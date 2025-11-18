@@ -66,6 +66,7 @@ import os
 import secrets
 import string
 import tempfile
+import shutil
 import hashlib
 import time
 
@@ -573,10 +574,12 @@ class MultiRegionDRStack(TerraformStack):
 
     def create_dynamodb_global(self):
         """Create DynamoDB Global Table"""
+        # Generate unique table name with timestamp to avoid conflicts
+        table_suffix = str(int(time.time()))[-6:]
         self.dynamodb_table = DynamodbTable(
             self, 'dynamodb_global', 
             provider=self.primary_provider,
-            name=f'payment-sessions-{self.environment_suffix}',
+            name=f'payment-sessions-{self.environment_suffix}-{table_suffix}',
             billing_mode='PAY_PER_REQUEST',
             hash_key='sessionId',
             attribute=[DynamodbTableAttribute(name='sessionId', type='S')],
@@ -629,7 +632,7 @@ class MultiRegionDRStack(TerraformStack):
             tags={'Name': f'payment-data-primary-{self.environment_suffix}'}
         )
 
-        S3BucketVersioningA(
+        self.s3_primary_versioning = S3BucketVersioningA(
             self, 's3_primary_versioning', 
             provider=self.primary_provider,
             bucket=self.s3_primary.id,
@@ -644,7 +647,7 @@ class MultiRegionDRStack(TerraformStack):
             tags={'Name': f'payment-data-secondary-{self.environment_suffix}'}
         )
 
-        S3BucketVersioningA(
+        self.s3_secondary_versioning = S3BucketVersioningA(
             self, 's3_secondary_versioning', 
             provider=self.secondary_provider,
             bucket=self.s3_secondary.id,
@@ -699,11 +702,12 @@ class MultiRegionDRStack(TerraformStack):
         )
 
         # Replication Configuration with delete marker replication
-        S3BucketReplicationConfigurationA(
+        self.s3_replication_config = S3BucketReplicationConfigurationA(
             self, 's3_replication_config', 
             provider=self.primary_provider,
             bucket=self.s3_primary.id, 
             role=self.s3_replication_role.arn,
+            depends_on=[self.s3_primary_versioning, self.s3_secondary_versioning],
             rule=[S3BucketReplicationConfigurationRule(
                 id='replication-rule', 
                 status='Enabled', 
@@ -897,9 +901,15 @@ class MultiRegionDRStack(TerraformStack):
 
     def create_health_lambda(self):
         """Create a simple health check Lambda function"""
-        # Create inline health check Lambda code
-        health_check_code = """
-import json
+        # Create a temporary directory for health lambda
+        import tempfile
+        import shutil
+        
+        health_lambda_dir = tempfile.mkdtemp()
+        health_lambda_file = os.path.join(health_lambda_dir, 'index.py')
+        
+        # Write health check code to file
+        health_check_code = """import json
 
 def lambda_handler(event, context):
     return {
@@ -909,17 +919,14 @@ def lambda_handler(event, context):
     }
 """
         
-        # Write to temporary file and create asset
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        with open(health_lambda_file, 'w') as f:
             f.write(health_check_code)
-            health_file_path = f.name
         
-        # Create asset for health check
+        # Create asset for health check as archive
         self.health_asset = TerraformAsset(
             self, "health-lambda-asset",
-            path=health_file_path,
-            type=AssetType.FILE
+            path=health_lambda_dir,
+            type=AssetType.ARCHIVE
         )
         
         # Create health check Lambda in primary region
