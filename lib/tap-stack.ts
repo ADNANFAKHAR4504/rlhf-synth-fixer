@@ -480,9 +480,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create Kubernetes provider
-    const k8sProvider = new k8s.Provider(`k8s-provider-${environmentSuffix}`, {
-      kubeconfig: cluster.kubeconfig,
-    }, { parent: this });
 
     // Note: EKS cluster automatically installs default versions of vpc-cni, kube-proxy, and coredns
     // Since these addons already exist, we'll skip managing them in Pulumi to avoid conflicts
