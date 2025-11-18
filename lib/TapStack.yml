@@ -83,6 +83,8 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'prod']
   IsStaging: !Equals [!Ref Environment, 'staging']
+  IsDevelopment: !Equals [!Ref Environment, 'dev']
+  EnableEnhancedMonitoring: !Or [!Condition IsProduction, !Condition IsStaging]
 
 Resources:
   # Requirement 2: DynamoDB table with on-demand billing and PITR
@@ -378,7 +380,6 @@ Resources:
   # Lambda error alarm
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
-    DependsOn: PaymentAlertTopic
     Properties:
       AlarmName: !Sub 'payment-validation-errors-${EnvironmentSuffix}'
       AlarmDescription: 'Alarm when Lambda function errors exceed threshold'
@@ -399,7 +400,6 @@ Resources:
   # Lambda throttle alarm
   LambdaThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
-    DependsOn: PaymentAlertTopic
     Properties:
       AlarmName: !Sub 'payment-validation-throttles-${EnvironmentSuffix}'
       AlarmDescription: 'Alarm when Lambda function throttles occur'
@@ -420,7 +420,6 @@ Resources:
   # DynamoDB capacity alarm (user errors)
   DynamoDBUserErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
-    DependsOn: PaymentAlertTopic
     Properties:
       AlarmName: !Sub 'payment-dynamodb-errors-${EnvironmentSuffix}'
       AlarmDescription: 'Alarm when DynamoDB user errors occur'
@@ -441,7 +440,6 @@ Resources:
   # DLQ message alarm
   DLQMessageAlarm:
     Type: AWS::CloudWatch::Alarm
-    DependsOn: PaymentAlertTopic
     Properties:
       AlarmName: !Sub 'payment-dlq-messages-${EnvironmentSuffix}'
       AlarmDescription: 'Alarm when messages appear in Dead Letter Queue'

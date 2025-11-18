@@ -15,6 +15,16 @@
                 },
                 {
                     "Label": {
+                        "default": "Account Configuration"
+                    },
+                    "Parameters": [
+                        "DevAccountId",
+                        "StagingAccountId",
+                        "ProdAccountId"
+                    ]
+                },
+                {
+                    "Label": {
                         "default": "Notification Configuration"
                     },
                     "Parameters": [
@@ -74,6 +84,27 @@
             ],
             "Description": "Deployment environment for conditional resource configuration"
         },
+        "DevAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID for development environment",
+            "AllowedPattern": "^\\d{12}$",
+            "ConstraintDescription": "Must be a valid 12-digit AWS account ID",
+            "Default": "123456789012"
+        },
+        "StagingAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID for staging environment",
+            "AllowedPattern": "^\\d{12}$",
+            "ConstraintDescription": "Must be a valid 12-digit AWS account ID",
+            "Default": "234567890123"
+        },
+        "ProdAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID for production environment",
+            "AllowedPattern": "^\\d{12}$",
+            "ConstraintDescription": "Must be a valid 12-digit AWS account ID",
+            "Default": "345678901234"
+        },
         "AlertEmail": {
             "Type": "String",
             "Description": "Email address for payment alerts and alarms",
@@ -97,6 +128,24 @@
                     "Ref": "Environment"
                 },
                 "staging"
+            ]
+        },
+        "IsDevelopment": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "dev"
+            ]
+        },
+        "EnableEnhancedMonitoring": {
+            "Fn::Or": [
+                {
+                    "Condition": "IsProduction"
+                },
+                {
+                    "Condition": "IsStaging"
+                }
             ]
         }
     },
