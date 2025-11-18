@@ -1,0 +1,24 @@
+{
+  "task_id": "k4o7k4",
+  "platform": "cdk",
+  "language": "py",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "k4o7k4",
+  "team": "synth-2",
+  "startedAt": "2025-11-18T20:55:16.268598+05:30",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9
+}
