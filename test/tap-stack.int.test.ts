@@ -7,7 +7,7 @@ import {
   ListReplaysCommand
 } from '@aws-sdk/client-eventbridge';
 import {
-  StepFunctionsClient,
+  SFNClient,
   StartExecutionCommand,
   DescribeExecutionCommand,
   ListExecutionsCommand
@@ -54,7 +54,7 @@ const outputs: Record<string, string> = (() => {
 
 // Initialize AWS clients
 const eventBridgeClient = new EventBridgeClient({ region: process.env.AWS_REGION });
-const stepFunctionsClient = new StepFunctionsClient({ region: process.env.AWS_REGION });
+const stepFunctionsClient = new SFNClient({ region: process.env.AWS_REGION });
 const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION });
 const dynamoDBClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
