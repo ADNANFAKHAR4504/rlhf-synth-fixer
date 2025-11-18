@@ -368,8 +368,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename="lib/lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda_placeholder.zip"),
+            filename="lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -397,8 +397,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename="lib/lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda_placeholder.zip"),
+            filename="lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -426,8 +426,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename="lib/lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda_placeholder.zip"),
+            filename="lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
