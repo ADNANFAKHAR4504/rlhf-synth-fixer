@@ -18,6 +18,9 @@ export interface TapStackProps extends cdk.StackProps {
   readonly environmentSuffix: string;
   readonly customDomainName?: string;
   readonly certificateArn?: string;
+  readonly dbUsername?: string;
+  readonly databaseName?: string;
+  readonly apiStageName?: string;
 }
 
 export class TapStack extends cdk.Stack {
@@ -25,6 +28,9 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     const { environmentSuffix } = props;
+    const dbUsername = props.dbUsername || 'postgres';
+    const databaseName = props.databaseName || 'payments';
+    const apiStageName = props.apiStageName || environmentSuffix;
 
     // VPC with 2 public and 4 private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, `PaymentVpc-${environmentSuffix}`, {
@@ -84,7 +90,7 @@ export class TapStack extends cdk.Stack {
         secretName: `payment-db-secret-${environmentSuffix}`,
         description: `Database credentials for ${environmentSuffix}`,
         generateSecretString: {
-          secretStringTemplate: JSON.stringify({ username: 'postgres' }),
+          secretStringTemplate: JSON.stringify({ username: dbUsername }),
           generateStringKey: 'password',
           excludePunctuation: true,
           includeSpace: false,
@@ -116,7 +122,7 @@ export class TapStack extends cdk.Stack {
       {
         instanceIdentifier: `payment-db-${environmentSuffix}`,
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_14_7,
+          version: rds.PostgresEngineVersion.VER_14,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
@@ -129,7 +135,7 @@ export class TapStack extends cdk.Stack {
         securityGroups: [rdsSecurityGroup],
         subnetGroup: dbSubnetGroup,
         credentials: rds.Credentials.fromSecret(dbSecret),
-        databaseName: 'payments',
+        databaseName: databaseName,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
         backupRetention: cdk.Duration.days(0),
@@ -221,7 +227,7 @@ exports.handler = async (event) => {
           DB_SECRET_ARN: dbSecret.secretArn,
           DB_HOST: dbInstance.dbInstanceEndpointAddress,
           DB_PORT: dbInstance.dbInstanceEndpointPort,
-          DB_NAME: 'payments',
+          DB_NAME: databaseName,
           RECEIPTS_BUCKET: receiptsBucket.bucketName,
           ENVIRONMENT: environmentSuffix,
         },
@@ -277,7 +283,7 @@ exports.handler = async (event) => {
           DB_SECRET_ARN: dbSecret.secretArn,
           DB_HOST: dbInstance.dbInstanceEndpointAddress,
           DB_PORT: dbInstance.dbInstanceEndpointPort,
-          DB_NAME: 'payments',
+          DB_NAME: databaseName,
           RECEIPTS_BUCKET: receiptsBucket.bucketName,
           ENVIRONMENT: environmentSuffix,
         },
@@ -303,7 +309,7 @@ exports.handler = async (event) => {
         description: `Payment processing API for ${environmentSuffix}`,
         cloudWatchRole: false,
         deployOptions: {
-          stageName: 'prod',
+          stageName: apiStageName,
           loggingLevel: apigateway.MethodLoggingLevel.INFO,
           dataTraceEnabled: true,
           metricsEnabled: true,

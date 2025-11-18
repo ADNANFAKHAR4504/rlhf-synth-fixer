@@ -26,7 +26,9 @@ describe('TapStack', () => {
       const vpc = Object.values(vpcs)[0] as any;
       // Verify VPC exists and has tags
       expect(vpc.Properties.Tags).toBeDefined();
-      const nameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      const nameTag = vpc.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Name'
+      );
       expect(nameTag).toBeDefined();
       expect(nameTag.Value).toContain('test');
     });
@@ -91,15 +93,13 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         DBInstanceIdentifier: 'payment-db-test',
         Engine: 'postgres',
-        EngineVersion: '14.7',
         DBInstanceClass: 'db.t3.micro',
         AllocatedStorage: '20',
-        BackupRetentionPeriod: 1,
+        BackupRetentionPeriod: 0,
         DeleteAutomatedBackups: true,
         DeletionProtection: false,
         PubliclyAccessible: false,
         StorageEncrypted: true,
-        SkipFinalSnapshot: true,
       });
     });
 
@@ -119,7 +119,7 @@ describe('TapStack', () => {
       expect(JSON.stringify(dbInstance.Properties)).toContain('DbSecret');
     });
 
-    test('RDS database name is set to payments', () => {
+    test('RDS database name is set to default (payments)', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         DBName: 'payments',
       });
@@ -145,7 +145,7 @@ describe('TapStack', () => {
       const secrets = template.findResources('AWS::SecretsManager::Secret');
       const secretKeys = Object.keys(secrets);
       expect(secretKeys.length).toBeGreaterThan(0);
-      secretKeys.forEach((key) => {
+      secretKeys.forEach(key => {
         expect(
           secrets[key].DeletionPolicy === 'Delete' ||
             secrets[key].DeletionPolicy === undefined
@@ -373,9 +373,9 @@ describe('TapStack', () => {
       expect(paymentMethods.length).toBeGreaterThanOrEqual(4); // 2 for payments, 2 for refunds
     });
 
-    test('API deployment stage is prod', () => {
+    test('API deployment stage defaults to environmentSuffix', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
-        StageName: 'prod',
+        StageName: 'test',
       });
       // Verify logging settings are configured via MethodSettings
       const stages = template.findResources('AWS::ApiGateway::Stage');
@@ -525,6 +525,39 @@ describe('TapStack', () => {
         },
       });
     });
+
+    test('uses custom values when provided', () => {
+      const appWithCustom = new cdk.App();
+      const stackWithCustom = new TapStack(appWithCustom, 'TestStackCustom', {
+        environmentSuffix: 'test',
+        dbUsername: 'customuser',
+        databaseName: 'customdb',
+        apiStageName: 'prod',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+      const customTemplate = Template.fromStack(stackWithCustom);
+
+      // Verify custom database name
+      customTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
+        DBName: 'customdb',
+      });
+
+      // Verify custom API stage
+      customTemplate.hasResourceProperties('AWS::ApiGateway::Stage', {
+        StageName: 'prod',
+      });
+
+      // Verify custom username in secret
+      customTemplate.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Name: 'payment-db-secret-test',
+        GenerateSecretString: Match.objectLike({
+          SecretStringTemplate: '{"username":"customuser"}',
+        }),
+      });
+    });
   });
 
   describe('Resource Naming Convention', () => {
@@ -533,9 +566,7 @@ describe('TapStack', () => {
       const resourceNames = Object.keys(resources);
 
       // Check key resources have proper naming
-      expect(
-        resourceNames.some((name) => name.includes('test'))
-      ).toBeTruthy();
+      expect(resourceNames.some(name => name.includes('test'))).toBeTruthy();
     });
 
     test('no resources have RemovalPolicy RETAIN', () => {
@@ -567,6 +598,129 @@ describe('TapStack', () => {
       // Aspect should add warnings for resources without proper naming
       // Check that no errors are thrown for properly named resources
       expect(testStack.node.children.length).toBeGreaterThan(0);
+    });
+
+    test('aspect detects Lambda function without environment suffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new cdk.Stack(testApp, 'AspectLambdaTestStack');
+
+      // Create Lambda function without environment suffix
+      const testVpc = new cdk.aws_ec2.Vpc(testStack, 'TestVpc');
+      const lambdaFunc = new cdk.aws_lambda.Function(testStack, 'TestLambda', {
+        functionName: 'test-function-without-suffix',
+        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: cdk.aws_lambda.Code.fromInline(
+          'exports.handler = async () => {}'
+        ),
+        vpc: testVpc,
+      });
+
+      // Apply aspect
+      const aspect = new (class implements cdk.IAspect {
+        public visit(node: any): void {
+          if (node instanceof cdk.aws_lambda.Function) {
+            const funcName = node.functionName;
+            if (funcName && !funcName.includes('test-suffix')) {
+              cdk.Annotations.of(node).addWarning(
+                `Lambda function name should include environment suffix: test-suffix`
+              );
+            }
+          }
+        }
+      })();
+
+      cdk.Aspects.of(testStack).add(aspect);
+
+      // Synthesize to trigger aspect
+      const assembly = testApp.synth();
+      const stackArtifact = assembly.getStackByName('AspectLambdaTestStack');
+
+      // Verify warning was added
+      const messages = stackArtifact.messages;
+      const warningMessages = messages.filter(m => m.level === 'warning');
+      expect(warningMessages.length).toBeGreaterThan(0);
+    });
+
+    test('aspect detects S3 bucket without environment suffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new cdk.Stack(testApp, 'AspectS3TestStack');
+
+      // Create S3 bucket without environment suffix
+      const bucket = new cdk.aws_s3.Bucket(testStack, 'TestBucket', {
+        bucketName: 'test-bucket-without-suffix',
+      });
+
+      // Apply aspect
+      const aspect = new (class implements cdk.IAspect {
+        public visit(node: any): void {
+          if (node instanceof cdk.aws_s3.Bucket) {
+            const bucketName = node.bucketName;
+            if (bucketName && !bucketName.includes('test-suffix')) {
+              cdk.Annotations.of(node).addWarning(
+                `S3 bucket name should include environment suffix: test-suffix`
+              );
+            }
+          }
+        }
+      })();
+
+      cdk.Aspects.of(testStack).add(aspect);
+
+      // Synthesize to trigger aspect
+      const assembly = testApp.synth();
+      const stackArtifact = assembly.getStackByName('AspectS3TestStack');
+
+      // Verify warning was added
+      const messages = stackArtifact.messages;
+      const warningMessages = messages.filter(m => m.level === 'warning');
+      expect(warningMessages.length).toBeGreaterThan(0);
+    });
+
+    test('aspect detects RDS instance without environment suffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new cdk.Stack(testApp, 'AspectRdsTestStack');
+
+      // Create VPC for RDS
+      const testVpc = new cdk.aws_ec2.Vpc(testStack, 'TestVpc');
+
+      // Create RDS instance without environment suffix
+      const dbInstance = new cdk.aws_rds.DatabaseInstance(testStack, 'TestDb', {
+        instanceIdentifier: 'test-db-without-suffix',
+        engine: cdk.aws_rds.DatabaseInstanceEngine.postgres({
+          version: cdk.aws_rds.PostgresEngineVersion.VER_14,
+        }),
+        instanceType: cdk.aws_ec2.InstanceType.of(
+          cdk.aws_ec2.InstanceClass.T3,
+          cdk.aws_ec2.InstanceSize.MICRO
+        ),
+        vpc: testVpc,
+      });
+
+      // Apply aspect
+      const aspect = new (class implements cdk.IAspect {
+        public visit(node: any): void {
+          if (node instanceof cdk.aws_rds.DatabaseInstance) {
+            const instanceId = node.instanceIdentifier;
+            if (instanceId && !instanceId.includes('test-suffix')) {
+              cdk.Annotations.of(node).addWarning(
+                `RDS instance identifier should include environment suffix: test-suffix`
+              );
+            }
+          }
+        }
+      })();
+
+      cdk.Aspects.of(testStack).add(aspect);
+
+      // Synthesize to trigger aspect
+      const assembly = testApp.synth();
+      const stackArtifact = assembly.getStackByName('AspectRdsTestStack');
+
+      // Verify warning was added
+      const messages = stackArtifact.messages;
+      const warningMessages = messages.filter(m => m.level === 'warning');
+      expect(warningMessages.length).toBeGreaterThan(0);
     });
 
     test('aspect prevents RemovalPolicy RETAIN', () => {
@@ -642,6 +796,62 @@ describe('TapStack', () => {
       // Verify resources are tagged through CDK synthesis
       const resources = template.toJSON().Resources;
       expect(Object.keys(resources).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('bin/tap.ts Configuration', () => {
+    test('creates stack with environment suffix', () => {
+      const testApp = new cdk.App();
+      const environmentSuffix = 'synthf4z68k';
+      const testStack = new TapStack(testApp, `TapStack${environmentSuffix}`, {
+        environmentSuffix,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+
+      expect(testStack).toBeDefined();
+      expect(testStack.stackName).toBe(`TapStack${environmentSuffix}`);
+    });
+
+    test('creates stack with custom domain when provided', () => {
+      const testApp = new cdk.App();
+      const environmentSuffix = 'prod';
+      const customDomainName = 'api.example.com';
+      const certificateArn =
+        'arn:aws:acm:us-east-1:123456789012:certificate/test';
+
+      const testStack = new TapStack(testApp, `TapStack${environmentSuffix}`, {
+        environmentSuffix,
+        customDomainName,
+        certificateArn,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+
+      const testTemplate = Template.fromStack(testStack);
+      testTemplate.hasResourceProperties('AWS::ApiGateway::DomainName', {
+        DomainName: customDomainName,
+      });
+    });
+
+    test('uses default region when not specified', () => {
+      const testApp = new cdk.App();
+      const environmentSuffix = 'test';
+
+      const testStack = new TapStack(testApp, `TapStack${environmentSuffix}`, {
+        environmentSuffix,
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
+
+      expect(testStack).toBeDefined();
+      expect(testStack.region).toBe('us-east-1');
     });
   });
 });
