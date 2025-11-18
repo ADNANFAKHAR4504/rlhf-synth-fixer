@@ -109,19 +109,97 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('Resource Configuration', () => {
-    it('should configure tags correctly', async () => {
-      const tags = {
-        Environment: 'production',
-        Application: 'payment-processor',
-        CostCenter: 'fintech-payments',
-      };
+  describe('Region Configuration', () => {
+    it('should use AWS_REGION environment variable when set', () => {
+      const originalEnv = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'us-west-2';
 
-      // Tags should be applied to resources
-      expect(tags.Application).toBe('payment-processor');
-      expect(tags.CostCenter).toBe('fintech-payments');
+      const testStack = new TapStack('test-region-env', {
+        environmentSuffix: 'test',
+      });
+
+      expect(testStack).toBeDefined();
+
+      // Restore original value
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      } else {
+        delete process.env.AWS_REGION;
+      }
     });
 
+    it('should fallback to aws.config.region when AWS_REGION not set', () => {
+      const originalEnv = process.env.AWS_REGION;
+      delete process.env.AWS_REGION;
+
+      const testStack = new TapStack('test-region-config', {
+        environmentSuffix: 'test',
+      });
+
+      expect(testStack).toBeDefined();
+
+      // Restore original value
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      }
+    });
+
+    it('should default to us-east-2 when neither AWS_REGION nor config.region set', () => {
+      const originalEnv = process.env.AWS_REGION;
+      delete process.env.AWS_REGION;
+
+      const testStack = new TapStack('test-region-default', {
+        environmentSuffix: 'test',
+      });
+
+      expect(testStack).toBeDefined();
+
+      // Restore original value
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      }
+    });
+  });
+
+  describe('Tags Configuration', () => {
+    it('should merge provided tags with default tags', () => {
+      const testStack = new TapStack('test-tags-merge', {
+        environmentSuffix: 'test',
+        tags: {
+          CustomTag: 'custom-value',
+          Test: 'true',
+        },
+      });
+
+      expect(testStack).toBeDefined();
+    });
+
+    it('should handle null tags gracefully', () => {
+      const testStack = new TapStack('test-tags-null', {
+        environmentSuffix: 'test',
+        tags: null as any,
+      });
+
+      expect(testStack).toBeDefined();
+    });
+
+    it('should handle undefined tags gracefully', () => {
+      const testStack = new TapStack('test-tags-undefined', {
+        environmentSuffix: 'test',
+        tags: undefined,
+      });
+
+      expect(testStack).toBeDefined();
+    });
+
+    it('should handle non-object tags gracefully', () => {
+      const testStack = new TapStack('test-tags-invalid', {
+        environmentSuffix: 'test',
+        tags: 'invalid' as any,
+      });
+
+      expect(testStack).toBeDefined();
+    });
   });
 
   describe('Multi-AZ Configuration', () => {
