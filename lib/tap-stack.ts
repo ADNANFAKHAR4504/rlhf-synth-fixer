@@ -1,7 +1,3 @@
-// NOTE: This file defines a Pulumi ComponentResource that contains the
-// original resources. The component groups all resources and exposes
-// the outputs used in the original single-file program.
-
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -10,16 +6,18 @@ export interface TapStackArgs {
 }
 
 export default class TapStack extends pulumi.ComponentResource {
-  // exposed outputs
   public readonly apiGatewayUrl: pulumi.Output<string>;
   public readonly s3BucketName: pulumi.Output<string>;
   public readonly dynamodbTableArn: pulumi.Output<string>;
 
-  // internal resources (optional to expose)
   private readonly environmentSuffix: string;
   private readonly region = 'us-east-1';
 
-  constructor(name: string, args: TapStackArgs = {}, opts?: pulumi.ComponentResourceOptions) {
+  constructor(
+    name: string,
+    _args: TapStackArgs = {},
+    opts?: pulumi.ComponentResourceOptions
+  ) {
     super('custom:stack:TapStack', name, {}, opts);
 
     this.environmentSuffix = pulumi.getStack() || 'dev';
@@ -30,28 +28,32 @@ export default class TapStack extends pulumi.ComponentResource {
     };
 
     // ===== S3 Bucket for Raw Data Ingestion =====
-    const marketDataBucket = new aws.s3.Bucket(`market-data-${this.environmentSuffix}`, {
-      bucket: `market-data-${this.environmentSuffix}`,
-      tags: commonTags,
-      versioning: {
-        enabled: true,
-      },
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-        },
-      },
-      lifecycleRules: [
-        {
+    const marketDataBucket = new aws.s3.Bucket(
+      `market-data-${this.environmentSuffix}`,
+      {
+        bucket: `market-data-${this.environmentSuffix}`,
+        tags: commonTags,
+        versioning: {
           enabled: true,
-          expiration: {
-            days: 30,
+        },
+        serverSideEncryptionConfiguration: {
+          rule: {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
           },
         },
-      ],
-    }, { parent: this });
+        lifecycleRules: [
+          {
+            enabled: true,
+            expiration: {
+              days: 30,
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
 
     // ===== DynamoDB Table for State Management =====
     const marketDataTable = new aws.dynamodb.Table(
@@ -69,7 +71,8 @@ export default class TapStack extends pulumi.ComponentResource {
           enabled: true,
         },
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     // ===== SQS Queues =====
@@ -79,7 +82,8 @@ export default class TapStack extends pulumi.ComponentResource {
         name: `ProcessingDLQ-${this.environmentSuffix}`,
         messageRetentionSeconds: 1209600, // 14 days
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const processingQueue = new aws.sqs.Queue(
@@ -88,14 +92,15 @@ export default class TapStack extends pulumi.ComponentResource {
         name: `ProcessingQueue-${this.environmentSuffix}`,
         messageRetentionSeconds: 345600, // 4 days
         visibilityTimeoutSeconds: 300, // 5 minutes
-        redrivePolicy: deadLetterQueue.arn.apply(arn =>
+        redrivePolicy: deadLetterQueue.arn.apply((arn) =>
           JSON.stringify({
             deadLetterTargetArn: arn,
             maxReceiveCount: 3,
           })
         ),
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     // ===== IAM Roles for Lambda Functions =====
@@ -118,7 +123,8 @@ export default class TapStack extends pulumi.ComponentResource {
           ],
         }),
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -127,60 +133,69 @@ export default class TapStack extends pulumi.ComponentResource {
         role: dataIngestionRole.name,
         policyArn:
           'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
-    new aws.iam.RolePolicyAttachment(`DataIngestion-XRay-${this.environmentSuffix}`, {
-      role: dataIngestionRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `DataIngestion-XRay-${this.environmentSuffix}`,
+      {
+        role: dataIngestionRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      },
+      { parent: this }
+    );
 
-    void new aws.iam.RolePolicy(`DataIngestion-Policy-${this.environmentSuffix}`, {
-      role: dataIngestionRole.id,
-      policy: pulumi
-        .all([
-          marketDataBucket.arn,
-          processingQueue.arn,
-          marketDataTable.arn,
-          deadLetterQueue.arn,
-        ])
-        .apply(([bucketArn, queueArn, tableArn, dlqArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:GetObject', 's3:GetObjectVersion'],
-                Resource: `${bucketArn}/*`,
-              },
-              {
-                Effect: 'Deny',
-                Action: [
-                  's3:DeleteBucket',
-                  's3:DeleteObject',
-                  's3:PutBucketPolicy',
-                ],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['sqs:SendMessage'],
-                Resource: [queueArn, dlqArn],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['dynamodb:PutItem', 'dynamodb:UpdateItem'],
-                Resource: tableArn,
-              },
-              {
-                Effect: 'Deny',
-                Action: ['dynamodb:DeleteTable', 'dynamodb:DeleteItem'],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
-    }, { parent: this });
+    void new aws.iam.RolePolicy(
+      `DataIngestion-Policy-${this.environmentSuffix}`,
+      {
+        role: dataIngestionRole.id,
+        policy: pulumi
+          .all([
+            marketDataBucket.arn,
+            processingQueue.arn,
+            marketDataTable.arn,
+            deadLetterQueue.arn,
+          ])
+          .apply(([bucketArn, queueArn, tableArn, dlqArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:GetObject', 's3:GetObjectVersion'],
+                  Resource: `${bucketArn}/*`,
+                },
+                {
+                  Effect: 'Deny',
+                  Action: [
+                    's3:DeleteBucket',
+                    's3:DeleteObject',
+                    's3:PutBucketPolicy',
+                  ],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['sqs:SendMessage'],
+                  Resource: [queueArn, dlqArn],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['dynamodb:PutItem', 'dynamodb:UpdateItem'],
+                  Resource: tableArn,
+                },
+                {
+                  Effect: 'Deny',
+                  Action: ['dynamodb:DeleteTable', 'dynamodb:DeleteItem'],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // DataProcessor Lambda Role
     const dataProcessorRole = new aws.iam.Role(
@@ -200,7 +215,8 @@ export default class TapStack extends pulumi.ComponentResource {
           ],
         }),
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -209,60 +225,69 @@ export default class TapStack extends pulumi.ComponentResource {
         role: dataProcessorRole.name,
         policyArn:
           'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
-    new aws.iam.RolePolicyAttachment(`DataProcessor-XRay-${this.environmentSuffix}`, {
-      role: dataProcessorRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `DataProcessor-XRay-${this.environmentSuffix}`,
+      {
+        role: dataProcessorRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      },
+      { parent: this }
+    );
 
-    void new aws.iam.RolePolicy(`DataProcessor-Policy-${this.environmentSuffix}`, {
-      role: dataProcessorRole.id,
-      policy: pulumi
-        .all([processingQueue.arn, marketDataTable.arn])
-        .apply(([queueArn, tableArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: [
-                  'sqs:ReceiveMessage',
-                  'sqs:DeleteMessage',
-                  'sqs:GetQueueAttributes',
-                ],
-                Resource: queueArn,
-              },
-              {
-                Effect: 'Deny',
-                Action: ['sqs:DeleteQueue', 'sqs:PurgeQueue'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'dynamodb:GetItem',
-                  'dynamodb:PutItem',
-                  'dynamodb:UpdateItem',
-                  'dynamodb:Query',
-                ],
-                Resource: tableArn,
-              },
-              {
-                Effect: 'Deny',
-                Action: ['dynamodb:DeleteTable', 'dynamodb:DeleteItem'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['events:PutEvents'],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
-    }, { parent: this });
+    void new aws.iam.RolePolicy(
+      `DataProcessor-Policy-${this.environmentSuffix}`,
+      {
+        role: dataProcessorRole.id,
+        policy: pulumi
+          .all([processingQueue.arn, marketDataTable.arn])
+          .apply(([queueArn, tableArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'sqs:ReceiveMessage',
+                    'sqs:DeleteMessage',
+                    'sqs:GetQueueAttributes',
+                  ],
+                  Resource: queueArn,
+                },
+                {
+                  Effect: 'Deny',
+                  Action: ['sqs:DeleteQueue', 'sqs:PurgeQueue'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:GetItem',
+                    'dynamodb:PutItem',
+                    'dynamodb:UpdateItem',
+                    'dynamodb:Query',
+                  ],
+                  Resource: tableArn,
+                },
+                {
+                  Effect: 'Deny',
+                  Action: ['dynamodb:DeleteTable', 'dynamodb:DeleteItem'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['events:PutEvents'],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // DataAggregator Lambda Role
     const dataAggregatorRole = new aws.iam.Role(
@@ -282,7 +307,8 @@ export default class TapStack extends pulumi.ComponentResource {
           ],
         }),
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -291,52 +317,61 @@ export default class TapStack extends pulumi.ComponentResource {
         role: dataAggregatorRole.name,
         policyArn:
           'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
-    new aws.iam.RolePolicyAttachment(`DataAggregator-XRay-${this.environmentSuffix}`, {
-      role: dataAggregatorRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `DataAggregator-XRay-${this.environmentSuffix}`,
+      {
+        role: dataAggregatorRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      },
+      { parent: this }
+    );
 
-    void new aws.iam.RolePolicy(`DataAggregator-Policy-${this.environmentSuffix}`, {
-      role: dataAggregatorRole.id,
-      policy: pulumi
-        .all([marketDataTable.arn, deadLetterQueue.arn])
-        .apply(([tableArn, dlqArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: [
-                  'dynamodb:Scan',
-                  'dynamodb:Query',
-                  'dynamodb:GetItem',
-                  'dynamodb:PutItem',
-                  'dynamodb:UpdateItem',
-                ],
-                Resource: tableArn,
-              },
-              {
-                Effect: 'Deny',
-                Action: ['dynamodb:DeleteTable', 'dynamodb:DeleteItem'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['cloudwatch:PutMetricData'],
-                Resource: '*',
-              },
-              {
-                Effect: 'Allow',
-                Action: ['sqs:SendMessage'],
-                Resource: dlqArn,
-              },
-            ],
-          })
-        ),
-    }, { parent: this });
+    void new aws.iam.RolePolicy(
+      `DataAggregator-Policy-${this.environmentSuffix}`,
+      {
+        role: dataAggregatorRole.id,
+        policy: pulumi
+          .all([marketDataTable.arn, deadLetterQueue.arn])
+          .apply(([tableArn, dlqArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:Scan',
+                    'dynamodb:Query',
+                    'dynamodb:GetItem',
+                    'dynamodb:PutItem',
+                    'dynamodb:UpdateItem',
+                  ],
+                  Resource: tableArn,
+                },
+                {
+                  Effect: 'Deny',
+                  Action: ['dynamodb:DeleteTable', 'dynamodb:DeleteItem'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['cloudwatch:PutMetricData'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['sqs:SendMessage'],
+                  Resource: dlqArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // ===== CloudWatch Log Groups =====
     const dataIngestionLogGroup = new aws.cloudwatch.LogGroup(
@@ -345,7 +380,8 @@ export default class TapStack extends pulumi.ComponentResource {
         name: `/aws/lambda/DataIngestion-${this.environmentSuffix}`,
         retentionInDays: 7,
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const dataProcessorLogGroup = new aws.cloudwatch.LogGroup(
@@ -354,7 +390,8 @@ export default class TapStack extends pulumi.ComponentResource {
         name: `/aws/lambda/DataProcessor-${this.environmentSuffix}`,
         retentionInDays: 7,
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const dataAggregatorLogGroup = new aws.cloudwatch.LogGroup(
@@ -363,11 +400,11 @@ export default class TapStack extends pulumi.ComponentResource {
         name: `/aws/lambda/DataAggregator-${this.environmentSuffix}`,
         retentionInDays: 7,
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     // ===== Lambda Functions =====
-
     const lambdaCodeArchive = new pulumi.asset.AssetArchive({
       '.': new pulumi.asset.FileArchive('./lambda'),
     });
@@ -395,7 +432,8 @@ export default class TapStack extends pulumi.ComponentResource {
           targetArn: deadLetterQueue.arn,
         },
         tags: commonTags,
-      }, { parent: this, dependsOn: [dataIngestionLogGroup] }
+      },
+      { parent: this, dependsOn: [dataIngestionLogGroup] }
     );
 
     const allowS3Invocation = new aws.lambda.Permission(
@@ -405,7 +443,8 @@ export default class TapStack extends pulumi.ComponentResource {
         function: dataIngestionLambda.arn,
         principal: 's3.amazonaws.com',
         sourceArn: marketDataBucket.arn,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     void new aws.s3.BucketNotification(
@@ -418,7 +457,8 @@ export default class TapStack extends pulumi.ComponentResource {
             events: ['s3:ObjectCreated:*'],
           },
         ],
-      }, { parent: this, dependsOn: [allowS3Invocation] }
+      },
+      { parent: this, dependsOn: [allowS3Invocation] }
     );
 
     const dataProcessorLambda = new aws.lambda.Function(
@@ -441,7 +481,8 @@ export default class TapStack extends pulumi.ComponentResource {
           mode: 'Active',
         },
         tags: commonTags,
-      }, { parent: this, dependsOn: [dataProcessorLogGroup] }
+      },
+      { parent: this, dependsOn: [dataProcessorLogGroup] }
     );
 
     void new aws.lambda.EventSourceMapping(
@@ -450,7 +491,8 @@ export default class TapStack extends pulumi.ComponentResource {
         eventSourceArn: processingQueue.arn,
         functionName: dataProcessorLambda.name,
         batchSize: 10,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const dataAggregatorLambda = new aws.lambda.Function(
@@ -475,7 +517,8 @@ export default class TapStack extends pulumi.ComponentResource {
           targetArn: deadLetterQueue.arn,
         },
         tags: commonTags,
-      }, { parent: this, dependsOn: [dataAggregatorLogGroup] }
+      },
+      { parent: this, dependsOn: [dataAggregatorLogGroup] }
     );
 
     // ===== EventBridge Rules =====
@@ -486,7 +529,8 @@ export default class TapStack extends pulumi.ComponentResource {
         description: 'Trigger DataAggregator every 5 minutes',
         scheduleExpression: 'rate(5 minutes)',
         tags: commonTags,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const allowEventBridgeInvocation = new aws.lambda.Permission(
@@ -496,7 +540,8 @@ export default class TapStack extends pulumi.ComponentResource {
         function: dataAggregatorLambda.arn,
         principal: 'events.amazonaws.com',
         sourceArn: scheduledRule.arn,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     void new aws.cloudwatch.EventTarget(
@@ -504,15 +549,20 @@ export default class TapStack extends pulumi.ComponentResource {
       {
         rule: scheduledRule.name,
         arn: dataAggregatorLambda.arn,
-      }, { parent: this, dependsOn: [allowEventBridgeInvocation] }
+      },
+      { parent: this, dependsOn: [allowEventBridgeInvocation] }
     );
 
     // ===== API Gateway =====
-    const api = new aws.apigateway.RestApi(`MarketDataAPI-${this.environmentSuffix}`, {
-      name: `MarketDataAPI-${this.environmentSuffix}`,
-      description: 'Market Data Ingestion API',
-      tags: commonTags,
-    }, { parent: this });
+    const api = new aws.apigateway.RestApi(
+      `MarketDataAPI-${this.environmentSuffix}`,
+      {
+        name: `MarketDataAPI-${this.environmentSuffix}`,
+        description: 'Market Data Ingestion API',
+        tags: commonTags,
+      },
+      { parent: this }
+    );
 
     const ingestResource = new aws.apigateway.Resource(
       `ingest-resource-${this.environmentSuffix}`,
@@ -520,7 +570,8 @@ export default class TapStack extends pulumi.ComponentResource {
         restApi: api.id,
         parentId: api.rootResourceId,
         pathPart: 'ingest',
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const ingestMethod = new aws.apigateway.Method(
@@ -530,7 +581,8 @@ export default class TapStack extends pulumi.ComponentResource {
         resourceId: ingestResource.id,
         httpMethod: 'POST',
         authorization: 'AWS_IAM',
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const apiLambdaPermission = new aws.lambda.Permission(
@@ -540,7 +592,8 @@ export default class TapStack extends pulumi.ComponentResource {
         function: dataIngestionLambda.arn,
         principal: 'apigateway.amazonaws.com',
         sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     const ingestIntegration = new aws.apigateway.Integration(
@@ -552,32 +605,42 @@ export default class TapStack extends pulumi.ComponentResource {
         integrationHttpMethod: 'POST',
         type: 'AWS_PROXY',
         uri: dataIngestionLambda.invokeArn,
-      }, { parent: this, dependsOn: [apiLambdaPermission] }
+      },
+      { parent: this, dependsOn: [apiLambdaPermission] }
     );
 
     const deployment = new aws.apigateway.Deployment(
       `api-deployment-${this.environmentSuffix}`,
       {
         restApi: api.id,
-      }, { parent: this, dependsOn: [ingestIntegration] }
+      },
+      { parent: this, dependsOn: [ingestIntegration] }
     );
 
-    const apiStage = new aws.apigateway.Stage(`api-stage-${this.environmentSuffix}`, {
-      deployment: deployment.id,
-      restApi: api.id,
-      stageName: 'prod',
-      tags: commonTags,
-    }, { parent: this });
-
-    void new aws.apigateway.MethodSettings(`api-throttle-${this.environmentSuffix}`, {
-      restApi: api.id,
-      stageName: apiStage.stageName,
-      methodPath: '*/*',
-      settings: {
-        throttlingBurstLimit: 10000,
-        throttlingRateLimit: 10000,
+    const apiStage = new aws.apigateway.Stage(
+      `api-stage-${this.environmentSuffix}`,
+      {
+        deployment: deployment.id,
+        restApi: api.id,
+        stageName: 'prod',
+        tags: commonTags,
       },
-    }, { parent: this });
+      { parent: this }
+    );
+
+    void new aws.apigateway.MethodSettings(
+      `api-throttle-${this.environmentSuffix}`,
+      {
+        restApi: api.id,
+        stageName: apiStage.stageName,
+        methodPath: '*/*',
+        settings: {
+          throttlingBurstLimit: 10000,
+          throttlingRateLimit: 10000,
+        },
+      },
+      { parent: this }
+    );
 
     // ===== CloudWatch Metric Filters =====
     void new aws.cloudwatch.LogMetricFilter(
@@ -591,7 +654,8 @@ export default class TapStack extends pulumi.ComponentResource {
           namespace: 'MarketAnalytics',
           value: '1',
         },
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     void new aws.cloudwatch.LogMetricFilter(
@@ -605,7 +669,8 @@ export default class TapStack extends pulumi.ComponentResource {
           namespace: 'MarketAnalytics',
           value: '1',
         },
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     void new aws.cloudwatch.LogMetricFilter(
@@ -619,7 +684,8 @@ export default class TapStack extends pulumi.ComponentResource {
           namespace: 'MarketAnalytics',
           value: '1',
         },
-      }, { parent: this }
+      },
+      { parent: this }
     );
 
     // ===== Expose outputs =====
@@ -627,7 +693,6 @@ export default class TapStack extends pulumi.ComponentResource {
     this.s3BucketName = marketDataBucket.bucket;
     this.dynamodbTableArn = marketDataTable.arn;
 
-    // register outputs for this component
     this.registerOutputs({
       apiGatewayUrl: this.apiGatewayUrl,
       s3BucketName: this.s3BucketName,
