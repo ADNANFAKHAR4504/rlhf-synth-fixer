@@ -1,4 +1,4 @@
-import TapStack from './tap-stack';
+import TapStack from '../lib/tap-stack';
 
 
 // instantiate the stack component (entrypoint)
