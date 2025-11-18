@@ -187,6 +187,8 @@ class MultiRegionDRStack(Construct):
 
         # Primary PRIVATE subnets (for Lambda and RDS)
         self.private_subnets_primary = []
+        self.rt_private_primary = []
+        self.nat_gateways_primary = []
         for i, az in enumerate(azs_primary):
             subnet = Subnet(
                 self, f'private_subnet_primary_{i}', 
@@ -249,6 +251,7 @@ class MultiRegionDRStack(Construct):
                 vpc_id=self.vpc_primary.id,
                 tags={'Name': f'rt-private-primary-{i}-{self.environment_suffix}'}
             )
+            self.rt_private_primary.append(rt_private)
 
             Route(
                 self, f'route_private_nat_primary_{i}',
@@ -299,6 +302,8 @@ class MultiRegionDRStack(Construct):
 
         # Secondary PRIVATE subnets
         self.private_subnets_secondary = []
+        self.rt_private_secondary = []
+        self.nat_gateways_secondary = []
         for i, az in enumerate(azs_secondary):
             subnet = Subnet(
                 self, f'private_subnet_secondary_{i}', 
@@ -361,6 +366,7 @@ class MultiRegionDRStack(Construct):
                 vpc_id=self.vpc_secondary.id,
                 tags={'Name': f'rt-private-secondary-{i}-{self.environment_suffix}'}
             )
+            self.rt_private_secondary.append(rt_private)
 
             Route(
                 self, f'route_private_nat_secondary_{i}',
@@ -401,7 +407,7 @@ class MultiRegionDRStack(Construct):
             Route(
                 self, f'route_primary_to_secondary_{i}',
                 provider=self.primary_provider,
-                route_table_id=f'${{aws_route_table.rt_private_primary_{i}.id}}',
+                route_table_id=self.rt_private_primary[i].id,
                 destination_cidr_block='10.1.0.0/16',
                 vpc_peering_connection_id=self.vpc_peering.id
             )
@@ -410,7 +416,7 @@ class MultiRegionDRStack(Construct):
             Route(
                 self, f'route_secondary_to_primary_{i}',
                 provider=self.secondary_provider,
-                route_table_id=f'${{aws_route_table.rt_private_secondary_{i}.id}}',
+                route_table_id=self.rt_private_secondary[i].id,
                 destination_cidr_block='10.0.0.0/16',
                 vpc_peering_connection_id=self.vpc_peering.id
             )
