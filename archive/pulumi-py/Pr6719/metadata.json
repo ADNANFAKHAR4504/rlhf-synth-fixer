@@ -4,17 +4,11 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "u74k4g",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T20:57:19.571050",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Configure API Gateway with custom domain names in each region",
-    "Set up CloudWatch cross-region alarms to trigger failover procedures",
-    "Use Route 53 health checks with failover routing policy for automatic DNS failover",
-    "Implement DynamoDB global tables with point-in-time recovery enabled",
-    "Implement SQS message replication between regions using Lambda triggers",
-    "Use S3 cross-region replication for static assets with RTC enabled",
-    "Deploy Lambda functions in both regions with identical configurations"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "VPC",
