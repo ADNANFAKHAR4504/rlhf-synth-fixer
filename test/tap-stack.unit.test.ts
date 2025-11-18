@@ -131,8 +131,14 @@ describe('AWS Config CloudFormation Template', () => {
       expect(template.Resources.S3BucketPublicReadRule.Type).toBe('AWS::Config::ConfigRule');
     });
 
-    test('should have CloudWatch Alarm', () => {
-      expect(template.Resources.ConfigComplianceAlarm).toBeDefined();
+    test('should have EventBridge Rule for compliance monitoring', () => {
+      expect(template.Resources.ConfigComplianceEventRule).toBeDefined();
+      expect(template.Resources.ConfigComplianceEventRule.Type).toBe('AWS::Events::Rule');
+    });
+
+    test('should have CloudWatch Log Group', () => {
+      expect(template.Resources.ConfigLogGroup).toBeDefined();
+      expect(template.Resources.ConfigLogGroup.Type).toBe('AWS::Logs::LogGroup');
     });
   });
 

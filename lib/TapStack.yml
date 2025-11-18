@@ -197,7 +197,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
       Policies:
         - PolicyName: ConfigS3Policy
           PolicyDocument:
@@ -396,7 +396,6 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/config/${EnvironmentSuffix}'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt ConfigKMSKey.Arn
 
 Outputs:
   ConfigBucketName:
