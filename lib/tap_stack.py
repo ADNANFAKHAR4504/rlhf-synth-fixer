@@ -35,8 +35,6 @@ from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
 from cdktf_cdktf_provider_aws.sfn_state_machine import SfnStateMachine
 from cdktf_cdktf_provider_aws.wafv2_web_acl import Wafv2WebAcl, Wafv2WebAclRule, Wafv2WebAclRuleAction, Wafv2WebAclVisibilityConfig
 from cdktf_cdktf_provider_aws.wafv2_web_acl_association import Wafv2WebAclAssociation
-import json
-
 
 class TapStack(TerraformStack):
     """Main fraud detection system stack."""
@@ -183,6 +181,30 @@ class TapStack(TerraformStack):
             tags=self.common_tags
         )
 
+        # Parameter for fraud alert email endpoint
+        self.fraud_alert_email = SsmParameter(
+            self,
+            f"fraud-alert-email-{self.resource_suffix}",
+            name=f"/fraud-detection/{self.environment_suffix}/alert-email",
+            type="SecureString",
+            value="fraud-alerts@company.com",  # Default value - should be updated in deployment
+            description="Email endpoint for fraud alert notifications",
+            key_id=self.kms_key.key_id,
+            tags=self.common_tags
+        )
+
+        # Parameter for fraud alert SMS endpoint
+        self.fraud_alert_phone = SsmParameter(
+            self,
+            f"fraud-alert-phone-{self.resource_suffix}",
+            name=f"/fraud-detection/{self.environment_suffix}/alert-phone",
+            type="SecureString",
+            value="+1234567890",  # Default value - should be updated in deployment
+            description="Phone endpoint for fraud alert SMS notifications",
+            key_id=self.kms_key.key_id,
+            tags=self.common_tags
+        )
+
     def _create_dynamodb_table(self):
         """Create DynamoDB table for storing transaction data."""
         self.transactions_table = DynamodbTable(
@@ -214,22 +236,24 @@ class TapStack(TerraformStack):
             tags=self.common_tags
         )
 
-        # Example email subscription (in production, this would be configured dynamically)
+        # Email subscription using SSM parameter
+        # Note: Email subscriptions require manual confirmation in AWS console
         SnsTopicSubscription(
             self,
             f"fraud-alerts-email-{self.resource_suffix}",
             topic_arn=self.fraud_alerts_topic.arn,
             protocol="email",
-            endpoint="fraud-alerts@company.com"  # Replace with actual email
+            endpoint=self.fraud_alert_email.value
         )
 
-        # Example SMS subscription
+        # SMS subscription using SSM parameter
+        # Note: Phone numbers must be in E.164 format (+1234567890)
         SnsTopicSubscription(
             self,
             f"fraud-alerts-sms-{self.resource_suffix}",
             topic_arn=self.fraud_alerts_topic.arn,
             protocol="sms",
-            endpoint="+1234567890"  # Replace with actual phone number
+            endpoint=self.fraud_alert_phone.value
         )
 
     def _create_iam_roles(self):
@@ -399,7 +423,7 @@ class TapStack(TerraformStack):
             f"transaction-validator-{self.resource_suffix}",
             function_name=f"transaction-validator-{self.resource_suffix}",
             role=self.lambda_role.arn,
-            handler="transaction_validator.lambda_handler",
+            handler="lambda_function.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
             filename=self.transaction_validator_zip,
@@ -419,7 +443,7 @@ class TapStack(TerraformStack):
             f"fraud-analyzer-{self.resource_suffix}",
             function_name=f"fraud-analyzer-{self.resource_suffix}",
             role=self.lambda_role.arn,
-            handler="fraud_analyzer.lambda_handler",
+            handler="lambda_function.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
             filename=self.fraud_analyzer_zip,
@@ -439,7 +463,7 @@ class TapStack(TerraformStack):
             f"notification-sender-{self.resource_suffix}",
             function_name=f"notification-sender-{self.resource_suffix}",
             role=self.lambda_role.arn,
-            handler="notification_sender.lambda_handler",
+            handler="lambda_function.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
             filename=self.notification_sender_zip,
