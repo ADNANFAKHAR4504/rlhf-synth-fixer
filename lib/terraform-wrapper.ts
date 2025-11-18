@@ -108,11 +108,21 @@ export class TerraformStackValidator {
   }
 
   public hasLoadBalancer(): boolean {
-    return this.hasResource('aws_lb') || this.hasResource('aws_alb');
+    const hasLb = this.hasResource('aws_lb');
+    const hasAlb = this.hasResource('aws_alb');
+    if (hasLb) {
+      return true;
+    }
+    return hasAlb;
   }
 
   public hasDatabase(): boolean {
-    return this.hasResource('aws_rds_cluster') || this.hasResource('aws_db_instance');
+    const hasCluster = this.hasResource('aws_rds_cluster');
+    const hasInstance = this.hasResource('aws_db_instance');
+    if (hasCluster) {
+      return true;
+    }
+    return hasInstance;
   }
 
   public validateRequiredResources(): { [key: string]: boolean } {

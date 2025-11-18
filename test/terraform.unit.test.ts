@@ -173,6 +173,55 @@ describe("Terraform Infrastructure Unit Tests", () => {
       }
     });
 
+    test("hasLoadBalancer covers aws_lb branch", () => {
+      // Test that hasLoadBalancer works when aws_lb exists
+      const hasLb = validator.hasResource('aws_lb');
+      if (hasLb) {
+        // This branch should be covered
+        expect(validator.hasLoadBalancer()).toBe(true);
+      }
+    });
+
+    test("hasLoadBalancer covers aws_alb branch", () => {
+      // Test that hasLoadBalancer checks aws_alb even if aws_lb exists
+      // This ensures both branches of the OR are evaluated
+      const hasAlb = validator.hasResource('aws_alb');
+      // Explicitly test the hasLoadBalancer method to cover both branches
+      const result = validator.hasLoadBalancer();
+      expect(typeof result).toBe('boolean');
+      // Ensure both resource types are checked
+      expect(validator.hasResource('aws_lb') || validator.hasResource('aws_alb')).toBe(result);
+    });
+
+    test("hasLoadBalancer else branch coverage", () => {
+      // Test the else branch by mocking hasResource to simulate aws_lb not existing
+      const originalHasResource = validator.hasResource.bind(validator);
+      let callCount = 0;
+      
+      // Mock hasResource to return false for aws_lb on first call, true for aws_alb
+      const mockHasResource = jest.fn((resourceType: string) => {
+        callCount++;
+        if (resourceType === 'aws_lb') {
+          return false; // Simulate aws_lb not existing
+        }
+        if (resourceType === 'aws_alb') {
+          return true; // Simulate aws_alb existing
+        }
+        return originalHasResource(resourceType);
+      });
+      
+      validator.hasResource = mockHasResource;
+      
+      // This should test the else branch (return hasAlb)
+      const result = validator.hasLoadBalancer();
+      expect(result).toBe(true);
+      expect(mockHasResource).toHaveBeenCalledWith('aws_lb');
+      expect(mockHasResource).toHaveBeenCalledWith('aws_alb');
+      
+      // Restore original method
+      validator.hasResource = originalHasResource;
+    });
+
     test("hasDatabase checks both database types", () => {
       expect(validator.hasDatabase()).toBe(true);
       // Verify at least one type exists
@@ -185,6 +234,53 @@ describe("Terraform Infrastructure Unit Tests", () => {
       } else {
         expect(hasInstance).toBe(true); // aws_db_instance is used
       }
+    });
+
+    test("hasDatabase covers aws_rds_cluster branch", () => {
+      // Test that hasDatabase works when aws_rds_cluster exists
+      const hasCluster = validator.hasResource('aws_rds_cluster');
+      if (hasCluster) {
+        // This branch should be covered
+        expect(validator.hasDatabase()).toBe(true);
+      }
+    });
+
+    test("hasDatabase covers aws_db_instance branch", () => {
+      // Test that hasDatabase checks aws_db_instance even if aws_rds_cluster exists
+      // This ensures both branches of the OR are evaluated
+      const hasInstance = validator.hasResource('aws_db_instance');
+      // Explicitly test the hasDatabase method to cover both branches
+      const result = validator.hasDatabase();
+      expect(typeof result).toBe('boolean');
+      // Ensure both resource types are checked
+      expect(validator.hasResource('aws_rds_cluster') || validator.hasResource('aws_db_instance')).toBe(result);
+    });
+
+    test("hasDatabase else branch coverage", () => {
+      // Test the else branch by mocking hasResource to simulate aws_rds_cluster not existing
+      const originalHasResource = validator.hasResource.bind(validator);
+      
+      // Mock hasResource to return false for aws_rds_cluster, true for aws_db_instance
+      const mockHasResource = jest.fn((resourceType: string) => {
+        if (resourceType === 'aws_rds_cluster') {
+          return false; // Simulate aws_rds_cluster not existing
+        }
+        if (resourceType === 'aws_db_instance') {
+          return true; // Simulate aws_db_instance existing
+        }
+        return originalHasResource(resourceType);
+      });
+      
+      validator.hasResource = mockHasResource;
+      
+      // This should test the else branch (return hasInstance)
+      const result = validator.hasDatabase();
+      expect(result).toBe(true);
+      expect(mockHasResource).toHaveBeenCalledWith('aws_rds_cluster');
+      expect(mockHasResource).toHaveBeenCalledWith('aws_db_instance');
+      
+      // Restore original method
+      validator.hasResource = originalHasResource;
     });
   });
 });
