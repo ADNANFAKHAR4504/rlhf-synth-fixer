@@ -506,6 +506,8 @@ export class TapStack extends pulumi.ComponentResource {
         clusterName: cluster.eksCluster.name,
         addonName: 'kube-proxy',
         addonVersion: 'v1.28.2-eksbuild.2',
+        resolveConflictsOnCreate: 'OVERWRITE',
+        resolveConflictsOnUpdate: 'OVERWRITE',
       },
       { parent: this }
     );
@@ -517,6 +519,8 @@ export class TapStack extends pulumi.ComponentResource {
         clusterName: cluster.eksCluster.name,
         addonName: 'coredns',
         addonVersion: 'v1.10.1-eksbuild.6',
+        resolveConflictsOnCreate: 'OVERWRITE',
+        resolveConflictsOnUpdate: 'OVERWRITE',
       },
       { parent: this }
     );
@@ -559,38 +563,43 @@ export class TapStack extends pulumi.ComponentResource {
     const clusterAutoscalerRole = new aws.iam.Role(
       `eks-cluster-autoscaler-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider) => {
-          if (!oidcProvider) {
+        assumeRolePolicy: pulumi.all([
+          cluster.core.oidcProvider,
+          cluster.eksCluster.arn,
+        ]).apply(([oidcProvider, clusterArn]) => {
+          if (!oidcProvider || typeof oidcProvider !== 'object') {
             throw new Error('OIDC provider not available');
           }
-          return pulumi.output(oidcProvider.url).apply((url) => {
-            const oidcUrl = url.replace('https://', '');
-            return JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    Federated: oidcProvider.arn,
-                  },
-                  Action: 'sts:AssumeRoleWithWebIdentity',
-                  Condition: {
-                    StringEquals: {
-                      [`${oidcUrl}:sub`]:
-                        'system:serviceaccount:kube-system:cluster-autoscaler',
-                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
-                    },
+          const provider = oidcProvider as any;
+          if (!provider.url || !provider.arn) {
+            throw new Error('OIDC provider URL or ARN not available');
+          }
+          const oidcUrl = provider.url.replace('https://', '');
+          return JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  Federated: provider.arn,
+                },
+                Action: 'sts:AssumeRoleWithWebIdentity',
+                Condition: {
+                  StringEquals: {
+                    [`${oidcUrl}:sub`]:
+                      'system:serviceaccount:kube-system:cluster-autoscaler',
+                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
                   },
                 },
-              ],
-            });
+              },
+            ],
           });
         }),
         tags: {
           Name: `eks-cluster-autoscaler-role-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      { parent: this, dependsOn: [cluster] }
     );
 
     // Create policy for cluster autoscaler
@@ -658,38 +667,43 @@ export class TapStack extends pulumi.ComponentResource {
     const albControllerRole = new aws.iam.Role(
       `eks-alb-controller-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider) => {
-          if (!oidcProvider) {
+        assumeRolePolicy: pulumi.all([
+          cluster.core.oidcProvider,
+          cluster.eksCluster.arn,
+        ]).apply(([oidcProvider, clusterArn]) => {
+          if (!oidcProvider || typeof oidcProvider !== 'object') {
             throw new Error('OIDC provider not available');
           }
-          return pulumi.output(oidcProvider.url).apply((url) => {
-            const oidcUrl = url.replace('https://', '');
-            return JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    Federated: oidcProvider.arn,
-                  },
-                  Action: 'sts:AssumeRoleWithWebIdentity',
-                  Condition: {
-                    StringEquals: {
-                      [`${oidcUrl}:sub`]:
-                        'system:serviceaccount:kube-system:aws-load-balancer-controller',
-                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
-                    },
+          const provider = oidcProvider as any;
+          if (!provider.url || !provider.arn) {
+            throw new Error('OIDC provider URL or ARN not available');
+          }
+          const oidcUrl = provider.url.replace('https://', '');
+          return JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  Federated: provider.arn,
+                },
+                Action: 'sts:AssumeRoleWithWebIdentity',
+                Condition: {
+                  StringEquals: {
+                    [`${oidcUrl}:sub`]:
+                      'system:serviceaccount:kube-system:aws-load-balancer-controller',
+                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
                   },
                 },
-              ],
-            });
+              },
+            ],
           });
         }),
         tags: {
           Name: `eks-alb-controller-role-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      { parent: this, dependsOn: [cluster] }
     );
 
     // Create policy for AWS Load Balancer Controller
