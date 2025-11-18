@@ -1,4 +1,4 @@
-name: migration-orchestrator
+name: TapStack
 runtime:
   name: nodejs
 description: Multi-account migration orchestration framework
