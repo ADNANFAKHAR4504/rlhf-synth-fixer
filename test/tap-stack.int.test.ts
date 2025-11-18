@@ -19,8 +19,8 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
   let lambda: AWS.Lambda;
   let sns: AWS.SNS;
 
-  const primaryRegion = 'us-east-1';
-  const secondaryRegion = 'us-east-2';
+  const primaryRegion = 'eu-central-1';
+  const secondaryRegion = 'eu-central-2';
 
   beforeAll(() => {
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -50,13 +50,13 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
       expect(outputs.dashboardUrl).toBeDefined();
     });
 
-    test('Primary endpoint should be in us-east-1', () => {
-      expect(outputs.primaryEndpoint).toContain('us-east-1');
+    test('Primary endpoint should be in eu-central-1', () => {
+      expect(outputs.primaryEndpoint).toContain('eu-central-1');
       expect(outputs.primaryEndpoint).toContain('elb.amazonaws.com');
     });
 
-    test('Secondary endpoint should be in us-east-2', () => {
-      expect(outputs.secondaryEndpoint).toContain('us-east-2');
+    test('Secondary endpoint should be in eu-central-2', () => {
+      expect(outputs.secondaryEndpoint).toContain('eu-central-2');
       expect(outputs.secondaryEndpoint).toContain('elb.amazonaws.com');
     });
 
@@ -66,7 +66,7 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
     });
   });
 
-  describe('Primary Region (us-east-1) - VPC and Network Infrastructure', () => {
+  describe('Primary Region (eu-central-1) - VPC and Network Infrastructure', () => {
     test('Primary VPC should exist with correct CIDR block', async () => {
       const vpcsResponse = await ec2Primary.describeVpcs({
         Filters: [
@@ -129,7 +129,7 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
     });
   });
 
-  describe('Secondary Region (us-east-2) - VPC and Network Infrastructure', () => {
+  describe('Secondary Region (eu-central-2) - VPC and Network Infrastructure', () => {
     test('Secondary VPC should exist with correct CIDR block', async () => {
       const vpcsResponse = await ec2Secondary.describeVpcs({
         Filters: [

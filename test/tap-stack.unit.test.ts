@@ -13,33 +13,33 @@ pulumi.runtime.setMocks({
       outputs.cidrBlock = args.inputs.cidrBlock || '10.0.0.0/16';
     } else if (args.type === 'aws:ec2/subnet:Subnet') {
       outputs.id = `subnet-${args.name}`;
-      outputs.availabilityZone = 'us-east-1a';
+      outputs.availabilityZone = 'eu-central-1a';
     } else if (args.type === 'aws:rds/globalCluster:GlobalCluster') {
       outputs.id = args.name;
       outputs.globalClusterIdentifier = args.name;
     } else if (args.type === 'aws:rds/cluster:Cluster') {
-      outputs.endpoint = `${args.name}.cluster-abc.us-east-1.rds.amazonaws.com`;
-      outputs.readerEndpoint = `${args.name}.cluster-ro-abc.us-east-1.rds.amazonaws.com`;
+      outputs.endpoint = `${args.name}.cluster-abc.eu-central-1.rds.amazonaws.com`;
+      outputs.readerEndpoint = `${args.name}.cluster-ro-abc.eu-central-1.rds.amazonaws.com`;
       outputs.id = args.name;
       outputs.clusterIdentifier = args.name;
     } else if (args.type === 'aws:rds/clusterInstance:ClusterInstance') {
       outputs.id = `${args.name}-instance`;
-      outputs.endpoint = `${args.name}.abc.us-east-1.rds.amazonaws.com`;
+      outputs.endpoint = `${args.name}.abc.eu-central-1.rds.amazonaws.com`;
     } else if (args.type === 'aws:lb/loadBalancer:LoadBalancer') {
-      outputs.dnsName = `${args.name}.us-east-1.elb.amazonaws.com`;
-      outputs.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/${args.name}`;
+      outputs.dnsName = `${args.name}.eu-central-1.elb.amazonaws.com`;
+      outputs.arn = `arn:aws:elasticloadbalancing:eu-central-1:123456789012:loadbalancer/app/${args.name}`;
     } else if (args.type === 'aws:lb/targetGroup:TargetGroup') {
-      outputs.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/${args.name}`;
+      outputs.arn = `arn:aws:elasticloadbalancing:eu-central-1:123456789012:targetgroup/${args.name}`;
     } else if (args.type === 'aws:lb/listener:Listener') {
-      outputs.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/${args.name}`;
+      outputs.arn = `arn:aws:elasticloadbalancing:eu-central-1:123456789012:listener/${args.name}`;
     } else if (args.type === 'aws:autoscaling/group:Group') {
       outputs.name = args.name;
-      outputs.arn = `arn:aws:autoscaling:us-east-1:123456789012:autoScalingGroup:${args.name}`;
+      outputs.arn = `arn:aws:autoscaling:eu-central-1:123456789012:autoScalingGroup:${args.name}`;
     } else if (args.type === 'aws:s3/bucket:Bucket') {
       outputs.id = args.name;
       outputs.bucket = args.name;
     } else if (args.type === 'aws:lambda/function:Function') {
-      outputs.arn = `arn:aws:lambda:us-east-1:123456789012:function:${args.name}`;
+      outputs.arn = `arn:aws:lambda:eu-central-1:123456789012:function:${args.name}`;
       outputs.name = args.name;
     } else if (args.type === 'aws:route53/zone:Zone') {
       outputs.zoneId = 'Z1234567890ABC';
@@ -49,13 +49,13 @@ pulumi.runtime.setMocks({
     } else if (args.type === 'aws:cloudwatch/dashboard:Dashboard') {
       outputs.dashboardArn = `arn:aws:cloudwatch::123456789012:dashboard/${args.name}`;
     } else if (args.type === 'aws:sns/topic:Topic') {
-      outputs.arn = `arn:aws:sns:us-east-1:123456789012:${args.name}`;
+      outputs.arn = `arn:aws:sns:eu-central-1:123456789012:${args.name}`;
     } else if (args.type === 'aws:iam/role:Role') {
       outputs.arn = `arn:aws:iam::123456789012:role/${args.name}`;
     }
 
     outputs.id = outputs.id || `${args.name}-id`;
-    outputs.arn = outputs.arn || `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`;
+    outputs.arn = outputs.arn || `arn:aws:${args.type}:eu-central-1:123456789012:${args.name}`;
     outputs.name = outputs.name || args.name;
 
     return {
@@ -66,8 +66,8 @@ pulumi.runtime.setMocks({
   call: function (args: pulumi.runtime.MockCallArgs): any {
     if (args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones') {
       return {
-        names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-        zoneIds: ['use1-az1', 'use1-az2', 'use1-az3'],
+        names: ['eu-central-1a', 'eu-central-1b', 'eu-central-1c'],
+        zoneIds: ['euc1-az1', 'euc1-az2', 'euc1-az3'],
       };
     }
     if (args.token === 'aws:index/getCallerIdentity:getCallerIdentity') {
@@ -79,8 +79,8 @@ pulumi.runtime.setMocks({
     }
     if (args.token === 'aws:index/getRegion:getRegion') {
       return {
-        name: 'us-east-1',
-        endpoint: 'ec2.us-east-1.amazonaws.com',
+        name: 'eu-central-1',
+        endpoint: 'ec2.eu-central-1.amazonaws.com',
       };
     }
     return args.inputs;
@@ -438,7 +438,7 @@ describe('TapStack Multi-Region Disaster Recovery', () => {
   });
 
   describe('Multi-Region Configuration', () => {
-    it('deploys infrastructure in both us-east-1 and us-east-2', async () => {
+    it('deploys infrastructure in both eu-central-1 and eu-central-2', async () => {
       const stack = new TapStack('test-multiregion', {
         environmentSuffix: 'test',
       });

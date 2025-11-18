@@ -8,18 +8,18 @@ The trading platform handles critical financial transactions that can't tolerate
 
 ## What we need to build
 
-Create a multi-region disaster recovery infrastructure using **Pulumi with TypeScript** for a critical trading platform. The solution must provide automated failover capabilities between US East (primary) and US West (standby) regions with minimal recovery time and data loss.
+Create a multi-region disaster recovery infrastructure using **Pulumi with TypeScript** for a critical trading platform. The solution must provide automated failover capabilities between EU Central 1 (primary) and EU Central 2 (standby) regions with minimal recovery time and data loss.
 
 ### Core Requirements
 
-1. **Primary Region Infrastructure (us-east-1)**
+1. **Primary Region Infrastructure (eu-central-1)**
    - Aurora PostgreSQL database cluster for transactional data
    - Application Load Balancer for traffic distribution
    - Auto Scaling Group with EC2 instances for application workload
    - VPC with private subnets across 3 availability zones
    - NAT Gateways for outbound connectivity
 
-2. **Standby Region Infrastructure (us-east-2)**
+2. **Standby Region Infrastructure (eu-central-2)**
    - Aurora read replica from primary cluster
    - Minimal compute resources in standby mode
    - Auto Scaling configuration ready to scale up during failover
@@ -62,8 +62,8 @@ Create a multi-region disaster recovery infrastructure using **Pulumi with TypeS
 - Use **Auto Scaling Groups** with launch templates
 - Use **IAM** roles and policies for service permissions
 - Use **KMS** for encryption of data at rest and in transit
-- Deploy primary infrastructure to **us-east-1** region
-- Deploy standby infrastructure to **us-east-2** region
+- Deploy primary infrastructure to **eu-central-1** region
+- Deploy standby infrastructure to **eu-central-2** region
 - Resource names must include **environmentSuffix** for uniqueness and environment identification
 - Follow naming convention: `resource-type-${environmentSuffix}`
 - Export outputs for primary endpoint, secondary endpoint, health check URLs, and dashboard URL

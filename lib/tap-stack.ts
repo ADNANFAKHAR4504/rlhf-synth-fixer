@@ -31,20 +31,20 @@ export class TapStack extends pulumi.ComponentResource {
       config.getSecret('dbPassword') ||
       pulumi.secret(process.env.TF_VAR_db_password || 'TempPassword123!');
 
-    // Primary region provider (us-east-1)
+    // Primary region provider (eu-central-1)
     const primaryProvider = new aws.Provider(
       `provider-primary-${environmentSuffix}`,
       {
-        region: 'us-east-1',
+        region: 'eu-central-1',
       },
       { parent: this }
     );
 
-    // Secondary region provider (us-east-2)
+    // Secondary region provider (eu-central-2)
     const secondaryProvider = new aws.Provider(
       `provider-secondary-${environmentSuffix}`,
       {
-        region: 'us-east-2',
+        region: 'eu-central-2',
       },
       { parent: this }
     );
@@ -832,8 +832,8 @@ export class TapStack extends pulumi.ComponentResource {
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
 const AWS = require('aws-sdk');
-const rds = new AWS.RDS({ region: 'us-east-1' });
-const cloudwatch = new AWS.CloudWatch({ region: 'us-east-1' });
+const rds = new AWS.RDS({ region: 'eu-central-1' });
+const cloudwatch = new AWS.CloudWatch({ region: 'eu-central-1' });
 
 exports.handler = async (event) => {
   try {
@@ -1345,7 +1345,7 @@ echo "Starting standby trading application..." > /var/log/user-data.log
     this.primaryEndpoint = primaryAlb.dnsName;
     this.secondaryEndpoint = secondaryAlb.dnsName;
     this.healthCheckUrl = pulumi.interpolate`http://${primaryAlb.dnsName}/health`;
-    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${dashboard.dashboardName}`;
+    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=${dashboard.dashboardName}`;
 
     // Resources are created for their side effects (infrastructure deployment)
     void secondaryClusterInstance;
