@@ -4,13 +4,11 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "w19bp2",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T00:00:00.000Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Environment Migration",
-    "VPC Peering",
-    "Multi-Account"
+    "Environment Migration"
   ],
   "aws_services": [
     "VPC",
@@ -29,6 +27,6 @@
     "lines": 0,
     "branches": 0
   },
-  "author": "synth-2",
+  "author": "rajendrasingh-turing",
   "dockerS3Location": ""
 }

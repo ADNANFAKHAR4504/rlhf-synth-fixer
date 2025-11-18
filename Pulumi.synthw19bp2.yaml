@@ -1,6 +1,0 @@
-encryptionsalt: v1:Jfx8Wy+Qm0Y=:v1:eyJDw6w31PToSE6y:lja4DqMBU/VoYAiMJwIcpaozTuDW1w==
-config:
-  VpcPeeringStack:paymentVpcId: dummy
-  VpcPeeringStack:auditVpcId: dummy
-  VpcPeeringStack:paymentAccountId: "111111111111"
-  VpcPeeringStack:auditAccountId: "111111111111"

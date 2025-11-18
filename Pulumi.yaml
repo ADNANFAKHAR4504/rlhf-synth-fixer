@@ -1,4 +1,4 @@
-name: VpcPeeringStack
+name: TapStack
 runtime:
   name: nodejs
   options:
