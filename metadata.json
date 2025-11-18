@@ -8,11 +8,7 @@
   "startedAt": "2025-11-18T10:17:55+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "networking",
-    "vpc",
-    "transit-gateway"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "Transit Gateway",
@@ -28,5 +24,7 @@
     "Transit Gateway VPC Attachments",
     "Availability Zones"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
