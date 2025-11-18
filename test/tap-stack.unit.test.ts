@@ -27,9 +27,9 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
       expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toHaveLength(3);
     });
 
-    test('should have exactly 35 resources', () => {
+    test('should have exactly 32 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(35);
+      expect(resourceCount).toBe(32);
     });
 
     test('should have exactly 6 parameters', () => {

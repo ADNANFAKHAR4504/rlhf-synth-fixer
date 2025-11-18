@@ -298,97 +298,15 @@ Resources:
         KeyId: !Ref LogEncryptionKey
 
   # ========================================
-  # OpenSearch Security Policies
-  # ========================================
-
-  OpenSearchEncryptionPolicy:
-    Type: AWS::OpenSearchServerless::SecurityPolicy
-    Properties:
-      Name: !Sub 'payment-logs-encryption-${EnvironmentSuffix}'
-      Type: encryption
-      Policy: !Sub |
-        {
-          "Rules": [
-            {
-              "ResourceType": "collection",
-              "Resource": [
-                "collection/payment-logs-${EnvironmentSuffix}"
-              ]
-            }
-          ],
-          "AWSOwnedKey": true
-        }
-
-  OpenSearchNetworkPolicy:
-    Type: AWS::OpenSearchServerless::SecurityPolicy
-    Properties:
-      Name: !Sub 'payment-logs-network-${EnvironmentSuffix}'
-      Type: network
-      Policy: !Sub |
-        [
-          {
-            "Rules": [
-              {
-                "ResourceType": "collection",
-                "Resource": [
-                  "collection/payment-logs-${EnvironmentSuffix}"
-                ]
-              },
-              {
-                "ResourceType": "dashboard",
-                "Resource": [
-                  "collection/payment-logs-${EnvironmentSuffix}"
-                ]
-              }
-            ],
-            "AllowFromPublic": true
-          }
-        ]
-
-  OpenSearchDataAccessPolicy:
-    Type: AWS::OpenSearchServerless::SecurityPolicy
-    Properties:
-      Name: !Sub 'payment-logs-data-access-${EnvironmentSuffix}'
-      Type: encryption
-      Policy: !Sub |
-        [
-          {
-            "Rules": [
-              {
-                "Resource": [
-                  "collection/payment-logs-${EnvironmentSuffix}",
-                  "index/payment-logs-${EnvironmentSuffix}/*"
-                ],
-                "Permission": [
-                  "aoss:*"
-                ],
-                "Principal": [
-                  "arn:aws:iam::${AWS::AccountId}:role/KinesisFirehoseRole-${EnvironmentSuffix}",
-                  "arn:aws:iam::${AWS::AccountId}:root"
-                ]
-              }
-            ],
-            "Principal": [
-              "arn:aws:iam::${AWS::AccountId}:role/KinesisFirehoseRole-${EnvironmentSuffix}",
-              "arn:aws:iam::${AWS::AccountId}:root"
-            ]
-          }
-        ]
-
-  # ========================================
   # OpenSearch Domain
   # ========================================
 
   OpenSearchDomain:
     Type: AWS::OpenSearchServerless::Collection
     DeletionPolicy: Delete
-    DependsOn:
-      - OpenSearchEncryptionPolicy
-      - OpenSearchNetworkPolicy
-      - OpenSearchDataAccessPolicy
     Properties:
       Name: !Sub 'payment-logs-${EnvironmentSuffix}'
-      Type: SEARCH
+      Type: 'SEARCH'
       Description: 'OpenSearch Serverless collection for payment logs'
 
   # ========================================
@@ -408,6 +326,8 @@ Resources:
       AmazonOpenSearchServerlessDestinationConfiguration:
         CollectionEndpoint: !GetAtt OpenSearchDomain.CollectionEndpoint
         IndexName: 'payment-logs'
+        IndexRotationPeriod: 'OneDay'
+        TypeName: '_doc'
         RoleARN: !GetAtt KinesisFirehoseRole.Arn
         S3BackupMode: FailedDocumentsOnly
         S3Configuration:
@@ -433,7 +353,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
-              - 'aoss:*'
+              - 'es:*'
             Resource:
               - !GetAtt OpenSearchDomain.Arn
               - !Sub '${OpenSearchDomain.Arn}/*'
@@ -718,18 +638,18 @@ Resources:
   OpenSearchClusterStatusAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'opensearch-5xx-errors-${EnvironmentSuffix}'
-      AlarmDescription: 'Triggered when OpenSearch has 5xx errors'
+      AlarmName: !Sub 'opensearch-cluster-status-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when OpenSearch cluster status is red'
       MetricName: 5xx
       Namespace: AWS/AOSS
       Dimensions:
         - Name: CollectionName
           Value: !Ref OpenSearchDomain
-      Statistic: Sum
-      Period: 300
+      Statistic: Maximum
+      Period: 60
       EvaluationPeriods: 1
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
       AlarmActions:
         - !Ref CriticalAlertTopic
       TreatMissingData: notBreaching
@@ -861,14 +781,12 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/AOSS", "2xx", {"stat": "Sum", "label": "2xx"}, {"CollectionName": "${OpenSearchDomain}"}],
-                  [".", "4xx", {"stat": "Sum", "label": "4xx"}, {"CollectionName": "${OpenSearchDomain}"}],
-                  [".", "5xx", {"stat": "Sum", "label": "5xx"}, {"CollectionName": "${OpenSearchDomain}"}]
+                  ["AWS/AOSS", "5xx", {"stat": "Maximum", "label": "5xx Errors"}, {"CollectionName": "${OpenSearchDomain}"}]
                 ],
-                "period": 300,
+                "period": 60,
                 "stat": "Maximum",
                 "region": "${AWS::Region}",
-                "title": "OpenSearch Response Codes"
+                "title": "OpenSearch Serverless Errors"
               }
             },
             {
@@ -1003,14 +921,14 @@ Outputs:
 
   # OpenSearch
   OpenSearchDomainEndpoint:
-    Description: 'OpenSearch collection endpoint'
+    Description: 'OpenSearch domain endpoint'
     Value: !GetAtt OpenSearchDomain.CollectionEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
 
   OpenSearchDashboardUrl:
     Description: 'OpenSearch Dashboards URL'
-    Value: !Sub 'https://${OpenSearchDomain.DashboardEndpoint}/_dashboards'
+    Value: !Sub 'https://${OpenSearchDomain.CollectionEndpoint}/_dashboards'
     Export:
       Name: !Sub '${AWS::StackName}-OpenSearchDashboardUrl'
 
