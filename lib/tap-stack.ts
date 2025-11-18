@@ -25,9 +25,10 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
 
-    // Get database password from Pulumi config
+    // Get database password from Pulumi config or environment variable
     const config = new pulumi.Config();
-    const dbPassword = config.requireSecret('dbPassword');
+    const dbPassword = config.getSecret('dbPassword') ||
+      pulumi.secret(process.env.TF_VAR_db_password || 'TempPassword123!');
 
     // Primary region provider (us-east-1)
     const primaryProvider = new aws.Provider(
