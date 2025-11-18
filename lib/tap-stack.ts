@@ -1361,7 +1361,7 @@ export class TapStack extends pulumi.ComponentResource {
           {
             name: 'SQLInjectionProtection',
             priority: 2,
-            action: { block: {} },
+            overrideAction: { none: {} },
             statement: {
               managedRuleGroupStatement: {
                 vendorName: 'AWS',
@@ -1373,12 +1373,11 @@ export class TapStack extends pulumi.ComponentResource {
               metricName: 'SQLInjectionProtection',
               sampledRequestsEnabled: true,
             },
-            overrideAction: { none: {} },
           },
           {
             name: 'XSSProtection',
             priority: 3,
-            action: { block: {} },
+            overrideAction: { none: {} },
             statement: {
               managedRuleGroupStatement: {
                 vendorName: 'AWS',
@@ -1390,7 +1389,6 @@ export class TapStack extends pulumi.ComponentResource {
               metricName: 'XSSProtection',
               sampledRequestsEnabled: true,
             },
-            overrideAction: { none: {} },
           },
         ],
         visibilityConfig: {
@@ -2037,6 +2035,9 @@ def handler(event, context):
       { parent: this }
     );
 
+    // NOTE: AWS Config Recorder commented out due to account limit (1 per region)
+    // Uncomment if no other Config Recorder exists in this region
+    /*
     const configRecorder = new aws.cfg.Recorder(
       `config-recorder-${environmentSuffix}`,
       {
@@ -2094,6 +2095,7 @@ def handler(event, context):
       },
       { parent: this, dependsOn: [configRecorder] }
     );
+    */
 
     // Set output properties
     this.blueVpcId = blueVpc.id;
