@@ -44,7 +44,6 @@ Resources:
 
   DatabaseStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: ComputeStack  # Need Lambda SG ID from compute stack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/database-stack.yaml'
       Parameters:
@@ -67,9 +66,6 @@ Resources:
 
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - NetworkStack
-      - QueueStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/compute-stack.yaml'
       Parameters:
@@ -122,7 +118,6 @@ Resources:
 
   CloudFrontStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: ComputeStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/cloudfront-stack.yaml'
       Parameters:
@@ -138,9 +133,6 @@ Resources:
 
   Route53FailoverStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - ComputeStack
-      - CloudFrontStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/route53-failover.yaml'
       Parameters:

@@ -330,25 +330,27 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      ReplicationConfiguration:
-        Role: !GetAtt ReplicationRole.Arn
-        Rules:
-          - Id: ReplicateToSecondaryRegion
-            Status: Enabled
-            Priority: 1
-            Filter:
-              Prefix: ''
-            Destination:
-              Bucket: !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}'
-              ReplicationTime:
-                Status: Enabled
-                Time:
-                  Minutes: 15
-              Metrics:
-                Status: Enabled
-                EventThreshold:
-                  Minutes: 15
-              StorageClass: STANDARD_IA
+      ReplicationConfiguration: !If
+        - IsPrimaryRegion
+        - Role: !GetAtt ReplicationRole.Arn
+          Rules:
+            - Id: ReplicateToSecondaryRegion
+              Status: Enabled
+              Priority: 1
+              Filter:
+                Prefix: ''
+              Destination:
+                Bucket: !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}'
+                ReplicationTime:
+                  Status: Enabled
+                  Time:
+                    Minutes: 15
+                Metrics:
+                  Status: Enabled
+                  EventThreshold:
+                    Minutes: 15
+                StorageClass: STANDARD_IA
+        - !Ref AWS::NoValue
       LifecycleConfiguration:
         Rules:
           - Id: TransitionToIA
