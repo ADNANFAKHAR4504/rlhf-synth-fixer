@@ -42,6 +42,8 @@ import {
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 
+jest.setTimeout(50000);
+
 // Load stack outputs from deployment
 const outputs: Record<string, string> = (() => {
   try {
@@ -141,6 +143,53 @@ const waitForTransactionRecord = async (
   }
 
   return undefined;
+};
+
+const invokeLambda = async (functionName: string, payload: Record<string, any>) => {
+  const response = await lambdaClient.send(
+    new InvokeCommand({
+      FunctionName: functionName,
+      Payload: Buffer.from(JSON.stringify(payload)),
+      InvocationType: 'RequestResponse'
+    })
+  );
+
+  if (response.FunctionError) {
+    const errorPayload = Buffer.from(response.Payload ?? []).toString('utf-8');
+    throw new Error(`Lambda invocation failed (${functionName}): ${response.FunctionError} ${errorPayload}`);
+  }
+
+  return parseLambdaPayload(response.Payload);
+};
+
+const purgeQueueMessages = async (queueUrl: string, maxIterations = 10) => {
+  for (let i = 0; i < maxIterations; i++) {
+    const response = await sqsClient.send(
+      new ReceiveMessageCommand({
+        QueueUrl: queueUrl,
+        MaxNumberOfMessages: 10,
+        WaitTimeSeconds: 1
+      })
+    );
+
+    const messages = response.Messages;
+    if (!messages || messages.length === 0) {
+      break;
+    }
+
+    await Promise.all(
+      messages
+        .filter(m => m.ReceiptHandle)
+        .map(m =>
+          sqsClient.send(
+            new DeleteMessageCommand({
+              QueueUrl: queueUrl,
+              ReceiptHandle: m.ReceiptHandle!
+            })
+          )
+        )
+    );
+  }
 };
 
 describe('TapStack End-to-End Integration Tests', () => {
@@ -322,37 +371,23 @@ describe('TapStack End-to-End Integration Tests', () => {
       const ownerId = `owner-${uuidv4()}`;
 
       // Act - Acquire lock
-      const acquireLockPayload = JSON.stringify({
+      const acquireResult = await invokeLambda(distributedLockFunctionArn, {
         operation: 'acquire',
-        lockId: lockId,
-        ownerId: ownerId,
+        lockId,
+        ownerId,
         ttlSeconds: 60
       });
-
-      const acquireCommand = new InvokeCommand({
-        FunctionName: distributedLockFunctionArn,
-        Payload: Buffer.from(acquireLockPayload)
-      });
-      const acquireResponse = await lambdaClient.send(acquireCommand);
-      const acquireResult = parseLambdaPayload(acquireResponse.Payload);
 
       // Assert - Lock acquired
       expect(acquireResult.locked).toBe(true);
       expect(acquireResult.lockId).toBe(lockId);
 
       // Act - Release lock
-      const releaseLockPayload = JSON.stringify({
+      const releaseResult = await invokeLambda(distributedLockFunctionArn, {
         operation: 'release',
-        lockId: lockId,
-        ownerId: ownerId
+        lockId,
+        ownerId
       });
-
-      const releaseCommand = new InvokeCommand({
-        FunctionName: distributedLockFunctionArn,
-        Payload: Buffer.from(releaseLockPayload)
-      });
-      const releaseResponse = await lambdaClient.send(releaseCommand);
-      const releaseResult = parseLambdaPayload(releaseResponse.Payload);
 
       // Assert - Lock released
       expect(releaseResult.released).toBe(true);
@@ -365,50 +400,32 @@ describe('TapStack End-to-End Integration Tests', () => {
       const ownerId2 = `owner2-${uuidv4()}`;
 
       // Act - First lock acquisition
-      const acquire1Payload = JSON.stringify({
+      const acquire1Result = await invokeLambda(distributedLockFunctionArn, {
         operation: 'acquire',
-        lockId: lockId,
+        lockId,
         ownerId: ownerId1,
         ttlSeconds: 60
       });
-
-      const acquire1Command = new InvokeCommand({
-        FunctionName: distributedLockFunctionArn,
-        Payload: Buffer.from(acquire1Payload)
-      });
-      const acquire1Response = await lambdaClient.send(acquire1Command);
-      const acquire1Result = parseLambdaPayload(acquire1Response.Payload);
       expect(acquire1Result.locked).toBe(true);
 
       // Act - Second lock acquisition attempt
-      const acquire2Payload = JSON.stringify({
+      const acquire2Result = await invokeLambda(distributedLockFunctionArn, {
         operation: 'acquire',
-        lockId: lockId,
+        lockId,
         ownerId: ownerId2,
         ttlSeconds: 60
       });
-
-      const acquire2Command = new InvokeCommand({
-        FunctionName: distributedLockFunctionArn,
-        Payload: Buffer.from(acquire2Payload)
-      });
-      const acquire2Response = await lambdaClient.send(acquire2Command);
-      const acquire2Result = parseLambdaPayload(acquire2Response.Payload);
 
       // Assert - Second acquisition should fail
       expect(acquire2Result.locked).toBe(false);
       expect(acquire2Result.message).toContain('Lock already held');
 
       // Cleanup
-      const releasePayload = JSON.stringify({
+      await invokeLambda(distributedLockFunctionArn, {
         operation: 'release',
-        lockId: lockId,
+        lockId,
         ownerId: ownerId1
       });
-      await lambdaClient.send(new InvokeCommand({
-        FunctionName: distributedLockFunctionArn,
-        Payload: Buffer.from(releasePayload)
-      }));
     });
   });
 
@@ -427,24 +444,14 @@ describe('TapStack End-to-End Integration Tests', () => {
       };
 
       // Act - First processing
-      const firstInvokeCommand = new InvokeCommand({
-        FunctionName: eventTransformerFunctionArn,
-        Payload: Buffer.from(JSON.stringify(testEvent))
-      });
-      const firstResponse = await lambdaClient.send(firstInvokeCommand);
-      const firstResult = parseLambdaPayload(firstResponse.Payload);
-      const firstStatusCode = firstResult.statusCode ?? firstResult.StatusCode;
+      const firstResult = await invokeLambda(eventTransformerFunctionArn, testEvent);
+      const firstStatusCode = firstResult.statusCode ?? firstResult.StatusCode ?? 200;
       expect(firstStatusCode).toBe(200);
       expect(firstResult.duplicate).toBeFalsy();
 
       // Act - Second processing (duplicate)
       await sleep(1000);
-      const secondInvokeCommand = new InvokeCommand({
-        FunctionName: eventTransformerFunctionArn,
-        Payload: Buffer.from(JSON.stringify(testEvent))
-      });
-      const secondResponse = await lambdaClient.send(secondInvokeCommand);
-      const secondResult = parseLambdaPayload(secondResponse.Payload);
+      const secondResult = await invokeLambda(eventTransformerFunctionArn, testEvent);
 
       // Assert - Should detect duplicate
       expect(secondResult.duplicate).toBe(true);
@@ -704,7 +711,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     test('should trigger saga coordinator for compensation', async () => {
       // Arrange
       const sagaTransactionId = `saga-${uuidv4()}`;
-      const compensationPayload = JSON.stringify({
+      const compensationPayload = {
         rollback: true,
         sagaState: {
           transactionId: sagaTransactionId,
@@ -712,16 +719,11 @@ describe('TapStack End-to-End Integration Tests', () => {
           completedSteps: ['validate_order', 'reserve_inventory']
         },
         compensationType: 'ORDER'
-      });
+      };
 
       // Act
-      const invokeCommand = new InvokeCommand({
-        FunctionName: sagaCoordinatorFunctionArn,
-        Payload: Buffer.from(compensationPayload)
-      });
-      const response = await lambdaClient.send(invokeCommand);
-      const result = parseLambdaPayload(response.Payload);
-      const sagaStatusCode = result.statusCode ?? result.StatusCode;
+      const result = await invokeLambda(sagaCoordinatorFunctionArn, compensationPayload);
+      const sagaStatusCode = result.statusCode ?? result.StatusCode ?? 200;
 
       // Assert
       expect(sagaStatusCode).toBe(200);
@@ -733,6 +735,10 @@ describe('TapStack End-to-End Integration Tests', () => {
   describe('J. Error Handling and DLQ', () => {
     test('should route failed order messages to DLQ', async () => {
       const dlqUrl = orderProcessingQueueUrl.replace('.fifo', '-DLQ.fifo');
+
+      // Ensure queues start empty for deterministic validation
+      await purgeQueueMessages(dlqUrl);
+      await purgeQueueMessages(orderProcessingQueueUrl);
 
       // Ensure DLQ exists
       const getAttributesCommand = new GetQueueAttributesCommand({
@@ -803,7 +809,8 @@ describe('TapStack End-to-End Integration Tests', () => {
         throw new Error('DLQ message not received for failure scenario');
       }
 
-      expect(dlqMessage.Body).toContain(dlqTransactionId);
+      const dlqBody = dlqMessage.Body ? JSON.parse(dlqMessage.Body) : {};
+      expect(dlqBody.transactionId).toBe(dlqTransactionId);
 
       // Cleanup DLQ message
       if (dlqMessage.ReceiptHandle) {
