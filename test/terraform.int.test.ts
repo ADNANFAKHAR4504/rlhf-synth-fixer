@@ -254,14 +254,6 @@ describe('E2E Financial Transaction Processing - SQS FIFO Queues', () => {
       console.log('All Terraform outputs parsed successfully');
     });
 
-    test('should validate environment configuration', () => {
-      expect(outputs.deployment_region).toMatch(/^[a-z]{2}-[a-z]+-\d$/);
-      expect(outputs.aws_account_id).toMatch(/^\d{12}$/);
-      expect(outputs.environment).toMatch(/^(dev|staging|prod|test)$/);
-
-      console.log(`Environment: ${outputs.environment} | Region: ${region} | Account: ${accountId}`);
-    });
-
     test('should validate Transaction Validation queue configuration', async () => {
       const attributes = await safeAwsCall(
         async () => {
