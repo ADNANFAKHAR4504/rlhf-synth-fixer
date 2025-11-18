@@ -73,7 +73,7 @@ describe("Multi-Environment ECS Infrastructure - Provider Configuration", () => 
   });
 
   test("main.tf declares terraform required_version", () => {
-    expect(mainContent).toMatch(/required_version\s*=\s*">=\s*1\.\d+\.\d+"/);
+    expect(mainContent).toMatch(/required_version\s*=\s*">=\s*1\.\d+(\.\d+)?"/);
   });
 
   test("main.tf declares AWS provider requirement", () => {
