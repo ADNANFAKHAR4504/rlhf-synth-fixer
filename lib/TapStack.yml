@@ -776,8 +776,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", {"stat": "Sum", "label": "Successful Transactions"}],
-                  [".", "TransactionFailure", {"stat": "Sum", "label": "Failed Transactions"}]
+                  ["PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", "Sum", "Successful Transactions"],
+                  [".", "TransactionFailure", "Sum", "Failed Transactions"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -794,7 +794,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", {"stat": "Average"}]
+                  ["PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", "Average"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -819,7 +819,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", {"stat": "Average"}]
+                  ["PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", "Average"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -845,7 +845,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", {"stat": "Sum"}]
+                  ["PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", "Sum"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -862,8 +862,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}, {"Name": "FunctionName", "Value": "${MetricsProcessorFunction}"}],
-                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}, {"Name": "FunctionName", "Value": "${MetricsProcessorFunction}"}]
+                  ["AWS/Lambda", "Invocations", "Sum", "Lambda Invocations", "FunctionName=${MetricsProcessorFunction}"],
+                  [".", "Errors", "Sum", "Lambda Errors", "FunctionName=${MetricsProcessorFunction}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -875,20 +875,25 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingRecords", {"stat": "Sum"}, {"Name": "StreamName", "Value": "${LogStream}"}],
-                  [".", "IncomingBytes", {"stat": "Sum", "yAxis": "right"}, {"Name": "StreamName", "Value": "${LogStream}"}]
+                  ["AWS/Kinesis", "IncomingRecords", "Sum", "", "StreamName=${LogStream}"],
+                  [".", "IncomingBytes", "Sum", "Incoming Bytes", "StreamName=${LogStream}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
                 "region": "${AWS::Region}",
-                "title": "Kinesis Stream Throughput"
+                "title": "Kinesis Stream Throughput",
+                "yAxis": {
+                  "right": {
+                    "min": 0
+                  }
+                }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/AOSS", "5xx", {"stat": "Maximum", "label": "5xx Errors"}, {"Name": "CollectionName", "Value": "${OpenSearchDomain}"}]
+                  ["AWS/AOSS", "5xx", "Maximum", "5xx Errors", "CollectionName=${OpenSearchDomain}"]
                 ],
                 "period": 60,
                 "stat": "Maximum",
