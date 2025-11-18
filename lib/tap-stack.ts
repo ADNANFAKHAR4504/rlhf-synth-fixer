@@ -821,22 +821,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // --- 10. ACM Certificate (self-signed for testing) ---
-    // Note: In production, you would create a proper ACM certificate with domain validation
-    const certificate = new aws.acm.Certificate(
-      `payment-cert-${environmentSuffix}`,
-      {
-        domainName: `payment-${environmentSuffix}.example.com`,
-        validationMethod: 'DNS',
-        tags: {
-          ...commonTags,
-          Name: `payment-cert-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // --- 11. Application Load Balancer ---
+    // --- 10. Application Load Balancer ---
+    // Note: ACM Certificate removed for testing - requires validated domain
     const alb = new aws.lb.LoadBalancer(
       `payment-alb-${environmentSuffix}`,
       {
@@ -883,36 +869,14 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // HTTP listener (redirect to HTTPS)
+    // HTTP listener (forward to target group)
+    // Note: For production, use HTTPS with validated ACM certificate
     const httpListener = new aws.lb.Listener(
       `payment-http-listener-${environmentSuffix}`,
       {
         loadBalancerArn: alb.arn,
         port: 80,
         protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'redirect',
-            redirect: {
-              port: '443',
-              protocol: 'HTTPS',
-              statusCode: 'HTTP_301',
-            },
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    // HTTPS listener
-    const httpsListener = new aws.lb.Listener(
-      `payment-https-listener-${environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        certificateArn: certificate.arn,
-        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
         defaultActions: [
           {
             type: 'forward',
@@ -1170,7 +1134,7 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `payment-service-${environmentSuffix}`,
         },
       },
-      { parent: this, dependsOn: [httpsListener] }
+      { parent: this, dependsOn: [httpListener] }
     );
 
     // --- 17. Auto Scaling for ECS Service ---
@@ -1328,7 +1292,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.registerOutputs({
       vpcId: this.vpcId,
       albDnsName: this.albDnsName,
-      albUrl: pulumi.interpolate`https://${alb.dnsName}`,
+      albUrl: pulumi.interpolate`http://${alb.dnsName}`,
       ecsClusterArn: this.ecsClusterArn,
       ecsClusterName: ecsCluster.name,
       ecsServiceName: ecsService.name,
