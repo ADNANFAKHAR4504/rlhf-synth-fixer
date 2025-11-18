@@ -47,7 +47,7 @@ export function createTransitGateway(
     `migration-tgw-share-${config.environmentSuffix}`,
     {
       name: `migration-tgw-share-${config.environmentSuffix}`,
-      allowExternalPrincipals: false,
+      allowExternalPrincipals: true, // Allow sharing outside AWS Organization for testing
       tags: {
         Name: `migration-tgw-share-${config.environmentSuffix}`,
         Environment: config.environmentSuffix,
@@ -85,20 +85,24 @@ export function createTransitGateway(
   // Remove duplicates for single-account mode
   const uniqueAccountIds = [...new Set(accountIds)];
 
-  const ramPrincipalAssociations = uniqueAccountIds.map((accountId, _index) => {
-    return new aws.ram.PrincipalAssociation(
-      `migration-tgw-principal-${accountId}-${config.environmentSuffix}`,
-      {
-        principal: accountId, // Use account ID directly, not ARN format
-        resourceShareArn: ramShare.arn,
-      }
-      // NOTE: dependsOn disabled since ramAssociation is a placeholder
-      // Restore when Transit Gateway limit is increased:
-      // {
-      //   dependsOn: [ramAssociation],
-      // }
-    );
-  });
+  // Skip RAM principal associations in single-account mode
+  // In single-account mode, sharing with the same account is not needed
+  const isSingleAccount = uniqueAccountIds.length === 1;
+
+  const ramPrincipalAssociations = isSingleAccount
+    ? []
+    : uniqueAccountIds.map((accountId, _index) => {
+        return new aws.ram.PrincipalAssociation(
+          `migration-tgw-principal-${accountId}-${config.environmentSuffix}`,
+          {
+            principal: accountId, // Use account ID directly, not ARN format
+            resourceShareArn: ramShare.arn,
+          },
+          {
+            dependsOn: [ramAssociation],
+          }
+        );
+      });
 
   return {
     tgw,

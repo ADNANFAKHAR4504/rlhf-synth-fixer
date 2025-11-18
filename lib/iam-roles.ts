@@ -78,7 +78,10 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ],
-            Resource: 'arn:aws:logs:*:*:*',
+            Resource: [
+              'arn:aws:logs:*:*:*',
+              'arn:aws:logs:*:*:log-group:/aws/stepfunctions/*',
+            ],
           },
           {
             Effect: 'Allow',
@@ -92,6 +95,15 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
           {
             Effect: 'Allow',
             Action: ['events:PutEvents', 'events:PutRule', 'events:PutTargets'],
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Action: [
+              'states:StartExecution',
+              'states:StopExecution',
+              'states:DescribeExecution',
+            ],
             Resource: '*',
           },
         ],
