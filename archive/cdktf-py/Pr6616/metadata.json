@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "9lh0b7",
   "team": "synth",
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-11-17T03:28:41+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -25,5 +25,10 @@
     "X-Ray",
     "ECR"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
