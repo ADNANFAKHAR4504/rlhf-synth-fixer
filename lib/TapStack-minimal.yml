@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Minimal test template'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+
+Resources:
+  TestQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    Properties:
+      QueueName: !Sub 'test-queue-${EnvironmentSuffix}'
+
+Outputs:
+  QueueUrl:
+    Value: !Ref TestQueue
