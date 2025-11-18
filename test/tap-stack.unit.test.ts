@@ -684,7 +684,6 @@ describe('TapStack CloudFormation Template - Cryptocurrency Webhook Processing S
       expect(template.Resources.ApiDeployment).toBeDefined();
       const deployment = template.Resources.ApiDeployment;
       expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
-      expect(deployment.Properties.StageName).toBe('prod');
       expect(deployment.DependsOn).toBe('WebhookPostMethod');
     });
 
@@ -692,7 +691,9 @@ describe('TapStack CloudFormation Template - Cryptocurrency Webhook Processing S
       expect(template.Resources.ApiStage).toBeDefined();
       const stage = template.Resources.ApiStage;
       expect(stage.Type).toBe('AWS::ApiGateway::Stage');
-      expect(stage.Properties.StageName).toBe('prod');
+      expect(stage.Properties.StageName).toEqual({
+        Ref: 'EnvironmentSuffix',
+      });
       expect(stage.Properties.TracingEnabled).toBe(true);
     });
 

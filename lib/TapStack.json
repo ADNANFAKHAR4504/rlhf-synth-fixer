@@ -488,8 +488,7 @@
             "Properties": {
                 "RestApiId": {
                     "Ref": "WebhookRestApi"
-                },
-                "StageName": "prod"
+                }
             }
         },
         "ApiStage": {
@@ -501,7 +500,9 @@
                 "DeploymentId": {
                     "Ref": "ApiDeployment"
                 },
-                "StageName": "prod",
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
                 "TracingEnabled": true,
                 "MethodSettings": [
                     {
@@ -567,7 +568,7 @@
         "ApiEndpointUrl": {
             "Description": "API Gateway endpoint URL",
             "Value": {
-                "Fn::Sub": "https://${WebhookRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/webhooks/{currency}"
+                "Fn::Sub": "https://${WebhookRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/webhooks/{currency}"
             },
             "Export": {
                 "Name": {
