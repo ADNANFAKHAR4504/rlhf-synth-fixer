@@ -32,6 +32,18 @@ variable "project_name" {
   }
 }
 
+variable "east_vpc_cidr" {
+  description = "CIDR block for the primary (us-east-1) VPC"
+  type        = string
+  default     = "10.10.0.0/16"
+}
+
+variable "west_vpc_cidr" {
+  description = "CIDR block for the secondary (us-west-2) VPC"
+  type        = string
+  default     = "10.20.0.0/16"
+}
+
 variable "team_name" {
   description = "Team responsible for the infrastructure"
   type        = string

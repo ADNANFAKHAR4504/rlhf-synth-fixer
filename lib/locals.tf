@@ -72,4 +72,10 @@ locals {
       region_key     = "west"
     }
   }
+
+  # Derived networking values from provisioned VPCs
+  east_public_subnet_ids  = [for subnet in aws_subnet.east_public : subnet.id]
+  east_private_subnet_ids = [for subnet in aws_subnet.east_private : subnet.id]
+  west_public_subnet_ids  = [for subnet in aws_subnet.west_public : subnet.id]
+  west_private_subnet_ids = [for subnet in aws_subnet.west_private : subnet.id]
 }

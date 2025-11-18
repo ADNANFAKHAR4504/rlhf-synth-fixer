@@ -68,23 +68,23 @@ output "infrastructure" {
 
     networking = {
       east = {
-        vpc_id             = data.aws_vpc.east.id
-        vpc_cidr           = data.aws_vpc.east.cidr_block
-        public_subnet_ids  = data.aws_subnets.public_east.ids
-        private_subnet_ids = data.aws_subnets.private_east.ids
-        availability_zones = data.aws_availability_zones.east.names
-        load_balancer_arn  = null  # Load Balancer not available - create separately if needed
-        load_balancer_dns  = null  # Load Balancer not available - create separately if needed
+        vpc_id             = aws_vpc.east.id
+        vpc_cidr           = aws_vpc.east.cidr_block
+        public_subnet_ids  = local.east_public_subnet_ids
+        private_subnet_ids = local.east_private_subnet_ids
+        availability_zones = keys(aws_subnet.east_public)
+        load_balancer_arn  = null # Load Balancer not available - create separately if needed
+        load_balancer_dns  = null # Load Balancer not available - create separately if needed
       }
 
       west = {
-        vpc_id             = data.aws_vpc.west.id
-        vpc_cidr           = data.aws_vpc.west.cidr_block
-        public_subnet_ids  = data.aws_subnets.public_west.ids
-        private_subnet_ids = data.aws_subnets.private_west.ids
-        availability_zones = data.aws_availability_zones.west.names
-        load_balancer_arn  = null  # Load Balancer not available - create separately if needed
-        load_balancer_dns  = null  # Load Balancer not available - create separately if needed
+        vpc_id             = aws_vpc.west.id
+        vpc_cidr           = aws_vpc.west.cidr_block
+        public_subnet_ids  = local.west_public_subnet_ids
+        private_subnet_ids = local.west_private_subnet_ids
+        availability_zones = keys(aws_subnet.west_public)
+        load_balancer_arn  = null # Load Balancer not available - create separately if needed
+        load_balancer_dns  = null # Load Balancer not available - create separately if needed
       }
     }
 
@@ -144,14 +144,14 @@ output "load_balancers" {
   description = "Load balancer endpoints for DNS configuration"
   value = {
     east = {
-      arn      = null  # Load Balancer not available - create separately if needed
-      dns_name = null  # Load Balancer not available - create separately if needed
-      zone_id  = null  # Load Balancer not available - create separately if needed
+      arn      = null # Load Balancer not available - create separately if needed
+      dns_name = null # Load Balancer not available - create separately if needed
+      zone_id  = null # Load Balancer not available - create separately if needed
     }
     west = {
-      arn      = null  # Load Balancer not available - create separately if needed
-      dns_name = null  # Load Balancer not available - create separately if needed
-      zone_id  = null  # Load Balancer not available - create separately if needed
+      arn      = null # Load Balancer not available - create separately if needed
+      dns_name = null # Load Balancer not available - create separately if needed
+      zone_id  = null # Load Balancer not available - create separately if needed
     }
   }
 }

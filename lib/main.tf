@@ -10,8 +10,8 @@ module "ec2_east" {
   region_name        = "us-east-1"
   tier_name          = split("-", each.key)[0]
 
-  vpc_id     = data.aws_vpc.east.id
-  subnet_ids = each.value.subnet_type == "public" ? data.aws_subnets.public_east.ids : data.aws_subnets.private_east.ids
+  vpc_id     = aws_vpc.east.id
+  subnet_ids = each.value.subnet_type == "public" ? local.east_public_subnet_ids : local.east_private_subnet_ids
 
   ami_id               = each.value.ami
   instance_type        = each.value.instance_type
@@ -47,8 +47,8 @@ module "ec2_west" {
   region_name        = "us-west-2"
   tier_name          = split("-", each.key)[0]
 
-  vpc_id     = data.aws_vpc.west.id
-  subnet_ids = each.value.subnet_type == "public" ? data.aws_subnets.public_west.ids : data.aws_subnets.private_west.ids
+  vpc_id     = aws_vpc.west.id
+  subnet_ids = each.value.subnet_type == "public" ? local.west_public_subnet_ids : local.west_private_subnet_ids
 
   ami_id               = each.value.ami
   instance_type        = each.value.instance_type
@@ -86,8 +86,8 @@ module "rds_east" {
   region_name        = local.regions["east"].name
   cluster_name       = each.key
 
-  vpc_id     = data.aws_vpc.east.id
-  subnet_ids = data.aws_subnets.private_east.ids
+  vpc_id     = aws_vpc.east.id
+  subnet_ids = local.east_private_subnet_ids
 
   engine          = each.value.engine
   engine_version  = each.value.engine_version
@@ -124,8 +124,8 @@ module "rds_west" {
   region_name        = local.regions["west"].name
   cluster_name       = each.key
 
-  vpc_id     = data.aws_vpc.west.id
-  subnet_ids = data.aws_subnets.private_west.ids
+  vpc_id     = aws_vpc.west.id
+  subnet_ids = local.west_private_subnet_ids
 
   engine          = each.value.engine
   engine_version  = each.value.engine_version
@@ -222,7 +222,7 @@ locals {
         from_port   = 8080
         to_port     = 8080
         protocol    = "tcp"
-        cidr_blocks = [data.aws_vpc.east.cidr_block, data.aws_vpc.west.cidr_block]
+        cidr_blocks = [aws_vpc.east.cidr_block, aws_vpc.west.cidr_block]
         description = "Application port from VPC"
       }
     ]
