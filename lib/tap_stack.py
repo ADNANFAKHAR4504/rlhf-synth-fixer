@@ -285,7 +285,7 @@ class TapStack(pulumi.ComponentResource):
         """Create SSM Parameter for Pulumi access token as SecureString."""
         param = aws.ssm.Parameter(
             f'pulumi-token-{self.env_suffix}',
-            name=f'/codebuild/pulumi-token-{self.env_suffix}',
+            name=f'/pulumi/token/{self.env_suffix}',
             type='SecureString',
             value=pulumi.Output.secret(token_value),
             description=f'Pulumi access token for CI/CD pipeline - {self.env_suffix}',
@@ -562,8 +562,8 @@ class TapStack(pulumi.ComponentResource):
     def _create_pipeline(self) -> aws.codepipeline.Pipeline:
         """Create CodePipeline with 3 stages: Source, Build, Deploy."""
         pipeline = aws.codepipeline.Pipeline(
-            f'pulumi-pipeline-{self.env_suffix}',
-            name=f'pulumi-pipeline-{self.env_suffix}',
+            f'pulumi-cicd-pipeline-{self.env_suffix}',
+            name=f'pulumi-cicd-pipeline-{self.env_suffix}',
             role_arn=self.pipeline_role.arn,
             artifact_stores=[{
                 'location': self.artifact_bucket.bucket,

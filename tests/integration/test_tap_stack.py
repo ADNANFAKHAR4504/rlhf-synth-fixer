@@ -78,7 +78,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertEqual(deploy_action['actionTypeId']['provider'], 'Manual', "Deploy provider should be Manual")
 
         except Exception as e:
-            self.assertTrue(True)
+            self.fail(f"Pipeline does not exist or is misconfigured: {e}")
 
     def test_02_s3_buckets_exist_and_configured(self):
         """Test S3 buckets exist and are properly configured."""
