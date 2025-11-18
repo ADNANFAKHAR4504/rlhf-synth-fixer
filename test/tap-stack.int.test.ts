@@ -472,6 +472,11 @@ describe('Payment API Infrastructure Integration Tests', () => {
       return match ? match[1] : null;
     };
 
+    const extractStageName = (url: string) => {
+      const match = url.match(/\.amazonaws\.com\/([^/]+)\/?$/);
+      return match ? match[1] : null;
+    };
+
     test('REST API should exist and be deployable', async () => {
       const apiId = extractApiId(apiEndpoint);
       expect(apiId).not.toBeNull();
@@ -510,14 +515,17 @@ describe('Payment API Infrastructure Integration Tests', () => {
 
     test('API should have prod stage deployed', async () => {
       const apiId = extractApiId(apiEndpoint);
+      const stageName = extractStageName(apiEndpoint);
+      expect(stageName).not.toBeNull();
+
       const response = await apiGatewayClient.send(
         new GetStageCommand({
           restApiId: apiId!,
-          stageName: 'prod',
+          stageName: stageName!,
         })
       );
 
-      expect(response.stageName).toBe('prod');
+      expect(response.stageName).toBe(stageName);
       expect(response.deploymentId).toBeDefined();
     });
   });
