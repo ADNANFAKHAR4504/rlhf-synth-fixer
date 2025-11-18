@@ -23,6 +23,16 @@ Parameters:
     Type: String
     Description: Route53 Hosted Zone ID
 
+  PrimaryALBHostedZoneId:
+    Type: String
+    Description: ALB Hosted Zone ID for primary region (ap-southeast-1)
+    Default: Z1LMS91P8CMLE5  # ALB hosted zone for ap-southeast-1
+
+  DRALBHostedZoneId:
+    Type: String
+    Description: ALB Hosted Zone ID for DR region (ap-southeast-2)
+    Default: Z1GM3OXH4ZPM65  # ALB hosted zone for ap-southeast-2
+
 Resources:
   PrimaryHealthCheck:
     Type: AWS::Route53::HealthCheck
@@ -66,7 +76,7 @@ Resources:
       Failover: PRIMARY
       HealthCheckId: !Ref PrimaryHealthCheck
       AliasTarget:
-        HostedZoneId: Z1234567890ABC
+        HostedZoneId: !Ref PrimaryALBHostedZoneId
         DNSName: !Ref PrimaryALBDNS
         EvaluateTargetHealth: true
 
@@ -80,7 +90,7 @@ Resources:
       Failover: SECONDARY
       HealthCheckId: !Ref DRHealthCheck
       AliasTarget:
-        HostedZoneId: Z0987654321XYZ
+        HostedZoneId: !Ref DRALBHostedZoneId
         DNSName: !Ref DRALBName
         EvaluateTargetHealth: true
 

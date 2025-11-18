@@ -18,8 +18,26 @@ Parameters:
     Type: String
     Description: API Gateway ID
 
+  TransactionProcessorFunctionName:
+    Type: String
+    Description: Transaction Processor Lambda Function Name
+    Default: ''
+
+  PaymentGatewayFunctionName:
+    Type: String
+    Description: Payment Gateway Lambda Function Name
+    Default: ''
+
+  TransactionQueueName:
+    Type: String
+    Description: Transaction Queue Name
+    Default: ''
+
 Conditions:
   HasDBCluster: !Not [!Equals [!Ref DBClusterIdentifier, '']]
+  HasTransactionProcessor: !Not [!Equals [!Ref TransactionProcessorFunctionName, '']]
+  HasPaymentGateway: !Not [!Equals [!Ref PaymentGatewayFunctionName, '']]
+  HasTransactionQueue: !Not [!Equals [!Ref TransactionQueueName, '']]
 
 Resources:
   SNSTopic:
@@ -143,6 +161,148 @@ Resources:
       Dimensions:
         - Name: ApiId
           Value: !Ref APIGatewayId
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  # Lambda Function Monitoring
+  TransactionProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionProcessor
+    Properties:
+      AlarmName: !Sub 'payment-lambda-processor-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Transaction Processor Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TransactionProcessorFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  TransactionProcessorThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionProcessor
+    Properties:
+      AlarmName: !Sub 'payment-lambda-processor-throttles-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Transaction Processor Lambda is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TransactionProcessorFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  PaymentGatewayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasPaymentGateway
+    Properties:
+      AlarmName: !Sub 'payment-lambda-gateway-errors-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Payment Gateway Lambda has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PaymentGatewayFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  PaymentGatewayDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasPaymentGateway
+    Properties:
+      AlarmName: !Sub 'payment-lambda-gateway-duration-${EnvironmentSuffix}'
+      AlarmDescription: Alert when Payment Gateway Lambda duration is high
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 3000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PaymentGatewayFunctionName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  # SQS Queue Monitoring
+  TransactionQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionQueue
+    Properties:
+      AlarmName: !Sub 'payment-queue-depth-high-${EnvironmentSuffix}'
+      AlarmDescription: Alert when transaction queue depth is high
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref TransactionQueueName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  TransactionQueueOldMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionQueue
+    Properties:
+      AlarmName: !Sub 'payment-queue-old-messages-${EnvironmentSuffix}'
+      AlarmDescription: Alert when messages are too old in queue
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 600
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref TransactionQueueName
+      AlarmActions:
+        - !Ref SNSTopic
+      TreatMissingData: notBreaching
+
+  TransactionQueueDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasTransactionQueue
+    Properties:
+      AlarmName: !Sub 'payment-queue-dlq-messages-${EnvironmentSuffix}'
+      AlarmDescription: Alert when messages appear in DLQ
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub '${TransactionQueueName}-dlq'
       AlarmActions:
         - !Ref SNSTopic
       TreatMissingData: notBreaching

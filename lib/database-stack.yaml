@@ -41,6 +41,7 @@ Parameters:
 
 Conditions:
   IsPrimaryRegion: !Equals [!Ref DeploymentRegion, 'primary']
+  IsDRRegion: !Equals [!Ref DeploymentRegion, 'dr']
 
 Resources:
   KMSKey:
@@ -192,6 +193,70 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Cross-Region Read Replica Cluster for DR
+  ReadReplicaCluster:
+    Type: AWS::RDS::DBCluster
+    Condition: IsDRRegion
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DBClusterIdentifier: !Sub 'payment-cluster-replica-${EnvironmentSuffix}'
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      ReplicationSourceIdentifier: !Sub 'arn:aws:rds:${SourceRegion}:${AWS::AccountId}:cluster:payment-cluster-${EnvironmentSuffix}'
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - general
+        - slowquery
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-cluster-replica-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Type
+          Value: 'read-replica'
+        - Key: Project
+          Value: payment-processing-dr
+
+  ReadReplicaInstance1:
+    Type: AWS::RDS::DBInstance
+    Condition: IsDRRegion
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-replica-instance-1-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref ReadReplicaCluster
+      Engine: aurora-mysql
+      DBInstanceClass: db.t4g.medium
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-replica-instance-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ReadReplicaInstance2:
+    Type: AWS::RDS::DBInstance
+    Condition: IsDRRegion
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-replica-instance-2-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref ReadReplicaCluster
+      Engine: aurora-mysql
+      DBInstanceClass: db.t4g.medium
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-replica-instance-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   SessionTable:
     Type: AWS::DynamoDB::GlobalTable
     Properties:
@@ -247,6 +312,29 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      ReplicationConfiguration:
+        Role: !If [IsPrimaryRegion, !GetAtt ReplicationRole.Arn, !Ref 'AWS::NoValue']
+        Rules:
+          - Id: ReplicateTransactionLogs
+            Status: !If [IsPrimaryRegion, Enabled, Disabled]
+            Priority: 1
+            DeleteMarkerReplication:
+              Status: Enabled
+            Filter: {}
+            Destination:
+              Bucket: !If
+                - IsPrimaryRegion
+                - !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}'
+                - !Ref 'AWS::NoValue'
+              ReplicationTime:
+                Status: Enabled
+                Time:
+                  Minutes: 15
+              Metrics:
+                Status: Enabled
+                EventThreshold:
+                  Minutes: 15
+              StorageClass: STANDARD_IA
       LifecycleConfiguration:
         Rules:
           - Id: TransitionToIA
@@ -292,7 +380,21 @@ Resources:
                 Action:
                   - 's3:ReplicateObject'
                   - 's3:ReplicateDelete'
+                  - 's3:ReplicateTags'
                 Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt KMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !Sub 'arn:aws:kms:ap-southeast-2:${AWS::AccountId}:key/*'
+                Condition:
+                  StringLike:
+                    'kms:ViaService': 's3.ap-southeast-2.amazonaws.com'
 
 Outputs:
   DBClusterEndpoint:

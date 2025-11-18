@@ -34,6 +34,14 @@ Parameters:
     Type: String
     Description: Transaction Queue URL
 
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for domain validation
+    Default: ''
+
+Conditions:
+  HasHostedZone: !Not [!Equals [!Ref HostedZoneId, '']]
+
 Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -251,6 +259,25 @@ Resources:
       BatchSize: 10
       Enabled: true
 
+  # ACM Certificate for HTTPS
+  ALBCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasHostedZone
+    Properties:
+      DomainName: !Sub 'payment-${EnvironmentSuffix}.example.com'
+      SubjectAlternativeNames:
+        - !Sub 'payment-${EnvironmentSuffix}.example.com'
+        - !Sub 'www.payment-${EnvironmentSuffix}.example.com'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub 'payment-${EnvironmentSuffix}.example.com'
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-alb-cert-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -297,24 +324,57 @@ Resources:
     Properties:
       Name: !Sub 'payment-tg-${EnvironmentSuffix}'
       TargetType: lambda
-      HealthCheckEnabled: true
-      HealthCheckPath: /health
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
+      HealthCheckEnabled: false  # Lambda targets don't support health checks
       Tags:
         - Key: Name
           Value: !Sub 'payment-tg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  ALBListener:
+  # Target Group Attachment for Lambda
+  ALBTargetGroupAttachment:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
+    Properties:
+      TargetGroupArn: !Ref ALBTargetGroup
+      TargetId: !GetAtt PaymentGatewayFunction.Arn
+
+  # Permission for ALB to invoke Lambda
+  ALBInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PaymentGatewayFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/*/*'
+
+  # HTTP Listener - Redirects to HTTPS
+  ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            Host: '#{host}'
+            Path: '/#{path}'
+            Query: '#{query}'
+            StatusCode: HTTP_301
+
+  # HTTPS Listener
+  ALBListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasHostedZone
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref ALBCertificate
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
