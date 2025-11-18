@@ -3,13 +3,13 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
+  "po_id": "f7o52n",
   "team": "synth",
   "startedAt": "2025-11-17T14:14:54+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
     "Web Application Deployment"
   ],
-  "po_id": "f7o52n",
   "aws_services": [
     "EKS",
     "EC2",
@@ -19,12 +19,7 @@
     "ELB",
     "Auto Scaling"
   ],
+  "author": "aj-turing",
   "region": "us-east-2",
-  "author": "aj-turing""training_quality": 8,
-  "coverage": {
-    "lines": 100,
-    "branches": 100,
-    "statements": 100,
-    "functions": 100
-  }
+  "training_quality": 9
 }
