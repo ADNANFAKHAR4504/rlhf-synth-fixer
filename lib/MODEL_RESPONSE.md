@@ -368,7 +368,7 @@ class LambdaStack(Construct):
             source_code_hash=lambda_asset.asset_hash,
             timeout=30,
             memory_size=512,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             
             tracing_config={
                 "mode": "Active"
@@ -399,7 +399,7 @@ class LambdaStack(Construct):
             source_code_hash=lambda_asset.asset_hash,
             timeout=30,
             memory_size=1024,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             
             tracing_config={
                 "mode": "Active"
@@ -430,7 +430,7 @@ class LambdaStack(Construct):
             source_code_hash=lambda_asset.asset_hash,
             timeout=30,
             memory_size=256,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             
             tracing_config={
                 "mode": "Active"
@@ -1204,7 +1204,7 @@ curl -X POST $API_ENDPOINT \
 ## Key Features Implemented
 
 ✅ **API Layer**: REST API with throttling (1000 req/s), API key auth, and WAF protection  
-✅ **Lambda Functions**: ARM-based with 50 reserved concurrency, X-Ray tracing enabled  
+✅ **Lambda Functions**: ARM-based with 10 reserved concurrency, X-Ray tracing enabled  
 ✅ **DynamoDB**: On-demand billing with point-in-time recovery  
 ✅ **Step Functions**: Complete workflow with error handling and retry logic  
 ✅ **EventBridge**: High-value transaction filtering (>$5000)  
