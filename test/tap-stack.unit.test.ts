@@ -1,8 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = 'test123';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -24,7 +24,7 @@ describe('TapStack', () => {
     });
 
     test('should create public subnets', () => {
-      template.resourceCountIs('AWS::EC2::Subnet', Match.anyValue());
+      template.resourceCountIs('AWS::EC2::Subnet', 2);
     });
 
     test('should not create NAT Gateways for cost optimization', () => {
@@ -52,39 +52,11 @@ describe('TapStack', () => {
     });
   });
 
-  describe('ECR Repositories', () => {
-    test('should create ECR repositories for all three services', () => {
-      template.resourceCountIs('AWS::ECR::Repository', 3);
-
-      template.hasResourceProperties('AWS::ECR::Repository', {
-        RepositoryName: `ecr-repo-api-gateway-${environmentSuffix}`,
-        ImageScanningConfiguration: {
-          ScanOnPush: true,
-        },
-      });
-
-      template.hasResourceProperties('AWS::ECR::Repository', {
-        RepositoryName: `ecr-repo-order-processor-${environmentSuffix}`,
-      });
-
-      template.hasResourceProperties('AWS::ECR::Repository', {
-        RepositoryName: `ecr-repo-market-data-${environmentSuffix}`,
-      });
-    });
-
-    test('should configure lifecycle policies to retain 10 images', () => {
-      template.hasResourceProperties('AWS::ECR::Repository', {
-        LifecyclePolicy: {
-          LifecyclePolicyText: Match.stringLikeRegexp('.*countNumber.*10.*'),
-        },
-      });
-    });
-  });
-
   describe('Service Discovery', () => {
     test('should create Cloud Map private DNS namespace', () => {
       template.hasResourceProperties('AWS::ServiceDiscovery::PrivateDnsNamespace', {
         Name: `services-${environmentSuffix}.local`,
+        Description: 'Private DNS namespace for service discovery',
       });
     });
 
@@ -109,12 +81,26 @@ describe('TapStack', () => {
       });
     });
 
+    test('should create listener with default 404 response', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        DefaultActions: Match.arrayWith([
+          Match.objectLike({
+            Type: 'fixed-response',
+            FixedResponseConfig: {
+              StatusCode: '404',
+              ContentType: 'text/plain',
+            },
+          }),
+        ]),
+      });
+    });
+
     test('should create target group with health checks', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
         Port: 8080,
         Protocol: 'HTTP',
         TargetType: 'ip',
-        HealthCheckPath: '/health',
+        HealthCheckPath: '/',
         HealthCheckIntervalSeconds: 30,
         HealthyThresholdCount: 2,
         UnhealthyThresholdCount: 3,
@@ -195,6 +181,11 @@ describe('TapStack', () => {
             }),
           ]),
         },
+        Roles: Match.arrayWith([
+          Match.objectLike({
+            Ref: Match.stringLikeRegexp('.*TaskExecutionRole.*'),
+          }),
+        ]),
       });
     });
 
@@ -216,6 +207,15 @@ describe('TapStack', () => {
         },
       });
     });
+
+    test('should create task roles for all three services', () => {
+      const roles = template.findResources('AWS::IAM::Role', {
+        Properties: {
+          RoleName: Match.stringLikeRegexp(`ecs-task-.*-${environmentSuffix}`),
+        },
+      });
+      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(3);
+    });
   });
 
   describe('ECS Task Definitions', () => {
@@ -228,6 +228,86 @@ describe('TapStack', () => {
         Memory: '512',
         NetworkMode: 'awsvpc',
         RequiresCompatibilities: ['FARGATE'],
+      });
+    });
+
+    test('should use nginx image from public registry', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            Image: Match.stringLikeRegexp('.*nginx.*1\\.25-alpine.*'),
+            Name: Match.stringLikeRegexp('.*api-gateway|order-processor|market-data.*'),
+          }),
+        ]),
+      });
+    });
+
+    test('should configure nginx to listen on port 8080', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            Command: Match.arrayWith([
+              'sh',
+              '-c',
+              Match.stringLikeRegexp('.*listen.*8080.*'),
+            ]),
+            PortMappings: Match.arrayWith([
+              Match.objectLike({
+                ContainerPort: 8080,
+                Protocol: 'tcp',
+              }),
+            ]),
+          }),
+        ]),
+      });
+    });
+
+    test('should configure container health check', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            HealthCheck: Match.objectLike({
+              Command: Match.arrayWith([
+                'CMD-SHELL',
+                Match.stringLikeRegexp('.*wget.*localhost:8080.*'),
+              ]),
+              Interval: 30,
+              Timeout: 5,
+              Retries: 3,
+              StartPeriod: 60,
+            }),
+          }),
+        ]),
+      });
+    });
+
+    test('should configure CloudWatch Logs for containers', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            LogConfiguration: {
+              LogDriver: 'awslogs',
+              Options: Match.objectLike({
+                'awslogs-stream-prefix': Match.anyValue(),
+              }),
+            },
+          }),
+        ]),
+      });
+    });
+
+    test('should set SERVICE_NAME environment variable', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            Environment: Match.arrayWith([
+              Match.objectLike({
+                Name: 'SERVICE_NAME',
+                Value: Match.anyValue(),
+              }),
+            ]),
+          }),
+        ]),
       });
     });
 
@@ -248,16 +328,13 @@ describe('TapStack', () => {
       });
     });
 
-    test('should configure CloudWatch Logs for containers', () => {
+    test('should configure X-Ray daemon with correct CPU and memory', () => {
       template.hasResourceProperties('AWS::ECS::TaskDefinition', {
         ContainerDefinitions: Match.arrayWith([
           Match.objectLike({
-            LogConfiguration: {
-              LogDriver: 'awslogs',
-              Options: Match.objectLike({
-                'awslogs-stream-prefix': Match.anyValue(),
-              }),
-            },
+            Name: 'xray-daemon',
+            Cpu: 32,
+            Memory: 128,
           }),
         ]),
       });
@@ -275,6 +352,15 @@ describe('TapStack', () => {
       });
     });
 
+    test('should configure deployment settings', () => {
+      template.hasResourceProperties('AWS::ECS::Service', {
+        DeploymentConfiguration: Match.objectLike({
+          MaximumPercent: 200,
+          MinimumHealthyPercent: 50,
+        }),
+      });
+    });
+
     test('should configure circuit breaker with rollback', () => {
       template.hasResourceProperties('AWS::ECS::Service', {
         DeploymentConfiguration: Match.objectLike({
@@ -283,6 +369,12 @@ describe('TapStack', () => {
             Rollback: true,
           },
         }),
+      });
+    });
+
+    test('should configure health check grace period', () => {
+      template.hasResourceProperties('AWS::ECS::Service', {
+        HealthCheckGracePeriodSeconds: 120,
       });
     });
 
@@ -310,6 +402,15 @@ describe('TapStack', () => {
           }),
         ]),
       });
+    });
+
+    test('should configure public IP assignment for api-gateway service', () => {
+      const services = template.findResources('AWS::ECS::Service', {
+        Properties: {
+          ServiceName: `svc-api-gateway-${environmentSuffix}`,
+        },
+      });
+      expect(Object.keys(services).length).toBeGreaterThan(0);
     });
   });
 
@@ -346,6 +447,15 @@ describe('TapStack', () => {
         }),
       });
     });
+
+    test('should configure scaling cooldown periods', () => {
+      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+        TargetTrackingScalingPolicyConfiguration: Match.objectLike({
+          ScaleInCooldown: 60,
+          ScaleOutCooldown: 60,
+        }),
+      });
+    });
   });
 
   describe('CloudWatch Dashboard', () => {
@@ -376,20 +486,99 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Resource Naming', () => {
-    test('all resources should include environmentSuffix', () => {
-      const templateJson = template.toJSON();
-      const resources = Object.keys(templateJson.Resources);
+  describe('Task Definition Configuration', () => {
+    test('should have two containers per task definition (app + xray)', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            Name: Match.stringLikeRegexp('.*api-gateway|order-processor|market-data.*'),
+          }),
+          Match.objectLike({
+            Name: 'xray-daemon',
+          }),
+        ]),
+      });
+    });
 
-      expect(resources.length).toBeGreaterThan(0);
+    test('should configure log retention for application containers', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 7,
+      });
+    });
+
+    test('should configure log retention for X-Ray containers', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 3,
+      });
     });
   });
 
-  describe('Removal Policies', () => {
-    test('ECR repositories should have DESTROY removal policy', () => {
-      template.hasResource('AWS::ECR::Repository', {
-        DeletionPolicy: 'Delete',
-        UpdateReplacePolicy: 'Delete',
+  describe('Service Configuration', () => {
+    test('should create services with correct service names', () => {
+      const serviceNames = [
+        `svc-api-gateway-${environmentSuffix}`,
+        `svc-order-processor-${environmentSuffix}`,
+        `svc-market-data-${environmentSuffix}`,
+      ];
+
+      serviceNames.forEach(serviceName => {
+        template.hasResourceProperties('AWS::ECS::Service', {
+          ServiceName: serviceName,
+        });
+      });
+    });
+
+    test('should configure Cloud Map service discovery options', () => {
+      template.hasResourceProperties('AWS::ECS::Service', {
+        ServiceRegistries: Match.arrayWith([
+          Match.objectLike({
+            RegistryArn: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Target Group Configuration', () => {
+    test('should configure target group deregistration delay', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        TargetGroupAttributes: Match.arrayWith([
+          Match.objectLike({
+            Key: 'deregistration_delay.timeout_seconds',
+            Value: '30',
+          }),
+        ]),
+      });
+    });
+
+    test('should attach api-gateway service to target group', () => {
+      // Verify service has load balancer configuration
+      template.hasResourceProperties('AWS::ECS::Service', {
+        ServiceName: `svc-api-gateway-${environmentSuffix}`,
+        LoadBalancers: Match.arrayWith([
+          Match.objectLike({
+            ContainerName: 'api-gateway',
+            ContainerPort: 8080,
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Security Group Rules', () => {
+    test('should allow ALB to communicate with ECS tasks on port 8080', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        FromPort: 8080,
+        ToPort: 8080,
+        IpProtocol: 'tcp',
+      });
+    });
+
+    test('should allow inter-service communication', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        IpProtocol: 'tcp',
+        FromPort: 0,
+        ToPort: 65535,
       });
     });
   });
