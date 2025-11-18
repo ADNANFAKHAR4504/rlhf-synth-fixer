@@ -1116,7 +1116,7 @@ export class TapStack extends pulumi.ComponentResource {
                   logDriver: 'awslogs',
                   options: {
                     'awslogs-group': logGroupName,
-                    'awslogs-region': 'us-east-1',
+                    'awslogs-region': 'us-east-2',
                     'awslogs-stream-prefix': 'payment-app',
                   },
                 },

@@ -25,7 +25,7 @@ A fintech startup needs to deploy their payment processing web application with 
 ## Technical Requirements
 
 ### Environment
-- Production deployment in us-east-1 region across 3 availability zones for high availability
+- Production deployment in us-east-2 region across 3 availability zones for high availability
 - Infrastructure includes:
   - VPC with public and private subnets
   - Application Load Balancer for traffic distribution
