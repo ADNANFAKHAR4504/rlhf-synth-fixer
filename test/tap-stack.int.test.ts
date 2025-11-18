@@ -1,23 +1,21 @@
 import {
-  EKSClient,
-  DescribeClusterCommand,
-  ListNodegroupsCommand,
-  DescribeNodegroupCommand,
-} from '@aws-sdk/client-eks';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  IAMClient,
-  GetOpenIDConnectProviderCommand,
-  GetRoleCommand,
-} from '@aws-sdk/client-iam';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClusterCommand,
+  DescribeNodegroupCommand,
+  EKSClient,
+  ListNodegroupsCommand,
+} from '@aws-sdk/client-eks';
+import {
+  IAMClient
+} from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -38,6 +36,14 @@ describe('EKS Cluster Integration Tests', () => {
     }
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Parse JSON strings to objects/arrays if needed
+    if (typeof outputs.nodeGroupArns === 'string') {
+      outputs.nodeGroupArns = JSON.parse(outputs.nodeGroupArns);
+    }
+    if (typeof outputs.kubeconfig === 'string') {
+      outputs.kubeconfig = JSON.parse(outputs.kubeconfig);
+    }
 
     const region = process.env.AWS_REGION || 'us-east-1';
     eksClient = new EKSClient({ region });
@@ -371,10 +377,15 @@ describe('EKS Cluster Integration Tests', () => {
     });
 
     it('should have node group ARNs array', () => {
-      expect(Array.isArray(outputs.nodeGroupArns)).toBe(true);
-      expect(outputs.nodeGroupArns.length).toBeGreaterThanOrEqual(2);
+      // Parse the JSON string to array
+      const nodeGroupArns = typeof outputs.nodeGroupArns === 'string'
+        ? JSON.parse(outputs.nodeGroupArns)
+        : outputs.nodeGroupArns;
 
-      outputs.nodeGroupArns.forEach((arn: string) => {
+      expect(Array.isArray(nodeGroupArns)).toBe(true);
+      expect(nodeGroupArns.length).toBeGreaterThanOrEqual(2);
+
+      nodeGroupArns.forEach((arn: string) => {
         expect(arn).toContain('arn:aws:eks');
         expect(arn).toContain('nodegroup');
       });
