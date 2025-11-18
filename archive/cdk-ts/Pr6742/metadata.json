@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-18T00:00:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
