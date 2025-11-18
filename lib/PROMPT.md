@@ -36,16 +36,11 @@ Refactor and optimize our AWS infrastructure using **Terraform with HCL** to eli
    - Reduce tag repetition across 50+ resources
    - Ensure consistent tagging for cost tracking and compliance
 
-6. **Data Sources for VPC**
-   - Replace hardcoded VPC and subnet IDs with data sources
-   - Reference existing VPC infrastructure dynamically
-   - Query existing ALB and Auto Scaling Group configurations
-
-7. **Lifecycle Rules**
+6. **Lifecycle Rules**
    - Add create_before_destroy lifecycle rules for zero-downtime deployments
    - Ensure smooth resource updates without service interruption
 
-8. **Structured Outputs**
+7. **Structured Outputs**
    - Organize outputs using nested maps for improved readability
    - Enable easy consumption by downstream systems and modules
    - Provide clear resource references for CI/CD integration
