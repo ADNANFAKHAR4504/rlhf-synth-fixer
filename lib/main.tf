@@ -15,7 +15,7 @@ resource "aws_sns_topic" "alarms" {
 resource "aws_sns_topic_subscription" "ops_email" {
   topic_arn = aws_sns_topic.alarms.arn
   protocol  = "email"
-  endpoint  = "kanakatla.k@turing.com"
+  endpoint  = var.ops_email
 }
 
 data "aws_iam_policy_document" "sns_topic_policy" {

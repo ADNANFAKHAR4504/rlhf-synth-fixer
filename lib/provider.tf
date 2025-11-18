@@ -36,3 +36,9 @@ variable "region" {
   type        = string
   default     = "us-east-1"
 }
+
+variable "ops_email" {
+  description = "Operations team email for alarm notifications"
+  type        = string
+  default     = "kanakatla.k@turing.com"
+}
