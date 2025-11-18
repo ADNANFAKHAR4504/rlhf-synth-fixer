@@ -9,11 +9,9 @@ resource "random_id" "bucket_suffix" {
 }
 
 locals {
-  # Create a timestamp-based string for bucket naming
-  # Format: YYYYMMDDHHmmss (14 chars) + random hex (8 chars) = 22 chars total
-  # The timestamp provides uniqueness, random_id provides additional entropy
-  timestamp_str    = formatdate("YYYYMMDDHHmmss", timestamp())
-  bucket_timestamp = "${substr(local.timestamp_str, 0, 14)}${substr(random_id.bucket_suffix.hex, 0, 8)}"
+  # Use random_id for stable, unique bucket naming
+  # This avoids perpetual changes from timestamp() function
+  bucket_timestamp = random_id.bucket_suffix.hex
 }
 
 # IAM Role for Lambda execution
@@ -67,7 +65,10 @@ resource "aws_iam_role_policy" "compliance_lambda_policy" {
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
-        Resource = aws_dynamodb_table.compliance_results.arn
+        Resource = [
+          aws_dynamodb_table.compliance_results.arn,
+          "${aws_dynamodb_table.compliance_results.arn}/index/*"
+        ]
       },
       {
         Effect = "Allow"
@@ -93,6 +94,13 @@ resource "aws_iam_role_policy" "compliance_lambda_policy" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage"
+        ]
+        Resource = aws_sqs_queue.lambda_dlq.arn
       }
     ]
   })
@@ -124,6 +132,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_files" {
   }
 }
 
+resource "aws_s3_bucket_versioning" "state_files" {
+  bucket = aws_s3_bucket.state_files.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "state_files" {
+  bucket = aws_s3_bucket.state_files.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # S3 Bucket for PDF Reports
 resource "aws_s3_bucket" "reports" {
   bucket = "compliance-reports-${local.bucket_timestamp}-${data.aws_caller_identity.current.account_id}-${var.environment_suffix}"
@@ -148,6 +173,15 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "reports" {
       sse_algorithm = "AES256"
     }
   }
+}
+
+resource "aws_s3_bucket_public_access_block" "reports" {
+  bucket = aws_s3_bucket.reports.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "reports" {
@@ -194,6 +228,10 @@ resource "aws_dynamodb_table" "compliance_results" {
     hash_key        = "rule_name"
     range_key       = "timestamp"
     projection_type = "ALL"
+  }
+
+  point_in_time_recovery {
+    enabled = true
   }
 
   tags = {
@@ -246,6 +284,15 @@ resource "aws_s3_bucket" "config" {
   }
 }
 
+resource "aws_s3_bucket_public_access_block" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # S3 Bucket Policy for Config
 resource "aws_s3_bucket_policy" "config" {
   bucket = aws_s3_bucket.config.id
@@ -294,6 +341,10 @@ resource "aws_config_configuration_recorder" "main" {
 resource "aws_config_delivery_channel" "main" {
   name           = "compliance-delivery-${var.environment_suffix}"
   s3_bucket_name = aws_s3_bucket.config.bucket
+
+  snapshot_delivery_properties {
+    delivery_frequency = "Six_Hours"
+  }
 
   depends_on = [aws_config_configuration_recorder.main, aws_s3_bucket_policy.config]
 }
@@ -349,10 +400,50 @@ resource "aws_config_config_rule" "rds_backup_retention" {
 
   source {
     owner             = "AWS"
-    source_identifier = "RDS_STORAGE_ENCRYPTED"
+    source_identifier = "DB_BACKUP_RETENTION_PERIOD"
   }
 
+  input_parameters = jsonencode({
+    requiredRetentionDays = "7"
+  })
+
   depends_on = [aws_config_configuration_recorder.main]
+
+  tags = {
+    Environment = var.environment
+    Purpose     = "ComplianceScanning"
+    CostCenter  = var.cost_center
+  }
+}
+
+# CloudWatch Log Group for Lambda with retention
+resource "aws_cloudwatch_log_group" "compliance_scanner" {
+  name              = "/aws/lambda/compliance-scanner-${var.environment_suffix}"
+  retention_in_days = 30
+
+  tags = {
+    Environment = var.environment
+    Purpose     = "ComplianceScanning"
+    CostCenter  = var.cost_center
+  }
+}
+
+# Dead Letter Queue for Lambda failures
+resource "aws_sqs_queue" "lambda_dlq" {
+  name                      = "compliance-scanner-dlq-${var.environment_suffix}"
+  message_retention_seconds = 1209600 # 14 days
+
+  tags = {
+    Environment = var.environment
+    Purpose     = "ComplianceScanning"
+    CostCenter  = var.cost_center
+  }
+}
+
+# Dead Letter Queue for EventBridge failures
+resource "aws_sqs_queue" "eventbridge_dlq" {
+  name                      = "compliance-eventbridge-dlq-${var.environment_suffix}"
+  message_retention_seconds = 1209600 # 14 days
 
   tags = {
     Environment = var.environment
@@ -370,7 +461,7 @@ resource "aws_lambda_function" "compliance_scanner" {
   source_code_hash = filebase64sha256("lambda_function.zip")
   runtime          = "python3.11"
   timeout          = 900
-  memory_size      = 3008
+  memory_size      = 3072
 
   environment {
     variables = {
@@ -380,11 +471,23 @@ resource "aws_lambda_function" "compliance_scanner" {
     }
   }
 
+  tracing_config {
+    mode = "Active"
+  }
+
+  dead_letter_config {
+    target_arn = aws_sqs_queue.lambda_dlq.arn
+  }
+
+  reserved_concurrent_executions = 5
+
   tags = {
     Environment = var.environment
     Purpose     = "ComplianceScanning"
     CostCenter  = var.cost_center
   }
+
+  depends_on = [aws_cloudwatch_log_group.compliance_scanner]
 }
 
 # SNS Topic for Compliance Alerts
@@ -416,6 +519,14 @@ resource "aws_cloudwatch_event_target" "compliance_scan" {
   rule      = aws_cloudwatch_event_rule.compliance_scan.name
   target_id = "ComplianceScannerLambda"
   arn       = aws_lambda_function.compliance_scanner.arn
+
+  retry_policy {
+    maximum_retry_attempts = 2
+  }
+
+  dead_letter_config {
+    arn = aws_sqs_queue.eventbridge_dlq.arn
+  }
 }
 
 resource "aws_lambda_permission" "allow_eventbridge" {
@@ -461,4 +572,28 @@ resource "aws_cloudwatch_dashboard" "compliance" {
       }
     ]
   })
+}
+
+# CloudWatch Alarm for Lambda Errors
+resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
+  alarm_name          = "compliance-scanner-errors-${var.environment_suffix}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "5"
+  alarm_description   = "Alert when Lambda function has errors"
+  alarm_actions       = [aws_sns_topic.compliance_alerts.arn]
+
+  dimensions = {
+    FunctionName = aws_lambda_function.compliance_scanner.function_name
+  }
+
+  tags = {
+    Environment = var.environment
+    Purpose     = "ComplianceScanning"
+    CostCenter  = var.cost_center
+  }
 }
