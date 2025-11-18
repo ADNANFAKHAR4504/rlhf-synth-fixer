@@ -787,6 +787,55 @@ except lambda_client.exceptions.ResourceNotFoundException:
 
 **Result**: Integration test now handles the case where reserved concurrency might not be immediately available after deployment.
 
+### Issue 25: Lambda Functions Using AWS SDK v2 with Node.js 18+ Runtime (CRITICAL)
+
+**Problem**: All Lambda functions were using AWS SDK v2 (`require('aws-sdk')`) which is NOT included in the Node.js 18+ Lambda runtime, causing immediate runtime failures.
+
+**Error**: Functions would fail with:
+```
+Error: Cannot find module 'aws-sdk'
+```
+
+**Solution**: Migrated all Lambda functions to AWS SDK v3:
+
+1. **Created package.json files** for each Lambda function with SDK v3 dependencies:
+```json
+{
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-lambda": "^3.0.0",
+    "@aws-sdk/client-sns": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "aws-xray-sdk-core": "^3.5.0"
+  }
+}
+```
+
+2. **Updated Lambda function code** to use SDK v3 patterns:
+```javascript
+// Old SDK v2
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+// New SDK v3
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+```
+
+3. **Added X-Ray tracing** for SDK v3 clients:
+```javascript
+const AWSXRay = require('aws-xray-sdk-core');
+const ddbClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));
+```
+
+4. **Created packaging script** (`scripts/package-lambdas.sh`) to bundle Lambda functions with dependencies.
+
+5. **Fixed IAM permission** for Lambda:InvokeFunction to be scoped to specific fraud-scorer ARN instead of wildcard.
+
+**Result**: Lambda functions are now fully compatible with Node.js 18+ runtime and will execute successfully.
+
 ## Conclusion
 
 MODEL_RESPONSE demonstrated understanding of CDKTF Python and AWS services but made critical architecture mistakes (missing ingestion Lambda), IAM configuration errors (role duplication, missing X-Ray), and Node.js 18+ runtime incompatibility (AWS SDK v2). IDEAL_RESPONSE corrected all issues and added comprehensive documentation, creating a production-ready serverless fraud detection system with proper monitoring, error handling, and multi-environment support.

@@ -321,7 +321,7 @@ class TapStack(TerraformStack):
                         {
                             "Effect": "Allow",
                             "Action": ["lambda:InvokeFunction"],
-                            "Resource": "*"
+                            "Resource": f"arn:aws:lambda:{self.region}:*:function:fraud-scorer-{self.environment_suffix}"
                         },
                         {
                             "Effect": "Allow",

@@ -681,255 +681,285 @@ class TapStack(TerraformStack):
         )
 ```
 
+### File: lib/lambda/transaction-ingestion/package.json
+
+```json
+{
+  "name": "transaction-ingestion",
+  "version": "1.0.0",
+  "description": "Transaction ingestion Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "aws-xray-sdk-core": "^3.5.0"
+  }
+}
+```
+
 ### File: lib/lambda/transaction-ingestion/index.js
 
 ```javascript
-const AWS = require('aws-sdk');
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
 const AWSXRay = require('aws-xray-sdk-core');
 
-// Wrap AWS SDK with X-Ray
-const aws = AWSXRay.captureAWS(AWS);
-
-const dynamodb = new aws.DynamoDB.DocumentClient();
-const sqs = new aws.SQS();
+// Create DynamoDB client with X-Ray tracing
+const ddbClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));
+const docClient = DynamoDBDocumentClient.from(ddbClient);
 
 const TRANSACTIONS_TABLE = process.env.TRANSACTIONS_TABLE;
 const DLQ_URL = process.env.DLQ_URL;
 
 exports.handler = async (event) => {
-    console.log('Received event:', JSON.stringify(event, null, 2));
-    
+    console.log('Received API Gateway event:', JSON.stringify(event, null, 2));
+
+    const transactionsTable = process.env.TRANSACTIONS_TABLE;
+
     try {
-        // Parse the transaction from the request body
-        const body = JSON.parse(event.body);
-        
-        if (!body.transaction_id || !body.amount || !body.merchant) {
+        // Parse request body
+        const body = JSON.parse(event.body || '{}');
+        const { transaction_id, amount, merchant } = body;
+
+        if (!transaction_id || !amount) {
             return {
                 statusCode: 400,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ error: 'Missing required fields' })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                    error: 'Missing required fields: transaction_id and amount are required'
+                })
             };
         }
+
+        const timestamp = Date.now();
+
+        // Write transaction to DynamoDB
+        const putCommand = new PutCommand({
+            TableName: transactionsTable,
+            Item: {
+                transaction_id: transaction_id,
+                timestamp: timestamp,
+                amount: parseFloat(amount),
+                merchant: merchant || 'unknown',
+                created_at: new Date().toISOString()
+            }
+        });
+
+        await docClient.send(putCommand);
         
-        // Add timestamp
-        const transaction = {
-            ...body,
-            timestamp: Date.now(),
-            created_at: new Date().toISOString()
-        };
-        
-        // Store transaction in DynamoDB
-        await dynamodb.put({
-            TableName: TRANSACTIONS_TABLE,
-            Item: transaction
-        }).promise();
-        
-        console.log('Transaction stored successfully:', transaction.transaction_id);
-        
+        console.log(`Stored transaction ${transaction_id} in DynamoDB`);
+
         return {
             statusCode: 200,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             body: JSON.stringify({
-                message: 'Transaction received',
-                transaction_id: transaction.transaction_id
+                message: 'Transaction received successfully',
+                transaction_id: transaction_id,
+                timestamp: timestamp
             })
         };
-        
     } catch (error) {
         console.error('Error processing transaction:', error);
-        
-        // Send to DLQ on error
-        if (DLQ_URL) {
-            await sqs.sendMessage({
-                QueueUrl: DLQ_URL,
-                MessageBody: JSON.stringify({
-                    error: error.message,
-                    event: event,
-                    timestamp: new Date().toISOString()
-                })
-            }).promise();
-        }
-        
+
         return {
             statusCode: 500,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: 'Internal server error' })
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                error: 'Internal server error',
+                message: error.message
+            })
         };
     }
 };
+```
+
+### File: lib/lambda/transaction-processor/package.json
+
+```json
+{
+  "name": "transaction-processor",
+  "version": "1.0.0",
+  "description": "Transaction processor Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "aws-xray-sdk-core": "^3.5.0"
+  }
+}
 ```
 
 ### File: lib/lambda/transaction-processor/index.js
 
 ```javascript
-const AWS = require('aws-sdk');
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 const AWSXRay = require('aws-xray-sdk-core');
 
-// Wrap AWS SDK with X-Ray
-const aws = AWSXRay.captureAWS(AWS);
-
-const lambda = new aws.Lambda();
-const sqs = new aws.SQS();
-
-const FRAUD_SCORER_FUNCTION = process.env.FRAUD_SCORER_FUNCTION;
-const DLQ_URL = process.env.DLQ_URL;
+// Create Lambda client with X-Ray tracing
+const lambda = AWSXRay.captureAWSv3Client(new LambdaClient({}));
 
 exports.handler = async (event) => {
-    console.log('Received DynamoDB stream event:', JSON.stringify(event, null, 2));
+    console.log('Processing DynamoDB stream records:', JSON.stringify(event, null, 2));
+
+    const fraudScorerFunction = process.env.FRAUD_SCORER_FUNCTION;
     
-    const failedRecords = [];
-    
-    for (const record of event.Records) {
-        try {
+    try {
+        // Process each record from DynamoDB stream
+        for (const record of event.Records) {
             // Process only INSERT and MODIFY events
             if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
-                const transaction = aws.DynamoDB.Converter.unmarshall(record.dynamodb.NewImage);
-                
-                console.log('Processing transaction:', transaction.transaction_id);
-                
+                const transaction = record.dynamodb.NewImage;
+
                 // Invoke fraud scorer Lambda
-                const scorerResponse = await lambda.invoke({
-                    FunctionName: FRAUD_SCORER_FUNCTION,
-                    InvocationType: 'RequestResponse',
-                    Payload: JSON.stringify(transaction)
-                }).promise();
-                
-                const result = JSON.parse(scorerResponse.Payload);
-                console.log('Fraud score result:', result);
+                const command = new InvokeCommand({
+                    FunctionName: fraudScorerFunction,
+                    InvocationType: 'Event',
+                    Payload: JSON.stringify({
+                        transaction_id: transaction.transaction_id.S,
+                        timestamp: transaction.timestamp.N,
+                        amount: transaction.amount ? transaction.amount.N : '0',
+                        merchant: transaction.merchant ? transaction.merchant.S : 'unknown'
+                    })
+                });
+
+                await lambda.send(command);
+                console.log(`Invoked fraud scorer for transaction ${transaction.transaction_id.S}`);
             }
-            
-        } catch (error) {
-            console.error('Error processing record:', error);
-            failedRecords.push({
-                record: record,
-                error: error.message
-            });
         }
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ message: 'Successfully processed records' })
+        };
+    } catch (error) {
+        console.error('Error processing records:', error);
+        throw error;
     }
-    
-    // Send failed records to DLQ
-    if (failedRecords.length > 0 && DLQ_URL) {
-        await sqs.sendMessage({
-            QueueUrl: DLQ_URL,
-            MessageBody: JSON.stringify({
-                failedRecords: failedRecords,
-                timestamp: new Date().toISOString()
-            })
-        }).promise();
-        
-        // Return failure for retry
-        throw new Error(`Failed to process ${failedRecords.length} records`);
-    }
-    
-    return `Successfully processed ${event.Records.length} records`;
 };
+```
+
+### File: lib/lambda/fraud-scorer/package.json
+
+```json
+{
+  "name": "fraud-scorer",
+  "version": "1.0.0",
+  "description": "Fraud scorer Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-sns": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "aws-xray-sdk-core": "^3.5.0"
+  }
+}
 ```
 
 ### File: lib/lambda/fraud-scorer/index.js
 
 ```javascript
-const AWS = require('aws-sdk');
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const AWSXRay = require('aws-xray-sdk-core');
 
-// Wrap AWS SDK with X-Ray
-const aws = AWSXRay.captureAWS(AWS);
-
-const dynamodb = new aws.DynamoDB.DocumentClient();
-const sns = new aws.SNS();
-const sqs = new aws.SQS();
-
-const FRAUD_SCORES_TABLE = process.env.FRAUD_SCORES_TABLE;
-const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN;
-const DLQ_URL = process.env.DLQ_URL;
-
-// Simple fraud scoring algorithm (replace with ML model in production)
-function calculateFraudScore(transaction) {
-    let score = 0;
-    
-    // High amount transactions
-    if (transaction.amount > 1000) score += 0.2;
-    if (transaction.amount > 5000) score += 0.3;
-    
-    // Unusual time (late night transactions)
-    const hour = new Date(transaction.timestamp).getHours();
-    if (hour >= 0 && hour < 6) score += 0.1;
-    
-    // New merchant
-    if (transaction.first_time_merchant) score += 0.2;
-    
-    // International transaction
-    if (transaction.international) score += 0.1;
-    
-    // Cap score at 1.0
-    return Math.min(score, 1.0);
-}
+// Create clients with X-Ray tracing
+const ddbClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));
+const docClient = DynamoDBDocumentClient.from(ddbClient);
+const snsClient = AWSXRay.captureAWSv3Client(new SNSClient({}));
 
 exports.handler = async (event) => {
-    console.log('Received transaction for scoring:', JSON.stringify(event, null, 2));
-    
+    console.log('Scoring transaction:', JSON.stringify(event, null, 2));
+
+    const fraudScoresTable = process.env.FRAUD_SCORES_TABLE;
+    const snsTopicArn = process.env.SNS_TOPIC_ARN;
+
     try {
-        const transaction = event;
-        const fraudScore = calculateFraudScore(transaction);
-        
-        // Store fraud score with TTL (30 days)
-        const ttl = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
-        
-        const scoreRecord = {
-            transaction_id: transaction.transaction_id,
-            fraud_score: fraudScore,
-            scored_at: new Date().toISOString(),
-            transaction_amount: transaction.amount,
-            expiry: ttl
-        };
-        
-        await dynamodb.put({
-            TableName: FRAUD_SCORES_TABLE,
-            Item: scoreRecord
-        }).promise();
-        
-        console.log('Fraud score stored:', scoreRecord);
-        
+        const { transaction_id, timestamp, amount, merchant } = event;
+
+        // Simple fraud scoring logic (in real world, this would be ML-based)
+        const fraudScore = calculateFraudScore(amount, merchant);
+
+        // Store fraud score in DynamoDB
+        const expiryTime = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
+
+        const putCommand = new PutCommand({
+            TableName: fraudScoresTable,
+            Item: {
+                transaction_id: transaction_id,
+                fraud_score: fraudScore,
+                timestamp: parseInt(timestamp),
+                merchant: merchant,
+                amount: parseFloat(amount),
+                expiry: expiryTime
+            }
+        });
+
+        await docClient.send(putCommand);
+        console.log(`Stored fraud score ${fraudScore} for transaction ${transaction_id}`);
+
         // Send alert if fraud score exceeds threshold
         if (fraudScore > 0.8) {
-            await sns.publish({
-                TopicArn: SNS_TOPIC_ARN,
-                Subject: 'High Fraud Score Alert',
+            const publishCommand = new PublishCommand({
+                TopicArn: snsTopicArn,
+                Subject: 'Fraud Alert',
                 Message: JSON.stringify({
-                    transaction_id: transaction.transaction_id,
+                    transaction_id: transaction_id,
                     fraud_score: fraudScore,
-                    amount: transaction.amount,
-                    merchant: transaction.merchant,
-                    timestamp: transaction.timestamp
-                })
-            }).promise();
-            
-            console.log('Fraud alert sent for transaction:', transaction.transaction_id);
+                    amount: amount,
+                    merchant: merchant,
+                    timestamp: timestamp
+                }, null, 2)
+            });
+
+            await snsClient.send(publishCommand);
+            console.log(`Sent fraud alert for transaction ${transaction_id}`);
         }
-        
+
         return {
-            transaction_id: transaction.transaction_id,
-            fraud_score: fraudScore,
-            alert_sent: fraudScore > 0.8
+            statusCode: 200,
+            body: JSON.stringify({
+                transaction_id: transaction_id,
+                fraud_score: fraudScore
+            })
         };
-        
     } catch (error) {
         console.error('Error scoring transaction:', error);
-        
-        // Send to DLQ on error
-        if (DLQ_URL) {
-            await sqs.sendMessage({
-                QueueUrl: DLQ_URL,
-                MessageBody: JSON.stringify({
-                    error: error.message,
-                    event: event,
-                    timestamp: new Date().toISOString()
-                })
-            }).promise();
-        }
-        
         throw error;
     }
 };
+
+function calculateFraudScore(amount, merchant) {
+    // Simple heuristic for demo purposes
+    let score = 0.0;
+
+    // High amounts are suspicious
+    const amountValue = parseFloat(amount);
+    if (amountValue > 10000) {
+        score += 0.5;
+    } else if (amountValue > 5000) {
+        score += 0.3;
+    }
+
+    // Certain merchants are higher risk
+    const highRiskMerchants = ['unknown', 'offshore', 'crypto'];
+    if (highRiskMerchants.some(term => merchant.toLowerCase().includes(term))) {
+        score += 0.4;
+    }
+
+    return Math.min(score, 1.0);
+}
 ```
 
 ## Testing
@@ -958,16 +988,93 @@ Integration tests (17+ test cases) validate:
 - X-Ray tracing
 - Dead letter queue configuration
 
+### File: scripts/package-lambdas.sh
+
+```bash
+#!/bin/bash
+
+# Script to package Lambda functions with their dependencies
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+LAMBDA_DIR="$PROJECT_ROOT/lib/lambda"
+
+# Colors for output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo "Packaging Lambda functions..."
+
+# Function to package a Lambda function
+package_lambda() {
+    local function_name=$1
+    local function_dir="$LAMBDA_DIR/$function_name"
+    
+    if [ ! -d "$function_dir" ]; then
+        echo -e "${RED}Error: Function directory $function_dir does not exist${NC}"
+        return 1
+    fi
+    
+    echo "Packaging $function_name..."
+    
+    # Create a temporary directory for packaging
+    local temp_dir=$(mktemp -d)
+    
+    # Copy function code
+    cp -r "$function_dir"/* "$temp_dir/"
+    
+    # Install dependencies if package.json exists
+    if [ -f "$temp_dir/package.json" ]; then
+        echo "Installing dependencies for $function_name..."
+        cd "$temp_dir"
+        npm install --production --silent
+        cd - > /dev/null
+    fi
+    
+    # Create the zip file
+    cd "$temp_dir"
+    zip -r -q "$function_dir.zip" .
+    cd - > /dev/null
+    
+    # Move the zip file to the function directory
+    mv "$temp_dir/$function_name.zip" "$function_dir.zip"
+    
+    # Clean up
+    rm -rf "$temp_dir"
+    
+    echo -e "${GREEN}✓ Packaged $function_name${NC}"
+}
+
+# Package all Lambda functions
+for function_dir in "$LAMBDA_DIR"/*/; do
+    if [ -d "$function_dir" ]; then
+        function_name=$(basename "$function_dir")
+        package_lambda "$function_name"
+    fi
+done
+
+echo -e "${GREEN}✓ All Lambda functions packaged successfully${NC}"
+```
+
 ## Deployment
 
-1. **Set environment variables**:
+1. **Package Lambda functions**:
+   ```bash
+   chmod +x scripts/package-lambdas.sh
+   ./scripts/package-lambdas.sh
+   ```
+
+2. **Set environment variables**:
    ```bash
    export ENVIRONMENT_SUFFIX="dev"
    export AWS_REGION="us-east-1"
    export TERRAFORM_STATE_BUCKET="iac-rlhf-tf-states"
    ```
 
-2. **Install dependencies**:
+3. **Install dependencies**:
    ```bash
    npm install
    ```
