@@ -1,0 +1,35 @@
+{
+  "task_id": "101912512",
+  "po_id": "101912512",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T13:18:25+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "infrastructure-analysis-/-qa"
+  ],
+  "aws_services": [
+    "config",
+    "lambda",
+    "dynamodb",
+    "s3",
+    "eventbridge",
+    "sns",
+    "iam",
+    "cloudwatch"
+  ],
+  "region": "us-east-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
