@@ -24,6 +24,10 @@ github_branch = config.get('github_branch') or 'main'
 # CodeStar Connections ARN: prefer Pulumi config, fallback to env var
 github_connection_arn = config.get('github_connection_arn') or os.getenv('GITHUB_CONNECTION_ARN')
 
+# For testing purposes, use a dummy ARN if not provided
+if not github_connection_arn:
+    github_connection_arn = 'arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+
 # Notification email
 notification_email = config.get('notification_email') or 'devops@example.com'
 

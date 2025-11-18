@@ -14,9 +14,10 @@ Tests cover:
 - KMS key creation and rotation
 """
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
 import json
+import unittest
+from unittest.mock import MagicMock, Mock, patch
+
 import pulumi
 
 
@@ -135,7 +136,10 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_stack_creates_required_resources(self):
         """Test that TapStack creates all required resources."""
-        args = TapStackArgs(environment_suffix='test')
+        args = TapStackArgs(
+            environment_suffix='test',
+            github_connection_arn='arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+        )
         stack = TapStack('test-stack', args)
 
         # Verify key resources exist
@@ -154,7 +158,11 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_default_tags_applied(self):
         """Test that default tags are properly set."""
-        args = TapStackArgs(environment_suffix='test', tags={'CustomTag': 'CustomValue'})
+        args = TapStackArgs(
+            environment_suffix='test',
+            tags={'CustomTag': 'CustomValue'},
+            github_connection_arn='arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+        )
         stack = TapStack('test-stack', args)
 
         expected_tags = {
@@ -170,7 +178,10 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_environment_suffix_in_resource_names(self):
         """Test that environment suffix is included in all resource names."""
-        args = TapStackArgs(environment_suffix='staging')
+        args = TapStackArgs(
+            environment_suffix='staging',
+            github_connection_arn='arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+        )
         stack = TapStack('test-stack', args)
 
         self.assertEqual(stack.env_suffix, 'staging')
@@ -178,7 +189,10 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_kms_key_rotation_enabled(self):
         """Test that KMS key has rotation enabled."""
-        args = TapStackArgs(environment_suffix='test')
+        args = TapStackArgs(
+            environment_suffix='test',
+            github_connection_arn='arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+        )
         stack = TapStack('test-stack', args)
 
         self.assertIsNotNone(stack.kms_key)
@@ -186,7 +200,10 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_s3_buckets_have_encryption(self):
         """Test that S3 buckets have encryption configured."""
-        args = TapStackArgs(environment_suffix='test')
+        args = TapStackArgs(
+            environment_suffix='test',
+            github_connection_arn='arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+        )
         stack = TapStack('test-stack', args)
 
         self.assertIsNotNone(stack.artifact_bucket)
@@ -195,7 +212,10 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_cloudwatch_log_retention(self):
         """Test that CloudWatch log group is created."""
-        args = TapStackArgs(environment_suffix='test')
+        args = TapStackArgs(
+            environment_suffix='test',
+            github_connection_arn='arn:aws:codestar-connections:us-east-1:123456789012:connection/test-connection'
+        )
         stack = TapStack('test-stack', args)
 
         self.assertIsNotNone(stack.log_group)
