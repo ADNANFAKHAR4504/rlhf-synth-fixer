@@ -463,7 +463,7 @@ export class TapStack extends pulumi.ComponentResource {
     const transactionLogsBucket = new aws.s3.Bucket(
       `transaction-logs-${environmentSuffix}`,
       {
-        bucket: `transaction-logs-${environmentSuffix}`,
+        bucket: `transaction-logs-payment-${environmentSuffix}-${region.name}`,
         versioning: { enabled: true },
         serverSideEncryptionConfiguration: {
           rule: {
@@ -524,7 +524,7 @@ export class TapStack extends pulumi.ComponentResource {
     const complianceDocsBucket = new aws.s3.Bucket(
       `compliance-docs-${environmentSuffix}`,
       {
-        bucket: `compliance-docs-${environmentSuffix}`,
+        bucket: `compliance-docs-payment-${environmentSuffix}-${region.name}`,
         versioning: { enabled: true },
         serverSideEncryptionConfiguration: {
           rule: {
@@ -1926,7 +1926,7 @@ def handler(event, context):
     const hostedZone = new aws.route53.Zone(
       `payment-zone-${environmentSuffix}`,
       {
-        name: `payments-${environmentSuffix}.example.com`,
+        name: `payments-${environmentSuffix}.testdomain.local`,
         comment: 'Hosted zone for blue-green deployment',
         tags: { Name: `payment-zone-${environmentSuffix}` },
       },
@@ -1937,7 +1937,7 @@ def handler(event, context):
       `blue-weighted-record-${environmentSuffix}`,
       {
         zoneId: hostedZone.zoneId,
-        name: `api.payments-${environmentSuffix}.example.com`,
+        name: `api.payments-${environmentSuffix}.testdomain.local`,
         type: 'A',
         aliases: [
           {
@@ -1956,7 +1956,7 @@ def handler(event, context):
       `green-weighted-record-${environmentSuffix}`,
       {
         zoneId: hostedZone.zoneId,
-        name: `api.payments-${environmentSuffix}.example.com`,
+        name: `api.payments-${environmentSuffix}.testdomain.local`,
         type: 'A',
         aliases: [
           {
@@ -2023,7 +2023,7 @@ def handler(event, context):
     const configBucket = new aws.s3.Bucket(
       `config-bucket-${environmentSuffix}`,
       {
-        bucket: `aws-config-${environmentSuffix}`,
+        bucket: `aws-config-payment-${environmentSuffix}-${region.name}`,
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
@@ -2108,7 +2108,7 @@ def handler(event, context):
     this.rateLimitTableName = rateLimitTable.name;
     this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${dashboard.dashboardName}`;
     this.migrationTopicArn = migrationTopic.arn;
-    this.apiDomainName = pulumi.interpolate`api.payments-${environmentSuffix}.example.com`;
+    this.apiDomainName = pulumi.interpolate`api.payments-${environmentSuffix}.testdomain.local`;
 
     this.registerOutputs({
       blueVpcId: this.blueVpcId,
