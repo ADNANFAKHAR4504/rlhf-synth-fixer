@@ -1,6 +1,8 @@
 # Network security groups for the EKS deployment
 
+# Use the VPC ID from vpc.tf locals, which handles both new and existing VPCs
 locals {
+  vpc_id = local.base_vpc_id
   kubernetes_control_plane_ports = [
     {
       description = "Kubernetes API access"
@@ -33,12 +35,12 @@ locals {
 }
 
 resource "aws_security_group" "eks_cluster" {
-  name        = "${local.cluster_name}-cp-sg"
+  name        = "${local.cluster_name}${local.resource_suffix}-cp-sg"
   description = "Control plane security group for ${local.cluster_name}"
   vpc_id      = local.vpc_id
 
   tags = merge(local.common_tags, {
-    Name                                          = "${local.cluster_name}-cp-sg"
+    Name                                          = "${local.cluster_name}${local.resource_suffix}-cp-sg"
     "kubernetes.io/cluster/${local.cluster_name}" = "owned"
   })
 
@@ -48,7 +50,7 @@ resource "aws_security_group" "eks_cluster" {
 }
 
 resource "aws_security_group" "eks_nodes" {
-  name        = "${local.cluster_name}-node-sg"
+  name        = "${local.cluster_name}${local.resource_suffix}-node-sg"
   description = "Worker node security group for ${local.cluster_name}"
   vpc_id      = local.vpc_id
 
@@ -77,7 +79,7 @@ resource "aws_security_group" "eks_nodes" {
   }
 
   tags = merge(local.common_tags, {
-    Name                                          = "${local.cluster_name}-node-sg"
+    Name                                          = "${local.cluster_name}${local.resource_suffix}-node-sg"
     "kubernetes.io/cluster/${local.cluster_name}" = "owned"
   })
 
