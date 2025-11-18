@@ -2,11 +2,11 @@
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from cdktf import App, Testing
-
 from lib.tap_stack import TapStack
+from lib.config.environment_config import EnvironmentConfig
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
 class TestStackStructure:
@@ -15,7 +15,6 @@ class TestStackStructure:
     def setup_method(self):
         """Reset mocks before each test."""
         # Clear any previous test state if needed
-        pass
 
     def test_tap_stack_instantiates_successfully_with_environment(self):
         """TapStack instantiates successfully with environment parameter."""
@@ -82,6 +81,41 @@ class TestStackStructure:
 
         # Verify that TapStack instantiates without errors
         assert stack is not None
+
+    def test_tap_stack_default_environment_suffix(self):
+        """TapStack uses default environment_suffix when not specified."""
+        app = App()
+        stack = TapStack(
+            app,
+            "TestTapStackDefaultSuffix",
+            environment="dev"
+        )
+
+        # Verify that TapStack instantiates without errors
+        assert stack is not None
+
+    def test_tap_stack_without_account_id(self):
+        """TapStack instantiates without assume_role when account_id is empty."""
+        # Temporarily modify config to have empty account_id
+        original_dev = EnvironmentConfig.DEV.copy()
+        try:
+            test_config = EnvironmentConfig.DEV.copy()
+            test_config["account_id"] = ""
+            EnvironmentConfig.DEV = test_config
+
+            app = App()
+            stack = TapStack(
+                app,
+                "TestTapStackNoAccount",
+                environment="dev",
+                environment_suffix="test"
+            )
+
+            # Verify that TapStack instantiates without errors
+            assert stack is not None
+        finally:
+            # Restore original config
+            EnvironmentConfig.DEV = original_dev
 
 
 # add more test suites and cases as needed

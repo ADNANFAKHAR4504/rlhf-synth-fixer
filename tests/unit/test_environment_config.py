@@ -77,3 +77,35 @@ class TestEnvironmentConfig:
         """Test that invalid environment defaults to dev."""
         config = EnvironmentConfig.get_config("invalid")
         assert config["environment"] == "dev"
+
+    def test_config_with_empty_account_id(self):
+        """Test configuration with empty account_id."""
+        # Temporarily add a test config with empty account_id
+        original_dev = EnvironmentConfig.DEV.copy()
+        try:
+            # Create a config without account_id for testing
+            test_config = EnvironmentConfig.DEV.copy()
+            test_config["account_id"] = ""
+            EnvironmentConfig.DEV = test_config
+
+            config = EnvironmentConfig.get_config("dev")
+            assert config["account_id"] == ""
+        finally:
+            # Restore original config
+            EnvironmentConfig.DEV = original_dev
+
+    def test_config_with_none_account_id(self):
+        """Test configuration with None account_id."""
+        # Temporarily add a test config with None account_id
+        original_dev = EnvironmentConfig.DEV.copy()
+        try:
+            # Create a config without account_id for testing
+            test_config = EnvironmentConfig.DEV.copy()
+            test_config["account_id"] = None
+            EnvironmentConfig.DEV = test_config
+
+            config = EnvironmentConfig.get_config("dev")
+            assert config["account_id"] is None
+        finally:
+            # Restore original config
+            EnvironmentConfig.DEV = original_dev
