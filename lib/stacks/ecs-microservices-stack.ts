@@ -35,11 +35,12 @@ export class EcsMicroservicesStack extends cdk.Stack {
     super(scope, id, props);
     this.isLocalStack = props?.isLocalStack ?? false;
 
-    // Detect CI/CD environment for conditional behavior
+    // Detect simplified mode for resource-constrained environments
     this.isCiCd =
       process.env.CI === 'true' ||
       process.env.CI === '1' ||
       process.env.GITHUB_ACTIONS === 'true' ||
+      process.env.USE_SIMPLIFIED_MODE === 'true' ||
       process.env.CDK_DEFAULT_ACCOUNT === '123456789012' ||
       Boolean(process.env.CDK_DEFAULT_ACCOUNT?.startsWith('123456789012'));
 
@@ -63,14 +64,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
 
     const maxAzs = parseInt(
       this.node.tryGetContext('maxAzs') ||
-        process.env.VPC_MAX_AZS ||
-        defaultMaxAzs,
+      process.env.VPC_MAX_AZS ||
+      defaultMaxAzs,
       10
     );
     const natGateways = parseInt(
       this.node.tryGetContext('natGateways') ||
-        process.env.VPC_NAT_GATEWAYS ||
-        defaultNatGateways,
+      process.env.VPC_NAT_GATEWAYS ||
+      defaultNatGateways,
       10
     );
     const vpcCidr =
@@ -400,11 +401,11 @@ export class EcsMicroservicesStack extends cdk.Stack {
       const appMeshService = this.isCiCd
         ? null
         : new AppMeshServiceConstruct(this, `${serviceConfig.name}AppMesh`, {
-            mesh: this.mesh!,
-            serviceName: serviceConfig.name,
-            port: serviceConfig.port,
-            healthCheckPath: serviceConfig.healthCheckPath,
-          });
+          mesh: this.mesh!,
+          serviceName: serviceConfig.name,
+          port: serviceConfig.port,
+          healthCheckPath: serviceConfig.healthCheckPath,
+        });
 
       const service = new MicroserviceConstruct(
         this,

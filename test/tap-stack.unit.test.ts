@@ -72,6 +72,9 @@ describe('TapStack Unit Tests', () => {
     delete process.env.ECS_ENABLE_CONTAINER_INSIGHTS;
     delete process.env.ALB_NAME;
     delete process.env.ALB_DELETION_PROTECTION;
+    delete process.env.CI;
+    delete process.env.GITHUB_ACTIONS;
+    delete process.env.USE_SIMPLIFIED_MODE;
     delete process.env.ALB_ENABLE_HTTP2;
     delete process.env.ALB_IDLE_TIMEOUT;
     delete process.env.ALB_ENABLE_ACCESS_LOGS;
