@@ -464,7 +464,7 @@ class TapStack(pulumi.ComponentResource):
                         'echo "Installing Python dependencies..."',
                         'pipenv install --deploy',
                         'echo "Installing Pulumi CLI..."',
-                        'curl -fsSL https://get.pulumi.com | sh -s -- --version 3.206.0',
+                        'curl -fsSL https://get.pulumi.com | sh -s -- --version 3.207.0',
                         'export PATH=$PATH:$HOME/.pulumi/bin',
                         'pipenv run pulumi version'
                     ]
