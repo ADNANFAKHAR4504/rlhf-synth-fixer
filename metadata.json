@@ -7,9 +7,9 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-17T13:21:00Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "IaC Optimization"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
