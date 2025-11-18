@@ -78,6 +78,71 @@ const eventArchiveName = outputs.EventArchiveName;
 // Helper function to wait for async operations
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const parseLambdaPayload = (payload?: Uint8Array) => {
+  if (!payload || payload.length === 0) {
+    return {};
+  }
+
+  const text = Buffer.from(payload).toString('utf-8').trim();
+  if (!text) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(text);
+
+    if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'body')) {
+      let body = parsed.body;
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          // leave body as string if it cannot be parsed
+        }
+      }
+
+      if (typeof body === 'object' && body !== null) {
+        return {
+          ...body,
+          statusCode: parsed.statusCode ?? body.statusCode
+        };
+      }
+    }
+
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const waitForTransactionRecord = async (
+  transactionId: string,
+  timestamp: number,
+  maxAttempts = 6,
+  delayMs = 5000
+) => {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const response = await dynamoDBClient.send(
+      new GetItemCommand({
+        TableName: transactionStateTableName,
+        Key: {
+          transactionId: { S: transactionId },
+          timestamp: { N: timestamp.toString() }
+        },
+        ConsistentRead: true
+      })
+    );
+
+    if (response.Item) {
+      return response.Item;
+    }
+
+    await sleep(delayMs);
+  }
+
+  return undefined;
+};
+
 describe('TapStack End-to-End Integration Tests', () => {
   const testTransactionId = `test-${uuidv4()}`;
   const testCustomerId = `customer-${uuidv4()}`;
@@ -142,10 +207,10 @@ describe('TapStack End-to-End Integration Tests', () => {
 
       // Assert
       expect(response.Rules).toBeDefined();
-      const ruleNames = response.Rules!.map(r => r.Name);
-      expect(ruleNames).toContain(expect.stringContaining('OrderRouting'));
-      expect(ruleNames).toContain(expect.stringContaining('PaymentRouting'));
-      expect(ruleNames).toContain(expect.stringContaining('FraudRouting'));
+      const ruleNames = response.Rules!.map(r => r.Name || '');
+      expect(ruleNames.some(name => name.includes('OrderRouting'))).toBe(true);
+      expect(ruleNames.some(name => name.includes('PaymentRouting'))).toBe(true);
+      expect(ruleNames.some(name => name.includes('FraudRouting'))).toBe(true);
     });
   });
 
@@ -228,18 +293,14 @@ describe('TapStack End-to-End Integration Tests', () => {
       // Assert
       expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED']).toContain(executionStatus);
       
-      // Verify transaction was stored in DynamoDB
-      const getItemCommand = new GetItemCommand({
-        TableName: transactionStateTableName,
-        Key: {
-          transactionId: { S: orderTransactionId },
-          timestamp: { N: orderTimestamp.toString() }
-        }
-      });
-      const getItemResponse = await dynamoDBClient.send(getItemCommand);
-      expect(getItemResponse.Item).toBeDefined();
-      expect(getItemResponse.Item?.transactionId?.S).toBe(orderTransactionId);
-      expect(getItemResponse.Item?.orderStatus?.S).toBeDefined();
+      // Verify transaction was stored in DynamoDB (eventual consistency with retries)
+      const storedRecord = await waitForTransactionRecord(orderTransactionId, orderTimestamp, 10, 3000);
+      expect(storedRecord).toBeDefined();
+      if (!storedRecord) {
+        throw new Error('Order transaction record not found after workflow execution');
+      }
+      expect(storedRecord.transactionId?.S).toBe(orderTransactionId);
+      expect(storedRecord.orderStatus?.S).toBeDefined();
 
       // Cleanup inserted record to keep table tidy
       await dynamoDBClient.send(
@@ -273,7 +334,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(acquireLockPayload)
       });
       const acquireResponse = await lambdaClient.send(acquireCommand);
-      const acquireResult = JSON.parse(Buffer.from(acquireResponse.Payload!).toString());
+      const acquireResult = parseLambdaPayload(acquireResponse.Payload);
 
       // Assert - Lock acquired
       expect(acquireResult.locked).toBe(true);
@@ -291,7 +352,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(releaseLockPayload)
       });
       const releaseResponse = await lambdaClient.send(releaseCommand);
-      const releaseResult = JSON.parse(Buffer.from(releaseResponse.Payload!).toString());
+      const releaseResult = parseLambdaPayload(releaseResponse.Payload);
 
       // Assert - Lock released
       expect(releaseResult.released).toBe(true);
@@ -316,7 +377,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(acquire1Payload)
       });
       const acquire1Response = await lambdaClient.send(acquire1Command);
-      const acquire1Result = JSON.parse(Buffer.from(acquire1Response.Payload!).toString());
+      const acquire1Result = parseLambdaPayload(acquire1Response.Payload);
       expect(acquire1Result.locked).toBe(true);
 
       // Act - Second lock acquisition attempt
@@ -332,7 +393,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(acquire2Payload)
       });
       const acquire2Response = await lambdaClient.send(acquire2Command);
-      const acquire2Result = JSON.parse(Buffer.from(acquire2Response.Payload!).toString());
+      const acquire2Result = parseLambdaPayload(acquire2Response.Payload);
 
       // Assert - Second acquisition should fail
       expect(acquire2Result.locked).toBe(false);
@@ -371,8 +432,9 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(JSON.stringify(testEvent))
       });
       const firstResponse = await lambdaClient.send(firstInvokeCommand);
-      const firstResult = JSON.parse(Buffer.from(firstResponse.Payload!).toString());
-      expect(firstResult.statusCode).toBe(200);
+      const firstResult = parseLambdaPayload(firstResponse.Payload);
+      const firstStatusCode = firstResult.statusCode ?? firstResult.StatusCode;
+      expect(firstStatusCode).toBe(200);
       expect(firstResult.duplicate).toBeFalsy();
 
       // Act - Second processing (duplicate)
@@ -382,7 +444,7 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(JSON.stringify(testEvent))
       });
       const secondResponse = await lambdaClient.send(secondInvokeCommand);
-      const secondResult = JSON.parse(Buffer.from(secondResponse.Payload!).toString());
+      const secondResult = parseLambdaPayload(secondResponse.Payload);
 
       // Assert - Should detect duplicate
       expect(secondResult.duplicate).toBe(true);
@@ -658,10 +720,11 @@ describe('TapStack End-to-End Integration Tests', () => {
         Payload: Buffer.from(compensationPayload)
       });
       const response = await lambdaClient.send(invokeCommand);
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaPayload(response.Payload);
+      const sagaStatusCode = result.statusCode ?? result.StatusCode;
 
       // Assert
-      expect(result.statusCode).toBe(200);
+      expect(sagaStatusCode).toBe(200);
       expect(result.compensationType).toBe('ORDER');
       expect(result.rollbackResults).toBeDefined();
     });
@@ -692,8 +755,6 @@ describe('TapStack End-to-End Integration Tests', () => {
 
       // MaxReceiveCount for queue is 3
       const maxReceiveCount = 3;
-      let receiptHandle: string | undefined;
-
       for (let attempt = 0; attempt < maxReceiveCount; attempt++) {
         const receiveResponse = await sqsClient.send(
           new ReceiveMessageCommand({
@@ -708,13 +769,10 @@ describe('TapStack End-to-End Integration Tests', () => {
           throw new Error('Failed to receive test message for DLQ routing');
         }
 
-        receiptHandle = message.ReceiptHandle;
-
-        // Immediately make the message visible again without deleting to increment receive count
         await sqsClient.send(
           new ChangeMessageVisibilityCommand({
             QueueUrl: orderProcessingQueueUrl,
-            ReceiptHandle: receiptHandle,
+            ReceiptHandle: message.ReceiptHandle,
             VisibilityTimeout: 0
           })
         );
@@ -722,18 +780,24 @@ describe('TapStack End-to-End Integration Tests', () => {
         await sleep(1000);
       }
 
-      // Wait for SQS to redrive the message into the DLQ
-      await sleep(5000);
+      // Poll DLQ until the message arrives
+      const maxDlqAttempts = 6;
+      let dlqMessage;
+      for (let attempt = 0; attempt < maxDlqAttempts && !dlqMessage; attempt++) {
+        const dlqReceiveResponse = await sqsClient.send(
+          new ReceiveMessageCommand({
+            QueueUrl: dlqUrl,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 10
+          })
+        );
+        dlqMessage = dlqReceiveResponse.Messages?.[0];
 
-      const dlqReceiveResponse = await sqsClient.send(
-        new ReceiveMessageCommand({
-          QueueUrl: dlqUrl,
-          MaxNumberOfMessages: 1,
-          WaitTimeSeconds: 10
-        })
-      );
+        if (!dlqMessage) {
+          await sleep(5000);
+        }
+      }
 
-      const dlqMessage = dlqReceiveResponse.Messages?.[0];
       expect(dlqMessage).toBeDefined();
       if (!dlqMessage) {
         throw new Error('DLQ message not received for failure scenario');
