@@ -12,21 +12,24 @@ const stateBucketRegion =
 const awsRegion = process.env.AWS_REGION || 'us-east-1';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+const prNumber = process.env.PR_NUMBER || 'unknown';
+const team = process.env.TEAM || 'unknown';
+const createdAt = new Date().toISOString();
 
 // Calculate the stack name
 const stackName = `TapStack${environmentSuffix}`;
 
-// defaultTags is structured in adherence to the AwsProviderDefaultTags interface
-const defaultTags: import('@cdktf/provider-aws/lib/provider').AwsProviderDefaultTags[] =
-  [
-    {
-      tags: {
-        Environment: environmentSuffix,
-        Repository: repositoryName,
-        CommitAuthor: commitAuthor,
-      },
-    },
-  ];
+// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
+const defaultTags = {
+  tags: {
+    Environment: environmentSuffix,
+    Repository: repositoryName,
+    Author: commitAuthor,
+    PRNumber: prNumber,
+    Team: team,
+    CreatedAt: createdAt,
+  },
+};
 
 // Create the TapStack with the calculated properties
 new TapStack(app, stackName, {
@@ -34,7 +37,7 @@ new TapStack(app, stackName, {
   stateBucket: stateBucket,
   stateBucketRegion: stateBucketRegion,
   awsRegion: awsRegion,
-  defaultTags: defaultTags,
+  defaultTags: [defaultTags],
 });
 
 // Synthesize the app to generate the Terraform configuration
