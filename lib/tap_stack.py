@@ -55,15 +55,24 @@ class TapStack(TerraformStack):
         )
         
         # Create Lambda placeholder zip file dynamically using Python
+        # Use absolute path to ensure Terraform can find it during deployment
         lambda_code = """def lambda_handler(event, context):
     return {
         'statusCode': 200,
         'body': 'OK'
     }
 """
-        lambda_zip_path = f"lambda_placeholder_{environment_suffix}.zip"
+        # Get the directory where tap.py is located (project root)
+        # This ensures the zip file is created where Terraform expects it
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        lambda_zip_path = os.path.join(project_root, f"lambda_placeholder_{environment_suffix}.zip")
+        
+        # Create the zip file if it doesn't exist or if we need to update it
         with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.writestr('index.py', lambda_code)
+        
+        # Use relative path from project root for Terraform (Terraform runs from project root)
+        lambda_zip_relative = f"lambda_placeholder_{environment_suffix}.zip"
 
         # Configure S3 Backend with native state locking
         S3Backend(
@@ -382,8 +391,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=lambda_zip_path,
-            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
+            filename=lambda_zip_relative,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_relative),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -411,8 +420,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=lambda_zip_path,
-            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
+            filename=lambda_zip_relative,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_relative),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -440,8 +449,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=lambda_zip_path,
-            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
+            filename=lambda_zip_relative,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_relative),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
