@@ -31,18 +31,12 @@ We need a resource and cost optimization audit for our microservices containers 
 - **resource_utilization_trends.png**: CPU/memory usage histogram/distribution (matplotlib/seaborn).
 - All cost savings/estimates must be calculated and shown in report files.
 
-**Testing:**
-- Provide `pytest` tests using _moto_ to mock 30+ ECS services/node groups and realistic CloudWatch metrics for ECS/EKS.
-- ECS: Moto with clusters/services/tasks and task definitions (include age, tags, images, health checks).
-- EKS: Simulate EC2 instances with `kubernetes.io/cluster/` tags and pod specs.
-
 **Environment:**
 - AWS us-east-1, ECS, EKS (EC2 & pod APIs), CloudWatch Container Insights, Auto Scaling, Python 3.12+, Boto3, Pandas
 - May use matplotlib and seaborn for charting.
 
 **Delivery:**
 - Main script as `analyze_container_resources.py` (Python code block)
-- Tests in `test_analyze_container_resources.py` (Python code block)
 - Any charting/Jinja2 templates, add inline or as extra blocks
 
 **_No requirement, exclusion, audit, or output structure may be omitted, softened, or changed from the prompt above. Deliverables must follow exactly._**
