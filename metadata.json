@@ -19,6 +19,8 @@
     "Route Tables",
     "Network ACLs",
     "Security Groups",
+    "VPC Flow Logs",
+    "VPC Endpoints",
     "S3",
     "CloudTrail",
     "CloudWatch Logs",

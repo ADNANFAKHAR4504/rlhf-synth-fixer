@@ -17,9 +17,9 @@ I've successfully implemented a production-ready, PCI-DSS compliant secure data 
 
 **Data Layer:**
 - Data Lake S3 bucket with KMS encryption, versioning, MFA delete capability
-- Access logs bucket for audit trail
+- Access logs bucket for audit trail (with AES256 server-side encryption)
 - CloudTrail bucket with Object Lock (365-day immutable retention)
-- Config bucket for compliance snapshots
+- Config bucket for compliance snapshots (with AES256 encryption and access logging to access logs bucket)
 - Flow Logs bucket with Object Lock (90-day retention)
 - All buckets have public access blocked and lifecycle policies
 
@@ -34,11 +34,13 @@ I've successfully implemented a production-ready, PCI-DSS compliant secure data 
 - GuardDuty remediation Lambda function (Python) - isolates compromised instances
 - KMS rotation monitoring Lambda function (Python) - documents 90-day rotation requirement
 - EventBridge rule triggers automated response for high-severity findings (severity >= 7)
+- EventBridge rule with target and permission for KMS rotation Lambda (90-day schedule)
 - SNS topic for security alerts
 
 **Access Control:**
 - IAM analytics role with permission boundaries and explicit deny policies
-- IAM role for GuardDuty Lambda with least privilege
+- IAM role for GuardDuty Lambda with least privilege (GuardDuty, EC2, SNS permissions)
+- Dedicated IAM role for KMS rotation Lambda (KMS describe/rotation status, CloudWatch Logs)
 - IAM role for Config with minimum required permissions
 - Session-based temporary credentials (no long-term access keys)
 

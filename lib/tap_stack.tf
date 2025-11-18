@@ -12,7 +12,11 @@
 variable "transit_gateway_id" {
   description = "ID of the existing Transit Gateway for centralized routing"
   type        = string
-  default     = "tgw-placeholder" # Placeholder - update for actual deployment
+
+  validation {
+    condition     = var.transit_gateway_id != null && var.transit_gateway_id != ""
+    error_message = "transit_gateway_id must be provided and cannot be empty."
+  }
 }
 
 variable "preexisting_kms_key_arn" {
@@ -336,6 +340,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "flow_logs_lifecycle" {
     id     = "expire-old-logs"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = var.log_retention_days
     }
@@ -434,6 +440,16 @@ resource "aws_s3_bucket" "data_lake_access_logs" {
   tags = {
     Name    = local.access_logs_bucket_name
     Purpose = "AccessLogs"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "data_lake_access_logs_encryption" {
+  bucket = aws_s3_bucket.data_lake_access_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
   }
 }
 
@@ -581,6 +597,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "data_lake_lifecycle" {
   rule {
     id     = "archive-old-data"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = 30
@@ -793,6 +811,69 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Dedicated Lambda execution role for KMS rotation
+resource "aws_iam_role" "kms_rotation_lambda_role" {
+  count                = var.preexisting_kms_key_arn == "" ? 1 : 0
+  name                 = "${local.name_prefix}-kms-rotation-lambda-role"
+  permissions_boundary = var.iam_permission_boundary_arn != "" ? var.iam_permission_boundary_arn : null
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "kms_rotation_lambda_policy" {
+  count = var.preexisting_kms_key_arn == "" ? 1 : 0
+
+  name = "${local.name_prefix}-kms-rotation-lambda-policy"
+  role = aws_iam_role.kms_rotation_lambda_role[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Sid    = "KMSRotateKey"
+        Effect = "Allow"
+        Action = [
+          "kms:DescribeKey",
+          "kms:GetKeyPolicy",
+          "kms:GetKeyRotationStatus",
+          "kms:ListResourceTags",
+          "kms:ListKeyPolicies",
+          "kms:EnableKeyRotation",
+          "kms:DisableKeyRotation"
+        ]
+        Resource = var.preexisting_kms_key_arn != "" ? data.aws_kms_key.existing_data_key[0].arn : aws_kms_key.data_encryption_key[0].arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "kms_rotation_lambda_basic_execution" {
+  count      = var.preexisting_kms_key_arn == "" ? 1 : 0
+  role       = aws_iam_role.kms_rotation_lambda_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
 # ==============================================================================
 # KMS - Encryption key management
 # PCI-DSS Control: Cryptographic key management (3.5, 3.6)
@@ -877,7 +958,7 @@ resource "aws_lambda_function" "kms_rotation_lambda" {
 
   filename      = "${path.module}/lambda/kms_rotation_payload.zip"
   function_name = "${local.name_prefix}-kms-rotation"
-  role          = aws_iam_role.guardduty_lambda_role.arn
+  role          = aws_iam_role.kms_rotation_lambda_role[0].arn
   handler       = "index.handler"
   runtime       = "python3.9"
   timeout       = 60
@@ -912,6 +993,23 @@ resource "aws_cloudwatch_event_rule" "kms_rotation_schedule" {
   name                = "${local.name_prefix}-kms-rotation-90days"
   description         = "Trigger KMS key rotation every 90 days"
   schedule_expression = "rate(90 days)"
+}
+
+resource "aws_cloudwatch_event_target" "kms_rotation_lambda_target" {
+  count = var.preexisting_kms_key_arn == "" ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.kms_rotation_schedule[0].name
+  target_id = "KMSRotationLambda"
+  arn       = aws_lambda_function.kms_rotation_lambda[0].arn
+}
+
+resource "aws_lambda_permission" "kms_rotation_eventbridge" {
+  count         = var.preexisting_kms_key_arn == "" ? 1 : 0
+  statement_id  = "AllowExecutionFromEventBridgeKMSRotation"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.kms_rotation_lambda[0].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.kms_rotation_schedule[0].arn
 }
 
 # ==============================================================================
@@ -1055,6 +1153,16 @@ resource "aws_s3_bucket" "config_bucket" {
   }
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket_encryption" {
+  bucket = aws_s3_bucket.config_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 # Versioning for Config bucket
 resource "aws_s3_bucket_versioning" "config_versioning" {
   bucket = aws_s3_bucket.config_bucket.id
@@ -1072,6 +1180,13 @@ resource "aws_s3_bucket_public_access_block" "config_pab" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_logging" "config_bucket_logging" {
+  bucket = aws_s3_bucket.config_bucket.id
+
+  target_bucket = aws_s3_bucket.data_lake_access_logs.id
+  target_prefix = "config-logs/"
 }
 
 # Config bucket policy
