@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T14:14:54+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -20,7 +20,7 @@
     "Auto Scaling"
   ],
   "region": "us-east-2",
-  "training_quality": 8,
+  "author": "aj-turing""training_quality": 8,
   "coverage": {
     "lines": 100,
     "branches": 100,
