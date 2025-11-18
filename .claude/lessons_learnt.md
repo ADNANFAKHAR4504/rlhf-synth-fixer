@@ -2,8 +2,107 @@
 
 This document contains common patterns, failures, and solutions discovered during synthetic task generation. Reference this before starting tasks to avoid known pitfalls and reduce deployment attempts.
 
-**For comprehensive validation procedures, see `.claude/validation_and_testing_guide.md`**  
+**For comprehensive validation procedures, see `.claude/validation_and_testing_guide.md`**
 **For quick reference, see `.claude/quick_validation_checklist.md`**
+
+## Critical Process Issues (MUST READ FIRST)
+
+### 0.1. QA Trainer Completion Criteria (CRITICAL - FIXED)
+
+**Symptom**: Tasks 3z4jg7, 5b0vj4 marked as ERROR despite good infrastructure work due to incomplete QA phase
+
+**Root Cause**: iac-infra-qa-trainer reported "complete" without meeting mandatory requirements:
+- 0% test coverage (tests left as placeholders with `self.fail()`)
+- No deployment performed (skipped due to "time constraints")
+- Documentation created but validation phase incomplete
+
+**Impact**:
+- Training quality scores reduced by -6 points (-3 tests, -3 deployment)
+- Tasks scored 0/10 and 4/10 instead of potential 8-10/10
+- Excellent architectural work (e.g., 6 critical fixes in task 5b0vj4) wasted
+
+**Prevention**:
+The iac-infra-qa-trainer MUST verify ALL 5 mandatory requirements before reporting "complete":
+
+1. **Deployment**: cfn-outputs/flat-outputs.json exists (proof of deployment)
+2. **100% Test Coverage**: coverage-summary.json shows 100% for statements/functions/lines
+3. **All Tests Pass**: No failures, no skipped tests
+4. **Build Quality**: Lint and build commands pass
+5. **Documentation**: MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
+
+**Correct Behavior** (Task 6ki0y8):
+```
+✅ Identified 7 critical blockers in generated code
+✅ Recognized cannot deploy due to fundamental issues
+✅ Reported "BLOCKED" with specific reasons
+✅ Did NOT falsely claim "complete"
+```
+
+**Agent Prompt Fix Required**:
+Add to `.claude/commands/iac-infra-qa-trainer.md`:
+```markdown
+## MANDATORY COMPLETION REQUIREMENTS (NON-NEGOTIABLE)
+
+YOU MUST COMPLETE ALL 5 BEFORE REPORTING "COMPLETE":
+
+1. ✅ Deployment successful (cfn-outputs/flat-outputs.json exists)
+2. ✅ 100% test coverage (coverage-summary.json verified)
+3. ✅ All tests pass (0 failures, 0 skipped)
+4. ✅ Build quality passes (lint + build)
+5. ✅ Documentation complete
+
+IF ANY MISSING:
+- Report "BLOCKED" with specific missing items
+- DO NOT report "complete"
+- Time is NOT an excuse to skip requirements
+```
+
+**Applies to**: ALL tasks, validated before Phase 4 (code review)
+
+---
+
+### 0.2. Expert Multi-Region Task Complexity (CRITICAL)
+
+**Symptom**: Tasks 3z4jg7, 5b0vj4, 6ki0y8 all failed - all were expert-level multi-region DR tasks
+
+**Root Cause**: Code generation for complex multi-region architectures produces code with fundamental errors:
+- Empty arrays where resources needed (DB subnet groups)
+- Wrong service architecture (regular Aurora instead of Global Database)
+- API syntax errors (Route 53 failover)
+- Circular dependencies
+- Missing resource associations
+
+**Examples from Task 6ki0y8** (Pulumi TypeScript):
+- Aurora DB subnet groups created with empty subnet arrays → immediate deployment failure
+- Route 53 records reference CloudWatch alarms not yet created → circular dependency
+- ECS services missing security group associations → deployment fails
+
+**Impact**:
+- 7+ critical deployment blockers in generated code
+- Would require 5-8 hours to fix properly
+- Exceeds scope of QA validation (becomes reimplementation)
+
+**Prevention**:
+1. **Task Selection**: Prefer medium/hard complexity over expert for multi-region
+2. **Code Validation Gate**: Add between Phase 2 (generation) and Phase 3 (QA):
+   ```bash
+   # Verify code compiles/synthesizes
+   # Check for empty arrays in critical resources
+   # Validate basic AWS resource structure
+   # If fails: Skip QA, mark ERROR immediately
+   ```
+3. **Model Selection**: Use `sonnet` (not `haiku`) for expert multi-region tasks
+4. **Template Validation**: Ensure generated code matches platform conventions
+
+**Recommendation**: Until code generation quality improves, focus on:
+- Single-region tasks
+- 2-4 AWS services (not 8-10)
+- Hard complexity (not expert)
+- Specific architectures (not DR/failover patterns)
+
+**Applies to**: Task selection strategy, code generation validation
+
+---
 
 ## Critical Data Integrity Requirements (MUST READ FIRST)
 
@@ -367,68 +466,6 @@ const key = event.Records[0].s3.object.key;
 - Prefer VPC Endpoints (S3, DynamoDB, etc.) - free for most services
 - If NAT required, create only 1 (not per AZ) for synthetic tasks
 - Document in PROMPT.md when NAT is truly necessary
-
----
-
-### 9. AWS CodeCommit Service Deprecation
-
-**Symptom**: `CreateRepository request is not allowed because there is no existing repository in this AWS account` or deployment fails with CodeCommit access denied
-
-**Root Cause**: AWS deprecated CodeCommit for new accounts in 2024. Service is no longer available for accounts created after deprecation date.
-
-**Impact**:
-- Tasks explicitly requiring CodeCommit cannot be deployed
-- CI/CD pipeline tasks using CodeCommit as source will fail
-- Affects training quality and deployment success rate
-
-**Quick Fix**:
-- **For CI/CD Pipeline tasks**: Replace CodeCommit with GitHub integration using CodeStar Connections
-- **Alternative**: Use GitHub, GitLab, or Bitbucket as pipeline source
-- **Code Change Required**: Replace `aws_codecommit_repository` or `CodeCommit.Repository` with CodeStar Connection + GitHub
-- **Task Description Update**: When task explicitly requires CodeCommit, flag as ERROR and document service unavailability
-
-**Example (Terraform)**:
-```hcl
-# WRONG (deprecated service)
-resource "aws_codecommit_repository" "repo" {
-  repository_name = "infrastructure-code-${var.environment_suffix}"
-}
-
-# CORRECT (use GitHub with CodeStar Connection)
-resource "aws_codestarconnections_connection" "github" {
-  name          = "github-connection-${var.environment_suffix}"
-  provider_type = "GitHub"
-}
-
-resource "aws_codepipeline" "pipeline" {
-  # ... pipeline config
-  stage {
-    name = "Source"
-    action {
-      name             = "Source"
-      category         = "Source"
-      owner            = "AWS"
-      provider         = "CodeStarSourceConnection"
-      version          = "1"
-      output_artifacts = ["source_output"]
-      configuration = {
-        ConnectionArn    = aws_codestarconnections_connection.github.arn
-        FullRepositoryId = "owner/repository-name"
-        BranchName       = "main"
-      }
-    }
-  }
-}
-```
-
-**Applies to**: All platforms when tasks require CodeCommit (CDK, Terraform, CloudFormation, Pulumi)
-
-**Task Quality Impact**:
-- Tasks with CodeCommit requirement will be marked as ERROR
-- Training quality automatically insufficient (<8) due to deployment failure
-- Document in MODEL_FAILURES.md as service deprecation issue
-
-**Reference**: Task 101912493 - first identified CodeCommit deprecation blocker
 
 ---
 
