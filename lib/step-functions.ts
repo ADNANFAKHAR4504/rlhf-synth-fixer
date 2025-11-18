@@ -354,22 +354,33 @@ export function createStepFunctions(
     `migration-orchestrator-log-policy-${config.environmentSuffix}`,
     {
       policyName: `migration-orchestrator-log-policy-${config.environmentSuffix}`,
-      policyDocument: pulumi.interpolate`{
+      policyDocument: pulumi.all([logGroup.arn]).apply(
+        ([logGroupArn]) => `{
         "Version": "2012-10-17",
         "Statement": [
           {
+            "Sid": "AllowStepFunctionsToWriteLogs",
             "Effect": "Allow",
             "Principal": {
               "Service": "states.amazonaws.com"
             },
             "Action": [
+              "logs:CreateLogDelivery",
+              "logs:GetLogDelivery",
+              "logs:UpdateLogDelivery",
+              "logs:DeleteLogDelivery",
+              "logs:ListLogDeliveries",
+              "logs:PutResourcePolicy",
+              "logs:DescribeResourcePolicies",
+              "logs:DescribeLogGroups",
               "logs:CreateLogStream",
               "logs:PutLogEvents"
             ],
-            "Resource": "${logGroup.arn}:*"
+            "Resource": ["${logGroupArn}", "${logGroupArn}:*"]
           }
         ]
-      }`,
+      }`
+      ),
     },
     {
       dependsOn: [logGroup],
@@ -395,11 +406,7 @@ export function createStepFunctions(
       },
     },
     {
-      dependsOn: [
-        logGroup,
-        logResourcePolicy,
-        iamRoles.migrationOrchestratorPolicy,
-      ],
+      dependsOn: [logGroup, logResourcePolicy],
     }
   );
 

@@ -599,6 +599,7 @@ export interface IamRoles {
   stagingAccountRole: aws.iam.Role;
   developmentAccountRole: aws.iam.Role;
   migrationOrchestratorRole: aws.iam.Role;
+  migrationOrchestratorPolicy: aws.iam.RolePolicy;
 }
 
 export function createIamRoles(config: MigrationConfig): IamRoles {
@@ -644,8 +645,7 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
   );
 
   // Policy for orchestrator to assume cross-account roles
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _orchestratorPolicy = new aws.iam.RolePolicy(
+  const migrationOrchestratorPolicy = new aws.iam.RolePolicy(
     `migration-orchestrator-policy-${config.environmentSuffix}`,
     {
       role: migrationOrchestratorRole.id,
@@ -669,8 +669,19 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'logs:CreateLogStream',
               'logs:PutLogEvents',
               'logs:DescribeLogStreams',
+              'logs:DescribeLogGroups',
+              'logs:CreateLogDelivery',
+              'logs:GetLogDelivery',
+              'logs:UpdateLogDelivery',
+              'logs:DeleteLogDelivery',
+              'logs:ListLogDeliveries',
+              'logs:PutResourcePolicy',
+              'logs:DescribeResourcePolicies',
             ],
-            Resource: '*',
+            Resource: [
+              `arn:aws:logs:*:*:log-group:/aws/stepfunctions/migration-orchestrator-${config.environmentSuffix}:*`,
+              `arn:aws:logs:*:*:log-group:*`,
+            ],
           },
           {
             Effect: 'Allow',
@@ -973,6 +984,7 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
     stagingAccountRole,
     developmentAccountRole,
     migrationOrchestratorRole,
+    migrationOrchestratorPolicy,
   };
 }
 
@@ -1454,26 +1466,39 @@ export function createStepFunctions(
     );
 
   // Add a resource policy to the log group to allow Step Functions to write logs
-  new aws.cloudwatch.LogResourcePolicy(
+  const logResourcePolicy = new aws.cloudwatch.LogResourcePolicy(
     `migration-orchestrator-log-policy-${config.environmentSuffix}`,
     {
       policyName: `migration-orchestrator-log-policy-${config.environmentSuffix}`,
-      policyDocument: pulumi.interpolate`{
+      policyDocument: pulumi
+        .all([logGroup.arn])
+        .apply(
+          ([logGroupArn]) => `{
         "Version": "2012-10-17",
         "Statement": [
           {
+            "Sid": "AllowStepFunctionsToWriteLogs",
             "Effect": "Allow",
             "Principal": {
               "Service": "states.amazonaws.com"
             },
             "Action": [
+              "logs:CreateLogDelivery",
+              "logs:GetLogDelivery",
+              "logs:UpdateLogDelivery",
+              "logs:DeleteLogDelivery",
+              "logs:ListLogDeliveries",
+              "logs:PutResourcePolicy",
+              "logs:DescribeResourcePolicies",
+              "logs:DescribeLogGroups",
               "logs:CreateLogStream",
               "logs:PutLogEvents"
             ],
-            "Resource": "${logGroup.arn}:*"
+            "Resource": ["${logGroupArn}", "${logGroupArn}:*"]
           }
         ]
-      }`,
+      }`
+        ),
     },
     {
       dependsOn: [logGroup],
@@ -1488,7 +1513,7 @@ export function createStepFunctions(
       roleArn: iamRoles.migrationOrchestratorRole.arn,
       definition: stateMachineDefinition,
       loggingConfiguration: {
-        logDestination: logGroup.arn,
+        logDestination: pulumi.interpolate`${logGroup.arn}:*`,
         includeExecutionData: true,
         level: 'ALL',
       },
@@ -1499,7 +1524,7 @@ export function createStepFunctions(
       },
     },
     {
-      dependsOn: [logGroup],
+      dependsOn: [logGroup, logResourcePolicy],
     }
   );
 
