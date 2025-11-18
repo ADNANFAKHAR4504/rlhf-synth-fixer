@@ -460,9 +460,26 @@ class MultiRegionDRStack(TerraformStack):
 
     def generate_secure_password(self, length=32):
         """Generate a secure random password"""
-        alphabet = string.ascii_letters + string.digits + '!@#$%^&*()-_=+'
-        password = ''.join(secrets.choice(alphabet) for _ in range(length))
-        return password
+        # RDS password rules: Only printable ASCII characters besides '/', '@', '"', ' '
+        # So we exclude those characters from our alphabet
+        special_chars = '!#$%^&*()-_=+{}[]|:;<>,.?~'
+        alphabet = string.ascii_letters + string.digits + special_chars
+        
+        # Ensure password has at least one of each type
+        password = [
+            secrets.choice(string.ascii_uppercase),
+            secrets.choice(string.ascii_lowercase), 
+            secrets.choice(string.digits),
+            secrets.choice(special_chars)
+        ]
+        
+        # Fill the rest with random characters
+        for _ in range(length - 4):
+            password.append(secrets.choice(alphabet))
+        
+        # Shuffle the password
+        secrets.SystemRandom().shuffle(password)
+        return ''.join(password)
 
     def create_aurora_global(self):
         """Create Aurora Global Database with secure password management"""
