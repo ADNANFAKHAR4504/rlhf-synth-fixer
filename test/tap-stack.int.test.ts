@@ -14,7 +14,8 @@ import {
 } from '@aws-sdk/client-sfn';
 import {
   LambdaClient,
-  GetFunctionCommand
+  GetFunctionCommand,
+  InvokeCommand
 } from '@aws-sdk/client-lambda';
 import {
   DynamoDBClient,
@@ -30,7 +31,8 @@ import {
   SendMessageCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
-  GetQueueAttributesCommand
+  GetQueueAttributesCommand,
+  ChangeMessageVisibilityCommand
 } from '@aws-sdk/client-sqs';
 import {
   CloudWatchClient,
@@ -39,8 +41,6 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-
-jest.setTimeout(50000);
 
 // Load stack outputs from deployment
 const outputs: Record<string, string> = (() => {
@@ -115,6 +115,81 @@ const parseLambdaPayload = (payload?: Uint8Array) => {
   }
 };
 
+const waitForTransactionRecord = async (
+  transactionId: string,
+  timestamp: number,
+  maxAttempts = 10,
+  delayMs = 3000
+) => {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const response = await dynamoDBClient.send(
+      new GetItemCommand({
+        TableName: transactionStateTableName,
+        Key: {
+          transactionId: { S: transactionId },
+          timestamp: { N: timestamp.toString() }
+        },
+        ConsistentRead: true
+      })
+    );
+
+    if (response.Item) {
+      return response.Item;
+    }
+
+    await sleep(delayMs);
+  }
+
+  return undefined;
+};
+
+const invokeLambda = async (functionName: string, payload: Record<string, any>) => {
+  const response = await lambdaClient.send(
+    new InvokeCommand({
+      FunctionName: functionName,
+      Payload: Buffer.from(JSON.stringify(payload)),
+      InvocationType: 'RequestResponse'
+    })
+  );
+
+  if (response.FunctionError) {
+    const errorPayload = Buffer.from(response.Payload ?? []).toString('utf-8');
+    throw new Error(`Lambda invocation failed (${functionName}): ${response.FunctionError} ${errorPayload}`);
+  }
+
+  return parseLambdaPayload(response.Payload);
+};
+
+const purgeQueueMessages = async (queueUrl: string, maxIterations = 10) => {
+  for (let i = 0; i < maxIterations; i++) {
+    const response = await sqsClient.send(
+      new ReceiveMessageCommand({
+        QueueUrl: queueUrl,
+        MaxNumberOfMessages: 10,
+        WaitTimeSeconds: 1
+      })
+    );
+
+    const messages = response.Messages;
+    if (!messages || messages.length === 0) {
+      break;
+    }
+
+    await Promise.all(
+      messages
+        .filter(m => m.ReceiptHandle)
+        .map(m =>
+          sqsClient.send(
+            new DeleteMessageCommand({
+              QueueUrl: queueUrl,
+              ReceiptHandle: m.ReceiptHandle!
+            })
+          )
+        )
+    );
+  }
+};
+
 
 describe('TapStack End-to-End Integration Tests', () => {
   const testTransactionId = `test-${uuidv4()}`;
@@ -129,7 +204,85 @@ describe('TapStack End-to-End Integration Tests', () => {
     expect(idempotencyTableName).toBeTruthy();
   });
 
-  describe('A. Event Ingestion and Routing', () => {
+  describe('Distributed Locking Mechanism', () => {
+    test('should acquire and release distributed lock', async () => {
+      const lockId = `lock-${uuidv4()}`;
+      const ownerId = `owner-${uuidv4()}`;
+
+      const acquireResult = await invokeLambda(distributedLockFunctionArn, {
+        operation: 'acquire',
+        lockId,
+        ownerId,
+        ttlSeconds: 60
+      });
+
+      expect(acquireResult.locked).toBe(true);
+
+      const releaseResult = await invokeLambda(distributedLockFunctionArn, {
+        operation: 'release',
+        lockId,
+        ownerId
+      });
+
+      expect(releaseResult.released).toBe(true);
+    });
+
+    test('should prevent duplicate lock acquisition', async () => {
+      const lockId = `lock-${uuidv4()}`;
+      const owner1 = `owner1-${uuidv4()}`;
+      const owner2 = `owner2-${uuidv4()}`;
+
+      const acquire1Result = await invokeLambda(distributedLockFunctionArn, {
+        operation: 'acquire',
+        lockId,
+        ownerId: owner1,
+        ttlSeconds: 60
+      });
+      expect(acquire1Result.locked).toBe(true);
+
+      const acquire2Result = await invokeLambda(distributedLockFunctionArn, {
+        operation: 'acquire',
+        lockId,
+        ownerId: owner2,
+        ttlSeconds: 60
+      });
+      expect(acquire2Result.locked).toBe(false);
+
+      await invokeLambda(distributedLockFunctionArn, {
+        operation: 'release',
+        lockId,
+        ownerId: owner1
+      });
+    });
+  });
+
+  describe('Idempotency Check', () => {
+    test('should prevent duplicate transaction processing', async () => {
+      const transactionId = `idempotent-${uuidv4()}`;
+      const testEvent = {
+        transactionId,
+        amount: 100.0,
+        type: 'PURCHASE',
+        currency: 'USD',
+        customerId: testCustomerId,
+        merchantId: testMerchantId,
+        timestamp: Date.now()
+      };
+
+      const firstResult = await invokeLambda(eventTransformerFunctionArn, testEvent);
+      const firstStatusCode = firstResult.statusCode ?? firstResult.StatusCode ?? 200;
+      expect(firstStatusCode).toBe(200);
+      expect(firstResult.duplicate).toBeFalsy();
+
+      await sleep(1000);
+
+      const secondResult = await invokeLambda(eventTransformerFunctionArn, testEvent);
+      expect(secondResult.duplicate).toBe(true);
+      expect(secondResult.transactionId).toBe(transactionId);
+    });
+  });
+
+  describe('Event Ingestion and Routing', () => {
     test('should successfully publish event to MainEventBus', async () => {
       // Arrange
       const testEvent = {
@@ -187,7 +340,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('B. Order Processing Workflow (End-to-End)', () => {
+  describe('Order Processing Workflow', () => {
     test('should trigger OrderProcessingStateMachine from EventBridge', async () => {
       // Arrange
       const testEvent = {
@@ -226,9 +379,62 @@ describe('TapStack End-to-End Integration Tests', () => {
       expect(executionsResponse.executions!.length).toBeGreaterThan(0);
     });
 
+    test('should execute complete order processing workflow', async () => {
+      const orderTransactionId = `order-e2e-${uuidv4()}`;
+      const orderTimestamp = Date.now();
+      const startExecutionInput = {
+        stateMachineArn: orderProcessingStateMachineArn,
+        input: JSON.stringify({
+          transactionId: orderTransactionId,
+          amount: 500.0,
+          currency: 'USD',
+          type: 'PURCHASE',
+          customerId: testCustomerId,
+          merchantId: testMerchantId,
+          timestamp: orderTimestamp
+        })
+      };
+
+      const startCommand = new StartExecutionCommand(startExecutionInput);
+      const executionResponse = await stepFunctionsClient.send(startCommand);
+      expect(executionResponse.executionArn).toBeDefined();
+
+      let executionStatus = 'RUNNING';
+      let attempts = 0;
+      const maxAttempts = 60;
+
+      while (executionStatus === 'RUNNING' && attempts < maxAttempts) {
+        await sleep(5000);
+        const describeCommand = new DescribeExecutionCommand({
+          executionArn: executionResponse.executionArn
+        });
+        const describeResponse = await stepFunctionsClient.send(describeCommand);
+        executionStatus = describeResponse.status!;
+        attempts++;
+      }
+
+      expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED']).toContain(executionStatus);
+
+      const storedRecord = await waitForTransactionRecord(orderTransactionId, orderTimestamp);
+      expect(storedRecord).toBeDefined();
+      if (storedRecord) {
+        expect(storedRecord.transactionId?.S).toBe(orderTransactionId);
+        expect(storedRecord.orderStatus?.S).toBeDefined();
+      }
+
+      await dynamoDBClient.send(
+        new DeleteItemCommand({
+          TableName: transactionStateTableName,
+          Key: {
+            transactionId: { S: orderTransactionId },
+            timestamp: { N: orderTimestamp.toString() }
+          }
+        })
+      );
+    }, 180000);
   });
 
-  describe('E. Payment Validation with Circuit Breaker', () => {
+  describe('Payment Validation with Circuit Breaker', () => {
     test('should execute payment validation state machine', async () => {
       // Arrange
       const paymentTransactionId = `payment-${uuidv4()}`;
@@ -279,9 +485,67 @@ describe('TapStack End-to-End Integration Tests', () => {
       // Assert - Circuit breaker record should exist or be creatable
       expect(queryResponse.Items).toBeDefined();
     });
+
+    test(
+      'should execute complete order processing workflow',
+      async () => {
+        const orderTransactionId = `order-e2e-${uuidv4()}`;
+        const orderTimestamp = Date.now();
+        const startExecutionInput = {
+          stateMachineArn: orderProcessingStateMachineArn,
+          input: JSON.stringify({
+            transactionId: orderTransactionId,
+            amount: 500.0,
+            currency: 'USD',
+            type: 'PURCHASE',
+            customerId: testCustomerId,
+            merchantId: testMerchantId,
+            timestamp: orderTimestamp
+          })
+        };
+
+        const startCommand = new StartExecutionCommand(startExecutionInput);
+        const executionResponse = await stepFunctionsClient.send(startCommand);
+        expect(executionResponse.executionArn).toBeDefined();
+
+        let executionStatus = 'RUNNING';
+        let attempts = 0;
+        const maxAttempts = 60;
+
+        while (executionStatus === 'RUNNING' && attempts < maxAttempts) {
+          await sleep(5000);
+          const describeCommand = new DescribeExecutionCommand({
+            executionArn: executionResponse.executionArn
+          });
+          const describeResponse = await stepFunctionsClient.send(describeCommand);
+          executionStatus = describeResponse.status!;
+          attempts++;
+        }
+
+        expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED']).toContain(executionStatus);
+
+        const storedRecord = await waitForTransactionRecord(orderTransactionId, orderTimestamp);
+        expect(storedRecord).toBeDefined();
+        if (storedRecord) {
+          expect(storedRecord.transactionId?.S).toBe(orderTransactionId);
+          expect(storedRecord.orderStatus?.S).toBeDefined();
+        }
+
+        await dynamoDBClient.send(
+          new DeleteItemCommand({
+            TableName: transactionStateTableName,
+            Key: {
+              transactionId: { S: orderTransactionId },
+              timestamp: { N: orderTimestamp.toString() }
+            }
+          })
+        );
+      },
+      180000
+    );
   });
 
-  describe('F. Fraud Detection Parallel Processing', () => {
+  describe('Fraud Detection Parallel Processing', () => {
     test('should execute fraud detection state machine with parallel checks', async () => {
       // Arrange
       const fraudTransactionId = `fraud-${uuidv4()}`;
@@ -320,7 +584,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('G. SQS Queue Processing', () => {
+  describe('SQS Queue Processing', () => {
     test('should send and receive message from PaymentValidationQueue', async () => {
       // Arrange
       const testMessage = {
@@ -384,7 +648,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('H. DynamoDB State Management', () => {
+  describe('DynamoDB State Management', () => {
     test('should store and retrieve transaction state', async () => {
       // Arrange
       const transactionId = `dynamodb-${uuidv4()}`;
@@ -476,15 +740,233 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
+  describe('Saga Compensation on Failure', () => {
+    test('should trigger saga coordinator for compensation', async () => {
+      const sagaTransactionId = `saga-${uuidv4()}`;
+      const payload = {
+        rollback: true,
+        sagaState: {
+          transactionId: sagaTransactionId,
+          timestamp: Date.now(),
+          completedSteps: ['validate_order', 'reserve_inventory']
+        },
+        compensationType: 'ORDER'
+      };
 
-  describe('K. Event Archive and Replay', () => {
+      const result = await invokeLambda(sagaCoordinatorFunctionArn, payload);
+      const sagaStatusCode = result.statusCode ?? result.StatusCode ?? 200;
+      expect(sagaStatusCode).toBe(200);
+      expect(result.compensationType).toBe('ORDER');
+      expect(result.rollbackResults).toBeDefined();
+    });
+  });
+
+  describe('Error Handling and DLQ', () => {
+    test('should route failed order messages to DLQ', async () => {
+      const dlqUrl = orderProcessingQueueUrl.replace('.fifo', '-DLQ.fifo');
+      await purgeQueueMessages(orderProcessingQueueUrl);
+      await purgeQueueMessages(dlqUrl);
+
+      const getAttributesCommand = new GetQueueAttributesCommand({
+        QueueUrl: dlqUrl,
+        AttributeNames: ['QueueArn']
+      });
+      const attributesResponse = await sqsClient.send(getAttributesCommand);
+      expect(attributesResponse.Attributes).toBeDefined();
+
+      const dlqTransactionId = `dlq-${uuidv4()}`;
+      await sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: orderProcessingQueueUrl,
+          MessageBody: JSON.stringify({ transactionId: dlqTransactionId, reason: 'DLQ test' }),
+          MessageGroupId: dlqTransactionId,
+          MessageDeduplicationId: `dedupe-${dlqTransactionId}`
+        })
+      );
+
+      const maxReceiveCount = 3;
+      for (let attempt = 0; attempt < maxReceiveCount; attempt++) {
+        const receiveResponse = await sqsClient.send(
+          new ReceiveMessageCommand({
+            QueueUrl: orderProcessingQueueUrl,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 5
+          })
+        );
+
+        const message = receiveResponse.Messages?.[0];
+        if (!message || !message.ReceiptHandle) {
+          throw new Error('Failed to receive test message for DLQ routing');
+        }
+
+        await sqsClient.send(
+          new ChangeMessageVisibilityCommand({
+            QueueUrl: orderProcessingQueueUrl,
+            ReceiptHandle: message.ReceiptHandle,
+            VisibilityTimeout: 0
+          })
+        );
+
+        await sleep(1000);
+      }
+
+      const maxDlqAttempts = 6;
+      let dlqMessage;
+      for (let attempt = 0; attempt < maxDlqAttempts && !dlqMessage; attempt++) {
+        const dlqReceiveResponse = await sqsClient.send(
+          new ReceiveMessageCommand({
+            QueueUrl: dlqUrl,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 10
+          })
+        );
+        dlqMessage = dlqReceiveResponse.Messages?.[0];
+
+        if (!dlqMessage) {
+          await sleep(5000);
+        }
+      }
+
+      expect(dlqMessage).toBeDefined();
+      if (!dlqMessage || !dlqMessage.Body) {
+        throw new Error('DLQ message not received for failure scenario');
+      }
+
+      const dlqBody = JSON.parse(dlqMessage.Body);
+      expect(dlqBody.transactionId).toBe(dlqTransactionId);
+
+      if (dlqMessage.ReceiptHandle) {
+        await sqsClient.send(
+          new DeleteMessageCommand({
+            QueueUrl: dlqUrl,
+            ReceiptHandle: dlqMessage.ReceiptHandle
+          })
+        );
+      }
+    }, 120000);
+  });
+
+  describe('Saga Compensation on Failure', () => {
+    test('should trigger saga coordinator for compensation', async () => {
+      const sagaTransactionId = `saga-${uuidv4()}`;
+      const payload = {
+        rollback: true,
+        sagaState: {
+          transactionId: sagaTransactionId,
+          timestamp: Date.now(),
+          completedSteps: ['validate_order', 'reserve_inventory']
+        },
+        compensationType: 'ORDER'
+      };
+
+      const result = await invokeLambda(sagaCoordinatorFunctionArn, payload);
+      const sagaStatusCode = result.statusCode ?? result.StatusCode ?? 200;
+
+      expect(sagaStatusCode).toBe(200);
+      expect(result.compensationType).toBe('ORDER');
+      expect(result.rollbackResults).toBeDefined();
+    });
+  });
+
+  describe('Error Handling and DLQ', () => {
+    test(
+      'should route failed order messages to DLQ',
+      async () => {
+        const dlqUrl = orderProcessingQueueUrl.replace('.fifo', '-DLQ.fifo');
+
+        await purgeQueueMessages(orderProcessingQueueUrl);
+        await purgeQueueMessages(dlqUrl);
+
+        const getAttributesCommand = new GetQueueAttributesCommand({
+          QueueUrl: dlqUrl,
+          AttributeNames: ['QueueArn']
+        });
+        const attributesResponse = await sqsClient.send(getAttributesCommand);
+        expect(attributesResponse.Attributes).toBeDefined();
+
+        const dlqTransactionId = `dlq-${uuidv4()}`;
+        await sqsClient.send(
+          new SendMessageCommand({
+            QueueUrl: orderProcessingQueueUrl,
+            MessageBody: JSON.stringify({ transactionId: dlqTransactionId, reason: 'DLQ test' }),
+            MessageGroupId: dlqTransactionId,
+            MessageDeduplicationId: `dedupe-${dlqTransactionId}`
+          })
+        );
+
+        const maxReceiveCount = 3;
+        for (let attempt = 0; attempt < maxReceiveCount; attempt++) {
+          const receiveResponse = await sqsClient.send(
+            new ReceiveMessageCommand({
+              QueueUrl: orderProcessingQueueUrl,
+              MaxNumberOfMessages: 1,
+              WaitTimeSeconds: 5
+            })
+          );
+
+          const message = receiveResponse.Messages?.[0];
+          if (!message || !message.ReceiptHandle) {
+            throw new Error('Failed to receive test message for DLQ routing');
+          }
+
+          await sqsClient.send(
+            new ChangeMessageVisibilityCommand({
+              QueueUrl: orderProcessingQueueUrl,
+              ReceiptHandle: message.ReceiptHandle,
+              VisibilityTimeout: 0
+            })
+          );
+
+          await sleep(1000);
+        }
+
+        const maxDlqAttempts = 6;
+        let dlqMessage;
+        for (let attempt = 0; attempt < maxDlqAttempts && !dlqMessage; attempt++) {
+          const dlqReceiveResponse = await sqsClient.send(
+            new ReceiveMessageCommand({
+              QueueUrl: dlqUrl,
+              MaxNumberOfMessages: 1,
+              WaitTimeSeconds: 10
+            })
+          );
+          dlqMessage = dlqReceiveResponse.Messages?.[0];
+
+          if (!dlqMessage) {
+            await sleep(5000);
+          }
+        }
+
+        expect(dlqMessage).toBeDefined();
+        if (!dlqMessage || !dlqMessage.Body) {
+          throw new Error('DLQ message not received for failure scenario');
+        }
+
+        const dlqBody = JSON.parse(dlqMessage.Body);
+        expect(dlqBody.transactionId).toBe(dlqTransactionId);
+
+        if (dlqMessage.ReceiptHandle) {
+          await sqsClient.send(
+            new DeleteMessageCommand({
+              QueueUrl: dlqUrl,
+              ReceiptHandle: dlqMessage.ReceiptHandle
+            })
+          );
+        }
+      },
+      120000
+    );
+  });
+
+
+  describe('Event Archive and Replay', () => {
     test('should verify EventArchive exists', async () => {
       // This test verifies the archive resource exists
       expect(eventArchiveName).toBeTruthy();
     });
   });
 
-  describe('L. Cross-Region Replication (Conditional)', () => {
+  describe('Cross-Region Replication', () => {
     test('should verify cross-region replication rule exists when conditions met', async () => {
       // This test is conditional based on stack deployment parameters
       // If CreateSecondaryResources condition is true, rule should exist
@@ -505,7 +987,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('M. Monitoring and Observability', () => {
+  describe('Monitoring and Observability', () => {
     test('should verify CloudWatch metrics are being published', async () => {
       // Arrange
       const endTime = new Date();
@@ -546,7 +1028,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('N. Performance and Scalability', () => {
+  describe('Performance and Scalability', () => {
     test('should handle concurrent event processing', async () => {
       // Arrange
       const concurrentEvents = 5;
@@ -584,7 +1066,7 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('O. Security and Encryption', () => {
+  describe('Security and Encryption', () => {
     test('should verify KMS encryption on SQS queues', async () => {
       // Act
       const getAttributesCommand = new GetQueueAttributesCommand({

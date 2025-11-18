@@ -47,6 +47,11 @@ Parameters:
     Default: ops-team@company.com
     Description: Email address for CloudWatch alerts
 
+  GlobalEndpointHealthCheckArn:
+    Type: String
+    Default: ''
+    Description: Existing Route53 Recovery Control health check ARN used for EventBridge global endpoint failover routing
+
 # =================== Mappings ===================
 Mappings:
   RegionConfig:
@@ -83,6 +88,10 @@ Conditions:
   CreateSecondaryResources: !And
     - !Condition IsProduction
     - !Condition IsUSEast1
+  HasGlobalEndpointHealthCheck: !Not [!Equals [!Ref GlobalEndpointHealthCheckArn, '']]
+  CreateGlobalEndpoint: !And
+    - !Condition CreateSecondaryResources
+    - !Condition HasGlobalEndpointHealthCheck
 
 # =================== Resources ===================
 Resources:
@@ -519,6 +528,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref MasterKMSKey
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -544,10 +554,35 @@ Resources:
           import os
           import time
           from datetime import datetime
-          from aws_xray_sdk.core import xray_recorder
-          from aws_xray_sdk.core import patch_all
+          try:
+              from aws_xray_sdk.core import xray_recorder  # type: ignore
+              from aws_xray_sdk.core import patch_all  # type: ignore
+          except ImportError:
+              class _DummySubsegment:
+                  def add_exception(self, *_args, **_kwargs):
+                      pass
+              
+              class _DummyRecorder:
+                  def capture(self, *_args, **_kwargs):
+                      def decorator(func):
+                          return func
+                      return decorator
+                  
+                  def begin_subsegment(self, *_args, **_kwargs):
+                      pass
+                  
+                  def end_subsegment(self):
+                      pass
+                  
+                  def current_subsegment(self):
+                      return _DummySubsegment()
+              
+              def patch_all():
+                  pass
+              
+              xray_recorder = _DummyRecorder()
           
-          # Patch boto3 for X-Ray tracing
+          # Patch boto3 for X-Ray tracing when available
           patch_all()
           
           dynamodb = boto3.resource('dynamodb')
@@ -667,6 +702,7 @@ Resources:
                   xray_recorder.end_subsegment()
       MemorySize: !Ref LambdaMemorySize
       Timeout: 60
+      ReservedConcurrentExecutions: 100
       Architectures:
         - arm64
       Environment:
@@ -703,8 +739,33 @@ Resources:
           import time
           import os
           from datetime import datetime, timedelta
-          from aws_xray_sdk.core import xray_recorder
-          from aws_xray_sdk.core import patch_all
+          try:
+              from aws_xray_sdk.core import xray_recorder  # type: ignore
+              from aws_xray_sdk.core import patch_all  # type: ignore
+          except ImportError:
+              class _DummySubsegment:
+                  def add_exception(self, *_args, **_kwargs):
+                      pass
+              
+              class _DummyRecorder:
+                  def capture(self, *_args, **_kwargs):
+                      def decorator(func):
+                          return func
+                      return decorator
+                  
+                  def begin_subsegment(self, *_args, **_kwargs):
+                      pass
+                  
+                  def end_subsegment(self):
+                      pass
+                  
+                  def current_subsegment(self):
+                      return _DummySubsegment()
+              
+              def patch_all():
+                  pass
+              
+              xray_recorder = _DummyRecorder()
           
           patch_all()
           
@@ -888,8 +949,33 @@ Resources:
           import boto3
           import os
           from datetime import datetime
-          from aws_xray_sdk.core import xray_recorder
-          from aws_xray_sdk.core import patch_all
+          try:
+              from aws_xray_sdk.core import xray_recorder  # type: ignore
+              from aws_xray_sdk.core import patch_all  # type: ignore
+          except ImportError:
+              class _DummySubsegment:
+                  def add_exception(self, *_args, **_kwargs):
+                      pass
+              
+              class _DummyRecorder:
+                  def capture(self, *_args, **_kwargs):
+                      def decorator(func):
+                          return func
+                      return decorator
+                  
+                  def begin_subsegment(self, *_args, **_kwargs):
+                      pass
+                  
+                  def end_subsegment(self):
+                      pass
+                  
+                  def current_subsegment(self):
+                      return _DummySubsegment()
+              
+              def patch_all():
+                  pass
+              
+              xray_recorder = _DummyRecorder()
           
           patch_all()
           
@@ -900,10 +986,45 @@ Resources:
           STATE_TABLE = os.environ['STATE_TABLE']
           EVENT_BUS = os.environ['EVENT_BUS']
           
+          table = dynamodb.Table(STATE_TABLE)
+          
+          def load_saga_state(transaction_id, timestamp):
+              if not transaction_id:
+                  return None
+              try:
+                  response = table.get_item(
+                      Key={
+                          'transactionId': transaction_id,
+                          'timestamp': timestamp
+                      }
+                  )
+                  return response.get('Item')
+              except Exception:
+                  return None
+          
+          def persist_saga_state(state, status='IN_PROGRESS'):
+              transaction_id = state.get('transactionId')
+              timestamp = state.get('timestamp', 0)
+              if not transaction_id:
+                  return
+              
+              merged_state = dict(state)
+              merged_state.setdefault('completedSteps', [])
+              merged_state['sagaStatus'] = status
+              
+              table.put_item(
+                  Item={
+                      'transactionId': transaction_id,
+                      'timestamp': timestamp,
+                      'completedSteps': merged_state.get('completedSteps', []),
+                      'sagaStatus': merged_state['sagaStatus'],
+                      'sagaState': merged_state
+                  }
+              )
+          
           @xray_recorder.capture('handle_rollback')
           def handle_rollback(saga_state, compensation_type):
               """Handle rollback for failed saga transactions"""
-              table = dynamodb.Table(STATE_TABLE)
               transaction_id = saga_state.get('transactionId')
               
               compensation_steps = {
@@ -1000,11 +1121,28 @@ Resources:
           def lambda_handler(event, context):
               """Main saga coordinator handler"""
               saga_state = event.get('sagaState', {})
+              saga_state.setdefault('completedSteps', [])
+              
+              transaction_id = saga_state.get('transactionId')
+              saga_timestamp = saga_state.get('timestamp', 0)
+              
+              persisted = load_saga_state(transaction_id, saga_timestamp)
+              if persisted:
+                  stored_state = persisted.get('sagaState', {})
+                  stored_steps = stored_state.get('completedSteps', [])
+                  incoming_steps = saga_state.get('completedSteps', [])
+                  saga_state = {**stored_state, **saga_state}
+                  saga_state['completedSteps'] = list({step: None for step in stored_steps + incoming_steps}.keys())
+              else:
+                  saga_state.setdefault('timestamp', saga_timestamp)
+                  persist_saga_state(saga_state)
               
               # Handle rollback if requested
               if event.get('rollback'):
                   compensation_type = event.get('compensationType')
-                  return handle_rollback(saga_state, compensation_type)
+                  result = handle_rollback(saga_state, compensation_type)
+                  persist_saga_state(saga_state, status=f"COMPENSATING_{compensation_type}")
+                  return result
               
               # Continue with next saga step
               next_step = determine_next_step(saga_state)
@@ -1035,6 +1173,9 @@ Resources:
                           }
                       ]
                   )
+                  persist_saga_state(saga_state, status='COMPLETED')
+              else:
+                  persist_saga_state(saga_state)
               
               return {
                   'statusCode': 200,
@@ -1076,8 +1217,33 @@ Resources:
           import json
           import os
           from datetime import datetime, timedelta
-          from aws_xray_sdk.core import xray_recorder
-          from aws_xray_sdk.core import patch_all
+          try:
+              from aws_xray_sdk.core import xray_recorder  # type: ignore
+              from aws_xray_sdk.core import patch_all  # type: ignore
+          except ImportError:
+              class _DummySubsegment:
+                  def add_exception(self, *_args, **_kwargs):
+                      pass
+              
+              class _DummyRecorder:
+                  def capture(self, *_args, **_kwargs):
+                      def decorator(func):
+                          return func
+                      return decorator
+                  
+                  def begin_subsegment(self, *_args, **_kwargs):
+                      pass
+                  
+                  def end_subsegment(self):
+                      pass
+                  
+                  def current_subsegment(self):
+                      return _DummySubsegment()
+              
+              def patch_all():
+                  pass
+              
+              xray_recorder = _DummyRecorder()
           
           patch_all()
           
@@ -2088,6 +2254,22 @@ Resources:
         - Id: CrossRegionEventBusTarget
           Arn: !Sub 'arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${AWS::StackName}-MainBus'
           RoleArn: !GetAtt EventBridgeRole.Arn
+
+  GlobalEventBridgeEndpoint:
+    Type: AWS::Events::Endpoint
+    Condition: CreateGlobalEndpoint
+    Properties:
+      Name: !Sub '${AWS::StackName}-GlobalEndpoint'
+      Description: Global endpoint for failover between primary and secondary EventBridge buses
+      EventBuses:
+        - EventBusArn: !GetAtt MainEventBus.Arn
+        - EventBusArn: !Sub 'arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${AWS::StackName}-MainBus'
+      RoutingConfig:
+        FailoverConfig:
+          Primary:
+            HealthCheck: !Ref GlobalEndpointHealthCheckArn
+          Secondary:
+            Route: secondary
 
   # Scheduled rule for visibility timeout adjustment
   VisibilityTimeoutSchedule:

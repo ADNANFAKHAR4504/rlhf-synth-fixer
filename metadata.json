@@ -15,7 +15,15 @@
     "CloudFormation",
     "Lambda",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "SNS",
+    "DynamoDB",
+    "SQS",
+    "Step Functions",
+    "X-Ray"
   ]
 }
