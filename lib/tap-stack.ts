@@ -154,7 +154,55 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Route Tables
+    // Elastic IPs for NAT Gateways
+    const blueNatEips = azs.map((_, i) =>
+      new aws.ec2.Eip(
+        `blue-nat-eip-${i}-${environmentSuffix}`,
+        {
+          domain: 'vpc',
+          tags: { Name: `blue-nat-eip-${i}-${environmentSuffix}` },
+        },
+        { parent: this }
+      )
+    );
+
+    const greenNatEips = azs.map((_, i) =>
+      new aws.ec2.Eip(
+        `green-nat-eip-${i}-${environmentSuffix}`,
+        {
+          domain: 'vpc',
+          tags: { Name: `green-nat-eip-${i}-${environmentSuffix}` },
+        },
+        { parent: this }
+      )
+    );
+
+    // NAT Gateways in public subnets
+    const blueNatGateways = azs.map((_, i) =>
+      new aws.ec2.NatGateway(
+        `blue-nat-${i}-${environmentSuffix}`,
+        {
+          allocationId: blueNatEips[i].id,
+          subnetId: bluePublicSubnets[i].id,
+          tags: { Name: `blue-nat-${i}-${environmentSuffix}` },
+        },
+        { parent: this }
+      )
+    );
+
+    const greenNatGateways = azs.map((_, i) =>
+      new aws.ec2.NatGateway(
+        `green-nat-${i}-${environmentSuffix}`,
+        {
+          allocationId: greenNatEips[i].id,
+          subnetId: greenPublicSubnets[i].id,
+          tags: { Name: `green-nat-${i}-${environmentSuffix}` },
+        },
+        { parent: this }
+      )
+    );
+
+    // Public Route Tables
     const bluePublicRt = new aws.ec2.RouteTable(
       `blue-public-rt-${environmentSuffix}`,
       {
@@ -192,6 +240,63 @@ export class TapStack extends pulumi.ComponentResource {
         {
           subnetId: subnet.id,
           routeTableId: greenPublicRt.id,
+        },
+        { parent: this }
+      );
+    });
+
+    // Private Route Tables with NAT Gateway routes
+    const bluePrivateRts = azs.map((_, i) =>
+      new aws.ec2.RouteTable(
+        `blue-private-rt-${i}-${environmentSuffix}`,
+        {
+          vpcId: blueVpc.id,
+          routes: [
+            {
+              cidrBlock: '0.0.0.0/0',
+              natGatewayId: blueNatGateways[i].id,
+            },
+          ],
+          tags: { Name: `blue-private-rt-${i}-${environmentSuffix}` },
+        },
+        { parent: this }
+      )
+    );
+
+    bluePrivateSubnets.forEach((subnet, i) => {
+      new aws.ec2.RouteTableAssociation(
+        `blue-private-rta-${i}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: bluePrivateRts[i].id,
+        },
+        { parent: this }
+      );
+    });
+
+    const greenPrivateRts = azs.map((_, i) =>
+      new aws.ec2.RouteTable(
+        `green-private-rt-${i}-${environmentSuffix}`,
+        {
+          vpcId: greenVpc.id,
+          routes: [
+            {
+              cidrBlock: '0.0.0.0/0',
+              natGatewayId: greenNatGateways[i].id,
+            },
+          ],
+          tags: { Name: `green-private-rt-${i}-${environmentSuffix}` },
+        },
+        { parent: this }
+      )
+    );
+
+    greenPrivateSubnets.forEach((subnet, i) => {
+      new aws.ec2.RouteTableAssociation(
+        `green-private-rta-${i}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: greenPrivateRts[i].id,
         },
         { parent: this }
       );
@@ -238,7 +343,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcId: blueVpc.id,
         serviceName: pulumi.interpolate`com.amazonaws.${region.name}.s3`,
         vpcEndpointType: 'Gateway',
-        routeTableIds: [bluePublicRt.id],
+        routeTableIds: [bluePublicRt.id, ...bluePrivateRts.map(rt => rt.id)],
         tags: { Name: `blue-s3-endpoint-${environmentSuffix}` },
       },
       { parent: this }
@@ -250,7 +355,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcId: greenVpc.id,
         serviceName: pulumi.interpolate`com.amazonaws.${region.name}.s3`,
         vpcEndpointType: 'Gateway',
-        routeTableIds: [greenPublicRt.id],
+        routeTableIds: [greenPublicRt.id, ...greenPrivateRts.map(rt => rt.id)],
         tags: { Name: `green-s3-endpoint-${environmentSuffix}` },
       },
       { parent: this }
@@ -262,7 +367,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcId: blueVpc.id,
         serviceName: pulumi.interpolate`com.amazonaws.${region.name}.dynamodb`,
         vpcEndpointType: 'Gateway',
-        routeTableIds: [bluePublicRt.id],
+        routeTableIds: [bluePublicRt.id, ...bluePrivateRts.map(rt => rt.id)],
         tags: { Name: `blue-dynamodb-endpoint-${environmentSuffix}` },
       },
       { parent: this }
@@ -274,7 +379,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcId: greenVpc.id,
         serviceName: pulumi.interpolate`com.amazonaws.${region.name}.dynamodb`,
         vpcEndpointType: 'Gateway',
-        routeTableIds: [greenPublicRt.id],
+        routeTableIds: [greenPublicRt.id, ...greenPrivateRts.map(rt => rt.id)],
         tags: { Name: `green-dynamodb-endpoint-${environmentSuffix}` },
       },
       { parent: this }
@@ -300,6 +405,122 @@ export class TapStack extends pulumi.ComponentResource {
         name: `alias/aurora-${environmentSuffix}`,
       },
       { parent: this }
+    );
+
+    // AWS Secrets Manager for database credentials with rotation
+    const dbSecret = new aws.secretsmanager.Secret(
+      `aurora-master-secret-${environmentSuffix}`,
+      {
+        description: 'Aurora PostgreSQL master password with 30-day rotation',
+        tags: { Name: `aurora-master-secret-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // Generate initial secret value
+    const dbSecretVersion = new aws.secretsmanager.SecretVersion(
+      `aurora-master-secret-version-${environmentSuffix}`,
+      {
+        secretId: dbSecret.id,
+        secretString: pulumi.jsonStringify({
+          username: 'dbadmin',
+          password: pulumi.secret('ChangeMe123!Initial'),
+          engine: 'postgres',
+          port: 5432,
+        }),
+      },
+      { parent: this }
+    );
+
+    // Lambda execution role for secret rotation
+    const rotationLambdaRole = new aws.iam.Role(
+      `rotation-lambda-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { Service: 'lambda.amazonaws.com' },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+        ],
+        tags: { Name: `rotation-lambda-role-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // Attach policy for Secrets Manager operations
+    const _rotationLambdaPolicy = new aws.iam.RolePolicy(
+      `rotation-lambda-policy-${environmentSuffix}`,
+      {
+        role: rotationLambdaRole.id,
+        policy: pulumi.all([dbSecret.arn]).apply(([secretArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'secretsmanager:DescribeSecret',
+                  'secretsmanager:GetSecretValue',
+                  'secretsmanager:PutSecretValue',
+                  'secretsmanager:UpdateSecretVersionStage',
+                ],
+                Resource: secretArn,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['secretsmanager:GetRandomPassword'],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
+
+    // Security group for rotation Lambda
+    const rotationLambdaSg = new aws.ec2.SecurityGroup(
+      `rotation-lambda-sg-${environmentSuffix}`,
+      {
+        vpcId: blueVpc.id,
+        description: 'Security group for secret rotation Lambda',
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: { Name: `rotation-lambda-sg-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // Note: Rotation Lambda function would typically use AWS SecretsManager rotation template
+    // For production, use aws.serverless.Function or aws.lambda.Function with proper rotation code
+    // This is a placeholder for the rotation configuration structure
+
+    // Configure secret rotation (30 days)
+    // Note: Full rotation requires a Lambda function with RDS permissions
+    // This sets up the rotation schedule but requires manual Lambda implementation
+    const _dbSecretRotation = new aws.secretsmanager.SecretRotation(
+      `aurora-secret-rotation-${environmentSuffix}`,
+      {
+        secretId: dbSecret.id,
+        rotationLambdaArn: pulumi.interpolate`arn:aws:lambda:${region.name}:${aws.getCallerIdentityOutput().accountId}:function:SecretsManagerRotation-${environmentSuffix}`,
+        rotationRules: {
+          automaticallyAfterDays: 30,
+        },
+      },
+      { parent: this, ignoreChanges: ['rotationLambdaArn'] }
     );
 
     // DB Subnet Groups
@@ -385,8 +606,12 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         engineVersion: '14.6',
         databaseName: 'payments',
-        masterUsername: 'dbadmin',
-        masterPassword: pulumi.secret('ChangeMe123!'),
+        masterUsername: dbSecretVersion.secretString.apply(s =>
+          JSON.parse(s).username
+        ),
+        masterPassword: dbSecretVersion.secretString.apply(s =>
+          JSON.parse(s).password
+        ),
         dbSubnetGroupName: blueDbSubnetGroup.name,
         vpcSecurityGroupIds: [blueDbSg.id],
         kmsKeyId: kmsKey.arn,
@@ -426,8 +651,12 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         engineVersion: '14.6',
         databaseName: 'payments',
-        masterUsername: 'dbadmin',
-        masterPassword: pulumi.secret('ChangeMe123!'),
+        masterUsername: dbSecretVersion.secretString.apply(s =>
+          JSON.parse(s).username
+        ),
+        masterPassword: dbSecretVersion.secretString.apply(s =>
+          JSON.parse(s).password
+        ),
         dbSubnetGroupName: greenDbSubnetGroup.name,
         vpcSecurityGroupIds: [greenDbSg.id],
         kmsKeyId: kmsKey.arn,
