@@ -105,8 +105,10 @@ class MonitoringModule(Construct):
             bucket=bucket.id,
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                        sse_algorithm="AES256"
+                    apply_server_side_encryption_by_default=(
+                        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                            sse_algorithm="AES256"
+                        )
                     )
                 )
             ]

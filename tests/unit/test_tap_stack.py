@@ -4,9 +4,9 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from cdktf import App, Testing
+from cdktf import App, Testing  # pylint: disable=wrong-import-position
 
-from lib.tap_stack import TapStack
+from lib.tap_stack import TapStack  # pylint: disable=wrong-import-position
 
 
 class TestStackStructure:
