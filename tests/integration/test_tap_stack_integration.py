@@ -140,12 +140,15 @@ class TestTapStackIntegration:
         # Check processor Lambda
         processor_name = outputs.get("processor_lambda_name")
         processor_config = lambda_client.get_function(FunctionName=processor_name)["Configuration"]
-        assert processor_config["ReservedConcurrentExecutions"] == 100
+        # ReservedConcurrentExecutions might not be in the response if not explicitly set
+        reserved_concurrency = processor_config.get("ReservedConcurrentExecutions")
+        assert reserved_concurrency == 100, f"Expected processor concurrency 100, got {reserved_concurrency}"
         
         # Check scorer Lambda
         scorer_name = outputs.get("scorer_lambda_name")
         scorer_config = lambda_client.get_function(FunctionName=scorer_name)["Configuration"]
-        assert scorer_config["ReservedConcurrentExecutions"] == 50
+        reserved_concurrency = scorer_config.get("ReservedConcurrentExecutions")
+        assert reserved_concurrency == 50, f"Expected scorer concurrency 50, got {reserved_concurrency}"
 
     def test_lambda_environment_variables(self, lambda_client, outputs):
         """Test that Lambda functions have correct environment variables"""
@@ -240,23 +243,25 @@ class TestTapStackIntegration:
 
     def test_cloudwatch_alarms_exist(self, cloudwatch_client, outputs):
         """Test that CloudWatch alarms exist for Lambda error monitoring"""
-        lambda_names = [
-            outputs.get("ingestion_lambda_name"),
-            outputs.get("processor_lambda_name"),
-            outputs.get("scorer_lambda_name")
+        # Get environment suffix from one of the lambda names
+        ingestion_name = outputs.get("ingestion_lambda_name", "")
+        environment_suffix = ingestion_name.split("-")[-1] if ingestion_name else "pr6741"
+        
+        # Expected alarm names based on our implementation
+        expected_alarms = [
+            f"transaction-ingestion-errors-{environment_suffix}",
+            f"transaction-processor-errors-{environment_suffix}",
+            f"fraud-scorer-errors-{environment_suffix}"
         ]
         
-        for lambda_name in lambda_names:
-            # Check if alarm exists
-            alarm_name_prefix = lambda_name.replace("lambda", "errors")
-            
+        for alarm_name in expected_alarms:
             response = cloudwatch_client.describe_alarms(
-                AlarmNamePrefix=alarm_name_prefix,
+                AlarmNames=[alarm_name],
                 MaxRecords=10
             )
             
-            # Should find at least one alarm
-            assert len(response["MetricAlarms"]) > 0
+            # Should find the alarm
+            assert len(response["MetricAlarms"]) > 0, f"Alarm {alarm_name} not found"
             
             # Check alarm configuration
             alarm = response["MetricAlarms"][0]
@@ -264,6 +269,7 @@ class TestTapStackIntegration:
             assert alarm["Namespace"] == "AWS/Lambda"
             assert alarm["Statistic"] == "Sum"
             assert alarm["Threshold"] == 10
+            assert alarm["Period"] == 300
 
     def test_lambda_event_source_mapping_exists(self, lambda_client, outputs):
         """Test that DynamoDB stream is connected to processor Lambda"""

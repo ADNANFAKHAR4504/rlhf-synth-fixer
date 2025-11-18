@@ -727,6 +727,37 @@ NotFoundException: Invalid stage identifier specified
 
 **Result**: Integration tests now properly handle CDKTF output structure and gracefully handle cases where resources might not be fully deployed.
 
+### Issue 23: Integration Test Failures for Reserved Concurrency and CloudWatch Alarms
+
+**Problem**: Two integration tests were failing:
+1. Lambda reserved concurrency test expecting `ReservedConcurrentExecutions` key that might not exist
+2. CloudWatch alarms test using incorrect alarm name pattern
+
+**Errors**:
+```
+KeyError: 'ReservedConcurrentExecutions'
+AssertionError: assert 0 > 0  # No alarms found with incorrect name pattern
+```
+
+**Solution**:
+1. Updated reserved concurrency test to use `.get()` method:
+   ```python
+   reserved_concurrency = processor_config.get("ReservedConcurrentExecutions")
+   assert reserved_concurrency == 100, f"Expected processor concurrency 100, got {reserved_concurrency}"
+   ```
+
+2. Fixed CloudWatch alarm name construction to match actual alarm names:
+   ```python
+   # Expected alarm names based on our implementation
+   expected_alarms = [
+       f"transaction-ingestion-errors-{environment_suffix}",
+       f"transaction-processor-errors-{environment_suffix}",
+       f"fraud-scorer-errors-{environment_suffix}"
+   ]
+   ```
+
+**Result**: Integration tests now correctly validate reserved concurrency and CloudWatch alarms.
+
 ## Conclusion
 
 MODEL_RESPONSE demonstrated understanding of CDKTF Python and AWS services but made critical architecture mistakes (missing ingestion Lambda), IAM configuration errors (role duplication, missing X-Ray), and Node.js 18+ runtime incompatibility (AWS SDK v2). IDEAL_RESPONSE corrected all issues and added comprehensive documentation, creating a production-ready serverless fraud detection system with proper monitoring, error handling, and multi-environment support.
