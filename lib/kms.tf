@@ -113,7 +113,8 @@ data "aws_iam_policy_document" "kms_key_policy" {
       "kms:Get*",
       "kms:Delete*",
       "kms:ScheduleKeyDeletion",
-      "kms:CancelKeyDeletion"
+      "kms:CancelKeyDeletion",
+      "kms:ReplicateKey"
     ]
 
     resources = ["*"]
@@ -193,6 +194,28 @@ data "aws_iam_policy_document" "kms_key_policy" {
       variable = "kms:EncryptionContext:aws:logs:arn"
       values   = ["arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:*"]
     }
+  }
+
+  # Allow Secrets Manager to use the key
+  statement {
+    sid    = "AllowSecretsManager"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["secretsmanager.${var.primary_region}.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:CreateGrant",
+      "kms:DescribeKey"
+    ]
+
+    resources = ["*"]
   }
 
 }

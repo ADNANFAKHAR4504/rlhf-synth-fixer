@@ -61,3 +61,4 @@ locals {
   vpc_id     = var.vpc_id != "" ? var.vpc_id : aws_vpc.security[0].id
   subnet_ids = length(var.subnet_ids) > 0 ? var.subnet_ids : aws_subnet.security_private[*].id
 }
+

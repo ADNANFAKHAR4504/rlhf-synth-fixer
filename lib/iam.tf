@@ -29,6 +29,16 @@ data "aws_iam_policy_document" "secrets_rotation_assume" {
   }
 }
 
+# Attach basic Lambda execution policy for VPC access
+resource "aws_iam_role_policy_attachment" "secrets_rotation_vpc" {
+  role       = aws_iam_role.secrets_rotation.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
 resource "aws_iam_role_policy" "secrets_rotation" {
   name   = "${local.resource_prefix}-secrets-rotation-policy-${local.suffix}"
   role   = aws_iam_role.secrets_rotation.id

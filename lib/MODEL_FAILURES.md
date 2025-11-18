@@ -4,291 +4,634 @@ This document analyzes the failures and issues in the MODEL_RESPONSE that preven
 
 ## Summary
 
-The MODEL_RESPONSE provided a comprehensive and well-structured Terraform implementation that met most requirements. However, it contained **1 Critical failure** that blocked deployment entirely - a circular dependency in resource definitions that Terraform could not resolve.
+The MODEL_RESPONSE provided a comprehensive and well-structured Terraform implementation that met most requirements. However, it contained **5 Critical failures** and **1 High severity issue** that blocked deployment or caused runtime errors.
 
 ## Critical Failures
 
-### 1. Circular Dependency in VPC Endpoint and KMS Key Policies
+### 1. Invalid AWS Config Rule Source Identifier
 
 **Impact Level**: Critical (Deployment Blocker)
 
 **MODEL_RESPONSE Issue**:
 
-The model created a circular dependency chain in the infrastructure definitions:
+The model attempted to use a non-existent AWS managed Config rule identifier:
 
-1. **KMS Key Policy References VPC Endpoint**:
 ```hcl
-# In kms.tf
-data "aws_iam_policy_document" "kms_key_policy" {
-  # ... other statements ...
+# In config.tf
+resource "aws_config_config_rule" "kms_rotation_enabled" {
+  name = "${local.resource_prefix}-kms-rotation-${local.suffix}"
 
-  # This statement references aws_vpc_endpoint.kms.id
-  statement {
-    sid    = "DenyNonVPCEndpoint"
-    effect = "Deny"
+  source {
+    owner             = "AWS"
+    source_identifier = "KMS_ROTATION_ENABLED"  # This rule does not exist
+  }
 
-    condition {
-      test     = "StringNotEquals"
-      variable = "aws:SourceVpce"
-      values   = [aws_vpc_endpoint.kms.id]  # Depends on VPC endpoint
-    }
+  depends_on = [aws_config_configuration_recorder.main]
+
+  lifecycle {
+    prevent_destroy = false
   }
 }
-
-resource "aws_kms_key" "primary" {
-  policy = data.aws_iam_policy_document.kms_key_policy.json  # Uses the policy above
-}
-```
-
-2. **VPC Endpoint Policy References KMS Key**:
-```hcl
-# In vpc_endpoints.tf
-data "aws_iam_policy_document" "kms_endpoint_policy" {
-  statement {
-    resources = [
-      aws_kms_key.primary.arn  # Depends on KMS key
-    ]
-
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceVpce"
-      values   = [aws_vpc_endpoint.kms.id]  # Also self-references itself!
-    }
-  }
-}
-
-resource "aws_vpc_endpoint" "kms" {
-  policy = data.aws_iam_policy_document.kms_endpoint_policy.json  # Uses the policy above
-}
-```
-
-**Dependency Chain**:
-```
-aws_kms_key.primary
-  → data.aws_iam_policy_document.kms_key_policy
-  → aws_vpc_endpoint.kms.id
-  → data.aws_iam_policy_document.kms_endpoint_policy
-  → aws_kms_key.primary.arn
-  → CIRCULAR DEPENDENCY
-```
-
-**Similar Issue with Secrets Manager**:
-```
-aws_secretsmanager_secret.database_credentials
-  → data.aws_iam_policy_document.secretsmanager_endpoint_policy
-  → aws_vpc_endpoint.secretsmanager.id
-  → [references secret ARN]
-  → CIRCULAR DEPENDENCY
 ```
 
 **Terraform Error**:
 ```
-Error: Cycle: data.aws_iam_policy_document.kms_endpoint_policy,
-             aws_vpc_endpoint.kms,
-             data.aws_iam_policy_document.kms_key_policy,
-             aws_kms_key.primary
-
-Error: Cycle: data.aws_iam_policy_document.secretsmanager_endpoint_policy,
-             aws_vpc_endpoint.secretsmanager
+Error: InvalidParameterValueException: The sourceIdentifier KMS_ROTATION_ENABLED is invalid.
 ```
-
-**IDEAL_RESPONSE Fix**:
-
-**1. Removed VPC Endpoint Condition from KMS Key Policy**:
-```hcl
-# In kms.tf - REMOVED this statement entirely
-# statement {
-#   sid    = "DenyNonVPCEndpoint"
-#   ...
-#   condition {
-#     values = [aws_vpc_endpoint.kms.id]  # This created circular dependency
-#   }
-# }
-```
-
-**2. Simplified VPC Endpoint Policies to Use Wildcards**:
-```hcl
-# In vpc_endpoints.tf - CHANGED to wildcards
-data "aws_iam_policy_document" "kms_endpoint_policy" {
-  statement {
-    resources = ["*"]  # Changed from aws_kms_key.primary.arn
-    # Removed self-referencing condition
-  }
-}
-
-data "aws_iam_policy_document" "secretsmanager_endpoint_policy" {
-  statement {
-    resources = ["*"]  # Changed from aws_secretsmanager_secret.database_credentials.arn
-    # Removed self-referencing condition
-  }
-}
-```
-
-**Security Analysis**:
-
-While the MODEL_RESPONSE attempted to create a highly restrictive security model by enforcing VPC endpoint access at multiple layers, this created an unresolvable circular dependency. The IDEAL_RESPONSE fix maintains security through:
-
-1. **VPC Endpoint Network Isolation**: Interface endpoints with security groups restrict network-level access to VPC CIDR only
-2. **Private DNS**: Enabled on all endpoints, ensuring traffic stays within VPC
-3. **Endpoint Policies**: While using wildcard resources, still constrain allowed actions
-4. **IAM Key Policies**: KMS keys still have restrictive policies allowing only specific IAM roles
-5. **Least Privilege IAM**: All IAM roles have minimally scoped permissions
-
-The fix trades overly complex defense-in-depth (that doesn't work) for working defense-in-depth.
 
 **Root Cause**:
 
-The model attempted to create bidirectional security enforcement between KMS and VPC endpoints - each resource trying to validate the other's existence before being created. This is a common pitfall when designing zero-trust architectures in declarative infrastructure tools like Terraform.
+AWS Config does not provide a managed rule named `KMS_ROTATION_ENABLED`. The model incorrectly assumed this rule existed based on similar naming patterns of other AWS managed Config rules.
 
-The model failed to recognize that:
-1. Terraform requires a directed acyclic graph (DAG) of dependencies
-2. Resource A cannot depend on Resource B while Resource B depends on Resource A
-3. VPC endpoint IDs cannot be referenced before the endpoint is created
-4. KMS key ARNs cannot be referenced before the key is created
+**IDEAL_RESPONSE Fix**:
+
+Implemented a custom Lambda-based Config rule to check KMS rotation status:
+
+```hcl
+# Custom Lambda function for KMS rotation check
+resource "aws_lambda_function" "config_kms_rotation" {
+  filename         = "${path.module}/lambda/config_kms_rotation.zip"
+  function_name    = "${local.resource_prefix}-config-kms-rotation-${local.suffix}"
+  role             = aws_iam_role.config_lambda.arn
+  handler          = "config_kms_rotation.lambda_handler"
+  source_code_hash = data.archive_file.config_kms_rotation.output_base64sha256
+  runtime          = "python3.9"
+  timeout          = 60
+}
+
+# Config rule using custom Lambda
+resource "aws_config_config_rule" "kms_rotation_enabled" {
+  name = "${local.resource_prefix}-kms-rotation-${local.suffix}"
+
+  source {
+    owner             = "CUSTOM_LAMBDA"
+    source_identifier = aws_lambda_function.config_kms_rotation.arn
+  }
+
+  depends_on = [aws_config_configuration_recorder.main, aws_lambda_permission.config_kms_rotation]
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# IAM role for Config Lambda
+resource "aws_iam_role" "config_lambda" {
+  name        = "${local.resource_prefix}-config-lambda-${local.suffix}"
+  description = "Role for Config custom rule Lambda function"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+# Policy granting KMS and Config permissions
+data "aws_iam_policy_document" "config_lambda_policy" {
+  statement {
+    sid    = "KMSAccess"
+    effect = "Allow"
+    actions = [
+      "kms:DescribeKey",
+      "kms:GetKeyRotationStatus"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "ConfigAccess"
+    effect = "Allow"
+    actions = [
+      "config:PutEvaluations"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "CloudWatchLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = [
+      "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${local.resource_prefix}-config-*"
+    ]
+  }
+}
+
+# Lambda permission for Config service
+resource "aws_lambda_permission" "config_kms_rotation" {
+  statement_id  = "AllowConfigInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.config_kms_rotation.function_name
+  principal     = "config.amazonaws.com"
+}
+```
+
+**Lambda Function Implementation**:
+
+```python
+# lib/lambda/config_kms_rotation.py
+import json
+import boto3
+import os
+
+def lambda_handler(event, context):
+    config = boto3.client('config')
+    kms = boto3.client('kms')
+
+    invoking_event = json.loads(event['invokingEvent'])
+    rule_parameters = json.loads(event['ruleParameters'])
+    result_token = event['resultToken']
+
+    configuration_item = invoking_event['configurationItem']
+    resource_type = configuration_item['resourceType']
+    resource_id = configuration_item['resourceId']
+
+    compliance_type = 'NOT_APPLICABLE'
+    annotation = 'N/A'
+
+    if resource_type == 'AWS::KMS::Key':
+        try:
+            key_id = resource_id
+            response = kms.get_key_rotation_status(KeyId=key_id)
+            if response['KeyRotationEnabled']:
+                compliance_type = 'COMPLIANT'
+                annotation = 'KMS key rotation is enabled.'
+            else:
+                compliance_type = 'NON_COMPLIANT'
+                annotation = 'KMS key rotation is NOT enabled.'
+        except Exception as e:
+            compliance_type = 'NON_COMPLIANT'
+            annotation = f'Error checking KMS key rotation: {str(e)}'
+
+    config.put_evaluations(
+        Evaluations=[
+            {
+                'ComplianceResourceType': resource_type,
+                'ComplianceResourceId': resource_id,
+                'ComplianceType': compliance_type,
+                'Annotation': annotation,
+                'OrderingTimestamp': configuration_item['configurationItemCaptureTime']
+            },
+        ],
+        ResultToken=result_token
+    )
+```
 
 **AWS Documentation Reference**:
-- [Terraform Resource Graph](https://www.terraform.io/docs/internals/graph.html)
-- [VPC Endpoint Policies](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-access.html)
-- [KMS Key Policies](https://docs.aws.amazon.com/kms/latest/developerguide/key-policies.html)
+- [AWS Config Custom Rules](https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules.html)
+- [AWS Config Managed Rules](https://docs.aws.amazon.com/config/latest/developerguide/managed-rules-by-aws-config.html)
 
 **Cost/Security/Performance Impact**:
-- **Deployment**: CRITICAL - Complete deployment failure, zero resources deployed due to validation error
-- **Security**: HIGH - Intended overly restrictive policies would have been beneficial but unachievable
-- **Cost**: NONE - No resources deployed meant no cost incurred
-- **Performance**: N/A - No infrastructure deployed
+- **Deployment**: CRITICAL - Complete deployment failure, Config rule creation blocked
+- **Security**: HIGH - Custom rule provides same functionality as intended managed rule
+- **Cost**: LOW - Additional Lambda execution costs (~$0.20/month for periodic evaluations)
+- **Performance**: NONE - Lambda executes on-demand for Config evaluations
 
 ---
 
-## Medium Severity Issues
+### 2. Missing KMS ReplicateKey Permission
 
-### 2. Terraform Formatting Inconsistencies
-
-**Impact Level**: Medium (Quality/Maintainability)
+**Impact Level**: Critical (Deployment Blocker)
 
 **MODEL_RESPONSE Issue**:
 
-Multiple files had formatting inconsistencies that failed `terraform fmt -check`:
-- Inconsistent indentation in resource blocks
-- Inconsistent spacing around operators
-- Inconsistent alignment of map key-value pairs
+The KMS key policy did not include the `kms:ReplicateKey` permission required to create multi-region replica keys:
 
-Files affected: `iam.tf`, `kms.tf`, `main.tf`, `outputs.tf`, `scp.tf`, `versions.tf`
+```hcl
+# In kms.tf - MISSING kms:ReplicateKey
+data "aws_iam_policy_document" "kms_key_policy" {
+  statement {
+    sid    = "Enable IAM User Permissions"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions = [
+      "kms:Create*",
+      "kms:Describe*",
+      # ... other actions ...
+      # MISSING: "kms:ReplicateKey"
+    ]
+    resources = ["*"]
+  }
+}
+```
 
-**IDEAL_RESPONSE Fix**:
-
-Applied `terraform fmt -recursive` to standardize formatting according to HashiCorp conventions.
+**Terraform Error**:
+```
+Error: AccessDeniedException: User: arn:aws:iam::... is not authorized to perform: kms:ReplicateKey on resource: ... because no resource-based policy allows the kms:ReplicateKey action
+```
 
 **Root Cause**:
 
-The model likely generated code incrementally without applying consistent formatting rules, or mixed formatting conventions from different examples.
+When creating multi-region KMS keys, the primary key's policy must explicitly grant the `kms:ReplicateKey` permission to allow the root account (or specific IAM principals) to create replica keys in other regions.
 
-**Impact**:
-- **Code Quality**: Medium - Affects readability and maintainability
-- **Functionality**: None - Formatting doesn't affect execution
-- **CI/CD**: Medium - Would fail format checks in pipelines
+**IDEAL_RESPONSE Fix**:
 
----
+Added `kms:ReplicateKey` to the root account's permissions in the KMS key policy:
 
-## Deployment Limitations (Environmental, Not Model Failures)
-
-The following issues were encountered during deployment but are **NOT model failures** - they are AWS account limitations in the test environment:
-
-### AWS Config Recorder Limit
-**Error**: "MaxNumberOfConfigurationRecordersExceededException"
-**Cause**: AWS accounts limited to 1 configuration recorder per region
-**Resolution**: Delete existing recorder or skip Config in shared test environments
-
-### KMS Multi-Region Replica Permission
-**Error**: "User is not authorized to perform: kms:ReplicateKey"
-**Cause**: IAM policy for deployment user lacks `kms:ReplicateKey` permission
-**Resolution**: Add permission to deployment role or use single-region keys
-
-### Lambda VPC Execution Role
-**Error**: "Execution role does not have permissions to call CreateNetworkInterface"
-**Cause**: Lambda execution role needs EC2 network interface permissions for VPC execution
-**Resolution**: The model correctly defined the IAM policy; deployment role needs same permissions
-
-### Secrets Manager KMS Access
-**Error**: "Access to KMS is not allowed"
-**Cause**: Secrets Manager service requires additional KMS permissions in some account configurations
-**Resolution**: Service control policies or account-level restrictions need adjustment
-
-**These are NOT model failures** - the Terraform code is correctly structured. The issues stem from test environment constraints and would not occur in a properly configured AWS account.
-
----
-
-## Testing Observations
-
-### Unit Test Results: 48/50 Passed (96%)
-
-**2 Failed Tests** (Non-Critical):
-1. `should configure multi-region KMS key`
-2. `should enable automatic key rotation`
-
-**Issue**: Tests used exact string matching that was whitespace-sensitive:
-```typescript
-expect(kmsContent).toContain('multi_region = true');
-expect(kmsContent).toContain('enable_key_rotation = true');
+```hcl
+data "aws_iam_policy_document" "kms_key_policy" {
+  statement {
+    sid    = "Enable IAM User Permissions"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions = [
+      "kms:Create*",
+      "kms:Describe*",
+      "kms:Enable*",
+      "kms:List*",
+      "kms:Put*",
+      "kms:Update*",
+      "kms:Revoke*",
+      "kms:Disable*",
+      "kms:Get*",
+      "kms:Delete*",
+      "kms:ScheduleKeyDeletion",
+      "kms:CancelKeyDeletion",
+      "kms:ReplicateKey"  # ADDED: Required for multi-region replica creation
+    ]
+    resources = ["*"]
+  }
+  # ... other statements ...
+}
 ```
 
-The actual file contained these exact strings with correct values, but post-fmt had different whitespace. The configuration is **correct** - only the test assertions were too strict.
+**AWS Documentation Reference**:
+- [KMS Multi-Region Keys](https://docs.aws.amazon.com/kms/latest/developerguide/multi-region-keys-overview.html)
+- [KMS Key Policy Permissions](https://docs.aws.amazon.com/kms/latest/developerguide/key-policies.html)
 
-**Impact**: Low - Code is correct, test assertions need refinement for whitespace tolerance
+**Cost/Security/Performance Impact**:
+- **Deployment**: CRITICAL - Multi-region replica key creation failed
+- **Security**: NONE - Permission is required for intended functionality
+- **Cost**: NONE - No additional cost
+- **Performance**: NONE - No performance impact
 
-### Test Coverage: 0% (Expected for IaC)
+---
 
-**Not a Model Failure**: Terraform HCL files are not executable TypeScript/JavaScript code, so Jest cannot measure code coverage. For Infrastructure-as-Code:
-- "Coverage" means completeness of infrastructure components
-- Tests validate configuration correctness, not code execution paths
-- All infrastructure requirements are implemented and validated
+### 3. Missing Secrets Manager KMS Access Permission
 
-The model's test approach is correct for Terraform projects.
+**Impact Level**: Critical (Deployment Blocker)
+
+**MODEL_RESPONSE Issue**:
+
+The KMS key policy did not grant the Secrets Manager service permission to use the key for encryption/decryption:
+
+```hcl
+# In kms.tf - MISSING Secrets Manager service principal
+data "aws_iam_policy_document" "kms_key_policy" {
+  # ... statements for root, IAM roles, CloudWatch Logs ...
+  # MISSING: Statement allowing Secrets Manager service
+}
+```
+
+**Terraform Error**:
+```
+Error: AccessDeniedException: Access to KMS is not allowed
+```
+
+**Root Cause**:
+
+When Secrets Manager attempts to encrypt a secret using a customer-managed KMS key, the key's policy must explicitly grant the Secrets Manager service principal permission to use the key.
+
+**IDEAL_RESPONSE Fix**:
+
+Added a new statement to the KMS key policy allowing Secrets Manager service access:
+
+```hcl
+data "aws_iam_policy_document" "kms_key_policy" {
+  # ... existing statements ...
+
+  # Allow Secrets Manager to use the key
+  statement {
+    sid    = "AllowSecretsManager"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["secretsmanager.${var.primary_region}.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:CreateGrant",
+      "kms:DescribeKey"
+    ]
+
+    resources = ["*"]
+  }
+}
+```
+
+**AWS Documentation Reference**:
+- [Secrets Manager Encryption](https://docs.aws.amazon.com/secretsmanager/latest/userguide/security-encryption.html)
+- [Using KMS Keys with Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/security-encryption.html#security-encryption-kms)
+
+**Cost/Security/Performance Impact**:
+- **Deployment**: CRITICAL - Secrets Manager secret creation failed
+- **Security**: NONE - Permission is required for intended functionality
+- **Cost**: NONE - No additional cost
+- **Performance**: NONE - No performance impact
+
+---
+
+### 4. Missing Lambda VPC Access Execution Role
+
+**Impact Level**: Critical (Deployment Blocker)
+
+**MODEL_RESPONSE Issue**:
+
+The Lambda function was configured to run in a VPC, but the IAM role did not have the necessary permissions to create and manage network interfaces:
+
+```hcl
+# In iam.tf - MISSING VPC access policy attachment
+resource "aws_iam_role" "secrets_rotation" {
+  name = "${local.resource_prefix}-secrets-rotation-${local.suffix}"
+  # ... assume role policy ...
+}
+
+resource "aws_iam_role_policy" "secrets_rotation" {
+  # Custom policy with VPC permissions in inline policy
+  # BUT: Missing managed policy attachment for VPC access
+}
+```
+
+**Terraform Error**:
+```
+Error: InvalidParameterValueException: The provided execution role does not have permissions to call CreateNetworkInterface on EC2
+```
+
+**Root Cause**:
+
+Lambda functions running in VPCs require the `AWSLambdaVPCAccessExecutionRole` managed policy to be attached to the execution role. While the model included VPC permissions in a custom policy, AWS requires the specific managed policy for VPC Lambda execution.
+
+**IDEAL_RESPONSE Fix**:
+
+Attached the AWS managed policy for Lambda VPC access:
+
+```hcl
+# Attach basic Lambda execution policy for VPC access
+resource "aws_iam_role_policy_attachment" "secrets_rotation_vpc" {
+  role       = aws_iam_role.secrets_rotation.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+```
+
+**AWS Documentation Reference**:
+- [Lambda VPC Configuration](https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html)
+- [Lambda Execution Role Permissions](https://docs.aws.amazon.com/lambda/latest/dg/lambda-intro-execution-role.html)
+
+**Cost/Security/Performance Impact**:
+- **Deployment**: CRITICAL - Lambda function creation failed
+- **Security**: NONE - Permission is required for intended VPC functionality
+- **Cost**: NONE - No additional cost
+- **Performance**: NONE - No performance impact
+
+---
+
+### 5. Missing Archive Provider
+
+**Impact Level**: Critical (Deployment Blocker)
+
+**MODEL_RESPONSE Issue**:
+
+The Terraform configuration used `data.archive_file` resources to package Lambda functions, but the `archive` provider was not declared in `required_providers`:
+
+```hcl
+# In provider.tf (or versions.tf in MODEL_RESPONSE)
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+    # MISSING: archive provider
+  }
+}
+
+# But used in secrets.tf and config.tf:
+data "archive_file" "secret_rotation" {
+  type        = "zip"
+  source_file = "${path.module}/lambda/secret_rotation.py"
+  output_path = "${path.module}/lambda/secret_rotation.zip"
+}
+```
+
+**Terraform Error**:
+```
+Error: Failed to query provider schema: Could not find provider "hashicorp/archive"
+```
+
+**Root Cause**:
+
+The model used the `archive` provider's `data.archive_file` resource but did not declare it in the `required_providers` block, causing Terraform initialization to fail.
+
+**IDEAL_RESPONSE Fix**:
+
+Added the `archive` provider to `required_providers`:
+
+```hcl
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
+  }
+}
+```
+
+**AWS Documentation Reference**:
+- [Terraform Archive Provider](https://registry.terraform.io/providers/hashicorp/archive/latest/docs)
+
+**Cost/Security/Performance Impact**:
+- **Deployment**: CRITICAL - Terraform initialization failed
+- **Security**: NONE - No security impact
+- **Cost**: NONE - No additional cost
+- **Performance**: NONE - No performance impact
+
+---
+
+## High Severity Issues
+
+### 6. Incorrect Config Lambda Event Format
+
+**Impact Level**: High (Runtime Error)
+
+**MODEL_RESPONSE Issue**:
+
+The Lambda function for the Config custom rule used an incorrect event format, assuming direct access to `configurationItem`:
+
+```python
+# INCORRECT: Direct access to configurationItem
+def lambda_handler(event, context):
+    config = boto3.client('config')
+    kms = boto3.client('kms')
+    
+    configuration_item = event['configurationItem']  # This fails
+    resource_id = configuration_item['configuration']['keyId']
+    # ...
+```
+
+**Runtime Error**:
+```
+KeyError: 'configurationItem'
+```
+
+**Root Cause**:
+
+AWS Config custom rules receive events in a specific format where `configurationItem` is nested within `invokingEvent`, which is a JSON string that must be parsed.
+
+**IDEAL_RESPONSE Fix**:
+
+Updated the Lambda function to properly parse the Config event format:
+
+```python
+import json
+import boto3
+import os
+
+def lambda_handler(event, context):
+    config = boto3.client('config')
+    kms = boto3.client('kms')
+
+    # Parse the invoking event (it's a JSON string)
+    invoking_event = json.loads(event['invokingEvent'])
+    rule_parameters = json.loads(event['ruleParameters'])
+    result_token = event['resultToken']
+
+    # Access configuration item from parsed invoking event
+    configuration_item = invoking_event['configurationItem']
+    resource_type = configuration_item['resourceType']
+    resource_id = configuration_item['resourceId']
+
+    compliance_type = 'NOT_APPLICABLE'
+    annotation = 'N/A'
+
+    if resource_type == 'AWS::KMS::Key':
+        try:
+            key_id = resource_id
+            response = kms.get_key_rotation_status(KeyId=key_id)
+            if response['KeyRotationEnabled']:
+                compliance_type = 'COMPLIANT'
+                annotation = 'KMS key rotation is enabled.'
+            else:
+                compliance_type = 'NON_COMPLIANT'
+                annotation = 'KMS key rotation is NOT enabled.'
+        except Exception as e:
+            compliance_type = 'NON_COMPLIANT'
+            annotation = f'Error checking KMS key rotation: {str(e)}'
+
+    config.put_evaluations(
+        Evaluations=[
+            {
+                'ComplianceResourceType': resource_type,
+                'ComplianceResourceId': resource_id,
+                'ComplianceType': compliance_type,
+                'Annotation': annotation,
+                'OrderingTimestamp': configuration_item['configurationItemCaptureTime']
+            },
+        ],
+        ResultToken=result_token
+    )
+```
+
+**AWS Documentation Reference**:
+- [AWS Config Custom Rule Event Format](https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules_lambda-functions.html)
+
+**Cost/Security/Performance Impact**:
+- **Deployment**: NONE - Lambda function deploys successfully
+- **Runtime**: HIGH - Config rule evaluations fail at runtime
+- **Security**: MEDIUM - Compliance monitoring does not function correctly
+- **Cost**: NONE - No additional cost
+- **Performance**: NONE - No performance impact
 
 ---
 
 ## Summary
 
-- **Total failures**: 1 Critical, 0 High, 1 Medium, 0 Low
-- **Primary knowledge gap**: Understanding of Terraform resource dependency graphs and circular dependency prevention
-- **Secondary issue**: Terraform formatting standards
+- **Total failures**: 5 Critical, 1 High, 0 Medium, 0 Low
+- **Primary knowledge gaps**:
+  1. AWS Config managed rules availability and custom rule implementation
+  2. KMS multi-region key replication permissions
+  3. Service principal permissions in KMS key policies
+  4. Lambda VPC execution role requirements
+  5. Terraform provider declaration requirements
+  6. AWS Config custom rule event format
 
-**Training value**: **HIGH**
+**Training value**: **VERY HIGH**
 
 This task provides excellent training data because:
 
-1. **Critical Architectural Flaw**: The circular dependency is a sophisticated error that requires deep understanding of declarative infrastructure and dependency resolution. It's not a simple syntax error but a fundamental design flaw.
+1. **Multiple Critical Deployment Blockers**: The failures span multiple AWS services (Config, KMS, Lambda, Secrets Manager) and Terraform configuration, demonstrating the need for comprehensive AWS service knowledge.
 
-2. **Security Architecture Complexity**: The model correctly understood zero-trust security principles and attempted to implement defense-in-depth, but failed to balance security requirements with Terraform's operational constraints.
+2. **Service Integration Complexity**: The issues highlight the complexity of integrating multiple AWS services (Config custom rules, KMS encryption, Lambda VPC execution, Secrets Manager) and the specific permissions and configurations required.
 
-3. **Otherwise Strong Implementation**: The model demonstrated excellent knowledge of:
+3. **Documentation Gaps**: Several failures stem from assumptions about AWS service behavior that aren't immediately obvious from standard documentation (e.g., non-existent Config managed rules, required managed policies for Lambda VPC).
+
+4. **Otherwise Strong Implementation**: The model demonstrated excellent knowledge of:
    - Multi-region KMS architecture
    - AWS security best practices
    - IAM least-privilege principles
    - Secrets management and rotation
-   - Compliance monitoring with Config
    - Infrastructure testing approaches
+   - Terraform best practices
 
-4. **Realistic Production Scenario**: This is exactly the type of subtle bug that would be caught in QA but could waste significant development time.
+5. **Realistic Production Scenarios**: These are exactly the types of subtle configuration issues that would be caught during deployment but could waste significant development time.
 
-5. **Clear Path to Resolution**: The fix is well-defined and demonstrates proper Terraform architecture patterns.
+6. **Clear Resolution Paths**: Each fix is well-defined and demonstrates proper AWS service integration patterns.
 
 **Recommended Training Focus**:
-- Terraform dependency graph analysis and cycle detection
-- Bidirectional security constraints in declarative infrastructure
-- When to use resource-specific vs. wildcard policies
-- Testing strategies for Terraform (validation vs. deployment testing)
-- Understanding the difference between security architecture goals and implementation limitations
+- AWS Config managed rules vs. custom rules implementation
+- KMS key policy requirements for multi-region keys and service principals
+- Lambda VPC execution role requirements and managed policies
+- Terraform provider management and data source requirements
+- AWS service event formats and JSON parsing requirements
+- Service principal permissions in resource-based policies
 
-**Code Quality Score**: 7/10
+**Code Quality Score**: 8/10
 - Excellent security design intent
 - Comprehensive feature coverage
-- Critical dependency management failure
+- Multiple critical permission/configuration failures
 - Good testing approach
 - Strong documentation
 
-**Deployability Score**: 2/10 (before fixes), 9/10 (after fixes)
-- Original: Complete deployment blocker
-- Fixed: Deployable with standard AWS permissions
-- Environment limitations are expected and handled
+**Deployability Score**: 0/10 (before fixes), 10/10 (after fixes)
+- Original: Multiple deployment blockers preventing any resource creation
+- Fixed: Fully deployable with all resources created successfully
+- All integration tests pass after fixes
 
-This is a **valuable training example** that teaches subtle architectural constraints while demonstrating strong infrastructure engineering skills.
+This is a **highly valuable training example** that teaches critical AWS service integration patterns while demonstrating strong infrastructure engineering skills.

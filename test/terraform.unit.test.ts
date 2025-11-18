@@ -9,9 +9,9 @@ describe('Terraform Security Foundation - Unit Tests', () => {
   describe('Terraform Configuration Structure', () => {
     it('should have all required Terraform files', () => {
       const requiredFiles = [
-        'versions.tf',
+        'provider.tf',
         'variables.tf',
-        'main.tf',
+        'tap_stack.tf',
         'outputs.tf',
         'kms.tf',
         'iam.tf',
@@ -86,9 +86,9 @@ describe('Terraform Security Foundation - Unit Tests', () => {
 
   describe('Resource Naming Convention', () => {
     it('should use environmentSuffix in resource names', () => {
-      const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
-      expect(mainTf).toContain('local.suffix');
-      expect(mainTf).toContain('environment_suffix');
+      const tapStackTf = fs.readFileSync(path.join(libPath, 'tap_stack.tf'), 'utf-8');
+      expect(tapStackTf).toContain('local.suffix');
+      expect(tapStackTf).toContain('environment_suffix');
     });
 
     it('should follow naming pattern {environment}-security-{purpose}-{suffix}', () => {
@@ -190,7 +190,8 @@ describe('Terraform Security Foundation - Unit Tests', () => {
     });
 
     it('should monitor KMS rotation', () => {
-      expect(configContent).toContain('KMS_ROTATION_ENABLED');
+      expect(configContent).toContain('kms_rotation_enabled');
+      expect(configContent).toContain('config_kms_rotation');
     });
 
     it('should monitor secrets encryption', () => {
@@ -264,7 +265,7 @@ describe('Terraform Security Foundation - Unit Tests', () => {
   });
 
   describe('Lifecycle Rules', () => {
-    const files = ['main.tf', 'kms.tf', 'iam.tf', 'secrets.tf', 'config.tf'];
+    const files = ['tap_stack.tf', 'kms.tf', 'iam.tf', 'secrets.tf', 'config.tf'];
 
     files.forEach(file => {
       it(`should have prevent_destroy lifecycle in ${file}`, () => {

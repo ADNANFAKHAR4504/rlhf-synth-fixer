@@ -26,5 +26,7 @@
     "VPC Flow Logs",
     "EC2"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }
