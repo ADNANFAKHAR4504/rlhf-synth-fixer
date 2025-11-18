@@ -244,8 +244,8 @@ Resources:
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-      CidrIp: 10.0.0.0/16
-      Description: Allow HTTPS to VPC endpoints (S3, DynamoDB Gateway endpoints)
+      CidrIp: 0.0.0.0/0
+      Description: Allow HTTPS to AWS services via Gateway endpoints (S3, DynamoDB)
 
   LambdaVPCEndpointSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
