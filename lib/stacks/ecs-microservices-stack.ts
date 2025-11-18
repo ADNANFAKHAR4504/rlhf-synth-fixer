@@ -6,8 +6,8 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { SERVICES } from '../config/service-config';
 import { AppMeshServiceConstruct } from '../constructs/app-mesh-service';
@@ -113,14 +113,22 @@ export class EcsMicroservicesStack extends cdk.Stack {
       this.node.tryGetContext('enableContainerInsights') !== false &&
       process.env.ECS_ENABLE_CONTAINER_INSIGHTS !== 'false';
 
+    // For CI/CD environments, don't enable FARGATE capacity providers to avoid cleanup issues
+    const isCiCd =
+      process.env.CI === 'true' ||
+      process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
+    const enableFargateCapacityProviders = !isCiCd;
+
     this.cluster = new ecs.Cluster(this, 'MicroservicesCluster', {
       clusterName,
       vpc: this.vpc,
       containerInsights: enableContainerInsights,
-      enableFargateCapacityProviders: true,
+      enableFargateCapacityProviders,
     });
 
-    this.cluster.enableFargateCapacityProviders();
+    if (enableFargateCapacityProviders) {
+      this.cluster.enableFargateCapacityProviders();
+    }
   }
 
   private createSecrets(): void {
