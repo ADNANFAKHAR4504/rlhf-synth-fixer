@@ -2,6 +2,8 @@
 Fraud Detection System Stack
 Real-time fraud detection system for credit card transactions using serverless architecture.
 """
+import os
+import json
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -89,6 +91,13 @@ class TapStack(TerraformStack):
             self.common_tags = {**base_tags, **default_tags["tags"]}
         else:
             self.common_tags = base_tags
+
+        # Calculate absolute paths for Lambda ZIP files
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        lambda_dir = os.path.join(current_dir, "lambda")
+        self.transaction_validator_zip = os.path.join(lambda_dir, "transaction_validator.zip")
+        self.fraud_analyzer_zip = os.path.join(lambda_dir, "fraud_analyzer.zip")
+        self.notification_sender_zip = os.path.join(lambda_dir, "notification_sender.zip")
 
         # Create infrastructure components
         self._create_kms_keys()
@@ -393,8 +402,8 @@ class TapStack(TerraformStack):
             handler="transaction_validator.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
-            filename="lib/lambda/transaction_validator.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda/transaction_validator.zip\")}",
+            filename=self.transaction_validator_zip,
+            source_code_hash=f"${{filebase64sha256(\"{self.transaction_validator_zip}\")}}",
             timeout=30,
             reserved_concurrent_executions=50,
             environment=lambda_environment,
@@ -413,8 +422,8 @@ class TapStack(TerraformStack):
             handler="fraud_analyzer.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
-            filename="lib/lambda/fraud_analyzer.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda/fraud_analyzer.zip\")}",
+            filename=self.fraud_analyzer_zip,
+            source_code_hash=f"${{filebase64sha256(\"{self.fraud_analyzer_zip}\")}}",
             timeout=60,
             reserved_concurrent_executions=50,
             environment=lambda_environment,
@@ -433,8 +442,8 @@ class TapStack(TerraformStack):
             handler="notification_sender.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
-            filename="lib/lambda/notification_sender.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda/notification_sender.zip\")}",
+            filename=self.notification_sender_zip,
+            source_code_hash=f"${{filebase64sha256(\"{self.notification_sender_zip}\")}}",
             timeout=30,
             reserved_concurrent_executions=50,
             environment=lambda_environment,
