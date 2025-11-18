@@ -1,5 +1,4 @@
 import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
 import { PaymentInfrastructure } from "./infrastructure";
 
 const config = new pulumi.Config();
@@ -9,13 +8,13 @@ const region = config.get("region") || "us-east-1";
 
 // Create the payment processing infrastructure
 const infrastructure = new PaymentInfrastructure(`payment-infra-${environmentSuffix}`, {
-    environmentSuffix,
-    environment,
-    region,
-    rdsInstanceClass: config.get("rdsInstanceClass") || "db.t3.medium",
-    rdsBackupRetentionDays: config.getNumber("rdsBackupRetentionDays") || 3,
-    lambdaMemorySize: config.getNumber("lambdaMemorySize") || 512,
-    lambdaTimeout: config.getNumber("lambdaTimeout") || 30,
+  environmentSuffix,
+  environment,
+  region,
+  rdsInstanceClass: config.get("rdsInstanceClass") || "db.t3.medium",
+  rdsBackupRetentionDays: config.getNumber("rdsBackupRetentionDays") || 3,
+  lambdaMemorySize: config.getNumber("lambdaMemorySize") || 512,
+  lambdaTimeout: config.getNumber("lambdaTimeout") || 30,
 });
 
 // Export outputs
