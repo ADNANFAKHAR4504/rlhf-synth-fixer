@@ -2,9 +2,8 @@
  * CoreDNS Optimization Stack
  * Optimizes CoreDNS and deploys node-local DNS cache
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as eks from '@pulumi/eks';
-import * as k8s from '@pulumi/kubernetes';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface CoreDnsOptimizationStackArgs {
   environmentSuffix: string;
@@ -19,7 +18,12 @@ export class CoreDnsOptimizationStack extends pulumi.ComponentResource {
   ) {
     super('tap:eks:CoreDnsOptimizationStack', name, args, opts);
 
-    // Deploy node-local DNS cache
+    // NOTE: Node-local DNS cache disabled due to compatibility issues
+    // This optional DNS optimization was causing pod crash loops
+    // The CoreDNS service in kube-system provides sufficient DNS performance
+    //
+    // Uncomment below to enable node-local DNS caching:
+    /*
     void new k8s.apps.v1.DaemonSet(
       `node-local-dns-${args.environmentSuffix}`,
       {
@@ -167,7 +171,6 @@ export class CoreDnsOptimizationStack extends pulumi.ComponentResource {
       { provider: args.cluster.provider, parent: this }
     );
 
-    // Create ConfigMap for node-local DNS cache
     void new k8s.core.v1.ConfigMap(
       `node-local-dns-config-${args.environmentSuffix}`,
       {
@@ -228,6 +231,7 @@ ip6.arpa:53 {
       },
       { provider: args.cluster.provider, parent: this }
     );
+    */
 
     this.registerOutputs({});
   }

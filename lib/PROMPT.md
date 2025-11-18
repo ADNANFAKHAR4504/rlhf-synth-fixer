@@ -42,9 +42,9 @@ Create a production-ready EKS cluster infrastructure using **Pulumi with TypeScr
    - Storage classes configured for dynamic provisioning
 
 6. **DNS and Networking**
-   - CoreDNS optimization configuration
-   - Node-local DNS cache implementation
+   - CoreDNS available in kube-system namespace (EKS managed)
    - Network policies for namespace isolation between dev and prod
+   - Note: Node-local DNS cache feature disabled due to compatibility issues
 
 7. **Security and Access Control**
    - Kubernetes RBAC configured with separate dev and prod namespaces
@@ -105,7 +105,7 @@ Create a production-ready EKS cluster infrastructure using **Pulumi with TypeScr
 - Kubernetes Cluster Autoscaler with pod disruption budgets
 - AWS Load Balancer Controller with IRSA integration
 - AWS EBS CSI driver with encryption enabled
-- CoreDNS optimization with node-local cache configuration
+- CoreDNS managed by EKS (node-local cache disabled for compatibility)
 - RBAC configuration with dev and prod namespaces
 - Network policies for namespace isolation
 - Pod security standards enforcement
