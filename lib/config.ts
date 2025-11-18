@@ -18,36 +18,32 @@ export interface MigrationConfig {
 }
 
 export function getConfig(): MigrationConfig {
-  const config = new pulumi.Config();
-
   // Get environment suffix - required for resource naming
-  const environmentSuffix = config.require('environmentSuffix');
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
   // Get region configuration
-  const region = config.get('region') || 'us-east-1';
-  const secondaryRegion = config.get('secondaryRegion') || 'us-east-2';
+  const region = process.env.AWS_REGION || 'us-east-1';
+  const secondaryRegion = 'us-east-2';
 
   // Get account IDs - support single-account mode for testing
   // If only legacyAccountId is provided, use it for all accounts
-  const legacyAccountId = config.require('legacyAccountId');
-  const productionAccountId =
-    config.get('productionAccountId') || legacyAccountId;
-  const stagingAccountId = config.get('stagingAccountId') || legacyAccountId;
-  const developmentAccountId =
-    config.get('developmentAccountId') || legacyAccountId;
-  const centralAccountId = config.get('centralAccountId') || legacyAccountId;
+  const legacyAccountId = process.env.CURRENT_ACCOUNT_ID || '123456789012';
+  const productionAccountId = legacyAccountId;
+  const stagingAccountId = legacyAccountId;
+  const developmentAccountId = legacyAccountId;
+  const centralAccountId = legacyAccountId;
 
   // Session duration (max 1 hour as per requirements)
-  const maxSessionDuration = config.getNumber('maxSessionDuration') || 3600;
+  const maxSessionDuration = 3600;
 
   // Dry-run mode support
-  const isDryRun = config.getBoolean('isDryRun') || false;
+  const isDryRun = false;
 
   // VPC CIDR blocks
-  const legacyVpcCidr = config.get('legacyVpcCidr') || '10.0.0.0/16';
-  const productionVpcCidr = config.get('productionVpcCidr') || '10.1.0.0/16';
-  const stagingVpcCidr = config.get('stagingVpcCidr') || '10.2.0.0/16';
-  const developmentVpcCidr = config.get('developmentVpcCidr') || '10.3.0.0/16';
+  const legacyVpcCidr = '10.0.0.0/16';
+  const productionVpcCidr = '10.1.0.0/16';
+  const stagingVpcCidr = '10.2.0.0/16';
+  const developmentVpcCidr = '10.3.0.0/16';
 
   return {
     environmentSuffix,
