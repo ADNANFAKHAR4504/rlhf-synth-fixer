@@ -11,5 +11,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["Step Functions", "Lambda", "DynamoDB", "SNS", "CloudWatch", "IAM", "KMS"]
+  "aws_services": [
+    "Step Functions",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
