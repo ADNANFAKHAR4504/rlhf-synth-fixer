@@ -435,11 +435,7 @@ Resources:
       IntegrationType: MOCK
       PayloadFormatVersion: '2.0'
       RequestTemplates:
-        application/json: '{"statusCode": 200}'
-      ResponseParameters:
-        '200':
-          ResponseParameters:
-            method.response.header.Content-Type: "'application/json'"
+        application/json: '{"statusCode": 200, "body": "{\"status\": \"healthy\"}"}'
 
   PaymentAPIStage:
     Type: AWS::ApiGatewayV2::Stage
