@@ -2,9 +2,7 @@ import {
   EventBridgeClient,
   PutEventsCommand,
   DescribeEventBusCommand,
-  ListRulesCommand,
-  StartReplayCommand,
-  ListReplaysCommand
+  ListRulesCommand
 } from '@aws-sdk/client-eventbridge';
 import {
   SFNClient,
@@ -22,7 +20,6 @@ import {
   PutItemCommand,
   GetItemCommand,
   QueryCommand,
-  UpdateItemCommand,
   DeleteItemCommand,
   DescribeTableCommand
 } from '@aws-sdk/client-dynamodb';
@@ -31,13 +28,11 @@ import {
   SendMessageCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
-  GetQueueAttributesCommand,
-  ChangeMessageVisibilityCommand
+  GetQueueAttributesCommand
 } from '@aws-sdk/client-sqs';
 import {
   CloudWatchClient,
-  GetMetricStatisticsCommand,
-  PutMetricDataCommand
+  GetMetricStatisticsCommand
 } from '@aws-sdk/client-cloudwatch';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
@@ -67,11 +62,9 @@ const paymentValidationStateMachineArn = outputs.PaymentValidationStateMachineAr
 const fraudDetectionStateMachineArn = outputs.FraudDetectionStateMachineArn;
 const orderProcessingQueueUrl = outputs.OrderProcessingQueueUrl;
 const paymentValidationQueueUrl = outputs.PaymentValidationQueueUrl;
-const fraudDetectionQueueUrl = outputs.FraudDetectionQueueUrl;
 const transactionStateTableName = outputs.TransactionStateTableName;
 const idempotencyTableName = outputs.IdempotencyTableName;
 const eventTransformerFunctionArn = outputs.EventTransformerFunctionArn;
-const distributedLockFunctionArn = outputs.DistributedLockFunctionArn;
 const sagaCoordinatorFunctionArn = outputs.SagaCoordinatorFunctionArn;
 const eventArchiveName = outputs.EventArchiveName;
 
@@ -115,34 +108,6 @@ const parseLambdaPayload = (payload?: Uint8Array) => {
   }
 };
 
-const waitForTransactionRecord = async (
-  transactionId: string,
-  timestamp: number,
-  maxAttempts = 10,
-  delayMs = 3000
-) => {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const response = await dynamoDBClient.send(
-      new GetItemCommand({
-        TableName: transactionStateTableName,
-        Key: {
-          transactionId: { S: transactionId },
-          timestamp: { N: timestamp.toString() }
-        },
-        ConsistentRead: true
-      })
-    );
-
-    if (response.Item) {
-      return response.Item;
-    }
-
-    await sleep(delayMs);
-  }
-
-  return undefined;
-};
-
 const invokeLambda = async (functionName: string, payload: Record<string, any>) => {
   const response = await lambdaClient.send(
     new InvokeCommand({
@@ -159,37 +124,6 @@ const invokeLambda = async (functionName: string, payload: Record<string, any>) 
 
   return parseLambdaPayload(response.Payload);
 };
-
-const purgeQueueMessages = async (queueUrl: string, maxIterations = 10) => {
-  for (let i = 0; i < maxIterations; i++) {
-    const response = await sqsClient.send(
-      new ReceiveMessageCommand({
-        QueueUrl: queueUrl,
-        MaxNumberOfMessages: 10,
-        WaitTimeSeconds: 1
-      })
-    );
-
-    const messages = response.Messages;
-    if (!messages || messages.length === 0) {
-      break;
-    }
-
-    await Promise.all(
-      messages
-        .filter(m => m.ReceiptHandle)
-        .map(m =>
-          sqsClient.send(
-            new DeleteMessageCommand({
-              QueueUrl: queueUrl,
-              ReceiptHandle: m.ReceiptHandle!
-            })
-          )
-        )
-    );
-  }
-};
-
 
 describe('TapStack End-to-End Integration Tests', () => {
   const testTransactionId = `test-${uuidv4()}`;
@@ -653,9 +587,7 @@ describe('TapStack End-to-End Integration Tests', () => {
       const replicationRule = response.Rules?.find(r => 
         r.Name?.includes('CrossRegionReplication')
       );
-      
-      // Rule may or may not exist based on deployment conditions
-      // This test documents the expected behavior
+
       if (replicationRule) {
         expect(replicationRule.State).toBe('ENABLED');
       }
@@ -687,7 +619,6 @@ describe('TapStack End-to-End Integration Tests', () => {
 
       // Assert
       expect(metricsResponse.Datapoints).toBeDefined();
-      // Metrics may be empty if no invocations occurred, which is acceptable
     });
 
     test('should verify X-Ray tracing is enabled on Lambda functions', async () => {
