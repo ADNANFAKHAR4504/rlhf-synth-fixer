@@ -365,7 +365,7 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     let configRuleNames: { [key: string]: string } | null = null;
     let recorderName: string;
 
-    beforeAll(() => {
+    beforeAll(async () => {
       // Discover Config rule ARNs dynamically
       const configRulesOutput = getOutputValue('config_rule_arns');
       if (configRulesOutput) {
@@ -385,9 +385,24 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
           configRuleNames = null;
         }
       }
-      // Discover recorder name from Terraform outputs
-      recorderName = getOutputValue('config_recorder_name') || 
-                     `compliance-recorder-${environmentSuffix}`;
+      // Discover recorder name from Terraform outputs, or discover from AWS
+      recorderName = getOutputValue('config_recorder_name');
+      if (!recorderName) {
+        // Discover from AWS by listing all recorders and finding one that matches the pattern
+        try {
+          const recorders = await configClient.describeConfigurationRecorders().promise();
+          const matchingRecorder = recorders.ConfigurationRecorders?.find((r: any) => 
+            r.name && r.name.startsWith('compliance-recorder-')
+          );
+          if (matchingRecorder) {
+            recorderName = matchingRecorder.name;
+          } else {
+            recorderName = `compliance-recorder-${environmentSuffix}`;
+          }
+        } catch (e) {
+          recorderName = `compliance-recorder-${environmentSuffix}`;
+        }
+      }
     });
 
     test('should discover Config rule ARNs', () => {
@@ -458,10 +473,22 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
   describe('EventBridge Rule', () => {
     let ruleName: string;
 
-    beforeAll(() => {
-      // Discover rule name from Terraform outputs
-      ruleName = getOutputValue('eventbridge_rule_name') || 
-                 `compliance-scan-schedule-${environmentSuffix}`;
+    beforeAll(async () => {
+      // Discover rule name from Terraform outputs, or discover from AWS
+      ruleName = getOutputValue('eventbridge_rule_name');
+      if (!ruleName) {
+        // Discover from AWS by listing rules and finding one that matches the pattern
+        try {
+          const rules = await eventBridgeClient.listRules({ NamePrefix: 'compliance-scan-schedule-' }).promise();
+          if (rules.Rules && rules.Rules.length > 0) {
+            ruleName = rules.Rules[0].Name || `compliance-scan-schedule-${environmentSuffix}`;
+          } else {
+            ruleName = `compliance-scan-schedule-${environmentSuffix}`;
+          }
+        } catch (e) {
+          ruleName = `compliance-scan-schedule-${environmentSuffix}`;
+        }
+      }
     });
 
     test('should discover EventBridge rule name', () => {
@@ -486,10 +513,22 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
   describe('CloudWatch Dashboard', () => {
     let dashboardName: string;
 
-    beforeAll(() => {
-      // Discover dashboard name from Terraform outputs
-      dashboardName = getOutputValue('cloudwatch_dashboard_name') || 
-                      `compliance-monitoring-${environmentSuffix}`;
+    beforeAll(async () => {
+      // Discover dashboard name from Terraform outputs, or discover from AWS
+      dashboardName = getOutputValue('cloudwatch_dashboard_name');
+      if (!dashboardName) {
+        // Discover from AWS by listing dashboards and finding one that matches the pattern
+        try {
+          const dashboards = await cloudWatchClient.listDashboards({ DashboardNamePrefix: 'compliance-monitoring-' }).promise();
+          if (dashboards.DashboardEntries && dashboards.DashboardEntries.length > 0) {
+            dashboardName = dashboards.DashboardEntries[0].DashboardName || `compliance-monitoring-${environmentSuffix}`;
+          } else {
+            dashboardName = `compliance-monitoring-${environmentSuffix}`;
+          }
+        } catch (e) {
+          dashboardName = `compliance-monitoring-${environmentSuffix}`;
+        }
+      }
     });
 
     test('should discover CloudWatch dashboard name', () => {
@@ -511,12 +550,45 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     let lambdaRoleName: string;
     let configRoleName: string;
 
-    beforeAll(() => {
-      // Discover IAM role names from Terraform outputs
-      lambdaRoleName = getOutputValue('lambda_iam_role_name') || 
-                       `compliance-scanner-lambda-${environmentSuffix}`;
-      configRoleName = getOutputValue('config_iam_role_name') || 
-                       `compliance-config-${environmentSuffix}`;
+    beforeAll(async () => {
+      // Discover IAM role names from Terraform outputs, or extract from Lambda/Config resources
+      lambdaRoleName = getOutputValue('lambda_iam_role_name');
+      if (!lambdaRoleName) {
+        // Extract from Lambda function's role ARN
+        const functionName = getOutputValue('lambda_function_name') || `compliance-scanner-${environmentSuffix}`;
+        try {
+          const lambdaFunc = await lambdaClient.getFunction({ FunctionName: functionName }).promise();
+          if (lambdaFunc.Configuration?.Role) {
+            // Extract role name from ARN: arn:aws:iam::account:role/role-name
+            const roleArn = lambdaFunc.Configuration.Role;
+            lambdaRoleName = roleArn.split('/').pop() || `compliance-scanner-lambda-${environmentSuffix}`;
+          } else {
+            lambdaRoleName = `compliance-scanner-lambda-${environmentSuffix}`;
+          }
+        } catch (e) {
+          lambdaRoleName = `compliance-scanner-lambda-${environmentSuffix}`;
+        }
+      }
+      
+      configRoleName = getOutputValue('config_iam_role_name');
+      if (!configRoleName) {
+        // Extract from Config recorder's role ARN
+        try {
+          const recorders = await configClient.describeConfigurationRecorders().promise();
+          const matchingRecorder = recorders.ConfigurationRecorders?.find((r: any) => 
+            r.name && r.name.startsWith('compliance-recorder-')
+          );
+          if (matchingRecorder?.roleARN) {
+            // Extract role name from ARN: arn:aws:iam::account:role/role-name
+            const roleArn = matchingRecorder.roleARN;
+            configRoleName = roleArn.split('/').pop() || `compliance-config-${environmentSuffix}`;
+          } else {
+            configRoleName = `compliance-config-${environmentSuffix}`;
+          }
+        } catch (e) {
+          configRoleName = `compliance-config-${environmentSuffix}`;
+        }
+      }
     });
 
     test('should discover IAM role names', () => {
