@@ -191,7 +191,6 @@ describe('TapStack End-to-End Integration Tests', () => {
     test('should execute complete order processing workflow', async () => {
       // Arrange
       const orderTransactionId = `order-e2e-${uuidv4()}`;
-      const orderTransactionId = `order-e2e-${uuidv4()}`;
       const orderTimestamp = Date.now();
       const startExecutionInput = {
         stateMachineArn: orderProcessingStateMachineArn,
