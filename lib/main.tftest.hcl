@@ -1,12 +1,12 @@
 
 variables {
   environment_suffix       = "test-12345"
-  aws_region              = "us-east-1"
-  log_retention_days      = 7
+  aws_region               = "us-east-1"
+  log_retention_days       = 7
   xray_sampling_percentage = 0.1
-  alert_email             = ""
-  enable_security_hub     = false
-  enable_config           = false
+  alert_email              = ""
+  enable_security_hub      = false
+  enable_config            = false
 }
 
 run "validate_cloudtrail" {
