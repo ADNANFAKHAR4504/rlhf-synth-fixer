@@ -55,7 +55,8 @@ class TapStack(TerraformStack):
         )
         
         # Create Lambda placeholder zip file dynamically using Python
-        # Use absolute path to ensure Terraform can find it during deployment
+        # CDKTF runs Terraform from cdktf.out/stacks/<stack-name>/ directory
+        # So we need to create the zip in project root and use relative path "../../../" to reference it
         lambda_code = """def lambda_handler(event, context):
     return {
         'statusCode': 200,
@@ -63,16 +64,16 @@ class TapStack(TerraformStack):
     }
 """
         # Get the directory where tap.py is located (project root)
-        # This ensures the zip file is created where Terraform expects it
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         lambda_zip_path = os.path.join(project_root, f"lambda_placeholder_{environment_suffix}.zip")
         
-        # Create the zip file if it doesn't exist or if we need to update it
+        # Create the zip file in project root
         with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             zipf.writestr('index.py', lambda_code)
         
-        # Use relative path from project root for Terraform (Terraform runs from project root)
-        lambda_zip_relative = f"lambda_placeholder_{environment_suffix}.zip"
+        # Terraform runs from cdktf.out/stacks/<stack-name>/, so we need to go up 3 levels
+        # to reach the project root: ../../../lambda_placeholder_<suffix>.zip
+        lambda_zip_relative = f"../../../lambda_placeholder_{environment_suffix}.zip"
 
         # Configure S3 Backend with native state locking
         S3Backend(
