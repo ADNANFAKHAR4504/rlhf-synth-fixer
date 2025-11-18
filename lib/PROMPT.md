@@ -101,7 +101,7 @@ Create a production-ready EKS cluster infrastructure using **Pulumi with TypeScr
 
 - Complete Pulumi TypeScript implementation with modular component structure
 - EKS cluster with OIDC provider and private endpoint configuration
-- Two managed node groups (spot and on-demand) with autoscaling
+- Default managed node group with on-demand instances and autoscaling capabilities
 - Kubernetes Cluster Autoscaler with pod disruption budgets
 - AWS Load Balancer Controller with IRSA integration
 - AWS EBS CSI driver with encryption enabled
@@ -109,8 +109,9 @@ Create a production-ready EKS cluster infrastructure using **Pulumi with TypeScr
 - RBAC configuration with dev and prod namespaces
 - Network policies for namespace isolation
 - Pod security standards enforcement
-- IRSA demonstration with example workload
-- Spot instance interruption handling demonstration
+- IRSA infrastructure fully configured (IAM role, policy, service account, S3 bucket)
+- Spot instance interruption handler installed (AWS Node Termination Handler)
 - All necessary IAM roles, policies, and service accounts
+- Note: Demo workloads (IRSA test pod, spot demo deployment) are implemented but commented out to avoid initial scheduling delays - they can be enabled after nodes are ready
 - Comprehensive documentation in README.md with deployment instructions
-- Resource outputs for cluster endpoint, OIDC provider ARN, and node group details
+- Resource outputs for cluster endpoint, OIDC provider ARN, and cluster details
