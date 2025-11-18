@@ -736,37 +736,27 @@ describe('TapStack', () => {
     });
 
     test('aspect adds error when RETAIN policy detected', () => {
-      // Create a minimal test to verify the aspect error path works
+      // Create a TapStack and add a resource with RETAIN policy
       const testApp = new cdk.App();
-      const testStack = new cdk.Stack(testApp, 'AspectRetainTestStack');
+      const testStack = new TapStack(testApp, 'AspectRetainTestStack', {
+        environmentSuffix: 'retaintest',
+        env: {
+          account: '123456789012',
+          region: 'us-east-1',
+        },
+      });
 
-      // Create a simple CFN resource with RETAIN policy
-      const bucket = new cdk.aws_s3.CfnBucket(testStack, 'TestBucket', {
-        bucketName: 'test-bucket-retain',
+      // Add a simple CFN resource with RETAIN policy to the TapStack
+      const bucket = new cdk.aws_s3.CfnBucket(testStack, 'TestBucketRetain', {
+        bucketName: 'test-bucket-retain-policy',
       });
       bucket.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
 
-      // Apply the aspect
-      const aspect = new (class implements cdk.IAspect {
-        public visit(node: any): void {
-          if (node instanceof cdk.CfnResource) {
-            const props = (node as any).cfnOptions;
-            if (props?.deletionPolicy === cdk.CfnDeletionPolicy.RETAIN) {
-              cdk.Annotations.of(node).addError(
-                'RemovalPolicy.RETAIN is not allowed. All resources must be destroyable.'
-              );
-            }
-          }
-        }
-      })();
-
-      cdk.Aspects.of(testStack).add(aspect);
-
-      // Synthesize to trigger aspect
+      // Synthesize to trigger the TapStack's aspect
       const assembly = testApp.synth();
       const stackArtifact = assembly.getStackByName('AspectRetainTestStack');
 
-      // Verify error was added
+      // Verify error was added by the aspect
       const messages = stackArtifact.messages;
       const errorMessages = messages.filter(m => m.level === 'error');
       expect(errorMessages.length).toBeGreaterThan(0);

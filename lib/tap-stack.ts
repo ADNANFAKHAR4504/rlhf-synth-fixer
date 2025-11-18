@@ -502,8 +502,10 @@ class EnvironmentValidationAspect implements cdk.IAspect {
 
     // Check for RemovalPolicy.RETAIN
     if (node instanceof cdk.CfnResource) {
-      const props = (node as any).cfnOptions;
-      if (props?.deletionPolicy === cdk.CfnDeletionPolicy.RETAIN) {
+      const cfnResource = node as cdk.CfnResource;
+      if (
+        cfnResource.cfnOptions.deletionPolicy === cdk.CfnDeletionPolicy.RETAIN
+      ) {
         cdk.Annotations.of(node).addError(
           'RemovalPolicy.RETAIN is not allowed. All resources must be destroyable.'
         );
