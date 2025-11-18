@@ -373,7 +373,7 @@ resource "aws_security_group_rule" "service_from_master" {
 ############################
 
 resource "aws_emr_security_configuration" "main" {
-  name = "${local.bucket_prefix}-security-config"
+  name = "${local.bucket_prefix}-security-config-${substr(md5("${local.bucket_prefix}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"), 0, 8)}"
 
   configuration = jsonencode({
     EncryptionConfiguration = merge({

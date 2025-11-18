@@ -107,7 +107,7 @@ describe("Terraform EMR stack conformance", () => {
   });
 
   test("in-transit and at-rest encryption are enabled for the cluster", () => {
-    expect(mainTf).toMatch(/EnableInTransitEncryption\s*=\s*true/);
+    expect(mainTf).toMatch(/EnableInTransitEncryption\s*=\s*var\.enable_in_transit_encryption/);
     expect(mainTf).toMatch(/EnableAtRestEncryption\s*=\s*true/);
     expect(mainTf).toMatch(/LocalDiskEncryptionConfiguration/);
   });
