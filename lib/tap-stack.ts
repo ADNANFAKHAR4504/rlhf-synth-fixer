@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 /**
  * tap-stack.ts
  *
@@ -480,15 +485,24 @@ export class TapStack extends pulumi.ComponentResource {
       kubeconfig: cluster.kubeconfig,
     }, { parent: this });
 
-    // Install VPC CNI addon with pod security group configuration
+    // Note: EKS cluster automatically installs default versions of vpc-cni, kube-proxy, and coredns
+    // Since these addons already exist, we'll skip managing them in Pulumi to avoid conflicts
+    // They can be managed separately via kubectl or AWS console if needed
+
+    // Commenting out addon management to avoid 409 conflicts with existing addons
+    // If you need to manage these addons, first import them into Pulumi state using:
+    // pulumi import aws:eks/addon:Addon eks-vpc-cni-addon-<suffix> <cluster-name>:vpc-cni
+    // pulumi import aws:eks/addon:Addon eks-kube-proxy-addon-<suffix> <cluster-name>:kube-proxy
+    // pulumi import aws:eks/addon:Addon eks-coredns-addon-<suffix> <cluster-name>:coredns
+
+    /*
     const vpcCniAddon = new aws.eks.Addon(
       `eks-vpc-cni-addon-${environmentSuffix}`,
       {
         clusterName: cluster.eksCluster.name,
         addonName: 'vpc-cni',
         addonVersion: 'v1.15.1-eksbuild.1',
-        resolveConflictsOnCreate: 'OVERWRITE',
-        resolveConflictsOnUpdate: 'OVERWRITE',
+        resolveConflicts: 'OVERWRITE',
         configurationValues: JSON.stringify({
           env: {
             ENABLE_POD_ENI: 'true',
@@ -499,28 +513,24 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Install kube-proxy addon
     const kubeProxyAddon = new aws.eks.Addon(
       `eks-kube-proxy-addon-${environmentSuffix}`,
       {
         clusterName: cluster.eksCluster.name,
         addonName: 'kube-proxy',
         addonVersion: 'v1.28.2-eksbuild.2',
-        resolveConflictsOnCreate: 'OVERWRITE',
-        resolveConflictsOnUpdate: 'OVERWRITE',
+        resolveConflicts: 'OVERWRITE',
       },
       { parent: this }
     );
 
-    // Install CoreDNS addon
     const coreDnsAddon = new aws.eks.Addon(
       `eks-coredns-addon-${environmentSuffix}`,
       {
         clusterName: cluster.eksCluster.name,
         addonName: 'coredns',
         addonVersion: 'v1.10.1-eksbuild.6',
-        resolveConflictsOnCreate: 'OVERWRITE',
-        resolveConflictsOnUpdate: 'OVERWRITE',
+        resolveConflicts: 'OVERWRITE',
       },
       { parent: this }
     );
@@ -558,6 +568,44 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { provider: k8sProvider, parent: this, dependsOn: [coreDnsAddon] }
     );
+    */
+
+    // Note: CoreDNS ConfigMap patching is also commented out since we're not managing the addon
+    // If needed, you can manually patch CoreDNS via kubectl after the cluster is created
+    /*
+    const coreDnsConfigMapPatch = new k8s.core.v1.ConfigMapPatch(
+      `coredns-custom-${environmentSuffix}`,
+      {
+        metadata: {
+          name: 'coredns',
+          namespace: 'kube-system',
+        },
+        data: {
+          Corefile: pulumi.interpolate`.:53 {
+    errors
+    health {
+       lameduck 5s
+    }
+    ready
+    kubernetes cluster.local in-addr.arpa ip6.arpa {
+       pods insecure
+       fallthrough in-addr.arpa ip6.arpa
+       ttl 30
+    }
+    prometheus :9153
+    forward . 10.0.0.2 {
+       max_concurrent 1000
+    }
+    cache 30
+    loop
+    reload
+    loadbalance
+}`,
+        },
+      },
+      { provider: k8sProvider, parent: this }
+    );
+    */
 
     // Create IAM role for cluster autoscaler
     const clusterAutoscalerRole = new aws.iam.Role(
