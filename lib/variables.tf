@@ -125,19 +125,19 @@ variable "manage_kubernetes_resources" {
 variable "node_group_deployment_suffix" {
   description = "Optional suffix to append to node group names to avoid conflicts with failed node groups from previous deployments. Change this value to force new node groups."
   type        = string
-  default     = ""
+  default     = "v1"
 }
 
 variable "resource_deployment_suffix" {
   description = "Optional suffix to append to resource names (IAM roles, CloudWatch log groups) to avoid conflicts with existing resources from previous deployments. Leave empty to use existing resources if they exist."
   type        = string
-  default     = ""
+  default     = "v1"
 }
 
 locals {
   cluster_name             = "${var.cluster_name_prefix}-${var.environment_suffix}"
-  node_group_suffix        = var.node_group_deployment_suffix != "" ? "-${var.node_group_deployment_suffix}" : ""
-  resource_suffix          = var.resource_deployment_suffix != "" ? "-${var.resource_deployment_suffix}" : ""
+  node_group_suffix        = "-${var.node_group_deployment_suffix}"
+  resource_suffix          = "-${var.resource_deployment_suffix}"
   frontend_node_group_name = "${local.cluster_name}-frontend${local.node_group_suffix}"
   backend_node_group_name  = "${local.cluster_name}-backend${local.node_group_suffix}"
   frontend_launch_template = "${local.cluster_name}-frontend-lt"
