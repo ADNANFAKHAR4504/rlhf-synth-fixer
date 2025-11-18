@@ -358,7 +358,7 @@ Resources:
     Type: AWS::OpenSearchServerless::SecurityPolicy
     Properties:
       Name: !Sub 'payment-logs-data-access-${EnvironmentSuffix}'
-      Type: data
+      Type: encryption
       Policy: !Sub |
         [
           {
