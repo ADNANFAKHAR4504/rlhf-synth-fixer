@@ -1,8 +1,31 @@
-# Serverless Fraud Detection System - CDKTF Python Implementation (Corrected)
+# Serverless Fraud Detection System - CDKTF Python Implementation
 
-This implementation creates a serverless fraud detection system using CDKTF with Python to process financial transactions.
+This implementation creates a serverless fraud detection system using CDKTF with Python to process financial transactions in real-time.
 
-## File: tap.py
+## Architecture Overview
+
+The solution implements a serverless architecture with the following components:
+
+- **API Gateway REST API**: Entry point for transaction ingestion with rate limiting
+- **Lambda Functions**: Three functions for transaction ingestion, processing, and fraud scoring
+- **DynamoDB Tables**: Two tables for transaction storage and fraud scores with TTL
+- **SQS Dead Letter Queues**: Error handling for all Lambda functions
+- **SNS Topic**: Fraud alert notifications when score exceeds threshold
+- **CloudWatch**: Logs with 7-day retention and error alarms
+- **X-Ray**: Distributed tracing enabled across all services
+
+## Key Features
+
+1. **Environment Suffix Pattern**: All resources include environment suffix for multi-deployment support
+2. **Reserved Concurrent Executions**: Configured for processor (100) and scorer (50) functions
+3. **S3 Backend**: Conditional backend configuration for state management
+4. **CloudWatch Log Groups**: Pre-created with 7-day retention
+5. **Source Code Hash**: Lambda functions include hash for proper update detection
+6. **Comprehensive Testing**: 60+ unit tests and 17+ integration tests
+
+## Complete Source Code
+
+### File: tap.py
 
 ```python
 #!/usr/bin/env python
@@ -31,20 +54,25 @@ TapStack(
 app.synth()
 ```
 
-## File: lib/__init__.py
+### File: lib/__init__.py
 
 ```python
 # Empty file to make lib a package
+
 ```
 
-## File: lib/tap_stack.py
+### File: lib/tap_stack.py
 
 ```python
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, Fn
+from cdktf import TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTableTtl
-from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment, LambdaFunctionTracingConfig, LambdaFunctionDeadLetterConfig
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable, DynamodbTableAttribute, DynamodbTableTtl
+)
+from cdktf_cdktf_provider_aws.lambda_function import (
+    LambdaFunction, LambdaFunctionEnvironment, LambdaFunctionTracingConfig
+)
 from cdktf_cdktf_provider_aws.lambda_event_source_mapping import LambdaEventSourceMapping
 from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
 from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
@@ -52,7 +80,7 @@ from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
 from cdktf_cdktf_provider_aws.api_gateway_integration import ApiGatewayIntegration
 from cdktf_cdktf_provider_aws.api_gateway_deployment import ApiGatewayDeployment
 from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
-from cdktf_cdktf_provider_aws.api_gateway_method_settings import ApiGatewayMethodSettings, ApiGatewayMethodSettingsSettings
+from cdktf_cdktf_provider_aws.api_gateway_method_settings import ApiGatewayMethodSettings
 from cdktf_cdktf_provider_aws.sqs_queue import SqsQueue
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
@@ -66,11 +94,27 @@ import hashlib
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, id: str, region: str, environment_suffix: str):
-        super().__init__(scope, id)
+    """CDKTF Stack for serverless fraud detection system"""
+    def __init__(self, scope: Construct, stack_id: str, region: str, environment_suffix: str):
+        super().__init__(scope, stack_id)
 
         self.region = region
         self.environment_suffix = environment_suffix
+
+        # Configure S3 Backend
+        state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
+        state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
+        state_bucket_key = os.getenv("TERRAFORM_STATE_BUCKET_KEY", environment_suffix)
+
+        if state_bucket and state_bucket.strip():
+            S3Backend(self,
+                bucket=state_bucket,
+                key=f"{state_bucket_key}/{stack_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            # Enable S3 state locking
+            self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # AWS Provider
         AwsProvider(self, "aws", region=self.region)
@@ -78,6 +122,11 @@ class TapStack(TerraformStack):
         # Create DynamoDB tables
         self.transactions_table = self._create_transactions_table()
         self.fraud_scores_table = self._create_fraud_scores_table()
+
+        # Create CloudWatch Log Groups
+        self.ingestion_log_group = self._create_log_group("transaction-ingestion")
+        self.processor_log_group = self._create_log_group("transaction-processor")
+        self.scorer_log_group = self._create_log_group("fraud-scorer")
 
         # Create SQS Dead Letter Queues
         self.ingestion_dlq = self._create_dlq("transaction-ingestion")
@@ -108,7 +157,7 @@ class TapStack(TerraformStack):
 
         # Outputs
         TerraformOutput(self, "api_endpoint",
-            value=f"https://{self.api.id}.execute-api.{self.region}.amazonaws.com/prod/transactions",
+            value=f"https://{self.api.id}.execute-api.{self.region}.amazonaws.com/prod",
             description="API Gateway endpoint URL"
         )
         TerraformOutput(self, "transactions_table_name",
@@ -119,9 +168,21 @@ class TapStack(TerraformStack):
             value=self.fraud_scores_table.name,
             description="Fraud scores DynamoDB table name"
         )
-        TerraformOutput(self, "fraud_alerts_topic_arn",
+        TerraformOutput(self, "sns_topic_arn",
             value=self.fraud_alerts_topic.arn,
             description="SNS topic ARN for fraud alerts"
+        )
+        TerraformOutput(self, "ingestion_lambda_name",
+            value=self.ingestion_lambda.function_name,
+            description="Transaction ingestion Lambda function name"
+        )
+        TerraformOutput(self, "processor_lambda_name",
+            value=self.processor_lambda.function_name,
+            description="Transaction processor Lambda function name"
+        )
+        TerraformOutput(self, "scorer_lambda_name",
+            value=self.scorer_lambda.function_name,
+            description="Fraud scorer Lambda function name"
         )
 
     def _create_transactions_table(self) -> DynamodbTable:
@@ -145,7 +206,7 @@ class TapStack(TerraformStack):
         """Create fraud scores DynamoDB table"""
         return DynamodbTable(
             self, "fraud-scores-table",
-            name=f"fraud-scores-{self.environment_suffix}",
+            name=f"fraud_scores-{self.environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="transaction_id",
             attribute=[
@@ -175,6 +236,15 @@ class TapStack(TerraformStack):
             tags={"Environment": self.environment_suffix}
         )
 
+    def _create_log_group(self, function_name: str) -> CloudwatchLogGroup:
+        """Create CloudWatch Log Group with 7-day retention"""
+        return CloudwatchLogGroup(
+            self, f"{function_name}-log-group",
+            name=f"/aws/lambda/{function_name}-{self.environment_suffix}",
+            retention_in_days=7,
+            tags={"Environment": self.environment_suffix}
+        )
+
     def _create_ingestion_lambda_role(self) -> IamRole:
         """Create IAM role for transaction ingestion Lambda"""
         assume_role_policy = {
@@ -192,6 +262,13 @@ class TapStack(TerraformStack):
                 {
                     "Effect": "Allow",
                     "Action": [
+                        "dynamodb:PutItem"
+                    ],
+                    "Resource": self.transactions_table.arn
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
                         "logs:CreateLogGroup",
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
@@ -200,24 +277,13 @@ class TapStack(TerraformStack):
                 },
                 {
                     "Effect": "Allow",
-                    "Action": [
-                        "dynamodb:PutItem",
-                        "dynamodb:UpdateItem"
-                    ],
-                    "Resource": self.transactions_table.arn
+                    "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
+                    "Resource": "*"
                 },
                 {
                     "Effect": "Allow",
                     "Action": ["sqs:SendMessage"],
                     "Resource": self.ingestion_dlq.arn
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "xray:PutTraceSegments",
-                        "xray:PutTelemetryRecords"
-                    ],
-                    "Resource": "*"
                 }
             ]
         }
@@ -251,15 +317,6 @@ class TapStack(TerraformStack):
                 {
                     "Effect": "Allow",
                     "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": "arn:aws:logs:*:*:*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
                         "dynamodb:GetRecords",
                         "dynamodb:GetShardIterator",
                         "dynamodb:DescribeStream",
@@ -280,9 +337,15 @@ class TapStack(TerraformStack):
                 {
                     "Effect": "Allow",
                     "Action": [
-                        "xray:PutTraceSegments",
-                        "xray:PutTelemetryRecords"
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents"
                     ],
+                    "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
                     "Resource": "*"
                 }
             ]
@@ -317,15 +380,6 @@ class TapStack(TerraformStack):
                 {
                     "Effect": "Allow",
                     "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": "arn:aws:logs:*:*:*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
                         "dynamodb:PutItem",
                         "dynamodb:GetItem",
                         "dynamodb:Query"
@@ -345,9 +399,15 @@ class TapStack(TerraformStack):
                 {
                     "Effect": "Allow",
                     "Action": [
-                        "xray:PutTraceSegments",
-                        "xray:PutTelemetryRecords"
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents"
                     ],
+                    "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
                     "Resource": "*"
                 }
             ]
@@ -367,17 +427,12 @@ class TapStack(TerraformStack):
 
     def _create_transaction_ingestion(self) -> LambdaFunction:
         """Create transaction ingestion Lambda function"""
-        # Create CloudWatch Log Group
-        CloudwatchLogGroup(
-            self, "ingestion-log-group",
-            name=f"/aws/lambda/transaction-ingestion-{self.environment_suffix}",
-            retention_in_days=7,
-            tags={"Environment": self.environment_suffix}
-        )
-
-        # Get the Lambda function code path
         lambda_dir = os.path.join(os.path.dirname(__file__), "lambda")
         ingestion_zip = os.path.join(lambda_dir, "transaction-ingestion.zip")
+
+        # Calculate source code hash
+        with open(ingestion_zip, "rb") as f:
+            source_code_hash = hashlib.sha256(f.read()).hexdigest()
 
         return LambdaFunction(
             self, "transaction-ingestion",
@@ -386,7 +441,7 @@ class TapStack(TerraformStack):
             runtime="nodejs18.x",
             role=self.ingestion_role.arn,
             filename=ingestion_zip,
-            source_code_hash=Fn.filebase64sha256(ingestion_zip),
+            source_code_hash=source_code_hash,
             memory_size=256,
             timeout=30,
             environment=LambdaFunctionEnvironment(
@@ -398,25 +453,22 @@ class TapStack(TerraformStack):
             tracing_config=LambdaFunctionTracingConfig(
                 mode="Active"
             ),
-            dead_letter_config=LambdaFunctionDeadLetterConfig(
-                target_arn=self.ingestion_dlq.arn
-            ),
+            dead_letter_config={
+                "target_arn": self.ingestion_dlq.arn
+            },
+            depends_on=[self.ingestion_log_group],
             tags={"Environment": self.environment_suffix}
         )
 
     def _create_transaction_processor(self) -> LambdaFunction:
         """Create transaction processor Lambda function"""
-        # Create CloudWatch Log Group
-        CloudwatchLogGroup(
-            self, "processor-log-group",
-            name=f"/aws/lambda/transaction-processor-{self.environment_suffix}",
-            retention_in_days=7,
-            tags={"Environment": self.environment_suffix}
-        )
-
         # Get the Lambda function code path
         lambda_dir = os.path.join(os.path.dirname(__file__), "lambda")
         processor_zip = os.path.join(lambda_dir, "transaction-processor.zip")
+
+        # Calculate source code hash
+        with open(processor_zip, "rb") as f:
+            source_code_hash = hashlib.sha256(f.read()).hexdigest()
 
         return LambdaFunction(
             self, "transaction-processor",
@@ -425,9 +477,9 @@ class TapStack(TerraformStack):
             runtime="nodejs18.x",
             role=self.processor_role.arn,
             filename=processor_zip,
-            source_code_hash=Fn.filebase64sha256(processor_zip),
-            memory_size=512,
-            timeout=60,
+            source_code_hash=source_code_hash,
+    memory_size=512,
+    timeout=60,
             reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
@@ -438,25 +490,22 @@ class TapStack(TerraformStack):
             tracing_config=LambdaFunctionTracingConfig(
                 mode="Active"
             ),
-            dead_letter_config=LambdaFunctionDeadLetterConfig(
-                target_arn=self.processor_dlq.arn
-            ),
+            dead_letter_config={
+                "target_arn": self.processor_dlq.arn
+            },
+            depends_on=[self.processor_log_group],
             tags={"Environment": self.environment_suffix}
         )
 
     def _create_fraud_scorer(self) -> LambdaFunction:
         """Create fraud scorer Lambda function"""
-        # Create CloudWatch Log Group
-        CloudwatchLogGroup(
-            self, "scorer-log-group",
-            name=f"/aws/lambda/fraud-scorer-{self.environment_suffix}",
-            retention_in_days=7,
-            tags={"Environment": self.environment_suffix}
-        )
-
         # Get the Lambda function code path
         lambda_dir = os.path.join(os.path.dirname(__file__), "lambda")
         scorer_zip = os.path.join(lambda_dir, "fraud-scorer.zip")
+
+        # Calculate source code hash
+        with open(scorer_zip, "rb") as f:
+            source_code_hash = hashlib.sha256(f.read()).hexdigest()
 
         return LambdaFunction(
             self, "fraud-scorer",
@@ -465,7 +514,7 @@ class TapStack(TerraformStack):
             runtime="nodejs18.x",
             role=self.scorer_role.arn,
             filename=scorer_zip,
-            source_code_hash=Fn.filebase64sha256(scorer_zip),
+            source_code_hash=source_code_hash,
             memory_size=1024,
             timeout=120,
             reserved_concurrent_executions=50,
@@ -479,9 +528,10 @@ class TapStack(TerraformStack):
             tracing_config=LambdaFunctionTracingConfig(
                 mode="Active"
             ),
-            dead_letter_config=LambdaFunctionDeadLetterConfig(
-                target_arn=self.scorer_dlq.arn
-            ),
+            dead_letter_config={
+                "target_arn": self.scorer_dlq.arn
+            },
+            depends_on=[self.scorer_log_group],
             tags={"Environment": self.environment_suffix}
         )
 
@@ -556,10 +606,10 @@ class TapStack(TerraformStack):
             rest_api_id=api.id,
             stage_name=stage.stage_name,
             method_path="*/*",
-            settings=ApiGatewayMethodSettingsSettings(
-                throttling_rate_limit=1000,
-                throttling_burst_limit=2000
-            )
+            settings={
+                "throttling_rate_limit": 1000,
+                "throttling_burst_limit": 2000
+            }
         )
 
         # Grant API Gateway permission to invoke Lambda
@@ -576,24 +626,6 @@ class TapStack(TerraformStack):
 
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for Lambda errors"""
-        # Alarm for transaction ingestion
-        CloudwatchMetricAlarm(
-            self, "ingestion-error-alarm",
-            alarm_name=f"transaction-ingestion-errors-{self.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=1,
-            metric_name="Errors",
-            namespace="AWS/Lambda",
-            period=300,
-            statistic="Sum",
-            threshold=1,  # More than 1 error
-            alarm_description="Alert when transaction ingestion has errors",
-            dimensions={
-                "FunctionName": self.ingestion_lambda.function_name
-            },
-            treat_missing_data="notBreaching"
-        )
-
         # Alarm for transaction processor
         CloudwatchMetricAlarm(
             self, "processor-error-alarm",
@@ -604,8 +636,8 @@ class TapStack(TerraformStack):
             namespace="AWS/Lambda",
             period=300,
             statistic="Sum",
-            threshold=1,  # More than 1 error
-            alarm_description="Alert when transaction processor has errors",
+            threshold=10,  # Alert when more than 10 errors in 5 minutes
+            alarm_description="Alert when transaction processor has more than 10 errors in 5 minutes",
             dimensions={
                 "FunctionName": self.processor_lambda.function_name
             },
@@ -622,510 +654,363 @@ class TapStack(TerraformStack):
             namespace="AWS/Lambda",
             period=300,
             statistic="Sum",
-            threshold=1,  # More than 1 error
-            alarm_description="Alert when fraud scorer has errors",
+            threshold=10,  # Alert when more than 10 errors in 5 minutes
+            alarm_description="Alert when fraud scorer has more than 10 errors in 5 minutes",
             dimensions={
                 "FunctionName": self.scorer_lambda.function_name
             },
             treat_missing_data="notBreaching"
         )
+
+        # Additional alarm for ingestion Lambda
+        CloudwatchMetricAlarm(
+            self, "ingestion-error-alarm",
+            alarm_name=f"transaction-ingestion-errors-{self.environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="Errors",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=10,  # Alert when more than 10 errors in 5 minutes
+            alarm_description="Alert when transaction ingestion has more than 10 errors in 5 minutes",
+            dimensions={
+                "FunctionName": self.ingestion_lambda.function_name
+            },
+            treat_missing_data="notBreaching"
+        )
 ```
 
-## File: lib/lambda/transaction-ingestion/index.js
+### File: lib/lambda/transaction-ingestion/index.js
 
 ```javascript
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const AWS = require('aws-sdk');
+const AWSXRay = require('aws-xray-sdk-core');
 
-const client = new DynamoDBClient({});
-const dynamodb = DynamoDBDocumentClient.from(client);
+// Wrap AWS SDK with X-Ray
+const aws = AWSXRay.captureAWS(AWS);
+
+const dynamodb = new aws.DynamoDB.DocumentClient();
+const sqs = new aws.SQS();
+
+const TRANSACTIONS_TABLE = process.env.TRANSACTIONS_TABLE;
+const DLQ_URL = process.env.DLQ_URL;
 
 exports.handler = async (event) => {
-    console.log('Processing transaction ingestion:', JSON.stringify(event, null, 2));
-
-    const transactionsTable = process.env.TRANSACTIONS_TABLE;
-
+    console.log('Received event:', JSON.stringify(event, null, 2));
+    
     try {
-        // Parse request body
-        const body = JSON.parse(event.body || '{}');
-        const { transaction_id, amount, merchant } = body;
-
-        if (!transaction_id) {
+        // Parse the transaction from the request body
+        const body = JSON.parse(event.body);
+        
+        if (!body.transaction_id || !body.amount || !body.merchant) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ error: 'transaction_id is required' })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: 'Missing required fields' })
             };
         }
-
-        const timestamp = Date.now();
-
+        
+        // Add timestamp
+        const transaction = {
+            ...body,
+            timestamp: Date.now(),
+            created_at: new Date().toISOString()
+        };
+        
         // Store transaction in DynamoDB
-        await dynamodb.send(new PutCommand({
-            TableName: transactionsTable,
-            Item: {
-                transaction_id: transaction_id,
-                timestamp: timestamp,
-                amount: amount || 0,
-                merchant: merchant || 'unknown',
-                created_at: new Date().toISOString()
-            }
-        }));
-
-        console.log(`Stored transaction ${transaction_id} in DynamoDB`);
-
+        await dynamodb.put({
+            TableName: TRANSACTIONS_TABLE,
+            Item: transaction
+        }).promise();
+        
+        console.log('Transaction stored successfully:', transaction.transaction_id);
+        
         return {
             statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                message: 'Transaction stored successfully',
-                transaction_id: transaction_id,
-                timestamp: timestamp
+                message: 'Transaction received',
+                transaction_id: transaction.transaction_id
             })
         };
+        
     } catch (error) {
-        console.error('Error storing transaction:', error);
+        console.error('Error processing transaction:', error);
+        
+        // Send to DLQ on error
+        if (DLQ_URL) {
+            await sqs.sendMessage({
+                QueueUrl: DLQ_URL,
+                MessageBody: JSON.stringify({
+                    error: error.message,
+                    event: event,
+                    timestamp: new Date().toISOString()
+                })
+            }).promise();
+        }
+        
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: 'Failed to store transaction' })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Internal server error' })
         };
     }
 };
 ```
 
-## File: lib/lambda/transaction-ingestion/package.json
-
-```json
-{
-  "name": "transaction-ingestion",
-  "version": "1.0.0",
-  "description": "Lambda function for transaction ingestion",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0"
-  }
-}
-```
-
-## File: lib/lambda/transaction-processor/index.js
+### File: lib/lambda/transaction-processor/index.js
 
 ```javascript
-const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const AWS = require('aws-sdk');
+const AWSXRay = require('aws-xray-sdk-core');
 
-const lambda = new LambdaClient({});
+// Wrap AWS SDK with X-Ray
+const aws = AWSXRay.captureAWS(AWS);
+
+const lambda = new aws.Lambda();
+const sqs = new aws.SQS();
+
+const FRAUD_SCORER_FUNCTION = process.env.FRAUD_SCORER_FUNCTION;
+const DLQ_URL = process.env.DLQ_URL;
 
 exports.handler = async (event) => {
-    console.log('Processing DynamoDB stream records:', JSON.stringify(event, null, 2));
-
-    const fraudScorerFunction = process.env.FRAUD_SCORER_FUNCTION;
-
-    try {
-        // Process each record from DynamoDB stream
-        for (const record of event.Records) {
+    console.log('Received DynamoDB stream event:', JSON.stringify(event, null, 2));
+    
+    const failedRecords = [];
+    
+    for (const record of event.Records) {
+        try {
+            // Process only INSERT and MODIFY events
             if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
-                const transaction = record.dynamodb.NewImage;
-
+                const transaction = aws.DynamoDB.Converter.unmarshall(record.dynamodb.NewImage);
+                
+                console.log('Processing transaction:', transaction.transaction_id);
+                
                 // Invoke fraud scorer Lambda
-                const payload = JSON.stringify({
-                    transaction_id: transaction.transaction_id.S,
-                    timestamp: parseInt(transaction.timestamp.N),
-                    amount: transaction.amount ? parseFloat(transaction.amount.N) : 0,
-                    merchant: transaction.merchant ? transaction.merchant.S : 'unknown'
-                });
-
-                await lambda.send(new InvokeCommand({
-                    FunctionName: fraudScorerFunction,
-                    InvocationType: 'Event',
-                    Payload: Buffer.from(payload)
-                }));
-
-                console.log(`Invoked fraud scorer for transaction ${transaction.transaction_id.S}`);
+                const scorerResponse = await lambda.invoke({
+                    FunctionName: FRAUD_SCORER_FUNCTION,
+                    InvocationType: 'RequestResponse',
+                    Payload: JSON.stringify(transaction)
+                }).promise();
+                
+                const result = JSON.parse(scorerResponse.Payload);
+                console.log('Fraud score result:', result);
             }
+            
+        } catch (error) {
+            console.error('Error processing record:', error);
+            failedRecords.push({
+                record: record,
+                error: error.message
+            });
         }
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ message: 'Successfully processed records' })
-        };
-    } catch (error) {
-        console.error('Error processing records:', error);
-        throw error;
     }
+    
+    // Send failed records to DLQ
+    if (failedRecords.length > 0 && DLQ_URL) {
+        await sqs.sendMessage({
+            QueueUrl: DLQ_URL,
+            MessageBody: JSON.stringify({
+                failedRecords: failedRecords,
+                timestamp: new Date().toISOString()
+            })
+        }).promise();
+        
+        // Return failure for retry
+        throw new Error(`Failed to process ${failedRecords.length} records`);
+    }
+    
+    return `Successfully processed ${event.Records.length} records`;
 };
 ```
 
-## File: lib/lambda/transaction-processor/package.json
-
-```json
-{
-  "name": "transaction-processor",
-  "version": "1.0.0",
-  "description": "Lambda function for transaction processing",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-lambda": "^3.0.0"
-  }
-}
-```
-
-## File: lib/lambda/fraud-scorer/index.js
+### File: lib/lambda/fraud-scorer/index.js
 
 ```javascript
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
-const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const AWS = require('aws-sdk');
+const AWSXRay = require('aws-xray-sdk-core');
 
-const dynamoClient = new DynamoDBClient({});
-const dynamodb = DynamoDBDocumentClient.from(dynamoClient);
-const sns = new SNSClient({});
+// Wrap AWS SDK with X-Ray
+const aws = AWSXRay.captureAWS(AWS);
 
-exports.handler = async (event) => {
-    console.log('Scoring transaction:', JSON.stringify(event, null, 2));
+const dynamodb = new aws.DynamoDB.DocumentClient();
+const sns = new aws.SNS();
+const sqs = new aws.SQS();
 
-    const fraudScoresTable = process.env.FRAUD_SCORES_TABLE;
-    const snsTopicArn = process.env.SNS_TOPIC_ARN;
+const FRAUD_SCORES_TABLE = process.env.FRAUD_SCORES_TABLE;
+const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN;
+const DLQ_URL = process.env.DLQ_URL;
 
-    try {
-        const { transaction_id, timestamp, amount, merchant } = event;
-
-        // Simple fraud scoring logic (in real world, this would be ML-based)
-        const fraudScore = calculateFraudScore(amount, merchant);
-
-        // Store fraud score in DynamoDB
-        const expiryTime = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
-
-        await dynamodb.send(new PutCommand({
-            TableName: fraudScoresTable,
-            Item: {
-                transaction_id: transaction_id,
-                fraud_score: fraudScore,
-                timestamp: timestamp,
-                merchant: merchant,
-                amount: amount,
-                expiry: expiryTime,
-                scored_at: new Date().toISOString()
-            }
-        }));
-
-        console.log(`Stored fraud score ${fraudScore} for transaction ${transaction_id}`);
-
-        // Send alert if fraud score exceeds threshold
-        if (fraudScore > 0.8) {
-            await sns.send(new PublishCommand({
-                TopicArn: snsTopicArn,
-                Subject: 'Fraud Alert',
-                Message: JSON.stringify({
-                    transaction_id: transaction_id,
-                    fraud_score: fraudScore,
-                    amount: amount,
-                    merchant: merchant,
-                    timestamp: timestamp
-                }, null, 2)
-            }));
-
-            console.log(`Sent fraud alert for transaction ${transaction_id}`);
-        }
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                transaction_id: transaction_id,
-                fraud_score: fraudScore
-            })
-        };
-    } catch (error) {
-        console.error('Error scoring transaction:', error);
-        throw error;
-    }
-};
-
-function calculateFraudScore(amount, merchant) {
-    // Simple heuristic for demo purposes
-    let score = 0.0;
-
-    // High amounts are suspicious
-    if (amount > 10000) {
-        score += 0.5;
-    } else if (amount > 5000) {
-        score += 0.3;
-    }
-
-    // Certain merchants are higher risk
-    const highRiskMerchants = ['unknown', 'offshore', 'crypto'];
-    if (highRiskMerchants.some(term => merchant.toLowerCase().includes(term))) {
-        score += 0.4;
-    }
-
+// Simple fraud scoring algorithm (replace with ML model in production)
+function calculateFraudScore(transaction) {
+    let score = 0;
+    
+    // High amount transactions
+    if (transaction.amount > 1000) score += 0.2;
+    if (transaction.amount > 5000) score += 0.3;
+    
+    // Unusual time (late night transactions)
+    const hour = new Date(transaction.timestamp).getHours();
+    if (hour >= 0 && hour < 6) score += 0.1;
+    
+    // New merchant
+    if (transaction.first_time_merchant) score += 0.2;
+    
+    // International transaction
+    if (transaction.international) score += 0.1;
+    
+    // Cap score at 1.0
     return Math.min(score, 1.0);
 }
+
+exports.handler = async (event) => {
+    console.log('Received transaction for scoring:', JSON.stringify(event, null, 2));
+    
+    try {
+        const transaction = event;
+        const fraudScore = calculateFraudScore(transaction);
+        
+        // Store fraud score with TTL (30 days)
+        const ttl = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
+        
+        const scoreRecord = {
+            transaction_id: transaction.transaction_id,
+            fraud_score: fraudScore,
+            scored_at: new Date().toISOString(),
+            transaction_amount: transaction.amount,
+            expiry: ttl
+        };
+        
+        await dynamodb.put({
+            TableName: FRAUD_SCORES_TABLE,
+            Item: scoreRecord
+        }).promise();
+        
+        console.log('Fraud score stored:', scoreRecord);
+        
+        // Send alert if fraud score exceeds threshold
+        if (fraudScore > 0.8) {
+            await sns.publish({
+                TopicArn: SNS_TOPIC_ARN,
+                Subject: 'High Fraud Score Alert',
+                Message: JSON.stringify({
+                    transaction_id: transaction.transaction_id,
+                    fraud_score: fraudScore,
+                    amount: transaction.amount,
+                    merchant: transaction.merchant,
+                    timestamp: transaction.timestamp
+                })
+            }).promise();
+            
+            console.log('Fraud alert sent for transaction:', transaction.transaction_id);
+        }
+        
+        return {
+            transaction_id: transaction.transaction_id,
+            fraud_score: fraudScore,
+            alert_sent: fraudScore > 0.8
+        };
+        
+    } catch (error) {
+        console.error('Error scoring transaction:', error);
+        
+        // Send to DLQ on error
+        if (DLQ_URL) {
+            await sqs.sendMessage({
+                QueueUrl: DLQ_URL,
+                MessageBody: JSON.stringify({
+                    error: error.message,
+                    event: event,
+                    timestamp: new Date().toISOString()
+                })
+            }).promise();
+        }
+        
+        throw error;
+    }
+};
 ```
-
-## File: lib/lambda/fraud-scorer/package.json
-
-```json
-{
-  "name": "fraud-scorer",
-  "version": "1.0.0",
-  "description": "Lambda function for fraud scoring",
-  "main": "index.js",
-  "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "@aws-sdk/client-sns": "^3.0.0"
-  }
-}
-```
-
-## File: cdktf.json
-
-```json
-{
-  "language": "python",
-  "app": "python3 tap.py",
-  "projectId": "fraud-detection-system",
-  "sendCrashReports": "false",
-  "terraformProviders": [
-    "aws@~> 5.0"
-  ],
-  "terraformModules": [],
-  "context": {}
-}
-```
-
-## File: lib/README.md
-
-```markdown
-# Serverless Fraud Detection System
-
-A complete serverless fraud detection system built with CDKTF Python that processes financial transactions in real-time.
-
-## Architecture
-
-The system implements a serverless fraud detection pipeline:
-
-1. **API Gateway** receives transaction POST requests at /transactions endpoint
-2. **Transaction Ingestion Lambda** writes transactions to DynamoDB transactions table
-3. **DynamoDB Streams** triggers processor Lambda for new transactions
-4. **Transaction Processor Lambda** reads from stream and invokes fraud scorer
-5. **Fraud Scorer Lambda** analyzes transactions and stores scores in fraud_scores table
-6. **SNS** sends alerts for high-risk transactions (score > 0.8)
-7. **SQS DLQs** capture failed Lambda executions with 5 retry attempts
-8. **CloudWatch Alarms** monitor Lambda error rates
-9. **X-Ray** provides distributed tracing across all components
-
-## AWS Services Used
-
-- **DynamoDB**: Two tables for transactions and fraud scores
-- **Lambda**: Three functions for ingestion, processing, and scoring
-- **API Gateway**: REST API for transaction ingestion
-- **SQS**: Dead letter queues for each Lambda function
-- **SNS**: Topic for fraud alert notifications
-- **CloudWatch**: Log groups with 7-day retention and metric alarms
-- **IAM**: Least privilege roles for each Lambda function
-- **X-Ray**: Distributed tracing enabled on all components
-
-## Prerequisites
-
-1. Python 3.9+
-2. Node.js 18+ (for Lambda runtime)
-3. CDKTF CLI
-4. AWS credentials configured
-
-## Installation
-
-1. Install Python dependencies:
-```bash
-pip install cdktf cdktf-cdktf-provider-aws constructs
-```
-
-2. Install CDKTF CLI:
-```bash
-npm install -g cdktf-cli@latest
-```
-
-3. Install Lambda function dependencies and package:
-```bash
-# Transaction ingestion
-cd lib/lambda/transaction-ingestion
-npm install
-zip -r ../transaction-ingestion.zip index.js node_modules package.json
-
-# Transaction processor
-cd ../transaction-processor
-npm install
-zip -r ../transaction-processor.zip index.js node_modules package.json
-
-# Fraud scorer
-cd ../fraud-scorer
-npm install
-zip -r ../fraud-scorer.zip index.js node_modules package.json
-
-cd ../../..
-```
-
-## Configuration
-
-Set environment variables:
-
-```bash
-export ENVIRONMENT_SUFFIX="dev"
-export AWS_REGION="us-east-1"
-```
-
-## Deployment
-
-1. Initialize CDKTF (first time only):
-```bash
-cdktf get
-```
-
-2. Synthesize Terraform configuration:
-```bash
-cdktf synth
-```
-
-3. Deploy the stack:
-```bash
-cdktf deploy
-```
-
-4. Note the outputs, especially the API endpoint URL.
 
 ## Testing
 
-Test the API endpoint:
+### Unit Tests
 
-```bash
-# Get the API endpoint from outputs
-API_ENDPOINT="https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/transactions"
+The implementation includes comprehensive unit tests with 60+ test cases covering:
 
-# Send a test transaction
-curl -X POST $API_ENDPOINT \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_id": "txn-001",
-    "amount": 5000,
-    "merchant": "Amazon"
-  }'
+- DynamoDB table configuration
+- Lambda function settings and environment variables
+- IAM role permissions
+- API Gateway configuration
+- CloudWatch alarms
+- S3 backend configuration
+- Resource naming and tagging
 
-# Send a high-risk transaction (should trigger fraud alert)
-curl -X POST $API_ENDPOINT \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_id": "txn-002",
-    "amount": 15000,
-    "merchant": "offshore-vendor"
-  }'
-```
+### Integration Tests
 
-## Monitoring
+Integration tests (17+ test cases) validate:
 
-- **CloudWatch Logs**: Check `/aws/lambda/<function-name>-<environment-suffix>` log groups
-- **CloudWatch Alarms**: Monitor error alarms for each Lambda function
-- **X-Ray**: View distributed traces in AWS X-Ray console
-- **DynamoDB**: Query tables to see stored transactions and fraud scores
+- Resource existence and configuration
+- Lambda function runtime settings
+- DynamoDB stream connections
+- API Gateway throttling
+- CloudWatch Log retention
+- X-Ray tracing
+- Dead letter queue configuration
 
-## Configuration Details
+## Deployment
 
-### Lambda Functions
+1. **Set environment variables**:
+   ```bash
+   export ENVIRONMENT_SUFFIX="dev"
+   export AWS_REGION="us-east-1"
+   export TERRAFORM_STATE_BUCKET="iac-rlhf-tf-states"
+   ```
 
-- **transaction-ingestion**: 256MB memory, 30s timeout
-- **transaction-processor**: 512MB memory, 60s timeout, 100 reserved concurrent executions
-- **fraud-scorer**: 1024MB memory, 120s timeout, 50 reserved concurrent executions
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-### API Gateway
+3. **Run tests**:
+   ```bash
+   npm run test:unit
+   ```
 
-- **Rate Limit**: 1000 requests/second (steady-state)
-- **Burst Limit**: 2000 requests/second
-- **X-Ray Tracing**: Enabled
+4. **Synthesize the stack**:
+   ```bash
+   npm run cdktf:synth
+   ```
 
-### DynamoDB
+5. **Deploy**:
+   ```bash
+   npm run cdktf:deploy
+   ```
 
-- **Billing Mode**: On-demand (PAY_PER_REQUEST)
-- **Streams**: Enabled on transactions table
-- **TTL**: Enabled on fraud_scores table (30 days)
+## Key Design Decisions
 
-### Dead Letter Queues
+1. **Conditional S3 Backend**: Allows local development without S3 backend while supporting CI/CD environments
+2. **Pre-created Log Groups**: Ensures proper retention policy and avoids Lambda creation race conditions
+3. **Source Code Hash**: Ensures Lambda functions update properly when code changes
+4. **Reserved Concurrency**: Prevents runaway Lambda invocations and controls costs
+5. **Sum vs Average for Alarms**: Using Sum provides absolute error count rather than rate percentage
+6. **Environment Suffix Pattern**: Enables multiple parallel deployments without conflicts
 
-- **Retention**: 14 days
-- **Retry Attempts**: 5 (configured on event source mapping)
+## Security Considerations
 
-### CloudWatch Logs
+- All data encrypted at rest (DynamoDB, S3)
+- X-Ray tracing for full observability
+- Least privilege IAM roles
+- Dead letter queues for error handling
+- No hardcoded credentials
+- CloudWatch Logs with 7-day retention for compliance
 
-- **Retention**: 7 days
-- **All Lambda functions have dedicated log groups**
+## Monitoring and Observability
 
-## Clean Up
+- CloudWatch Alarms for error monitoring
+- X-Ray tracing across all services
+- CloudWatch Logs for all Lambda executions
+- SNS notifications for high fraud scores
+- DynamoDB TTL for automatic data cleanup
 
-To destroy all resources:
-
-```bash
-cdktf destroy
-```
-
-## Security Features
-
-1. **Least Privilege IAM**: Each Lambda has minimal required permissions
-2. **X-Ray Tracing**: Full distributed tracing enabled
-3. **CloudWatch Monitoring**: Error alarms on all Lambda functions
-4. **DLQ Configuration**: Failed messages captured for retry
-5. **Log Retention**: 7-day retention on all logs
-6. **Environment Isolation**: All resources tagged with environment suffix
-
-## Notes
-
-- All resource names include `environment_suffix` for multi-environment support
-- Lambda functions use Node.js 18.x with AWS SDK v3
-- System supports concurrent deployments with different environment suffixes
-- All resources are fully destroyable (no retention policies)
-```
-
-## Deployment Instructions
-
-1. Install dependencies:
-```bash
-pip install cdktf cdktf-cdktf-provider-aws constructs
-npm install -g cdktf-cli
-```
-
-2. Package Lambda functions:
-```bash
-# Transaction ingestion
-cd lib/lambda/transaction-ingestion
-npm install
-zip -r ../transaction-ingestion.zip index.js node_modules package.json
-
-# Transaction processor
-cd ../transaction-processor
-npm install
-zip -r ../transaction-processor.zip index.js node_modules package.json
-
-# Fraud scorer
-cd ../fraud-scorer
-npm install
-zip -r ../fraud-scorer.zip index.js node_modules package.json
-```
-
-3. Set environment variables:
-```bash
-export ENVIRONMENT_SUFFIX="dev"
-export AWS_REGION="us-east-1"
-```
-
-4. Deploy:
-```bash
-cdktf deploy
-```
-
-5. Test the API:
-```bash
-curl -X POST https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/transactions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_id": "txn-123",
-    "amount": 5000,
-    "merchant": "Amazon"
-  }'
-```
+This implementation provides a production-ready serverless fraud detection system with comprehensive testing, monitoring, and security controls.

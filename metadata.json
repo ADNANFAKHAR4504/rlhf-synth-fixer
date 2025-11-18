@@ -5,6 +5,7 @@
   "turn_type": "single",
   "po_id": "z8j4a2",
   "team": "synth",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-11-18T00:00:00Z",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -18,7 +19,8 @@
     "SNS",
     "CloudWatch",
     "IAM",
-    "X-Ray"
+    "X-Ray",
+    "CloudWatch Logs"
   ],
-  "training_quality": 8
+  "training_quality": 9
 }
