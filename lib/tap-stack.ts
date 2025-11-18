@@ -874,11 +874,11 @@ exports.handler = async (event) => {
       { parent: this, provider: primaryProvider }
     );
 
-    // EventBridge rule to trigger Lambda every 30 seconds
+    // EventBridge rule to trigger Lambda every 1 minute
     const monitorRule = new aws.cloudwatch.EventRule(
       `monitor-rule-${environmentSuffix}`,
       {
-        scheduleExpression: 'rate(30 seconds)',
+        scheduleExpression: 'rate(1 minute)',
         tags: { ...tags, Environment: environmentSuffix },
       },
       { parent: this, provider: primaryProvider }
