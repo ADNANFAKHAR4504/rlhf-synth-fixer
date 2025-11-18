@@ -63,7 +63,7 @@ The system uses a serverless architecture deployed in the `us-east-1` region wit
 
 ### Performance Requirements
 - **Response Time**: Sub-second processing for all transactions
-- **Concurrency**: Reserved concurrency of 50 for predictable performance
+- **Concurrency**: Reserved concurrency of 10 for predictable performance
 - **Throughput**: 1000 requests per second per API client
 - **Processor**: ARM-based Graviton2 for cost optimization
 
@@ -78,7 +78,7 @@ The system uses a serverless architecture deployed in the `us-east-1` region wit
 The system should be implemented as a complete CDKTF Python application that provisions all resources with:
 
 ### Resource Configuration Details
-- Lambda functions with exactly 50 reserved concurrency units
+- Lambda functions with exactly 10 reserved concurrency units
 - DynamoDB tables using on-demand billing mode with point-in-time recovery
 - API Gateway throttling set to 1000 requests per second per client
 - Step Functions with explicit error handling and retry logic for each state
