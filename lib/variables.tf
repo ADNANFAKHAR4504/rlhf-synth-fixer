@@ -13,6 +13,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming"
   type        = string
+  default     = "devtest"
 }
 
 variable "project_name" {

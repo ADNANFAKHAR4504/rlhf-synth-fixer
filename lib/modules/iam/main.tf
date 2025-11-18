@@ -9,12 +9,16 @@ data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   }
 }
 
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 resource "aws_iam_role" "ecs_task_execution" {
-  name               = "ecs-task-execution-role-${var.environment}-${var.environment_suffix}"
+  name               = "ecs-task-execution-role-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role.json
 
   tags = {
-    Name        = "ecs-task-execution-role-${var.environment}-${var.environment_suffix}"
+    Name        = "ecs-task-execution-role-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
@@ -26,11 +30,11 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 }
 
 resource "aws_iam_role" "ecs_task" {
-  name               = "ecs-task-role-${var.environment}-${var.environment_suffix}"
+  name               = "ecs-task-role-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
   assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role.json
 
   tags = {
-    Name        = "ecs-task-role-${var.environment}-${var.environment_suffix}"
+    Name        = "ecs-task-role-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
