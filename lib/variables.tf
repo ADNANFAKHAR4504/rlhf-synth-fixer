@@ -119,13 +119,7 @@ EOT
 variable "manage_kubernetes_resources" {
   description = "Whether to create Kubernetes resources (namespaces, service accounts, deployments). Set to false if Terraform runner cannot access the private EKS endpoint."
   type        = bool
-  default     = false
-}
-
-variable "force_replace_node_groups" {
-  description = "If true, forces replacement of existing node groups. Use this when node groups exist from a previous failed deployment and need to be recreated."
-  type        = bool
-  default     = false
+  default     = true
 }
 
 locals {
