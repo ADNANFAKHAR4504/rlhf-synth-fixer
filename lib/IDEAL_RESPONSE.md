@@ -1,3 +1,10 @@
+# Serverless Cryptocurrency Webhook Processing System
+
+Complete CloudFormation implementation for a production-ready serverless webhook processing system.
+
+### File lib/TapStack.yml
+
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Serverless Cryptocurrency Webhook Processing System'
 
@@ -379,7 +386,6 @@ Resources:
     DependsOn: WebhookPostMethod
     Properties:
       RestApiId: !Ref WebhookRestApi
-      StageName: 'prod'
 
   # API Gateway Stage with X-Ray Tracing
   ApiStage:
@@ -387,7 +393,7 @@ Resources:
     Properties:
       RestApiId: !Ref WebhookRestApi
       DeploymentId: !Ref ApiDeployment
-      StageName: 'prod'
+      StageName: !Ref EnvironmentSuffix
       TracingEnabled: true
       MethodSettings:
         - ResourcePath: '/*'
@@ -430,7 +436,7 @@ Resources:
 Outputs:
   ApiEndpointUrl:
     Description: 'API Gateway endpoint URL'
-    Value: !Sub 'https://${WebhookRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/webhooks/{currency}'
+    Value: !Sub 'https://${WebhookRestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/webhooks/{currency}'
     Export:
       Name: !Sub '${AWS::StackName}-ApiEndpointUrl'
 
@@ -469,3 +475,5 @@ Outputs:
     Value: !Ref ApiKey
     Export:
       Name: !Sub '${AWS::StackName}-ApiKeyId'
+
+```

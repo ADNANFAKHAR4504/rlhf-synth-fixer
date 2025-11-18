@@ -479,52 +479,6 @@ Outputs:
       Name: !Sub '${AWS::StackName}-ApiKeyId'
 ```
 
-## File: lib/README.md
-
-```markdown
-# Serverless Cryptocurrency Webhook Processing System
-
-A production-ready serverless system for processing cryptocurrency transaction webhooks with real-time validation, storage, and monitoring.
-
-## Architecture
-
-This CloudFormation template deploys a complete serverless webhook processing system with:
-
-- **API Gateway REST API**: Webhook endpoints at `/webhooks/{currency}` supporting BTC, ETH, and USDT
-- **Lambda Function**: Python 3.11 function for transaction validation and processing
-- **DynamoDB Table**: Transaction storage with `transactionId` (partition key) and `timestamp` (sort key)
-- **SQS Queues**: Standard processing queue and dead letter queue for failed messages
-- **CloudWatch Monitoring**: Log groups with metric filters for currency-specific transaction counting
-- **X-Ray Tracing**: Distributed tracing across API Gateway and Lambda
-- **KMS Encryption**: Customer managed key for Lambda environment variable encryption
-
-## Deployment
-
-### Prerequisites
-
-- AWS CLI configured with appropriate credentials
-- CloudFormation access to create stacks
-
-### Deploy the Stack
-
-```bash
-aws cloudformation create-stack \
-  --stack-name crypto-webhook-system \
-  --template-body file://lib/TapStack.yml \
-  --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-### Get Stack Outputs
-
-```bash
-aws cloudformation describe-stacks \
-  --stack-name crypto-webhook-system \
-  --query 'Stacks[0].Outputs' \
-  --region us-east-1
-```
-
 ## Usage
 
 ### Send Webhook Request
