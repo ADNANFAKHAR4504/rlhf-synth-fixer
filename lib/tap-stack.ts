@@ -27,7 +27,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Get database password from Pulumi config or environment variable
     const config = new pulumi.Config();
-    const dbPassword = config.getSecret('dbPassword') ||
+    const dbPassword =
+      config.getSecret('dbPassword') ||
       pulumi.secret(process.env.TF_VAR_db_password || 'TempPassword123!');
 
     // Primary region provider (us-east-1)
