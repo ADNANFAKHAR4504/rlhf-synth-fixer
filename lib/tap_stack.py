@@ -396,7 +396,7 @@ class TapStack(TerraformStack):
             source_code_hash=Fn.filebase64sha256(lambda_zip_relative),
             memory_size=3072,  # 3GB
             timeout=60,
-            reserved_concurrent_executions=10,  # Reduced to avoid account limit issues
+            reserved_concurrent_executions=100,  # Reduced to avoid account limit issues
             vpc_config=LambdaFunctionVpcConfig(
                 subnet_ids=[subnet.id for subnet in private_subnets],
                 security_group_ids=[lambda_sg.id]
@@ -425,7 +425,7 @@ class TapStack(TerraformStack):
             source_code_hash=Fn.filebase64sha256(lambda_zip_relative),
             memory_size=3072,  # 3GB
             timeout=60,
-            reserved_concurrent_executions=10,  # Reduced to avoid account limit issues
+            reserved_concurrent_executions=100,  # Reduced to avoid account limit issues
             vpc_config=LambdaFunctionVpcConfig(
                 subnet_ids=[subnet.id for subnet in private_subnets],
                 security_group_ids=[lambda_sg.id]
@@ -454,7 +454,7 @@ class TapStack(TerraformStack):
             source_code_hash=Fn.filebase64sha256(lambda_zip_relative),
             memory_size=3072,  # 3GB
             timeout=60,
-            reserved_concurrent_executions=10,  # Reduced to avoid account limit issues
+            reserved_concurrent_executions=100,  # Reduced to avoid account limit issues
             vpc_config=LambdaFunctionVpcConfig(
                 subnet_ids=[subnet.id for subnet in private_subnets],
                 security_group_ids=[lambda_sg.id]
