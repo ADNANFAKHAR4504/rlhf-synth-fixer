@@ -10,12 +10,12 @@ Parameters:
   StagingAccountId:
     Type: String
     Description: AWS Account ID for staging environment
-    Default: '123456789012'
+    Default: ''
 
   ProductionAccountId:
     Type: String
     Description: AWS Account ID for production environment
-    Default: '123456789012'
+    Default: ''
 
   SourceRepositoryName:
     Type: String
@@ -33,6 +33,10 @@ Parameters:
     Default: 30
     MinValue: 1
     MaxValue: 365
+
+Conditions:
+  HasStagingAccount: !Not [!Equals [!Ref StagingAccountId, '']]
+  HasProductionAccount: !Not [!Equals [!Ref ProductionAccountId, '']]
 
 Resources:
   # KMS Key for artifact encryption
@@ -70,22 +74,6 @@ Resources:
               - kms:Encrypt
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow cross-account access for staging
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${StagingAccountId}:root
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow cross-account access for production
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${ProductionAccountId}:root
-            Action:
-              - kms:Decrypt
               - kms:DescribeKey
             Resource: '*'
 
@@ -133,16 +121,6 @@ Resources:
             Condition:
               StringNotEquals:
                 s3:x-amz-server-side-encryption: aws:kms
-          - Sid: AllowCrossAccountAccess
-            Effect: Allow
-            Principal:
-              AWS:
-                - !Sub arn:aws:iam::${StagingAccountId}:root
-                - !Sub arn:aws:iam::${ProductionAccountId}:root
-            Action:
-              - s3:GetObject
-              - s3:GetObjectVersion
-            Resource: !Sub ${ArtifactBucket.Arn}/*
 
   # CodePipeline Service Role
   CodePipelineServiceRole:
@@ -196,12 +174,6 @@ Resources:
                 Resource:
                   - !GetAtt UnitTestProject.Arn
                   - !GetAtt SecurityScanProject.Arn
-              - Effect: Allow
-                Action:
-                  - sts:AssumeRole
-                Resource:
-                  - !Sub arn:aws:iam::${StagingAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
-                  - !Sub arn:aws:iam::${ProductionAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
 
   # CodeBuild Service Role
   CodeBuildServiceRole:
@@ -461,60 +433,6 @@ Resources:
                 - Name: SecurityScanOutput
               RunOrder: 1
 
-        # Deploy to Staging
-        - Name: DeployToStaging
-          Actions:
-            - Name: DeployStaging
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: '1'
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                StackName: !Sub application-stack-staging-${EnvironmentSuffix}
-                Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-                RoleArn: !Sub arn:aws:iam::${StagingAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
-                TemplatePath: SecurityScanOutput::template.yaml
-              InputArtifacts:
-                - Name: SecurityScanOutput
-              RunOrder: 1
-              RoleArn: !Sub arn:aws:iam::${StagingAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
-
-        # Manual Approval before Production
-        - Name: ApprovalForProduction
-          Actions:
-            - Name: ManualApproval
-              ActionTypeId:
-                Category: Approval
-                Owner: AWS
-                Provider: Manual
-                Version: '1'
-              Configuration:
-                CustomData: Please review staging deployment before approving production release
-                NotificationArn: !Ref PipelineNotificationTopic
-              RunOrder: 1
-
-        # Deploy to Production
-        - Name: DeployToProduction
-          Actions:
-            - Name: DeployProduction
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: '1'
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                StackName: !Sub application-stack-production-${EnvironmentSuffix}
-                Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-                RoleArn: !Sub arn:aws:iam::${ProductionAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
-                TemplatePath: SecurityScanOutput::template.yaml
-              InputArtifacts:
-                - Name: SecurityScanOutput
-              RunOrder: 1
-              RoleArn: !Sub arn:aws:iam::${ProductionAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
-
   # EventBridge Rule to trigger pipeline on CodeCommit changes
   PipelineTriggerRule:
     Type: AWS::Events::Rule
@@ -591,11 +509,3 @@ Outputs:
   CodePipelineUrl:
     Description: URL to the CodePipeline console
     Value: !Sub https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view
-
-  CrossAccountDeployRoleStaging:
-    Description: ARN of role needed in staging account
-    Value: !Sub arn:aws:iam::${StagingAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
-
-  CrossAccountDeployRoleProduction:
-    Description: ARN of role needed in production account
-    Value: !Sub arn:aws:iam::${ProductionAccountId}:role/cross-account-deploy-role-${EnvironmentSuffix}
