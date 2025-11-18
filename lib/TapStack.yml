@@ -3,11 +3,16 @@ Description: 'Production-ready multi-tier web application infrastructure in us-w
 
 # Template Parameters
 Parameters:
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID (auto-updated via SSM)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
   KeyName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-    
+    Description: (Optional) EC2 Key Pair for SSH access - leave empty to disable SSH key
+    Type: String
+    Default: ''
+
   DBUsername:
     Description: Database master username
     Type: String
@@ -16,21 +21,18 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
     Default: dbadmin
-    
-  DBPassword:
-    Description: Database master password
-    Type: String
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must contain only alphanumeric characters
-    NoEcho: true
 
-# Mappings for AMI IDs
-Mappings:
-  RegionMap:
-    us-west-2:
-      AMI: ami-0c2d06d50ce30b442  # Amazon Linux 2 AMI for us-west-2
+  CreateNATGateways:
+    Description: Create NAT Gateways for private subnet internet access (requires 2 EIPs - AWS limit is 5 per region)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyName, '']]
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
 
 Resources:
   # ==========================================
@@ -72,6 +74,26 @@ Resources:
     Properties:
       AliasName: alias/production-encryption-key
       TargetKeyId: !Ref KMSKey
+
+  # ==========================================
+  # Secrets Manager for Database Password
+  # ==========================================
+
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: production-db-password
+      Description: Master password for RDS MySQL database
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Environment
+          Value: Production
 
   # ==========================================
   # VPC and Networking
@@ -156,36 +178,40 @@ Resources:
         - Key: Environment
           Value: Production
           
-  # NAT Gateways
+  # NAT Gateways (Optional - controlled by CreateNATGateways parameter)
   NATGateway1EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
       Tags:
         - Key: Environment
           Value: Production
-          
+
   NATGateway2EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
       Tags:
         - Key: Environment
           Value: Production
-          
+
   NATGateway1:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NATGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Environment
           Value: Production
-          
+
   NATGateway2:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NATGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -236,6 +262,7 @@ Resources:
           
   PrivateRoute1:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -259,6 +286,7 @@ Resources:
           
   PrivateRoute2:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -507,17 +535,18 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: production-database
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.28'
+      EngineVersion: '8.0.39'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref KMSKey
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -585,9 +614,9 @@ Resources:
     Properties:
       LaunchTemplateName: Production-LaunchTemplate
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
-        KeyName: !Ref KeyName
+        KeyName: !If [HasKeyPair, !Ref KeyName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -597,11 +626,9 @@ Resources:
             Ebs:
               VolumeSize: 20
               VolumeType: gp3
-              Encrypted: true
-              KmsKeyId: !Ref KMSKey
               DeleteOnTermination: true
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd amazon-cloudwatch-agent
@@ -818,3 +845,9 @@ Outputs:
     Value: !GetAtt RDSDatabase.Endpoint.Address
     Export:
       Name: Production-DB-Endpoint
+
+  DBPasswordSecretArn:
+    Description: ARN of the Secrets Manager secret containing database password
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: Production-DB-Password-Secret-ARN
