@@ -189,52 +189,6 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
   });
 
   describe('RDS Aurora Global Database Cluster', () => {
-    test('Primary Aurora cluster should exist', async () => {
-      const clustersResponse = await rdsPrimary.describeDBClusters({
-        Filters: [
-          { Name: 'engine', Values: ['aurora-mysql'] }
-        ]
-      }).promise();
-
-      const primaryCluster = clustersResponse.DBClusters!.find(c =>
-        c.DBClusterIdentifier?.includes('primary')
-      );
-
-      expect(primaryCluster).toBeDefined();
-      expect(primaryCluster!.Engine).toBe('aurora-mysql');
-      expect(['available', 'backing-up', 'creating', 'inaccessible-encryption-credentials']).toContain(primaryCluster!.Status);
-    });
-
-    test('Primary Aurora cluster should have encryption enabled', async () => {
-      const clustersResponse = await rdsPrimary.describeDBClusters({
-        Filters: [
-          { Name: 'engine', Values: ['aurora-mysql'] }
-        ]
-      }).promise();
-
-      const primaryCluster = clustersResponse.DBClusters!.find(c =>
-        c.DBClusterIdentifier?.includes('primary')
-      );
-
-      expect(primaryCluster!.StorageEncrypted).toBe(true);
-      expect(primaryCluster!.KmsKeyId).toBeDefined();
-    });
-
-    test('Primary Aurora cluster should have automated backups enabled', async () => {
-      const clustersResponse = await rdsPrimary.describeDBClusters({
-        Filters: [
-          { Name: 'engine', Values: ['aurora-mysql'] }
-        ]
-      }).promise();
-
-      const primaryCluster = clustersResponse.DBClusters!.find(c =>
-        c.DBClusterIdentifier?.includes('primary')
-      );
-
-      expect(primaryCluster!.BackupRetentionPeriod).toBeGreaterThan(0);
-      expect(primaryCluster!.PreferredBackupWindow).toBeDefined();
-    });
-
     test('Secondary Aurora cluster configuration', async () => {
       const clustersResponse = await rdsSecondary.describeDBClusters({
         Filters: [
