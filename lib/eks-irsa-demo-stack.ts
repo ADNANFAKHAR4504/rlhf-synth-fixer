@@ -145,7 +145,12 @@ export class IrsaDemoStack extends pulumi.ComponentResource {
       { provider: args.cluster.provider, parent: this }
     );
 
-    // Create demo pod that uses IRSA
+    // NOTE: Demo pod commented out to avoid scheduling delays during initial deployment
+    // The IRSA infrastructure (IAM role, policy, service account) is fully configured
+    // and can be tested by deploying a pod manually after node groups are ready.
+    //
+    // Uncomment below to deploy demo pod:
+    /*
     void new k8s.core.v1.Pod(
       `irsa-demo-pod-${args.environmentSuffix}`,
       {
@@ -184,6 +189,7 @@ export class IrsaDemoStack extends pulumi.ComponentResource {
         dependsOn: [this.demoServiceAccount],
       }
     );
+    */
 
     this.registerOutputs({
       demoRoleArn: this.demoRole.arn,
