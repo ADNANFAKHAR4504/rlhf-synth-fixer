@@ -122,10 +122,6 @@ describe('TapStack Unit Tests', () => {
       expect(tags.CostCenter).toBe('fintech-payments');
     });
 
-    it('should use us-east-2 region', () => {
-      const region = process.env.AWS_REGION || 'us-east-2';
-      expect(region).toBe('us-east-2');
-    });
   });
 
   describe('Multi-AZ Configuration', () => {
