@@ -92,8 +92,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [vpcStack] }
     );
 
-    // Note: Using default node group from EKS cluster instead of separate managed node groups
-    // to avoid IAM role issues with skipDefaultNodeGroup
+    // Note: Using default node group from EKS cluster for compute capacity
 
     // 4. Install EKS add-ons (EBS CSI driver with encryption)
     void new EksAddonsStack(

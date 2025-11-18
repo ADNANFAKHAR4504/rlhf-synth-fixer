@@ -2,8 +2,8 @@
  * EKS Cluster Stack
  * Creates EKS cluster with OIDC provider and private endpoint access
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as eks from '@pulumi/eks';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface EksClusterStackArgs {
   environmentSuffix: string;
@@ -50,8 +50,8 @@ export class EksClusterStack extends pulumi.ComponentResource {
         endpointPublicAccess: true,
         // Create OIDC provider for IRSA
         createOidcProvider: true,
-        // Skip creating default node group - we'll create managed node groups separately
-        skipDefaultNodeGroup: true,
+        // Use default node group for compute capacity
+        skipDefaultNodeGroup: false,
         tags: {
           Name: clusterName,
           Environment: args.environmentSuffix,
