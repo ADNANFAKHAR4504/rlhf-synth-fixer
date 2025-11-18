@@ -168,22 +168,43 @@ class TapStack(pulumi.ComponentResource):
         bucket = aws.s3.Bucket(
             f'pipeline-artifacts-{self.env_suffix}',
             bucket=f'pipeline-artifacts-{self.account_id}-{self.env_suffix}',
-            versioning={'enabled': True},
-            server_side_encryption_configuration={
-                'rule': {
-                    'apply_server_side_encryption_by_default': {
-                        'sse_algorithm': 'aws:kms',
-                        'kms_master_key_id': self.kms_key.arn
-                    },
-                    'bucket_key_enabled': True
-                }
+            tags={**self.default_tags, 'Name': f'pipeline-artifacts-{self.env_suffix}'},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Versioning
+        aws.s3.BucketVersioning(
+            f'pipeline-artifacts-versioning-{self.env_suffix}',
+            bucket=bucket.id,
+            versioning_configuration={
+                'status': 'Enabled'
             },
-            lifecycle_rules=[{
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Server-side encryption
+        aws.s3.BucketServerSideEncryptionConfiguration(
+            f'pipeline-artifacts-encryption-{self.env_suffix}',
+            bucket=bucket.id,
+            rule={
+                'apply_server_side_encryption_by_default': {
+                    'sse_algorithm': 'aws:kms',
+                    'kms_master_key_id': self.kms_key.arn
+                },
+                'bucket_key_enabled': True
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Lifecycle configuration
+        aws.s3.BucketLifecycleConfiguration(
+            f'pipeline-artifacts-lifecycle-{self.env_suffix}',
+            bucket=bucket.id,
+            rules=[{
                 'id': 'expire-old-artifacts',
-                'enabled': True,
+                'status': 'Enabled',
                 'expiration': {'days': 30}
             }],
-            tags={**self.default_tags, 'Name': f'pipeline-artifacts-{self.env_suffix}'},
             opts=ResourceOptions(parent=self)
         )
 
@@ -205,17 +226,31 @@ class TapStack(pulumi.ComponentResource):
         bucket = aws.s3.Bucket(
             f'pulumi-state-{self.env_suffix}',
             bucket=f'pulumi-state-{self.account_id}-{self.env_suffix}',
-            versioning={'enabled': True},
-            server_side_encryption_configuration={
-                'rule': {
-                    'apply_server_side_encryption_by_default': {
-                        'sse_algorithm': 'aws:kms',
-                        'kms_master_key_id': self.kms_key.arn
-                    },
-                    'bucket_key_enabled': True
-                }
-            },
             tags={**self.default_tags, 'Name': f'pulumi-state-{self.env_suffix}'},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Versioning
+        aws.s3.BucketVersioning(
+            f'pulumi-state-versioning-{self.env_suffix}',
+            bucket=bucket.id,
+            versioning_configuration={
+                'status': 'Enabled'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Server-side encryption
+        aws.s3.BucketServerSideEncryptionConfiguration(
+            f'pulumi-state-encryption-{self.env_suffix}',
+            bucket=bucket.id,
+            rule={
+                'apply_server_side_encryption_by_default': {
+                    'sse_algorithm': 'aws:kms',
+                    'kms_master_key_id': self.kms_key.arn
+                },
+                'bucket_key_enabled': True
+            },
             opts=ResourceOptions(parent=self)
         )
 
@@ -521,8 +556,7 @@ class TapStack(pulumi.ComponentResource):
                 'encryption_key': {
                     'id': self.kms_key.arn,
                     'type': 'KMS'
-                },
-                'region': self.region
+                }
             }],
             stages=[
                 {
@@ -532,13 +566,12 @@ class TapStack(pulumi.ComponentResource):
                         'category': 'Source',
                         'owner': 'ThirdParty',
                         'provider': 'GitHub',
-                        'version': '1',
+                        'version': '2',
                         'output_artifacts': ['source_output'],
                         'configuration': {
-                            'Owner': self.github_owner,
-                            'Repo': self.github_repo,
-                            'Branch': self.github_branch,
-                            'OAuthToken': '{{resolve:secretsmanager:github-token:SecretString:token}}'
+                            'ConnectionArn': 'arn:aws:codestar-connections:region:account:connection/connection-id',  # Replace with actual CodeStar Connection ARN
+                            'FullRepositoryId': f'{self.github_owner}/{self.github_repo}',
+                            'BranchName': self.github_branch
                         }
                     }]
                 },
