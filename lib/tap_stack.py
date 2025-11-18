@@ -72,35 +72,37 @@ class TapStack(TerraformStack):
 
         # Configure S3 Backend with workspace-specific state files
         # Backend is enabled to prevent resource conflicts
+        # Note: Using v1 table for state locking to avoid chicken-and-egg problem
         S3Backend(
             self,
             bucket=state_bucket,
             key=f"{workspace}/{construct_id}.tfstate",
             region=state_bucket_region,
             encrypt=True,
-            dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-{version}"
+            dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-v1"
         )
 
-        # Create DynamoDB table for state locking
-        # This table is created first, then the S3 backend can be enabled
-        state_lock_table = DynamodbTable(
-            self,
-            f"state-lock-table-{version}-{environment_suffix}",
-            name=f"terraform-state-lock-{workspace}-{environment_suffix}-{version}",
-            billing_mode="PAY_PER_REQUEST",
-            hash_key="LockID",
-            attribute=[{
-                "name": "LockID",
-                "type": "S"
-            }],
-            deletion_protection_enabled=False,  # CRITICAL: For destroyability
-            tags={
-                "Name": f"terraform-state-lock-{workspace}-{environment_suffix}-{version}",
-                "Workspace": workspace,
-                "Purpose": "Terraform state locking",
-                "Version": version
-            }
-        )
+        # DynamoDB table for state locking (using existing v1 table)
+        # Not creating a new v2 table to avoid conflicts and chicken-and-egg problem
+        # The existing v1 table will be used for state locking
+        # state_lock_table = DynamodbTable(
+        #     self,
+        #     f"state-lock-table-{version}-{environment_suffix}",
+        #     name=f"terraform-state-lock-{workspace}-{environment_suffix}-{version}",
+        #     billing_mode="PAY_PER_REQUEST",
+        #     hash_key="LockID",
+        #     attribute=[{
+        #         "name": "LockID",
+        #         "type": "S"
+        #     }],
+        #     deletion_protection_enabled=False,  # CRITICAL: For destroyability
+        #     tags={
+        #         "Name": f"terraform-state-lock-{workspace}-{environment_suffix}-{version}",
+        #         "Workspace": workspace,
+        #         "Purpose": "Terraform state locking",
+        #         "Version": version
+        #     }
+        # )
 
         # Create S3 bucket for static assets
         assets_bucket = S3Bucket(
@@ -300,6 +302,6 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "state_lock_table_name",
-            value=state_lock_table.name,
-            description="DynamoDB table name for state locking"
+            value=f"terraform-state-lock-{workspace}-{environment_suffix}-v1",
+            description="DynamoDB table name for state locking (using existing v1 table)"
         )
