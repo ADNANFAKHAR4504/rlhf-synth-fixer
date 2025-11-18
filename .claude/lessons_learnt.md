@@ -113,7 +113,6 @@ IF ANY MISSING:
 **Root Cause**: Not preserving all rows when updating CSV file, or not validating write operations
 
 **Prevention Rules** (MANDATORY for ALL CSV operations):
-
 1. **ALWAYS create backup before ANY modification**: `shutil.copy2('.claude/tasks.csv', '.claude/tasks.csv.backup')`
 2. **ALWAYS read ALL rows into memory** before modifying any single row
 3. **ALWAYS validate row count** before and after write operations
@@ -122,7 +121,6 @@ IF ANY MISSING:
 6. **NEVER write CSV without these safeguards**
 
 **Safe CSV Update Pattern**:
-
 ```python
 import csv
 import shutil
@@ -167,13 +165,11 @@ if verify_count != original_count:
 **Applies to**: ALL agents that modify .claude/tasks.csv (task-selector, task-coordinator)
 
 **Recovery**: If corruption occurs:
-
 1. Use the validation tool: `python3 .claude/scripts/validate-tasks-csv.py --restore`
 2. Or manually restore: `cp .claude/tasks.csv.backup .claude/tasks.csv`
 3. Or use git: `git checkout .claude/tasks.csv` (if committed)
 
 **Validation Tool**: Use `python3 .claude/scripts/validate-tasks-csv.py` to:
-
 - Validate CSV structure and integrity
 - Check backup file status
 - Create backups: `--create-backup`
@@ -190,21 +186,18 @@ if verify_count != original_count:
 **Root Cause**: Task description contains logically impossible requirements
 
 **Impact**:
-
 - Multi-region migration cannot occur within same region
 - VPC peering fails between same-region VPCs with overlapping CIDRs
 - Cross-region replication becomes meaningless
 - Wastes development time on undeployable architecture
 
 **Prevention**:
-
 - **VALIDATE task description for logical consistency BEFORE code generation**
 - Multi-region tasks MUST specify different source and target regions
 - Check for contradictory requirements (e.g., "import existing VPC" + "create from scratch")
 - Flag tasks with placeholder dependencies (Lambda code, ACM certificates)
 
 **Quick Validation Checklist**:
-
 ```bash
 # For multi-region tasks, verify:
 grep -i "region" lib/PROMPT.md | grep -E "(us-east-1|us-west-2|eu-west-1)"
@@ -228,7 +221,6 @@ grep -i "import\|existing\|data source" lib/PROMPT.md
 **Root Cause**: Not reading or honoring the platform/language constraints from metadata.json or .claude/tasks.csv
 
 **Quick Fix**:
-
 - **ALWAYS read metadata.json FIRST** before generating any code
 - metadata.json platform and language are MANDATORY, NON-NEGOTIABLE constraints
 - PROMPT.md MUST explicitly state the platform and language in the opening paragraph
@@ -236,7 +228,6 @@ grep -i "import\|existing\|data source" lib/PROMPT.md
 - Verify generated code matches the required platform/language before proceeding
 
 **Validation**:
-
 ```bash
 # Check metadata
 cat metadata.json | jq -r '"\(.platform) - \(.language)"'
@@ -258,7 +249,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Root Cause**: Summarizing or simplifying task requirements during PROMPT.md generation
 
 **Quick Fix**:
-
 - Include ALL AWS services mentioned in task description
 - Include ALL constraints (region, security, compliance, performance)
 - Include ALL specific configurations mentioned
@@ -277,14 +267,12 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Root Cause**: Generated code too simple, missing best practices, or doesn't exercise model's capabilities
 
 **CRITICAL REQUIREMENTS**:
-
 - **MINIMUM acceptable score: 8/10** (enforced - PR creation will be BLOCKED if score < 8)
 - **TARGET score: 9/10** (aim for this in all tasks)
 - Score 10 reserved for exceptional learning opportunities with novel patterns
 - Tasks scoring below 8 MUST be improved before PR creation
 
 **Guidelines**:
-
 - Training quality score < 8 = Insufficient training data (BLOCKED)
 - Target range: 8-9 for most tasks (with 9 as the goal)
 - Include 2-3 AWS best practices or features relevant to the task
@@ -293,7 +281,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 - MODEL_FAILURES.md should demonstrate significant learning opportunities
 
 **Red Flags for Low Quality** (will result in score < 8):
-
 - Only basic resources with no integrations
 - No security configurations (missing KMS, IAM, encryption)
 - No monitoring or logging
@@ -303,7 +290,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 - Missing required AWS services from task description (-2 points per missing service)
 
 **How to Improve Training Quality**:
-
 1. Add security features: KMS encryption, IAM least privilege, security groups
 2. Add observability: CloudWatch logs/metrics, X-Ray tracing, alarms
 3. Add resilience: Multi-AZ deployment, auto-scaling, retry logic
@@ -316,7 +302,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Symptom**: Training quality score 5/10 despite production-ready code that meets all requirements
 
 **Scenario**: Generated infrastructure was 95% correct from MODEL_RESPONSE:
-
 - Perfect code quality (10/10 pylint)
 - All AWS services implemented correctly
 - PCI DSS compliant
@@ -325,7 +310,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 - Only 5 minor bugs fixed (duplicate URN, missing outputs, linting, env config)
 
 **Scoring Calculation** (per training-quality-guide.md v2.0):
-
 - Base Score: 8
 - MODEL_FAILURES: 5 fixes, all Category C (minor) → Category D penalty: -3
 - Complexity: Multi-service + HA + Security = +2 (max bonus)
@@ -333,7 +317,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 - **Final: 5/10**
 
 **Why Score Was Low**:
-
 - Minimal training value when model is already highly competent
 - Fixes were tactical (configuration), not strategic (architecture)
 - No new AWS service knowledge gained
@@ -342,7 +325,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Decision**: Task marked as "error" per policy (training_quality < 8 = BLOCKED)
 
 **Lesson Learned**:
-
 - Training quality measures **learning value**, not code quality
 - Even production-ready code can have low training value if model was already correct
 - This is actually a **POSITIVE signal** about model capability
@@ -361,7 +343,6 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Root Cause**: GuardDuty allows only ONE detector per AWS account/region. It's an account-level service, not a stack-level resource.
 
 **Quick Fix**:
-
 - Remove GuardDuty from infrastructure code entirely
 - Document that GuardDuty should be enabled manually at account level
 - Alternative: Use CloudFormation custom resource to check if detector exists before creating
@@ -379,13 +360,11 @@ cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 **Root Cause**: Model hallucinates incorrect AWS Config managed policy names
 
 **Quick Fix**:
-
 - **Correct managed policy**: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole` (note `service-role/AWS_` prefix)
 - **Alternative**: Use AWS Config service-linked role `AWSServiceRoleForConfig` (recommended, auto-created)
 - **Last resort**: Create custom inline policy with Config permissions
 
 **Example (CDK Python)**:
-
 ```python
 # CORRECT - Use actual managed policy
 config_role = iam.Role(
@@ -412,7 +391,6 @@ config_role = iam.Role(
 **Root Cause**: Setting `reservedConcurrentExecutions` too high or when account has limited capacity
 
 **Quick Fix**:
-
 - Remove `reservedConcurrentExecutions` parameter entirely (use default unreserved pool)
 - If required, set to a low value (1-5) and verify account limits first
 
@@ -427,13 +405,11 @@ config_role = iam.Role(
 **Root Cause**: AWS SDK v2 not available in Node.js 18.x+ runtimes
 
 **Quick Fix**:
-
 - For Node.js 18.x+: Use AWS SDK v3 (`@aws-sdk/client-*`) or extract data from event object
 - For Node.js 16.x: AWS SDK v2 available by default
 - Better: Avoid SDK dependency when event data contains all needed information
 
 **Example**:
-
 ```javascript
 // DON'T (Node.js 18+)
 const AWS = require('aws-sdk');
@@ -453,7 +429,6 @@ const key = event.Records[0].s3.object.key;
 **Root Cause**: Resource names without `environmentSuffix` cause collisions across parallel deployments
 
 **Quick Fix**:
-
 - ALL resource names must include `environmentSuffix` or `environment_suffix`
 - Pattern: `resourceName-${environmentSuffix}` or `resourceName-${props.environmentSuffix}`
 
@@ -474,7 +449,6 @@ const key = event.Records[0].s3.object.key;
 **Root Cause**: RDS Multi-AZ and non-serverless instances are slow to provision
 
 **Quick Fix**:
-
 - Prefer Aurora Serverless v2 (faster provisioning, auto-scaling)
 - If Multi-AZ required, mention in PROMPT.md and increase timeouts
 - Use `backup_retention_period = 1` (minimum) for faster creation
@@ -489,7 +463,6 @@ const key = event.Records[0].s3.object.key;
 **Root Cause**: NAT Gateways cost ~$0.045/hour (~$32/month) each
 
 **Quick Fix**:
-
 - Prefer VPC Endpoints (S3, DynamoDB, etc.) - free for most services
 - If NAT required, create only 1 (not per AZ) for synthetic tasks
 - Document in PROMPT.md when NAT is truly necessary
@@ -499,13 +472,11 @@ const key = event.Records[0].s3.object.key;
 ## Resource Naming Patterns
 
 ### Standard Format
-
 ```
 {resource-type}-{environment-suffix}
 ```
 
 ### CDK/CDKTF TypeScript
-
 ```typescript
 const bucket = new s3.Bucket(this, 'DataBucket', {
   bucketName: `data-bucket-${environmentSuffix}`,
@@ -514,7 +485,6 @@ const bucket = new s3.Bucket(this, 'DataBucket', {
 ```
 
 ### CDK/Pulumi Python
-
 ```python
 bucket = s3.Bucket(
     "data_bucket",
@@ -524,7 +494,6 @@ bucket = s3.Bucket(
 ```
 
 ### CloudFormation YAML
-
 ```yaml
 Resources:
   DataBucket:
@@ -534,7 +503,6 @@ Resources:
 ```
 
 ### Terraform HCL
-
 ```hcl
 resource "aws_s3_bucket" "data_bucket" {
   bucket = "data-bucket-${var.environment_suffix}"
@@ -546,18 +514,15 @@ resource "aws_s3_bucket" "data_bucket" {
 ## Region-Specific Configurations
 
 ### Default Region
-
 - Use `us-east-1` unless specified in `lib/AWS_REGION`
 - Always check for `lib/AWS_REGION` file first
 
 ### Multi-Region Tasks
-
 - Verify regions in task description match actual deployment regions
 - Common mismatch: task says "us-east-1 and eu-west-1" but code uses different regions
 - Cross-region references require explicit ARNs or exports
 
 ### Region-Specific Service Availability
-
 - Not all services available in all regions
 - Check AWS docs for service regional endpoints
 - Common issues: SageMaker features, specific instance types
@@ -569,7 +534,6 @@ resource "aws_s3_bucket" "data_bucket" {
 ### CDK (TypeScript/Python/Java)
 
 **Pattern**: Constructs not Stacks
-
 ```typescript
 // GOOD: Use Constructs for modularity
 export class NetworkingStack extends Construct {
@@ -580,17 +544,15 @@ export class NetworkingStack extends Construct {
 }
 
 // AVOID: Multiple Stack classes create complex cross-stack references
-export class NetworkingStack extends cdk.Stack {}
+export class NetworkingStack extends cdk.Stack { }
 ```
 
 **Entry Point**: Single TapStack orchestrator
-
 - `bin/tap.ts` instantiates TapStack
 - TapStack instantiates all Constructs
 - Maintains clean dependency management
 
 **Common Mistakes**:
-
 - Creating resources directly in TapStack (use separate Constructs)
 - Modifying bin/ directory entry point unnecessarily
 - Not using `this` as parent for nested stacks
@@ -602,7 +564,6 @@ export class NetworkingStack extends cdk.Stack {}
 **Pattern**: Similar to CDK but with Terraform constructs
 
 **Watch Out For**:
-
 - Provider configuration must be explicit
 - State management differs from CDK
 - Cross-stack references use Terraform data sources
@@ -612,7 +573,6 @@ export class NetworkingStack extends cdk.Stack {}
 ### CloudFormation (YAML/JSON)
 
 **Nested Stacks**: Keep logical separation
-
 ```yaml
 Resources:
   NetworkStack:
@@ -624,7 +584,6 @@ Resources:
 ```
 
 **Common Issues**:
-
 - Circular dependencies between stacks
 - Missing `DependsOn` for resource ordering
 - Forgetting to pass EnvironmentSuffix to nested stacks
@@ -634,7 +593,6 @@ Resources:
 ### Terraform (HCL)
 
 **Module Structure**: Use modules for reusability
-
 ```hcl
 module "networking" {
   source              = "./modules/networking"
@@ -643,12 +601,10 @@ module "networking" {
 ```
 
 **State Management**:
-
 - Always configure remote state (S3 + DynamoDB)
 - Use workspace isolation or separate state files per environment
 
 **Common Issues**:
-
 - Not using `depends_on` for implicit dependencies
 - Incorrect variable interpolation
 - Missing provider version constraints
@@ -658,18 +614,15 @@ module "networking" {
 ### Pulumi (TypeScript/Python/Java/Go)
 
 **Stack Exports**: Use outputs for cross-stack references
-
 ```typescript
 export const vpcId = vpc.id;
 ```
 
 **Config Management**:
-
 - Use Pulumi config for environment-specific values
 - Don't hardcode stack names
 
 **Common Issues**:
-
 - Stack naming conflicts
 - Not using `apply()` for output values
 - Incorrect resource options (parent, dependsOn)
@@ -683,7 +636,6 @@ export const vpcId = vpc.id;
 **Coverage Requirements**: 90%+ statements
 
 **Common Patterns**:
-
 ```typescript
 // CDK - Snapshot testing
 expect(template.toJSON()).toMatchSnapshot();
@@ -694,13 +646,12 @@ template.resourceCountIs('AWS::S3::Bucket', 1);
 // Property testing
 template.hasResourceProperties('AWS::S3::Bucket', {
   BucketEncryption: Match.objectLike({
-    ServerSideEncryptionConfiguration: Match.anyValue(),
-  }),
+    ServerSideEncryptionConfiguration: Match.anyValue()
+  })
 });
 ```
 
 **Watch Out For**:
-
 - Don't test hardcoded environmentSuffix values
 - Use flexible matchers for arrays vs objects
 - Account for singleton resources (log retention Lambdas)
@@ -721,7 +672,6 @@ const bucketName = outputs.S3BucketName;
 ```
 
 **Assertions**:
-
 - Test complete workflows, not just individual resources
 - Verify resource connectivity and permissions
 - No mocking - use real AWS SDK calls
@@ -731,7 +681,6 @@ const bucketName = outputs.S3BucketName;
 ## Cost Optimization Patterns
 
 ### Prefer Serverless
-
 - Lambda over EC2
 - Aurora Serverless over provisioned RDS
 - DynamoDB on-demand over provisioned
@@ -739,7 +688,6 @@ const bucketName = outputs.S3BucketName;
 - API Gateway over ALB for APIs
 
 ### Avoid Expensive Resources
-
 - NAT Gateways (~$32/month each)
 - RDS Multi-AZ non-serverless (~$350+/month)
 - Large EC2 instances
@@ -747,7 +695,6 @@ const bucketName = outputs.S3BucketName;
 - Multiple Availability Zones (when 1 AZ sufficient for synthetic tasks)
 
 ### Use Lifecycle Policies
-
 - S3: Transition to IA/Glacier
 - CloudWatch Logs: Set retention periods (7-14 days for synthetic)
 - DynamoDB: Enable TTL for automatic cleanup
@@ -757,7 +704,6 @@ const bucketName = outputs.S3BucketName;
 ## Security Best Practices
 
 ### IAM Least Privilege
-
 ```typescript
 // GOOD: Specific permissions
 {
@@ -773,14 +719,12 @@ const bucketName = outputs.S3BucketName;
 ```
 
 ### Encryption
-
 - S3: Enable `SSE-S3` or `SSE-KMS` (prefer SSE-S3 for simplicity)
 - RDS: Enable encryption at rest
 - DynamoDB: Encryption enabled by default
 - Lambda environment variables: Use KMS when storing secrets
 
 ### Secrets Management
-
 - Use AWS Secrets Manager or SSM Parameter Store (secure string)
 - Never hardcode secrets in code
 - Rotate credentials regularly
@@ -790,7 +734,6 @@ const bucketName = outputs.S3BucketName;
 ## When to Update This Document
 
 Add entries when you discover:
-
 1. A failure pattern that repeats across tasks
 2. A solution that saves deployment attempts
 3. Platform-specific quirks not in AWS docs
@@ -804,25 +747,21 @@ Add entries when you discover:
 ## Quick Reference Commands
 
 **Pre-validate before deployment**:
-
 ```bash
 bash scripts/pre-validate-iac.sh
 ```
 
 **Check resource naming**:
-
 ```bash
 grep -rni "environmentSuffix" lib/
 ```
 
 **Find hardcoded values**:
-
 ```bash
 grep -rniE "(prod-|dev-|stage-)" lib/
 ```
 
 **Verify destroyability**:
-
 ```bash
 grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 ```
@@ -863,12 +802,11 @@ grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 - [ ] Fix all issues found before deployment
 
 **Expected Outcome**:
-
 - Deployment success rate: 70-80% (up from 30-40%)
 - Average iterations per PR: 1-2 (down from 3-5)
 - Common preventable failures eliminated
 
 ---
 
-_Last Updated: 2025-01-XX_
-_This document is maintained by the task-coordinator and updated after each task completion._
+*Last Updated: 2025-01-XX*
+*This document is maintained by the task-coordinator and updated after each task completion.*
