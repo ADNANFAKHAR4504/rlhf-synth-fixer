@@ -24,9 +24,9 @@
   "training_quality": 10,
   "task_config": {},
   "coverage": {
-    "lines": 0,
-    "branches": 0
+    "lines": 100,
+    "branches": 100
   },
-  "author": "rajendrasingh-turing",
+  "author": "mayanksethi-turing",
   "dockerS3Location": ""
 }
