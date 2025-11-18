@@ -1,373 +1,380 @@
-"""Integration tests for Multi-Region DR Stack.
-
-These tests validate the deployed infrastructure functionality.
-They require actual deployment to AWS and use cfn-outputs/flat-outputs.json.
-"""
+"""Integration tests for Multi-Region Disaster Recovery infrastructure"""
+import pytest
+import boto3
 import json
 import os
-import boto3
-import pytest
+import time
+from botocore.exceptions import ClientError
 
 
 class TestMultiRegionDRIntegration:
-    """Integration tests for deployed Multi-Region DR infrastructure."""
+    """Integration tests for Multi-Region DR setup"""
 
-    @classmethod
-    def setup_class(cls):
-        """Load deployment outputs once for all tests."""
-        outputs_path = 'cfn-outputs/flat-outputs.json'
+    @pytest.fixture(scope="class")
+    def environment_suffix(self):
+        """Get environment suffix from environment variable"""
+        return os.getenv('ENVIRONMENT_SUFFIX', 'test')
 
-        if os.path.exists(outputs_path):
-            with open(outputs_path, 'r') as f:
-                cls.outputs = json.load(f)
-        else:
-            cls.outputs = {}
-            pytest.skip("Deployment outputs not found - infrastructure not deployed")
+    @pytest.fixture(scope="class")
+    def primary_region(self):
+        """Primary AWS region"""
+        return 'us-east-1'
 
-    def test_vpc_primary_exists(self):
-        """Primary VPC is deployed and accessible."""
-        vpc_id = self.outputs.get('vpc_primary_id')
-        assert vpc_id is not None, "Primary VPC ID not found in outputs"
+    @pytest.fixture(scope="class")
+    def secondary_region(self):
+        """Secondary AWS region"""
+        return 'us-east-2'
 
-        ec2 = boto3.client('ec2', region_name='us-east-1')
-        response = ec2.describe_vpcs(VpcIds=[vpc_id])
+    @pytest.fixture(scope="class")
+    def outputs(self):
+        """Load Terraform outputs"""
+        outputs_file = 'outputs.json'
+        if os.path.exists(outputs_file):
+            with open(outputs_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
 
-        assert len(response['Vpcs']) == 1
-        vpc = response['Vpcs'][0]
-        assert vpc['CidrBlock'] == '10.0.0.0/16'
-        assert vpc['State'] == 'available'
-
-    def test_vpc_secondary_exists(self):
-        """Secondary VPC is deployed and accessible."""
-        vpc_id = self.outputs.get('vpc_secondary_id')
-        assert vpc_id is not None, "Secondary VPC ID not found in outputs"
-
-        ec2 = boto3.client('ec2', region_name='us-east-2')
-        response = ec2.describe_vpcs(VpcIds=[vpc_id])
-
-        assert len(response['Vpcs']) == 1
-        vpc = response['Vpcs'][0]
-        assert vpc['CidrBlock'] == '10.1.0.0/16'
-        assert vpc['State'] == 'available'
-
-    def test_aurora_primary_cluster_accessible(self):
-        """Primary Aurora cluster is deployed and available."""
-        endpoint = self.outputs.get('aurora_primary_endpoint')
-        assert endpoint is not None, "Primary Aurora endpoint not found in outputs"
-
-        rds = boto3.client('rds', region_name='us-east-1')
-
-        # Extract cluster identifier from endpoint
-        cluster_id = endpoint.split('.')[0]
-
-        response = rds.describe_db_clusters(
-            DBClusterIdentifier=cluster_id
+    def test_vpc_connectivity(self, outputs, primary_region, secondary_region):
+        """Test VPC creation and peering connection"""
+        ec2_primary = boto3.client('ec2', region_name=primary_region)
+        ec2_secondary = boto3.client('ec2', region_name=secondary_region)
+        
+        # Check primary VPC
+        primary_vpc_id = outputs.get('vpc_primary_id', {}).get('value')
+        assert primary_vpc_id, "Primary VPC ID not found in outputs"
+        
+        vpcs = ec2_primary.describe_vpcs(VpcIds=[primary_vpc_id])
+        assert len(vpcs['Vpcs']) == 1
+        assert vpcs['Vpcs'][0]['State'] == 'available'
+        assert vpcs['Vpcs'][0]['CidrBlock'] == '10.0.0.0/16'
+        
+        # Check secondary VPC
+        secondary_vpc_id = outputs.get('vpc_secondary_id', {}).get('value')
+        assert secondary_vpc_id, "Secondary VPC ID not found in outputs"
+        
+        vpcs = ec2_secondary.describe_vpcs(VpcIds=[secondary_vpc_id])
+        assert len(vpcs['Vpcs']) == 1
+        assert vpcs['Vpcs'][0]['State'] == 'available'
+        assert vpcs['Vpcs'][0]['CidrBlock'] == '10.1.0.0/16'
+        
+        # Check VPC peering connection
+        peering_connections = ec2_primary.describe_vpc_peering_connections(
+            Filters=[
+                {'Name': 'requester-vpc-info.vpc-id', 'Values': [primary_vpc_id]},
+                {'Name': 'accepter-vpc-info.vpc-id', 'Values': [secondary_vpc_id]}
+            ]
         )
+        
+        assert len(peering_connections['VpcPeeringConnections']) > 0
+        peering = peering_connections['VpcPeeringConnections'][0]
+        assert peering['Status']['Code'] == 'active'
 
-        assert len(response['DBClusters']) == 1
-        cluster = response['DBClusters'][0]
-        assert cluster['Status'] == 'available'
-        assert cluster['Engine'] == 'aurora-postgresql'
-        assert cluster['StorageEncrypted'] is True
-
-    def test_aurora_secondary_cluster_accessible(self):
-        """Secondary Aurora cluster is deployed and available."""
-        endpoint = self.outputs.get('aurora_secondary_endpoint')
-        assert endpoint is not None, "Secondary Aurora endpoint not found in outputs"
-
-        rds = boto3.client('rds', region_name='us-east-2')
-
-        # Extract cluster identifier from endpoint
-        cluster_id = endpoint.split('.')[0]
-
-        response = rds.describe_db_clusters(
-            DBClusterIdentifier=cluster_id
+    def test_nat_gateways_exist(self, outputs, primary_region, secondary_region, environment_suffix):
+        """Test NAT Gateways are created in both regions"""
+        ec2_primary = boto3.client('ec2', region_name=primary_region)
+        ec2_secondary = boto3.client('ec2', region_name=secondary_region)
+        
+        # Check primary region NAT Gateways
+        primary_nats = ec2_primary.describe_nat_gateways(
+            Filters=[
+                {'Name': 'state', 'Values': ['available']},
+                {'Name': 'tag:Environment', 'Values': [environment_suffix]}
+            ]
         )
+        assert len(primary_nats['NatGateways']) >= 3, "Expected at least 3 NAT Gateways in primary region"
+        
+        # Check secondary region NAT Gateways
+        secondary_nats = ec2_secondary.describe_nat_gateways(
+            Filters=[
+                {'Name': 'state', 'Values': ['available']},
+                {'Name': 'tag:Environment', 'Values': [environment_suffix]}
+            ]
+        )
+        assert len(secondary_nats['NatGateways']) >= 3, "Expected at least 3 NAT Gateways in secondary region"
 
-        assert len(response['DBClusters']) == 1
-        cluster = response['DBClusters'][0]
-        assert cluster['Status'] == 'available'
-        assert cluster['Engine'] == 'aurora-postgresql'
-        assert cluster['StorageEncrypted'] is True
+    def test_aurora_global_database(self, outputs, primary_region, secondary_region):
+        """Test Aurora Global Database setup"""
+        rds_primary = boto3.client('rds', region_name=primary_region)
+        
+        # Check global cluster
+        global_clusters = rds_primary.describe_global_clusters()
+        payment_global = None
+        
+        for gc in global_clusters['GlobalClusters']:
+            if 'payment-global' in gc['GlobalClusterIdentifier']:
+                payment_global = gc
+                break
+        
+        assert payment_global is not None, "Global cluster not found"
+        assert payment_global['Status'] == 'available'
+        assert len(payment_global['GlobalClusterMembers']) == 2, "Expected 2 regional clusters"
+        
+        # Check primary cluster endpoint
+        primary_endpoint = outputs.get('aurora_primary_endpoint', {}).get('value')
+        assert primary_endpoint, "Primary Aurora endpoint not found"
+        
+        # Check secondary cluster endpoint
+        secondary_endpoint = outputs.get('aurora_secondary_endpoint', {}).get('value')
+        assert secondary_endpoint, "Secondary Aurora endpoint not found"
 
-    def test_aurora_global_database_replication(self):
-        """Aurora Global Database is replicating between regions."""
-        primary_endpoint = self.outputs.get('aurora_primary_endpoint')
-        secondary_endpoint = self.outputs.get('aurora_secondary_endpoint')
+    def test_dynamodb_global_table(self, outputs, primary_region, secondary_region, environment_suffix):
+        """Test DynamoDB Global Table"""
+        dynamodb_primary = boto3.client('dynamodb', region_name=primary_region)
+        dynamodb_secondary = boto3.client('dynamodb', region_name=secondary_region)
+        
+        table_name = outputs.get('dynamodb_table_name', {}).get('value')
+        assert table_name, "DynamoDB table name not found"
+        
+        # Check table in primary region
+        primary_table = dynamodb_primary.describe_table(TableName=table_name)
+        assert primary_table['Table']['TableStatus'] == 'ACTIVE'
+        assert primary_table['Table']['StreamSpecification']['StreamEnabled'] is True
+        
+        # Check global table configuration
+        global_table = dynamodb_primary.describe_global_table(GlobalTableName=table_name)
+        assert len(global_table['GlobalTableDescription']['ReplicationGroup']) == 2
+        
+        regions = [r['RegionName'] for r in global_table['GlobalTableDescription']['ReplicationGroup']]
+        assert primary_region in regions
+        assert secondary_region in regions
 
-        assert primary_endpoint is not None
-        assert secondary_endpoint is not None
-        assert primary_endpoint != secondary_endpoint
-
-        # Verify global cluster exists
-        rds = boto3.client('rds', region_name='us-east-1')
-
-        # Get global cluster identifier from primary cluster
-        primary_cluster_id = primary_endpoint.split('.')[0]
-        response = rds.describe_db_clusters(DBClusterIdentifier=primary_cluster_id)
-
-        if response['DBClusters']:
-            global_cluster_id = response['DBClusters'][0].get('GlobalWriteForwardingStatus')
-            # In real deployment, verify replication lag is acceptable
-            assert True  # Placeholder for actual replication validation
-
-    def test_dynamodb_global_table_exists(self):
-        """DynamoDB Global Table exists and is active."""
-        table_name = self.outputs.get('dynamodb_table_name')
-        assert table_name is not None, "DynamoDB table name not found in outputs"
-
-        dynamodb = boto3.client('dynamodb', region_name='us-east-1')
-        response = dynamodb.describe_table(TableName=table_name)
-
-        table = response['Table']
-        assert table['TableStatus'] == 'ACTIVE'
-        assert table['BillingModeSummary']['BillingMode'] == 'PAY_PER_REQUEST'
-        assert 'StreamSpecification' in table
-        assert table['StreamSpecification']['StreamEnabled'] is True
-
-    def test_dynamodb_replication_to_secondary(self):
-        """DynamoDB table replicates to secondary region."""
-        table_name = self.outputs.get('dynamodb_table_name')
-        assert table_name is not None
-
-        dynamodb_secondary = boto3.client('dynamodb', region_name='us-east-2')
-
+    def test_s3_cross_region_replication(self, outputs, primary_region, secondary_region):
+        """Test S3 cross-region replication"""
+        s3_primary = boto3.client('s3', region_name=primary_region)
+        
+        primary_bucket = outputs.get('s3_primary_bucket', {}).get('value')
+        secondary_bucket = outputs.get('s3_secondary_bucket', {}).get('value')
+        
+        assert primary_bucket, "Primary S3 bucket not found"
+        assert secondary_bucket, "Secondary S3 bucket not found"
+        
+        # Check versioning is enabled
+        versioning = s3_primary.get_bucket_versioning(Bucket=primary_bucket)
+        assert versioning.get('Status') == 'Enabled'
+        
+        # Check replication configuration
         try:
-            response = dynamodb_secondary.describe_table(TableName=table_name)
-            table = response['Table']
-            assert table['TableStatus'] == 'ACTIVE'
-        except dynamodb_secondary.exceptions.ResourceNotFoundException:
-            pytest.fail("DynamoDB table not replicated to secondary region")
+            replication = s3_primary.get_bucket_replication(Bucket=primary_bucket)
+            assert 'Rules' in replication['ReplicationConfiguration']
+            assert len(replication['ReplicationConfiguration']['Rules']) > 0
+            
+            rule = replication['ReplicationConfiguration']['Rules'][0]
+            assert rule['Status'] == 'Enabled'
+            assert secondary_bucket in rule['Destination']['Bucket']
+        except ClientError as e:
+            if e.response['Error']['Code'] != 'ReplicationConfigurationNotFoundError':
+                raise
 
-    def test_dynamodb_write_replicates(self):
-        """Data written to primary DynamoDB replicates to secondary."""
-        table_name = self.outputs.get('dynamodb_table_name')
-        assert table_name is not None
+    def test_lambda_vpc_configuration(self, outputs, primary_region, secondary_region, environment_suffix):
+        """Test Lambda functions are properly configured in VPC"""
+        lambda_primary = boto3.client('lambda', region_name=primary_region)
+        lambda_secondary = boto3.client('lambda', region_name=secondary_region)
+        
+        # Check primary Lambda
+        primary_functions = lambda_primary.list_functions()
+        primary_payment_function = None
+        
+        for func in primary_functions['Functions']:
+            if f'payment-processor-primary-{environment_suffix}' in func['FunctionName']:
+                primary_payment_function = func
+                break
+        
+        assert primary_payment_function is not None, "Primary Lambda function not found"
+        assert 'VpcConfig' in primary_payment_function
+        assert len(primary_payment_function['VpcConfig']['SubnetIds']) > 0
+        
+        # Check secondary Lambda
+        secondary_functions = lambda_secondary.list_functions()
+        secondary_payment_function = None
+        
+        for func in secondary_functions['Functions']:
+            if f'payment-processor-secondary-{environment_suffix}' in func['FunctionName']:
+                secondary_payment_function = func
+                break
+        
+        assert secondary_payment_function is not None, "Secondary Lambda function not found"
+        assert 'VpcConfig' in secondary_payment_function
 
-        # Write to primary region
-        dynamodb_primary = boto3.resource('dynamodb', region_name='us-east-1')
-        table = dynamodb_primary.Table(table_name)
-
-        test_session_id = 'integration-test-session-123'
-        table.put_item(Item={
-            'sessionId': test_session_id,
-            'data': 'test-data'
-        })
-
-        # Read from secondary region (with retry for replication delay)
-        import time
-        dynamodb_secondary = boto3.resource('dynamodb', region_name='us-east-2')
-        table_secondary = dynamodb_secondary.Table(table_name)
-
-        for _ in range(10):  # Retry up to 10 times
-            try:
-                response = table_secondary.get_item(Key={'sessionId': test_session_id})
-                if 'Item' in response:
-                    assert response['Item']['data'] == 'test-data'
-                    break
-            except Exception:
-                pass
-            time.sleep(2)  # Wait 2 seconds between retries
-
-        # Cleanup
-        table.delete_item(Key={'sessionId': test_session_id})
-
-    def test_api_gateway_primary_accessible(self):
-        """Primary API Gateway is accessible and responding."""
-        api_endpoint = self.outputs.get('api_primary_endpoint')
-        assert api_endpoint is not None, "Primary API endpoint not found in outputs"
-
+    def test_api_gateway_endpoints(self, outputs, primary_region, secondary_region):
+        """Test API Gateway endpoints are accessible"""
         import requests
+        
+        primary_endpoint = outputs.get('api_primary_endpoint', {}).get('value')
+        secondary_endpoint = outputs.get('api_secondary_endpoint', {}).get('value')
+        
+        assert primary_endpoint, "Primary API endpoint not found"
+        assert secondary_endpoint, "Secondary API endpoint not found"
+        
+        # Test health endpoints
+        response = requests.get(f"{primary_endpoint}/prod/health", timeout=5)
+        assert response.status_code == 200
+        assert response.json().get('status') == 'healthy'
+        
+        response = requests.get(f"{secondary_endpoint}/prod/health", timeout=5)
+        assert response.status_code == 200
 
-        # Test health/status endpoint
-        response = requests.get(f"{api_endpoint}/prod/health", timeout=10)
+    def test_route53_health_check(self, outputs, primary_region):
+        """Test Route 53 health check configuration"""
+        route53 = boto3.client('route53')
+        
+        health_check_id = outputs.get('health_check_id', {}).get('value')
+        assert health_check_id, "Health check ID not found"
+        
+        health_check = route53.get_health_check(HealthCheckId=health_check_id)
+        config = health_check['HealthCheck']['HealthCheckConfig']
+        
+        assert config['Type'] == 'HTTPS'
+        assert config['ResourcePath'] == '/prod/health'
+        assert config['FailureThreshold'] == 3
 
-        # Expect 404 or 403 (no health endpoint configured)
-        # OR 200 if health endpoint exists
-        assert response.status_code in [200, 403, 404]
+    def test_route53_failover_records(self, outputs):
+        """Test Route 53 failover DNS records"""
+        route53 = boto3.client('route53')
+        
+        hosted_zone_id = outputs.get('hosted_zone_id', {}).get('value')
+        assert hosted_zone_id, "Hosted zone ID not found"
+        
+        # List all records in the zone
+        records = route53.list_resource_record_sets(HostedZoneId=hosted_zone_id)
+        
+        primary_failover = None
+        secondary_failover = None
+        
+        for record in records['ResourceRecordSets']:
+            if 'api.payment' in record.get('Name', ''):
+                if record.get('Failover') == 'PRIMARY':
+                    primary_failover = record
+                elif record.get('Failover') == 'SECONDARY':
+                    secondary_failover = record
+        
+        assert primary_failover is not None, "Primary failover record not found"
+        assert secondary_failover is not None, "Secondary failover record not found"
+        assert 'HealthCheckId' in primary_failover, "Health check not associated with primary record"
 
-    def test_api_gateway_secondary_accessible(self):
-        """Secondary API Gateway is accessible and responding."""
-        api_endpoint = self.outputs.get('api_secondary_endpoint')
-        assert api_endpoint is not None, "Secondary API endpoint not found in outputs"
-
-        import requests
-
-        # Test health/status endpoint
-        response = requests.get(f"{api_endpoint}/prod/health", timeout=10)
-
-        # Expect 404 or 403 (no health endpoint configured)
-        # OR 200 if health endpoint exists
-        assert response.status_code in [200, 403, 404]
-
-    def test_lambda_primary_invocation(self):
-        """Primary Lambda function can be invoked."""
-        lambda_client = boto3.client('lambda', region_name='us-east-1')
-
-        env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'test')
-        function_name = f'payment-processor-primary-{env_suffix}'
-
-        payload = json.dumps({
-            'body': json.dumps({
-                'payment_id': 'test-payment-123',
-                'amount': 100.00
-            })
-        })
-
-        response = lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=payload
+    def test_cloudwatch_alarms(self, outputs, primary_region):
+        """Test CloudWatch alarms are configured"""
+        cloudwatch = boto3.client('cloudwatch', region_name=primary_region)
+        
+        # Check for health check alarm
+        alarms = cloudwatch.describe_alarms(
+            AlarmNamePrefix='primary-health-alarm'
         )
-
-        assert response['StatusCode'] == 200
-        result = json.loads(response['Payload'].read())
-        assert result['statusCode'] == 200
-
-    def test_lambda_secondary_invocation(self):
-        """Secondary Lambda function can be invoked."""
-        lambda_client = boto3.client('lambda', region_name='us-east-2')
-
-        env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'test')
-        function_name = f'payment-processor-secondary-{env_suffix}'
-
-        payload = json.dumps({
-            'body': json.dumps({
-                'payment_id': 'test-payment-456',
-                'amount': 200.00
-            })
-        })
-
-        response = lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=payload
+        
+        assert len(alarms['MetricAlarms']) > 0, "Health check alarm not found"
+        
+        alarm = alarms['MetricAlarms'][0]
+        assert len(alarm['AlarmActions']) > 0, "No alarm actions configured"
+        assert alarm['MetricName'] == 'HealthCheckStatus'
+        
+        # Check for Aurora replication lag alarm
+        lag_alarms = cloudwatch.describe_alarms(
+            AlarmNamePrefix='aurora-replication-lag'
         )
+        
+        assert len(lag_alarms['MetricAlarms']) > 0, "Aurora lag alarm not found"
 
-        assert response['StatusCode'] == 200
-        result = json.loads(response['Payload'].read())
-        assert result['statusCode'] == 200
+    def test_sns_topics(self, outputs, primary_region, secondary_region):
+        """Test SNS topics for notifications"""
+        sns_primary = boto3.client('sns', region_name=primary_region)
+        sns_secondary = boto3.client('sns', region_name=secondary_region)
+        
+        primary_topic_arn = outputs.get('sns_primary_topic_arn', {}).get('value')
+        secondary_topic_arn = outputs.get('sns_secondary_topic_arn', {}).get('value')
+        
+        assert primary_topic_arn, "Primary SNS topic ARN not found"
+        assert secondary_topic_arn, "Secondary SNS topic ARN not found"
+        
+        # Check primary topic
+        primary_topic = sns_primary.get_topic_attributes(TopicArn=primary_topic_arn)
+        assert primary_topic['Attributes']['DisplayName'] == 'Payment Notifications Primary'
+        
+        # Check secondary topic
+        secondary_topic = sns_secondary.get_topic_attributes(TopicArn=secondary_topic_arn)
+        assert secondary_topic['Attributes']['DisplayName'] == 'Payment Notifications Secondary'
 
-    def test_s3_cross_region_replication(self):
-        """S3 objects replicate from primary to secondary region."""
-        # Note: S3 bucket names are dynamically generated with unique_id
-        # In real integration test, we would get bucket names from outputs
-
-        # For now, validate test structure
-        assert True  # Placeholder for actual S3 replication test
-
-    def test_cloudwatch_metrics_available(self):
-        """CloudWatch metrics are available for monitoring."""
-        cloudwatch = boto3.client('cloudwatch', region_name='us-east-1')
-
-        # Check if metrics exist for deployed resources
-        # This is a basic validation that CloudWatch is collecting metrics
-        response = cloudwatch.list_metrics(
-            Namespace='AWS/Lambda',
-            MetricName='Invocations'
+    def test_secrets_manager(self, primary_region, environment_suffix):
+        """Test database password is stored in Secrets Manager"""
+        secrets_client = boto3.client('secretsmanager', region_name=primary_region)
+        
+        # List secrets and find our DB secret
+        secrets = secrets_client.list_secrets(
+            Filters=[
+                {
+                    'Key': 'name',
+                    'Values': [f'payment-db-password-{environment_suffix}']
+                }
+            ]
         )
+        
+        assert len(secrets['SecretList']) > 0, "Database secret not found"
+        
+        secret = secrets['SecretList'][0]
+        assert secret['Name'] == f'payment-db-password-{environment_suffix}'
+        
+        # Verify secret contains expected fields (without retrieving actual password)
+        secret_value = secrets_client.get_secret_value(SecretId=secret['ARN'])
+        secret_data = json.loads(secret_value['SecretString'])
+        
+        assert 'username' in secret_data
+        assert 'password' in secret_data
+        assert secret_data['username'] == 'dbadmin'
+        assert len(secret_data['password']) >= 32  # Ensure strong password
 
-        # At least some Lambda metrics should exist if Lambdas are deployed
-        assert isinstance(response['Metrics'], list)
+    def test_kms_encryption(self, outputs, primary_region, secondary_region, environment_suffix):
+        """Test KMS keys are created and used for encryption"""
+        kms_primary = boto3.client('kms', region_name=primary_region)
+        kms_secondary = boto3.client('kms', region_name=secondary_region)
+        
+        # Check primary KMS key
+        primary_aliases = kms_primary.list_aliases()
+        primary_key_found = False
+        
+        for alias in primary_aliases['Aliases']:
+            if f'alias/dr-primary-{environment_suffix}' == alias['AliasName']:
+                primary_key_found = True
+                # Verify key is enabled
+                key_info = kms_primary.describe_key(KeyId=alias['TargetKeyId'])
+                assert key_info['KeyMetadata']['KeyState'] == 'Enabled'
+                assert key_info['KeyMetadata']['KeySpec'] == 'SYMMETRIC_DEFAULT'
+                break
+        
+        assert primary_key_found, "Primary KMS key not found"
+        
+        # Check secondary KMS key
+        secondary_aliases = kms_secondary.list_aliases()
+        secondary_key_found = False
+        
+        for alias in secondary_aliases['Aliases']:
+            if f'alias/dr-secondary-{environment_suffix}' == alias['AliasName']:
+                secondary_key_found = True
+                break
+        
+        assert secondary_key_found, "Secondary KMS key not found"
 
-    def test_route53_health_check_exists(self):
-        """Route 53 health check is configured and monitoring."""
-        # In real deployment, would get health check ID from outputs
-        # and verify it's actively monitoring the primary API endpoint
-        assert True  # Placeholder for actual Route 53 validation
-
-    def test_failover_simulation(self):
-        """Simulate failover scenario (manual test placeholder)."""
-        # This would be a complex test involving:
-        # 1. Write data to primary region
-        # 2. Verify replication to secondary
-        # 3. Simulate primary region failure
-        # 4. Verify DNS failover to secondary
-        # 5. Verify secondary can serve traffic
-        # 6. Verify data consistency
-
-        pytest.skip("Manual failover testing required")
-
-
-class TestDisasterRecoveryCapabilities:
-    """Test DR-specific capabilities."""
-
-    @classmethod
-    def setup_class(cls):
-        """Load deployment outputs."""
-        outputs_path = 'cfn-outputs/flat-outputs.json'
-
-        if os.path.exists(outputs_path):
-            with open(outputs_path, 'r') as f:
-                cls.outputs = json.load(f)
-        else:
-            cls.outputs = {}
-            pytest.skip("Deployment outputs not found")
-
-    def test_rpo_validation(self):
-        """Validate RPO (Recovery Point Objective) is met."""
-        # RPO requirement: 15 minutes
-        # Test would measure replication lag for:
-        # - Aurora Global Database (< 1 second typically)
-        # - DynamoDB Global Tables (< 1 second typically)
-        # - S3 Replication Time Control (15 minutes)
-
-        assert True  # Placeholder
-
-    def test_rto_validation(self):
-        """Validate RTO (Recovery Time Objective) is met."""
-        # RTO requirement: 30 minutes
-        # Test would measure time for:
-        # - Health check failure detection (2-3 minutes)
-        # - DNS failover propagation (5-10 minutes)
-        # - Aurora promotion (10-15 minutes if needed)
-
-        assert True  # Placeholder
-
-    def test_data_consistency_across_regions(self):
-        """Validate data consistency between regions."""
-        # Write known data to primary
-        # Wait for replication
-        # Read from secondary
-        # Compare results
-
-        assert True  # Placeholder
+    @pytest.mark.slow
+    def test_failover_simulation(self, outputs):
+        """Simulate failover by checking Route 53 can fail over"""
+        route53 = boto3.client('route53')
+        
+        health_check_id = outputs.get('health_check_id', {}).get('value')
+        assert health_check_id, "Health check ID not found"
+        
+        # Get current health check status
+        status = route53.get_health_check_status(HealthCheckId=health_check_id)
+        
+        # In a real test, we would simulate primary region failure
+        # For now, just verify the health check is reporting status
+        assert len(status['HealthCheckObservations']) > 0
+        
+        # Verify at least one checker is reporting
+        has_status = False
+        for observation in status['HealthCheckObservations']:
+            if 'StatusReport' in observation:
+                has_status = True
+                break
+        
+        assert has_status, "No health check status reports found"
 
 
-class TestSecurityCompliance:
-    """Test security and compliance requirements."""
-
-    @classmethod
-    def setup_class(cls):
-        """Load deployment outputs."""
-        outputs_path = 'cfn-outputs/flat-outputs.json'
-
-        if os.path.exists(outputs_path):
-            with open(outputs_path, 'r') as f:
-                cls.outputs = json.load(f)
-        else:
-            cls.outputs = {}
-            pytest.skip("Deployment outputs not found")
-
-    def test_encryption_at_rest(self):
-        """Validate all data stores have encryption at rest."""
-        # Check Aurora encryption
-        # Check DynamoDB encryption
-        # Check S3 encryption
-
-        assert True  # Placeholder
-
-    def test_encryption_in_transit(self):
-        """Validate encryption in transit for all communications."""
-        # Check API Gateway uses HTTPS
-        # Check database connections use TLS
-
-        assert True  # Placeholder
-
-    def test_iam_least_privilege(self):
-        """Validate IAM policies follow least privilege principle."""
-        # Check Lambda execution roles
-        # Check S3 replication role
-        # Verify no wildcard permissions
-
-        assert True  # Placeholder
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])

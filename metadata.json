@@ -3,6 +3,7 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
+  "author": "raaj1021",
   "team": "synth-2",
   "startedAt": "2025-11-18T00:05:28+05:30",
   "subtask": "Failure Recovery and High Availability",
@@ -23,7 +24,9 @@
     "SNS",
     "KMS",
     "IAM",
-    "Secrets Manager"
+    "Secrets Manager",
+    "VPC Peering",
+    "EIP"
   ],
   "region": "us-east-1",
   "training_quality": 10
