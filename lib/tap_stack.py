@@ -558,8 +558,9 @@ class TradingPlatformStack(TerraformStack):
 
     def _generate_secure_password(self, length=32):
         """Generate a secure random password"""
-        # Define character sets
-        alphabet = string.ascii_letters + string.digits + "!#$%&*()-_=+[]{}:?"
+        # Define character sets - exclude %, $, {, } to avoid Terraform template syntax issues
+        alphabet = string.ascii_letters + string.digits + "!#&*()-_=+[].:?"
+        special_chars = "!#&*()-_=+[].:?"
         # Generate password ensuring it has at least one of each type
         while True:
             password = ''.join(secrets.choice(alphabet) for _ in range(length))
@@ -567,7 +568,7 @@ class TradingPlatformStack(TerraformStack):
             if (any(c.islower() for c in password)
                 and any(c.isupper() for c in password)
                 and any(c.isdigit() for c in password)
-                and any(c in "!#$%&*()-_=+[]{}:?" for c in password)):
+                and any(c in special_chars for c in password)):
                 return password
 
     def create_api_gateway(self):
