@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-11-13T13:21:54.718Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "background": "Provision production-grade ECS Fargate infrastructure for a multi-AZ Node.js and React e-commerce platform in us-east-1.",
+  "training_quality": 9,
+  "last_ci_retry": "2025-11-13T16:25:00Z",
+  "aws_services": [
+    "Amazon VPC",
+    "AWS Internet Gateway",
+    "AWS NAT Gateway",
+    "Elastic Load Balancing (Application Load Balancer)",
+    "Amazon ECS (Fargate)",
+    "AWS Auto Scaling (Application Auto Scaling)",
+    "Amazon Elastic Container Registry (ECR)",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Logs",
+    "AWS Identity and Access Management (IAM)",
+    "AWS Certificate Manager (ACM)",
+    "AWS Systems Manager Parameter Store",
+    "Amazon Route 53",
+    "AWS Secrets Manager",
+    "Amazon RDS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}
