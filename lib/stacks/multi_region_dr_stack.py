@@ -4,7 +4,7 @@ Multi-Region Disaster Recovery Stack for Payment Processing
 Fixed version addressing all issues from MODEL_FAILURES.md
 """
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput, TerraformAsset, AssetType
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -65,6 +65,7 @@ import json
 import os
 import secrets
 import string
+import tempfile
 import hashlib
 import time
 
@@ -729,6 +730,14 @@ class MultiRegionDRStack(TerraformStack):
 
     def create_lambda_functions(self):
         """Create Lambda functions in both regions"""
+        # Create TerraformAsset for Lambda code
+        lambda_code_path = os.path.join(os.path.dirname(__file__), "..", "lambda")
+        self.lambda_asset = TerraformAsset(
+            self, "lambda-asset",
+            path=lambda_code_path,
+            type=AssetType.ARCHIVE
+        )
+        
         # Lambda execution roles
         lambda_assume_policy = json.dumps({
             "Version": "2012-10-17",
@@ -843,9 +852,10 @@ class MultiRegionDRStack(TerraformStack):
             provider=self.primary_provider,
             function_name=f'payment-processor-primary-{self.environment_suffix}',
             runtime='python3.11', 
-            handler='index.lambda_handler',
+            handler='payment_processor.lambda_handler',
             role=self.lambda_role_primary.arn,
-            filename='lambda_code.zip',
+            filename=self.lambda_asset.path,
+            source_code_hash=self.lambda_asset.asset_hash,
             timeout=30, 
             memory_size=512,
             vpc_config=LambdaFunctionVpcConfig(
@@ -866,9 +876,10 @@ class MultiRegionDRStack(TerraformStack):
             provider=self.secondary_provider,
             function_name=f'payment-processor-secondary-{self.environment_suffix}',
             runtime='python3.11', 
-            handler='index.lambda_handler',
+            handler='payment_processor.lambda_handler',
             role=self.lambda_role_secondary.arn,
-            filename='lambda_code.zip',
+            filename=self.lambda_asset.path,
+            source_code_hash=self.lambda_asset.asset_hash,
             timeout=30, 
             memory_size=512,
             vpc_config=LambdaFunctionVpcConfig(
@@ -886,27 +897,31 @@ class MultiRegionDRStack(TerraformStack):
 
     def create_health_lambda(self):
         """Create a simple health check Lambda function"""
-        health_code = '''
+        # Create inline health check Lambda code
+        health_check_code = """
 import json
+
 def lambda_handler(event, context):
     return {
         'statusCode': 200,
         'headers': {'Content-Type': 'application/json'},
         'body': json.dumps({'status': 'healthy'})
     }
-'''
-        # Write health check code to file
-        with open('health_lambda.py', 'w') as f:
-            f.write(health_code)
+"""
         
-        # Create zip file for health lambda
-        import zipfile
-        with zipfile.ZipFile('health_lambda.zip', 'w') as zf:
-            zf.write('health_lambda.py', 'index.py')
+        # Write to temporary file and create asset
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(health_check_code)
+            health_file_path = f.name
         
-        # Clean up
-        os.remove('health_lambda.py')
-
+        # Create asset for health check
+        self.health_asset = TerraformAsset(
+            self, "health-lambda-asset",
+            path=health_file_path,
+            type=AssetType.FILE
+        )
+        
         # Create health check Lambda in primary region
         self.lambda_health_primary = LambdaFunction(
             self, 'lambda_health_primary',
@@ -915,7 +930,8 @@ def lambda_handler(event, context):
             runtime='python3.11',
             handler='index.lambda_handler',
             role=self.lambda_role_primary.arn,
-            filename='health_lambda.zip',
+            filename=self.health_asset.path,
+            source_code_hash=self.health_asset.asset_hash,
             timeout=5,
             memory_size=128,
             tags={'Name': f'payment-health-primary-{self.environment_suffix}'}
@@ -1059,11 +1075,11 @@ def lambda_handler(event, context):
 
     def create_route53_failover(self):
         """Create Route 53 failover with health checks and DNS records"""
-        # Create hosted zone
+        # Create hosted zone with non-reserved domain
         self.hosted_zone = Route53Zone(
             self, 'payment_zone',
             provider=self.primary_provider,
-            name=f'payment-{self.environment_suffix}.example.com',
+            name=f'payment-system-{self.environment_suffix}.internal',
             tags={'Name': f'payment-zone-{self.environment_suffix}'}
         )
 
@@ -1085,7 +1101,7 @@ def lambda_handler(event, context):
             self, 'api_primary_record',
             provider=self.primary_provider,
             zone_id=self.hosted_zone.zone_id,
-            name=f'api.payment-{self.environment_suffix}.example.com',
+            name=f'api.payment-system-{self.environment_suffix}.internal',
             type='CNAME',
             ttl=60,
             records=[f'{self.api_primary.id}.execute-api.{self.primary_region}.amazonaws.com'],
@@ -1099,7 +1115,7 @@ def lambda_handler(event, context):
             self, 'api_secondary_record',
             provider=self.primary_provider,
             zone_id=self.hosted_zone.zone_id,
-            name=f'api.payment-{self.environment_suffix}.example.com',
+            name=f'api.payment-system-{self.environment_suffix}.internal',
             type='CNAME',
             ttl=60,
             records=[f'{self.api_secondary.id}.execute-api.{self.secondary_region}.amazonaws.com'],
