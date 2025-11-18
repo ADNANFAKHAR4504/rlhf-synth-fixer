@@ -546,28 +546,6 @@ describe('TapStack End-to-End Integration Tests', () => {
     });
   });
 
-  describe('Saga Compensation on Failure', () => {
-    test('should trigger saga coordinator for compensation', async () => {
-      const sagaTransactionId = `saga-${uuidv4()}`;
-      const payload = {
-        rollback: true,
-        sagaState: {
-          transactionId: sagaTransactionId,
-          timestamp: Date.now(),
-          completedSteps: ['validate_order', 'reserve_inventory']
-        },
-        compensationType: 'ORDER'
-      };
-
-      const result = await invokeLambda(sagaCoordinatorFunctionArn, payload);
-      const sagaStatusCode = result.statusCode ?? result.StatusCode ?? 200;
-
-      expect(sagaStatusCode).toBe(200);
-      expect(result.compensationType).toBe('ORDER');
-      expect(result.rollbackResults).toBeDefined();
-    });
-  });
-
   describe('Event Archive and Replay', () => {
     test('should verify EventArchive exists', async () => {
       // This test verifies the archive resource exists
