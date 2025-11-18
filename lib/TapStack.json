@@ -1,0 +1,620 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Master CloudFormation template for multi-environment payment processing infrastructure",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Unique suffix for environment resources (e.g., dev-001, staging-001, prod-001)",
+            "AllowedPattern": "^[a-z]+-[0-9]{3}$",
+            "ConstraintDescription": "Must be in format: environment-###"
+        },
+        "Environment": {
+            "Type": "String",
+            "Description": "Environment name",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Default": "dev"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Description": "CIDR block for VPC",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
+        },
+        "PrimaryRegion": {
+            "Type": "String",
+            "Description": "Primary AWS region",
+            "Default": "us-east-1"
+        },
+        "ReplicaRegion": {
+            "Type": "String",
+            "Description": "Replica AWS region for DR",
+            "Default": "eu-west-1"
+        },
+        "DevOpsEmail": {
+            "Type": "String",
+            "Description": "Email address for DevOps team notifications",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        },
+        "Application": {
+            "Type": "String",
+            "Description": "Application name",
+            "Default": "payment-processing"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Description": "Cost center for billing",
+            "Default": "fintech-payments"
+        },
+        "TransitGatewayId": {
+            "Type": "String",
+            "Description": "Transit Gateway ID for cross-account connectivity",
+            "Default": ""
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        },
+        "IsStaging": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "staging"
+            ]
+        },
+        "IsDevelopment": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "dev"
+            ]
+        },
+        "IsProductionOrStaging": {
+            "Fn::Or": [
+                {
+                    "Condition": "IsProduction"
+                },
+                {
+                    "Condition": "IsStaging"
+                }
+            ]
+        },
+        "HasTransitGateway": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "TransitGatewayId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "NetworkStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/network-stack.yml"
+                },
+                "Parameters": {
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "VpcCidr": {
+                        "Ref": "VpcCidr"
+                    },
+                    "TransitGatewayId": {
+                        "Ref": "TransitGatewayId"
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "Application"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "SecurityStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": "NetworkStack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/security-stack.yml"
+                },
+                "Parameters": {
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "VpcId": {
+                        "Fn::GetAtt": [
+                            "NetworkStack",
+                            "Outputs.VpcId"
+                        ]
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "Application"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "DatabaseStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": [
+                "NetworkStack",
+                "SecurityStack"
+            ],
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/database-stack.yml"
+                },
+                "Parameters": {
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "VpcId": {
+                        "Fn::GetAtt": [
+                            "NetworkStack",
+                            "Outputs.VpcId"
+                        ]
+                    },
+                    "PrivateSubnetIds": {
+                        "Fn::GetAtt": [
+                            "NetworkStack",
+                            "Outputs.PrivateSubnetIds"
+                        ]
+                    },
+                    "DatabaseSecurityGroupId": {
+                        "Fn::GetAtt": [
+                            "SecurityStack",
+                            "Outputs.DatabaseSecurityGroupId"
+                        ]
+                    },
+                    "DBInstanceClass": {
+                        "Fn::If": [
+                            "IsDevelopment",
+                            "db.t3.medium",
+                            "db.r5.large"
+                        ]
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "Application"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "StorageStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": "NetworkStack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/storage-stack.yml"
+                },
+                "Parameters": {
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "ReplicaRegion": {
+                        "Ref": "ReplicaRegion"
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "Application"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "ComputeStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": [
+                "NetworkStack",
+                "SecurityStack",
+                "DatabaseStack"
+            ],
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/compute-stack.yml"
+                },
+                "Parameters": {
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "VpcId": {
+                        "Fn::GetAtt": [
+                            "NetworkStack",
+                            "Outputs.VpcId"
+                        ]
+                    },
+                    "PrivateSubnetIds": {
+                        "Fn::GetAtt": [
+                            "NetworkStack",
+                            "Outputs.PrivateSubnetIds"
+                        ]
+                    },
+                    "PublicSubnetIds": {
+                        "Fn::GetAtt": [
+                            "NetworkStack",
+                            "Outputs.PublicSubnetIds"
+                        ]
+                    },
+                    "ECSSecurityGroupId": {
+                        "Fn::GetAtt": [
+                            "SecurityStack",
+                            "Outputs.ECSSecurityGroupId"
+                        ]
+                    },
+                    "ECSTaskRoleArn": {
+                        "Fn::GetAtt": [
+                            "SecurityStack",
+                            "Outputs.ECSTaskRoleArn"
+                        ]
+                    },
+                    "ECSExecutionRoleArn": {
+                        "Fn::GetAtt": [
+                            "SecurityStack",
+                            "Outputs.ECSExecutionRoleArn"
+                        ]
+                    },
+                    "TaskCpu": {
+                        "Fn::If": [
+                            "IsDevelopment",
+                            "256",
+                            "1024"
+                        ]
+                    },
+                    "TaskMemory": {
+                        "Fn::If": [
+                            "IsDevelopment",
+                            "512",
+                            "2048"
+                        ]
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "Application"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "MonitoringStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": "SecurityStack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/monitoring-stack.yml"
+                },
+                "Parameters": {
+                    "EnvironmentSuffix": {
+                        "Ref": "EnvironmentSuffix"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "DevOpsEmail": {
+                        "Ref": "DevOpsEmail"
+                    },
+                    "ComplianceLambdaRoleArn": {
+                        "Fn::GetAtt": [
+                            "SecurityStack",
+                            "Outputs.ComplianceLambdaRoleArn"
+                        ]
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "Application"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EnvironmentParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/${Environment}/config/environment-name"
+                },
+                "Description": "Environment name parameter",
+                "Type": "String",
+                "Value": {
+                    "Ref": "Environment"
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                }
+            }
+        },
+        "ApplicationParameter": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "/${Environment}/config/application-name"
+                },
+                "Description": "Application name parameter",
+                "Type": "String",
+                "Value": {
+                    "Ref": "Application"
+                },
+                "Tags": {
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Application": {
+                        "Ref": "Application"
+                    },
+                    "CostCenter": {
+                        "Ref": "CostCenter"
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "StackName": {
+            "Description": "Master stack name",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-master-stack-name"
+                }
+            }
+        },
+        "VpcId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NetworkStack",
+                    "Outputs.VpcId"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-vpc-id"
+                }
+            }
+        },
+        "AuroraClusterEndpoint": {
+            "Description": "Aurora cluster endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DatabaseStack",
+                    "Outputs.ClusterEndpoint"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-aurora-endpoint"
+                }
+            }
+        },
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StorageStack",
+                    "Outputs.DynamoDBTableName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-dynamodb-table"
+                }
+            }
+        },
+        "ECSClusterName": {
+            "Description": "ECS cluster name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ComputeStack",
+                    "Outputs.ClusterName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-ecs-cluster"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "S3 bucket name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StorageStack",
+                    "Outputs.S3BucketName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-s3-bucket"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS topic ARN for alerts",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MonitoringStack",
+                    "Outputs.SNSTopicArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-sns-topic"
+                }
+            }
+        }
+    }
+}
