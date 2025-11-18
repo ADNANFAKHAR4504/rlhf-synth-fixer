@@ -76,13 +76,45 @@ data "aws_iam_policy_document" "kms" {
 
     resources = ["*"]
   }
+
+}
+
+# Combined KMS key policy that includes node group IAM role permissions
+data "aws_iam_policy_document" "kms_combined" {
+  # Include all statements from the base KMS policy
+  source_policy_documents = [data.aws_iam_policy_document.kms.json]
+
+  # Add node group IAM role permissions (this will be empty initially, then populated after roles are created)
+  statement {
+    sid    = "AllowNodeGroupRoles"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.cluster_name}-frontend-role",
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.cluster_name}-backend-role"
+      ]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey",
+      "kms:CreateGrant"
+    ]
+
+    resources = ["*"]
+  }
 }
 
 resource "aws_kms_key" "eks" {
   description             = "KMS key for ${local.cluster_name} secret encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-  policy                  = data.aws_iam_policy_document.kms.json
+  policy                  = data.aws_iam_policy_document.kms_combined.json
 
   tags = merge(local.common_tags, {
     Name = "${local.cluster_name}-kms"
