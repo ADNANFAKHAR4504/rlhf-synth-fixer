@@ -10,7 +10,7 @@ resource "aws_vpc" "eks" {
   enable_dns_hostnames = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-vpc"
+    Name = "${local.cluster_name}${local.resource_suffix}-vpc"
   })
 }
 
@@ -19,7 +19,7 @@ resource "aws_internet_gateway" "eks" {
   vpc_id = aws_vpc.eks[0].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-igw"
+    Name = "${local.cluster_name}${local.resource_suffix}-igw"
   })
 }
 
@@ -32,7 +32,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name                                          = "${local.cluster_name}-public-${each.key}"
+    Name                                          = "${local.cluster_name}${local.resource_suffix}-public-${each.key}"
     "kubernetes.io/role/elb"                      = "1"
     "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   })
@@ -46,7 +46,7 @@ resource "aws_subnet" "private" {
   availability_zone = each.key
 
   tags = merge(local.common_tags, {
-    Name                                          = "${local.cluster_name}-private-${each.key}"
+    Name                                          = "${local.cluster_name}${local.resource_suffix}-private-${each.key}"
     "kubernetes.io/role/internal-elb"             = "1"
     "kubernetes.io/cluster/${local.cluster_name}" = "shared"
   })
@@ -58,7 +58,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-nat-eip-${each.key}"
+    Name = "${local.cluster_name}${local.resource_suffix}-nat-eip-${each.key}"
   })
 }
 
@@ -69,7 +69,7 @@ resource "aws_nat_gateway" "eks" {
   subnet_id     = aws_subnet.public[each.key].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-nat-${each.key}"
+    Name = "${local.cluster_name}${local.resource_suffix}-nat-${each.key}"
   })
 
   depends_on = [aws_internet_gateway.eks]
@@ -85,7 +85,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-public-rt"
+    Name = "${local.cluster_name}${local.resource_suffix}-public-rt"
   })
 }
 
@@ -107,7 +107,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-private-rt-${each.key}"
+    Name = "${local.cluster_name}${local.resource_suffix}-private-rt-${each.key}"
   })
 }
 
