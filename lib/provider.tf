@@ -14,10 +14,11 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment    = var.environment_suffix
-      ManagedBy      = "Terraform"
-      Project        = "CodePipeline-Infrastructure"
-      DeploymentDate = timestamp()
+      Environment = var.environment_suffix
+      ManagedBy   = "Terraform"
+      Project     = "CodePipeline-Infrastructure"
+      # DeploymentDate should be set via variable to avoid state drift
+      # DeploymentDate = var.deployment_date
     }
   }
 }
