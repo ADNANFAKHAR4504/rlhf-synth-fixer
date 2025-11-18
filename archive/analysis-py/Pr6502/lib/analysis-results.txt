@@ -1,0 +1,25 @@
+2025-11-15 05:40:28,132 - INFO - Found credentials in environment variables.
+2025-11-15 05:40:28,295 - INFO - 
+Unused EBS Volumes
+| VolumeId              |   Size (GiB) | Type   | AZ         | Encrypted   |
+|-----------------------|--------------|--------|------------|-------------|
+| vol-45b89780f4915b520 |            1 | gp2    | us-east-1a | No          |
+| vol-1f680eacfbd96f04e |            2 | gp2    | us-east-1a | No          |
+| vol-79488272f6e7fdfe7 |            3 | gp2    | us-east-1a | No          |
+| vol-0ef25fbe55c0aa59c |            2 | gp2    | us-east-1a | No          |
+| vol-d8fc1db4dec9bee0b |            8 | gp2    | us-east-1a | No          |
+| vol-2b981cf87014efcbf |           20 | gp2    | us-east-1a | No          |
+2025-11-15 05:40:28,295 - INFO - 
+Public Security Groups
+| GroupId              | Name           |   Public Rules | Sources   |
+|----------------------|----------------|----------------|-----------|
+| sg-81ec1e67b8e339487 | public         |              1 | 0.0.0.0/0 |
+| sg-e18d475c65cc01c52 | analyse-public |              1 | 0.0.0.0/0 |
+2025-11-15 05:40:28,296 - INFO - 
+CloudWatch Log Groups
+| Log Group     |   Streams |   Total Size (bytes) |   Avg. Stream Size |
+|---------------|-----------|----------------------|--------------------|
+| /analyse/demo |         2 |                   54 |                 27 |
+| /test-group   |         2 |                  402 |                201 |
+2025-11-15 05:40:28,296 - INFO - Summary: 6 unused volumes | 2 public security groups | 4 log streams analysed
+2025-11-15 05:40:28,296 - INFO - AWS resource audit report saved to /home/runner/work/iac-test-automations/iac-test-automations/aws_audit_results.json

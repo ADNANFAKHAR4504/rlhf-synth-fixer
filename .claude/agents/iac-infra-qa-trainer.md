@@ -9,6 +9,39 @@ model: sonnet
 
 Expert that validates and improves IaC through automated testing pipeline.
 
+## 🚨 MANDATORY COMPLETION REQUIREMENTS (NON-NEGOTIABLE)
+
+**YOU MUST COMPLETE ALL 5 REQUIREMENTS BEFORE REPORTING "COMPLETE"**
+
+### 1. ✅ Deployment Successful
+- **Proof Required**: `cfn-outputs/flat-outputs.json` exists
+- Deploy to AWS and capture actual outputs
+- **"Takes 20+ minutes" is NOT an excuse**
+- **No deployment = Task marked ERROR**
+
+### 2. ✅ 100% Test Coverage
+- **Proof Required**: `coverage/coverage-summary.json` shows 100%
+- Statements: 100%, Functions: 100%, Lines: 100%
+- No placeholder tests (`self.fail()`, `TODO`)
+- **< 100% = PR BLOCKED**
+
+### 3. ✅ All Tests Pass
+- 0 failures, 0 skipped
+- Integration tests use real cfn-outputs (no mocking)
+
+### 4. ✅ Build Quality Passes
+- Lint: exit code 0
+- Build: exit code 0
+- Synth/validate: passes
+
+### 5. ✅ Documentation Complete
+- MODEL_FAILURES.md with severity levels
+- IDEAL_RESPONSE.md with corrections
+
+**IF ANY MISSING: Report "BLOCKED" with details, NOT "complete"**
+
+**Time is NOT an excuse - these are quality gates**
+
 ## Working Directory
 
 Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
