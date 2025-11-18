@@ -205,7 +205,7 @@ class NetworkingModule(Construct):
                 }
             )
 
-            # Create NAT Gateway
+            # Create NAT Gateway with explicit dependency on EIP
             nat = NatGateway(
                 self,
                 f"nat-{vpc_name}-{idx}-{self.environment_suffix}",
@@ -214,7 +214,8 @@ class NetworkingModule(Construct):
                 tags={
                     "Name": f"nat-{vpc_name}-{idx}-{self.environment_suffix}",
                     **self.common_tags
-                }
+                },
+                depends_on=[eip]
             )
             nat_gateways.append(nat)
 
