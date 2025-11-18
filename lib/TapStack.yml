@@ -38,7 +38,7 @@ Resources:
   # ==========================================
   # KMS Keys for Encryption
   # ==========================================
-  
+
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -68,7 +68,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -98,7 +98,7 @@ Resources:
   # ==========================================
   # VPC and Networking
   # ==========================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -110,7 +110,7 @@ Resources:
           Value: Production-VPC
         - Key: Environment
           Value: Production
-          
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -119,13 +119,13 @@ Resources:
           Value: Production-IGW
         - Key: Environment
           Value: Production
-          
+
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
-      
+
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -139,7 +139,7 @@ Resources:
           Value: Public-Subnet-AZ1
         - Key: Environment
           Value: Production
-          
+
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -152,7 +152,7 @@ Resources:
           Value: Public-Subnet-AZ2
         - Key: Environment
           Value: Production
-          
+
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -165,7 +165,7 @@ Resources:
           Value: Private-Subnet-AZ1
         - Key: Environment
           Value: Production
-          
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -177,7 +177,7 @@ Resources:
           Value: Private-Subnet-AZ2
         - Key: Environment
           Value: Production
-          
+
   # NAT Gateways (Optional - controlled by CreateNATGateways parameter)
   NATGateway1EIP:
     Type: AWS::EC2::EIP
@@ -218,7 +218,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -229,7 +229,7 @@ Resources:
           Value: Public-RouteTable
         - Key: Environment
           Value: Production
-          
+
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -237,19 +237,19 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-      
+
   PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
-      
+
   PublicSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
-      
+
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -259,7 +259,7 @@ Resources:
           Value: Private-RouteTable-AZ1
         - Key: Environment
           Value: Production
-          
+
   PrivateRoute1:
     Type: AWS::EC2::Route
     Condition: ShouldCreateNATGateways
@@ -267,13 +267,13 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway1
-      
+
   PrivateSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable1
-      
+
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -283,7 +283,7 @@ Resources:
           Value: Private-RouteTable-AZ2
         - Key: Environment
           Value: Production
-          
+
   PrivateRoute2:
     Type: AWS::EC2::Route
     Condition: ShouldCreateNATGateways
@@ -291,7 +291,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway2
-      
+
   PrivateSubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -301,7 +301,7 @@ Resources:
   # ==========================================
   # Security Groups
   # ==========================================
-  
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -321,7 +321,7 @@ Resources:
           Value: ALB-SecurityGroup
         - Key: Environment
           Value: Production
-          
+
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -341,7 +341,7 @@ Resources:
           Value: WebServer-SecurityGroup
         - Key: Environment
           Value: Production
-          
+
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -361,7 +361,7 @@ Resources:
   # ==========================================
   # IAM Roles and Policies
   # ==========================================
-  
+
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -399,7 +399,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -409,7 +409,7 @@ Resources:
   # ==========================================
   # S3 Buckets
   # ==========================================
-  
+
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -439,7 +439,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ContentBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -457,7 +457,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ContentBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -474,13 +474,13 @@ Resources:
   # ==========================================
   # CloudFront Distribution
   # ==========================================
-  
+
   CloudFrontOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: OAI for Production Content Distribution
-        
+
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -520,7 +520,7 @@ Resources:
   # ==========================================
   # RDS Database
   # ==========================================
-  
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -531,7 +531,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -561,7 +561,7 @@ Resources:
   # ==========================================
   # Application Load Balancer
   # ==========================================
-  
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -576,7 +576,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -594,7 +594,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-          
+
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -608,7 +608,7 @@ Resources:
   # ==========================================
   # Launch Template and Auto Scaling
   # ==========================================
-  
+
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -632,7 +632,7 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y httpd amazon-cloudwatch-agent
-            
+
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
@@ -656,20 +656,20 @@ Resources:
               }
             }
             EOF
-            
+
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config \
               -m ec2 \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
               -s
-            
+
             # Start web server
             systemctl start httpd
             systemctl enable httpd
-            
+
             # Create health check endpoint
             echo "OK" > /var/www/html/health
-            
+
             # Create sample index page
             cat > /var/www/html/index.html <<EOF
             <!DOCTYPE html>
@@ -689,7 +689,7 @@ Resources:
             Tags:
               - Key: Environment
                 Value: Production
-                
+
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -714,7 +714,7 @@ Resources:
         - Key: Environment
           Value: Production
           PropagateAtLaunch: true
-          
+
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -722,7 +722,7 @@ Resources:
       AutoScalingGroupName: !Ref AutoScalingGroup
       Cooldown: 300
       ScalingAdjustment: 1
-      
+
   ScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -734,7 +734,7 @@ Resources:
   # ==========================================
   # CloudWatch Alarms
   # ==========================================
-  
+
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -752,7 +752,7 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleUpPolicy
-        
+
   LowCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -770,7 +770,7 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
-        
+
   HighMemoryAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -786,7 +786,7 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-          
+
   UnHealthyHostAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -815,31 +815,31 @@ Outputs:
     Value: !Ref VPC
     Export:
       Name: Production-VPC-ID
-      
+
   LoadBalancerDNS:
     Description: Application Load Balancer DNS
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: Production-ALB-DNS
-      
+
   CloudFrontURL:
     Description: CloudFront Distribution URL
     Value: !GetAtt CloudFrontDistribution.DomainName
     Export:
       Name: Production-CloudFront-URL
-      
+
   LogsBucket:
     Description: S3 Bucket for logs
     Value: !Ref LogsBucket
     Export:
       Name: Production-Logs-Bucket
-      
+
   ContentBucket:
     Description: S3 Bucket for content
     Value: !Ref ContentBucket
     Export:
       Name: Production-Content-Bucket
-      
+
   DatabaseEndpoint:
     Description: RDS Database Endpoint
     Value: !GetAtt RDSDatabase.Endpoint.Address
@@ -851,3 +851,135 @@ Outputs:
     Value: !Ref DBPasswordSecret
     Export:
       Name: Production-DB-Password-Secret-ARN
+
+  DBPasswordSecretName:
+    Description: Name of the Secrets Manager secret containing database password
+    Value: production-db-password
+    Export:
+      Name: Production-DB-Password-Secret-Name
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref KMSKey
+    Export:
+      Name: Production-KMS-Key-ID
+
+  KMSKeyArn:
+    Description: KMS Key ARN for encryption
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: Production-KMS-Key-ARN
+
+  ALBSecurityGroupId:
+    Description: Security Group ID for Application Load Balancer
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: Production-ALB-Security-Group-ID
+
+  WebServerSecurityGroupId:
+    Description: Security Group ID for Web Servers
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: Production-WebServer-Security-Group-ID
+
+  DatabaseSecurityGroupId:
+    Description: Security Group ID for Database
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: Production-Database-Security-Group-ID
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: Production-Public-Subnet-1-ID
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: Production-Public-Subnet-2-ID
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: Production-Private-Subnet-1-ID
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: Production-Private-Subnet-2-ID
+
+  ALBTargetGroupArn:
+    Description: Application Load Balancer Target Group ARN
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: Production-ALB-TargetGroup-ARN
+
+  ALBArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: Production-ALB-ARN
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: Production-ASG-Name
+
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: Production-LaunchTemplate-ID
+
+  DatabasePort:
+    Description: RDS Database Port
+    Value: '3306'
+    Export:
+      Name: Production-DB-Port
+
+  DatabaseName:
+    Description: RDS Database Instance Identifier
+    Value: production-database
+    Export:
+      Name: Production-DB-Name
+
+  DBUsername:
+    Description: Database master username
+    Value: !Ref DBUsername
+    Export:
+      Name: Production-DB-Username
+
+  EC2InstanceRoleArn:
+    Description: EC2 Instance IAM Role ARN
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: Production-EC2-Role-ARN
+
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: Production-EC2-InstanceProfile-ARN
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: Production-CloudFront-ID
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: Production-IGW-ID
+
+  DBSubnetGroupName:
+    Description: RDS DB Subnet Group Name
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: Production-DB-SubnetGroup-Name
