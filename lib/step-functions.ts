@@ -349,6 +349,33 @@ export function createStepFunctions(
         })
     );
 
+  // Add a resource policy to the log group to allow Step Functions to write logs
+  new aws.cloudwatch.LogResourcePolicy(
+    `migration-orchestrator-log-policy-${config.environmentSuffix}`,
+    {
+      policyName: `migration-orchestrator-log-policy-${config.environmentSuffix}`,
+      policyDocument: pulumi.interpolate`{
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "states.amazonaws.com"
+            },
+            "Action": [
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ],
+            "Resource": "${logGroup.arn}:*"
+          }
+        ]
+      }`,
+    },
+    {
+      dependsOn: [logGroup],
+    }
+  );
+
   // Step Functions State Machine
   const stateMachine = new aws.sfn.StateMachine(
     `migration-orchestrator-${config.environmentSuffix}`,
@@ -357,7 +384,7 @@ export function createStepFunctions(
       roleArn: iamRoles.migrationOrchestratorRole.arn,
       definition: stateMachineDefinition,
       loggingConfiguration: {
-        logDestination: logGroup.arn,
+        logDestination: pulumi.interpolate`${logGroup.arn}:*`,
         includeExecutionData: true,
         level: 'ALL',
       },
