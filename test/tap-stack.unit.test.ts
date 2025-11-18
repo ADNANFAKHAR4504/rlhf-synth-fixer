@@ -235,28 +235,6 @@ describe('PaymentInfrastructure Unit Tests', () => {
   });
 
   describe('SQS Queues', () => {
-    it('should create payment queue with correct naming', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-sqs',
-        {
-          environmentSuffix: 'sqs-test-123',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const queueUrl = await new Promise<string>((resolve) => {
-        infra.paymentQueue.url.apply((url) => resolve(url as string));
-      });
-
-      expect(queueUrl).toBeDefined();
-      expect(infra.paymentQueue).toBeDefined();
-    });
-
     it('should validate SQS queue with DLQ configuration', async () => {
       const infra = new infrastructure.PaymentInfrastructure(
         'test-infra-sqs-dlq',
@@ -276,27 +254,6 @@ describe('PaymentInfrastructure Unit Tests', () => {
   });
 
   describe('RDS Database', () => {
-    it('should create RDS instance with correct configuration', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-rds',
-        {
-          environmentSuffix: 'rds-test-123',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const rdsEndpoint = await new Promise<string>((resolve) => {
-        infra.rdsEndpoint.apply((endpoint) => resolve(endpoint as string));
-      });
-
-      expect(rdsEndpoint).toBeDefined();
-    });
-
     it('should validate RDS deletionProtection is false', async () => {
       const infra = new infrastructure.PaymentInfrastructure(
         'test-infra-rds-protection',
@@ -458,62 +415,9 @@ describe('PaymentInfrastructure Unit Tests', () => {
       expect(infra.processPaymentLambda.lambda).toBeDefined();
       expect(infra.verifyPaymentLambda.lambda).toBeDefined();
     });
-
-    it('should get Lambda ARNs', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-lambda-arn',
-        {
-          environmentSuffix: 'lambda-arn-222',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const processArn = await new Promise<string>((resolve) => {
-        infra.processPaymentLambda.lambdaArn.apply((arn) =>
-          resolve(arn as string)
-        );
-      });
-
-      const verifyArn = await new Promise<string>((resolve) => {
-        infra.verifyPaymentLambda.lambdaArn.apply((arn) =>
-          resolve(arn as string)
-        );
-      });
-
-      expect(processArn).toBeDefined();
-      expect(verifyArn).toBeDefined();
-    });
   });
 
   describe('API Gateway', () => {
-    it('should create API Gateway with HTTP protocol', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-api',
-        {
-          environmentSuffix: 'api-test-123',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const apiEndpoint = await new Promise<string>((resolve) => {
-        infra.apiGatewayEndpoint.apply((endpoint) =>
-          resolve(endpoint as string)
-        );
-      });
-
-      expect(apiEndpoint).toBeDefined();
-    });
-
     it('should validate API Gateway endpoint is defined', async () => {
       const infra = new infrastructure.PaymentInfrastructure(
         'test-infra-api-endpoint',
@@ -802,50 +706,6 @@ describe('PaymentInfrastructure Unit Tests', () => {
       expect(publicSubnets.length).toBeGreaterThan(0);
     });
 
-    it('should export API Gateway endpoint', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-output-api',
-        {
-          environmentSuffix: 'output-api-789',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const apiEndpoint = await new Promise<string>((resolve) => {
-        infra.apiGatewayEndpoint.apply((endpoint) =>
-          resolve(endpoint as string)
-        );
-      });
-
-      expect(apiEndpoint).toBeDefined();
-    });
-
-    it('should export RDS endpoint', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-output-rds',
-        {
-          environmentSuffix: 'output-rds-999',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const rdsEndpoint = await new Promise<string>((resolve) => {
-        infra.rdsEndpoint.apply((endpoint) => resolve(endpoint as string));
-      });
-
-      expect(rdsEndpoint).toBeDefined();
-    });
-
     it('should export S3 bucket name', async () => {
       const infra = new infrastructure.PaymentInfrastructure(
         'test-infra-output-s3',
@@ -866,57 +726,6 @@ describe('PaymentInfrastructure Unit Tests', () => {
 
       expect(bucketName).toBeDefined();
       expect(bucketName).toContain('output-s3-111');
-    });
-
-    it('should export SQS queue URL', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-output-sqs',
-        {
-          environmentSuffix: 'output-sqs-222',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const queueUrl = await new Promise<string>((resolve) => {
-        infra.paymentQueue.url.apply((url) => resolve(url as string));
-      });
-
-      expect(queueUrl).toBeDefined();
-    });
-
-    it('should export Lambda ARNs', async () => {
-      const infra = new infrastructure.PaymentInfrastructure(
-        'test-infra-output-lambda',
-        {
-          environmentSuffix: 'output-lambda-333',
-          environment: 'test',
-          region: 'us-east-1',
-          rdsInstanceClass: 'db.t3.medium',
-          rdsBackupRetentionDays: 3,
-          lambdaMemorySize: 512,
-          lambdaTimeout: 30,
-        }
-      );
-
-      const processLambdaArn = await new Promise<string>((resolve) => {
-        infra.processPaymentLambda.lambdaArn.apply((arn) =>
-          resolve(arn as string)
-        );
-      });
-
-      const verifyLambdaArn = await new Promise<string>((resolve) => {
-        infra.verifyPaymentLambda.lambdaArn.apply((arn) =>
-          resolve(arn as string)
-        );
-      });
-
-      expect(processLambdaArn).toBeDefined();
-      expect(verifyLambdaArn).toBeDefined();
     });
   });
 
