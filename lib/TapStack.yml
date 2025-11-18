@@ -237,16 +237,6 @@ Resources:
       DestinationSecurityGroupId: !Ref LambdaVPCEndpointSecurityGroup
       Description: Allow HTTPS to Lambda VPC endpoint
 
-  LambdaSecurityGroupEgressToVPCEndpoints:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref LambdaSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      CidrIp: 0.0.0.0/0
-      Description: Allow HTTPS to AWS services via Gateway endpoints (S3, DynamoDB)
-
   LambdaVPCEndpointSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
