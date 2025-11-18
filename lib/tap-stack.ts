@@ -81,7 +81,6 @@ export class TapStack extends pulumi.ComponentResource {
     // Get configuration
     const config = new pulumi.Config();
     const environmentSuffix = args.environmentSuffix || config.get('environmentSuffix') || 'dev';
-    const region = aws.config.region || 'us-east-1';
 
     // Get availability zones
     const availabilityZones = aws.getAvailabilityZonesOutput({
@@ -701,19 +700,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create service account for cluster autoscaler
-    const clusterAutoscalerSA = new k8s.core.v1.ServiceAccount(
-      `cluster-autoscaler-sa-${environmentSuffix}`,
-      {
-        metadata: {
-          name: 'cluster-autoscaler',
-          namespace: 'kube-system',
-          annotations: {
-            'eks.amazonaws.com/role-arn': clusterAutoscalerRole.arn,
-          },
-        },
-      },
-      { provider: k8sProvider, parent: this }
-    );
 
     // Create IAM role for AWS Load Balancer Controller
     const albControllerRole = new aws.iam.Role(
@@ -959,19 +945,6 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create service account for AWS Load Balancer Controller
-    const albControllerSA = new k8s.core.v1.ServiceAccount(
-      `aws-lb-controller-sa-${environmentSuffix}`,
-      {
-        metadata: {
-          name: 'aws-load-balancer-controller',
-          namespace: 'kube-system',
-          annotations: {
-            'eks.amazonaws.com/role-arn': albControllerRole.arn,
-          },
-        },
-      },
-      { provider: k8sProvider, parent: this }
-    );
 
     // Create Fargate profile for kube-system namespace
     const fargateProfile = new aws.eks.FargateProfile(

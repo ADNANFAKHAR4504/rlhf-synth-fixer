@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
+
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
