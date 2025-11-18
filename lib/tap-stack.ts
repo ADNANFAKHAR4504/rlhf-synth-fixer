@@ -602,6 +602,7 @@ export class TapStack extends pulumi.ComponentResource {
         parent: this,
         provider: secondaryProvider,
         dependsOn: [primaryClusterInstance],
+        ignoreChanges: ['globalClusterIdentifier'],
       }
     );
 
