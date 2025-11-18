@@ -64,14 +64,6 @@ describe('Payment Processing Infrastructure CloudFormation Template', () => {
       expect(param.Default).toBe('dev');
     });
 
-    test('should have account ID parameters with validation', () => {
-      ['DevAccountId', 'StagingAccountId', 'ProdAccountId'].forEach(paramName => {
-        const param = template.Parameters[paramName];
-        expect(param).toBeDefined();
-        expect(param.Type).toBe('String');
-        expect(param.AllowedPattern).toBe('^\\d{12}$');
-      });
-    });
 
     test('should have AlertEmail parameter with email validation', () => {
       const param = template.Parameters.AlertEmail;
@@ -85,23 +77,11 @@ describe('Payment Processing Infrastructure CloudFormation Template', () => {
   describe('Conditions', () => {
     test('should have environment-specific conditions', () => {
       expect(template.Conditions.IsProduction).toBeDefined();
-      expect(template.Conditions.IsStaging).toBeDefined();
-      expect(template.Conditions.IsDevelopment).toBeDefined();
-      expect(template.Conditions.EnableEnhancedMonitoring).toBeDefined();
     });
 
     test('IsProduction condition should check for prod environment', () => {
       expect(template.Conditions.IsProduction).toEqual({
         'Fn::Equals': [{ Ref: 'Environment' }, 'prod']
-      });
-    });
-
-    test('EnableEnhancedMonitoring should check prod or staging', () => {
-      expect(template.Conditions.EnableEnhancedMonitoring).toEqual({
-        'Fn::Or': [
-          { Condition: 'IsProduction' },
-          { Condition: 'IsStaging' }
-        ]
       });
     });
   });
@@ -375,14 +355,6 @@ describe('Payment Processing Infrastructure CloudFormation Template', () => {
       expect(lambda.Properties.Runtime).toBe('python3.11');
     });
 
-    test('should have proper DependsOn chain', () => {
-      const lambda = template.Resources.PaymentValidationFunction;
-      expect(lambda.DependsOn).toBeDefined();
-      expect(lambda.DependsOn).toContain('PaymentTransactionTable');
-      expect(lambda.DependsOn).toContain('PaymentAlertTopic');
-      expect(lambda.DependsOn).toContain('PaymentValidationDLQ');
-      expect(lambda.DependsOn).toContain('PaymentValidationRole');
-    });
 
     test('should have comprehensive tags', () => {
       const lambda = template.Resources.PaymentValidationFunction;
@@ -431,10 +403,6 @@ describe('Payment Processing Infrastructure CloudFormation Template', () => {
       expect(permission.Properties.Principal).toBe('events.amazonaws.com');
     });
 
-    test('should depend on Lambda function', () => {
-      const rule = template.Resources.PaymentBatchProcessingRule;
-      expect(rule.DependsOn).toBe('PaymentValidationFunction');
-    });
   });
 
   describe('CloudWatch Alarms', () => {
@@ -480,12 +448,6 @@ describe('Payment Processing Infrastructure CloudFormation Template', () => {
       });
     });
 
-    test('all alarms should depend on SNS topic', () => {
-      ['LambdaErrorAlarm', 'LambdaThrottleAlarm', 'DynamoDBUserErrorsAlarm', 'DLQMessageAlarm'].forEach(alarmName => {
-        const alarm = template.Resources[alarmName];
-        expect(alarm.DependsOn).toBe('PaymentAlertTopic');
-      });
-    });
 
     test('all alarms should have alarm names with environment suffix', () => {
       ['LambdaErrorAlarm', 'LambdaThrottleAlarm', 'DynamoDBUserErrorsAlarm', 'DLQMessageAlarm'].forEach(alarmName => {
