@@ -529,7 +529,8 @@ resource "aws_emr_cluster" "main" {
     aws_s3_bucket.curated,
     aws_s3_bucket.raw,
     aws_s3_object.bootstrap_script,
-    aws_iam_role_policy.emr_service_ec2_permissions
+    aws_iam_role_policy.emr_service_ec2_permissions,
+    aws_iam_role_policy_attachment.emr_service_role
   ]
 }
 

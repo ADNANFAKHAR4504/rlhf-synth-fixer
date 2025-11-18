@@ -60,7 +60,16 @@ resource "aws_iam_role_policy" "emr_service_ec2_permissions" {
           "ec2:AttachNetworkInterface",
           "ec2:DetachNetworkInterface",
           "ec2:CreateTags",
-          "ec2:DescribeTags"
+          "ec2:DescribeTags",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances",
+          "ec2:StartInstances",
+          "ec2:StopInstances",
+          "ec2:ModifyInstanceAttribute",
+          "ec2:AssociateAddress",
+          "ec2:DisassociateAddress",
+          "ec2:AllocateAddress",
+          "ec2:ReleaseAddress"
         ]
         Resource = "*"
       }
