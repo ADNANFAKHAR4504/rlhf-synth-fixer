@@ -439,6 +439,29 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
       expect(apiGatewayService?.networkConfiguration?.awsvpcConfiguration?.assignPublicIp).toBe('ENABLED');
     });
 
+    test('market-data service should have public IP assignment', async () => {
+      const clusterName = outputs.ClusterName;
+      const servicesResponse = await ecsClient.send(
+        new ListServicesCommand({
+          cluster: clusterName,
+        })
+      );
+
+      const describeResponse = await ecsClient.send(
+        new DescribeServicesCommand({
+          cluster: clusterName,
+          services: servicesResponse.serviceArns!,
+        })
+      );
+
+      const marketDataService = describeResponse.services!.find(
+        (s) => s.serviceName === `svc-market-data-${environmentSuffix}`
+      );
+
+      expect(marketDataService).toBeDefined();
+      expect(marketDataService?.networkConfiguration?.awsvpcConfiguration?.assignPublicIp).toBe('ENABLED');
+    });
+
     test('services should have running tasks', async () => {
       const clusterName = outputs.ClusterName;
       const servicesResponse = await ecsClient.send(

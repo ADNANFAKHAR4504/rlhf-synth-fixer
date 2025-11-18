@@ -166,7 +166,7 @@ export class TapStack extends cdk.Stack {
       marketDataTask,
       ecsSecurityGroup,
       namespace,
-      false
+      true
     );
 
     // Target Group for API Gateway
@@ -426,6 +426,10 @@ export class TapStack extends cdk.Stack {
         },
       }
     );
+
+    // Add node dependency to ensure service is deleted before capacity providers
+    // This prevents the "capacity provider in use" error during rollback
+    service.node.addDependency(cluster);
 
     return service;
   }
