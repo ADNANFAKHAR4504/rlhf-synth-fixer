@@ -25,5 +25,7 @@
     "S3",
     "IAM"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355"
 }
