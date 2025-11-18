@@ -23,6 +23,39 @@ resource "aws_iam_role_policy_attachment" "emr_service_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2"
 }
 
+# S3 permissions for EMR service role to access TLS certificate and other security configurations
+resource "aws_iam_role_policy" "emr_service_s3_permissions" {
+  name = "${local.bucket_prefix}-emr-service-s3-permissions"
+  role = aws_iam_role.emr_service_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = [
+          "${aws_s3_bucket.logs.arn}/security/*",
+          "${aws_s3_bucket.logs.arn}/bootstrap/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          aws_s3_bucket.logs.arn
+        ]
+      }
+    ]
+  })
+}
+
 # Additional EC2 permissions for EMR to create managed security groups in public subnets
 # Note: EMR requires these permissions to create its own managed security groups when
 # launching clusters in public subnets. The managed policy may not include all required
