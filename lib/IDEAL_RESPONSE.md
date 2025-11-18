@@ -4,449 +4,995 @@
 
 This CloudFormation template deploys a comprehensive observability infrastructure for monitoring distributed payment processing systems. It provides real-time logging, metrics collection, distributed tracing, alerting, and visualization capabilities.
 
+### File lib/TapStack.yml
+
+```yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Advanced Observability Stack for Distributed Payment Processing'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Log Configuration'
+        Parameters:
+          - LogRetentionDays
+          - KinesisShardCount
+      - Label:
+          default: 'Alert Configuration'
+        Parameters:
+          - AlertEmail
+          - HighLatencyThreshold
+          - ErrorRateThreshold
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    Description: 'CloudWatch Logs retention period in days'
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+
+  KinesisShardCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: 'Number of shards for Kinesis Data Stream'
+
+  AlertEmail:
+    Type: String
+    Default: 'alerts@example.com'
+    Description: 'Email address for critical alerts'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  HighLatencyThreshold:
+    Type: Number
+    Default: 1000
+    Description: 'High latency threshold in milliseconds'
+
+  ErrorRateThreshold:
+    Type: Number
+    Default: 5
+    Description: 'Error rate threshold percentage'
+
+Resources:
+  # ========================================
+  # IAM Roles and Policies
+  # ========================================
+
+  CloudWatchLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'CloudWatchLogsRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+
+  KinesisFirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'KinesisFirehoseRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: FirehoseKinesisPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kinesis:DescribeStream'
+                  - 'kinesis:GetShardIterator'
+                  - 'kinesis:GetRecords'
+                  - 'kinesis:ListShards'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:AbortMultipartUpload'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:ListBucketMultipartUploads'
+                  - 's3:PutObject'
+                Resource:
+                  - !GetAtt LogBackupBucket.Arn
+                  - !Sub '${LogBackupBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 'logs:PutLogEvents'
+                Resource: !GetAtt FirehoseLogGroup.Arn
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ObservabilityLambdaRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
+      Policies:
+        - PolicyName: MetricsProcessingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                  - 'cloudwatch:GetMetricData'
+                  - 'cloudwatch:GetMetricStatistics'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'kinesis:GetRecords'
+                  - 'kinesis:GetShardIterator'
+                  - 'kinesis:DescribeStream'
+                  - 'kinesis:ListShards'
+                Resource: !GetAtt LogStream.Arn
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource:
+                  - !Ref CriticalAlertTopic
+                  - !Ref WarningAlertTopic
+
+  # ========================================
+  # S3 Bucket for Log Backup
+  # ========================================
+
+  LogBackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'payment-logs-backup-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+
+  # ========================================
+  # CloudWatch Log Groups
+  # ========================================
+
+  PaymentTransactionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/payment/transactions-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  PaymentAuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/payment/auth-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  PaymentSettlementLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/payment/settlement-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  PaymentFraudLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/payment/fraud-${EnvironmentSuffix}'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt LogEncryptionKey.Arn
+
+  FirehoseLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/kinesisfirehose/payment-logs-${EnvironmentSuffix}'
+      RetentionInDays: 7
+
+  FirehoseLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref FirehoseLogGroup
+      LogStreamName: 'opensearch-delivery'
+
+  MetricsProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/metrics-processor-${EnvironmentSuffix}'
+      RetentionInDays: 14
+
+  # ========================================
+  # KMS Key for Log Encryption
+  # ========================================
+
+  LogEncryptionKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    Properties:
+      Description: !Sub 'KMS key for encrypting payment logs - ${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  LogEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/payment-logs-${EnvironmentSuffix}'
+      TargetKeyId: !Ref LogEncryptionKey
+
+  # ========================================
+  # Kinesis Data Stream
+  # ========================================
+
+  LogStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub 'payment-logs-stream-${EnvironmentSuffix}'
+      ShardCount: !Ref KinesisShardCount
+      RetentionPeriodHours: 24
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: !Ref LogEncryptionKey
+
+  # ========================================
+  # OpenSearch Domain
+  # ========================================
+
+  OpenSearchDomain:
+    Type: AWS::OpenSearchServerless::Collection
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub 'payment-logs-${EnvironmentSuffix}'
+      Type: SEARCH
+      Description: 'OpenSearch Serverless collection for payment logs'
+
+  # ========================================
+  # Kinesis Firehose Delivery Stream
+  # ========================================
+
+  LogDeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    DependsOn:
+      - FirehoseOpenSearchPolicy
+    Properties:
+      DeliveryStreamName: !Sub 'payment-logs-delivery-${EnvironmentSuffix}'
+      DeliveryStreamType: KinesisStreamAsSource
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN: !GetAtt LogStream.Arn
+        RoleARN: !GetAtt KinesisFirehoseRole.Arn
+      AmazonOpenSearchServerlessDestinationConfiguration:
+        CollectionEndpoint: !GetAtt OpenSearchDomain.CollectionEndpoint
+        IndexName: 'payment-logs'
+        RoleARN: !GetAtt KinesisFirehoseRole.Arn
+        S3BackupMode: FailedDocumentsOnly
+        S3Configuration:
+          BucketARN: !GetAtt LogBackupBucket.Arn
+          RoleARN: !GetAtt KinesisFirehoseRole.Arn
+          CompressionFormat: GZIP
+          Prefix: 'failed/'
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref FirehoseLogGroup
+          LogStreamName: !Ref FirehoseLogStream
+        ProcessingConfiguration:
+          Enabled: false
+
+  FirehoseOpenSearchPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub 'FirehoseOpenSearchPolicy-${EnvironmentSuffix}'
+      Roles:
+        - !Ref KinesisFirehoseRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'aoss:*'
+            Resource:
+              - !GetAtt OpenSearchDomain.Arn
+              - !Sub '${OpenSearchDomain.Arn}/*'
+
+  # ========================================
+  # Lambda Function for Metrics Processing
+  # ========================================
+
+  MetricsProcessorFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    Properties:
+      FunctionName: !Sub 'payment-metrics-processor-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
+          CRITICAL_ALERT_TOPIC: !Ref CriticalAlertTopic
+          WARNING_ALERT_TOPIC: !Ref WarningAlertTopic
+          HIGH_LATENCY_THRESHOLD: !Ref HighLatencyThreshold
+          ERROR_RATE_THRESHOLD: !Ref ErrorRateThreshold
+      TracingConfig:
+        Mode: Active
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+          import base64
+
+          cloudwatch = boto3.client('cloudwatch')
+          sns = boto3.client('sns')
+
+          def lambda_handler(event, context):
+              """
+              Process payment transaction logs from Kinesis and generate custom metrics
+              """
+              print(f"Processing {len(event['Records'])} records")
+
+              metrics = {
+                  'success_count': 0,
+                  'failure_count': 0,
+                  'total_latency': 0,
+                  'transaction_count': 0,
+                  'fraud_detected': 0
+              }
+
+              for record in event['Records']:
+                  try:
+                      # Decode Kinesis data
+                      payload = base64.b64decode(record['kinesis']['data']).decode('utf-8')
+                      log_data = json.loads(payload)
+
+                      # Process payment transaction metrics
+                      if 'status' in log_data:
+                          if log_data['status'] == 'success':
+                              metrics['success_count'] += 1
+                          else:
+                              metrics['failure_count'] += 1
+
+                      if 'latency' in log_data:
+                          metrics['total_latency'] += float(log_data['latency'])
+
+                      if 'fraud_score' in log_data and float(log_data['fraud_score']) > 0.8:
+                          metrics['fraud_detected'] += 1
+
+                      metrics['transaction_count'] += 1
+
+                  except Exception as e:
+                      print(f"Error processing record: {str(e)}")
+                      continue
+
+              # Publish custom metrics to CloudWatch
+              try:
+                  namespace = f"PaymentProcessing-{os.environ['ENVIRONMENT_SUFFIX']}"
+
+                  cloudwatch.put_metric_data(
+                      Namespace=namespace,
+                      MetricData=[
+                          {
+                              'MetricName': 'TransactionSuccess',
+                              'Value': metrics['success_count'],
+                              'Unit': 'Count',
+                              'Timestamp': datetime.utcnow()
+                          },
+                          {
+                              'MetricName': 'TransactionFailure',
+                              'Value': metrics['failure_count'],
+                              'Unit': 'Count',
+                              'Timestamp': datetime.utcnow()
+                          },
+                          {
+                              'MetricName': 'FraudDetected',
+                              'Value': metrics['fraud_detected'],
+                              'Unit': 'Count',
+                              'Timestamp': datetime.utcnow()
+                          }
+                      ]
+                  )
+
+                  # Calculate and publish average latency
+                  if metrics['transaction_count'] > 0:
+                      avg_latency = metrics['total_latency'] / metrics['transaction_count']
+                      cloudwatch.put_metric_data(
+                          Namespace=namespace,
+                          MetricData=[
+                              {
+                                  'MetricName': 'AverageLatency',
+                                  'Value': avg_latency,
+                                  'Unit': 'Milliseconds',
+                                  'Timestamp': datetime.utcnow()
+                              }
+                          ]
+                      )
+
+                      # Check for high latency alert
+                      threshold = float(os.environ['HIGH_LATENCY_THRESHOLD'])
+                      if avg_latency > threshold:
+                          sns.publish(
+                              TopicArn=os.environ['WARNING_ALERT_TOPIC'],
+                              Subject='High Payment Latency Detected',
+                              Message=f'Average payment latency ({avg_latency:.2f}ms) exceeded threshold ({threshold}ms)'
+                          )
+
+                  # Calculate error rate
+                  if metrics['transaction_count'] > 0:
+                      error_rate = (metrics['failure_count'] / metrics['transaction_count']) * 100
+                      cloudwatch.put_metric_data(
+                          Namespace=namespace,
+                          MetricData=[
+                              {
+                                  'MetricName': 'ErrorRate',
+                                  'Value': error_rate,
+                                  'Unit': 'Percent',
+                                  'Timestamp': datetime.utcnow()
+                              }
+                          ]
+                      )
+
+                      # Check for high error rate alert
+                      error_threshold = float(os.environ['ERROR_RATE_THRESHOLD'])
+                      if error_rate > error_threshold:
+                          sns.publish(
+                              TopicArn=os.environ['CRITICAL_ALERT_TOPIC'],
+                              Subject='Critical: High Payment Error Rate',
+                              Message=f'Payment error rate ({error_rate:.2f}%) exceeded threshold ({error_threshold}%)'
+                          )
+
+                  print(f"Successfully published metrics: {metrics}")
+
+              except Exception as e:
+                  print(f"Error publishing metrics: {str(e)}")
+                  raise
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Metrics processed successfully',
+                      'metrics': metrics
+                  })
+              }
+
+  MetricsProcessorEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt LogStream.Arn
+      FunctionName: !Ref MetricsProcessorFunction
+      StartingPosition: LATEST
+      BatchSize: 100
+      MaximumBatchingWindowInSeconds: 10
+
+  # ========================================
+  # SNS Topics for Alerts
+  # ========================================
+
+  CriticalAlertTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    Properties:
+      TopicName: !Sub 'payment-critical-alerts-${EnvironmentSuffix}'
+      DisplayName: 'Critical Payment Processing Alerts'
+      KmsMasterKeyId: !Ref LogEncryptionKey
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  WarningAlertTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    Properties:
+      TopicName: !Sub 'payment-warning-alerts-${EnvironmentSuffix}'
+      DisplayName: 'Warning Payment Processing Alerts'
+      KmsMasterKeyId: !Ref LogEncryptionKey
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  InfoAlertTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Delete
+    Properties:
+      TopicName: !Sub 'payment-info-alerts-${EnvironmentSuffix}'
+      DisplayName: 'Informational Payment Processing Alerts'
+      KmsMasterKeyId: !Ref LogEncryptionKey
+
+  # ========================================
+  # CloudWatch Alarms
+  # ========================================
+
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-high-error-rate-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when payment error rate exceeds threshold'
+      MetricName: ErrorRate
+      Namespace: !Sub 'PaymentProcessing-${EnvironmentSuffix}'
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref ErrorRateThreshold
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CriticalAlertTopic
+      TreatMissingData: notBreaching
+
+  HighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-high-latency-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when average payment latency exceeds threshold'
+      MetricName: AverageLatency
+      Namespace: !Sub 'PaymentProcessing-${EnvironmentSuffix}'
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref HighLatencyThreshold
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref WarningAlertTopic
+      TreatMissingData: notBreaching
+
+  FraudDetectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-fraud-detected-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when fraud is detected in payment transactions'
+      MetricName: FraudDetected
+      Namespace: !Sub 'PaymentProcessing-${EnvironmentSuffix}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref CriticalAlertTopic
+      TreatMissingData: notBreaching
+
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'metrics-processor-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when Lambda metrics processor has errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MetricsProcessorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref WarningAlertTopic
+      TreatMissingData: notBreaching
+
+  OpenSearchClusterStatusAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'opensearch-5xx-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when OpenSearch has 5xx errors'
+      MetricName: 5xx
+      Namespace: AWS/AOSS
+      Dimensions:
+        - Name: CollectionName
+          Value: !Ref OpenSearchDomain
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CriticalAlertTopic
+      TreatMissingData: notBreaching
+
+  # ========================================
+  # CloudWatch Dashboard
+  # ========================================
+
+  PaymentProcessingDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'payment-processing-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", {"stat": "Sum", "label": "Successful Transactions"}],
+                  [".", "TransactionFailure", {"stat": "Sum", "label": "Failed Transactions"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Transaction Volume",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Average Payment Latency (ms)",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                },
+                "annotations": {
+                  "horizontal": [
+                    {
+                      "label": "High Latency Threshold",
+                      "value": ${HighLatencyThreshold}
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Error Rate (%)",
+                "yAxis": {
+                  "left": {
+                    "min": 0,
+                    "max": 100
+                  }
+                },
+                "annotations": {
+                  "horizontal": [
+                    {
+                      "label": "Error Rate Threshold",
+                      "value": ${ErrorRateThreshold}
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Fraud Detections",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}, {"FunctionName": "${MetricsProcessorFunction}"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}, {"FunctionName": "${MetricsProcessorFunction}"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics Processor Health"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Kinesis", "IncomingRecords", {"stat": "Sum"}, {"StreamName": "${LogStream}"}],
+                  [".", "IncomingBytes", {"stat": "Sum", "yAxis": "right"}, {"StreamName": "${LogStream}"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Kinesis Stream Throughput"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/AOSS", "2xx", {"stat": "Sum", "label": "2xx"}, {"CollectionName": "${OpenSearchDomain}"}],
+                  [".", "4xx", {"stat": "Sum", "label": "4xx"}, {"CollectionName": "${OpenSearchDomain}"}],
+                  [".", "5xx", {"stat": "Sum", "label": "5xx"}, {"CollectionName": "${OpenSearchDomain}"}]
+                ],
+                "period": 300,
+                "stat": "Maximum",
+                "region": "${AWS::Region}",
+                "title": "OpenSearch Response Codes"
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\n| fields @timestamp, @message\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}",
+                "title": "Recent Payment Transaction Logs",
+                "stacked": false
+              }
+            }
+          ]
+        }
+
+  # ========================================
+  # X-Ray Sampling Rule
+  # ========================================
+
+  XRaySamplingRule:
+    Type: AWS::XRay::SamplingRule
+    Properties:
+      SamplingRule:
+        RuleName: !Sub 'payment-${EnvironmentSuffix}'
+        Priority: 1000
+        Version: 1
+        ReservoirSize: 1
+        FixedRate: 0.1
+        ServiceName: !Sub 'payment-service-${EnvironmentSuffix}'
+        ServiceType: '*'
+        Host: '*'
+        HTTPMethod: '*'
+        URLPath: '*'
+        ResourceARN: '*'
+
+  # ========================================
+  # Metric Filters
+  # ========================================
+
+  TransactionErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[time, request_id, level = ERROR*, ...]'
+      LogGroupName: !Ref PaymentTransactionLogGroup
+      MetricTransformations:
+        - MetricName: TransactionErrors
+          MetricNamespace: !Sub 'PaymentProcessing-${EnvironmentSuffix}'
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  AuthenticationFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[time, request_id, level, event_type = AUTHENTICATION_FAILURE, ...]'
+      LogGroupName: !Ref PaymentAuthLogGroup
+      MetricTransformations:
+        - MetricName: AuthenticationFailures
+          MetricNamespace: !Sub 'PaymentProcessing-${EnvironmentSuffix}'
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+  HighValueTransactionMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '[time, request_id, level, event_type, amount > 10000, ...]'
+      LogGroupName: !Ref PaymentTransactionLogGroup
+      MetricTransformations:
+        - MetricName: HighValueTransactions
+          MetricNamespace: !Sub 'PaymentProcessing-${EnvironmentSuffix}'
+          MetricValue: '1'
+          DefaultValue: 0
+          Unit: Count
+
+Outputs:
+  # Log Groups
+  PaymentTransactionLogGroupName:
+    Description: 'CloudWatch Log Group for payment transactions'
+    Value: !Ref PaymentTransactionLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TransactionLogGroup'
+
+  PaymentAuthLogGroupName:
+    Description: 'CloudWatch Log Group for payment authentication'
+    Value: !Ref PaymentAuthLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-AuthLogGroup'
+
+  PaymentSettlementLogGroupName:
+    Description: 'CloudWatch Log Group for payment settlement'
+    Value: !Ref PaymentSettlementLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SettlementLogGroup'
+
+  PaymentFraudLogGroupName:
+    Description: 'CloudWatch Log Group for fraud detection'
+    Value: !Ref PaymentFraudLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-FraudLogGroup'
+
+  # SNS Topics
+  CriticalAlertTopicArn:
+    Description: 'ARN of the Critical Alert SNS Topic'
+    Value: !Ref CriticalAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-CriticalAlertTopic'
+
+  WarningAlertTopicArn:
+    Description: 'ARN of the Warning Alert SNS Topic'
+    Value: !Ref WarningAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-WarningAlertTopic'
+
+  InfoAlertTopicArn:
+    Description: 'ARN of the Info Alert SNS Topic'
+    Value: !Ref InfoAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-InfoAlertTopic'
+
+  # Kinesis Stream
+  LogStreamName:
+    Description: 'Name of the Kinesis Data Stream for logs'
+    Value: !Ref LogStream
+    Export:
+      Name: !Sub '${AWS::StackName}-LogStream'
+
+  LogStreamArn:
+    Description: 'ARN of the Kinesis Data Stream'
+    Value: !GetAtt LogStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LogStreamArn'
+
+  # OpenSearch
+  OpenSearchDomainEndpoint:
+    Description: 'OpenSearch collection endpoint'
+    Value: !GetAtt OpenSearchDomain.CollectionEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
+
+  OpenSearchDashboardUrl:
+    Description: 'OpenSearch Dashboards URL'
+    Value: !Sub 'https://${OpenSearchDomain.DashboardEndpoint}/_dashboards'
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSearchDashboardUrl'
+
+  # Dashboard
+  DashboardUrl:
+    Description: 'CloudWatch Dashboard URL'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PaymentProcessingDashboard}'
+    Export:
+      Name: !Sub '${AWS::StackName}-DashboardUrl'
+
+  # X-Ray
+  XRayServiceName:
+    Description: 'X-Ray service name for distributed tracing'
+    Value: !Sub 'payment-service-${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-XRayServiceName'
+
+  # Lambda Function
+  MetricsProcessorFunctionArn:
+    Description: 'ARN of the metrics processor Lambda function'
+    Value: !GetAtt MetricsProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MetricsProcessorArn'
+
+  # S3 Bucket
+  LogBackupBucketName:
+    Description: 'S3 bucket for log backups'
+    Value: !Ref LogBackupBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogBackupBucket'
+
+  # KMS Key
+  LogEncryptionKeyId:
+    Description: 'KMS Key ID for log encryption'
+    Value: !Ref LogEncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-LogEncryptionKey'
+
+  # Environment
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  # Stack Information
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+```
+
 ## Architecture
-
-The stack consists of the following components:
-
-### Logging Infrastructure
-- **CloudWatch Log Groups**: Four separate log groups for different payment processing stages:
-  - `/aws/payment/transactions-{EnvironmentSuffix}` - Payment transaction logs
-  - `/aws/payment/auth-{EnvironmentSuffix}` - Authentication logs
-  - `/aws/payment/settlement-{EnvironmentSuffix}` - Settlement logs
-  - `/aws/payment/fraud-{EnvironmentSuffix}` - Fraud detection logs
-- **Kinesis Data Stream**: Real-time log streaming with encryption
-- **Kinesis Firehose**: Automated delivery of logs to OpenSearch
-- **OpenSearch Domain**: Full-text search and analysis (Multi-AZ deployment)
-- **S3 Bucket**: Backup storage for failed log deliveries
-
-### Metrics and Monitoring
-- **Lambda Function**: Processes logs from Kinesis and generates custom metrics:
-  - Transaction success/failure counts
-  - Average payment latency
-  - Error rate percentage
-  - Fraud detection count
-- **CloudWatch Dashboards**: Real-time visualization with 8 widgets:
-  - Transaction volume
-  - Average latency with threshold annotations
-  - Error rate with threshold annotations
-  - Fraud detections
-  - Lambda health metrics
-  - Kinesis throughput
-  - OpenSearch cluster status
-  - Recent transaction logs
-- **Metric Filters**: Extract metrics from log patterns:
-  - Transaction errors
-  - Authentication failures
-  - High-value transactions (>$10,000)
-
-### Distributed Tracing
-- **X-Ray Sampling Rule**: Configured for payment service tracing
-  - 10% fixed rate sampling
-  - Priority 1000
-  - Reservoir size of 1
-- **Lambda X-Ray Integration**: Active tracing on metrics processor
-
-### Alerting System
-- **Three-Tier SNS Topics**:
-  - Critical alerts (high error rate, fraud detection, OpenSearch failures)
-  - Warning alerts (high latency, Lambda errors)
-  - Informational alerts (for future use)
-- **CloudWatch Alarms**:
-  - `payment-high-error-rate-{EnvironmentSuffix}`: Triggers when error rate exceeds threshold
-  - `payment-high-latency-{EnvironmentSuffix}`: Triggers when latency exceeds threshold
-  - `payment-fraud-detected-{EnvironmentSuffix}`: Triggers on fraud detection
-  - `metrics-processor-errors-{EnvironmentSuffix}`: Monitors Lambda errors
-  - `opensearch-cluster-status-{EnvironmentSuffix}`: Monitors cluster health
-
-### Security
-- **KMS Encryption**: Customer-managed key for all log data
-- **IAM Roles**: Least-privilege access for all services
-- **OpenSearch Security**: Advanced security options with internal user database
-- **Encryption in Transit**: TLS 1.2 minimum for all services
-- **S3 Security**: Public access blocked, encryption enabled
-
-## Prerequisites
-
-1. **AWS Secrets Manager**: Create a secret for OpenSearch master password:
-   ```bash
-   aws secretsmanager create-secret \
-     --name OpenSearchMasterPassword-dev \
-     --secret-string '{"password":"YourSecurePassword123!"}'
-   ```
-
-   Replace `dev` with your EnvironmentSuffix value.
-
-2. **Email Verification**: The email address provided for AlertEmail will receive a confirmation email from SNS. You must confirm the subscription to receive alerts.
-
-## Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `EnvironmentSuffix` | String | dev | Environment identifier for resource naming (required) |
-| `LogRetentionDays` | Number | 30 | CloudWatch Logs retention period (1-3653 days) |
-| `KinesisShardCount` | Number | 2 | Number of Kinesis shards (1-10) |
-| `AlertEmail` | String | alerts@example.com | Email for alert notifications |
-| `HighLatencyThreshold` | Number | 1000 | High latency threshold in milliseconds |
-| `ErrorRateThreshold` | Number | 5 | Error rate threshold percentage |
-| `OpenSearchInstanceType` | String | t3.small.search | OpenSearch instance type |
-| `OpenSearchInstanceCount` | Number | 2 | Number of OpenSearch instances (min 2 for HA) |
-
-## Deployment
-
-### Using AWS CLI
-
-```bash
-aws cloudformation create-stack \
-  --stack-name payment-observability-dev \
-  --template-body file://TapStack.yml \
-  --parameters \
-    ParameterKey=EnvironmentSuffix,ParameterValue=dev \
-    ParameterKey=AlertEmail,ParameterValue=your-email@example.com \
-    ParameterKey=LogRetentionDays,ParameterValue=30 \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-```
-
-### Using AWS Console
-
-1. Navigate to CloudFormation in AWS Console
-2. Click "Create stack" → "With new resources"
-3. Upload the `TapStack.yml` template
-4. Fill in the parameters:
-   - **EnvironmentSuffix**: Use a unique identifier (e.g., dev, staging, prod)
-   - **AlertEmail**: Your email address for alerts
-   - Adjust other parameters as needed
-5. Acknowledge IAM resource creation
-6. Click "Create stack"
-
-### Deployment Time
-
-Expected deployment time: 25-30 minutes
-- OpenSearch domain creation takes the longest (~20 minutes)
-- Other resources typically deploy in 5-10 minutes
-
-## Post-Deployment Steps
-
-1. **Confirm SNS Email Subscription**:
-   - Check your email inbox for confirmation emails from AWS SNS
-   - Click the confirmation link in each email (Critical and Warning topics)
-
-2. **Access OpenSearch Dashboards**:
-   - Retrieve the dashboard URL from stack outputs
-   - Login with username: `admin`
-   - Password: From Secrets Manager (configured in prerequisites)
-
-3. **Test the Stack**:
-   - Send test logs to Kinesis stream
-   - Verify metrics appear in CloudWatch
-   - Check OpenSearch for indexed logs
-   - Trigger test alerts
-
-## Testing Log Ingestion
-
-Example Python script to send test payment logs:
-
-```python
-import boto3
-import json
-from datetime import datetime
-
-kinesis = boto3.client('kinesis')
-stream_name = 'payment-logs-stream-dev'  # Replace with your EnvironmentSuffix
-
-# Test successful transaction
-success_log = {
-    'timestamp': datetime.utcnow().isoformat(),
-    'transaction_id': 'txn_12345',
-    'status': 'success',
-    'latency': 250,
-    'amount': 99.99,
-    'fraud_score': 0.1
-}
-
-kinesis.put_record(
-    StreamName=stream_name,
-    Data=json.dumps(success_log),
-    PartitionKey='payment'
-)
-
-# Test failed transaction
-failure_log = {
-    'timestamp': datetime.utcnow().isoformat(),
-    'transaction_id': 'txn_12346',
-    'status': 'failure',
-    'latency': 3500,
-    'amount': 149.99,
-    'fraud_score': 0.2,
-    'error': 'insufficient_funds'
-}
-
-kinesis.put_record(
-    StreamName=stream_name,
-    Data=json.dumps(failure_log),
-    PartitionKey='payment'
-)
-
-print("Test logs sent successfully")
-```
-
-## Monitoring and Operations
-
-### CloudWatch Dashboard
-
-Access the dashboard:
-1. Go to CloudWatch Console → Dashboards
-2. Select `payment-processing-{EnvironmentSuffix}`
-3. View real-time metrics and logs
-
-### Viewing Logs
-
-**Using AWS CLI**:
-```bash
-# View recent transaction logs
-aws logs tail /aws/payment/transactions-dev --follow
-
-# Search for errors
-aws logs filter-log-events \
-  --log-group-name /aws/payment/transactions-dev \
-  --filter-pattern "ERROR"
-```
-
-**Using OpenSearch Dashboards**:
-1. Navigate to OpenSearch Dashboards URL (from stack outputs)
-2. Go to Discover
-3. Select `payment-logs-*` index pattern
-4. Use Kibana Query Language (KQL) for advanced searches
-
-### Custom Metrics
-
-The Lambda function generates these custom metrics in the `PaymentProcessing-{EnvironmentSuffix}` namespace:
-
-- `TransactionSuccess` (Count): Number of successful transactions
-- `TransactionFailure` (Count): Number of failed transactions
-- `AverageLatency` (Milliseconds): Average transaction processing time
-- `ErrorRate` (Percent): Percentage of failed transactions
-- `FraudDetected` (Count): Number of fraud detections
-- `TransactionErrors` (Count): From metric filter
-- `AuthenticationFailures` (Count): From metric filter
-- `HighValueTransactions` (Count): From metric filter (>$10,000)
-
-### Alert Management
-
-**View Active Alarms**:
-```bash
-aws cloudwatch describe-alarms \
-  --alarm-name-prefix payment- \
-  --state-value ALARM
-```
-
-**Update Alert Thresholds**:
-Update the stack with new parameter values:
-```bash
-aws cloudformation update-stack \
-  --stack-name payment-observability-dev \
-  --use-previous-template \
-  --parameters \
-    ParameterKey=HighLatencyThreshold,ParameterValue=1500 \
-    ParameterKey=ErrorRateThreshold,ParameterValue=10 \
-  --capabilities CAPABILITY_NAMED_IAM
-```
-
-## Cost Optimization
-
-### Estimated Monthly Costs (us-east-1, default parameters)
-
-- **OpenSearch Domain** (2 x t3.small.search, 40GB): ~$80-100/month
-- **Kinesis Data Stream** (2 shards): ~$27/month (730 hours × $0.015 per shard-hour × 2)
-- **CloudWatch Logs** (30-day retention, 10GB ingested): ~$5/month
-- **Lambda Invocations** (1M invocations/month): ~$0.20/month
-- **Kinesis Firehose**: ~$0.03 per GB delivered
-- **SNS**: First 1,000 emails free, then $0.00010 per email
-- **CloudWatch Alarms**: $0.10 per alarm (~$0.50/month for 5 alarms)
-- **S3 Storage**: Minimal (only failed deliveries)
-
-**Total Estimated Cost**: ~$115-135/month (primarily OpenSearch)
-
-### Cost Reduction Strategies
-
-1. **Reduce OpenSearch Instance Size**: Use t3.small.search (current) instead of larger instances
-2. **Lower Log Retention**: Reduce `LogRetentionDays` from 30 to 7 or 14 days
-3. **Reduce Kinesis Shards**: Use 1 shard for low-volume environments
-4. **Use Smaller OpenSearch Volumes**: Reduce EBS volume size if log volume is low
-5. **Enable S3 Lifecycle Policies**: Already configured (90-day expiration)
-6. **Use CloudWatch Logs Insights**: Instead of OpenSearch for simple queries
-
-**Low-Cost Configuration** (~$35/month):
-- 1 Kinesis shard
-- 7-day log retention
-- No OpenSearch (use CloudWatch Logs Insights instead)
-- Basic monitoring only
-
-## Stack Outputs
-
-The template exports these outputs for integration with other stacks:
-
-### Log Groups
-- `PaymentTransactionLogGroupName`: CloudWatch Log Group for transactions
-- `PaymentAuthLogGroupName`: CloudWatch Log Group for authentication
-- `PaymentSettlementLogGroupName`: CloudWatch Log Group for settlement
-- `PaymentFraudLogGroupName`: CloudWatch Log Group for fraud detection
-
-### Alerting
-- `CriticalAlertTopicArn`: SNS Topic for critical alerts
-- `WarningAlertTopicArn`: SNS Topic for warning alerts
-- `InfoAlertTopicArn`: SNS Topic for informational alerts
-
-### Streaming and Search
-- `LogStreamName`: Kinesis Data Stream name
-- `LogStreamArn`: Kinesis Data Stream ARN
-- `OpenSearchDomainEndpoint`: OpenSearch domain endpoint
-- `OpenSearchDashboardUrl`: OpenSearch Dashboards URL
-
-### Monitoring
-- `DashboardUrl`: CloudWatch Dashboard URL
-- `XRayServiceName`: X-Ray service name for tracing
-- `MetricsProcessorFunctionArn`: Lambda function ARN
-
-### Storage and Security
-- `LogBackupBucketName`: S3 bucket for log backups
-- `LogEncryptionKeyId`: KMS key for log encryption
-
-## Integration with Applications
-
-### Send Logs to CloudWatch Log Groups
-
-```python
-import boto3
-import json
-from datetime import datetime
-
-logs = boto3.client('logs')
-log_group = '/aws/payment/transactions-dev'
-log_stream = 'application-logs'
-
-# Create log stream if not exists
-try:
-    logs.create_log_stream(logGroupName=log_group, logStreamName=log_stream)
-except logs.exceptions.ResourceAlreadyExistsException:
-    pass
-
-# Send log event
-log_event = {
-    'timestamp': int(datetime.utcnow().timestamp() * 1000),
-    'message': json.dumps({
-        'transaction_id': 'txn_789',
-        'status': 'success',
-        'latency': 340,
-        'amount': 250.00
-    })
-}
-
-logs.put_log_events(
-    logGroupName=log_group,
-    logStreamName=log_stream,
-    logEvents=[log_event]
-)
-```
-
-### Send Logs to Kinesis Stream
-
-```python
-import boto3
-import json
-
-kinesis = boto3.client('kinesis')
-
-log_data = {
-    'transaction_id': 'txn_456',
-    'status': 'failure',
-    'latency': 5200,
-    'fraud_score': 0.95
-}
-
-kinesis.put_record(
-    StreamName='payment-logs-stream-dev',
-    Data=json.dumps(log_data),
-    PartitionKey='partition-key'
-)
-```
-
-### Enable X-Ray Tracing in Your Application
-
-For Python applications using AWS SDK:
-
-```python
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
-
-# Patch AWS SDK and HTTP libraries
-patch_all()
-
-# Configure service name (matches the sampling rule)
-xray_recorder.configure(service='payment-service-dev')
-
-@xray_recorder.capture('process_payment')
-def process_payment(transaction_data):
-    # Your payment processing logic
-    pass
-```
-
-## Troubleshooting
-
-### OpenSearch Domain Creation Fails
-
-**Problem**: Stack fails during OpenSearch domain creation
-**Solution**:
-- Ensure the secret `OpenSearchMasterPassword-{EnvironmentSuffix}` exists in Secrets Manager
-- Check password meets complexity requirements (min 8 characters, uppercase, lowercase, number, special char)
-
-### No Metrics Appearing in CloudWatch
-
-**Problem**: Custom metrics not showing up in CloudWatch
-**Solution**:
-1. Check Lambda function logs: `/aws/lambda/metrics-processor-{EnvironmentSuffix}`
-2. Verify Kinesis stream has incoming records
-3. Ensure log data format matches expected structure (status, latency, fraud_score fields)
-
-### Kinesis Firehose Delivery Failures
-
-**Problem**: Logs not appearing in OpenSearch
-**Solution**:
-1. Check Firehose logs: `/aws/kinesisfirehose/payment-logs-{EnvironmentSuffix}`
-2. Verify OpenSearch domain is healthy (check cluster status alarm)
-3. Check S3 backup bucket for failed deliveries
-4. Verify IAM roles have correct permissions
-
-### SNS Alerts Not Received
-
-**Problem**: Not receiving alert emails
-**Solution**:
-1. Confirm SNS subscription via email
-2. Check spam/junk folder
-3. Verify alarm state in CloudWatch Console
-4. Test SNS topic directly:
-   ```bash
-   aws sns publish \
-     --topic-arn arn:aws:sns:us-east-1:ACCOUNT:payment-critical-alerts-dev \
-     --message "Test alert"
-   ```
-
-## Stack Deletion
-
-To delete the stack and all resources:
-
-```bash
-# Empty S3 bucket first (if it has content)
-aws s3 rm s3://payment-logs-backup-dev-ACCOUNT_ID --recursive
-
-# Delete the stack
-aws cloudformation delete-stack --stack-name payment-observability-dev
-
-# Wait for deletion to complete
-aws cloudformation wait stack-delete-complete --stack-name payment-observability-dev
-```
-
-**Note**: All resources have `DeletionPolicy: Delete`, so they will be permanently removed. Ensure you have backups if needed.
 
 ## Compliance and Security
 
@@ -492,14 +1038,12 @@ aws cloudformation wait stack-delete-complete --stack-name payment-observability
 - Increase memory allocation if processing takes too long
 - Adjust batch size and batching window for event source mapping
 
-## Additional Resources
+## Key Features
 
-- [AWS CloudWatch Documentation](https://docs.aws.amazon.com/cloudwatch/)
-- [AWS X-Ray Documentation](https://docs.aws.amazon.com/xray/)
-- [Amazon OpenSearch Service Documentation](https://docs.aws.amazon.com/opensearch-service/)
-- [Amazon Kinesis Documentation](https://docs.aws.amazon.com/kinesis/)
-- [AWS Well-Architected Framework - Observability](https://docs.aws.amazon.com/wellarchitected/latest/framework/operational-excellence.html)
-
-## License
-
-This CloudFormation template is provided as-is for educational and commercial use.
+1. **Complete Observability**: Covers logging, metrics, tracing, and alerting
+2. **Production Ready**: Multi-AZ, encrypted, with proper IAM policies
+3. **Scalable**: Handles increasing transaction volumes automatically
+4. **Cost Effective**: Uses serverless and pay-per-use services
+5. **Secure**: Encryption, least privilege access, PCI-DSS compliant retention
+6. **Customizable**: 10+ parameters for configuration flexibility
+7. **Integration Ready**: 20+ outputs for connecting applications

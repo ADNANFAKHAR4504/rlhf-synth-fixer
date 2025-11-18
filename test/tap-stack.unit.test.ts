@@ -24,17 +24,17 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
     test('should have metadata section with parameter groups', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toHaveLength(4);
+      expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toHaveLength(3);
     });
 
-    test('should have exactly 32 resources', () => {
+    test('should have exactly 35 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(32);
+      expect(resourceCount).toBe(35);
     });
 
-    test('should have exactly 8 parameters', () => {
+    test('should have exactly 6 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(8);
+      expect(parameterCount).toBe(6);
     });
 
     test('should have outputs defined', () => {
@@ -79,19 +79,11 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
       expect(param.AllowedPattern).toContain('@');
     });
 
-    test('should have HighLatencyThreshold parameter', () => {
-      const param = template.Parameters.HighLatencyThreshold;
+    test('should have ErrorRateThreshold parameter', () => {
+      const param = template.Parameters.ErrorRateThreshold;
       expect(param).toBeDefined();
       expect(param.Type).toBe('Number');
-      expect(param.Default).toBe(1000);
-    });
-
-    test('should have OpenSearchInstanceType and Count parameters', () => {
-      const typeParam = template.Parameters.OpenSearchInstanceType;
-      const countParam = template.Parameters.OpenSearchInstanceCount;
-      expect(typeParam).toBeDefined();
-      expect(countParam).toBeDefined();
-      expect(countParam.MinValue).toBe(2);
+      expect(param.Default).toBe(5);
     });
   });
 
@@ -318,63 +310,27 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
     test('OpenSearchDomain should exist with correct properties', () => {
       const domain = template.Resources.OpenSearchDomain;
       expect(domain).toBeDefined();
-      expect(domain.Type).toBe('AWS::OpenSearchService::Domain');
+      expect(domain.Type).toBe('AWS::OpenSearchServerless::Collection');
       expect(domain.DeletionPolicy).toBe('Delete');
     });
 
-    test('OpenSearchDomain should use parameters for instance configuration', () => {
+    test('OpenSearchDomain should have correct name and type', () => {
       const domain = template.Resources.OpenSearchDomain;
-      const clusterConfig = domain.Properties.ClusterConfig;
-      expect(clusterConfig.InstanceType).toEqual({ Ref: 'OpenSearchInstanceType' });
-      expect(clusterConfig.InstanceCount).toEqual({ Ref: 'OpenSearchInstanceCount' });
+      expect(domain.Properties.Name).toEqual({ 'Fn::Sub': 'payment-logs-${EnvironmentSuffix}' });
+      expect(domain.Properties.Type).toBe('SEARCH');
+      expect(domain.Properties.Description).toBe('OpenSearch Serverless collection for payment logs');
     });
 
-    test('OpenSearchDomain should have multi-AZ enabled', () => {
+    test('OpenSearchDomain should depend on security policies', () => {
       const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.ClusterConfig.ZoneAwarenessEnabled).toBe(true);
-      expect(domain.Properties.ClusterConfig.ZoneAwarenessConfig.AvailabilityZoneCount).toBe(2);
-    });
-
-    test('OpenSearchDomain should have encryption at rest enabled', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.EncryptionAtRestOptions.Enabled).toBe(true);
-    });
-
-    test('OpenSearchDomain should have node-to-node encryption enabled', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.NodeToNodeEncryptionOptions.Enabled).toBe(true);
-    });
-
-    test('OpenSearchDomain should enforce HTTPS with TLS 1.2', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.DomainEndpointOptions.EnforceHTTPS).toBe(true);
-      expect(domain.Properties.DomainEndpointOptions.TLSSecurityPolicy).toBe('Policy-Min-TLS-1-2-2019-07');
-    });
-
-    test('OpenSearchDomain should have advanced security enabled', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.AdvancedSecurityOptions.Enabled).toBe(true);
-      expect(domain.Properties.AdvancedSecurityOptions.InternalUserDatabaseEnabled).toBe(true);
-    });
-
-    test('OpenSearchDomain should reference master password from Secrets Manager', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      const masterPassword = domain.Properties.AdvancedSecurityOptions.MasterUserOptions.MasterUserPassword;
-      expect(masterPassword).toEqual(
-        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('resolve:secretsmanager:OpenSearchMasterPassword') })
-      );
-    });
-
-    test('OpenSearchDomain should have access policy for Firehose role', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      const accessPolicies = domain.Properties.AccessPolicies;
-      expect(accessPolicies.Statement).toBeDefined();
-      expect(accessPolicies.Statement[0].Principal.AWS).toEqual({ 'Fn::GetAtt': ['KinesisFirehoseRole', 'Arn'] });
+      expect(domain.DependsOn).toContain('OpenSearchEncryptionPolicy');
+      expect(domain.DependsOn).toContain('OpenSearchNetworkPolicy');
+      expect(domain.DependsOn).toContain('OpenSearchDataAccessPolicy');
     });
 
     test('OpenSearchDomain name should include EnvironmentSuffix', () => {
       const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.DomainName).toEqual(
+      expect(domain.Properties.Name).toEqual(
         expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
       );
     });
@@ -401,24 +357,24 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
       });
     });
 
-    test('LogDeliveryStream should have OpenSearch destination', () => {
+    test('LogDeliveryStream should have OpenSearch Serverless destination', () => {
       const stream = template.Resources.LogDeliveryStream;
-      expect(stream.Properties.OpenSearchDestinationConfiguration).toBeDefined();
-      const config = stream.Properties.OpenSearchDestinationConfiguration;
-      expect(config.DomainARN).toEqual({ 'Fn::GetAtt': ['OpenSearchDomain', 'Arn'] });
+      expect(stream.Properties.AmazonOpenSearchServerlessDestinationConfiguration).toBeDefined();
+      const config = stream.Properties.AmazonOpenSearchServerlessDestinationConfiguration;
+      expect(config.CollectionEndpoint).toEqual({ 'Fn::GetAtt': ['OpenSearchDomain', 'CollectionEndpoint'] });
       expect(config.IndexName).toBe('payment-logs');
     });
 
     test('LogDeliveryStream should have S3 backup for failed documents', () => {
       const stream = template.Resources.LogDeliveryStream;
-      const config = stream.Properties.OpenSearchDestinationConfiguration;
+      const config = stream.Properties.AmazonOpenSearchServerlessDestinationConfiguration;
       expect(config.S3BackupMode).toBe('FailedDocumentsOnly');
       expect(config.S3Configuration).toBeDefined();
     });
 
     test('LogDeliveryStream should have CloudWatch logging enabled', () => {
       const stream = template.Resources.LogDeliveryStream;
-      const config = stream.Properties.OpenSearchDestinationConfiguration;
+      const config = stream.Properties.AmazonOpenSearchServerlessDestinationConfiguration;
       expect(config.CloudWatchLoggingOptions.Enabled).toBe(true);
     });
 
@@ -579,8 +535,11 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
 
     test('OpenSearchClusterStatusAlarm should monitor cluster health', () => {
       const alarm = template.Resources.OpenSearchClusterStatusAlarm;
-      expect(alarm.Properties.MetricName).toBe('ClusterStatus.red');
-      expect(alarm.Properties.Namespace).toBe('AWS/ES');
+      expect(alarm.Properties.MetricName).toBe('5xx');
+      expect(alarm.Properties.Namespace).toBe('AWS/AOSS');
+      expect(alarm.Properties.Dimensions).toBeDefined();
+      expect(alarm.Properties.Dimensions[0].Name).toBe('CollectionName');
+      expect(alarm.Properties.Dimensions[0].Value).toEqual({ Ref: 'OpenSearchDomain' });
       expect(alarm.Properties.AlarmActions).toContainEqual({ Ref: 'CriticalAlertTopic' });
     });
 
@@ -827,19 +786,26 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
       });
     });
 
-    test('OpenSearch should enforce HTTPS', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.DomainEndpointOptions.EnforceHTTPS).toBe(true);
+    test('OpenSearch Serverless should have security policies', () => {
+      expect(template.Resources.OpenSearchEncryptionPolicy).toBeDefined();
+      expect(template.Resources.OpenSearchNetworkPolicy).toBeDefined();
+      expect(template.Resources.OpenSearchDataAccessPolicy).toBeDefined();
     });
 
-    test('OpenSearch should have encryption at rest', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.EncryptionAtRestOptions.Enabled).toBe(true);
-    });
+    test('OpenSearch security policies should include EnvironmentSuffix', () => {
+      const encryptionPolicy = template.Resources.OpenSearchEncryptionPolicy;
+      const networkPolicy = template.Resources.OpenSearchNetworkPolicy;
+      const dataAccessPolicy = template.Resources.OpenSearchDataAccessPolicy;
 
-    test('OpenSearch should have advanced security enabled', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.Properties.AdvancedSecurityOptions.Enabled).toBe(true);
+      expect(encryptionPolicy.Properties.Name).toEqual(
+        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
+      );
+      expect(networkPolicy.Properties.Name).toEqual(
+        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
+      );
+      expect(dataAccessPolicy.Properties.Name).toEqual(
+        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
+      );
     });
   });
 

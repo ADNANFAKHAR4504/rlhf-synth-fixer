@@ -26,5 +26,7 @@
     "S3",
     "Logs"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }

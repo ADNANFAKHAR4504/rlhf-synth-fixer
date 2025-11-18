@@ -30,15 +30,6 @@
             "HighLatencyThreshold",
             "ErrorRateThreshold"
           ]
-        },
-        {
-          "Label": {
-            "default": "OpenSearch Configuration"
-          },
-          "Parameters": [
-            "OpenSearchInstanceType",
-            "OpenSearchInstanceCount"
-          ]
         }
       ]
     }
@@ -97,24 +88,6 @@
       "Type": "Number",
       "Default": 5,
       "Description": "Error rate threshold percentage"
-    },
-    "OpenSearchInstanceType": {
-      "Type": "String",
-      "Default": "t3.small.search",
-      "Description": "OpenSearch instance type",
-      "AllowedValues": [
-        "t3.small.search",
-        "t3.medium.search",
-        "m5.large.search",
-        "m5.xlarge.search"
-      ]
-    },
-    "OpenSearchInstanceCount": {
-      "Type": "Number",
-      "Default": 2,
-      "MinValue": 2,
-      "MaxValue": 10,
-      "Description": "Number of OpenSearch instances (minimum 2 for HA)"
     }
   },
   "Resources": {
@@ -517,72 +490,56 @@
         }
       }
     },
+    "OpenSearchEncryptionPolicy": {
+      "Type": "AWS::OpenSearchServerless::SecurityPolicy",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-logs-encryption-${EnvironmentSuffix}"
+        },
+        "Type": "encryption",
+        "Policy": {
+          "Fn::Sub": "{\n  \"Rules\": [\n    {\n      \"Resource\": [\n        \"collection/payment-logs-${EnvironmentSuffix}\"\n      ],\n      \"ResourceType\": \"collection\"\n    }\n  ],\n  \"AWSOwnedKey\": true\n}\n"
+        }
+      }
+    },
+    "OpenSearchNetworkPolicy": {
+      "Type": "AWS::OpenSearchServerless::SecurityPolicy",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-logs-network-${EnvironmentSuffix}"
+        },
+        "Type": "network",
+        "Policy": {
+          "Fn::Sub": "[\n  {\n    \"Rules\": [\n      {\n        \"Resource\": [\n        \"collection/payment-logs-${EnvironmentSuffix}\"\n      ],\n      \"ResourceType\": \"collection\"\n      }\n    ],\n    \"AllowFromPublic\": true\n  }\n]\n"
+        }
+      }
+    },
+    "OpenSearchDataAccessPolicy": {
+      "Type": "AWS::OpenSearchServerless::AccessPolicy",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-logs-data-access-${EnvironmentSuffix}"
+        },
+        "Type": "data",
+        "Policy": {
+          "Fn::Sub": "[\n  {\n    \"Rules\": [\n      {\n        \"Resource\": [\n        \"collection/payment-logs-${EnvironmentSuffix}\"\n      ],\n      \"Permission\": [\n        \"aoss:CreateCollectionItems\",\n        \"aoss:DeleteCollectionItems\",\n        \"aoss:UpdateCollectionItems\",\n        \"aoss:DescribeCollectionItems\"\n      ],\n      \"ResourceType\": \"collection\"\n      },\n      {\n        \"Resource\": [\n        \"index/payment-logs-${EnvironmentSuffix}/*\"\n      ],\n      \"Permission\": [\n        \"aoss:CreateIndex\",\n        \"aoss:DeleteIndex\",\n        \"aoss:UpdateIndex\",\n        \"aoss:DescribeIndex\",\n        \"aoss:ReadDocument\",\n        \"aoss:WriteDocument\"\n      ],\n      \"ResourceType\": \"index\"\n      }\n    ],\n    \"Principal\": [\n      \"${KinesisFirehoseRole.Arn}\"\n    ]\n  }\n]\n"
+        }
+      }
+    },
     "OpenSearchDomain": {
-      "Type": "AWS::OpenSearchService::Domain",
+      "Type": "AWS::OpenSearchServerless::Collection",
+      "DependsOn": [
+        "OpenSearchEncryptionPolicy",
+        "OpenSearchNetworkPolicy",
+        "OpenSearchDataAccessPolicy"
+      ],
       "DeletionPolicy": "Delete",
       "Properties": {
-        "DomainName": {
+        "Name": {
           "Fn::Sub": "payment-logs-${EnvironmentSuffix}"
         },
-        "EngineVersion": "OpenSearch_2.11",
-        "ClusterConfig": {
-          "InstanceType": {
-            "Ref": "OpenSearchInstanceType"
-          },
-          "InstanceCount": {
-            "Ref": "OpenSearchInstanceCount"
-          },
-          "DedicatedMasterEnabled": false,
-          "ZoneAwarenessEnabled": true,
-          "ZoneAwarenessConfig": {
-            "AvailabilityZoneCount": 2
-          }
-        },
-        "EBSOptions": {
-          "EBSEnabled": true,
-          "VolumeType": "gp3",
-          "VolumeSize": 20
-        },
-        "EncryptionAtRestOptions": {
-          "Enabled": true
-        },
-        "NodeToNodeEncryptionOptions": {
-          "Enabled": true
-        },
-        "DomainEndpointOptions": {
-          "EnforceHTTPS": true,
-          "TLSSecurityPolicy": "Policy-Min-TLS-1-2-2019-07"
-        },
-        "AccessPolicies": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::GetAtt": [
-                    "KinesisFirehoseRole",
-                    "Arn"
-                  ]
-                }
-              },
-              "Action": "es:*",
-              "Resource": {
-                "Fn::Sub": "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/payment-logs-${EnvironmentSuffix}/*"
-              }
-            }
-          ]
-        },
-        "AdvancedSecurityOptions": {
-          "Enabled": true,
-          "InternalUserDatabaseEnabled": true,
-          "MasterUserOptions": {
-            "MasterUserName": "admin",
-            "MasterUserPassword": {
-              "Fn::Sub": "{{resolve:secretsmanager:OpenSearchMasterPassword-${EnvironmentSuffix}:SecretString:password}}"
-            }
-          }
-        }
+        "Type": "SEARCH",
+        "Description": "OpenSearch Serverless collection for payment logs"
       }
     },
     "LogDeliveryStream": {
@@ -609,16 +566,14 @@
             ]
           }
         },
-        "OpenSearchDestinationConfiguration": {
-          "DomainARN": {
+        "AmazonOpenSearchServerlessDestinationConfiguration": {
+          "CollectionEndpoint": {
             "Fn::GetAtt": [
               "OpenSearchDomain",
-              "Arn"
+              "CollectionEndpoint"
             ]
           },
           "IndexName": "payment-logs",
-          "IndexRotationPeriod": "OneDay",
-          "TypeName": "_doc",
           "RoleARN": {
             "Fn::GetAtt": [
               "KinesisFirehoseRole",
@@ -674,7 +629,7 @@
             {
               "Effect": "Allow",
               "Action": [
-                "es:*"
+                "aoss:*"
               ],
               "Resource": [
                 {
@@ -918,30 +873,24 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "opensearch-cluster-status-${EnvironmentSuffix}"
+          "Fn::Sub": "opensearch-5xx-errors-${EnvironmentSuffix}"
         },
-        "AlarmDescription": "Triggered when OpenSearch cluster status is red",
-        "MetricName": "ClusterStatus.red",
-        "Namespace": "AWS/ES",
+        "AlarmDescription": "Triggered when OpenSearch has 5xx errors",
+        "MetricName": "5xx",
+        "Namespace": "AWS/AOSS",
         "Dimensions": [
           {
-            "Name": "DomainName",
+            "Name": "CollectionName",
             "Value": {
               "Ref": "OpenSearchDomain"
             }
-          },
-          {
-            "Name": "ClientId",
-            "Value": {
-              "Ref": "AWS::AccountId"
-            }
           }
         ],
-        "Statistic": "Maximum",
-        "Period": 60,
+        "Statistic": "Sum",
+        "Period": 300,
         "EvaluationPeriods": 1,
-        "Threshold": 1,
-        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
         "AlarmActions": [
           {
             "Ref": "CriticalAlertTopic"
@@ -957,7 +906,7 @@
           "Fn::Sub": "payment-processing-${EnvironmentSuffix}"
         },
         "DashboardBody": {
-          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"TransactionSuccess\", {\"stat\": \"Sum\", \"label\": \"Successful Transactions\"}],\n          [\".\", \"TransactionFailure\", {\"stat\": \"Sum\", \"label\": \"Failed Transactions\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Transaction Volume\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"AverageLatency\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Average Payment Latency (ms)\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        },\n        \"annotations\": {\n          \"horizontal\": [\n            {\n              \"label\": \"High Latency Threshold\",\n              \"value\": ${HighLatencyThreshold}\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"ErrorRate\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Error Rate (%)\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0,\n            \"max\": 100\n          }\n        },\n        \"annotations\": {\n          \"horizontal\": [\n            {\n              \"label\": \"Error Rate Threshold\",\n              \"value\": ${ErrorRateThreshold}\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"FraudDetected\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Fraud Detections\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}, {\"FunctionName\": \"${MetricsProcessorFunction}\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Lambda Errors\"}, {\"FunctionName\": \"${MetricsProcessorFunction}\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics Processor Health\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Kinesis\", \"IncomingRecords\", {\"stat\": \"Sum\"}, {\"StreamName\": \"${LogStream}\"}],\n          [\".\", \"IncomingBytes\", {\"stat\": \"Sum\", \"yAxis\": \"right\"}, {\"StreamName\": \"${LogStream}\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Kinesis Stream Throughput\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/ES\", \"ClusterStatus.green\", {\"stat\": \"Maximum\", \"label\": \"Green\"}, {\"DomainName\": \"${OpenSearchDomain}\", \"ClientId\": \"${AWS::AccountId}\"}],\n          [\".\", \"ClusterStatus.yellow\", {\"stat\": \"Maximum\", \"label\": \"Yellow\"}, {\"DomainName\": \"${OpenSearchDomain}\", \"ClientId\": \"${AWS::AccountId}\"}],\n          [\".\", \"ClusterStatus.red\", {\"stat\": \"Maximum\", \"label\": \"Red\"}, {\"DomainName\": \"${OpenSearchDomain}\", \"ClientId\": \"${AWS::AccountId}\"}]\n        ],\n        \"period\": 60,\n        \"stat\": \"Maximum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"OpenSearch Cluster Status\"\n      }\n    },\n    {\n      \"type\": \"log\",\n      \"properties\": {\n        \"query\": \"SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\\n| fields @timestamp, @message\\n| sort @timestamp desc\\n| limit 20\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Recent Payment Transaction Logs\",\n        \"stacked\": false\n      }\n    }\n  ]\n}\n"
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"TransactionSuccess\", {\"stat\": \"Sum\", \"label\": \"Successful Transactions\"}],\n          [\".\", \"TransactionFailure\", {\"stat\": \"Sum\", \"label\": \"Failed Transactions\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Transaction Volume\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"AverageLatency\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Average Payment Latency (ms)\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        },\n        \"annotations\": {\n          \"horizontal\": [\n            {\n              \"label\": \"High Latency Threshold\",\n              \"value\": ${HighLatencyThreshold}\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"ErrorRate\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Average\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Error Rate (%)\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0,\n            \"max\": 100\n          }\n        },\n        \"annotations\": {\n          \"horizontal\": [\n            {\n              \"label\": \"Error Rate Threshold\",\n              \"value\": ${ErrorRateThreshold}\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"PaymentProcessing-${EnvironmentSuffix}\", \"FraudDetected\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Fraud Detections\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\", \"label\": \"Lambda Invocations\"}, {\"FunctionName\": \"${MetricsProcessorFunction}\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\", \"label\": \"Lambda Errors\"}, {\"FunctionName\": \"${MetricsProcessorFunction}\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics Processor Health\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/Kinesis\", \"IncomingRecords\", {\"stat\": \"Sum\"}, {\"StreamName\": \"${LogStream}\"}],\n          [\".\", \"IncomingBytes\", {\"stat\": \"Sum\", \"yAxis\": \"right\"}, {\"StreamName\": \"${LogStream}\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Kinesis Stream Throughput\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/AOSS\", \"2xx\", {\"stat\": \"Sum\", \"label\": \"2xx\"}, {\"CollectionName\": \"${OpenSearchDomain}\"}],\n          [\".\", \"4xx\", {\"stat\": \"Sum\", \"label\": \"4xx\"}, {\"CollectionName\": \"${OpenSearchDomain}\"}],\n          [\".\", \"5xx\", {\"stat\": \"Sum\", \"label\": \"5xx\"}, {\"CollectionName\": \"${OpenSearchDomain}\"}]\n        ],\n        \"period\": 300,\n        \"stat\": \"Maximum\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"OpenSearch Response Codes\"\n      }\n    },\n    {\n      \"type\": \"log\",\n      \"properties\": {\n        \"query\": \"SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\\n| fields @timestamp, @message\\n| sort @timestamp desc\\n| limit 20\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Recent Payment Transaction Logs\",\n        \"stacked\": false\n      }\n    }\n  ]\n}\n"
         }
       }
     },
@@ -1148,11 +1097,11 @@
       }
     },
     "OpenSearchDomainEndpoint": {
-      "Description": "OpenSearch domain endpoint",
+      "Description": "OpenSearch collection endpoint",
       "Value": {
         "Fn::GetAtt": [
           "OpenSearchDomain",
-          "DomainEndpoint"
+          "CollectionEndpoint"
         ]
       },
       "Export": {
@@ -1164,7 +1113,7 @@
     "OpenSearchDashboardUrl": {
       "Description": "OpenSearch Dashboards URL",
       "Value": {
-        "Fn::Sub": "https://${OpenSearchDomain.DomainEndpoint}/_dashboards"
+        "Fn::Sub": "https://${OpenSearchDomain.DashboardEndpoint}/_dashboards"
       },
       "Export": {
         "Name": {

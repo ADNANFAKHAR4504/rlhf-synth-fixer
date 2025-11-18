@@ -19,11 +19,6 @@ Metadata:
           - AlertEmail
           - HighLatencyThreshold
           - ErrorRateThreshold
-      - Label:
-          default: 'OpenSearch Configuration'
-        Parameters:
-          - OpenSearchInstanceType
-          - OpenSearchInstanceCount
 
 Parameters:
   EnvironmentSuffix:
@@ -61,23 +56,6 @@ Parameters:
     Type: Number
     Default: 5
     Description: 'Error rate threshold percentage'
-
-  OpenSearchInstanceType:
-    Type: String
-    Default: 't3.small.search'
-    Description: 'OpenSearch instance type'
-    AllowedValues:
-      - 't3.small.search'
-      - 't3.medium.search'
-      - 'm5.large.search'
-      - 'm5.xlarge.search'
-
-  OpenSearchInstanceCount:
-    Type: Number
-    Default: 2
-    MinValue: 2
-    MaxValue: 10
-    Description: 'Number of OpenSearch instances (minimum 2 for HA)'
 
 Resources:
   # ========================================
@@ -324,43 +302,12 @@ Resources:
   # ========================================
 
   OpenSearchDomain:
-    Type: AWS::OpenSearchService::Domain
+    Type: AWS::OpenSearchServerless::Collection
     DeletionPolicy: Delete
     Properties:
-      DomainName: !Sub 'payment-logs-${EnvironmentSuffix}'
-      EngineVersion: 'OpenSearch_2.11'
-      ClusterConfig:
-        InstanceType: !Ref OpenSearchInstanceType
-        InstanceCount: !Ref OpenSearchInstanceCount
-        DedicatedMasterEnabled: false
-        ZoneAwarenessEnabled: true
-        ZoneAwarenessConfig:
-          AvailabilityZoneCount: 2
-      EBSOptions:
-        EBSEnabled: true
-        VolumeType: gp3
-        VolumeSize: 20
-      EncryptionAtRestOptions:
-        Enabled: true
-      NodeToNodeEncryptionOptions:
-        Enabled: true
-      DomainEndpointOptions:
-        EnforceHTTPS: true
-        TLSSecurityPolicy: 'Policy-Min-TLS-1-2-2019-07'
-      AccessPolicies:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !GetAtt KinesisFirehoseRole.Arn
-            Action: 'es:*'
-            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/payment-logs-${EnvironmentSuffix}/*'
-      AdvancedSecurityOptions:
-        Enabled: true
-        InternalUserDatabaseEnabled: true
-        MasterUserOptions:
-          MasterUserName: 'admin'
-          MasterUserPassword: !Sub '{{resolve:secretsmanager:OpenSearchMasterPassword-${EnvironmentSuffix}:SecretString:password}}'
+      Name: !Sub 'payment-logs-${EnvironmentSuffix}'
+      Type: SEARCH
+      Description: 'OpenSearch Serverless collection for payment logs'
 
   # ========================================
   # Kinesis Firehose Delivery Stream
@@ -376,11 +323,9 @@ Resources:
       KinesisStreamSourceConfiguration:
         KinesisStreamARN: !GetAtt LogStream.Arn
         RoleARN: !GetAtt KinesisFirehoseRole.Arn
-      OpenSearchDestinationConfiguration:
-        DomainARN: !GetAtt OpenSearchDomain.Arn
+      AmazonOpenSearchServerlessDestinationConfiguration:
+        CollectionEndpoint: !GetAtt OpenSearchDomain.CollectionEndpoint
         IndexName: 'payment-logs'
-        IndexRotationPeriod: 'OneDay'
-        TypeName: '_doc'
         RoleARN: !GetAtt KinesisFirehoseRole.Arn
         S3BackupMode: FailedDocumentsOnly
         S3Configuration:
@@ -406,7 +351,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
-              - 'es:*'
+              - 'aoss:*'
             Resource:
               - !GetAtt OpenSearchDomain.Arn
               - !Sub '${OpenSearchDomain.Arn}/*'
@@ -691,20 +636,18 @@ Resources:
   OpenSearchClusterStatusAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'opensearch-cluster-status-${EnvironmentSuffix}'
-      AlarmDescription: 'Triggered when OpenSearch cluster status is red'
-      MetricName: ClusterStatus.red
-      Namespace: AWS/ES
+      AlarmName: !Sub 'opensearch-5xx-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when OpenSearch has 5xx errors'
+      MetricName: 5xx
+      Namespace: AWS/AOSS
       Dimensions:
-        - Name: DomainName
+        - Name: CollectionName
           Value: !Ref OpenSearchDomain
-        - Name: ClientId
-          Value: !Ref AWS::AccountId
-      Statistic: Maximum
-      Period: 60
+      Statistic: Sum
+      Period: 300
       EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
       AlarmActions:
         - !Ref CriticalAlertTopic
       TreatMissingData: notBreaching
@@ -836,14 +779,14 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/ES", "ClusterStatus.green", {"stat": "Maximum", "label": "Green"}, {"DomainName": "${OpenSearchDomain}", "ClientId": "${AWS::AccountId}"}],
-                  [".", "ClusterStatus.yellow", {"stat": "Maximum", "label": "Yellow"}, {"DomainName": "${OpenSearchDomain}", "ClientId": "${AWS::AccountId}"}],
-                  [".", "ClusterStatus.red", {"stat": "Maximum", "label": "Red"}, {"DomainName": "${OpenSearchDomain}", "ClientId": "${AWS::AccountId}"}]
+                  ["AWS/AOSS", "2xx", {"stat": "Sum", "label": "2xx"}, {"CollectionName": "${OpenSearchDomain}"}],
+                  [".", "4xx", {"stat": "Sum", "label": "4xx"}, {"CollectionName": "${OpenSearchDomain}"}],
+                  [".", "5xx", {"stat": "Sum", "label": "5xx"}, {"CollectionName": "${OpenSearchDomain}"}]
                 ],
-                "period": 60,
+                "period": 300,
                 "stat": "Maximum",
                 "region": "${AWS::Region}",
-                "title": "OpenSearch Cluster Status"
+                "title": "OpenSearch Response Codes"
               }
             },
             {
@@ -978,14 +921,14 @@ Outputs:
 
   # OpenSearch
   OpenSearchDomainEndpoint:
-    Description: 'OpenSearch domain endpoint'
-    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+    Description: 'OpenSearch collection endpoint'
+    Value: !GetAtt OpenSearchDomain.CollectionEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
 
   OpenSearchDashboardUrl:
     Description: 'OpenSearch Dashboards URL'
-    Value: !Sub 'https://${OpenSearchDomain.DomainEndpoint}/_dashboards'
+    Value: !Sub 'https://${OpenSearchDomain.DashboardEndpoint}/_dashboards'
     Export:
       Name: !Sub '${AWS::StackName}-OpenSearchDashboardUrl'
 
