@@ -50,15 +50,54 @@ const discoverStack = async (): Promise<{ stackName: string; region: string }> =
   const region = process.env.AWS_REGION || 'us-east-1';
   const cfClient = new CloudFormationClient({ region });
 
-  // Try to find stack by pattern TapStack*
+  // First, try to get stack name from environment variable or outputs file
+  let stackName: string | undefined;
+  
+  // Check for STACK_NAME environment variable
+  if (process.env.STACK_NAME) {
+    stackName = process.env.STACK_NAME;
+  }
+  
+  // Check for ENVIRONMENT_SUFFIX to construct stack name
+  if (!stackName && process.env.ENVIRONMENT_SUFFIX) {
+    stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX}`;
+  }
+  
+  // If we have a specific stack name, verify it exists
+  if (stackName) {
+    try {
+      const describeCommand = new DescribeStacksCommand({ StackName: stackName });
+      const response = await cfClient.send(describeCommand);
+      if (response.Stacks && response.Stacks.length > 0) {
+        const stackStatus = response.Stacks[0].StackStatus;
+        if (stackStatus === 'CREATE_COMPLETE' || stackStatus === 'UPDATE_COMPLETE') {
+          return { stackName, region };
+        } else {
+          console.log(`Stack ${stackName} exists but status is ${stackStatus}, falling back to discovery`);
+        }
+      }
+    } catch (error: any) {
+      console.log(`Stack ${stackName} not found (${error.message}), falling back to discovery`);
+    }
+  }
+
+  // Fallback: Try to find stack by pattern TapStack*
   const listCommand = new ListStacksCommand({
     StackStatusFilter: ['CREATE_COMPLETE', 'UPDATE_COMPLETE'],
   });
 
   const stacks = await cfClient.send(listCommand);
-  const tapStack = stacks.StackSummaries?.find(
-    (stack) => stack.StackName?.startsWith('TapStack')
-  );
+  
+  // Sort by creation time (newest first) to get the most recent stack
+  const tapStacks = (stacks.StackSummaries || [])
+    .filter((stack) => stack.StackName?.startsWith('TapStack'))
+    .sort((a, b) => {
+      const aTime = a.CreationTime?.getTime() || 0;
+      const bTime = b.CreationTime?.getTime() || 0;
+      return bTime - aTime; // Newest first
+    });
+  
+  const tapStack = tapStacks[0];
 
   if (!tapStack?.StackName) {
     throw new Error('No TapStack found. Please deploy the stack first.');
@@ -66,7 +105,7 @@ const discoverStack = async (): Promise<{ stackName: string; region: string }> =
 
   return {
     stackName: tapStack.StackName,
-    region: tapStack.StackName.includes('dev') ? region : region,
+    region,
   };
 };
 
