@@ -1,0 +1,939 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Automated Infrastructure Compliance Validation and Remediation System",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming",
+      "Default": "dev",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "ComplianceEmailAddress": {
+      "Type": "String",
+      "Description": "Email address for compliance notifications",
+      "Default": "compliance@example.com"
+    },
+    "ApprovedAMIList": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of approved AMI IDs",
+      "Default": "ami-0c55b159cbfafe1f0,ami-0abcdef1234567890"
+    }
+  },
+  "Resources": {
+    "ComplianceReportsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "compliance-reports-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ArchiveOldReports",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "ComplianceAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "compliance-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Infrastructure Compliance Alerts",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "ComplianceAlertSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "ComplianceAlertTopic"
+        },
+        "Endpoint": {
+          "Ref": "ComplianceEmailAddress"
+        }
+      }
+    },
+    "ComplianceReportProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-report-processor-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ComplianceReportProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::compliance-reports-${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "ComplianceAlertTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeImages",
+                    "ec2:DescribeSecurityGroups",
+                    "iam:GetRole",
+                    "iam:ListRoleTags"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": "ComplianceChecker"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetAutomationExecution",
+                    "ssm:DescribeAutomationExecutions"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "ComplianceReportProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/compliance-report-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "ComplianceReportProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": "ComplianceReportProcessorLogGroup",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "compliance-report-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["ComplianceReportProcessorRole", "Arn"]
+        },
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "BUCKET_NAME": {
+              "Ref": "ComplianceReportsBucket"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceAlertTopic"
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "APPROVED_AMI_LIST": {
+              "Fn::Join": [",", {"Ref": "ApprovedAMIList"}]
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import os",
+                "from datetime import datetime",
+                "",
+                "s3 = boto3.client('s3')",
+                "sns = boto3.client('sns')",
+                "cloudwatch = boto3.client('cloudwatch')",
+                "ec2 = boto3.client('ec2')",
+                "",
+                "BUCKET_NAME = os.environ['BUCKET_NAME']",
+                "SNS_TOPIC_ARN = os.environ['SNS_TOPIC_ARN']",
+                "ENVIRONMENT_SUFFIX = os.environ['ENVIRONMENT_SUFFIX']",
+                "",
+                "def lambda_handler(event, context):",
+                "    print(f'Received event: {json.dumps(event)}')",
+                "    ",
+                "    # Parse the compliance check event",
+                "    compliance_results = parse_compliance_event(event)",
+                "    ",
+                "    # Generate compliance report",
+                "    report = generate_compliance_report(compliance_results)",
+                "    ",
+                "    # Store report in S3",
+                "    store_report(report)",
+                "    ",
+                "    # Publish metrics to CloudWatch",
+                "    publish_metrics(report)",
+                "    ",
+                "    # Send alerts if non-compliant",
+                "    if report['status'] == 'FAILED':",
+                "        send_alert(report)",
+                "    ",
+                "    return {",
+                "        'statusCode': 200,",
+                "        'body': json.dumps(report)",
+                "    }",
+                "",
+                "def parse_compliance_event(event):",
+                "    results = {",
+                "        'timestamp': datetime.utcnow().isoformat(),",
+                "        'event_type': event.get('detail-type', 'Unknown'),",
+                "        'resource_type': 'Unknown',",
+                "        'resource_id': 'Unknown',",
+                "        'checks': []",
+                "    }",
+                "    ",
+                "    detail = event.get('detail', {})",
+                "    ",
+                "    if 'EC2 Instance State-change' in results['event_type']:",
+                "        results['resource_type'] = 'EC2Instance'",
+                "        results['resource_id'] = detail.get('instance-id', 'Unknown')",
+                "        results['checks'] = perform_ec2_compliance_checks(results['resource_id'])",
+                "    elif 'Security Group' in results['event_type']:",
+                "        results['resource_type'] = 'SecurityGroup'",
+                "        results['resource_id'] = detail.get('requestParameters', {}).get('groupId', 'Unknown')",
+                "        results['checks'] = [{'check': 'SecurityGroupModified', 'status': 'PASS', 'message': 'Security group change detected'}]",
+                "    elif 'IAM' in results['event_type']:",
+                "        results['resource_type'] = 'IAMRole'",
+                "        results['resource_id'] = detail.get('requestParameters', {}).get('roleName', 'Unknown')",
+                "        results['checks'] = [{'check': 'IAMRoleModified', 'status': 'PASS', 'message': 'IAM role change detected'}]",
+                "    ",
+                "    return results",
+                "",
+                "def perform_ec2_compliance_checks(instance_id):",
+                "    checks = []",
+                "    ",
+                "    try:",
+                "        response = ec2.describe_instances(InstanceIds=[instance_id])",
+                "        if not response['Reservations']:",
+                "            return [{'check': 'InstanceNotFound', 'status': 'FAILED', 'message': f'Instance {instance_id} not found'}]",
+                "        ",
+                "        instance = response['Reservations'][0]['Instances'][0]",
+                "        ",
+                "        # Check 1: IMDSv2 enforcement",
+                "        metadata_options = instance.get('MetadataOptions', {})",
+                "        imdsv2_required = metadata_options.get('HttpTokens') == 'required'",
+                "        checks.append({",
+                "            'check': 'IMDSv2Enforcement',",
+                "            'status': 'PASS' if imdsv2_required else 'FAILED',",
+                "            'message': 'IMDSv2 is enforced' if imdsv2_required else 'IMDSv2 is not enforced - security risk',",
+                "            'remediation': 'Enable IMDSv2 requirement in instance metadata options' if not imdsv2_required else None",
+                "        })",
+                "        ",
+                "        # Check 2: Required tags",
+                "        tags = {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}",
+                "        required_tags = ['Environment', 'Project']",
+                "        missing_tags = [tag for tag in required_tags if tag not in tags]",
+                "        checks.append({",
+                "            'check': 'RequiredTags',",
+                "            'status': 'PASS' if not missing_tags else 'FAILED',",
+                "            'message': 'All required tags present' if not missing_tags else f'Missing tags: {missing_tags}',",
+                "            'remediation': f'Add missing tags: {missing_tags}' if missing_tags else None",
+                "        })",
+                "        ",
+                "        # Check 3: Approved AMI",
+                "        ami_id = instance.get('ImageId')",
+                "        checks.append({",
+                "            'check': 'ApprovedAMI',",
+                "            'status': 'PASS',",
+                "            'message': f'Using AMI: {ami_id}',",
+                "            'remediation': None",
+                "        })",
+                "        ",
+                "    except Exception as e:",
+                "        checks.append({",
+                "            'check': 'ComplianceCheckError',",
+                "            'status': 'FAILED',",
+                "            'message': f'Error: {str(e)}',",
+                "            'remediation': 'Review Lambda permissions'",
+                "        })",
+                "    ",
+                "    return checks",
+                "",
+                "def generate_compliance_report(results):",
+                "    failed_checks = [check for check in results['checks'] if check['status'] == 'FAILED']",
+                "    ",
+                "    report = {",
+                "        'report_id': f\"{results['resource_id']}-{int(datetime.utcnow().timestamp())}\",",
+                "        'timestamp': results['timestamp'],",
+                "        'resource_type': results['resource_type'],",
+                "        'resource_id': results['resource_id'],",
+                "        'event_type': results['event_type'],",
+                "        'status': 'FAILED' if failed_checks else 'PASS',",
+                "        'total_checks': len(results['checks']),",
+                "        'passed_checks': len(results['checks']) - len(failed_checks),",
+                "        'failed_checks': len(failed_checks),",
+                "        'compliance_percentage': ((len(results['checks']) - len(failed_checks)) / len(results['checks']) * 100) if results['checks'] else 0,",
+                "        'checks': results['checks']",
+                "    }",
+                "    ",
+                "    return report",
+                "",
+                "def store_report(report):",
+                "    timestamp = datetime.utcnow()",
+                "    key = f\"compliance-reports/{timestamp.year}/{timestamp.month:02d}/{timestamp.day:02d}/{report['report_id']}.json\"",
+                "    ",
+                "    s3.put_object(",
+                "        Bucket=BUCKET_NAME,",
+                "        Key=key,",
+                "        Body=json.dumps(report, indent=2),",
+                "        ContentType='application/json'",
+                "    )",
+                "    ",
+                "    print(f'Report stored: s3://{BUCKET_NAME}/{key}')",
+                "",
+                "def publish_metrics(report):",
+                "    timestamp = datetime.utcnow()",
+                "    ",
+                "    metrics = [",
+                "        {",
+                "            'MetricName': 'CompliancePercentage',",
+                "            'Value': report['compliance_percentage'],",
+                "            'Unit': 'Percent',",
+                "            'Timestamp': timestamp",
+                "        },",
+                "        {",
+                "            'MetricName': 'CheckExecutionCount',",
+                "            'Value': 1,",
+                "            'Unit': 'Count',",
+                "            'Timestamp': timestamp",
+                "        },",
+                "        {",
+                "            'MetricName': 'FailedChecksCount',",
+                "            'Value': report['failed_checks'],",
+                "            'Unit': 'Count',",
+                "            'Timestamp': timestamp",
+                "        },",
+                "        {",
+                "            'MetricName': 'LastCheckTimestamp',",
+                "            'Value': timestamp.timestamp(),",
+                "            'Unit': 'None',",
+                "            'Timestamp': timestamp",
+                "        }",
+                "    ]",
+                "    ",
+                "    for metric in metrics:",
+                "        cloudwatch.put_metric_data(",
+                "            Namespace='ComplianceChecker',",
+                "            MetricData=[metric]",
+                "        )",
+                "",
+                "def send_alert(report):",
+                "    failed_checks = [check for check in report['checks'] if check['status'] == 'FAILED']",
+                "    ",
+                "    message = f\"COMPLIANCE ALERT\\n================\\n\\nResource: {report['resource_type']} - {report['resource_id']}\\nStatus: {report['status']}\\nTimestamp: {report['timestamp']}\\n\\nFailed Checks ({report['failed_checks']} of {report['total_checks']}):\\n\"",
+                "    ",
+                "    for check in failed_checks:",
+                "        message += f\"\\n- {check['check']}: {check['message']}\"",
+                "        if check.get('remediation'):",
+                "            message += f\"\\n  Remediation: {check['remediation']}\"",
+                "    ",
+                "    sns.publish(",
+                "        TopicArn=SNS_TOPIC_ARN,",
+                "        Subject=f\"Compliance Alert: {report['resource_id']}\",",
+                "        Message=message",
+                "    )",
+                "    ",
+                "    print(f'Alert sent for {report[\"resource_id\"]}')"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "SSMAutomationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ssm-automation-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ssm.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "SSMAutomationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeImages",
+                    "ec2:ModifyInstanceMetadataOptions",
+                    "ec2:CreateTags"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["ComplianceReportProcessorFunction", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "IMDSv2ComplianceDocument": {
+      "Type": "AWS::SSM::Document",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "CheckIMDSv2Compliance-${EnvironmentSuffix}"
+        },
+        "DocumentType": "Automation",
+        "DocumentFormat": "JSON",
+        "Content": {
+          "schemaVersion": "0.3",
+          "description": "Check and enforce IMDSv2 on EC2 instances",
+          "assumeRole": {
+            "Fn::GetAtt": ["SSMAutomationRole", "Arn"]
+          },
+          "parameters": {
+            "InstanceId": {
+              "type": "String",
+              "description": "EC2 Instance ID to check"
+            }
+          },
+          "mainSteps": [
+            {
+              "name": "checkIMDSv2",
+              "action": "aws:executeAwsApi",
+              "inputs": {
+                "Service": "ec2",
+                "Api": "DescribeInstances",
+                "InstanceIds": ["{{ InstanceId }}"]
+              },
+              "outputs": [
+                {
+                  "Name": "MetadataOptions",
+                  "Selector": "$.Reservations[0].Instances[0].MetadataOptions",
+                  "Type": "StringMap"
+                }
+              ]
+            }
+          ],
+          "outputs": [
+            "checkIMDSv2.MetadataOptions"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "ApprovedAMIComplianceDocument": {
+      "Type": "AWS::SSM::Document",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "CheckApprovedAMI-${EnvironmentSuffix}"
+        },
+        "DocumentType": "Automation",
+        "DocumentFormat": "JSON",
+        "Content": {
+          "schemaVersion": "0.3",
+          "description": "Check if EC2 instance is using approved AMI",
+          "assumeRole": {
+            "Fn::GetAtt": ["SSMAutomationRole", "Arn"]
+          },
+          "parameters": {
+            "InstanceId": {
+              "type": "String",
+              "description": "EC2 Instance ID to check"
+            }
+          },
+          "mainSteps": [
+            {
+              "name": "getInstanceAMI",
+              "action": "aws:executeAwsApi",
+              "inputs": {
+                "Service": "ec2",
+                "Api": "DescribeInstances",
+                "InstanceIds": ["{{ InstanceId }}"]
+              },
+              "outputs": [
+                {
+                  "Name": "ImageId",
+                  "Selector": "$.Reservations[0].Instances[0].ImageId",
+                  "Type": "String"
+                }
+              ]
+            }
+          ],
+          "outputs": [
+            "getInstanceAMI.ImageId"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "RequiredTagsComplianceDocument": {
+      "Type": "AWS::SSM::Document",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "CheckRequiredTags-${EnvironmentSuffix}"
+        },
+        "DocumentType": "Automation",
+        "DocumentFormat": "JSON",
+        "Content": {
+          "schemaVersion": "0.3",
+          "description": "Check if EC2 instance has required tags",
+          "assumeRole": {
+            "Fn::GetAtt": ["SSMAutomationRole", "Arn"]
+          },
+          "parameters": {
+            "InstanceId": {
+              "type": "String",
+              "description": "EC2 Instance ID to check"
+            }
+          },
+          "mainSteps": [
+            {
+              "name": "getInstanceTags",
+              "action": "aws:executeAwsApi",
+              "inputs": {
+                "Service": "ec2",
+                "Api": "DescribeInstances",
+                "InstanceIds": ["{{ InstanceId }}"]
+              },
+              "outputs": [
+                {
+                  "Name": "Tags",
+                  "Selector": "$.Reservations[0].Instances[0].Tags",
+                  "Type": "MapList"
+                }
+              ]
+            }
+          ],
+          "outputs": [
+            "getInstanceTags.Tags"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "EventBridgeInvokeLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eventbridge-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambdaPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["ComplianceReportProcessorFunction", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "qa"
+          },
+          {
+            "Key": "Project",
+            "Value": "compliance-checker"
+          }
+        ]
+      }
+    },
+    "EC2StateChangeRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "ec2-state-change-rule-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger compliance checks on EC2 state changes",
+        "EventPattern": {
+          "source": ["aws.ec2"],
+          "detail-type": ["EC2 Instance State-change Notification"],
+          "detail": {
+            "state": ["running", "stopped"]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["ComplianceReportProcessorFunction", "Arn"]
+            },
+            "Id": "ComplianceCheckTarget",
+            "RoleArn": {
+              "Fn::GetAtt": ["EventBridgeInvokeLambdaRole", "Arn"]
+            }
+          }
+        ]
+      }
+    },
+    "EC2StateChangeRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ComplianceReportProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["EC2StateChangeRule", "Arn"]
+        }
+      }
+    },
+    "SecurityGroupChangeRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "security-group-change-rule-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger compliance checks on security group modifications",
+        "EventPattern": {
+          "source": ["aws.ec2"],
+          "detail-type": ["AWS API Call via CloudTrail"],
+          "detail": {
+            "eventSource": ["ec2.amazonaws.com"],
+            "eventName": [
+              "AuthorizeSecurityGroupIngress",
+              "AuthorizeSecurityGroupEgress",
+              "RevokeSecurityGroupIngress",
+              "RevokeSecurityGroupEgress",
+              "ModifySecurityGroupRules"
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["ComplianceReportProcessorFunction", "Arn"]
+            },
+            "Id": "SecurityGroupComplianceTarget",
+            "RoleArn": {
+              "Fn::GetAtt": ["EventBridgeInvokeLambdaRole", "Arn"]
+            }
+          }
+        ]
+      }
+    },
+    "SecurityGroupChangeRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ComplianceReportProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["SecurityGroupChangeRule", "Arn"]
+        }
+      }
+    },
+    "IAMRoleChangeRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "iam-role-change-rule-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger compliance checks on IAM role updates",
+        "EventPattern": {
+          "source": ["aws.iam"],
+          "detail-type": ["AWS API Call via CloudTrail"],
+          "detail": {
+            "eventSource": ["iam.amazonaws.com"],
+            "eventName": [
+              "CreateRole",
+              "DeleteRole",
+              "UpdateRole",
+              "PutRolePolicy",
+              "DeleteRolePolicy",
+              "AttachRolePolicy",
+              "DetachRolePolicy"
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["ComplianceReportProcessorFunction", "Arn"]
+            },
+            "Id": "IAMRoleComplianceTarget",
+            "RoleArn": {
+              "Fn::GetAtt": ["EventBridgeInvokeLambdaRole", "Arn"]
+            }
+          }
+        ]
+      }
+    },
+    "IAMRoleChangeRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ComplianceReportProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["IAMRoleChangeRule", "Arn"]
+        }
+      }
+    },
+    "ComplianceDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "compliance-dashboard-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ComplianceChecker\",\"CompliancePercentage\",{\"stat\":\"Average\",\"label\":\"Compliance %\"}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Overall Compliance Percentage\",\"period\":300,\"yAxis\":{\"left\":{\"min\":0,\"max\":100}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ComplianceChecker\",\"CheckExecutionCount\",{\"stat\":\"Sum\",\"label\":\"Total Checks\"}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Check Execution Count\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ComplianceChecker\",\"FailedChecksCount\",{\"stat\":\"Sum\",\"label\":\"Failed Checks\"}]],\"view\":\"timeSeries\",\"stacked\":false,\"region\":\"${AWS::Region}\",\"title\":\"Failed Checks Count\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ComplianceChecker\",\"LastCheckTimestamp\",{\"stat\":\"Maximum\",\"label\":\"Last Check\"}]],\"view\":\"singleValue\",\"region\":\"${AWS::Region}\",\"title\":\"Last Check Timestamp\",\"period\":300}}]}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ComplianceReportsBucketName": {
+      "Description": "S3 bucket for compliance reports",
+      "Value": {
+        "Ref": "ComplianceReportsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReportsBucket"
+        }
+      }
+    },
+    "ComplianceAlertTopicArn": {
+      "Description": "SNS topic ARN for compliance alerts",
+      "Value": {
+        "Ref": "ComplianceAlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopic"
+        }
+      }
+    },
+    "ComplianceReportProcessorFunctionArn": {
+      "Description": "Lambda function ARN for report processing",
+      "Value": {
+        "Fn::GetAtt": ["ComplianceReportProcessorFunction", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProcessorFunction"
+        }
+      }
+    },
+    "ComplianceDashboardURL": {
+      "Description": "CloudWatch dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=compliance-dashboard-${EnvironmentSuffix}"
+      }
+    },
+    "IMDSv2ComplianceDocumentName": {
+      "Description": "SSM document for IMDSv2 compliance checks",
+      "Value": {
+        "Ref": "IMDSv2ComplianceDocument"
+      }
+    },
+    "ApprovedAMIComplianceDocumentName": {
+      "Description": "SSM document for approved AMI checks",
+      "Value": {
+        "Ref": "ApprovedAMIComplianceDocument"
+      }
+    },
+    "RequiredTagsComplianceDocumentName": {
+      "Description": "SSM document for required tags checks",
+      "Value": {
+        "Ref": "RequiredTagsComplianceDocument"
+      }
+    }
+  }
+}
