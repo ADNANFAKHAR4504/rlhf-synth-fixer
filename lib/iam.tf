@@ -69,9 +69,30 @@ resource "aws_iam_role_policy" "emr_service_ec2_permissions" {
           "ec2:AssociateAddress",
           "ec2:DisassociateAddress",
           "ec2:AllocateAddress",
-          "ec2:ReleaseAddress"
+          "ec2:ReleaseAddress",
+          "ec2:CreateVolume",
+          "ec2:DeleteVolume",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeVolumeStatus",
+          "ec2:DescribeSnapshots",
+          "ec2:CreateSnapshot",
+          "ec2:DeleteSnapshot",
+          "ec2:ModifyVolumeAttribute",
+          "iam:PassRole"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = [
+          aws_iam_role.emr_ec2_role.arn,
+          aws_iam_role.emr_autoscaling_role.arn
+        ]
       }
     ]
   })
