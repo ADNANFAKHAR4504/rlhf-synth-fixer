@@ -204,6 +204,17 @@ resource "aws_iam_role_policy" "emr_s3_access" {
           "${aws_s3_bucket.logs.arn}/bootstrap/*",
           "${aws_s3_bucket.logs.arn}/emr-logs/*"
         ]
+      },
+      {
+        Sid    = "ReadSecurityConfigurations"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = [
+          "${aws_s3_bucket.logs.arn}/security/*"
+        ]
       }
     ]
   })
