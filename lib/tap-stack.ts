@@ -930,8 +930,18 @@ export class TapStack extends pulumi.ComponentResource {
     this.clusterName = cluster.eksCluster.name;
     this.clusterEndpoint = cluster.eksCluster.endpoint;
     this.clusterVersion = cluster.eksCluster.version;
-    this.oidcProviderUrl = cluster.core.oidcProvider!.apply((p) => p?.url);
-    this.oidcProviderArn = cluster.core.oidcProvider!.apply((p) => p?.arn);
+    this.oidcProviderUrl = cluster.core.oidcProvider!.apply((p) => {
+      if (p && typeof p === 'object' && 'url' in p) {
+        return (p as any).url;
+      }
+      return undefined;
+    });
+    this.oidcProviderArn = cluster.core.oidcProvider!.apply((p) => {
+      if (p && typeof p === 'object' && 'arn' in p) {
+        return (p as any).arn;
+      }
+      return undefined;
+    });
     this.kubeconfig = cluster.kubeconfig;
     this.onDemandNodeGroupName = onDemandNodeGroup.nodeGroupName;
     this.spotNodeGroupName = spotNodeGroup.nodeGroupName;
