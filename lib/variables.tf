@@ -146,7 +146,7 @@ locals {
   log_group_name           = "/aws/eks/${local.cluster_name}${local.resource_suffix}/cluster"
   eks_cluster_role_name    = "${local.cluster_name}-cluster-role${local.resource_suffix}"
   namespace_name           = "${var.kubernetes_namespace}-${var.environment_suffix}"
-  database_secret_name     = "${var.database_secret_name}-${var.environment_suffix}"
+  database_secret_name     = "${var.database_secret_name}-${var.environment_suffix}${local.resource_suffix}"
   sns_topic_name           = "${local.cluster_name}-autoscaler-alerts"
 
   common_tags = {
