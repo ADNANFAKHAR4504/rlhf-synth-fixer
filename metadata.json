@@ -13,9 +13,20 @@
   "aws_services": [
     "S3 Bucket",
     "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "ASG",
+    "ALB",
+    "ELB",
+    "IAM",
+    "SSM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
