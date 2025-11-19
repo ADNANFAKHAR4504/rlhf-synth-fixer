@@ -246,7 +246,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 100,
         "TracingConfig": {
           "Mode": "Active"
         },

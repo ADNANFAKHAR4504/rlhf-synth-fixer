@@ -19,5 +19,7 @@
     "IAM",
     "CloudWatch Logs"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 8
 }
