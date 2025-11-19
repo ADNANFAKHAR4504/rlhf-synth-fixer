@@ -99,7 +99,12 @@ class MyMocks(pulumi.runtime.Mocks):
         elif resource_type == 'aws:apigateway/deployment:Deployment':
             outputs['id'] = f'deployment-{name}'
             outputs['invokeUrl'] = f'https://{name}.execute-api.us-east-1.amazonaws.com/prod'
+            # FIX: Remove stageName - Deployment no longer has this property
+        elif resource_type == 'aws:apigateway/stage:Stage':
+            # FIX: Add mock for Stage resource (newly separated from Deployment)
+            outputs['id'] = f'stage-{name}'
             outputs['stageName'] = 'prod'
+            outputs['invokeUrl'] = f'https://{name}.execute-api.us-east-1.amazonaws.com/prod'
         elif resource_type == 'aws:apigateway/domainName:DomainName':
             outputs['id'] = f'domain-{name}'
             outputs['regionalDomainName'] = f'{name}.execute-api.us-east-1.amazonaws.com'
@@ -285,7 +290,7 @@ class TestTapStack(unittest.TestCase):
     @mock_pulumi_test
     @pulumi.runtime.test
     def test_api_gateway(self):
-        """Test API Gateway with custom domains (CRITICAL FIX)."""
+        """Test API Gateway with custom domains (CRITICAL FIX - custom domains were missing)."""
         import sys
         import os
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lib'))
@@ -305,6 +310,10 @@ class TestTapStack(unittest.TestCase):
         self.assertTrue(hasattr(stack, 'primary_api_method'))
         self.assertTrue(hasattr(stack, 'primary_api_integration'))
         self.assertTrue(hasattr(stack, 'primary_api_deployment'))
+        
+        # FIX: Verify Stage resources (newly separated from Deployment)
+        self.assertTrue(hasattr(stack, 'primary_api_stage'))
+        self.assertTrue(hasattr(stack, 'secondary_api_stage'))
 
         # Verify deployments
         self.assertTrue(hasattr(stack, 'secondary_api_deployment'))

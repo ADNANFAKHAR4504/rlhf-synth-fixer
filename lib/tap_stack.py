@@ -819,6 +819,7 @@ class TapStack(ComponentResource):
         # Primary DB security group
         self.primary_db_sg = aws.ec2.SecurityGroup(
             f'sg-db-primary-{self.environment_suffix}',
+            name=f'db-primary-{self.environment_suffix}',
             vpc_id=self.primary_vpc.id,
             description='Security group for Aurora database',
             ingress=[aws.ec2.SecurityGroupIngressArgs(
@@ -896,6 +897,7 @@ class TapStack(ComponentResource):
         # Secondary DB security group
         self.secondary_db_sg = aws.ec2.SecurityGroup(
             f'sg-db-secondary-{self.environment_suffix}',
+            name=f'db-secondary-{self.environment_suffix}',
             vpc_id=self.secondary_vpc.id,
             description='Security group for Aurora database (secondary)',
             ingress=[aws.ec2.SecurityGroupIngressArgs(
@@ -1031,6 +1033,7 @@ class TapStack(ComponentResource):
         # Primary Lambda security group
         self.primary_lambda_sg = aws.ec2.SecurityGroup(
             f'sg-lambda-primary-{self.environment_suffix}',
+            name=f'lambda-primary-{self.environment_suffix}',
             vpc_id=self.primary_vpc.id,
             description='Security group for Lambda functions',
             egress=[aws.ec2.SecurityGroupEgressArgs(
@@ -1075,6 +1078,7 @@ def handler(event, context):
         # Secondary Lambda security group
         self.secondary_lambda_sg = aws.ec2.SecurityGroup(
             f'sg-lambda-secondary-{self.environment_suffix}',
+            name=f'lambda-secondary-{self.environment_suffix}',
             vpc_id=self.secondary_vpc.id,
             description='Security group for Lambda functions (secondary)',
             egress=[aws.ec2.SecurityGroupEgressArgs(
