@@ -9,11 +9,6 @@
       "MaxLength": 20,
       "Default": "dev"
     },
-    "PrimaryRegion": {
-      "Type": "String",
-      "Description": "Primary region",
-      "Default": "us-east-1"
-    },
     "AlertEmail": {
       "Type": "String",
       "Description": "Email address for CloudWatch alarms",
