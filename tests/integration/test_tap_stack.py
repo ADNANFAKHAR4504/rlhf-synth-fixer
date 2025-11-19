@@ -271,7 +271,7 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_cloudwatch_log_groups_exist(self):
         """Test that CloudWatch log groups are created"""
         for service_name in self.microservices:
-            log_group_name = f'/ecs/trading-{service_name}-{self.env_suffix}'
+            log_group_name = f'/ecs/trading/{service_name}-{self.env_suffix}'
             
             try:
                 response = self.logs_client.describe_log_groups(
