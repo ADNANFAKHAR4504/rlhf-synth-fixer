@@ -13,7 +13,7 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
-**After review completion, hand off to task-coordinator for Phase 5 (PR creation).**
+**After review completion, hand off to task-coordinator for PHASE 5 (PR creation).**
 
 ## Review Process
 
@@ -47,14 +47,14 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **Reference**: `.claude/docs/references/pre-submission-checklist.md`
 
-### Phase 1: Prerequisites Check
+### PHASE 1: Prerequisites Check
 
 - Verify latest PROMPT file (lib/PROMPT.md, lib/PROMPT2.md, or lib/PROMPT3.md) exists
 - Verify lib/IDEAL_RESPONSE.md exists
 - Confirm integration tests in test/ folder
 - Return "PR is not ready" if missing
 
-### Phase 1.5: Metadata Enhancement & Deep Compliance Validation
+### PHASE 1.1: Metadata Enhancement & Deep Compliance Validation
 
 **⚠️ CRITICAL**: This phase MUST update `metadata.json` with `training_quality` field. The CI/CD pipeline uses this as the primary source for quality scoring. Failure to update metadata.json will cause the quality gate to fail even if your review is positive.
 
@@ -425,7 +425,7 @@ FINAL CHECKLIST:
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
-- Hand off to task-coordinator Phase 5
+- Hand off to task-coordinator PHASE 5
 
 If ANY unchecked:
 - Report: "❌ NOT READY"
@@ -525,7 +525,7 @@ Before posting your comment, verify:
 2. Your comment ends with `SCORE:X` line where X is 0-10
 ```
 
-### Phase 2: Compliance Analysis
+### PHASE 2: Compliance Analysis
 
 **Cost Optimization**: Focus on meaningful differences only.
 
@@ -541,7 +541,7 @@ Before posting your comment, verify:
   - Avoid listing trivial formatting/comment differences
   - Document significant fixes for MODEL_FAILURES analysis and training quality bonus
 
-### Phase 3: Test Coverage
+### PHASE 3: Test Coverage
 
 **CRITICAL REQUIREMENT: 100% Coverage**
 
@@ -572,7 +572,7 @@ fi
 - BLOCK PR creation
 - Report specific coverage gaps
 - Training quality penalty: -3 points
-- Cannot proceed to Phase 4
+- Cannot proceed to PHASE 4
 
 **Integration Test Coverage**:
 - Analyze integration test coverage (must use cfn-outputs, no mocks)
@@ -583,7 +583,7 @@ fi
 
 **Reference**: `.claude/docs/references/pre-submission-checklist.md` Section 5
 
-### Phase 4: Final Training Quality Gate
+### PHASE 4: Final Training Quality Gate
 
 **CRITICAL**: Validate before reporting "Ready"
 
@@ -608,7 +608,7 @@ If training_quality < 8:
     - Do NOT iterate
   ```
 
-- Do NOT proceed to Phase 5 until training_quality ≥ 8 after any iteration
+- Do NOT proceed to PHASE 5 until training_quality ≥ 8 after any iteration
 
 **Report "Ready" only when**:
 - All phases passed

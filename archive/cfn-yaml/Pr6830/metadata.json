@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912392",
+  "team": "synth",
+  "startedAt": "2025-11-19T05:56:29.569705",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "serverless-infrastructure"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

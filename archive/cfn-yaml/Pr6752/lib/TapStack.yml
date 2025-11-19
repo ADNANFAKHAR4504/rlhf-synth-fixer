@@ -1,0 +1,610 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Optimized Payment Processing Infrastructure with Enhanced Monitoring and Resilience'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - Environment
+      - Label:
+          default: 'Notification Configuration'
+        Parameters:
+          - AlertEmail
+    ParameterLabels:
+      EnvironmentSuffix:
+        default: 'Environment Suffix for Resource Naming'
+      Environment:
+        default: 'Deployment Environment'
+      AlertEmail:
+        default: 'Email for Alerts'
+
+  # Requirement 8: Documentation of optimization rationale
+  OptimizationRationale:
+    DynamoDB: 'Using on-demand billing eliminates capacity planning and prevents throttling during traffic spikes. Point-in-time recovery protects against data loss.'
+    Lambda: 'arm64 architecture reduces cost by 20%. 3GB memory provides optimal performance for payment validation. 5-minute timeout handles complex validation scenarios.'
+    DependencyChain: 'DynamoDB created before Lambda prevents race conditions. SNS topic created before alarms ensures proper alarm actions. SQS DLQ created before Lambda ensures error handling.'
+    Monitoring: 'CloudWatch alarms provide proactive alerting. X-Ray tracing enables end-to-end transaction visibility. Dashboard consolidates all metrics for operational awareness.'
+    Resilience: 'Dead Letter Queue captures failed executions for retry. Reserved concurrency prevents account-level throttling. EventBridge enables scheduled batch processing.'
+
+  # Requirement 9 & 10: StackSet deployment configuration
+  StackSetConfiguration:
+    PermissionModel: 'SERVICE_MANAGED'
+    DeploymentTargets: 'Multi-account deployment across dev, staging, and production environments'
+    OrganizationalUnits: 'Deploys to specified AWS accounts within organization'
+    AutoDeployment: 'Enabled for new accounts added to target OUs'
+
+  # Requirement 20: Stack Policy guidance
+  StackPolicyGuidance:
+    Recommendation: 'Apply stack policy to prevent accidental deletion of DynamoDB table and production resources'
+    ProtectedResources:
+      - 'PaymentTransactionTable'
+      - 'PaymentValidationFunction'
+    SamplePolicy: |
+      {
+        "Statement": [
+          {
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "Update:Delete",
+            "Resource": "LogicalResourceId/PaymentTransactionTable"
+          }
+        ]
+      }
+
+Parameters:
+  # Requirement 5: Parameters with AllowedPattern validation
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues:
+      - 'dev'
+      - 'staging'
+      - 'prod'
+    Description: 'Deployment environment for conditional resource configuration'
+
+  AlertEmail:
+    Type: String
+    Description: 'Email address for payment alerts and alarms'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address'
+    Default: 'alerts@example.com'
+
+# Requirement 18: Conditions for multi-environment support
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'prod']
+
+Resources:
+  # Requirement 2: DynamoDB table with on-demand billing and PITR
+  # Requirement 9: DeletionPolicy Retain for DynamoDB only
+  PaymentTransactionTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'payment-transactions-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'transactionId'
+          AttributeType: 'S'
+        - AttributeName: 'timestamp'
+          AttributeType: 'N'
+      KeySchema:
+        - AttributeName: 'transactionId'
+          KeyType: 'HASH'
+        - AttributeName: 'timestamp'
+          KeyType: 'RANGE'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      SSESpecification:
+        SSEEnabled: true
+      # Requirement 17: Comprehensive tagging strategy
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'payment-transactions-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: 'PaymentProcessing'
+        - Key: 'Team'
+          Value: 'FinTech'
+        - Key: 'CostCenter'
+          Value: 'Engineering'
+        - Key: 'ManagedBy'
+          Value: 'CloudFormation'
+
+  # Requirement 3: SNS topic with email subscription
+  PaymentAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'payment-alerts-${EnvironmentSuffix}'
+      DisplayName: 'Payment Processing Alerts'
+      # Requirement 17: Comprehensive tagging
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'payment-alerts-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: 'PaymentProcessing'
+        - Key: 'Team'
+          Value: 'FinTech'
+        - Key: 'CostCenter'
+          Value: 'Engineering'
+
+  PaymentAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: 'email'
+      TopicArn: !Ref PaymentAlertTopic
+      Endpoint: !Ref AlertEmail
+
+  # Requirement 11: Dead Letter Queue for failed Lambda executions
+  PaymentValidationDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'payment-validation-dlq-${EnvironmentSuffix}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      VisibilityTimeout: 300
+      # Requirement 17: Comprehensive tagging
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'payment-validation-dlq-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: 'PaymentProcessing'
+        - Key: 'Team'
+          Value: 'FinTech'
+        - Key: 'CostCenter'
+          Value: 'Engineering'
+
+  # Requirement 19: IAM role with least-privilege permissions
+  PaymentValidationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'payment-validation-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'DynamoDBAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:UpdateItem'
+                Resource: !GetAtt PaymentTransactionTable.Arn
+        - PolicyName: 'SNSPublish'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref PaymentAlertTopic
+        # Requirement 13: X-Ray permissions
+        - PolicyName: 'XRayAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'xray:PutTraceSegments'
+                  - 'xray:PutTelemetryRecords'
+                Resource: '*'
+        # Requirement 11: SQS DLQ permissions
+        - PolicyName: 'SQSDLQAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'sqs:SendMessage'
+                Resource: !GetAtt PaymentValidationDLQ.Arn
+      # Requirement 17: Comprehensive tagging
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'payment-validation-role-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: 'PaymentProcessing'
+        - Key: 'Team'
+          Value: 'FinTech'
+
+  # Requirement 1: Lambda function with 3GB memory, 5-minute timeout, arm64
+  # Requirement 4: DependsOn chains
+  # Requirement 6: Environment variables using Fn::Sub
+  # Requirement 13: X-Ray tracing
+  # Requirement 16: Reserved concurrency
+  PaymentValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'payment-validation-${EnvironmentSuffix}'
+      Runtime: 'python3.11'
+      Handler: 'index.handler'
+      Role: !GetAtt PaymentValidationRole.Arn
+      MemorySize: 3072
+      Timeout: 300
+      Architectures:
+        - 'arm64'
+      # Requirement 16: Reserved concurrency
+      ReservedConcurrentExecutions: !If [IsProduction, 100, 10]
+      # Requirement 13: X-Ray tracing
+      TracingConfig:
+        Mode: 'Active'
+      # Requirement 11: Dead Letter Queue configuration
+      DeadLetterConfig:
+        TargetArn: !GetAtt PaymentValidationDLQ.Arn
+      # Requirement 6: Environment variables using Fn::Sub
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Sub '${PaymentTransactionTable}'
+          SNS_TOPIC_ARN: !Sub '${PaymentAlertTopic}'
+          ENVIRONMENT: !Ref Environment
+          REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from decimal import Decimal
+          import time
+
+          dynamodb = boto3.resource('dynamodb')
+          sns = boto3.client('sns')
+
+          table_name = os.environ['DYNAMODB_TABLE_NAME']
+          sns_topic = os.environ['SNS_TOPIC_ARN']
+
+          def handler(event, context):
+              """Payment validation Lambda function"""
+              try:
+                  table = dynamodb.Table(table_name)
+
+                  # Extract payment details
+                  transaction_id = event.get('transactionId', 'unknown')
+                  amount = Decimal(str(event.get('amount', 0)))
+                  timestamp = int(time.time())
+
+                  # Validate payment
+                  if amount <= 0:
+                      raise ValueError('Invalid payment amount')
+
+                  # Store transaction
+                  table.put_item(
+                      Item={
+                          'transactionId': transaction_id,
+                          'timestamp': timestamp,
+                          'amount': amount,
+                          'status': 'validated'
+                      }
+                  )
+
+                  # Send success notification for large transactions
+                  if amount > 1000:
+                      sns.publish(
+                          TopicArn=sns_topic,
+                          Subject='Large Payment Validated',
+                          Message=f'Transaction {transaction_id} for ${amount} validated successfully'
+                      )
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'Payment validated', 'transactionId': transaction_id})
+                  }
+
+              except Exception as e:
+                  print(f'Error validating payment: {str(e)}')
+                  # Send error notification
+                  try:
+                      sns.publish(
+                          TopicArn=sns_topic,
+                          Subject='Payment Validation Error',
+                          Message=f'Error processing transaction: {str(e)}'
+                      )
+                  except:
+                      pass
+                  raise
+      # Requirement 17: Comprehensive tagging
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'payment-validation-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+        - Key: 'Project'
+          Value: 'PaymentProcessing'
+        - Key: 'Team'
+          Value: 'FinTech'
+        - Key: 'CostCenter'
+          Value: 'Engineering'
+
+  # Requirement 12: EventBridge rule for scheduled processing
+  PaymentBatchProcessingRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'payment-batch-processing-${EnvironmentSuffix}'
+      Description: 'Triggers Lambda for scheduled payment batch processing'
+      ScheduleExpression: 'rate(1 hour)'
+      State: !If [IsProduction, 'ENABLED', 'DISABLED']
+      Targets:
+        - Arn: !GetAtt PaymentValidationFunction.Arn
+          Id: 'PaymentBatchTarget'
+          Input: |
+            {
+              "transactionId": "batch-scheduled",
+              "amount": 0,
+              "type": "batch-processing"
+            }
+
+  PaymentBatchProcessingPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PaymentValidationFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt PaymentBatchProcessingRule.Arn
+
+  # Requirement 10: CloudWatch Alarms
+  # Lambda error alarm
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-validation-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when Lambda function errors exceed threshold'
+      MetricName: 'Errors'
+      Namespace: 'AWS/Lambda'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !If [IsProduction, 5, 10]
+      ComparisonOperator: 'GreaterThanThreshold'
+      Dimensions:
+        - Name: 'FunctionName'
+          Value: !Ref PaymentValidationFunction
+      AlarmActions:
+        - !Ref PaymentAlertTopic
+      TreatMissingData: 'notBreaching'
+
+  # Lambda throttle alarm
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-validation-throttles-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when Lambda function throttles occur'
+      MetricName: 'Throttles'
+      Namespace: 'AWS/Lambda'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: 'GreaterThanThreshold'
+      Dimensions:
+        - Name: 'FunctionName'
+          Value: !Ref PaymentValidationFunction
+      AlarmActions:
+        - !Ref PaymentAlertTopic
+      TreatMissingData: 'notBreaching'
+
+  # DynamoDB capacity alarm (user errors)
+  DynamoDBUserErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-dynamodb-errors-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when DynamoDB user errors occur'
+      MetricName: 'UserErrors'
+      Namespace: 'AWS/DynamoDB'
+      Statistic: 'Sum'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !If [IsProduction, 5, 20]
+      ComparisonOperator: 'GreaterThanThreshold'
+      Dimensions:
+        - Name: 'TableName'
+          Value: !Ref PaymentTransactionTable
+      AlarmActions:
+        - !Ref PaymentAlertTopic
+      TreatMissingData: 'notBreaching'
+
+  # DLQ message alarm
+  DLQMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'payment-dlq-messages-${EnvironmentSuffix}'
+      AlarmDescription: 'Alarm when messages appear in Dead Letter Queue'
+      MetricName: 'ApproximateNumberOfMessagesVisible'
+      Namespace: 'AWS/SQS'
+      Statistic: 'Average'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+      Dimensions:
+        - Name: 'QueueName'
+          Value: !GetAtt PaymentValidationDLQ.QueueName
+      AlarmActions:
+        - !Ref PaymentAlertTopic
+      TreatMissingData: 'notBreaching'
+
+  # Requirement 14: CloudWatch Dashboard
+  PaymentProcessingDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'payment-processing-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Invocations"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Errors"}],
+                  [".", "Throttles", {"stat": "Sum", "label": "Throttles"}],
+                  [".", "Duration", {"stat": "Average", "label": "Avg Duration"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics - Payment Validation",
+                "period": 300,
+                "dimensions": {
+                  "FunctionName": ["${PaymentValidationFunction}"]
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"stat": "Sum"}],
+                  [".", "ConsumedWriteCapacityUnits", {"stat": "Sum"}],
+                  [".", "UserErrors", {"stat": "Sum"}],
+                  [".", "SystemErrors", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Metrics - Payment Transactions",
+                "period": 300,
+                "dimensions": {
+                  "TableName": ["${PaymentTransactionTable}"]
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SNS", "NumberOfMessagesPublished", {"stat": "Sum"}],
+                  [".", "NumberOfNotificationsFailed", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "SNS Metrics - Payment Alerts",
+                "period": 300,
+                "dimensions": {
+                  "TopicName": ["${PaymentAlertTopic.TopicName}"]
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"stat": "Average"}],
+                  [".", "NumberOfMessagesSent", {"stat": "Sum"}],
+                  [".", "NumberOfMessagesDeleted", {"stat": "Sum"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "SQS DLQ Metrics",
+                "period": 300,
+                "dimensions": {
+                  "QueueName": ["${PaymentValidationDLQ.QueueName}"]
+                }
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "SOURCE '/aws/lambda/${PaymentValidationFunction}'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 20",
+                "region": "${AWS::Region}",
+                "title": "Recent Lambda Errors",
+                "stacked": false
+              }
+            }
+          ]
+        }
+
+# Requirement 7: Outputs with Fn::Sub syntax
+Outputs:
+  PaymentTransactionTableName:
+    Description: 'Name of the DynamoDB payment transactions table'
+    Value: !Ref PaymentTransactionTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentTransactionTable'
+
+  PaymentTransactionTableArn:
+    Description: 'ARN of the DynamoDB payment transactions table'
+    Value: !GetAtt PaymentTransactionTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentTransactionTableArn'
+
+  PaymentValidationFunctionArn:
+    Description: 'ARN of the Lambda payment validation function'
+    Value: !GetAtt PaymentValidationFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentValidationFunctionArn-${EnvironmentSuffix}'
+
+  PaymentValidationFunctionName:
+    Description: 'Name of the Lambda payment validation function'
+    Value: !Ref PaymentValidationFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentValidationFunctionName'
+
+  PaymentAlertTopicArn:
+    Description: 'ARN of the SNS payment alerts topic'
+    Value: !Ref PaymentAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentAlertTopicArn-${EnvironmentSuffix}'
+
+  PaymentAlertTopicName:
+    Description: 'Name of the SNS payment alerts topic'
+    Value: !GetAtt PaymentAlertTopic.TopicName
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentAlertTopicName'
+
+  PaymentValidationDLQArn:
+    Description: 'ARN of the SQS Dead Letter Queue'
+    Value: !GetAtt PaymentValidationDLQ.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentValidationDLQArn'
+
+  PaymentValidationDLQUrl:
+    Description: 'URL of the SQS Dead Letter Queue'
+    Value: !Ref PaymentValidationDLQ
+    Export:
+      Name: !Sub '${AWS::StackName}-PaymentValidationDLQUrl'
+
+  PaymentProcessingDashboardName:
+    Description: 'Name of the CloudWatch Dashboard'
+    Value: !Ref PaymentProcessingDashboard
+    Export:
+      Name: !Sub '${AWS::StackName}-DashboardName'
+
+  StackEnvironment:
+    Description: 'Deployment environment'
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
+
+  StackRegion:
+    Description: 'Deployment region'
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
