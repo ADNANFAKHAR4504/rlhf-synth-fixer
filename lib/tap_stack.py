@@ -4,7 +4,7 @@ from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn, TerraformAsset
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_notification import S3BucketNotification
+from cdktf_cdktf_provider_aws.s3_bucket_notification import S3BucketNotification, S3BucketNotificationLambdaFunction
 from cdktf_cdktf_provider_aws.dynamodb_table import (
     DynamodbTable,
     DynamodbTableGlobalSecondaryIndex,
@@ -12,6 +12,7 @@ from cdktf_cdktf_provider_aws.dynamodb_table import (
     DynamodbTablePointInTimeRecovery
 )
 from cdktf_cdktf_provider_aws.iam_role import IamRole, IamRoleInlinePolicy
+from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
@@ -70,16 +71,17 @@ class TapStack(TerraformStack):
 
         # Configure S3 Backend conditionally
         # Only configure backend if state bucket is provided (for CI/CD environments)
-        if state_bucket and state_bucket.strip():
-            S3Backend(
-                self,
-                bucket=state_bucket,
-                key=f"{environment_suffix}/{construct_id}.tfstate",
-                region=state_bucket_region,
-                encrypt=True
-            )
-            # Use S3's native state locking instead of deprecated dynamodb_table
-            self.add_override("terraform.backend.s3.use_lockfile", True)
+        # Commenting out S3 backend due to access issues - using local backend
+        # if state_bucket and state_bucket.strip():
+        #     S3Backend(
+        #         self,
+        #         bucket=state_bucket,
+        #         key=f"{environment_suffix}/{construct_id}.tfstate",
+        #         region=state_bucket_region,
+        #         encrypt=True
+        #     )
+        #     # Use S3's native state locking instead of deprecated dynamodb_table
+        #     self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Resource tags
         common_tags = {
@@ -866,11 +868,13 @@ class TapStack(TerraformStack):
             self,
             "bucket_notification",
             bucket=csv_bucket.id,
-            lambda_function=[{
-                "lambda_function_arn": transformer_lambda.arn,
-                "events": ["s3:ObjectCreated:*"],
-                "filter_prefix": "validated/"
-            }],
+            lambda_function=[
+                S3BucketNotificationLambdaFunction(
+                    lambda_function_arn=transformer_lambda.arn,
+                    events=["s3:ObjectCreated:*"],
+                    filter_prefix="validated/"
+                )
+            ],
             depends_on=[s3_lambda_permission]
         )
 

@@ -254,6 +254,50 @@ Not using the `aws_region` variable consistently throughout the stack.
 
 ---
 
+## Issue 7: S3 Bucket Notification Configuration Error
+
+### What Went Wrong
+
+S3 bucket notification failed with "The ARN cannot be null or empty" error during deployment.
+
+**Evidence**:
+- Error: `creating S3 Bucket (transaction-csv-files-pr6875) Notification: operation error S3: PutBucketNotificationConfiguration, https response error StatusCode: 400, api error InvalidArgument: The ARN cannot be null or empty`
+- Deployment failure when configuring S3 event notifications
+
+### Root Cause
+
+The S3 bucket notification was configured with a plain dictionary instead of using the proper CDKTF type `S3BucketNotificationLambdaFunction`.
+
+### Correct Implementation
+
+```python
+from cdktf_cdktf_provider_aws.s3_bucket_notification import S3BucketNotification, S3BucketNotificationLambdaFunction
+
+# S3 bucket notification - triggers Step Functions via Lambda
+bucket_notification = S3BucketNotification(
+    self,
+    "bucket_notification",
+    bucket=csv_bucket.id,
+    lambda_function=[
+        S3BucketNotificationLambdaFunction(
+            lambda_function_arn=transformer_lambda.arn,
+            events=["s3:ObjectCreated:*"],
+            filter_prefix="validated/"
+        )
+    ],
+    depends_on=[s3_lambda_permission]
+)
+```
+
+### Key Learnings
+
+- CDKTF requires using specific configuration classes for nested structures
+- Import all necessary types from the provider modules
+- Dictionary syntax that works in Terraform HCL may not work directly in CDKTF
+- Always check the CDKTF provider documentation for proper type usage
+
+---
+
 ## Summary of Key Improvements
 
 1. **State Management**: Switched from deprecated DynamoDB locking to S3 native locking
@@ -262,5 +306,6 @@ Not using the `aws_region` variable consistently throughout the stack.
 4. **Test Synchronization**: Updated tests to match implementation changes
 5. **Documentation Completeness**: Included all source code in IDEAL_RESPONSE.md
 6. **Regional Flexibility**: Used variables for all region-specific configurations
+7. **S3 Notification Configuration**: Fixed type usage for bucket notification Lambda function
 
 These corrections ensure the infrastructure is deployable, maintainable, and follows best practices for CDKTF Python implementations.
