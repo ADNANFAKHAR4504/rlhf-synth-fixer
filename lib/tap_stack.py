@@ -4,23 +4,20 @@ CDK Python Stack implementing ECS Fargate with App Mesh service mesh
 """
 
 from typing import Optional
+
 import aws_cdk as cdk
-from aws_cdk import (
-    Stack,
-    Duration,
-    RemovalPolicy,
-    aws_ec2 as ec2,
-    aws_ecs as ecs,
-    aws_ecr as ecr,
-    aws_elasticloadbalancingv2 as elbv2,
-    aws_iam as iam,
-    aws_logs as logs,
-    aws_servicediscovery as servicediscovery,
-    aws_secretsmanager as secretsmanager,
-    aws_appmesh as appmesh,
-    aws_cloudwatch as cloudwatch,
-    aws_applicationautoscaling as appscaling,
-)
+from aws_cdk import Duration, RemovalPolicy, Stack
+from aws_cdk import aws_applicationautoscaling as appscaling
+from aws_cdk import aws_appmesh as appmesh
+from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_ecr as ecr
+from aws_cdk import aws_ecs as ecs
+from aws_cdk import aws_elasticloadbalancingv2 as elbv2
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_secretsmanager as secretsmanager
+from aws_cdk import aws_servicediscovery as servicediscovery
 from constructs import Construct
 
 
@@ -275,13 +272,12 @@ class TapStack(Stack):
             )
 
             # Add application container
+            # Using public demo image for testing - replace with actual ECR image in production
+            # To use ECR images: image=ecs.ContainerImage.from_ecr_repository(ecr_repos[service_name], tag='latest')
             app_container = task_definition.add_container(
                 f'AppContainer-{service_name}',
                 container_name=service_name,
-                image=ecs.ContainerImage.from_ecr_repository(
-                    ecr_repos[service_name],
-                    tag='latest'
-                ),
+                image=ecs.ContainerImage.from_registry('public.ecr.aws/docker/library/nginx:alpine'),
                 logging=ecs.LogDriver.aws_logs(
                     stream_prefix=service_name,
                     log_group=log_group
@@ -297,10 +293,10 @@ class TapStack(Stack):
                 }
             )
 
-            # Add port mapping
+            # Add port mapping (nginx listens on port 80 by default)
             app_container.add_port_mappings(
                 ecs.PortMapping(
-                    container_port=8080,
+                    container_port=80,
                     protocol=ecs.Protocol.TCP
                 )
             )
@@ -372,11 +368,11 @@ class TapStack(Stack):
                 ),
                 listeners=[
                     appmesh.VirtualNodeListener.http(
-                        port=8080,
+                        port=80,
                         health_check=appmesh.HealthCheck.http(
                             healthy_threshold=2,
                             interval=Duration.seconds(5),
-                            path='/health',
+                            path='/',
                             timeout=Duration.seconds(2),
                             unhealthy_threshold=2
                         )
@@ -533,15 +529,15 @@ class TapStack(Stack):
                     self,
                     f'TargetGroup-{service_name}-{environment_suffix}',
                     vpc=vpc,
-                    port=8080,
+                    port=80,
                     protocol=elbv2.ApplicationProtocol.HTTP,
                     target_type=elbv2.TargetType.IP,
                     target_group_name=f'trading-{service_name}-{environment_suffix}'[:32],
                     health_check=elbv2.HealthCheck(
                         enabled=True,
-                        path='/health',
+                        path='/',
                         protocol=elbv2.Protocol.HTTP,
-                        port='8080',
+                        port='80',
                         healthy_threshold_count=2,
                         unhealthy_threshold_count=3,
                         timeout=Duration.seconds(5),
