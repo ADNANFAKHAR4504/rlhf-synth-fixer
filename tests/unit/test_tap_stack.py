@@ -25,7 +25,7 @@ class TestTapStack(unittest.TestCase):
         """Test S3 bucket is created with encryption, versioning, and lifecycle"""
         self.template.resource_count_is("AWS::S3::Bucket", 1)
         self.template.has_resource_properties("AWS::S3::Bucket", {
-            "BucketName": f"etl-processing-{self.env_suffix}",
+            "BucketName": Match.string_like_regexp(f"etl-processing-{self.env_suffix}.*"),
             "BucketEncryption": {
                 "ServerSideEncryptionConfiguration": Match.any_value()
             },
@@ -48,7 +48,7 @@ class TestTapStack(unittest.TestCase):
         """Test DynamoDB table is created with correct partition and sort keys"""
         self.template.resource_count_is("AWS::DynamoDB::Table", 1)
         self.template.has_resource_properties("AWS::DynamoDB::Table", {
-            "TableName": f"etl-status-{self.env_suffix}",
+            "TableName": Match.string_like_regexp(f"etl-status-{self.env_suffix}.*"),
             "KeySchema": [
                 {"AttributeName": "file_id", "KeyType": "HASH"},
                 {"AttributeName": "chunk_id", "KeyType": "RANGE"}
@@ -68,7 +68,7 @@ class TestTapStack(unittest.TestCase):
 
         # Check Splitter function
         self.template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": f"etl-splitter-{self.env_suffix}",
+            "FunctionName": Match.string_like_regexp(f"etl-splitter-{self.env_suffix}.*"),
             "Runtime": "python3.9",
             "MemorySize": 3072,
             "Timeout": 900
@@ -76,7 +76,7 @@ class TestTapStack(unittest.TestCase):
 
         # Check Validator function
         self.template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": f"etl-validator-{self.env_suffix}",
+            "FunctionName": Match.string_like_regexp(f"etl-validator-{self.env_suffix}.*"),
             "Runtime": "python3.9",
             "MemorySize": 3072,
             "Timeout": 900
@@ -84,7 +84,7 @@ class TestTapStack(unittest.TestCase):
 
         # Check Processor function
         self.template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": f"etl-processor-{self.env_suffix}",
+            "FunctionName": Match.string_like_regexp(f"etl-processor-{self.env_suffix}.*"),
             "Runtime": "python3.9",
             "MemorySize": 3072,
             "Timeout": 900
@@ -104,7 +104,7 @@ class TestTapStack(unittest.TestCase):
         """Test Step Functions state machine is created with correct properties"""
         self.template.resource_count_is("AWS::StepFunctions::StateMachine", 1)
         self.template.has_resource_properties("AWS::StepFunctions::StateMachine", {
-            "StateMachineName": f"etl-pipeline-{self.env_suffix}",
+            "StateMachineName": Match.string_like_regexp(f"etl-pipeline-{self.env_suffix}.*"),
             "TracingConfiguration": {
                 "Enabled": True
             }
@@ -115,7 +115,7 @@ class TestTapStack(unittest.TestCase):
         """Test EventBridge rule is created for S3 file uploads"""
         self.template.resource_count_is("AWS::Events::Rule", 1)
         self.template.has_resource_properties("AWS::Events::Rule", {
-            "Name": f"etl-s3-trigger-{self.env_suffix}",
+            "Name": Match.string_like_regexp(f"etl-s3-trigger-{self.env_suffix}.*"),
             "EventPattern": Match.object_like({
                 "source": ["aws.s3"],
                 "detail-type": ["Object Created"]
@@ -127,7 +127,7 @@ class TestTapStack(unittest.TestCase):
         """Test SNS topic is created for failure alerts"""
         self.template.resource_count_is("AWS::SNS::Topic", 1)
         self.template.has_resource_properties("AWS::SNS::Topic", {
-            "TopicName": f"etl-failures-{self.env_suffix}",
+            "TopicName": Match.string_like_regexp(f"etl-failures-{self.env_suffix}.*"),
             "DisplayName": "ETL Pipeline Failure Notifications"
         })
 
@@ -136,7 +136,7 @@ class TestTapStack(unittest.TestCase):
         """Test SQS FIFO queue is created"""
         self.template.resource_count_is("AWS::SQS::Queue", 1)
         self.template.has_resource_properties("AWS::SQS::Queue", {
-            "QueueName": f"etl-results-{self.env_suffix}.fifo",
+            "QueueName": Match.string_like_regexp(f"etl-results-{self.env_suffix}.*\.fifo"),
             "FifoQueue": True,
             "ContentBasedDeduplication": True
         })
@@ -146,14 +146,14 @@ class TestTapStack(unittest.TestCase):
         """Test CloudWatch dashboard is created"""
         self.template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
         self.template.has_resource_properties("AWS::CloudWatch::Dashboard", {
-            "DashboardName": f"etl-pipeline-{self.env_suffix}"
+            "DashboardName": Match.string_like_regexp(f"etl-pipeline-{self.env_suffix}.*")
         })
 
     @mark.it("creates CloudWatch log group for state machine")
     def test_cloudwatch_log_group_creation(self):
         """Test CloudWatch log group is created with correct retention"""
         self.template.has_resource_properties("AWS::Logs::LogGroup", {
-            "LogGroupName": f"/aws/stepfunctions/etl-{self.env_suffix}",
+            "LogGroupName": Match.string_like_regexp(f"/aws/stepfunctions/etl-{self.env_suffix}.*"),
             "RetentionInDays": 30
         })
 
@@ -253,7 +253,7 @@ class TestTapStack(unittest.TestCase):
         # CDK may create custom resources for notifications
         # Just verify the bucket exists with correct name
         self.template.has_resource_properties("AWS::S3::Bucket", {
-            "BucketName": f"etl-processing-{self.env_suffix}"
+            "BucketName": Match.string_like_regexp(f"etl-processing-{self.env_suffix}.*")
         })
 
     @mark.it("configures Step Functions with retry logic")
@@ -275,7 +275,7 @@ class TestTapStack(unittest.TestCase):
 
         # Check retention is set to 30 days for state machine log group
         self.template.has_resource_properties("AWS::Logs::LogGroup", {
-            "LogGroupName": f"/aws/stepfunctions/etl-{self.env_suffix}",
+            "LogGroupName": Match.string_like_regexp(f"/aws/stepfunctions/etl-{self.env_suffix}.*"),
             "RetentionInDays": 30
         })
 

@@ -4,15 +4,25 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aws-cdk-lib = "*"
-constructs = ">=10.0.0,<11.0.0"
+aws-cdk-aws-lambda-python-alpha = "*"
+cdktf = "0.21.0"
+pulumi_random = "*"
+pulumi = "*"
+pulumi-aws = "*"
 boto3 = "*"
+moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
 attrs = "*"
 aws-lambda-powertools = "*"
 aws-xray-sdk = "*"
+aws-cdk-lib = "*"
+constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 tabulate = "*"
+cdktf-cdktf-provider-aws = "*"
+pulumi-kubernetes = "*"
+pulumi-tls = "*"
+aws-cdk-lambda-layer-kubectl-v29 = "*"
 
 [dev-packages]
 boto3 = "*"
