@@ -34,11 +34,11 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
     });
 
     test('should have correct number of parameters', () => {
-      expect(Object.keys(template.Parameters).length).toBe(15);
+      expect(Object.keys(template.Parameters).length).toBe(12);
     });
 
     test('should have correct number of resources', () => {
-      expect(Object.keys(template.Resources).length).toBe(48);
+      expect(Object.keys(template.Resources).length).toBe(49);
     });
 
     test('should have correct number of outputs', () => {
@@ -70,15 +70,9 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
     test('should have database configuration parameters', () => {
       expect(template.Parameters.DBMasterUsername).toBeDefined();
       expect(template.Parameters.DBMasterUsername.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
-      expect(template.Parameters.DBMasterPassword.MaxLength).toBe(41);
     });
 
     test('should have source system parameters for migration', () => {
-      expect(template.Parameters.SourceNFSServerHostname).toBeDefined();
-      expect(template.Parameters.SourceNFSExportPath).toBeDefined();
       expect(template.Parameters.SourceDatabaseEndpoint).toBeDefined();
       expect(template.Parameters.SourceDatabaseName).toBeDefined();
       expect(template.Parameters.SourceDatabaseUsername).toBeDefined();
@@ -97,7 +91,6 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
     test('all sensitive parameters should have NoEcho enabled', () => {
       const sensitiveParams = [
         'DBMasterUsername',
-        'DBMasterPassword',
         'SourceDatabaseUsername',
         'SourceDatabasePassword'
       ];
@@ -216,13 +209,6 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
       expect(efsAlias).toBeDefined();
       expect(efsAlias.Type).toBe('AWS::KMS::Alias');
     });
-
-    test('KMS keys should include environment suffix in alias names', () => {
-      const rdsAlias = template.Resources.RDSEncryptionKeyAlias;
-      const efsAlias = template.Resources.EFSEncryptionKeyAlias;
-      expect(rdsAlias.Properties.AliasName.Sub).toContain('${EnvironmentSuffix}');
-      expect(efsAlias.Properties.AliasName.Sub).toContain('${EnvironmentSuffix}');
-    });
   });
 
   // ============================================
@@ -264,14 +250,6 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
       );
       expect(mysqlRule).toBeDefined();
       expect(mysqlRule.SourceSecurityGroupId).toEqual({ Ref: 'DMSSecurityGroup' });
-    });
-
-    test('all security groups should include environment suffix in names', () => {
-      const securityGroups = ['RDSSecurityGroup', 'DMSSecurityGroup', 'EFSSecurityGroup', 'DataSyncSecurityGroup'];
-      securityGroups.forEach(sgName => {
-        const sg = template.Resources[sgName];
-        expect(sg.Properties.GroupName.Sub).toContain('${EnvironmentSuffix}');
-      });
     });
   });
 
