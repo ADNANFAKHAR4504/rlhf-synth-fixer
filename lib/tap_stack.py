@@ -706,18 +706,38 @@ class TapStack(ComponentResource):
         self.primary_bucket = aws.s3.Bucket(
             f's3-primary-{self.environment_suffix}',
             bucket=f's3-primary-{self.environment_suffix}',
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            # FIX: Remove versioning from Bucket - use separate resource instead
             tags={'Name': f's3-primary-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self, provider=self.primary_provider)
+        )
+        
+        # FIX: Add separate versioning resource for primary bucket
+        self.primary_bucket_versioning = aws.s3.BucketVersioning(
+            f's3-versioning-primary-{self.environment_suffix}',
+            bucket=self.primary_bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                status='Enabled'
+            ),
+            opts=ResourceOptions(parent=self.primary_bucket, provider=self.primary_provider)
         )
         
         # Secondary S3 bucket
         self.secondary_bucket = aws.s3.Bucket(
             f's3-secondary-{self.environment_suffix}',
             bucket=f's3-secondary-{self.environment_suffix}',
-            versioning=aws.s3.BucketVersioningArgs(enabled=True),
+            # FIX: Remove versioning from Bucket - use separate resource instead
             tags={'Name': f's3-secondary-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self, provider=self.secondary_provider)
+        )
+        
+        # FIX: Add separate versioning resource for secondary bucket
+        self.secondary_bucket_versioning = aws.s3.BucketVersioning(
+            f's3-versioning-secondary-{self.environment_suffix}',
+            bucket=self.secondary_bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+                status='Enabled'
+            ),
+            opts=ResourceOptions(parent=self.secondary_bucket, provider=self.secondary_provider)
         )
         
         # S3 replication policy
@@ -843,7 +863,9 @@ class TapStack(ComponentResource):
             f'aurora-global-{self.environment_suffix}',
             global_cluster_identifier=f'aurora-global-{self.environment_suffix}',
             engine='aurora-mysql',
-            engine_version='8.0.mysql_aurora.3.02.0',
+            # FIX: Use engine version that supports global databases
+            # Version 8.0.mysql_aurora.3.04.0 or later supports global functionality
+            engine_version='8.0.mysql_aurora.3.04.0',
             database_name='appdb',
             opts=ResourceOptions(parent=self, provider=self.primary_provider)
         )
@@ -853,7 +875,8 @@ class TapStack(ComponentResource):
             f'aurora-primary-{self.environment_suffix}',
             cluster_identifier=f'aurora-primary-{self.environment_suffix}',
             engine='aurora-mysql',
-            engine_version='8.0.mysql_aurora.3.02.0',
+            # FIX: Update to match global cluster version
+            engine_version='8.0.mysql_aurora.3.04.0',
             engine_mode='provisioned',
             database_name='appdb',
             master_username='admin',
@@ -882,7 +905,8 @@ class TapStack(ComponentResource):
             cluster_identifier=self.primary_cluster.id,
             instance_class='db.serverless',
             engine='aurora-mysql',
-            engine_version='8.0.mysql_aurora.3.02.0',
+            # FIX: Update to match global cluster version
+            engine_version='8.0.mysql_aurora.3.04.0',
             opts=ResourceOptions(parent=self.primary_cluster, provider=self.primary_provider)
         )
         
@@ -921,7 +945,8 @@ class TapStack(ComponentResource):
             f'aurora-secondary-{self.environment_suffix}',
             cluster_identifier=f'aurora-secondary-{self.environment_suffix}',
             engine='aurora-mysql',
-            engine_version='8.0.mysql_aurora.3.02.0',
+            # FIX: Update to match global cluster version
+            engine_version='8.0.mysql_aurora.3.04.0',
             engine_mode='provisioned',
             db_subnet_group_name=self.secondary_db_subnet_group.name,
             vpc_security_group_ids=[self.secondary_db_sg.id],
@@ -947,7 +972,8 @@ class TapStack(ComponentResource):
             cluster_identifier=self.secondary_cluster.id,
             instance_class='db.serverless',
             engine='aurora-mysql',
-            engine_version='8.0.mysql_aurora.3.02.0',
+            # FIX: Update to match global cluster version
+            engine_version='8.0.mysql_aurora.3.04.0',
             opts=ResourceOptions(parent=self.secondary_cluster, provider=self.secondary_provider)
         )
         
