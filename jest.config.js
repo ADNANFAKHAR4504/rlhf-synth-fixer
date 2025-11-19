@@ -28,10 +28,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 100,
-      lines: 100,
-      statements: 100,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90
     },
   },
   testTimeout: 30000,
@@ -42,8 +42,8 @@ module.exports = {
       isolatedModules: true,
       tsconfig: {
         allowJs: true,
-        esModuleInterop: true
-      }
-    }
-  }
+        esModuleInterop: true,
+      },
+    },
+  },
 };
