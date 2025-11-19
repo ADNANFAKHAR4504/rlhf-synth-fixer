@@ -675,7 +675,7 @@ def handler(event, context):
         clusterIdentifier: `blue-payment-db-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '14.6',
+        engineVersion: '14',
         databaseName: 'payments',
         masterUsername: dbSecretVersion.secretString.apply(s => {
           if (!s) throw new Error('Database secret string is undefined');
@@ -712,7 +712,7 @@ def handler(event, context):
         clusterIdentifier: blueCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '14.6',
+        engineVersion: '14',
         tags: { Name: `blue-aurora-instance-${environmentSuffix}` },
       },
       { parent: this }
@@ -724,7 +724,7 @@ def handler(event, context):
         clusterIdentifier: `green-payment-db-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '14.6',
+        engineVersion: '14',
         databaseName: 'payments',
         masterUsername: dbSecretVersion.secretString.apply(s => {
           if (!s) throw new Error('Database secret string is undefined');
@@ -761,7 +761,7 @@ def handler(event, context):
         clusterIdentifier: greenCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '14.6',
+        engineVersion: '14',
         tags: { Name: `green-aurora-instance-${environmentSuffix}` },
       },
       { parent: this }

@@ -541,7 +541,7 @@ describe('TapStack Unit Tests with 100% Coverage', () => {
       expect(blueCluster).toBeDefined();
       expect(blueCluster?.props.engine).toBe('aurora-postgresql');
       expect(blueCluster?.props.engineMode).toBe('provisioned');
-      expect(blueCluster?.props.engineVersion).toBe('14.6');
+      expect(blueCluster?.props.engineVersion).toBe('14');
       expect(blueCluster?.props.databaseName).toBe('payments');
       expect(blueCluster?.props.storageEncrypted).toBe(true);
       expect(blueCluster?.props.skipFinalSnapshot).toBe(true);
@@ -557,6 +557,9 @@ describe('TapStack Unit Tests with 100% Coverage', () => {
       );
       expect(greenCluster).toBeDefined();
       expect(greenCluster?.props.engine).toBe('aurora-postgresql');
+      expect(greenCluster?.props.engineMode).toBe('provisioned');
+      expect(greenCluster?.props.engineVersion).toBe('14');
+      expect(greenCluster?.props.storageEncrypted).toBe(true);
     });
 
     it('should create Aurora cluster instances', () => {
@@ -567,6 +570,7 @@ describe('TapStack Unit Tests with 100% Coverage', () => {
       clusterInstances.forEach(instance => {
         expect(instance.props.instanceClass).toBe('db.serverless');
         expect(instance.props.engine).toBe('aurora-postgresql');
+        expect(instance.props.engineVersion).toBe('14');
       });
     });
   });
@@ -1182,6 +1186,85 @@ describe('TapStack Unit Tests with 100% Coverage', () => {
 
       expect(devResources.length).toBeGreaterThan(0);
       expect(prodResources.length).toBeGreaterThan(0);
+    });
+
+    it('should use default environment suffix when not provided', async () => {
+      const testStack = new TapStack('default-env', {});
+      await new Promise(resolve => setImmediate(resolve));
+
+      const devResources = createdResources.filter(r => r.name.includes('dev'));
+      expect(devResources.length).toBeGreaterThan(0);
+    });
+
+    it('should handle AWS_REGION environment variable', async () => {
+      const originalRegion = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'us-west-2';
+
+      const testStack = new TapStack('region-test', { environmentSuffix: 'test' });
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(testStack.blueVpcId).toBeDefined();
+
+      // Restore original value
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      } else {
+        delete process.env.AWS_REGION;
+      }
+    });
+
+    it('should handle undefined AWS_REGION environment variable', async () => {
+      const originalRegion = process.env.AWS_REGION;
+      delete process.env.AWS_REGION;
+
+      const testStack = new TapStack('no-region-test', { environmentSuffix: 'test' });
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(testStack.blueVpcId).toBeDefined();
+
+      // Restore original value
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      }
+    });
+
+    it('should handle various environment suffix formats', async () => {
+      const suffixes = ['prod', 'staging', 'qa'];
+
+      for (const suffix of suffixes) {
+        createdResources.length = 0;
+        const testStack = new TapStack(`${suffix}-stack`, { environmentSuffix: suffix });
+        await new Promise(resolve => setImmediate(resolve));
+
+        const resourcesWithSuffix = createdResources.filter(r => r.name.includes(suffix));
+        expect(resourcesWithSuffix.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('should properly handle tags parameter when provided', async () => {
+      const customTags = {
+        Project: 'PaymentSystem',
+        Owner: 'DevOpsTeam',
+        CostCenter: '12345',
+      };
+
+      const testStack = new TapStack('tags-test', {
+        environmentSuffix: 'prod',
+        tags: customTags,
+      });
+
+      await new Promise(resolve => setImmediate(resolve));
+      expect(testStack.blueVpcId).toBeDefined();
+    });
+
+    it('should handle undefined tags parameter', async () => {
+      const testStack = new TapStack('no-tags-test', {
+        environmentSuffix: 'test',
+        tags: undefined,
+      });
+
+      await new Promise(resolve => setImmediate(resolve));
+      expect(testStack.blueVpcId).toBeDefined();
     });
   });
 
