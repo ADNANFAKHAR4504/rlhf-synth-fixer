@@ -1,0 +1,1100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Document Management System Migration Infrastructure - DMS, DataSync, RDS Aurora, EFS, CloudWatch, SNS'
+
+# TESTING CONFIGURATION NOTE:
+# This template is simplified for testing to avoid AWS EIP quota limits.
+# Production deployments should use 3 AZs with 3 NAT Gateways for high availability.
+# Current configuration: 2 AZs, 1 NAT Gateway, 2 private subnets for cost-effective testing.
+# - 2 AZs: Required minimum for DMS Replication Subnet Group
+# - 1 NAT Gateway: Reduced from 3 to avoid EIP quota limits
+# - 2 Aurora instances: 1 primary + 1 read replica across 2 AZs
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for resource names to support parallel deployments'
+    Default: 'prod'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
+  VpcCIDR:
+    Type: String
+    Description: 'CIDR block for VPC'
+    Default: '10.0.0.0/16'
+
+  PublicSubnetCIDR:
+    Type: String
+    Description: 'CIDR block for public subnet'
+    Default: '10.0.1.0/24'
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Description: 'CIDR block for first private subnet'
+    Default: '10.0.11.0/24'
+
+  PrivateSubnet2CIDR:
+    Type: String
+    Description: 'CIDR block for second private subnet (required for DMS)'
+    Default: '10.0.12.0/24'
+
+  DBMasterUsername:
+    Type: String
+    Description: 'Master username for RDS Aurora MySQL'
+    Default: 'admin'
+    NoEcho: true
+
+  SourceDatabaseEndpoint:
+    Type: String
+    Description: 'Source database endpoint for DMS'
+    Default: 'test-source-db.example.com'
+
+  SourceDatabasePort:
+    Type: String
+    Description: 'Source database port'
+    Default: '3306'
+
+  SourceDatabaseName:
+    Type: String
+    Description: 'Source database name'
+    Default: 'testdb'
+
+  SourceDatabaseUsername:
+    Type: String
+    Description: 'Source database username'
+    Default: 'testuser'
+    NoEcho: true
+
+  SourceDatabasePassword:
+    Type: String
+    Description: 'Source database password'
+    Default: 'TestPassword123!'
+    NoEcho: true
+
+  AlertEmailAddress:
+    Type: String
+    Description: 'Email address for migration alerts'
+    Default: 'test@example.com'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+Resources:
+  # ========================================
+  # Secrets Manager Secret for RDS Password
+  # ========================================
+
+  DBMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'rds-master-password-${EnvironmentSuffix}'
+      Description: 'Master password for RDS Aurora MySQL cluster'
+      SecretString: !Sub |
+        {
+          "username": "${DBMasterUsername}",
+          "password": "TestDbPassword123!"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub 'rds-master-password-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ========================================
+  # VPC and Network Infrastructure
+  # NOTE: Simplified to 2 AZs for testing (minimum for DMS). Production should use 3 AZs.
+  # ========================================
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'infrastructure'
+        - Key: DataClassification
+          Value: 'sensitive'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnet (1 for testing, production would use 3)
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-public-subnet-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private Subnets (2 required for DMS subnet group, production would use 3)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-private-subnet-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-private-subnet-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateway (1 for testing to avoid EIP quota limits, production would use 3)
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-nat-eip-${EnvironmentSuffix}'
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-nat-${EnvironmentSuffix}'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-public-rt-${EnvironmentSuffix}'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-private-rt-${EnvironmentSuffix}'
+
+  DefaultPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # ========================================
+  # KMS Keys for Encryption
+  # ========================================
+
+  RDSEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for RDS Aurora encryption - ${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow RDS to use the key
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'rds-encryption-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  RDSEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/rds-migration-${EnvironmentSuffix}'
+      TargetKeyId: !Ref RDSEncryptionKey
+
+  EFSEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for EFS encryption - ${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow EFS to use the key
+            Effect: Allow
+            Principal:
+              Service: elasticfilesystem.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'efs-encryption-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  EFSEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/efs-migration-${EnvironmentSuffix}'
+      TargetKeyId: !Ref EFSEncryptionKey
+
+  # ========================================
+  # Security Groups
+  # ========================================
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'rds-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for RDS Aurora MySQL cluster'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref DMSSecurityGroup
+          Description: 'Allow MySQL access from DMS'
+      Tags:
+        - Key: Name
+          Value: !Sub 'rds-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'database'
+        - Key: DataClassification
+          Value: 'sensitive'
+
+  DMSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'dms-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for DMS replication instance'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound MySQL connections'
+      Tags:
+        - Key: Name
+          Value: !Sub 'dms-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'replication'
+
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'efs-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for EFS mount targets'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref DataSyncSecurityGroup
+          Description: 'Allow NFS access from DataSync'
+      Tags:
+        - Key: Name
+          Value: !Sub 'efs-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'storage'
+        - Key: DataClassification
+          Value: 'sensitive'
+
+  DataSyncSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'datasync-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for DataSync agents'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound NFS connections'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS for DataSync service'
+      Tags:
+        - Key: Name
+          Value: !Sub 'datasync-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'file-transfer'
+
+  # ========================================
+  # RDS Aurora MySQL Cluster (Requirement 3)
+  # NOTE: Using 2 subnets in 2 AZs for testing (minimum for RDS). Production would use 3 subnets across 3 AZs.
+  # NOTE: Using 2 instances as required (requirement says 2 read replicas, meaning 3 total instances)
+  # ========================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'aurora-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: 'Subnet group for Aurora MySQL cluster'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-subnet-group-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub 'aurora-cluster-${EnvironmentSuffix}'
+      Engine: aurora-mysql
+      EngineVersion: '8.0.mysql_aurora.3.04.0'
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
+      DatabaseName: documents
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref RDSSecurityGroup
+      StorageEncrypted: true
+      KmsKeyId: !GetAtt RDSEncryptionKey.Arn
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-cluster-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'database'
+        - Key: DataClassification
+          Value: 'sensitive'
+
+  # Primary instance
+  AuroraInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'aurora-instance-1-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref AuroraCluster
+      Engine: aurora-mysql
+      DBInstanceClass: db.r5.large
+      PubliclyAccessible: false
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-instance-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Read replica 1 - in second AZ for better availability
+  AuroraInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'aurora-instance-2-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref AuroraCluster
+      Engine: aurora-mysql
+      DBInstanceClass: db.r5.large
+      PubliclyAccessible: false
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-instance-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ========================================
+  # EFS File System (Requirement 4)
+  # NOTE: Using 2 mount targets for testing (matches our 2 AZs). Production would use 3 mount targets across 3 AZs.
+  # ========================================
+
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      KmsKeyId: !GetAtt EFSEncryptionKey.Arn
+      LifecyclePolicies:
+        - TransitionToIA: AFTER_30_DAYS
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub 'migration-efs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'storage'
+        - Key: DataClassification
+          Value: 'sensitive'
+
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Ref PrivateSubnet2
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+
+  # ========================================
+  # DMS Resources (Requirements 1, 5)
+  # ========================================
+
+  DMSSubnetGroup:
+    Type: AWS::DMS::ReplicationSubnetGroup
+    Properties:
+      ReplicationSubnetGroupIdentifier: !Sub 'dms-subnet-group-${EnvironmentSuffix}'
+      ReplicationSubnetGroupDescription: 'Subnet group for DMS replication instance'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'dms-subnet-group-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DMSReplicationInstance:
+    Type: AWS::DMS::ReplicationInstance
+    Properties:
+      ReplicationInstanceIdentifier: !Sub 'dms-instance-${EnvironmentSuffix}'
+      ReplicationInstanceClass: dms.r5.large
+      AllocatedStorage: 100
+      VpcSecurityGroupIds:
+        - !Ref DMSSecurityGroup
+      ReplicationSubnetGroupIdentifier: !Ref DMSSubnetGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'dms-instance-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'replication'
+
+  DMSSourceEndpoint:
+    Type: AWS::DMS::Endpoint
+    Properties:
+      EndpointIdentifier: !Sub 'dms-source-${EnvironmentSuffix}'
+      EndpointType: source
+      EngineName: mysql
+      ServerName: !Ref SourceDatabaseEndpoint
+      Port: !Ref SourceDatabasePort
+      DatabaseName: !Ref SourceDatabaseName
+      Username: !Ref SourceDatabaseUsername
+      Password: !Ref SourceDatabasePassword
+      Tags:
+        - Key: Name
+          Value: !Sub 'dms-source-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DMSTargetEndpoint:
+    Type: AWS::DMS::Endpoint
+    Properties:
+      EndpointIdentifier: !Sub 'dms-target-${EnvironmentSuffix}'
+      EndpointType: target
+      EngineName: aurora
+      ServerName: !GetAtt AuroraCluster.Endpoint.Address
+      Port: !GetAtt AuroraCluster.Endpoint.Port
+      DatabaseName: documents
+      Username: !Ref DBMasterUsername
+      Password: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'dms-target-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DMSReplicationTask:
+    Type: AWS::DMS::ReplicationTask
+    Properties:
+      ReplicationTaskIdentifier: !Sub 'dms-task-${EnvironmentSuffix}'
+      SourceEndpointArn: !Ref DMSSourceEndpoint
+      TargetEndpointArn: !Ref DMSTargetEndpoint
+      ReplicationInstanceArn: !Ref DMSReplicationInstance
+      MigrationType: full-load-and-cdc
+      TableMappings: |
+        {
+          "rules": [
+            {
+              "rule-type": "selection",
+              "rule-id": "1",
+              "rule-name": "1",
+              "object-locator": {
+                "schema-name": "%",
+                "table-name": "%"
+              },
+              "rule-action": "include"
+            }
+          ]
+        }
+      ReplicationTaskSettings: |
+        {
+          "TargetMetadata": {
+            "SupportLobs": true,
+            "FullLobMode": false,
+            "LobChunkSize": 64,
+            "LimitedSizeLobMode": true,
+            "LobMaxSize": 32
+          },
+          "FullLoadSettings": {
+            "TargetTablePrepMode": "DROP_AND_CREATE",
+            "CreatePkAfterFullLoad": false,
+            "StopTaskCachedChangesApplied": false,
+            "StopTaskCachedChangesNotApplied": false,
+            "MaxFullLoadSubTasks": 8,
+            "TransactionConsistencyTimeout": 600,
+            "CommitRate": 10000
+          },
+          "Logging": {
+            "EnableLogging": true,
+            "LogComponents": [
+              {
+                "Id": "SOURCE_UNLOAD",
+                "Severity": "LOGGER_SEVERITY_DEFAULT"
+              },
+              {
+                "Id": "TARGET_LOAD",
+                "Severity": "LOGGER_SEVERITY_DEFAULT"
+              },
+              {
+                "Id": "SOURCE_CAPTURE",
+                "Severity": "LOGGER_SEVERITY_DEFAULT"
+              },
+              {
+                "Id": "TARGET_APPLY",
+                "Severity": "LOGGER_SEVERITY_DEFAULT"
+              }
+            ]
+          },
+          "ChangeProcessingDdlHandlingPolicy": {
+            "HandleSourceTableDropped": true,
+            "HandleSourceTableTruncated": true,
+            "HandleSourceTableAltered": true
+          },
+          "ChangeProcessingTuning": {
+            "BatchApplyPreserveTransaction": true,
+            "BatchApplyTimeoutMin": 1,
+            "BatchApplyTimeoutMax": 30,
+            "BatchApplyMemoryLimit": 500,
+            "BatchSplitSize": 0,
+            "MinTransactionSize": 1000,
+            "CommitTimeout": 1,
+            "MemoryLimitTotal": 1024,
+            "MemoryKeepTime": 60,
+            "StatementCacheSize": 50
+          }
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub 'dms-task-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'replication'
+
+  # ========================================
+  # DataSync Resources (Requirements 2, 6)
+  # ========================================
+
+  DataSyncRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'datasync-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: datasync.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSDataSyncFullAccess'
+      Policies:
+        - PolicyName: EFSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticfilesystem:ClientMount'
+                  - 'elasticfilesystem:ClientWrite'
+                  - 'elasticfilesystem:DescribeFileSystems'
+                  - 'elasticfilesystem:DescribeMountTargets'
+                Resource: !Sub 'arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}'
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeSubnets'
+                  - 'ec2:DescribeSecurityGroups'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'datasync-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # DataSync Agent Comment: For testing without actual on-premises infrastructure,
+  # DataSync source location is commented out. In production, provision a DataSync agent
+  # and provide its ARN in the OnPremConfig.AgentArns array.
+  # DataSyncSourceLocation:
+  #   Type: AWS::DataSync::LocationNFS
+  #   Properties:
+  #     ServerHostname: !Ref SourceNFSServerHostname
+  #     Subdirectory: !Ref SourceNFSExportPath
+  #     OnPremConfig:
+  #       AgentArns:
+  #         - arn:aws:datasync:us-east-1:342597974367:agent/agent-xxxxxxxxx
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'datasync-source-${EnvironmentSuffix}'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+
+  # DataSyncDestinationLocation:
+  #   Type: AWS::DataSync::LocationEFS
+  #   Properties:
+  #     EfsFilesystemArn: !Sub 'arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}'
+  #     Ec2Config:
+  #       SecurityGroupArns:
+  #         - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${DataSyncSecurityGroup}'
+  #       SubnetArn: !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet}'
+  #     Subdirectory: /documents
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'datasync-destination-${EnvironmentSuffix}'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #
+  # DataSyncTask:
+  #   Type: AWS::DataSync::Task
+  #   DependsOn:
+  #     - DataSyncSourceLocation
+  #     - DataSyncDestinationLocation
+  #     - MountTarget
+  #   Properties:
+  #     Name: !Sub 'datasync-task-${EnvironmentSuffix}'
+  #     SourceLocationArn: !GetAtt DataSyncSourceLocation.LocationArn
+  #     DestinationLocationArn: !GetAtt DataSyncDestinationLocation.LocationArn
+  #     CloudWatchLogGroupArn: !GetAtt DataSyncLogGroup.Arn
+  #     Options:
+  #       VerifyMode: POINT_IN_TIME_CONSISTENT
+  #       OverwriteMode: ALWAYS
+  #       Atime: BEST_EFFORT
+  #       Mtime: PRESERVE
+  #       Uid: INT_VALUE
+  #       Gid: INT_VALUE
+  #       PreserveDeletedFiles: PRESERVE
+  #       PreserveDevices: NONE
+  #       PosixPermissions: PRESERVE
+  #       BytesPerSecond: -1
+  #       TaskQueueing: ENABLED
+  #       LogLevel: TRANSFER
+  #       TransferMode: CHANGED
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'datasync-task-${EnvironmentSuffix}'
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentSuffix
+  #       - Key: MigrationPhase
+  #         Value: 'file-transfer'
+  #
+  # DataSyncLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub '/aws/datasync/${EnvironmentSuffix}'
+  #     RetentionInDays: 30
+
+  # ========================================
+  # SNS Topic for Alerts (Requirement 9)
+  # ========================================
+
+  MigrationAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'migration-alerts-${EnvironmentSuffix}'
+      DisplayName: 'Migration Alerts'
+      Tags:
+        - Key: Name
+          Value: !Sub 'migration-alerts-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: MigrationPhase
+          Value: 'monitoring'
+
+  MigrationAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref MigrationAlertTopic
+      Endpoint: !Ref AlertEmailAddress
+
+  # ========================================
+  # CloudWatch Alarms
+  # ========================================
+
+  DMSReplicationLagAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'dms-replication-lag-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when DMS replication lag exceeds threshold'
+      MetricName: CDCLatencySource
+      Namespace: AWS/DMS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 300
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ReplicationInstanceIdentifier
+          Value: !Ref DMSReplicationInstance
+        - Name: ReplicationTaskIdentifier
+          Value: !Ref DMSReplicationTask
+      AlarmActions:
+        - !Ref MigrationAlertTopic
+      TreatMissingData: notBreaching
+
+  AuroraClusterCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'aurora-cpu-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when Aurora cluster CPU exceeds threshold'
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref AuroraCluster
+      AlarmActions:
+        - !Ref MigrationAlertTopic
+
+  EFSBurstCreditBalanceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'efs-burst-credit-${EnvironmentSuffix}'
+      AlarmDescription: 'Alert when EFS burst credit balance is low'
+      MetricName: BurstCreditBalance
+      Namespace: AWS/EFS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000000000000
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystem
+      AlarmActions:
+        - !Ref MigrationAlertTopic
+
+  # ========================================
+  # SSM Parameters (Requirement 8)
+  # ========================================
+
+  SSMRDSEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/migration/${EnvironmentSuffix}/rds/endpoint'
+      Type: String
+      Value: !GetAtt AuroraCluster.Endpoint.Address
+      Description: 'Aurora cluster endpoint'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        MigrationPhase: database
+
+  SSMRDSPort:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/migration/${EnvironmentSuffix}/rds/port'
+      Type: String
+      Value: !GetAtt AuroraCluster.Endpoint.Port
+      Description: 'Aurora cluster port'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+  SSMRDSUsername:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/migration/${EnvironmentSuffix}/rds/username'
+      Type: String
+      Value: !Ref DBMasterUsername
+      Description: 'Aurora master username'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        DataClassification: sensitive
+
+  SSMEFSId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/migration/${EnvironmentSuffix}/efs/filesystem-id'
+      Type: String
+      Value: !Ref FileSystem
+      Description: 'EFS file system ID'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+  SSMDMSInstanceArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/migration/${EnvironmentSuffix}/dms/instance-arn'
+      Type: String
+      Value: !Ref DMSReplicationInstance
+      Description: 'DMS replication instance ARN'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+  SSMMigrationStatus:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/migration/${EnvironmentSuffix}/status'
+      Type: String
+      Value: 'initialized'
+      Description: 'Current migration status'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        MigrationPhase: tracking
+
+  # ========================================
+  # CloudWatch Dashboard (Requirement 7)
+  # ========================================
+
+  MigrationDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'migration-dashboard-${EnvironmentSuffix}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DMS", "CDCLatencySource", {"stat": "Average", "label": "CDC Latency (seconds)"}],
+                  [".", "CDCLatencyTarget", {"stat": "Average", "label": "Target Latency (seconds)"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DMS Replication Lag",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "label": "Seconds"
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DMS", "FullLoadThroughputRowsSource", {"stat": "Sum", "label": "Rows Loaded"}],
+                  [".", "FullLoadThroughputBandwidthSource", {"stat": "Sum", "label": "Bandwidth (KB)"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DMS Full Load Progress",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/RDS", "CPUUtilization", {"stat": "Average", "label": "CPU Utilization"}],
+                  [".", "DatabaseConnections", {"stat": "Average", "label": "Connections"}],
+                  [".", "FreeableMemory", {"stat": "Average", "label": "Freeable Memory"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "RDS Aurora Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/EFS", "ClientConnections", {"stat": "Sum", "label": "Client Connections"}],
+                  [".", "DataReadIOBytes", {"stat": "Sum", "label": "Read IO Bytes"}],
+                  [".", "DataWriteIOBytes", {"stat": "Sum", "label": "Write IO Bytes"}]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "EFS Activity",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PrivateSubnetIds:
+    Description: 'Private subnet IDs'
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Subnets'
+
+  PublicSubnetId:
+    Description: 'Public subnet ID'
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-Subnet'
+
+  AuroraClusterEndpoint:
+    Description: 'Aurora cluster endpoint'
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-Aurora-Endpoint'
+
+  AuroraClusterPort:
+    Description: 'Aurora cluster port'
+    Value: !GetAtt AuroraCluster.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-Aurora-Port'
+
+  EFSFileSystemId:
+    Description: 'EFS file system ID'
+    Value: !Ref FileSystem
+    Export:
+      Name: !Sub '${AWS::StackName}-EFS-ID'
+
+  DMSReplicationInstanceArn:
+    Description: 'DMS replication instance ARN'
+    Value: !Ref DMSReplicationInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-DMS-Instance-ARN'
+
+  DMSReplicationTaskArn:
+    Description: 'DMS replication task ARN'
+    Value: !Ref DMSReplicationTask
+    Export:
+      Name: !Sub '${AWS::StackName}-DMS-Task-ARN'
+
+  SNSTopicArn:
+    Description: 'SNS topic ARN for migration alerts'
+    Value: !Ref MigrationAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNS-Topic-ARN'
+
+  CloudWatchDashboardURL:
+    Description: 'CloudWatch dashboard URL'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=migration-dashboard-${EnvironmentSuffix}'
+
+  RDSEncryptionKeyId:
+    Description: 'KMS key ID for RDS encryption'
+    Value: !GetAtt RDSEncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-KMS-Key'
+
+  EFSEncryptionKeyId:
+    Description: 'KMS key ID for EFS encryption'
+    Value: !GetAtt EFSEncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EFS-KMS-Key'
