@@ -37,7 +37,7 @@ const defaultTags = {
 
 // Configure AWS provider with default tags
 const provider = new aws.Provider('aws', {
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'us-east-2',
   defaultTags: {
     tags: defaultTags,
   },

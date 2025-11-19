@@ -42,11 +42,11 @@ export class RdsComponent extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create KMS alias
+    // Create KMS alias with unique name per environment suffix
     new aws.kms.Alias(
       `rds-kms-alias-${environmentSuffix}`,
       {
-        name: config.kmsKeyAlias,
+        name: `alias/rds-${environmentSuffix}`,
         targetKeyId: this.kmsKey.keyId,
       },
       { parent: this }
