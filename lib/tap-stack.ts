@@ -41,6 +41,12 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly transactionTableName: pulumi.Output<string>;
   public readonly transactionQueueUrl: pulumi.Output<string>;
   public readonly notificationTopicArn: pulumi.Output<string>;
+  public readonly validatorFunctionName: pulumi.Output<string>;
+  public readonly fraudDetectionFunctionName: pulumi.Output<string>;
+  public readonly notificationFunctionName: pulumi.Output<string>;
+  public readonly apiId: pulumi.Output<string>;
+  public readonly stageName: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -159,6 +165,7 @@ export class TapStack extends pulumi.ComponentResource {
       `notification-topic-${environmentSuffix}`,
       {
         name: pulumi.interpolate`notification-topic-${environmentSuffix}`,
+        kmsMasterKeyId: kmsKey.id,
         tags: tags,
       },
       { parent: this }
@@ -930,6 +937,12 @@ require (
     this.transactionTableName = transactionTable.name;
     this.transactionQueueUrl = transactionQueue.url;
     this.notificationTopicArn = notificationTopic.arn;
+    this.validatorFunctionName = validatorFunction.name;
+    this.fraudDetectionFunctionName = fraudDetectionFunction.name;
+    this.notificationFunctionName = notificationFunction.name;
+    this.apiId = api.id;
+    this.stageName = stage.stageName;
+    this.kmsKeyId = kmsKey.id;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
@@ -937,6 +950,12 @@ require (
       transactionTableName: this.transactionTableName,
       transactionQueueUrl: this.transactionQueueUrl,
       notificationTopicArn: this.notificationTopicArn,
+      validatorFunctionName: this.validatorFunctionName,
+      fraudDetectionFunctionName: this.fraudDetectionFunctionName,
+      notificationFunctionName: this.notificationFunctionName,
+      apiId: this.apiId,
+      stageName: this.stageName,
+      kmsKeyId: this.kmsKeyId,
     });
   }
 }
