@@ -467,7 +467,6 @@ class TapStack(pulumi.ComponentResource):
             f"webhook-usage-plan-{self.environment_suffix}",
             name=f"webhook-usage-plan-{self.environment_suffix}",
             description="Usage plan for webhook API",
-            api_stages=[],  # Will be populated after deployment
             quota_settings=aws.apigateway.UsagePlanQuotaSettingsArgs(
                 limit=10000,
                 period="DAY"
@@ -542,14 +541,27 @@ class TapStack(pulumi.ComponentResource):
         self.deployment = aws.apigateway.Deployment(
             f"api-deployment-{self.environment_suffix}",
             rest_api=self.api_gateway.id,
-            stage_name="prod",
             opts=ResourceOptions(
                 parent=self.api_gateway,
                 depends_on=[self.lambda_integration, self.post_method]
             )
         )
         
-        # Update usage plan with deployment stage
+        # Create API stage
+        self.api_stage = aws.apigateway.Stage(
+            f"api-stage-{self.environment_suffix}",
+            deployment=self.deployment.id,
+            rest_api=self.api_gateway.id,
+            stage_name="prod",
+            tags={
+                **self.tags,
+                "Name": f"api-stage-{self.environment_suffix}",
+                "Component": "API-Gateway"
+            },
+            opts=ResourceOptions(parent=self.api_gateway)
+        )
+        
+        # Associate API stage with usage plan
         aws.apigateway.UsagePlanKey(
             f"usage-plan-key-{self.environment_suffix}",
             key_id=self.api_key.id,
@@ -561,7 +573,7 @@ class TapStack(pulumi.ComponentResource):
         # Export API endpoint
         self.api_endpoint = pulumi.Output.all(
             self.api_gateway.id,
-            self.deployment.stage_name
+            self.api_stage.stage_name
         ).apply(lambda args: f"https://{args[0]}.execute-api.{os.getenv('AWS_REGION', 'us-east-1')}.amazonaws.com/{args[1]}")
 
     def _create_cloudwatch_monitoring(self):
