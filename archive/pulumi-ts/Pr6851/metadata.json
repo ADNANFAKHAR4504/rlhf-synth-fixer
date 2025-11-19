@@ -3,20 +3,12 @@
   "platform": "pulumi",
   "language": "ts",
   "complexity": "expert",
-  "team": "synth-2",
+  "team": "synth",
   "turn_type": "single",
   "po_id": "a1w9m4",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Implement AWS Systems Manager Parameter Store for configuration synchronization",
-    "Use Route53 health checks with failover routing policies for automatic regional failover",
-    "Configure S3 buckets with cross-region replication for static assets",
-    "Deploy API Gateway with custom domain names in both primary and secondary regions",
-    "Implement DynamoDB global tables for cross-region data replication",
-    "Configure Lambda functions with reserved concurrency to ensure availability",
-    "Implement CloudWatch Synthetics for endpoint monitoring in both regions",
-    "Use AWS Secrets Manager with cross-region replication for API credentials",
-    "Set up SNS topics for failover notifications with cross-region subscriptions"
+    "Failure Recovery Automation"
   ],
   "startedAt": "2025-11-19T13:56:30+05:30",
   "aws_services": [
