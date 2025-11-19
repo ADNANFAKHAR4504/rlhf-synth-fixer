@@ -64,6 +64,35 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **If verification fails**: STOP immediately, report BLOCKED status.
 
+## Master QA Pipeline (ENHANCED)
+
+**NEW**: Orchestrated QA pipeline with progress tracking and time estimation.
+
+**Run Complete Pipeline**:
+```bash
+bash .claude/scripts/qa-pipeline.sh
+```
+
+**Pipeline Stages**:
+1. Worktree Verification
+2. Code Quality (Lint/Build/Synth)
+3. Pre-Deployment Validation
+4. Code Health Check
+5. Deployment
+6. Test Coverage Validation
+7. Integration Test Validation
+8. Documentation Validation
+
+**Features**:
+- Progress reporting at each stage
+- Time tracking per phase
+- Estimated time remaining
+- Blocking condition alerts
+- Stage-by-stage status reporting
+- Comprehensive summary at completion
+
+**Usage**: Run at start of QA phase to execute all validation steps in sequence with real-time progress tracking.
+
 **Before Starting**:
 - Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements
 - Review `.claude/lessons_learnt.md` for deployment failures and fixes
@@ -156,6 +185,33 @@ Validates:
 
 **Cost Impact**: Saves 2-3 deployment attempts (~15% token reduction)
 
+### 2.6. Code Health Check (ENHANCED)
+
+**NEW**: Automated code analysis to catch common failure patterns from lessons_learnt.md.
+
+**Validation**: Run enhanced code health check
+```bash
+bash .claude/scripts/code-health-check.sh
+```
+
+Scans for:
+- Empty arrays in critical resources (DB subnet groups, security groups)
+- Missing environmentSuffix in resource names
+- Circular dependencies
+- Retain policies and DeletionProtection
+- GuardDuty detector creation (account-level resource)
+- AWS Config IAM policy issues
+- Lambda reserved concurrency issues
+- AWS SDK v2 in Node.js 18+
+- Expensive resource configurations (NAT Gateway, RDS Multi-AZ)
+
+**Action**:
+- If FAILS (errors): Fix before deployment
+- If PASSES with warnings: Review warnings, proceed if acceptable
+- If PASSES: Proceed to deployment
+
+**Integration**: Automatically runs before deployment attempts to catch known failure patterns early.
+
 ### 3. Deployment
 
 **CRITICAL**: Only proceed if Checkpoint G passed (lint + build + synth successful)
@@ -184,9 +240,36 @@ REGION=$(cat lib/AWS_REGION 2>/dev/null || echo "us-east-1")
 
 **Deploy to AWS**:
 - If SSM parameters referenced, include them in deployed resources
-- If deployment fails, fix code (max 5 attempts)
+- If deployment fails, analyze error and apply fixes (max 5 attempts)
+- Use enhanced error recovery for automatic retry and fix suggestions
 - If unable to deploy after 5 attempts, report error and exit
 - If AWS Quota Limit issues, report to user and await input
+
+**Deployment Failure Analysis (ENHANCED)**:
+```bash
+# After deployment failure, analyze error patterns
+bash .claude/scripts/deployment-failure-analysis.sh <deployment_log> <attempt_number> <max_attempts>
+```
+
+Features:
+- Automated deployment failure pattern matching
+- Integration with lessons_learnt.md to suggest fixes
+- Deployment attempt tracking and reporting
+- Automatic classification of errors (transient, quota, permission, dependency, configuration, conflict)
+- Fix suggestions based on error patterns
+
+**Enhanced Error Recovery (ENHANCED)**:
+```bash
+# Automatic retry logic with smart fix suggestions
+bash .claude/scripts/enhanced-error-recovery.sh <error_type> <error_message> <attempt_number> <max_attempts>
+```
+
+Features:
+- Automatic retry logic for transient failures (exponential backoff)
+- Smart fix suggestions based on error patterns
+- Integration with error recovery guide
+- Escalation path for unresolvable issues (quota, permissions)
+- Auto-fix for common issues (resource conflicts, dependencies, configuration errors)
 
 **Verify**: Deployed resources match PROMPT requirements (within guardrails)
 
@@ -344,6 +427,26 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Only compare PROMPT/MODEL_RESPONSE conversation
 - **CRITICAL**: MUST be in `lib/MODEL_FAILURES.md`, NOT at root level
 - See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
+
+**Documentation Quality Validation (ENHANCED)**:
+```bash
+# Validate MODEL_FAILURES.md and IDEAL_RESPONSE.md structure and completeness
+bash .claude/scripts/validate-documentation.sh
+```
+
+Validates:
+- MODEL_FAILURES.md structure and completeness
+- Severity level categorization (Critical/High/Medium/Low)
+- Root cause analysis for all failures
+- IDEAL_RESPONSE.md matches actual deployed code
+- Training value justification
+- Failure count in summary
+- Proper failure numbering and subsections
+
+**Action**:
+- If FAILS: Fix documentation issues before proceeding
+- If PASSES with warnings: Review warnings, proceed if acceptable
+- If PASSES: Documentation quality validated
 
 **Note**: Do NOT destroy resources - cleanup handled after manual PR review
 
