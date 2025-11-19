@@ -349,9 +349,11 @@ class TapStack(Stack):
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
                 ),
                 security_groups=[self.db_sg],
+                # FIXED: Aurora Global Database requires memory-optimized instances (R5/R6)
+                # T3 instances are not supported for global databases
                 instance_type=ec2.InstanceType.of(
-                    ec2.InstanceClass.BURSTABLE3,
-                    ec2.InstanceSize.MEDIUM,
+                    ec2.InstanceClass.MEMORY5,  # R5 instance class
+                    ec2.InstanceSize.LARGE,     # r5.large is the minimum for global DB
                 ),
             ),
             subnet_group=db_subnet_group,
@@ -401,9 +403,11 @@ class TapStack(Stack):
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
                 ),
                 security_groups=[self.db_sg],
+                # FIXED: Aurora Global Database requires memory-optimized instances (R5/R6)
+                # T3 instances are not supported for global databases
                 instance_type=ec2.InstanceType.of(
-                    ec2.InstanceClass.BURSTABLE3,
-                    ec2.InstanceSize.MEDIUM,
+                    ec2.InstanceClass.MEMORY5,  # R5 instance class
+                    ec2.InstanceSize.LARGE,     # r5.large is the minimum for global DB
                 ),
             ),
             subnet_group=db_subnet_group,
