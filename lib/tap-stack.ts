@@ -47,6 +47,11 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly apiId: pulumi.Output<string>;
   public readonly stageName: pulumi.Output<string>;
   public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly validatorLogGroup: pulumi.Output<string>;
+  public readonly fraudDetectionLogGroup: pulumi.Output<string>;
+  public readonly notificationLogGroup: pulumi.Output<string>;
+  public readonly fraudDlqUrl: pulumi.Output<string>;
+  public readonly notificationDlqUrl: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -485,7 +490,7 @@ require (
           },
         },
         kmsKeyArn: kmsKey.arn,
-        reservedConcurrentExecutions: 5,
+        reservedConcurrentExecutions: 100,
         timeout: 30,
         tags: tags,
       },
@@ -601,7 +606,7 @@ require (
           },
         },
         kmsKeyArn: kmsKey.arn,
-        reservedConcurrentExecutions: 5,
+        reservedConcurrentExecutions: 100,
         deadLetterConfig: {
           targetArn: fraudDLQ.arn,
         },
@@ -692,7 +697,7 @@ require (
           },
         },
         kmsKeyArn: kmsKey.arn,
-        reservedConcurrentExecutions: 5,
+        reservedConcurrentExecutions: 100,
         deadLetterConfig: {
           targetArn: notificationDLQ.arn,
         },
@@ -943,6 +948,11 @@ require (
     this.apiId = api.id;
     this.stageName = stage.stageName;
     this.kmsKeyId = kmsKey.id;
+    this.validatorLogGroup = validatorLogGroup.name;
+    this.fraudDetectionLogGroup = fraudDetectionLogGroup.name;
+    this.notificationLogGroup = notificationLogGroup.name;
+    this.fraudDlqUrl = fraudDLQ.url;
+    this.notificationDlqUrl = notificationDLQ.url;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
@@ -956,6 +966,11 @@ require (
       apiId: this.apiId,
       stageName: this.stageName,
       kmsKeyId: this.kmsKeyId,
+      validatorLogGroup: this.validatorLogGroup,
+      fraudDetectionLogGroup: this.fraudDetectionLogGroup,
+      notificationLogGroup: this.notificationLogGroup,
+      fraudDlqUrl: this.fraudDlqUrl,
+      notificationDlqUrl: this.notificationDlqUrl,
     });
   }
 }
