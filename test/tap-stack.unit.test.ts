@@ -1164,7 +1164,7 @@ describe('TapStack - Production-Grade EKS Cluster Unit Tests', () => {
 
       // Count Name tag occurrences (should be multiple for EKS infrastructure)
       const nameTagMatches = (templateYaml.match(/Key: Name/g) || []).length;
-      expect(nameTagMatches).toBeGreaterThanOrEqual(15); // Many resources need naming
+      expect(nameTagMatches).toBeGreaterThanOrEqual(15); 
     });
 
     test('Secondary CIDR blocks integrate with VPC for custom networking', () => {
