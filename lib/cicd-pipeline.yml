@@ -274,7 +274,6 @@ Resources:
       TargetType: ip
       VpcId: !Ref VPC
       HealthCheckEnabled: true
-      HealthCheckGracePeriodSeconds: 60
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
@@ -301,7 +300,6 @@ Resources:
       TargetType: ip
       VpcId: !Ref VPC
       HealthCheckEnabled: true
-      HealthCheckGracePeriodSeconds: 60
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
@@ -607,11 +605,6 @@ Resources:
             NoncurrentVersionExpirationInDays: 30
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 1
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref PipelineArtifactLogGroup
       Tags:
         - Key: Name
           Value: !Sub 'cicd-pipeline-artifacts-${EnvironmentSuffix}'
@@ -796,7 +789,7 @@ Resources:
             Value: !Ref 'AWS::AccountId'
             Type: PLAINTEXT
           - Name: IMAGE_REPO_NAME
-            Value: !Sub '${ECRRepository.RepositoryName}'
+            Value: !Ref ECRRepository
             Type: PLAINTEXT
           - Name: IMAGE_TAG
             Value: 'latest'
@@ -832,7 +825,7 @@ Resources:
                 - echo Writing image definitions file...
                 - printf '[{"name":"app","imageUri":"%s"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
                 - echo Writing task definition template...
-                - printf '{"family":"cicd-app-task-${EnvironmentSuffix}","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"256","memory":"512","executionRoleArn":"arn:aws:iam::${AWS::AccountId}:role/cicd-ecs-task-execution-role-${EnvironmentSuffix}","containerDefinitions":[{"name":"app","image":"%s","portMappings":[{"containerPort":%s,"protocol":"tcp"}],"essential":true,"logConfiguration":{"logDriver":"awslogs","options":{"awslogs-group":"/ecs/cicd-app-${EnvironmentSuffix}","awslogs-region":"${AWS::Region}","awslogs-stream-prefix":"ecs"}}}]}' $ECR_REPOSITORY_URI:$IMAGE_TAG $CONTAINER_PORT > taskdef.json
+                - printf '{"family":"cicd-app-task-dev","networkMode":"awsvpc","requiresCompatibilities":["FARGATE"],"cpu":"256","memory":"512","executionRoleArn":"arn:aws:iam::%s:role/ecs-task-execution-role-dev","containerDefinitions":[{"name":"app","image":"%s","portMappings":[{"containerPort":%s,"protocol":"tcp"}],"essential":true,"logConfiguration":{"logDriver":"awslogs","options":{"awslogs-group":"/ecs/cicd-app-dev","awslogs-region":"%s","awslogs-stream-prefix":"ecs"}}}]}' $AWS_ACCOUNT_ID $ECR_REPOSITORY_URI:$IMAGE_TAG $CONTAINER_PORT $AWS_DEFAULT_REGION > taskdef.json
                 - echo Writing appspec file...
                 - printf 'version: 0.0\nResources:\n  - TargetService:\n      Type: AWS::ECS::Service\n      Properties:\n        TaskDefinition: <TASK_DEFINITION>\n        LoadBalancerInfo:\n          ContainerName: "app"\n          ContainerPort: %s' $CONTAINER_PORT > appspec.yaml
           artifacts:

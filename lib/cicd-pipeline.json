@@ -493,7 +493,6 @@
                     "Ref": "VPC"
                 },
                 "HealthCheckEnabled": true,
-                "HealthCheckGracePeriodSeconds": 60,
                 "HealthCheckIntervalSeconds": 30,
                 "HealthCheckPath": "/",
                 "HealthCheckProtocol": "HTTP",
@@ -539,7 +538,6 @@
                     "Ref": "VPC"
                 },
                 "HealthCheckEnabled": true,
-                "HealthCheckGracePeriodSeconds": 60,
                 "HealthCheckIntervalSeconds": 30,
                 "HealthCheckPath": "/",
                 "HealthCheckProtocol": "HTTP",
@@ -1087,18 +1085,6 @@
                         }
                     ]
                 },
-                "NotificationConfiguration": {
-                    "CloudWatchConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "CloudWatchConfiguration": {
-                                "LogGroupName": {
-                                    "Ref": "PipelineArtifactLogGroup"
-                                }
-                            }
-                        }
-                    ]
-                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1478,7 +1464,7 @@
                         {
                             "Name": "IMAGE_REPO_NAME",
                             "Value": {
-                                "Fn::Sub": "${ECRRepository.RepositoryName}"
+                                "Ref": "ECRRepository"
                             },
                             "Type": "PLAINTEXT"
                         },
@@ -1505,7 +1491,7 @@
                 },
                 "Source": {
                     "Type": "CODEPIPELINE",
-                    "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Build started on `date`\n      - echo Logging in to Amazon ECR...\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com\n      - echo ECR Repository URI is $ECR_REPOSITORY_URI\n  build:\n    commands:\n      - echo Building the Docker image...\n      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_REPOSITORY_URI:$IMAGE_TAG\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER\n  post_build:\n    commands:\n      - echo Pushing the Docker images...\n      - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG\n      - docker push $ECR_REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER\n      - echo Writing image definitions file...\n      - printf '[{\"name\":\"app\",\"imageUri\":\"%s\"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json\n      - echo Writing task definition template...\n      - printf '{\"family\":\"cicd-app-task-${EnvironmentSuffix}\",\"networkMode\":\"awsvpc\",\"requiresCompatibilities\":[\"FARGATE\"],\"cpu\":\"256\",\"memory\":\"512\",\"executionRoleArn\":\"arn:aws:iam::${AWS::AccountId}:role/cicd-ecs-task-execution-role-${EnvironmentSuffix}\",\"containerDefinitions\":[{\"name\":\"app\",\"image\":\"%s\",\"portMappings\":[{\"containerPort\":%s,\"protocol\":\"tcp\"}],\"essential\":true,\"logConfiguration\":{\"logDriver\":\"awslogs\",\"options\":{\"awslogs-group\":\"/ecs/cicd-app-${EnvironmentSuffix}\",\"awslogs-region\":\"${AWS::Region}\",\"awslogs-stream-prefix\":\"ecs\"}}}]}' $ECR_REPOSITORY_URI:$IMAGE_TAG $CONTAINER_PORT > taskdef.json\n      - echo Writing appspec file...\n      - printf 'version: 0.0\\nResources:\\n  - TargetService:\\n      Type: AWS::ECS::Service\\n      Properties:\\n        TaskDefinition: <TASK_DEFINITION>\\n        LoadBalancerInfo:\\n          ContainerName: \"app\"\\n          ContainerPort: %s' $CONTAINER_PORT > appspec.yaml\nartifacts:\n  files:\n    - imagedefinitions.json\n    - taskdef.json\n    - appspec.yaml\n"
+                    "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Build started on `date`\n      - echo Logging in to Amazon ECR...\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com\n      - echo ECR Repository URI is $ECR_REPOSITORY_URI\n  build:\n    commands:\n      - echo Building the Docker image...\n      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_REPOSITORY_URI:$IMAGE_TAG\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER\n  post_build:\n    commands:\n      - echo Pushing the Docker images...\n      - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG\n      - docker push $ECR_REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER\n      - echo Writing image definitions file...\n      - printf '[{\"name\":\"app\",\"imageUri\":\"%s\"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json\n      - echo Writing task definition template...\n      - printf '{\"family\":\"cicd-app-task-dev\",\"networkMode\":\"awsvpc\",\"requiresCompatibilities\":[\"FARGATE\"],\"cpu\":\"256\",\"memory\":\"512\",\"executionRoleArn\":\"arn:aws:iam::%s:role/ecs-task-execution-role-dev\",\"containerDefinitions\":[{\"name\":\"app\",\"image\":\"%s\",\"portMappings\":[{\"containerPort\":%s,\"protocol\":\"tcp\"}],\"essential\":true,\"logConfiguration\":{\"logDriver\":\"awslogs\",\"options\":{\"awslogs-group\":\"/ecs/cicd-app-dev\",\"awslogs-region\":\"%s\",\"awslogs-stream-prefix\":\"ecs\"}}}]}' $AWS_ACCOUNT_ID $ECR_REPOSITORY_URI:$IMAGE_TAG $CONTAINER_PORT $AWS_DEFAULT_REGION > taskdef.json\n      - echo Writing appspec file...\n      - printf 'version: 0.0\\nResources:\\n  - TargetService:\\n      Type: AWS::ECS::Service\\n      Properties:\\n        TaskDefinition: <TASK_DEFINITION>\\n        LoadBalancerInfo:\\n          ContainerName: \"app\"\\n          ContainerPort: %s' $CONTAINER_PORT > appspec.yaml\nartifacts:\n  files:\n    - imagedefinitions.json\n    - taskdef.json\n    - appspec.yaml\n"
                 },
                 "LogsConfig": {
                     "CloudWatchLogs": {
