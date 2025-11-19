@@ -1747,18 +1747,8 @@ exports.handler = async (event) => {
       { provider: primaryProvider, parent: this }
     );
 
-    // Attach Lambda to Primary Target Group
-    new aws.lb.TargetGroupAttachment(
-      `payment-alb-tg-attach-primary-${environmentSuffix}`,
-      {
-        targetGroupArn: primaryAlbTargetGroup.arn,
-        targetId: primaryPaymentLambda.arn,
-      },
-      { provider: primaryProvider, parent: this, dependsOn: [primaryPaymentLambda] }
-    );
-
     // Lambda permission for Primary ALB
-    new aws.lambda.Permission(
+    const primaryAlbLambdaPermission = new aws.lambda.Permission(
       `payment-lambda-alb-permission-primary-${environmentSuffix}`,
       {
         action: 'lambda:InvokeFunction',
@@ -1767,6 +1757,16 @@ exports.handler = async (event) => {
         sourceArn: primaryAlbTargetGroup.arn,
       },
       { provider: primaryProvider, parent: this }
+    );
+
+    // Attach Lambda to Primary Target Group
+    new aws.lb.TargetGroupAttachment(
+      `payment-alb-tg-attach-primary-${environmentSuffix}`,
+      {
+        targetGroupArn: primaryAlbTargetGroup.arn,
+        targetId: primaryPaymentLambda.arn,
+      },
+      { provider: primaryProvider, parent: this, dependsOn: [primaryPaymentLambda, primaryAlbLambdaPermission] }
     );
 
     // Primary ALB Listener
@@ -1818,18 +1818,8 @@ exports.handler = async (event) => {
       { provider: secondaryProvider, parent: this }
     );
 
-    // Attach Lambda to Secondary Target Group
-    new aws.lb.TargetGroupAttachment(
-      `payment-alb-tg-attach-secondary-${environmentSuffix}`,
-      {
-        targetGroupArn: secondaryAlbTargetGroup.arn,
-        targetId: secondaryPaymentLambda.arn,
-      },
-      { provider: secondaryProvider, parent: this, dependsOn: [secondaryPaymentLambda] }
-    );
-
     // Lambda permission for Secondary ALB
-    new aws.lambda.Permission(
+    const secondaryAlbLambdaPermission = new aws.lambda.Permission(
       `payment-lambda-alb-permission-secondary-${environmentSuffix}`,
       {
         action: 'lambda:InvokeFunction',
@@ -1838,6 +1828,16 @@ exports.handler = async (event) => {
         sourceArn: secondaryAlbTargetGroup.arn,
       },
       { provider: secondaryProvider, parent: this }
+    );
+
+    // Attach Lambda to Secondary Target Group
+    new aws.lb.TargetGroupAttachment(
+      `payment-alb-tg-attach-secondary-${environmentSuffix}`,
+      {
+        targetGroupArn: secondaryAlbTargetGroup.arn,
+        targetId: secondaryPaymentLambda.arn,
+      },
+      { provider: secondaryProvider, parent: this, dependsOn: [secondaryPaymentLambda, secondaryAlbLambdaPermission] }
     );
 
     // Secondary ALB Listener
