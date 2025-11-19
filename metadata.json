@@ -1,5 +1,5 @@
 {
-  "platform": "CloudFormation",
+  "platform": "cfn",
   "language": "yaml",
   "complexity": "expert",
   "turn_type": "single",
@@ -19,5 +19,7 @@
     "KMS",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355"
 }
