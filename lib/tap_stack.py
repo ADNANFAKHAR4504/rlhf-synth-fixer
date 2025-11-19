@@ -201,7 +201,8 @@ class TapStack(Stack):
                 cdk.CfnTag(key="Environment", value=environment_suffix)
             ]
         )
-        trading_flow_log.add_dependency(flow_logs_bucket)
+        # Use node-based dependency for high-level constructs
+        trading_flow_log.node.add_dependency(flow_logs_bucket)
 
         # Analytics VPC Flow Logs
         analytics_flow_log = ec2.CfnFlowLog(
@@ -218,7 +219,8 @@ class TapStack(Stack):
                 cdk.CfnTag(key="Environment", value=environment_suffix)
             ]
         )
-        analytics_flow_log.add_dependency(flow_logs_bucket)
+        # Use node-based dependency for high-level constructs
+        analytics_flow_log.node.add_dependency(flow_logs_bucket)
 
         # ==========================================
         # 5. Create VPC Peering Connection
