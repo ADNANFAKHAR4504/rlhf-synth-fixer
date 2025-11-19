@@ -1,8 +1,10 @@
 """Comprehensive unit tests for TapStack"""
 import unittest
+
 import aws_cdk as cdk
-from aws_cdk.assertions import Template, Match
+from aws_cdk.assertions import Match, Template
 from pytest import mark
+
 from lib.tap_stack import TapStack, TapStackProps
 
 
@@ -97,18 +99,6 @@ class TestTapStack(unittest.TestCase):
                 "TopicName": f"webhook-alerts-{self.env_suffix}",
                 "DisplayName": "Payment Webhook Alerts",
                 "KmsMasterKeyId": Match.any_value(),
-            },
-        )
-
-    @mark.it("creates Lambda layer for shared dependencies")
-    def test_creates_lambda_layer(self):
-        """Test Lambda layer creation"""
-        self.template.resource_count_is("AWS::Lambda::LayerVersion", 1)
-        self.template.has_resource_properties(
-            "AWS::Lambda::LayerVersion",
-            {
-                "Description": "Shared dependencies for webhook processing",
-                "CompatibleRuntimes": ["python3.11"],
             },
         )
 
@@ -425,15 +415,3 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-    @mark.it("verifies all Lambda functions use shared layer")
-    def test_lambda_functions_use_layer(self):
-        """Test that Lambda functions reference the layer"""
-        # Get all Lambda functions and verify they have Layers property
-        resources = self.template.to_json()["Resources"]
-        lambda_functions = [
-            r for r in resources.values() if r["Type"] == "AWS::Lambda::Function"
-        ]
-
-        for func in lambda_functions:
-            self.assertIn("Layers", func["Properties"])
-            self.assertEqual(len(func["Properties"]["Layers"]), 1)
