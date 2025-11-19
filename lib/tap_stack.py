@@ -481,8 +481,12 @@ class TapStack(Stack):
             auto_delete_objects=True,
         )
 
-        # If primary region, set up cross-region replication with RTC
-        if self.is_primary:
+        # FIXED: Only set up cross-region replication if explicitly enabled
+        # This prevents errors when destination bucket doesn't exist yet
+        # Set ENABLE_S3_REPLICATION=true environment variable to enable replication
+        enable_replication = os.environ.get("ENABLE_S3_REPLICATION", "false").lower() == "true"
+        
+        if self.is_primary and enable_replication:
             # Create replication role
             replication_role = iam.Role(
                 self,
