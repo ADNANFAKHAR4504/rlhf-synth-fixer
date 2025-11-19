@@ -142,7 +142,7 @@ locals {
   backend_node_group_name  = "${local.cluster_name}-backend${local.node_group_suffix}"
   frontend_launch_template = "${local.cluster_name}-frontend-lt"
   backend_launch_template  = "${local.cluster_name}-backend-lt"
-  kms_alias_name           = "alias/${local.cluster_name}"
+  kms_alias_name           = "alias/${local.cluster_name}${local.resource_suffix}"
   log_group_name           = "/aws/eks/${local.cluster_name}${local.resource_suffix}/cluster"
   eks_cluster_role_name    = "${local.cluster_name}-cluster-role${local.resource_suffix}"
   namespace_name           = "${var.kubernetes_namespace}-${var.environment_suffix}"

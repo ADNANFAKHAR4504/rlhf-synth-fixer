@@ -131,13 +131,13 @@ data "aws_iam_policy_document" "kms" {
 # since we use AWS-managed EBS encryption and EKS handles secrets encryption
 
 resource "aws_kms_key" "eks" {
-  description             = "KMS key for ${local.cluster_name} secret encryption"
+  description             = "KMS key for ${local.cluster_name}${local.resource_suffix} secret encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
   policy                  = data.aws_iam_policy_document.kms.json
 
   tags = merge(local.common_tags, {
-    Name = "${local.cluster_name}-kms"
+    Name = "${local.cluster_name}${local.resource_suffix}-kms"
   })
 
   lifecycle {
