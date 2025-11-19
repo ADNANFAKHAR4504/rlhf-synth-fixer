@@ -1,0 +1,13 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "m3a4c6",
+  "team": "synth-2",
+  "startedAt": "2025-11-19T18:04:44+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": ["Web Application Deployment"],
+  "aws_services": ["S3", "Lambda", "SQS", "DynamoDB", "API Gateway", "CloudWatch", "IAM"],
+  "training_quality": 9
+}
