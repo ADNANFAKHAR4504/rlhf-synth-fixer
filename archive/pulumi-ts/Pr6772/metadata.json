@@ -37,5 +37,6 @@
     "lines": 100,
     "branches": 100
   },
-  "region": "us-east-2"
+  "region": "us-east-2",
+  "dockerS3Location": ""
 }
