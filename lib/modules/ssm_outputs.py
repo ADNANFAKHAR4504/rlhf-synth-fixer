@@ -22,7 +22,7 @@ class SsmOutputsModule(Construct):
             SsmParameter(
                 self,
                 f"ssm_{key}",
-                name=f"/{naming.environment}/{key}",
+                name=naming.generate_unique_ssm_path(key),
                 type="String",
                 value=value,
                 description=f"{key} for {naming.environment} environment",

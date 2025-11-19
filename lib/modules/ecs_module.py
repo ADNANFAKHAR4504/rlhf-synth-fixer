@@ -49,10 +49,10 @@ class EcsModule(Construct):
         log_group = CloudwatchLogGroup(
             self,
             "log_group",
-            name=f"/ecs/{naming.generate_simple_name('app')}",
+            name=f"/ecs/{naming.generate_unique_name('app')}",
             retention_in_days=7,
             tags={
-                "Name": naming.generate_simple_name("ecs-logs"),
+                "Name": naming.generate_unique_name("ecs-logs"),
                 "Environment": naming.environment
             }
         )

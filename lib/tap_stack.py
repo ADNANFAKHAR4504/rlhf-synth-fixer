@@ -34,11 +34,12 @@ class TapStack(TerraformStack):
         # Get environment-specific configuration
         config = EnvironmentConfig.get_config(environment)
 
-        # Initialize naming module
+        # Initialize naming module with stack ID for uniqueness
         naming = NamingModule(
             environment=config["environment"],
             region=config["region"],
-            environment_suffix=environment_suffix
+            environment_suffix=environment_suffix,
+            stack_id=id  # Use stack ID to ensure uniqueness
         )
 
         # AWS Provider with cross-account role support
@@ -53,11 +54,11 @@ class TapStack(TerraformStack):
             }]
         }
 
-        # Only add assume_role if account_id is present and valid
+        # Only add assume_role if account_id is present and valid (not empty/whitespace)
         account_id = config.get("account_id")
-        if account_id and account_id.strip():
+        if account_id and isinstance(account_id, str) and account_id.strip() and account_id.strip() != "123456789012":
             provider_kwargs["assume_role"] = [{
-                "role_arn": f"arn:aws:iam::{account_id}:role/TerraformDeploymentRole"
+                "role_arn": f"arn:aws:iam::{account_id.strip()}:role/TerraformDeploymentRole"
             }]
 
         AwsProvider(

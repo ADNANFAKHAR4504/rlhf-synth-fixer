@@ -34,10 +34,10 @@ class RdsModule(Construct):
         self.db_subnet_group = DbSubnetGroup(
             self,
             "db_subnet_group",
-            name=naming.generate_simple_name("db-subnet-group"),
+            name=naming.generate_unique_name("db-subnet-group"),
             subnet_ids=private_subnet_ids,
             tags={
-                "Name": naming.generate_simple_name("db-subnet-group"),
+                "Name": naming.generate_unique_name("db-subnet-group"),
                 "Environment": naming.environment
             }
         )
