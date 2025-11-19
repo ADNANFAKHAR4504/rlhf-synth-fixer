@@ -54,7 +54,7 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
         expect(response.Description).toContain('Self-sufficient');
         expect(response.Description).toContain('ECS infrastructure');
       } catch (error: any) {
-        fail(`AWS validation failed: ${error.message}`);
+        throw new Error(`AWS validation failed: ${error.message}`);
       }
     });
 
@@ -86,7 +86,7 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
         expect(parameterNames).not.toContain('ECSClusterNameProduction');
         expect(parameterNames).not.toContain('ECSServiceNameProduction');
       } catch (error: any) {
-        fail(`AWS parameter validation failed: ${error.message}`);
+        throw new Error(`AWS parameter validation failed: ${error.message}`);
       }
     });
   });
@@ -175,15 +175,15 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
     test('should have comprehensive encryption', () => {
       // KMS key for artifacts
       expect(template.Resources.ArtifactEncryptionKey).toBeDefined();
-      
+
       // S3 bucket encryption
       const bucket = template.Resources.PipelineArtifactBucket;
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].SSEAlgorithm).toBe('aws:kms');
-      
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+
       // SNS topic encryption
       const snsTopic = template.Resources.PipelineNotificationTopic;
       expect(snsTopic.Properties.KmsMasterKeyId).toEqual({ Ref: 'ArtifactEncryptionKey' });
-      
+
       // CloudWatch Logs encryption
       expect(template.Resources.BuildProjectLogGroup.Properties.KmsKeyId).toBeDefined();
       expect(template.Resources.TestProjectLogGroup.Properties.KmsKeyId).toBeDefined();
@@ -192,15 +192,15 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
     test('should have secure network configuration', () => {
       // ALB should be in public subnets
       const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Subnets).toContain({ Ref: 'PublicSubnet1' });
-      expect(alb.Properties.Subnets).toContain({ Ref: 'PublicSubnet2' });
-      
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet1' });
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
+
       // ECS services should be in private subnets
       const stagingService = template.Resources.ECSServiceStaging;
       const productionService = template.Resources.ECSServiceProduction;
       
-      expect(stagingService.Properties.NetworkConfiguration.AwsvpcConfiguration.Subnets).toContain({ Ref: 'PrivateSubnet1' });
-      expect(productionService.Properties.NetworkConfiguration.AwsvpcConfiguration.Subnets).toContain({ Ref: 'PrivateSubnet1' });
+      expect(stagingService.Properties.NetworkConfiguration.AwsvpcConfiguration.Subnets).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(productionService.Properties.NetworkConfiguration.AwsvpcConfiguration.Subnets).toContainEqual({ Ref: 'PrivateSubnet1' });
       
       // Security group should only allow ALB traffic to ECS
       const ecsSecurityGroup = template.Resources.ECSSecurityGroup;
@@ -340,9 +340,11 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
     test('should have detailed notification configuration', () => {
       const approvalAction = template.Resources.CICDPipeline.Properties.Stages[4].Actions
         .find((a: any) => a.ActionTypeId.Provider === 'Manual');
-      
-      expect(approvalAction.Configuration.CustomData).toContain('staging deployment');
-      expect(approvalAction.Configuration.CustomData).toContain('${ApplicationLoadBalancer.DNSName}');
+
+      // CustomData is a Fn::Sub object, so we need to check its content
+      const customData = approvalAction.Configuration.CustomData['Fn::Sub'];
+      expect(customData).toContain('staging deployment');
+      expect(customData).toContain('${ApplicationLoadBalancer.DNSName}');
     });
   });
 
