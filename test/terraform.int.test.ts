@@ -374,11 +374,16 @@ describe("Foundational Infrastructure - Live Traffic Tests", () => {
 
       const policyJson = JSON.parse(decodeURIComponent(policyDoc.PolicyDocument!));
       const s3Actions = policyJson.Statement[0].Action;
+      const resources = policyJson.Statement[0].Resource;
 
       expect(s3Actions).toContain("s3:PutObject");
       expect(s3Actions).toContain("s3:GetObject");
       expect(s3Actions).toContain("s3:ListBucket");
-      expect(policyJson.Statement[0].Resource).toContain(outputs.s3_bucket_name);
+
+      // Resources is an array of ARNs like ["arn:aws:s3:::bucket-name", "arn:aws:s3:::bucket-name/*"]
+      // Check that at least one resource contains the bucket name
+      const resourceString = Array.isArray(resources) ? resources.join(' ') : resources;
+      expect(resourceString).toContain(outputs.s3_bucket_name);
     });
 
     test("EC2 IAM role should have Secrets Manager access policy", async () => {
@@ -514,19 +519,32 @@ describe("Foundational Infrastructure - Live Traffic Tests", () => {
     test("Should deploy Node.js application with database connectivity", async () => {
       const deployScript = `
 #!/bin/bash
-
-# Install dependencies for Amazon Linux 2
-# Completely remove any existing NodeSource installations and repos (don't fail on errors)
-sudo yum remove -y nodesource-nodejs nodejs npm 2>/dev/null || true
-sudo rm -f /etc/yum.repos.d/nodesource*.repo 2>/dev/null || true
-sudo yum clean all 2>/dev/null || true
-
-# Now set -e for the rest of the script
 set -e
 
-# Install Node.js from Amazon Linux Extras (provides both nodejs and npm)
-sudo amazon-linux-extras install -y nodejs
-sudo yum install -y mariadb git awscli python3 || true
+echo "=== Installing Node.js using NVM ==="
+
+# Install NVM (Node Version Manager) - most reliable method for Amazon Linux 2
+export HOME=/root
+export NVM_DIR="$HOME/.nvm"
+
+# Download and install NVM
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Load NVM
+[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"
+
+# Install Node.js LTS version
+nvm install --lts
+nvm use --lts
+
+# Verify installation
+echo "Node version: $(node --version)"
+echo "NPM version: $(npm --version)"
+
+# Install required system packages
+sudo yum install -y mariadb git awscli python3
+
+echo "=== Node.js and dependencies installed successfully ==="
 
 # Create application directory
 mkdir -p /opt/test-app
@@ -665,6 +683,10 @@ app.listen(port, '0.0.0.0', () => {
 });
 EOF
 
+# Load NVM for this shell session
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"
+
 # Install dependencies and start application
 npm install
 
@@ -678,7 +700,7 @@ if [ ! -z "$secret_json" ]; then
   export RDS_DB="${rdsDbName}"
 fi
 
-nohup npm start > app.log 2>&1 &
+nohup node server.js > app.log 2>&1 &
 
 # Wait for app to start
 sleep 10
