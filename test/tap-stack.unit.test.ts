@@ -416,7 +416,8 @@ describe('TapStack CloudFormation Template - Secure Transaction Processing Pipel
         'CloudWatchLogGroupName',
         'LambdaSecurityGroupId',
         'LambdaErrorAlarmName',
-        'DynamoDBThrottleAlarmName'
+        'DynamoDBThrottleAlarmName',
+        'TerminationProtectionEnabled'
       ];
 
       expectedOutputs.forEach(outputName => {

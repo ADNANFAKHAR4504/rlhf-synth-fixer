@@ -599,3 +599,7 @@ Outputs:
     Value: !Ref DynamoDBThrottleAlarm
     Export:
       Name: !Sub '${AWS::StackName}-DynamoDB-Throttle-Alarm'
+
+  TerminationProtectionEnabled:
+    Description: 'Stack termination protection setting (for reference when creating stack)'
+    Value: !Ref EnableTerminationProtection

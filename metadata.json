@@ -20,5 +20,7 @@
     "CloudWatch",
     "IAM"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 9
 }
