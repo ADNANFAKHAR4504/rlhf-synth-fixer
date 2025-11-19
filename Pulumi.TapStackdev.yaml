@@ -1,0 +1,26 @@
+encryptionsalt: v1:zUsQuiwIy5E=:v1:KtDcKpIGbSAoX3C/:qmr9wgmVt+EDY+/EigtA8kketmm3xw==
+config:
+  tap-stack:environment: dev
+  tap-stack:environmentSuffix: dev
+  tap-stack:vpcCidr: 10.0.0.0/16
+  tap-stack:rdsInstanceClass: db.t3.micro
+  tap-stack:lambdaMemory: "128"
+  tap-stack:lambdaTimeout: "30"
+  tap-stack:s3RetentionDays: "7"
+  tap-stack:logRetentionDays: "7"
+  tap-stack:rdsAlarmThreshold: "80"
+  tap-stack:multiAz: "false"
+  tap-stack:dbPassword:
+    secure: v1:IBAi1tnWXDPzml6K:fvkP7JkleMX0hAeBXhNKMSE003kEBo4C7QURRmjboV4=
+  TapStack:environment: dev
+  TapStack:environmentSuffix: dev
+  TapStack:vpcCidr: 10.0.0.0/16
+  TapStack:rdsInstanceClass: db.t3.micro
+  TapStack:lambdaMemory: "128"
+  TapStack:lambdaTimeout: "30"
+  TapStack:s3RetentionDays: "7"
+  TapStack:logRetentionDays: "7"
+  TapStack:rdsAlarmThreshold: "80"
+  TapStack:multiAz: "false"
+  TapStack:dbPassword:
+    secure: v1:rcBu+Ua4QvvzKTo6:mGUIiAl3Z7rULcOAxhxYBNUuu/fAEzcUMRDtPc984P8=

@@ -1,0 +1,13 @@
+config:
+  tap-stack:environment: staging
+  tap-stack:environmentSuffix: staging-001
+  tap-stack:vpcCidr: 10.1.0.0/16
+  tap-stack:rdsInstanceClass: db.t3.small
+  tap-stack:lambdaMemory: 256
+  tap-stack:lambdaTimeout: 60
+  tap-stack:s3RetentionDays: 30
+  tap-stack:logRetentionDays: 14
+  tap-stack:rdsAlarmThreshold: 70
+  tap-stack:multiAz: true
+  tap-stack:dbPassword:
+    secure: AAABAED13Rr/mESCuD9cQu+fRYaLt4qvMYKaP0i3bR9DqLNL
