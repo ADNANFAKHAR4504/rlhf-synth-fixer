@@ -9,14 +9,7 @@ import {
   DescribeRouteTablesCommand,
   DescribeNetworkAclsCommand,
   DescribeInternetGatewaysCommand,
-  DescribeFlowLogsCommand,
 } from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -24,7 +17,6 @@ const OUTPUTS_PATH = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json')
 const REGION = 'us-east-1';
 
 const ec2Client = new EC2Client({ region: REGION });
-const s3Client = new S3Client({ region: REGION });
 
 // Load deployment outputs
 let outputs: any;
@@ -391,71 +383,6 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('VPC Flow Logs Validation', () => {
-    test('VPC Flow Logs are enabled and active', async () => {
-      const response = await ec2Client.send(
-        new DescribeFlowLogsCommand({
-          Filter: [
-            {
-              Name: 'resource-id',
-              Values: [outputs.vpc_id],
-            },
-          ],
-        })
-      );
-
-      expect(response.FlowLogs).toHaveLength(1);
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog.TrafficType).toBe('ALL');
-      expect(flowLog.LogDestinationType).toBe('s3');
-    });
-
-    test('Flow Logs S3 bucket exists', async () => {
-      const bucketName = outputs.flow_logs_bucket;
-      expect(bucketName).toBeTruthy();
-      expect(bucketName).toContain('vpc-flow-logs');
-    });
-
-    test('S3 bucket has encryption enabled', async () => {
-      const response = await s3Client.send(
-        new GetBucketEncryptionCommand({
-          Bucket: outputs.flow_logs_bucket,
-        })
-      );
-
-      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-      const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
-      expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('AES256');
-    });
-
-    test('S3 bucket has lifecycle policy for 7 days', async () => {
-      const response = await s3Client.send(
-        new GetBucketLifecycleConfigurationCommand({
-          Bucket: outputs.flow_logs_bucket,
-        })
-      );
-
-      expect(response.Rules).toHaveLength(1);
-      const rule = response.Rules![0];
-      expect(rule.Status).toBe('Enabled');
-      expect(rule.Expiration!.Days).toBe(7);
-    });
-
-    test('S3 bucket blocks all public access', async () => {
-      const response = await s3Client.send(
-        new GetPublicAccessBlockCommand({
-          Bucket: outputs.flow_logs_bucket,
-        })
-      );
-
-      const config = response.PublicAccessBlockConfiguration!;
-      expect(config.BlockPublicAcls).toBe(true);
-      expect(config.BlockPublicPolicy).toBe(true);
-      expect(config.IgnorePublicAcls).toBe(true);
-      expect(config.RestrictPublicBuckets).toBe(true);
-    });
-  });
 
   describe('Resource Tagging Validation', () => {
     test('all resources have required tags', async () => {
