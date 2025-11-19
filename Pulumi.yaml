@@ -1,3 +1,5 @@
 name: TapStack
-runtime: python
-description: Multi-region disaster recovery infrastructure for payment processing
+runtime:
+  name: python
+description: Pulumi infrastructure for TapStack
+main: tap.py
