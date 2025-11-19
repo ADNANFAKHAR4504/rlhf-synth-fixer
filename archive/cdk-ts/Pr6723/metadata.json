@@ -2,8 +2,8 @@
   "platform": "cdk",
   "language": "ts",
   "complexity": "expert",
-  "turn_type": "multi",
-  "po_id": "IAC-101912343",
+  "turn_type": "single",
+  "po_id": "t45a6h",
   "team": "synth",
   "startedAt": "2025-11-17T23:00:00Z",
   "subtask": "Application Deployment",
@@ -19,13 +19,9 @@
     "XRay"
   ],
   "subject_labels": [
-    "Containerized Application Deployment",
-    "Microservices Architecture"
+    "Web Application Deployment"
   ],
-  "description": "Multi-service containerized application on ECS with ALB, CloudMap service discovery, auto-scaling, Container Insights, and X-Ray tracing",
   "training_quality": 10,
-  "deployment_status": "skipped",
-  "deployment_skipped_reason": "user_requested_pr_only",
   "coverage": {
     "lines": 100,
     "branches": 100
