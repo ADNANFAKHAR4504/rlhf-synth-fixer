@@ -1,15 +1,7 @@
-import * as cdk from 'aws-cdk-lib';
 import * as config from 'aws-cdk-lib/aws-config';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
 interface ComplianceStackProps {
-  vpc: ec2.Vpc;
-  kmsKeys: kms.Key[];
-  buckets: s3.Bucket[];
   environmentSuffix: string;
 }
 
@@ -17,61 +9,10 @@ export class ComplianceStack extends Construct {
   constructor(scope: Construct, id: string, props: ComplianceStackProps) {
     super(scope, id);
 
-    // S3 bucket for AWS Config recordings
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `trading-config-${props.environmentSuffix}`,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-      lifecycleRules: [
-        {
-          id: 'DeleteOldRecordings',
-          enabled: true,
-          expiration: cdk.Duration.days(90),
-        },
-      ],
-    });
-
-    // IAM role for AWS Config
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      roleName: `trading-config-role-${props.environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWS_ConfigRole'
-        ),
-      ],
-    });
-
-    configBucket.grantWrite(configRole);
-
-    // AWS Config Recorder
-    const recorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: `trading-config-recorder-${props.environmentSuffix}`,
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    // Delivery channel
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'DeliveryChannel',
-      {
-        name: `trading-config-delivery-${props.environmentSuffix}`,
-        s3BucketName: configBucket.bucketName,
-      }
-    );
-
-    deliveryChannel.addDependency(recorder);
+    // Note: AWS Config Recorder and Delivery Channel are not created here
+    // because AWS only allows 1 configuration recorder per region per account.
+    // This stack assumes an existing Config recorder is already set up at the account level.
+    // The Config Rules below will use the existing account-level recorder.
 
     // PCI-DSS Compliance Rules
 

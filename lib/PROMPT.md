@@ -1,6 +1,6 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using CDK with TypeScript**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using CDK with TypeScript**
 > 
 > Platform: **cdk**  
 > Language: **ts**  
@@ -84,12 +84,12 @@ Production financial services environment deployed in us-east-1 across 3 availab
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)

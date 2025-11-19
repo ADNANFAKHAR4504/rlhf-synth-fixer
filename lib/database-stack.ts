@@ -22,7 +22,7 @@ export class DatabaseStack extends Construct {
     // Aurora Serverless v2 PostgreSQL cluster
     this.cluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        version: rds.AuroraPostgresEngineVersion.of('15.13', '15'),
       }),
       writer: rds.ClusterInstance.serverlessV2('Writer', {
         scaleWithWriter: true,
@@ -61,7 +61,9 @@ export class DatabaseStack extends Construct {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       timeToLiveAttribute: 'ttl',
     });
@@ -75,7 +77,9 @@ export class DatabaseStack extends Construct {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 

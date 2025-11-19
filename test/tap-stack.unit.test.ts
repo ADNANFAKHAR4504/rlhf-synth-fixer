@@ -35,8 +35,8 @@ describe('TapStack', () => {
         (r: any) => r.Type === 'AWS::EC2::VPCEndpoint'
       );
       const s3Endpoint = vpcEndpoints.find((ep: any) =>
-        ep.Properties?.ServiceName?.['Fn::Join']?.[1]?.some((part: any) =>
-          typeof part === 'string' && part.includes('.s3')
+        ep.Properties?.ServiceName?.['Fn::Join']?.[1]?.some(
+          (part: any) => typeof part === 'string' && part.includes('.s3')
         )
       );
       expect(s3Endpoint).toBeDefined();
@@ -48,8 +48,8 @@ describe('TapStack', () => {
         (r: any) => r.Type === 'AWS::EC2::VPCEndpoint'
       );
       const dynamoEndpoint = vpcEndpoints.find((ep: any) =>
-        ep.Properties?.ServiceName?.['Fn::Join']?.[1]?.some((part: any) =>
-          typeof part === 'string' && part.includes('.dynamodb')
+        ep.Properties?.ServiceName?.['Fn::Join']?.[1]?.some(
+          (part: any) => typeof part === 'string' && part.includes('.dynamodb')
         )
       );
       expect(dynamoEndpoint).toBeDefined();
@@ -73,7 +73,9 @@ describe('TapStack', () => {
 
     test('creates Lambda KMS key with rotation', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: Match.stringLikeRegexp('Lambda environment variables encryption key'),
+        Description: Match.stringLikeRegexp(
+          'Lambda environment variables encryption key'
+        ),
         EnableKeyRotation: true,
       });
     });
@@ -163,7 +165,7 @@ describe('TapStack', () => {
     });
 
     test('creates access logging bucket', () => {
-      template.resourceCountIs('AWS::S3::Bucket', 5); // raw, processed, archive, logs, config
+      template.resourceCountIs('AWS::S3::Bucket', 4); // raw, processed, archive, logs
     });
 
     test('all S3 buckets have public access blocked', () => {
@@ -236,7 +238,9 @@ describe('TapStack', () => {
               Effect: 'Deny',
               Condition: {
                 StringNotEquals: {
-                  'aws:RequestedRegion': 'us-east-1',
+                  'aws:RequestedRegion': Match.objectLike({
+                    Ref: 'AWS::Region',
+                  }),
                 },
               },
             }),
@@ -305,26 +309,19 @@ describe('TapStack', () => {
   });
 
   describe('Compliance Resources', () => {
-    test('creates AWS Config recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true,
-        },
-      });
+    test('does not create AWS Config recorder', () => {
+      template.resourceCountIs('AWS::Config::ConfigurationRecorder', 0);
     });
 
-    test('creates Config delivery channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        S3BucketName: Match.anyValue(),
-      });
+    test('does not create Config delivery channel', () => {
+      template.resourceCountIs('AWS::Config::DeliveryChannel', 0);
     });
 
     test('creates Config rules for PCI-DSS compliance', () => {
       const configRuleCount = Object.values(template.toJSON().Resources).filter(
         (r: any) => r.Type === 'AWS::Config::ConfigRule'
       ).length;
-      expect(configRuleCount).toBeGreaterThanOrEqual(10);
+      expect(configRuleCount).toBe(10);
     });
 
     test('creates S3 encryption Config rule', () => {
@@ -340,6 +337,33 @@ describe('TapStack', () => {
         Source: {
           SourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
         },
+      });
+    });
+
+    test('creates VPC flow logs Config rule', () => {
+      template.hasResourceProperties('AWS::Config::ConfigRule', {
+        Source: {
+          SourceIdentifier: 'VPC_FLOW_LOGS_ENABLED',
+        },
+      });
+    });
+
+    test('creates DynamoDB PITR Config rule', () => {
+      template.hasResourceProperties('AWS::Config::ConfigRule', {
+        Source: {
+          SourceIdentifier: 'DYNAMODB_PITR_ENABLED',
+        },
+      });
+    });
+
+    test('creates IAM password policy Config rule', () => {
+      template.hasResourceProperties('AWS::Config::ConfigRule', {
+        Source: {
+          SourceIdentifier: 'IAM_PASSWORD_POLICY',
+        },
+        InputParameters: Match.objectLike({
+          MinimumPasswordLength: '14',
+        }),
       });
     });
   });
@@ -394,7 +418,9 @@ describe('TapStack', () => {
   describe('Resource Tags', () => {
     test('applies standard tags to stack', () => {
       const resources = template.toJSON().Resources;
-      const vpc = Object.values(resources).find((r: any) => r.Type === 'AWS::EC2::VPC');
+      const vpc = Object.values(resources).find(
+        (r: any) => r.Type === 'AWS::EC2::VPC'
+      );
       expect(vpc).toBeDefined();
     });
   });
@@ -428,6 +454,30 @@ describe('TapStack', () => {
         }
       });
     });
+
+    test('defaults to "dev" when no environmentSuffix provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultEnvStack');
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: Match.stringLikeRegexp('dev'),
+      });
+    });
+
+    test('uses context value for environmentSuffix', () => {
+      const testApp = new cdk.App({
+        context: {
+          environmentSuffix: 'prod',
+        },
+      });
+      const testStack = new TapStack(testApp, 'ContextEnvStack');
+      const testTemplate = Template.fromStack(testStack);
+
+      testTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: Match.stringLikeRegexp('prod'),
+      });
+    });
   });
 
   describe('Security Best Practices', () => {
@@ -459,7 +509,9 @@ describe('TapStack', () => {
     test('creates expected number of subnets', () => {
       // VPC creates subnets across AZs - verify we have the right count
       const resources = template.toJSON().Resources;
-      const subnets = Object.values(resources).filter((r: any) => r.Type === 'AWS::EC2::Subnet');
+      const subnets = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::EC2::Subnet'
+      );
       expect(subnets.length).toBeGreaterThanOrEqual(6); // At least 6 subnets created
     });
 

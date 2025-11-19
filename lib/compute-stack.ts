@@ -57,11 +57,18 @@ export class ComputeStack extends Construct {
         resources: ['*'],
         conditions: {
           StringNotEquals: {
-            'aws:RequestedRegion': 'us-east-1',
+            'aws:RequestedRegion': cdk.Stack.of(this).region,
           },
         },
       })
     );
+
+    // CloudWatch log group for Lambda function
+    const lambdaLogGroup = new logs.LogGroup(this, 'DataProcessorLogs', {
+      logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     // Lambda function for data processing using Graviton2 (ARM64)
     this.dataProcessorFunction = new lambda.Function(
@@ -117,7 +124,7 @@ exports.handler = async (event) => {
         },
         environmentEncryption: props.kmsKey,
         deadLetterQueue: dlq,
-        logRetention: logs.RetentionDays.ONE_MONTH,
+        logGroup: lambdaLogGroup,
         tracing: lambda.Tracing.ACTIVE,
       }
     );

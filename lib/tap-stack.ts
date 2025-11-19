@@ -95,13 +95,6 @@ export class TapStack extends cdk.Stack {
 
     // Compliance layer
     new ComplianceStack(this, 'Compliance', {
-      vpc: networking.vpc,
-      kmsKeys: Object.values(kmsKeys),
-      buckets: [
-        storage.rawDataBucket,
-        storage.processedDataBucket,
-        storage.archiveBucket,
-      ],
       environmentSuffix,
     });
 
@@ -140,6 +133,30 @@ export class TapStack extends cdk.Stack {
       value: storage.archiveBucket.bucketName,
       description: 'S3 bucket for long-term archival',
       exportName: `TradingPlatform-ArchiveBucket-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'UserSessionsTableName', {
+      value: database.userSessionsTable.tableName,
+      description: 'DynamoDB table for user sessions',
+      exportName: `TradingPlatform-UserSessionsTable-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiKeysTableName', {
+      value: database.apiKeysTable.tableName,
+      description: 'DynamoDB table for API keys',
+      exportName: `TradingPlatform-ApiKeysTable-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessorFunctionArn', {
+      value: compute.dataProcessorFunction.functionArn,
+      description: 'Lambda function ARN for data processing',
+      exportName: `TradingPlatform-DataProcessorArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessorFunctionName', {
+      value: compute.dataProcessorFunction.functionName,
+      description: 'Lambda function name for data processing',
+      exportName: `TradingPlatform-DataProcessorName-${environmentSuffix}`,
     });
   }
 }
