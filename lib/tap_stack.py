@@ -227,7 +227,7 @@ class TapStack(pulumi.ComponentResource):
             handler="webhook_validator.webhook_validator_handler",
             memory_size=1024,
             timeout=300,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             code=pulumi.FileArchive("lib/lambda"),
             role=self.lambda_role.arn,
             environment=aws.lambda_.FunctionEnvironmentArgs(
@@ -257,7 +257,7 @@ class TapStack(pulumi.ComponentResource):
                 handler="provider_processor.provider_processor_handler",
                 memory_size=1024,
                 timeout=300,
-                reserved_concurrent_executions=50,
+                reserved_concurrent_executions=10,
                 code=pulumi.FileArchive("lib/lambda"),
                 role=self.lambda_role.arn,
                 environment=aws.lambda_.FunctionEnvironmentArgs(
@@ -295,7 +295,7 @@ class TapStack(pulumi.ComponentResource):
             handler="event_processor.event_processor_handler",
             memory_size=1024,
             timeout=300,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             code=pulumi.FileArchive("lib/lambda"),
             role=self.lambda_role.arn,
             environment=aws.lambda_.FunctionEnvironmentArgs(
