@@ -185,6 +185,7 @@ class TapStack(Stack):
         # 4. Enable VPC Flow Logs for Both VPCs
         # ==========================================
         # Trading VPC Flow Logs
+        # NOTE: AWS only supports 60 or 600 seconds for max_aggregation_interval
         trading_flow_log = ec2.CfnFlowLog(
             self, f"TradingFlowLog-{environment_suffix}",
             resource_id=trading_vpc.vpc_id,
@@ -192,7 +193,7 @@ class TapStack(Stack):
             traffic_type="ALL",
             log_destination_type="s3",
             log_destination=flow_logs_bucket.bucket_arn,
-            max_aggregation_interval=300,  # 5 minutes
+            max_aggregation_interval=600,  # 10 minutes (AWS only supports 60 or 600)
             tags=[
                 cdk.CfnTag(key="Name", value=f"trading-flow-log-{environment_suffix}"),
                 cdk.CfnTag(key="CostCenter", value="Trading"),
@@ -208,7 +209,7 @@ class TapStack(Stack):
             traffic_type="ALL",
             log_destination_type="s3",
             log_destination=flow_logs_bucket.bucket_arn,
-            max_aggregation_interval=300,
+            max_aggregation_interval=600,  # 10 minutes (AWS only supports 60 or 600)
             tags=[
                 cdk.CfnTag(key="Name", value=f"analytics-flow-log-{environment_suffix}"),
                 cdk.CfnTag(key="CostCenter", value="Analytics"),
@@ -450,35 +451,39 @@ class TapStack(Stack):
             )
 
         # ==========================================
-        # 9. Create VPC Endpoints
+        # 9. Create VPC Endpoints (DISABLED due to quota limits)
         # ==========================================
-        # S3 Gateway Endpoint for Trading VPC
-        trading_s3_endpoint = trading_vpc.add_gateway_endpoint(
-            f"TradingS3Endpoint-{environment_suffix}",
-            service=ec2.GatewayVpcEndpointAwsService.S3,
-            subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
-        )
+        # NOTE: VPC endpoints are disabled to avoid quota exhaustion errors
+        # AWS accounts have default limits (typically 20 gateway endpoints per region)
+        # Uncomment below if your account has available quota
 
-        # DynamoDB Gateway Endpoint for Trading VPC
-        trading_dynamodb_endpoint = trading_vpc.add_gateway_endpoint(
-            f"TradingDynamoDBEndpoint-{environment_suffix}",
-            service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-            subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
-        )
+        # # S3 Gateway Endpoint for Trading VPC
+        # trading_s3_endpoint = trading_vpc.add_gateway_endpoint(
+        #     f"TradingS3Endpoint-{environment_suffix}",
+        #     service=ec2.GatewayVpcEndpointAwsService.S3,
+        #     subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
+        # )
 
-        # S3 Gateway Endpoint for Analytics VPC
-        analytics_s3_endpoint = analytics_vpc.add_gateway_endpoint(
-            f"AnalyticsS3Endpoint-{environment_suffix}",
-            service=ec2.GatewayVpcEndpointAwsService.S3,
-            subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
-        )
+        # # DynamoDB Gateway Endpoint for Trading VPC
+        # trading_dynamodb_endpoint = trading_vpc.add_gateway_endpoint(
+        #     f"TradingDynamoDBEndpoint-{environment_suffix}",
+        #     service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+        #     subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
+        # )
 
-        # DynamoDB Gateway Endpoint for Analytics VPC
-        analytics_dynamodb_endpoint = analytics_vpc.add_gateway_endpoint(
-            f"AnalyticsDynamoDBEndpoint-{environment_suffix}",
-            service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-            subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
-        )
+        # # S3 Gateway Endpoint for Analytics VPC
+        # analytics_s3_endpoint = analytics_vpc.add_gateway_endpoint(
+        #     f"AnalyticsS3Endpoint-{environment_suffix}",
+        #     service=ec2.GatewayVpcEndpointAwsService.S3,
+        #     subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
+        # )
+
+        # # DynamoDB Gateway Endpoint for Analytics VPC
+        # analytics_dynamodb_endpoint = analytics_vpc.add_gateway_endpoint(
+        #     f"AnalyticsDynamoDBEndpoint-{environment_suffix}",
+        #     service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+        #     subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)]
+        # )
 
         # ==========================================
         # 10. Create CloudWatch Log Metric Filters and Alarms
