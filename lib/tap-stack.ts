@@ -606,7 +606,7 @@ export class TapStack extends pulumi.ComponentResource {
     const clusterAutoscalerRole = new aws.iam.Role(
       `eks-cluster-autoscaler-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider.apply((oidcProvider: any) => {
+        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider: any) => {
           return pulumi.all([
             pulumi.output(oidcProvider.url),
             pulumi.output(oidcProvider.arn)
@@ -693,7 +693,7 @@ export class TapStack extends pulumi.ComponentResource {
     const albControllerRole = new aws.iam.Role(
       `eks-alb-controller-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider.apply((oidcProvider: any) => {
+        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider: any) => {
           return pulumi.all([
             pulumi.output(oidcProvider.url),
             pulumi.output(oidcProvider.arn)
