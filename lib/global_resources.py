@@ -128,20 +128,12 @@ class GlobalResources(pulumi.ComponentResource):
         self.dynamodb_table_arn = self.dynamodb_table_primary.arn
 
     def _create_route53_resources(self, args: GlobalResourcesArgs):
-        """Create Route 53 hosted zone with failover routing."""
-        # Hosted zone
-        self.hosted_zone = aws.route53.Zone(
-            f'dr-zone-{args.environment_suffix}',
-            name=f'payments-{args.environment_suffix}.yourdomain.com',
-            tags={**args.tags, 'Name': f'dr-zone-{args.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Health check for primary region
+        """Create Route 53 health checks for monitoring (no custom domain)."""
+        # Health check for primary region API Gateway
         self.primary_health_check = aws.route53.HealthCheck(
             f'health-check-primary-{args.environment_suffix}',
             type='HTTPS',
-            resource_path='/payment',
+            resource_path='/prod/payment',
             fqdn=args.primary_api_endpoint.apply(
                 lambda endpoint: endpoint.replace('https://', '').split('/')[0]
             ),
@@ -153,11 +145,11 @@ class GlobalResources(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Health check for DR region
+        # Health check for DR region API Gateway
         self.dr_health_check = aws.route53.HealthCheck(
             f'health-check-dr-{args.environment_suffix}',
             type='HTTPS',
-            resource_path='/payment',
+            resource_path='/prod/payment',
             fqdn=args.dr_api_endpoint.apply(
                 lambda endpoint: endpoint.replace('https://', '').split('/')[0]
             ),
@@ -169,47 +161,13 @@ class GlobalResources(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Primary failover record
-        self.primary_record = aws.route53.Record(
-            f'route53-primary-{args.environment_suffix}',
-            zone_id=self.hosted_zone.zone_id,
-            name=f'api.payments-{args.environment_suffix}.yourdomain.com',
-            type='CNAME',
-            ttl=60,
-            records=[args.primary_api_endpoint.apply(
-                lambda endpoint: endpoint.replace('https://', '').split('/')[0]
-            )],
-            set_identifier='primary',
-            failover_routing_policies=[aws.route53.RecordFailoverRoutingPolicyArgs(
-                type='PRIMARY'
-            )],
-            health_check_id=self.primary_health_check.id,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # DR failover record
-        self.dr_record = aws.route53.Record(
-            f'route53-dr-{args.environment_suffix}',
-            zone_id=self.hosted_zone.zone_id,
-            name=f'api.payments-{args.environment_suffix}.yourdomain.com',
-            type='CNAME',
-            ttl=60,
-            records=[args.dr_api_endpoint.apply(
-                lambda endpoint: endpoint.replace('https://', '').split('/')[0]
-            )],
-            set_identifier='secondary',
-            failover_routing_policies=[aws.route53.RecordFailoverRoutingPolicyArgs(
-                type='SECONDARY'
-            )],
-            health_check_id=self.dr_health_check.id,
-            opts=ResourceOptions(parent=self)
-        )
-
-        self.hosted_zone_id = self.hosted_zone.zone_id
+        # Store endpoints for output (no custom domain, use API Gateway endpoints directly)
+        self.hosted_zone_id = None
         self.route53_fqdn = pulumi.Output.concat(
-            'api.payments-',
-            args.environment_suffix,
-            '.yourdomain.com'
+            'Use API Gateway endpoints directly: Primary=',
+            args.primary_api_endpoint,
+            ', DR=',
+            args.dr_api_endpoint
         )
 
     def _create_s3_replication(self, args: GlobalResourcesArgs):
