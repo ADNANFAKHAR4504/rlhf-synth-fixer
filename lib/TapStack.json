@@ -333,7 +333,6 @@
     },
     "TransactionLogBucket": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": "S3ReplicationRole",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}"
