@@ -556,7 +556,7 @@ class TapStack(pulumi.ComponentResource):
             f"api-stage-{self.environment_suffix}",
             deployment=self.deployment.id,
             rest_api=self.api_gateway.id,
-            stage_name="prod",
+            stage_name=self.environment_suffix,
             tags={
                 **self.tags,
                 "Name": f"api-stage-{self.environment_suffix}",
