@@ -1,22 +1,19 @@
 # backend.tf
-# Local backend for testing (not recommended for production)
+# S3 backend for state management (configured dynamically by bootstrap script)
 terraform {
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "s3" {
+    # These values are configured via -backend-config flags during terraform init
+    # bucket = "configured-via-backend-config"
+    # key    = "configured-via-backend-config"
+    # region = "configured-via-backend-config"
+    # encrypt = true
   }
 }
 
-# S3 backend for production (requires pre-created resources)
+# Local backend for local testing (not used in CI/CD)
 # terraform {
-#   backend "s3" {
-#     bucket         = "PLACEHOLDER-terraform-state-bucket"
-#     key            = "myapp/us-west-2/terraform.tfstate"
-#     region         = "us-west-2"
-#     encrypt        = true
-#     dynamodb_table = "PLACEHOLDER-terraform-locks"
-#
-#     # Optional: Use assume role for cross-account access
-#     # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+#   backend "local" {
+#     path = "terraform.tfstate"
 #   }
 # }
 
