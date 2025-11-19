@@ -10,7 +10,7 @@
     "Web Application Deployment"
   ],
   "po_id": "w8r7z4",
-  "aws_services": [],
+  "aws_services": ["EC2", "VPC", "EKS", "IAM"],
   "region": "us-east-1",
   "coverage": {
     "lines": 100,
