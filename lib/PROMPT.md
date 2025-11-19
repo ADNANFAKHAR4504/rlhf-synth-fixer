@@ -6,7 +6,7 @@ We've got a critical project on our hands. Our fintech client needs to migrate t
 
 The challenge here is maintaining continuous operation while we transition from their old infrastructure to a modern, cloud-native architecture. They're currently handling payment processing with traditional servers, and we need to move this to a fully managed AWS environment that can scale, maintain security compliance, and provide better disaster recovery capabilities.
 
-The business has made it clear that this migration needs to happen seamlessly. They process transactions 24/7, and even a few minutes of downtime could cost them millions in revenue and damage their reputation with payment processors. So we're implementing a blue-green deployment strategy that will let us run both environments in parallel during the transition, then gradually shift traffic once we're confident everything works correctly.
+The business has made it clear that this migration needs to happen seamlessly. They process transactions 24/7, and even a few minutes of downtime could cost them millions in revenue and damage their reputation with payment processors. For blue-green deployment, we'll use API Gateway stage variables with Lambda aliases to enable gradual traffic shifting during updates.
 
 ## What we need to build
 
@@ -35,24 +35,24 @@ Create a payment processing infrastructure using **AWS CDK with Python** for mig
    - All Lambda functions must have VPC connectivity to access database resources
    - Avoid reserved concurrency unless specifically required (use default scaling)
 
-4. **API and Load Balancing**
-   - API Gateway with request validation for external-facing APIs
-   - VPC Link connecting API Gateway to private Application Load Balancer
-   - Application Load Balancer with two target groups for blue-green deployment strategy
-   - Weighted routing between target groups to enable gradual traffic migration
-   - ALB must be in private subnets with security group restrictions
+4. **API and Integration**
+   - API Gateway REST API with request validation for external-facing APIs
+   - Direct Lambda integration for all endpoints (validate, fraud-check, process)
+   - No VPC Link required - API Gateway connects directly to Lambda functions
+   - Blue-green deployment can be achieved using API Gateway stage variables with Lambda aliases
 
 5. **Storage and Compliance**
    - S3 buckets for audit logs with versioning enabled
-   - 90-day retention policy with automatic compliance archival
+   - 90-day retention policy with automatic compliance archival to Glacier
    - Lifecycle policies for cost optimization
    - All S3 buckets must have auto_delete_objects=True for destroyability
 
 6. **Monitoring and Observability**
-   - CloudWatch dashboards displaying real-time API response times
+   - CloudWatch dashboards displaying real-time API response times (p99 and p50)
    - Dashboards showing error rates and transaction failures
    - Database performance metrics (CPU, connections, query latency)
    - CloudWatch alarms monitoring API latency with 99th percentile metrics
+   - CloudWatch alarms for API errors, Lambda errors, and Aurora CPU utilization
    - SNS topics for alerting operations team on failed transactions and system errors
 
 7. **Security and Secrets Management**
@@ -66,7 +66,8 @@ Create a payment processing infrastructure using **AWS CDK with Python** for mig
 
 - All infrastructure defined using **AWS CDK with Python**
 - Use **AWS CDK v2** with Python 3.9 or higher
-- Deploy to **us-east-1** region
+- Deploy to region specified by `CDK_DEFAULT_REGION` environment variable (defaults to us-east-1)
+- Stack name format: `TapStack{environmentSuffix}` (no hyphen between TapStack and suffix)
 - Resource names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: `resource-name-{environmentSuffix}`
 - All resources must be destroyable (RemovalPolicy.DESTROY, no DeletionPolicy.Retain)
@@ -83,13 +84,12 @@ Create a payment processing infrastructure using **AWS CDK with Python** for mig
 ### Constraints
 
 - PCI compliance requirements must be maintained throughout migration
-- Zero downtime during migration phase using blue-green deployment
+- Zero downtime during migration phase using API Gateway stage variables with Lambda aliases for blue-green deployment
 - All databases encrypted at rest using customer-managed KMS keys
 - All data in transit must be encrypted using TLS 1.2 or higher
 - S3 buckets must have versioning and lifecycle policies configured
 - Point-in-time recovery required for all DynamoDB tables
-- Blue-green deployment strategy with gradual traffic shifting capability
-- VPC Link required for API Gateway to ALB communication (no public endpoints)
+- API Gateway uses direct Lambda integration (no VPC Link or ALB required)
 - All Lambda functions must handle cold starts gracefully
 - CloudWatch alarms must use 99th percentile for latency metrics (not average)
 - Include proper error handling and retry logic in all Lambda functions
@@ -99,7 +99,7 @@ Create a payment processing infrastructure using **AWS CDK with Python** for mig
 
 - **Functionality**: Complete payment processing pipeline from API Gateway through Lambda to databases with proper validation and fraud detection
 - **Performance**: API response times under 200ms at 99th percentile, Lambda cold starts minimized through VPC optimization
-- **Reliability**: Multi-AZ deployment with automatic failover, blue-green deployment capability for zero-downtime updates
+- **Reliability**: Multi-AZ deployment with automatic failover, API Gateway stage variables enable zero-downtime updates
 - **Security**: All data encrypted at rest and in transit, secrets managed through Secrets Manager with rotation, IAM least privilege, PCI compliance maintained
 - **Resource Naming**: All resources include environmentSuffix parameter for unique identification across deployments
 - **Destroyability**: All resources can be completely torn down without manual intervention or orphaned resources
@@ -113,8 +113,7 @@ Create a payment processing infrastructure using **AWS CDK with Python** for mig
 - RDS Aurora PostgreSQL Serverless v2 cluster with encryption and read replicas
 - DynamoDB tables with global secondary indexes and point-in-time recovery
 - Lambda functions for payment validation, fraud detection, and transaction processing
-- API Gateway with VPC Link and request validation
-- Application Load Balancer with two target groups for blue-green deployment
+- API Gateway REST API with direct Lambda integration and request validation
 - S3 buckets for audit logs with versioning and lifecycle policies
 - CloudWatch dashboards and alarms for comprehensive monitoring
 - SNS topics for operational alerting

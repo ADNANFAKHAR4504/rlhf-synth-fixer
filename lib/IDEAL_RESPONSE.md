@@ -17,9 +17,18 @@ The solution implements a production-grade payment processing infrastructure wit
 ## File: lib/payment_stack.py
 
 ```python
+"""tap_stack.py
+This module defines the TapStack class, which serves as the main CDK stack for
+the TAP (Test Automation Platform) project.
+It orchestrates the instantiation of payment processing infrastructure and
+manages environment-specific configurations.
+"""
+
+from typing import Optional
+import os
+
+import aws_cdk as cdk
 from aws_cdk import (
-    Stack,
-    CfnParameter,
     RemovalPolicy,
     Duration,
     CfnOutput,
@@ -44,31 +53,84 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class PaymentProcessingStack(Stack):
+class TapStackProps(cdk.StackProps):
     """
-    Main stack for payment processing infrastructure migration.
-    Implements a complete AWS CDK solution for fintech payment processing
-    with PCI compliance, blue-green deployment, and zero-downtime migration.
+    TapStackProps defines the properties for the TapStack CDK stack.
+
+    Args:
+      environment_suffix (Optional[str]): An optional suffix to identify the
+      deployment environment (e.g., 'dev', 'prod').
+      alert_email (Optional[str]): Email address for alerts (defaults to ops@example.com).
+      **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+
+    Attributes:
+      environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+      alert_email (Optional[str]): Stores the alert email for the stack.
     """
 
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        environment_suffix: Optional[str] = None,
+        alert_email: Optional[str] = None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
+        self.alert_email = alert_email or "ops@example.com"
+
+
+class TapStack(cdk.Stack):
+    """
+    Represents the main CDK stack for the Tap project.
+
+    This stack contains all payment processing infrastructure including:
+    - VPC with public, private, and isolated subnets
+    - Aurora PostgreSQL cluster
+    - DynamoDB transaction table
+    - Lambda functions for payment processing
+    - API Gateway with VPC Link
+    - Application Load Balancer
+    - CloudWatch monitoring and alarms
+
+    Args:
+      scope (Construct): The parent construct.
+      construct_id (str): The unique identifier for this stack.
+      props (Optional[TapStackProps]): Optional properties for configuring the
+        stack, including environment suffix and alert email.
+      **kwargs: Additional keyword arguments passed to the CDK Stack.
+
+    Attributes:
+      environment_suffix (str): The environment suffix used for resource naming and configuration.
+    """
+
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        props: Optional[TapStackProps] = None,
+        **kwargs
+    ):
         super().__init__(scope, construct_id, **kwargs)
 
-        # Environment suffix parameter for unique resource naming
-        environment_suffix = CfnParameter(
-            self, "EnvironmentSuffix",
-            type="String",
-            description="Unique suffix for resource names to enable multiple deployments",
-            default="dev"
-        ).value_as_string
+        # Get environment suffix from props, context, or use 'dev' as default
+        environment_suffix = (
+            (props.environment_suffix if props else None)
+            or self.node.try_get_context("environmentSuffix")
+            or "dev"
+        )
 
-        # Email for SNS notifications
-        alert_email = CfnParameter(
-            self, "AlertEmail",
-            type="String",
-            description="Email address for receiving alerts",
-            default="ops@example.com"
-        ).value_as_string
+        # Get alert email from props or environment variable
+        alert_email = (
+            (props.alert_email if props else None)
+            or os.getenv("ALERT_EMAIL", "ops@example.com")
+        )
+
+        self.environment_suffix = environment_suffix
+        self.alert_email = alert_email
+
+        # ============================================
+        # Payment Processing Infrastructure
+        # ============================================
 
         # Create KMS key for encryption (customer-managed)
         kms_key = kms.Key(
@@ -144,20 +206,9 @@ class PaymentProcessingStack(Stack):
             description="Allow Lambda functions to connect to Aurora"
         )
 
-        # Security group for ALB
-        alb_sg = ec2.SecurityGroup(
-            self, f"AlbSecurityGroup-{environment_suffix}",
-            vpc=vpc,
-            description=f"Security group for Application Load Balancer - {environment_suffix}",
-            allow_all_outbound=True
-        )
-
-        # Allow HTTPS traffic to ALB from VPC
-        alb_sg.add_ingress_rule(
-            peer=ec2.Peer.ipv4(vpc.vpc_cidr_block),
-            connection=ec2.Port.tcp(443),
-            description="Allow HTTPS traffic from VPC"
-        )
+        # REMOVED: ALB security group - no longer needed since we removed ALB
+        # ALB was removed to avoid VPC Link issues (VPC Links only support NLB, not ALB)
+        # We now use direct Lambda integration with API Gateway
 
         # Create Aurora Serverless v2 cluster for customer database
         # Generate random password using Secrets Manager
@@ -179,7 +230,7 @@ class PaymentProcessingStack(Stack):
         aurora_parameter_group = rds.ParameterGroup(
             self, f"AuroraParameterGroup-{environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_15_4
+                version=rds.AuroraPostgresEngineVersion.VER_15_8
             ),
             description=f"Parameter group for Aurora PostgreSQL - {environment_suffix}"
         )
@@ -189,7 +240,7 @@ class PaymentProcessingStack(Stack):
             self, f"AuroraCluster-{environment_suffix}",
             cluster_identifier=f"payment-customer-db-{environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_15_4
+                version=rds.AuroraPostgresEngineVersion.VER_15_8
             ),
             credentials=rds.Credentials.from_secret(db_secret),
             writer=rds.ClusterInstance.serverless_v2(
@@ -640,70 +691,13 @@ def handler(event, context):
             log_retention=logs.RetentionDays.ONE_WEEK
         )
 
-        # Create Application Load Balancer in private subnets
-        alb = elbv2.ApplicationLoadBalancer(
-            self, f"PaymentAlb-{environment_suffix}",
-            load_balancer_name=f"payment-alb-{environment_suffix}",
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            security_group=alb_sg,
-            internet_facing=False
-        )
-
-        # Create target groups for blue-green deployment
-        blue_target_group = elbv2.ApplicationTargetGroup(
-            self, f"BlueTargetGroup-{environment_suffix}",
-            target_group_name=f"payment-blue-{environment_suffix}",
-            vpc=vpc,
-            port=80,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            target_type=elbv2.TargetType.LAMBDA,
-            targets=[elbv2_targets.LambdaTarget(transaction_processing_lambda)],
-            health_check=elbv2.HealthCheck(
-                enabled=True,
-                healthy_http_codes="200"
-            )
-        )
-
-        green_target_group = elbv2.ApplicationTargetGroup(
-            self, f"GreenTargetGroup-{environment_suffix}",
-            target_group_name=f"payment-green-{environment_suffix}",
-            vpc=vpc,
-            port=80,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            target_type=elbv2.TargetType.LAMBDA,
-            targets=[elbv2_targets.LambdaTarget(transaction_processing_lambda)],
-            health_check=elbv2.HealthCheck(
-                enabled=True,
-                healthy_http_codes="200"
-            )
-        )
-
-        # Add listener with weighted target groups for blue-green deployment
-        listener = alb.add_listener(
-            f"AlbListener-{environment_suffix}",
-            port=443,
-            protocol=elbv2.ApplicationProtocol.HTTPS,
-            certificates=[],  # In production, add ACM certificate
-            default_action=elbv2.ListenerAction.weighted_target_groups([
-                elbv2.WeightedTargetGroup(
-                    target_group=blue_target_group,
-                    weight=100  # Start with 100% traffic to blue
-                ),
-                elbv2.WeightedTargetGroup(
-                    target_group=green_target_group,
-                    weight=0  # 0% traffic to green initially
-                )
-            ])
-        )
-
-        # Create VPC Link for API Gateway
-        vpc_link = apigw.VpcLink(
-            self, f"PaymentVpcLink-{environment_suffix}",
-            vpc_link_name=f"payment-vpc-link-{environment_suffix}",
-            targets=[alb]
-        )
-
+        # Remove the ALB and VPC Link setup - use direct Lambda integration instead
+        # This simplifies the architecture and avoids VPC Link NLB requirement
+        
+        # Note: If blue-green deployment is needed, it can be achieved using:
+        # 1. API Gateway stage variables with Lambda aliases
+        # 2. Or keep ALB for internal use only (not via API Gateway)
+        
         # Create API Gateway REST API
         api = apigw.RestApi(
             self, f"PaymentApi-{environment_suffix}",
@@ -742,19 +736,12 @@ def handler(event, context):
             request_validator=request_validator
         )
 
-        # Transaction processing endpoint via VPC Link to ALB
+        # Transaction processing endpoint - direct Lambda integration
+        # FIXED: Use direct Lambda integration instead of VPC Link/ALB
         process_resource = api.root.add_resource("process")
         process_resource.add_method(
             "POST",
-            apigw.Integration(
-                type=apigw.IntegrationType.HTTP_PROXY,
-                integration_http_method="POST",
-                uri=f"http://{alb.load_balancer_dns_name}/",
-                options=apigw.IntegrationOptions(
-                    connection_type=apigw.ConnectionType.VPC_LINK,
-                    vpc_link=vpc_link
-                )
-            ),
+            apigw.LambdaIntegration(transaction_processing_lambda),
             request_validator=request_validator
         )
 
@@ -894,7 +881,10 @@ def handler(event, context):
             cloudwatch_actions.SnsAction(alert_topic)
         )
 
-        # CloudFormation Outputs for operations team
+        # ============================================
+        # CloudFormation Outputs
+        # ============================================
+
         CfnOutput(
             self, "VpcId",
             value=vpc.vpc_id,
@@ -924,13 +914,6 @@ def handler(event, context):
         )
 
         CfnOutput(
-            self, "AlbDnsName",
-            value=alb.load_balancer_dns_name,
-            description="Application Load Balancer DNS name",
-            export_name=f"payment-alb-dns-{environment_suffix}"
-        )
-
-        CfnOutput(
             self, "AuditLogBucket",
             value=audit_log_bucket.bucket_name,
             description="S3 audit log bucket name",
@@ -953,36 +936,64 @@ def handler(event, context):
 
         CfnOutput(
             self, "DashboardUrl",
-            value=f"https://console.aws.amazon.com/cloudwatch/home?region={self.region}#dashboards:name={dashboard.dashboard_name}",
+            value=(
+                f"https://console.aws.amazon.com/cloudwatch/home?"
+                f"region={self.region}#dashboards:name={dashboard.dashboard_name}"
+            ),
             description="CloudWatch Dashboard URL",
             export_name=f"payment-dashboard-url-{environment_suffix}"
         )
+
 ```
 
 ## File: bin/tap.py
 
 ```python
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 import os
+from datetime import datetime, timezone
+
 import aws_cdk as cdk
-from lib.payment_stack import PaymentProcessingStack
+from aws_cdk import Tags
+from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
 
-# Get environment suffix from context or use default
-env_suffix = app.node.try_get_context("environmentSuffix") or "dev"
+# Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
+STACK_NAME = f"TapStack{environment_suffix}"
 
-PaymentProcessingStack(
-    app,
-    f"PaymentProcessingStack-{env_suffix}",
+repository_name = os.getenv('REPOSITORY', 'unknown')
+commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
+pr_number = os.getenv('PR_NUMBER', 'unknown')
+team = os.getenv('TEAM', 'unknown')
+created_at = datetime.now(timezone.utc).isoformat()
+alert_email = app.node.try_get_context('alertEmail') or os.getenv('ALERT_EMAIL', 'ops@example.com')
+
+# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+Tags.of(app).add('Environment', environment_suffix)
+Tags.of(app).add('Repository', repository_name)
+Tags.of(app).add('Author', commit_author)
+Tags.of(app).add('PRNumber', pr_number)
+Tags.of(app).add('Team', team)
+Tags.of(app).add('CreatedAt', created_at)
+
+# Create a TapStackProps object to pass environment_suffix
+props = TapStackProps(
+    environment_suffix=environment_suffix,
+    alert_email=alert_email,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION', 'us-east-1')
-    ),
-    description=f"Payment processing infrastructure for fintech migration - {env_suffix}"
+        region=os.getenv('CDK_DEFAULT_REGION')
+    )
 )
 
+# Initialize the stack with proper parameters
+TapStack(app, STACK_NAME, props=props)
+
 app.synth()
+
 ```
 
 ## File: lib/AWS_REGION
