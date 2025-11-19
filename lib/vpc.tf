@@ -145,10 +145,11 @@ data "aws_ssm_parameter" "vpc_id" {
 }
 
 locals {
-  vpc_id = var.vpc_id_parameter_name != "" ? (
-    var.manage_vpc_ssm_parameter
+  # Use newly created VPC if we're creating one, otherwise use SSM or existing VPC
+  vpc_id = local.use_existing_vpc ? local.base_vpc_id : (
+    var.vpc_id_parameter_name != "" && var.manage_vpc_ssm_parameter
     ? aws_ssm_parameter.vpc_id[0].value
-    : data.aws_ssm_parameter.vpc_id[0].value
-  ) : local.base_vpc_id
+    : local.base_vpc_id
+  )
 }
 
