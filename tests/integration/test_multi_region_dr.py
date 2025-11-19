@@ -28,10 +28,21 @@ class TestMultiRegionDRIntegration:
     @pytest.fixture(scope="class")
     def outputs(self):
         """Load Terraform outputs"""
-        outputs_file = 'outputs.json'
-        if os.path.exists(outputs_file):
-            with open(outputs_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        # Try multiple output file locations
+        possible_files = [
+            'cfn-outputs/flat-outputs.json',
+            'outputs.json',
+            'cdktf.out/stacks/TapStackpr6739/outputs.json'
+        ]
+        
+        for outputs_file in possible_files:
+            if os.path.exists(outputs_file):
+                with open(outputs_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # Handle different output formats
+                    if 'TapStackpr6739' in data:
+                        return data['TapStackpr6739']
+                    return data
         return {}
 
     def test_vpc_connectivity(self, outputs, primary_region, secondary_region):
@@ -40,7 +51,7 @@ class TestMultiRegionDRIntegration:
         ec2_secondary = boto3.client('ec2', region_name=secondary_region)
         
         # Check primary VPC
-        primary_vpc_id = outputs.get('vpc_primary_id', {}).get('value')
+        primary_vpc_id = outputs.get('vpc_primary_id')
         assert primary_vpc_id, "Primary VPC ID not found in outputs"
         
         vpcs = ec2_primary.describe_vpcs(VpcIds=[primary_vpc_id])
@@ -49,7 +60,7 @@ class TestMultiRegionDRIntegration:
         assert vpcs['Vpcs'][0]['CidrBlock'] == '10.0.0.0/16'
         
         # Check secondary VPC
-        secondary_vpc_id = outputs.get('vpc_secondary_id', {}).get('value')
+        secondary_vpc_id = outputs.get('vpc_secondary_id')
         assert secondary_vpc_id, "Secondary VPC ID not found in outputs"
         
         vpcs = ec2_secondary.describe_vpcs(VpcIds=[secondary_vpc_id])
@@ -110,11 +121,11 @@ class TestMultiRegionDRIntegration:
         assert len(payment_global['GlobalClusterMembers']) == 2, "Expected 2 regional clusters"
         
         # Check primary cluster endpoint
-        primary_endpoint = outputs.get('aurora_primary_endpoint', {}).get('value')
+        primary_endpoint = outputs.get('aurora_primary_endpoint')
         assert primary_endpoint, "Primary Aurora endpoint not found"
         
         # Check secondary cluster endpoint
-        secondary_endpoint = outputs.get('aurora_secondary_endpoint', {}).get('value')
+        secondary_endpoint = outputs.get('aurora_secondary_endpoint')
         assert secondary_endpoint, "Secondary Aurora endpoint not found"
 
     def test_dynamodb_global_table(self, outputs, primary_region, secondary_region, environment_suffix):
@@ -122,7 +133,7 @@ class TestMultiRegionDRIntegration:
         dynamodb_primary = boto3.client('dynamodb', region_name=primary_region)
         dynamodb_secondary = boto3.client('dynamodb', region_name=secondary_region)
         
-        table_name = outputs.get('dynamodb_table_name', {}).get('value')
+        table_name = outputs.get('dynamodb_table_name')
         assert table_name, "DynamoDB table name not found"
         
         # Check table in primary region
@@ -142,8 +153,8 @@ class TestMultiRegionDRIntegration:
         """Test S3 cross-region replication"""
         s3_primary = boto3.client('s3', region_name=primary_region)
         
-        primary_bucket = outputs.get('s3_primary_bucket', {}).get('value')
-        secondary_bucket = outputs.get('s3_secondary_bucket', {}).get('value')
+        primary_bucket = outputs.get('s3_primary_bucket')
+        secondary_bucket = outputs.get('s3_secondary_bucket')
         
         assert primary_bucket, "Primary S3 bucket not found"
         assert secondary_bucket, "Secondary S3 bucket not found"
@@ -190,7 +201,7 @@ class TestMultiRegionDRIntegration:
         for func in secondary_functions['Functions']:
             if f'payment-processor-secondary-{environment_suffix}' in func['FunctionName']:
                 secondary_payment_function = func
-                break
+                    break
         
         assert secondary_payment_function is not None, "Secondary Lambda function not found"
         assert 'VpcConfig' in secondary_payment_function
@@ -198,9 +209,9 @@ class TestMultiRegionDRIntegration:
     def test_api_gateway_endpoints(self, outputs, primary_region, secondary_region):
         """Test API Gateway endpoints are accessible"""
         import requests
-        
-        primary_endpoint = outputs.get('api_primary_endpoint', {}).get('value')
-        secondary_endpoint = outputs.get('api_secondary_endpoint', {}).get('value')
+
+        primary_endpoint = outputs.get('api_primary_endpoint')
+        secondary_endpoint = outputs.get('api_secondary_endpoint')
         
         assert primary_endpoint, "Primary API endpoint not found"
         assert secondary_endpoint, "Secondary API endpoint not found"
@@ -217,7 +228,7 @@ class TestMultiRegionDRIntegration:
         """Test Route 53 health check configuration"""
         route53 = boto3.client('route53')
         
-        health_check_id = outputs.get('health_check_id', {}).get('value')
+        health_check_id = outputs.get('health_check_id')
         assert health_check_id, "Health check ID not found"
         
         health_check = route53.get_health_check(HealthCheckId=health_check_id)
@@ -231,7 +242,7 @@ class TestMultiRegionDRIntegration:
         """Test Route 53 failover DNS records"""
         route53 = boto3.client('route53')
         
-        hosted_zone_id = outputs.get('hosted_zone_id', {}).get('value')
+        hosted_zone_id = outputs.get('hosted_zone_id')
         assert hosted_zone_id, "Hosted zone ID not found"
         
         # List all records in the zone
@@ -278,8 +289,8 @@ class TestMultiRegionDRIntegration:
         sns_primary = boto3.client('sns', region_name=primary_region)
         sns_secondary = boto3.client('sns', region_name=secondary_region)
         
-        primary_topic_arn = outputs.get('sns_primary_topic_arn', {}).get('value')
-        secondary_topic_arn = outputs.get('sns_secondary_topic_arn', {}).get('value')
+        primary_topic_arn = outputs.get('sns_primary_topic_arn')
+        secondary_topic_arn = outputs.get('sns_secondary_topic_arn')
         
         assert primary_topic_arn, "Primary SNS topic ARN not found"
         assert secondary_topic_arn, "Secondary SNS topic ARN not found"
@@ -356,7 +367,7 @@ class TestMultiRegionDRIntegration:
         """Simulate failover by checking Route 53 can fail over"""
         route53 = boto3.client('route53')
         
-        health_check_id = outputs.get('health_check_id', {}).get('value')
+        health_check_id = outputs.get('health_check_id')
         assert health_check_id, "Health check ID not found"
         
         # Get current health check status
