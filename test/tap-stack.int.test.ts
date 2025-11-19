@@ -1378,7 +1378,6 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
       );
 
       privateRtRes.RouteTables?.forEach(rt => {
-        // Should NOT have route to IGW
         const igwRoute = rt.Routes?.find(r => r.GatewayId?.startsWith("igw-"));
         expect(igwRoute).toBeUndefined();
 
