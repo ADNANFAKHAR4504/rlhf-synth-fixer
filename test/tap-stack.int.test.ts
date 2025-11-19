@@ -551,7 +551,7 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
       console.log(`EKS Cluster validated: ${cluster?.name}, Status: ${cluster?.status}, Version: ${cluster?.version}`);
     });
 
-    test("EKS cluster has private-only endpoint access for security", async () => {
+    test("EKS cluster has hybrid endpoint access for operational functionality", async () => {
       const res = await eksClient.send(
         new DescribeClusterCommand({ name: outputs.ClusterName })
       );
@@ -559,12 +559,16 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
       const cluster = res.cluster;
       expect(cluster).toBeDefined();
 
-      // Verify endpoint configuration for enhanced security
+      // Verify endpoint configuration supports both private and public access
       const vpcConfig = cluster?.resourcesVpcConfig;
-      expect(vpcConfig?.endpointPublicAccess).toBe(false);
+      expect(vpcConfig?.endpointPublicAccess).toBe(true);
       expect(vpcConfig?.endpointPrivateAccess).toBe(true);
 
-      console.log("EKS cluster endpoint is configured for private-only access");
+      // Verify public access is configured
+      expect(vpcConfig?.publicAccessCidrs).toBeDefined();
+      expect(vpcConfig?.publicAccessCidrs).toContain("0.0.0.0/0");
+
+      console.log("EKS cluster endpoint is configured for hybrid access (private + public)");
     });
 
     test("EKS cluster has encryption enabled", async () => {

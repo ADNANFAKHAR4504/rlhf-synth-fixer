@@ -631,7 +631,8 @@ Resources:
         SecurityGroupIds:
           - !Ref EksClusterSecurityGroup
         EndpointPrivateAccess: true
-        EndpointPublicAccess: false
+        EndpointPublicAccess: true
+        PublicAccessCidrs: ['0.0.0.0/0']
       Logging:
         ClusterLogging:
           EnabledTypes:

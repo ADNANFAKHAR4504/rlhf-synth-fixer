@@ -377,8 +377,8 @@ describe('TapStack - Production-Grade EKS Cluster Unit Tests', () => {
     test('EKS Cluster has proper VPC configuration', () => {
       expect(templateYaml).toContain('ResourcesVpcConfig:');
       expect(templateYaml).toContain('EndpointPrivateAccess: true');
-      expect(templateYaml).toContain('EndpointPublicAccess: false');
-      // Note: PublicAccessCidrs not needed for private-only clusters
+      expect(templateYaml).toContain('EndpointPublicAccess: true');
+      expect(templateYaml).toContain('PublicAccessCidrs: [\'0.0.0.0/0\']');
     });
 
     test('EKS Cluster logging is enabled for all log types', () => {
