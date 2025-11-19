@@ -38,6 +38,9 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   public readonly apiUrl: pulumi.Output<string>;
   public readonly apiKey: pulumi.Output<string>;
+  public readonly transactionTableName: pulumi.Output<string>;
+  public readonly transactionQueueUrl: pulumi.Output<string>;
+  public readonly notificationTopicArn: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -924,13 +927,16 @@ require (
     // Export outputs
     this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/${stage.stageName}/transaction`;
     this.apiKey = apiKey.value;
+    this.transactionTableName = transactionTable.name;
+    this.transactionQueueUrl = transactionQueue.url;
+    this.notificationTopicArn = notificationTopic.arn;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
       apiKey: this.apiKey,
-      tableName: transactionTable.name,
-      topicArn: notificationTopic.arn,
-      queueUrl: transactionQueue.url,
+      transactionTableName: this.transactionTableName,
+      transactionQueueUrl: this.transactionQueueUrl,
+      notificationTopicArn: this.notificationTopicArn,
     });
   }
 }
