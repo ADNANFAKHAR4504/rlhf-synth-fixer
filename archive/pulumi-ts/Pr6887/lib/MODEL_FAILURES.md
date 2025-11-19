@@ -15,7 +15,7 @@ const deployment = new aws.apigateway.Deployment(
   `api-deployment-${environmentSuffix}`,
   {
     restApi: api.id,
-    stageName: 'prod',  // ❌ ERROR: Property 'stageName' does not exist
+    stageName: 'prod',  // ERROR: Property 'stageName' does not exist
   },
   { parent: this, dependsOn: [statusIntegration] }
 );
@@ -31,7 +31,7 @@ const usagePlan = new aws.apigateway.UsagePlan(
     apiStages: [
       {
         apiId: api.id,
-        stage: deployment.stageName,  // ❌ ERROR: Property 'stageName' does not exist
+        stage: deployment.stageName,  // ERROR: Property 'stageName' does not exist
       },
     ],
     // ...
@@ -61,7 +61,7 @@ const deployment = new aws.apigateway.Deployment(
   { parent: this, dependsOn: [statusIntegration] }
 );
 
-// ✅ Separate Stage resource
+// Separate Stage resource
 const stage = new aws.apigateway.Stage(
   `api-stage-${environmentSuffix}`,
   {
@@ -81,7 +81,7 @@ const usagePlan = new aws.apigateway.UsagePlan(
     apiStages: [
       {
         apiId: api.id,
-        stage: stage.stageName,  // ✅ Correctly references Stage resource
+        stage: stage.stageName,  // Correctly references Stage resource
       },
     ],
     throttleSettings: {
@@ -115,7 +115,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 new TapStack(
   'pulumi-infra',
   {
-    tags: defaultTags,  // ❌ Missing environmentSuffix!
+    tags: defaultTags,  // Missing environmentSuffix!
   },
   { provider }
 );
@@ -131,7 +131,7 @@ Added environmentSuffix to the TapStackArgs:
 const stack = new TapStack(
   'pulumi-infra',
   {
-    environmentSuffix,  // ✅ Correctly passed
+    environmentSuffix,  // Correctly passed
     tags: defaultTags,
   },
   { provider }
@@ -160,7 +160,7 @@ new TapStack(
   { provider }
 );
 
-// ❌ No exports! Can't access stack outputs like bucket name, API endpoint, etc.
+// No exports! Can't access stack outputs like bucket name, API endpoint, etc.
 ```
 
 ### Impact
@@ -185,7 +185,7 @@ const stack = new TapStack(
   { provider }
 );
 
-// ✅ Export all stack outputs
+// Export all stack outputs
 export const bucketName = stack.bucketName;
 export const tableName = stack.tableName;
 export const apiEndpoint = stack.apiEndpoint;
