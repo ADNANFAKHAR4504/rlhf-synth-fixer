@@ -5,7 +5,7 @@ locals {
 
 resource "aws_vpc" "eks" {
   count                = local.use_existing_vpc ? 0 : 1
-  cidr_block           = "10.10.0.0/16"
+  cidr_block           = "10.30.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
 
@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
   for_each = local.use_existing_vpc ? {} : local.az_map
 
   vpc_id                  = aws_vpc.eks[0].id
-  cidr_block              = cidrsubnet("10.10.0.0/16", 4, each.value)
+  cidr_block              = cidrsubnet("10.30.0.0/16", 4, each.value)
   availability_zone       = each.key
   map_public_ip_on_launch = true
 
@@ -42,7 +42,7 @@ resource "aws_subnet" "private" {
   for_each = local.use_existing_vpc ? {} : local.az_map
 
   vpc_id            = aws_vpc.eks[0].id
-  cidr_block        = cidrsubnet("10.10.0.0/16", 4, each.value + 8)
+  cidr_block        = cidrsubnet("10.30.0.0/16", 4, each.value + 8)
   availability_zone = each.key
 
   tags = merge(local.common_tags, {
