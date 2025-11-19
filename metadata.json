@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c0c7a2",
+  "team": "synth-2",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "startedAt": "2025-11-19T12:25:00-05:00",
+  "aws_services": [
+    "Route53",
+    "RDS",
+    "Aurora",
+    "Lambda",
+    "SQS",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "Step Functions",
+    "API Gateway",
+    "EventBridge",
+    "Systems Manager",
+    "VPC",
+    "IAM"
+  ],
+  "training_quality": 10
+}
