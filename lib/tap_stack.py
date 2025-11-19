@@ -748,6 +748,8 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
         )
 
         # Auto Scaling Group
+        # Note: Using public subnets for cost optimization (no NAT Gateway required)
+        # For production, consider using private subnets with NAT Gateway
         asg = AutoscalingGroup(
             self,
             f"asg_{environment_suffix}",
@@ -755,7 +757,7 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             min_size=3,
             max_size=9,
             desired_capacity=3,
-            vpc_zone_identifier=[subnet.id for subnet in private_subnets],
+            vpc_zone_identifier=[subnet.id for subnet in public_subnets],
             target_group_arns=[target_group.arn],
             health_check_type="ELB",
             health_check_grace_period=300,
