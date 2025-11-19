@@ -1,0 +1,48 @@
+# Environment configuration
+environment        = "prod"
+environment_suffix = "abc123xyz"
+project_name       = "fintech-platform"
+team_name          = "platform-engineering"
+cost_center        = "engineering"
+compliance_level   = "high"
+
+# EC2 configuration
+web_instance_type    = "t3.medium"
+app_instance_type    = "t3.large"
+worker_instance_type = "t3.large"
+
+# Note: AMI ID is automatically set to the latest Amazon Linux 2 AMI via data source
+
+# Auto Scaling configuration
+asg_configurations = {
+  web = {
+    min_size         = 2
+    max_size         = 10
+    desired_capacity = 3
+  }
+  app = {
+    min_size         = 3
+    max_size         = 15
+    desired_capacity = 5
+  }
+  worker = {
+    min_size         = 2
+    max_size         = 8
+    desired_capacity = 3
+  }
+}
+
+# RDS configuration
+mysql_instance_class    = "db.r6g.large"
+mysql_instance_count    = 2
+mysql_database_name     = "fintech_db"
+
+postgres_instance_class = "db.r6g.large"
+postgres_instance_count = 2
+postgres_database_name  = "analytics_db"
+
+# Optional features
+enable_state_locking = true
+enable_ssm_secrets   = true
+enable_cloudfront    = true
+cloudfront_price_class = "PriceClass_100"

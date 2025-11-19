@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7000",
+  "team": "2",
+  "startedAt": "2025-11-12T16:32:02.791Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "NAT Gateway",
+    "Kinesis Data Streams",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "Aurora PostgreSQL Serverless",
+    "ElastiCache Redis",
+    "EventBridge",
+    "Step Functions",
+    "S3",
+    "Athena",
+    "Secrets Manager",
+    "Systems Manager Parameter Store",
+    "KMS",
+    "CloudWatch"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}
