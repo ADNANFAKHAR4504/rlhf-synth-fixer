@@ -75,7 +75,7 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
       });
       expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(properties.DeletionProtectionEnabled).toBe(true);
     });
 
     test('TurnAroundPromptTable should have correct attribute definitions', () => {
