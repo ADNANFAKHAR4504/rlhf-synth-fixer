@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912485",
+  "team": "synth",
+  "startedAt": "2025-11-18T08:52:54+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "serverless-infrastructure"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "IAM",
+    "CloudWatch Logs",
+    "KMS",
+    "X-Ray"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

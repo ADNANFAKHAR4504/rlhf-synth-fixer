@@ -1,0 +1,5 @@
+environment_suffix = "test-101912422"
+aws_region         = "us-east-1"
+owner_tag          = "SecurityTeam"
+environment_tag    = "Test"
+cost_center_tag    = "Security-001"

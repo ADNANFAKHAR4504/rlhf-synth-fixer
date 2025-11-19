@@ -1,0 +1,1447 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Multi-Region AWS Infrastructure with Best Practices for Encryption, Auditing, and Threat Protection'
+
+Parameters:
+  ApprovedIPRange:
+    Type: String
+    Default: "10.0.0.0/8"
+    Description: Approved IP range for EC2 access
+
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Email address for security alerts (leave empty to disable email notifications)
+    AllowedPattern: "^$|^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
+
+  KeyRotationDays:
+    Type: Number
+    Default: 90
+    Description: Number of days before IAM access key rotation
+
+  CreateCloudTrail:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create CloudTrail resources (AWS limit is 5 trails per region - set to false if limit reached)
+
+  CreateAWSConfig:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create AWS Config resources (only 1 recorder/channel allowed per region)
+
+  CreateGuardDuty:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create GuardDuty detector (only 1 detector allowed per region)
+
+  CreateALB:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create Application Load Balancer (requires Internet Gateway to be created first)
+
+  VPCCidrBlock:
+    Type: String
+    Default: '10.0.0.0/16'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    Description: CIDR block for VPC (default 10.0.0.0/16)
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: '10.0.11.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    Description: CIDR block for Private Subnet 1 in AZ1
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: '10.0.13.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    Description: CIDR block for Private Subnet 2 in AZ2
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: '10.0.12.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    Description: CIDR block for Public Subnet 1 in AZ1
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: '10.0.14.0/24'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    Description: CIDR block for Public Subnet 2 in AZ2
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
+  ShouldCreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
+  ShouldCreateAWSConfig: !Equals [!Ref CreateAWSConfig, 'true']
+  ShouldCreateGuardDuty: !Equals [!Ref CreateGuardDuty, 'true']
+  ShouldCreateALB: !Equals [!Ref CreateALB, 'true']
+
+Resources:
+  # ==========================================
+  # S3 BUCKETS WITH ENCRYPTION AND VERSIONING
+  # ==========================================
+
+  # S3 Bucket for CloudTrail Logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateCloudTrail
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'tapstack-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLogsBucket
+        LogFilePrefix: cloudtrail-logs/
+      Tags:
+        - Key: Purpose
+          Value: CloudTrailLogs
+
+  # Lambda-backed Custom Resource to Empty CloudTrail Bucket
+  EmptyCloudTrailBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateCloudTrail
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref CloudTrailBucket
+
+  # S3 Bucket Policy for CloudTrail
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateCloudTrail
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+          - Sid: RequireSSLRequestsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt CloudTrailBucket.Arn
+              - !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  # S3 Bucket for Access Logs
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'tapstack-access-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldAccessLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Purpose
+          Value: AccessLogs
+
+  # S3 Bucket for Config
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateAWSConfig
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'tapstack-config-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Purpose
+          Value: ConfigLogs
+
+  # Lambda-backed Custom Resource to Empty Config Bucket
+  EmptyConfigBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ConfigBucket
+
+  # Config Bucket Policy
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:ListBucket'
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # ==========================================
+  # IAM ROLES AND POLICIES
+  # ==========================================
+
+  # NOTE: IAM Password Policy cannot be managed via CloudFormation
+  # Set password policy using AWS CLI:
+  # aws iam update-account-password-policy \
+  #   --minimum-password-length 14 \
+  #   --require-symbols \
+  #   --require-numbers \
+  #   --require-uppercase-characters \
+  #   --require-lowercase-characters \
+  #   --allow-users-to-change-password \
+  #   --max-password-age 90 \
+  #   --password-reuse-prevention 24
+
+  # Lambda for S3 Bucket Cleanup
+  EmptyS3BucketLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3BucketCleanupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:ListBucketVersions'
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                Resource: '*'
+
+  EmptyS3BucketLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt EmptyS3BucketLambdaRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      bucket_name = event['ResourceProperties']['BucketName']
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket_name)
+                      bucket.object_versions.all().delete()
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  # IAM Role for EC2 Applications
+  EC2ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: EC2ApplicationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-*/*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+      Tags:
+        - Key: Purpose
+          Value: EC2Application
+
+  # Instance Profile for EC2
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2ApplicationRole
+
+  # IAM Policy for MFA Enforcement
+  MFAEnforcementPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowViewAccountInfo
+            Effect: Allow
+            Action:
+              - 'iam:GetAccountPasswordPolicy'
+              - 'iam:ListVirtualMFADevices'
+            Resource: '*'
+          - Sid: AllowManageOwnPasswords
+            Effect: Allow
+            Action:
+              - 'iam:ChangePassword'
+              - 'iam:GetUser'
+            Resource: 'arn:aws:iam::*:user/${aws:username}'
+          - Sid: AllowManageOwnAccessKeys
+            Effect: Allow
+            Action:
+              - 'iam:CreateAccessKey'
+              - 'iam:DeleteAccessKey'
+              - 'iam:ListAccessKeys'
+              - 'iam:UpdateAccessKey'
+            Resource: 'arn:aws:iam::*:user/${aws:username}'
+          - Sid: AllowManageOwnMFA
+            Effect: Allow
+            Action:
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:DeleteVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:ResyncMFADevice'
+              - 'iam:ListMFADevices'
+            Resource:
+              - 'arn:aws:iam::*:user/${aws:username}'
+              - 'arn:aws:iam::*:mfa/${aws:username}'
+          - Sid: DenyAllExceptListedIfNoMFA
+            Effect: Deny
+            NotAction:
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:GetUser'
+              - 'iam:ListMFADevices'
+              - 'iam:ListVirtualMFADevices'
+              - 'iam:ResyncMFADevice'
+              - 'sts:GetSessionToken'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:MultiFactorAuthPresent': false
+
+  # IAM Policy for IP-based EC2 Access
+  EC2IPRestrictedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: RestrictEC2AccessByIP
+            Effect: Allow
+            Action:
+              - 'ec2:*'
+            Resource: '*'
+            Condition:
+              IpAddress:
+                'aws:SourceIp':
+                  - !Ref ApprovedIPRange
+
+  # IAM Role for Config
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: ConfigBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !GetAtt ConfigBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                Resource: !Sub '${ConfigBucket.Arn}/*'
+
+  # ==========================================
+  # VPC AND NETWORKING
+  # ==========================================
+
+  # VPC
+  SecureVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+
+  # VPC Flow Logs
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/${AWS::StackName}'
+      RetentionInDays: 30
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref SecureVPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPCFlowLog'
+
+  # Security Group with IP Restrictions
+  RestrictedSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-RestrictedSG'
+      GroupDescription: Security group with IP-based restrictions
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref ApprovedIPRange
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref ApprovedIPRange
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-RestrictedSG'
+
+  # Private Subnet 1 (AZ 1)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet1'
+
+  # Private Subnet 2 (AZ 2)
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  # Public Subnet 1 (AZ 1)
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet1'
+
+  # Public Subnet 2 (AZ 2)
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet2'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+
+  # Attach Internet Gateway to VPC
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicRouteTable'
+
+  # Public Route to Internet
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnet 1 with Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  # Associate Public Subnet 2 with Public Route Table
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateRouteTable'
+
+  # Associate Private Subnet 1 with Private Route Table
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  # Associate Private Subnet 2 with Private Route Table
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # ==========================================
+  # CLOUDTRAIL CONFIGURATION
+  # ==========================================
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: ShouldCreateCloudTrail
+    DependsOn:
+      - CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-Trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - 'arn:aws:s3:::*/objects/*'
+            - Type: AWS::Lambda::Function
+              Values:
+                - 'arn:aws:lambda:*:*:function/*'
+      InsightSelectors:
+        - InsightType: ApiCallRateInsight
+      Tags:
+        - Key: Purpose
+          Value: SecurityAuditing
+
+  # ==========================================
+  # AWS CONFIG CONFIGURATION
+  # ==========================================
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      Name: !Sub '${AWS::StackName}-ConfigRecorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      Name: !Sub '${AWS::StackName}-ConfigDeliveryChannel'
+      S3BucketName: !Ref ConfigBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # NOTE: ConfigurationRecorderStatus is not a valid CloudFormation resource type
+  # The ConfigRecorder is automatically enabled when created
+  # To manually enable/disable, use AWS CLI:
+  # aws configservice start-configuration-recorder --configuration-recorder-name <name>
+
+  # Config Rules for Compliance
+  S3BucketEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-S3BucketEncryption'
+      Description: Checks that S3 buckets have encryption enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+    DependsOn: ConfigRecorder
+
+  S3BucketVersioningRule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-S3BucketVersioning'
+      Description: Checks that S3 buckets have versioning enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_VERSIONING_ENABLED
+    DependsOn: ConfigRecorder
+
+  EBSEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-EBSEncryption'
+      Description: Checks that EBS volumes are encrypted
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+    DependsOn: ConfigRecorder
+
+  RDSPublicAccessRule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-RDSPublicAccess'
+      Description: Checks that RDS instances are not publicly accessible
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_INSTANCE_PUBLIC_ACCESS_CHECK
+    DependsOn: ConfigRecorder
+
+  IAMMFARule:
+    Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-IAMMFA'
+      Description: Checks that IAM users have MFA enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+    DependsOn: ConfigRecorder
+
+  # ==========================================
+  # GUARDDUTY CONFIGURATION
+  # ==========================================
+
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Condition: ShouldCreateGuardDuty
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+
+  # ==========================================
+  # SNS TOPIC FOR ALERTS
+  # ==========================================
+
+  SecurityAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-SecurityAlerts'
+      DisplayName: Security Alerts
+      Subscription: !If
+        - HasAlertEmail
+        - - Endpoint: !Ref AlertEmail
+            Protocol: email
+        - !Ref 'AWS::NoValue'
+
+  SecurityAlertTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref SecurityAlertTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowServicesToPublish
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+                - config.amazonaws.com
+            Action:
+              - 'sns:Publish'
+            Resource: !Ref SecurityAlertTopic
+
+  # ==========================================
+  # CLOUDWATCH ALARMS
+  # ==========================================
+
+  UnauthorizedAPICallsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-UnauthorizedAPICalls'
+      AlarmDescription: Alert on unauthorized API calls
+      MetricName: UnauthorizedAPICalls
+      Namespace: CloudTrailMetrics
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  RootAccountUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-RootAccountUsage'
+      AlarmDescription: Alert on root account usage
+      MetricName: RootAccountUsage
+      Namespace: CloudTrailMetrics
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # ==========================================
+  # LAMBDA FOR KEY ROTATION MONITORING
+  # ==========================================
+
+  KeyRotationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: KeyRotationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iam:ListUsers'
+                  - 'iam:ListAccessKeys'
+                  - 'iam:GetAccessKeyLastUsed'
+                  - 'sns:Publish'
+                Resource: '*'
+
+  KeyRotationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-KeyRotationMonitor'
+      Handler: index.handler
+      Role: !GetAtt KeyRotationLambdaRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref SecurityAlertTopic
+          MAX_KEY_AGE_DAYS: !Ref KeyRotationDays
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+
+          def handler(event, context):
+              iam = boto3.client('iam')
+              sns = boto3.client('sns')
+
+              max_age = int(os.environ['MAX_KEY_AGE_DAYS'])
+              topic_arn = os.environ['SNS_TOPIC_ARN']
+
+              users = iam.list_users()
+              old_keys = []
+
+              for user in users['Users']:
+                  username = user['UserName']
+                  keys = iam.list_access_keys(UserName=username)
+
+                  for key in keys['AccessKeyMetadata']:
+                      key_age = datetime.now(key['CreateDate'].tzinfo) - key['CreateDate']
+
+                      if key_age.days > max_age:
+                          old_keys.append({
+                              'Username': username,
+                              'KeyId': key['AccessKeyId'],
+                              'Age': key_age.days
+                          })
+
+              if old_keys:
+                  message = f"Access keys older than {max_age} days found:\n"
+                  for key in old_keys:
+                      message += f"\nUser: {key['Username']}, Key: {key['KeyId']}, Age: {key['Age']} days"
+
+                  sns.publish(
+                      TopicArn=topic_arn,
+                      Subject='AWS Access Key Rotation Required',
+                      Message=message
+                  )
+
+              return {
+                  'statusCode': 200,
+                  'body': f'Checked {len(users["Users"])} users, found {len(old_keys)} old keys'
+              }
+
+  KeyRotationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-KeyRotationSchedule'
+      Description: Daily check for old access keys
+      ScheduleExpression: 'cron(0 9 * * ? *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt KeyRotationLambda.Arn
+          Id: KeyRotationLambdaTarget
+
+  KeyRotationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref KeyRotationLambda
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt KeyRotationSchedule.Arn
+
+  # ==========================================
+  # SAMPLE ENCRYPTED EBS VOLUME
+  # ==========================================
+
+  EncryptedEBSVolume:
+    Type: AWS::EC2::Volume
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Size: 10
+      Encrypted: true
+      AvailabilityZone: !GetAtt PublicSubnet1.AvailabilityZone
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EncryptedVolume'
+
+  # ==========================================
+  # SAMPLE RDS INSTANCE (NON-PUBLIC)
+  # ==========================================
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${AWS::StackName}-DBSubnetGroup'
+      DBSubnetGroupDescription: Subnet group for RDS (requires at least 2 AZs)
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-DBSubnetGroup'
+
+  SecureRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-SecureDB'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSPasswordSecret}:SecretString:password}}'
+      AllocatedStorage: 20
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-SecureDB'
+
+  RDSPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-RDSPassword'
+      Description: RDS Master Password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-RDSSG'
+      GroupDescription: Security group for RDS
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref RestrictedSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-RDSSG'
+
+  # ==========================================
+  # APPLICATION LOAD BALANCER WITH LOGGING
+  # ==========================================
+
+  ALBLogsBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateALB
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'tapstack-alb-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldALBLogs
+            Status: Enabled
+            ExpirationInDays: 30
+
+  EmptyALBLogsBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateALB
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ALBLogsBucket
+
+  ALBLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateALB
+    Properties:
+      Bucket: !Ref ALBLogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowALBAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub '${ALBLogsBucket.Arn}/*'
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: ShouldCreateALB
+    DependsOn:
+      - ALBLogsBucketPolicy
+      - PublicRoute
+      - PublicSubnet1RouteTableAssociation
+      - PublicSubnet2RouteTableAssociation
+    Properties:
+      Name: !Sub '${AWS::StackName}-ALB'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: true
+        - Key: access_logs.s3.bucket
+          Value: !Ref ALBLogsBucket
+        - Key: deletion_protection.enabled
+          Value: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALB'
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: ShouldCreateALB
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-ALBSG'
+      GroupDescription: Security group for ALB
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALBSG'
+
+  # ==========================================
+  # LAMBDA WITH ENCRYPTED ENVIRONMENT VARIABLES
+  # ==========================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: KMSDecryptPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                Resource: !GetAtt LambdaKMSKey.Arn
+
+  LambdaKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for Lambda environment variables
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow Lambda to use the key
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+            Resource: '*'
+
+  LambdaKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-lambda-key'
+      TargetKeyId: !Ref LambdaKMSKey
+
+  SecureLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-SecureFunction'
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      KmsKeyArn: !GetAtt LambdaKMSKey.Arn
+      Environment:
+        Variables:
+          SECRET_VALUE: 'encrypted-value'
+      Code:
+        ZipFile: |
+          import os
+          def handler(event, context):
+              secret = os.environ['SECRET_VALUE']
+              return {
+                  'statusCode': 200,
+                  'body': 'Function executed successfully'
+              }
+
+  # ==========================================
+  # AWS SHIELD STANDARD (AUTOMATICALLY ENABLED)
+  # ==========================================
+  # Note: AWS Shield Standard is automatically enabled for all AWS customers at no additional cost.
+  # AWS Shield Advanced requires manual subscription and cannot be enabled via CloudFormation.
+
+Outputs:
+  # S3 Buckets
+  CloudTrailBucketName:
+    Condition: ShouldCreateCloudTrail
+    Description: S3 Bucket for CloudTrail logs
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+
+  AccessLogsBucketName:
+    Description: S3 Bucket for Access logs
+    Value: !Ref AccessLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AccessLogsBucket'
+
+  ConfigBucketName:
+    Condition: ShouldCreateAWSConfig
+    Description: S3 Bucket for Config logs
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigBucket'
+
+  ALBLogsBucketName:
+    Condition: ShouldCreateALB
+    Description: S3 Bucket for ALB logs
+    Value: !Ref ALBLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBLogsBucket'
+
+  # Lambda Functions
+  EmptyS3BucketLambdaArn:
+    Description: ARN of Empty S3 Bucket Lambda
+    Value: !GetAtt EmptyS3BucketLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EmptyS3BucketLambda'
+
+  KeyRotationLambdaArn:
+    Description: ARN of Key Rotation Lambda
+    Value: !GetAtt KeyRotationLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyRotationLambda'
+
+  SecureLambdaFunctionArn:
+    Description: ARN of Secure Lambda Function
+    Value: !GetAtt SecureLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecureLambdaFunction'
+
+  # IAM Resources
+  EC2ApplicationRoleArn:
+    Description: IAM Role ARN for EC2 applications
+    Value: !GetAtt EC2ApplicationRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2ApplicationRole'
+
+  MFAEnforcementPolicyArn:
+    Description: IAM Policy ARN for MFA enforcement
+    Value: !Ref MFAEnforcementPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MFAEnforcementPolicy'
+
+  EC2IPRestrictedPolicyArn:
+    Description: IAM Policy ARN for IP-restricted EC2 access
+    Value: !Ref EC2IPRestrictedPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2IPRestrictedPolicy'
+
+  # VPC and Networking
+  VPCId:
+    Description: VPC ID
+    Value: !Ref SecureVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  VPCCidrBlock:
+    Description: VPC CIDR Block
+    Value: !GetAtt SecureVPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCCidrBlock'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGateway'
+
+  RestrictedSecurityGroupId:
+    Description: Restricted Security Group ID
+    Value: !Ref RestrictedSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RestrictedSecurityGroup'
+
+  # CloudWatch
+  VPCFlowLogGroupName:
+    Description: VPC Flow Log Group Name
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCFlowLogGroup'
+
+  UnauthorizedAPICallsAlarmName:
+    Description: Unauthorized API Calls Alarm Name
+    Value: !Ref UnauthorizedAPICallsAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-UnauthorizedAPICallsAlarm'
+
+  RootAccountUsageAlarmName:
+    Description: Root Account Usage Alarm Name
+    Value: !Ref RootAccountUsageAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-RootAccountUsageAlarm'
+
+  # CloudTrail
+  CloudTrailName:
+    Condition: ShouldCreateCloudTrail
+    Description: CloudTrail Name
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail'
+
+  # AWS Config
+  ConfigRecorderName:
+    Condition: ShouldCreateAWSConfig
+    Description: Config Recorder Name
+    Value: !Ref ConfigRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigRecorder'
+
+  # GuardDuty
+  GuardDutyDetectorId:
+    Condition: ShouldCreateGuardDuty
+    Description: GuardDuty Detector ID
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
+
+  # SNS
+  SecurityAlertTopicArn:
+    Description: SNS Topic ARN for security alerts
+    Value: !Ref SecurityAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityAlertTopic'
+
+  # RDS
+  RDSInstanceId:
+    Description: RDS Instance Identifier
+    Value: !Ref SecureRDSInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSInstanceId'
+
+  RDSInstanceEndpoint:
+    Description: RDS Instance Endpoint
+    Value: !GetAtt SecureRDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSInstanceEndpoint'
+
+  RDSSecretArn:
+    Description: RDS Password Secret ARN
+    Value: !Ref RDSPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSecretArn'
+
+  # EBS
+  EncryptedEBSVolumeId:
+    Description: Encrypted EBS Volume ID
+    Value: !Ref EncryptedEBSVolume
+    Export:
+      Name: !Sub '${AWS::StackName}-EncryptedEBSVolume'
+
+  # ALB
+  ApplicationLoadBalancerArn:
+    Condition: ShouldCreateALB
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB'
+
+  ApplicationLoadBalancerDNS:
+    Condition: ShouldCreateALB
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBDNS'
+
+  # KMS
+  LambdaKMSKeyId:
+    Description: KMS Key ID for Lambda
+    Value: !Ref LambdaKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaKMSKey'
+
+  LambdaKMSKeyArn:
+    Description: KMS Key ARN for Lambda
+    Value: !GetAtt LambdaKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaKMSKeyArn'
+
+  # EventBridge
+  KeyRotationScheduleName:
+    Description: Key Rotation Schedule Name
+    Value: !Ref KeyRotationSchedule
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyRotationSchedule'

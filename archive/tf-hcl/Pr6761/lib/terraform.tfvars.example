@@ -1,0 +1,24 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Unique suffix for resource names (required)
+# Must be unique across deployments to avoid conflicts
+environment_suffix = "dev-001"
+
+# GitHub Repository Configuration
+# Update these values with your actual repository details
+github_repository_owner = "your-github-org"
+github_repository_name  = "infrastructure-repo"
+github_branch          = "main"
+
+# Notification Configuration (optional)
+# Provide email to receive pipeline status notifications
+notification_email = "devops-team@example.com"
+
+# CloudWatch Configuration
+log_retention_days     = 7
+enable_pipeline_alarms = true
+
+# CodeBuild Configuration
+codebuild_compute_type = "BUILD_GENERAL1_SMALL"
+codebuild_image        = "aws/codebuild/standard:7.0"

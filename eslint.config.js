@@ -116,7 +116,9 @@ module.exports = [
       'cdk.out/**',
       'coverage/**',
       'archive/**',
+      'subcategory-references/**', // Exclude reference files from linting
       'lambda/**', // Exclude lambda folder from linting
+      'cli/**', // Exclude CLI tooling scripts from linting
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting

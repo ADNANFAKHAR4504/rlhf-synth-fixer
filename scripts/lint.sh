@@ -104,17 +104,16 @@ elif [ "$PLATFORM" = "tf" ] && [ "$LANGUAGE" = "hcl" ]; then
     # Navigate to lib directory where terraform files are located
     cd lib
 
+    # Always initialize terraform (required for fmt and validate)
+    # Using -upgrade=false to use cache when available but ensure providers exist
+    echo "📦 Initializing Terraform..."
+    terraform init -backend=false -upgrade=false
+
     # Check terraform formatting
     echo "🔍 Checking Terraform formatting..."
     if ! terraform fmt -check -recursive; then
         echo "❌ Terraform files are not properly formatted. Run 'terraform fmt -recursive' to fix."
         exit 1
-    fi
-
-    # Initialize terraform if needed
-    if [ ! -d ".terraform" ]; then
-        echo "📦 Initializing Terraform..."
-        terraform init -backend=false
     fi
 
     # Validate terraform configuration

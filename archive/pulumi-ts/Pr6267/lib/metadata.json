@@ -1,0 +1,13 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T13:38:32+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [],
+  "po_id": "e9w3b4",
+  "aws_services": [],
+  "region": "ap-southeast-1"
+}

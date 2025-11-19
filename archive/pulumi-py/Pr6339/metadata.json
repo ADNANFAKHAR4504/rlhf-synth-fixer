@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "3xa2x1",
+  "team": "synth",
+  "startedAt": "2025-11-12T11:44:03+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "api-gateway",
+    "lambda",
+    "dynamodb",
+    "sqs",
+    "sns",
+    "kms",
+    "vpc",
+    "iam",
+    "cloudwatch",
+    "xray"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
