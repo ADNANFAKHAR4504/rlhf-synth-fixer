@@ -112,14 +112,14 @@ f"ml-api-{resource}-{self.environment_suffix}"
 ### Destroyability Validation
 ```python
 # RDS Aurora Cluster:
-skip_final_snapshot=True,          # ✅ CORRECT
-deletion_protection=False,         # ✅ CORRECT
+skip_final_snapshot=True,          # CORRECT
+deletion_protection=False,         # CORRECT
 
 # ALB:
-enable_deletion_protection=False,  # ✅ CORRECT
+enable_deletion_protection=False,  # CORRECT
 
 # DynamoDB:
-# No deletion protection by default  # ✅ CORRECT
+# No deletion protection by default  # CORRECT
 ```
 
 ## Architecture Diagram (Conceptual)

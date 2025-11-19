@@ -1,6 +1,6 @@
 # Infrastructure as Code
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with py**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with py**
 >
 > Platform: **pulumi**
 > Language: **py**
@@ -84,22 +84,22 @@ Production deployment in us-east-1 using ECS Fargate for containerized ML API, R
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -129,11 +129,11 @@ Production deployment in us-east-1 using ECS Fargate for containerized ML API, R
 ```python
 bucket = s3.Bucket(
     "data_bucket",
-    bucket_name=f"data-bucket-{environment_suffix}",  # ✅ CORRECT
+    bucket_name=f"data-bucket-{environment_suffix}",  # CORRECT
     # ...
 )
 
-# ❌ WRONG:
+# WRONG:
 # bucket_name="data-bucket-prod"  # Hardcoded, will fail
 ```
 
@@ -143,7 +143,7 @@ bucket = s3.Bucket(
     "data_bucket",
     bucket_name=f"data-bucket-{environment_suffix}",
     opts=pulumi.ResourceOptions(
-        delete_before_replace=True  # ✅ CORRECT
+        delete_before_replace=True  # CORRECT
     )
 )
 ```
@@ -159,12 +159,12 @@ cluster = rds.Cluster(
         max_capacity=2.0,
         min_capacity=0.5,
     ),
-    skip_final_snapshot=True,  # ✅ CORRECT for destroyability
-    deletion_protection=False,  # ✅ CORRECT for destroyability
+    skip_final_snapshot=True,  # CORRECT for destroyability
+    deletion_protection=False,  # CORRECT for destroyability
     # ...
 )
 
-# ❌ WRONG:
+# WRONG:
 # skip_final_snapshot=False  # Will block cleanup
 # deletion_protection=True  # Will block cleanup
 ```
