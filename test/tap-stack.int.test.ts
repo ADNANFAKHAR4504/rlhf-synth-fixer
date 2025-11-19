@@ -61,7 +61,7 @@ const outputs = loadDeploymentOutputs();
 
 // Get environment suffix and region from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS SDK clients
 const ec2Client = new EC2Client({ region });
@@ -514,7 +514,6 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
       // List all task definitions with the family prefix
       const taskDefsResponse = await ecsClient.send(
         new ListTaskDefinitionsCommand({
-          // familyPrefix: `task-`,
           status: 'ACTIVE',
         })
       );
