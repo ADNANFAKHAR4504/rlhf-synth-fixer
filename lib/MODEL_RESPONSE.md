@@ -18,7 +18,6 @@ The user has provided a detailed project specification for a serverless payment 
    - Provider-specific processors (3 functions)
    - Event processor
    - 1024MB memory, 5-minute timeout
-   - Reserved concurrency of 10 for processors
 
 4. **EventBridge**:
    - Custom event bus 'payment-events'
@@ -623,7 +622,6 @@ for provider in providers:
         }),
         memory_size=1024,
         timeout=300,
-        reserved_concurrent_executions=10,
         tracing_config=aws.lambda_.FunctionTracingConfigArgs(
             mode="Active"
         ),
@@ -962,7 +960,6 @@ curl -X POST \\
 
 ### 2. **High Availability & Scalability**
 - FIFO queues ensure ordered processing
-- Reserved concurrency for payment processors
 - Dead letter queues for failed messages
 
 ### 3. **Monitoring & Observability**

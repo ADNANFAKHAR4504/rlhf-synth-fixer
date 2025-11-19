@@ -62,7 +62,6 @@ The solution uses AWS serverless services to create a robust, scalable payment p
 - Secure configuration storage using SSM Parameter Store
 
 ### Performance & Scaling
-- Reserved concurrency of 10 for payment processor functions
 - FIFO queues ensure processing order while handling high volume
 - EventBridge patterns support complex routing scenarios (5+ rule patterns)
 - X-Ray tracing provides performance insights across all components
