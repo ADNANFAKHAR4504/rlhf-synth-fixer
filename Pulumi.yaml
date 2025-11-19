@@ -1,3 +1,5 @@
-name: payment-api-failover
-runtime: nodejs
-description: Multi-region payment processing API with automated failover
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for TAP
+main: bin/tap.ts

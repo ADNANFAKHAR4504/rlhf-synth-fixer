@@ -1,4 +1,0 @@
-encryptionsalt: v1:xfXq1X/OIIE=:v1:TsgNvHNO3cBdQwmT:H2EH5nZWgCTpSIIy1Tfz/264SSmf3g==
-config:
-  payment-api-failover:environmentSuffix: synth-a1w9m4
-  aws:region: us-east-1
