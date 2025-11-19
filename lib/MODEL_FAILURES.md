@@ -298,6 +298,56 @@ bucket_notification = S3BucketNotification(
 
 ---
 
+## Issue 8: IAM Role Cleanup Requirements
+
+### What Went Wrong
+
+IAM roles failed to delete during cleanup, causing subsequent deployments to fail with "EntityAlreadyExists" errors.
+
+**Evidence**:
+- Error: `creating IAM Role (csv-validator-role-pr6875): operation error IAM: CreateRole, https response error StatusCode: 409, RequestID: b7492b16-0712-4048-a60e-536683a8e506, EntityAlreadyExists: Role with name csv-validator-role-pr6875 already exists.`
+- Same error for all Lambda and Step Functions IAM roles
+
+### Root Cause
+
+IAM roles with inline policies cannot be deleted until their policies are removed first. The initial cleanup script attempted direct role deletion without removing policies.
+
+### Correct Implementation
+
+```bash
+# Function to delete a role with its inline policies
+delete_role_with_policies() {
+    local role_name=$1
+    echo "  Deleting role: $role_name"
+    
+    # List and delete inline policies
+    policies=$(aws iam list-role-policies --role-name $role_name --query 'PolicyNames[]' --output text 2>/dev/null)
+    for policy in $policies; do
+        echo "    Deleting inline policy: $policy"
+        aws iam delete-role-policy --role-name $role_name --policy-name $policy 2>/dev/null || true
+    done
+    
+    # List and detach managed policies
+    attached_policies=$(aws iam list-attached-role-policies --role-name $role_name --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null)
+    for policy_arn in $attached_policies; do
+        echo "    Detaching managed policy: $policy_arn"
+        aws iam detach-role-policy --role-name $role_name --policy-arn $policy_arn 2>/dev/null || true
+    done
+    
+    # Delete the role
+    aws iam delete-role --role-name $role_name 2>/dev/null || true
+}
+```
+
+### Key Learnings
+
+- IAM roles must have all policies detached/deleted before the role can be deleted
+- Inline policies must be deleted with `delete-role-policy`
+- Managed policies must be detached with `detach-role-policy`
+- Cleanup scripts should handle resource dependencies properly
+
+---
+
 ## Summary of Key Improvements
 
 1. **State Management**: Switched from deprecated DynamoDB locking to S3 native locking
@@ -307,5 +357,6 @@ bucket_notification = S3BucketNotification(
 5. **Documentation Completeness**: Included all source code in IDEAL_RESPONSE.md
 6. **Regional Flexibility**: Used variables for all region-specific configurations
 7. **S3 Notification Configuration**: Fixed type usage for bucket notification Lambda function
+8. **IAM Role Cleanup**: Enhanced cleanup script to properly remove inline policies before role deletion
 
 These corrections ensure the infrastructure is deployable, maintainable, and follows best practices for CDKTF Python implementations.

@@ -22,7 +22,19 @@ class TestTransactionProcessingPipelineIntegration:
             pytest.skip("Deployment outputs not found - run deployment first")
 
         with open(outputs_file, 'r', encoding='utf-8') as f:
-            self.outputs = json.load(f)
+            outputs_data = json.load(f)
+            
+        # Handle both flat and nested output formats
+        if isinstance(outputs_data, dict):
+            # Check if outputs are nested under a stack name
+            if len(outputs_data) == 1 and all(isinstance(v, dict) for v in outputs_data.values()):
+                # Get the first (and only) stack's outputs
+                self.outputs = next(iter(outputs_data.values()))
+            else:
+                # Already flat structure
+                self.outputs = outputs_data
+        else:
+            self.outputs = outputs_data
 
         # Initialize AWS clients
         self.region = os.getenv('AWS_REGION', 'us-east-1')
