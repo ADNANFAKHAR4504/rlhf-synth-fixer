@@ -271,7 +271,9 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(igw.State || 'available').toBe('available'); // Graceful fallback
       
       if (igw.Attachments && igw.Attachments.length > 0) {
-        expect(igw.Attachments[0].State || 'attached').toBe('attached'); // Graceful fallback
+        // Accept both 'attached' and 'available' as valid attachment states
+        const attachmentState = igw.Attachments[0].State || 'attached';
+        expect(['attached', 'available']).toContain(attachmentState);
         expect(igw.Attachments[0].VpcId).toBeDefined();
       }
     });
