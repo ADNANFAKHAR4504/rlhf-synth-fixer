@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-19T18:30:32+0000",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "po_id": "y6k5k3",
+  "aws_services": [
+    "VPC",
+    "Aurora PostgreSQL (RDS)",
+    "Lambda",
+    "S3",
+    "Application Load Balancer (ALB)",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "KMS",
+    "Systems Manager (Parameter Store)",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9
+}
