@@ -23,14 +23,9 @@ variable "project_name" {
 }
 
 variable "vpc_id" {
-  description = "VPC ID where EMR will be deployed"
+  description = "VPC ID where EMR will be deployed. When supplying vpc_id, also provide public_subnet_id and at least two private_subnet_ids."
   type        = string
   default     = null
-
-  validation {
-    condition     = var.vpc_id == null ? true : (var.public_subnet_id != null && var.private_subnet_ids != null && length(var.private_subnet_ids) >= 2)
-    error_message = "When supplying vpc_id, also provide public_subnet_id and at least two private_subnet_ids."
-  }
 }
 
 variable "public_subnet_id" {

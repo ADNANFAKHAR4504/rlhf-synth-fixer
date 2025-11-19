@@ -535,20 +535,19 @@ resource "aws_emr_cluster" "main" {
     aws_iam_role_policy.emr_service_ec2_permissions,
     aws_iam_role_policy.emr_service_s3_permissions,
     aws_iam_role_policy_attachment.emr_service_role,
-    aws_emr_security_configuration.main
+    aws_emr_security_configuration.main,
+    null_resource.disable_termination_protection
   ]
 }
 
 # Disable termination protection before destroying the cluster
-# This resource depends on the cluster, so during destroy it will be
+# The cluster depends on this resource, so during destroy this will be
 # destroyed first, running the provisioner to disable termination protection
 resource "null_resource" "disable_termination_protection" {
-  # Depend on cluster so this is destroyed before cluster during terraform destroy
-  depends_on = [aws_emr_cluster.main]
-
-  # Use cluster name as trigger to avoid circular dependency
+  # Store cluster ID in triggers so it can be accessed via self.triggers in destroy provisioner
+  # Note: This creates the resource after cluster is created (cluster ID is available)
   triggers = {
-    cluster_name = aws_emr_cluster.main.name
+    cluster_id = aws_emr_cluster.main.id
   }
 
   # This runs when this null_resource is being destroyed (before cluster destroy)
@@ -573,7 +572,7 @@ session = boto3.Session(
 )
 
 emr = session.client('emr')
-cluster_id = '${aws_emr_cluster.main.id}'
+cluster_id = '${self.triggers.cluster_id}'
 
 try:
     emr.set_termination_protection(
