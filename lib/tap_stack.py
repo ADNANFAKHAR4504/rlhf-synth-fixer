@@ -232,9 +232,9 @@ class TapStack(pulumi.ComponentResource):
             role=self.lambda_role.arn,
             environment=aws.lambda_.FunctionEnvironmentArgs(
                 variables={
-                    "STRIPE_QUEUE_URL": self.sqs_queues["stripe"].id,
-                    "PAYPAL_QUEUE_URL": self.sqs_queues["paypal"].id,
-                    "SQUARE_QUEUE_URL": self.sqs_queues["square"].id,
+                    "STRIPE_QUEUE_URL": self.sqs_queues["stripe"].url,
+                    "PAYPAL_QUEUE_URL": self.sqs_queues["paypal"].url,
+                    "SQUARE_QUEUE_URL": self.sqs_queues["square"].url,
                     "DYNAMODB_TABLE": self.dynamodb_table.name
                 }
             ),
@@ -412,6 +412,13 @@ class TapStack(pulumi.ComponentResource):
                             "events:PutEvents"
                         ],
                         "Resource": args[4]  # EventBridge ARN
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "cloudwatch:PutMetricData"
+                        ],
+                        "Resource": "*"
                     }
                 ]
             })),
@@ -582,8 +589,8 @@ class TapStack(pulumi.ComponentResource):
         for provider, queue in self.sqs_queues.items():
             aws.cloudwatch.MetricAlarm(
                 f"{provider}-queue-depth-alarm-{self.environment_suffix}",
-                alarm_name=f"{provider}-queue-depth-alarm-{self.environment_suffix}",
-                alarm_description=f"Alarm for {provider} SQS queue depth exceeding 1000",
+                name=f"{provider}-queue-depth-alarm-{self.environment_suffix}",
+                description=f"Alarm for {provider} SQS queue depth exceeding 1000",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=2,
                 metric_name="ApproximateNumberOfMessages",
@@ -610,15 +617,15 @@ class TapStack(pulumi.ComponentResource):
         for lambda_func in all_lambdas:
             aws.cloudwatch.MetricAlarm(
                 f"{lambda_func._name}-error-rate-alarm",
-                alarm_name=f"{lambda_func._name}-error-rate-alarm",
-                alarm_description=f"Alarm for {lambda_func._name} error rate exceeding 1%",
+                name=f"{lambda_func._name}-error-rate-alarm",
+                description=f"Alarm for {lambda_func._name} error rate exceeding 1%",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=2,
-                metric_name="ErrorRate",
+                metric_name="Errors",
                 namespace="AWS/Lambda",
                 period=300,
-                statistic="Average",
-                threshold=1.0,  # 1%
+                statistic="Sum",
+                threshold=1.0,
                 alarm_actions=[self.sns_topic.arn],
                 dimensions={
                     "FunctionName": lambda_func.name
