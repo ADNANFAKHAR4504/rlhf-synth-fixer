@@ -352,7 +352,6 @@ export class TapStack extends cdk.Stack {
       {
         functionName: `webhook-validator-${environmentSuffix}`,
         runtime: cdk.aws_lambda.Runtime.FROM_IMAGE,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
         handler: cdk.aws_lambda.Handler.FROM_IMAGE,
         code: cdk.aws_lambda.Code.fromAssetImage('./lib', {
           cmd: ['app.handler'],
@@ -377,7 +376,6 @@ export class TapStack extends cdk.Stack {
       {
         functionName: `webhook-processor-${environmentSuffix}`,
         runtime: cdk.aws_lambda.Runtime.FROM_IMAGE,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
         handler: cdk.aws_lambda.Handler.FROM_IMAGE,
         code: cdk.aws_lambda.Code.fromAssetImage('./lib', {
           cmd: ['processor.handler'],

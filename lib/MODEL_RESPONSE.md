@@ -12,7 +12,6 @@ This is a comprehensive request to build a serverless webhook processing system 
 7. **CloudWatch Monitoring** - alarms and dashboards
 
 Key requirements:
-- ARM64 architecture for Lambda
 - Container-based Lambda functions
 - FIFO queues with content-based deduplication
 - Proper IAM permissions
@@ -128,10 +127,7 @@ export class TapStack extends cdk.Stack {
     // Webhook Validator Lambda (Container-based)
     const webhookValidator = new lambda.DockerImageFunction(this, 'WebhookValidator', {
       functionName: 'webhook-validator',
-      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../lambda/webhook-validator'), {
-        platform: lambda.Platform.LINUX_ARM64,
-      }),
-      architecture: lambda.Architecture.ARM_64,
+      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../lambda/webhook-validator')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
       environment: {
@@ -153,10 +149,7 @@ export class TapStack extends cdk.Stack {
     // Webhook Processor Lambda (Container-based)
     const webhookProcessor = new lambda.DockerImageFunction(this, 'WebhookProcessor', {
       functionName: 'webhook-processor',
-      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../lambda/webhook-processor'), {
-        platform: lambda.Platform.LINUX_ARM64,
-      }),
-      architecture: lambda.Architecture.ARM_64,
+      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../lambda/webhook-processor')),
       timeout: cdk.Duration.minutes(5),
       memorySize: 2048,
       environment: {
@@ -496,7 +489,7 @@ You'll need to create the following directory structure for your Lambda function
 Create `lambda/webhook-validator/Dockerfile`:
 
 ```dockerfile
-FROM public.ecr.aws/lambda/nodejs:18-arm64
+FROM public.ecr.aws/lambda/nodejs:18
 
 # Copy function code and package files
 COPY package*.json ${LAMBDA_TASK_ROOT}/
@@ -634,7 +627,7 @@ exports.handler = async (event) => {
 Create `lambda/webhook-processor/Dockerfile`:
 
 ```dockerfile
-FROM public.ecr.aws/lambda/nodejs:18-arm64
+FROM public.ecr.aws/lambda/nodejs:18
 
 # Copy function code and package files
 COPY package*.json ${LAMBDA_TASK_ROOT}/
@@ -824,7 +817,6 @@ Create `lambda/webhook-processor/package.json`:
 
 ### 1. **Architecture Decisions**
 - **Container-based Lambda functions** for better dependency management and consistent runtime
-- **ARM64 architecture** for cost optimization and performance
 - **FIFO queues** with content-based deduplication to prevent duplicate processing
 - **EventBridge** for decoupling downstream services
 

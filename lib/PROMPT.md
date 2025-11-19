@@ -68,7 +68,6 @@ Implement the full infrastructure in `lib/tap-stack.ts` to deploy a **complete w
 ## Technical Requirements
 
 * AWS CDK v2.x with TypeScript and Node.js 18+
-* All Lambda functions use ARM64 (Graviton2) architecture
 * Container images for Lambda deployment (Docker required)
 * SQS FIFO queues with content-based deduplication
 * No VPC required (all services are managed/AWS Lambda)

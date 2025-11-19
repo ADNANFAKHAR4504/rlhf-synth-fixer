@@ -198,7 +198,6 @@ export class TapStack extends cdk.Stack {
       {
         functionName: `webhook-validator-${environmentSuffix}`,
         runtime: cdk.aws_lambda.Runtime.FROM_IMAGE,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
         handler: cdk.aws_lambda.Handler.FROM_IMAGE,
         code: cdk.aws_lambda.Code.fromAssetImage('./lib', {
           cmd: ['app.handler'],
@@ -223,7 +222,6 @@ export class TapStack extends cdk.Stack {
       {
         functionName: `webhook-processor-${environmentSuffix}`,
         runtime: cdk.aws_lambda.Runtime.FROM_IMAGE,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
         handler: cdk.aws_lambda.Handler.FROM_IMAGE,
         code: cdk.aws_lambda.Code.fromAssetImage('./lib', {
           cmd: ['processor.handler'],
@@ -248,7 +246,7 @@ export class TapStack extends cdk.Stack {
 
 #### Dockerfile
 ```dockerfile
-FROM public.ecr.aws/lambda/nodejs:18-arm64
+FROM public.ecr.aws/lambda/nodejs:18
 
 COPY package*.json ./
 RUN npm ci --only=production
@@ -619,7 +617,6 @@ This implementation provides a robust, scalable, and maintainable webhook proces
       {
         code: lambda.DockerImageCode.fromImageAsset('./lambda/webhook-validator'),
         functionName: `webhook-validator-${environmentSuffix}`,
-        architecture: lambda.Architecture.ARM_64,
         memorySize: 512,
         timeout: cdk.Duration.seconds(30),
         role: lambdaRole,
@@ -642,7 +639,6 @@ This implementation provides a robust, scalable, and maintainable webhook proces
       {
         functionName: `webhook-processor-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
-        architecture: lambda.Architecture.ARM_64,
         code: lambda.Code.fromInline(`
           const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
           const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
@@ -1201,7 +1197,7 @@ async function routeToQueue(provider, body) {
 }
 ```
 ```dockerfile
-FROM public.ecr.aws/lambda/nodejs:18-arm64
+FROM public.ecr.aws/lambda/nodejs:18
 
 # Copy package files
 COPY package*.json ./
