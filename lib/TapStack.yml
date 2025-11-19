@@ -43,21 +43,10 @@ Parameters:
     Default: 'admin'
     NoEcho: true
 
-  DBMasterPassword:
+  DBMasterPasswordSecretArn:
     Type: String
-    Description: 'Master password for RDS Aurora MySQL'
+    Description: 'ARN of AWS Secrets Manager secret containing RDS master password'
     NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-
-  SourceNFSServerHostname:
-    Type: String
-    Description: 'On-premises NFS server hostname or IP'
-
-  SourceNFSExportPath:
-    Type: String
-    Description: 'NFS export path on source server'
-    Default: '/data/documents'
 
   SourceDatabaseEndpoint:
     Type: String
@@ -424,7 +413,7 @@ Resources:
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.04.0'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}'
       DatabaseName: documents
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
@@ -584,7 +573,7 @@ Resources:
       Port: !GetAtt AuroraCluster.Endpoint.Port
       DatabaseName: documents
       Username: !Ref DBMasterUsername
-      Password: !Ref DBMasterPassword
+      Password: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}'
       Tags:
         - Key: Name
           Value: !Sub 'dms-target-${EnvironmentSuffix}'
@@ -593,10 +582,6 @@ Resources:
 
   DMSReplicationTask:
     Type: AWS::DMS::ReplicationTask
-    DependsOn:
-      - DMSReplicationInstance
-      - DMSSourceEndpoint
-      - DMSTargetEndpoint
     Properties:
       ReplicationTaskIdentifier: !Sub 'dms-task-${EnvironmentSuffix}'
       SourceEndpointArn: !Ref DMSSourceEndpoint
