@@ -90,7 +90,7 @@ class TapStack(pulumi.ComponentResource):
             f"webhook-processing-{self.environment_suffix}",
             name=f"webhook-processing-{self.environment_suffix}",
             hash_key="webhook_id",
-            billing_mode="ON_DEMAND",
+            billing_mode="PAY_PER_REQUEST",
             point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
                 enabled=True
             ),
