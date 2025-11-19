@@ -18,26 +18,20 @@ import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
-  isPrimaryRegion: boolean;
-  peerVpcId?: string;
-  peerRegion?: string;
-  globalDatabaseIdentifier?: string;
   hostedZoneName?: string;
-  hostedZoneId?: string;
 }
 
 export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly cluster: ecs.Cluster;
   public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
-  public readonly auroraCluster?: rds.DatabaseCluster;
-  public readonly globalDatabase?: rds.CfnGlobalCluster;
-  public readonly hostedZone?: route53.HostedZone;
+  public readonly auroraCluster: rds.DatabaseCluster;
+  public readonly hostedZone: route53.HostedZone;
 
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, isPrimaryRegion } = props;
+    const { environmentSuffix } = props;
 
     // VPC Configuration - 3 AZs with private subnets
     this.vpc = new ec2.Vpc(this, `vpc-${environmentSuffix}`, {
@@ -62,19 +56,6 @@ export class TapStack extends cdk.Stack {
         },
       ],
     });
-
-    // VPC Peering (if peer VPC specified)
-    if (props.peerVpcId && props.peerRegion) {
-      new ec2.CfnVPCPeeringConnection(
-        this,
-        `vpc-peering-${environmentSuffix}`,
-        {
-          vpcId: this.vpc.vpcId,
-          peerVpcId: props.peerVpcId,
-          peerRegion: props.peerRegion,
-        }
-      );
-    }
 
     // Security Groups
     const albSecurityGroup = new ec2.SecurityGroup(
@@ -110,7 +91,7 @@ export class TapStack extends cdk.Stack {
     );
     ecsSecurityGroup.addIngressRule(
       albSecurityGroup,
-      ec2.Port.tcp(8080),
+      ec2.Port.tcp(80),
       'Allow traffic from ALB'
     );
 
@@ -130,194 +111,61 @@ export class TapStack extends cdk.Stack {
       'Allow PostgreSQL from ECS'
     );
 
-    // Aurora Global Database (Primary region only creates the global cluster)
-    if (isPrimaryRegion) {
-      this.globalDatabase = new rds.CfnGlobalCluster(
-        this,
-        `global-db-${environmentSuffix}`,
-        {
-          globalClusterIdentifier: `global-db-${environmentSuffix}`,
-          engine: 'aurora-postgresql',
-          engineVersion: '14.6',
-          storageEncrypted: true,
-        }
-      );
-
-      // Primary Aurora Cluster
-      this.auroraCluster = new rds.DatabaseCluster(
-        this,
-        `aurora-primary-${environmentSuffix}`,
-        {
-          engine: rds.DatabaseClusterEngine.auroraPostgres({
-            version: rds.AuroraPostgresEngineVersion.VER_14_6,
-          }),
-          credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
-          writer: rds.ClusterInstance.provisioned(
-            `writer-${environmentSuffix}`,
-            {
-              instanceType: ec2.InstanceType.of(
-                ec2.InstanceClass.T4G,
-                ec2.InstanceSize.MEDIUM
-              ),
-            }
-          ),
-          readers: [
-            rds.ClusterInstance.provisioned(`reader-${environmentSuffix}`, {
-              instanceType: ec2.InstanceType.of(
-                ec2.InstanceClass.T4G,
-                ec2.InstanceSize.MEDIUM
-              ),
-            }),
-          ],
-          vpc: this.vpc,
-          vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-          securityGroups: [dbSecurityGroup],
-          backup: {
-            retention: cdk.Duration.days(7),
-          },
-          storageEncrypted: true,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-        }
-      );
-
-      // Add cluster to global database
-      const cfnDbCluster = this.auroraCluster.node
-        .defaultChild as rds.CfnDBCluster;
-      cfnDbCluster.addPropertyOverride(
-        'GlobalClusterIdentifier',
-        this.globalDatabase.ref
-      );
-      cfnDbCluster.addPropertyOverride('BacktrackWindow', 72); // 72 hours backtrack
-    } else {
-      // Secondary Aurora Cluster (part of global database)
-      if (props.globalDatabaseIdentifier) {
-        this.auroraCluster = new rds.DatabaseCluster(
-          this,
-          `aurora-secondary-${environmentSuffix}`,
-          {
-            engine: rds.DatabaseClusterEngine.auroraPostgres({
-              version: rds.AuroraPostgresEngineVersion.VER_14_6,
-            }),
-            writer: rds.ClusterInstance.provisioned(
-              `writer-secondary-${environmentSuffix}`,
-              {
-                instanceType: ec2.InstanceType.of(
-                  ec2.InstanceClass.T4G,
-                  ec2.InstanceSize.MEDIUM
-                ),
-              }
-            ),
-            vpc: this.vpc,
-            vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-            securityGroups: [dbSecurityGroup],
-            storageEncrypted: true,
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-          }
-        );
-
-        const cfnDbCluster = this.auroraCluster.node
-          .defaultChild as rds.CfnDBCluster;
-        cfnDbCluster.addPropertyOverride(
-          'GlobalClusterIdentifier',
-          props.globalDatabaseIdentifier
-        );
-      }
-    }
-
-    // DynamoDB Global Table (Primary region defines the table)
-    if (isPrimaryRegion) {
-      new dynamodb.Table(this, `session-table-${environmentSuffix}`, {
-        tableName: `session-table-${environmentSuffix}`,
-        partitionKey: {
-          name: 'sessionId',
-          type: dynamodb.AttributeType.STRING,
-        },
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        encryption: dynamodb.TableEncryption.AWS_MANAGED,
-        pointInTimeRecovery: true,
-        replicationRegions: ['us-east-2'],
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
-    }
-
-    // S3 Buckets with Cross-Region Replication
-    // For cross-region replication, we need separate buckets in each region
-    const bucketName = isPrimaryRegion
-      ? `source-bucket-${environmentSuffix}-${this.account}`
-      : `destination-bucket-${environmentSuffix}-${this.account}`;
-
-    const replicaBucket = new s3.Bucket(
+    // Aurora Cluster with Multi-AZ
+    this.auroraCluster = new rds.DatabaseCluster(
       this,
-      `s3-bucket-${environmentSuffix}`,
+      `aurora-${environmentSuffix}`,
       {
-        bucketName: bucketName,
-        versioned: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
+        engine: rds.DatabaseClusterEngine.auroraPostgres({
+          version: rds.AuroraPostgresEngineVersion.VER_14_6,
+        }),
+        credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
+        writer: rds.ClusterInstance.provisioned(`writer-${environmentSuffix}`, {
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T4G,
+            ec2.InstanceSize.MEDIUM
+          ),
+        }),
+        readers: [
+          rds.ClusterInstance.provisioned(`reader-${environmentSuffix}`, {
+            instanceType: ec2.InstanceType.of(
+              ec2.InstanceClass.T4G,
+              ec2.InstanceSize.MEDIUM
+            ),
+          }),
+        ],
+        vpc: this.vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+        securityGroups: [dbSecurityGroup],
+        backup: {
+          retention: cdk.Duration.days(7),
+        },
+        storageEncrypted: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
       }
     );
 
-    // Configure replication from primary to secondary
-    if (isPrimaryRegion) {
-      const replicationRole = new iam.Role(
-        this,
-        `replication-role-${environmentSuffix}`,
-        {
-          assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
-          roleName: `s3-replication-role-${environmentSuffix}`,
-        }
-      );
+    // DynamoDB Table for session management
+    new dynamodb.Table(this, `session-table-${environmentSuffix}`, {
+      tableName: `session-table-${environmentSuffix}`,
+      partitionKey: {
+        name: 'sessionId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          actions: [
-            's3:GetReplicationConfiguration',
-            's3:ListBucket',
-            's3:GetObjectVersionForReplication',
-            's3:GetObjectVersionAcl',
-          ],
-          resources: [replicaBucket.bucketArn, `${replicaBucket.bucketArn}/*`],
-        })
-      );
-
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          actions: [
-            's3:ReplicateObject',
-            's3:ReplicateDelete',
-            's3:ReplicateTags',
-          ],
-          resources: [
-            `arn:aws:s3:::destination-bucket-${environmentSuffix}-${this.account}/*`,
-          ],
-        })
-      );
-
-      const cfnBucket = replicaBucket.node.defaultChild as s3.CfnBucket;
-      cfnBucket.replicationConfiguration = {
-        role: replicationRole.roleArn,
-        rules: [
-          {
-            id: `replication-rule-${environmentSuffix}`,
-            status: 'Enabled',
-            priority: 1,
-            filter: {},
-            destination: {
-              bucket: `arn:aws:s3:::destination-bucket-${environmentSuffix}-${this.account}`,
-              replicationTime: {
-                status: 'Enabled',
-                time: { minutes: 15 },
-              },
-              metrics: {
-                status: 'Enabled',
-                eventThreshold: { minutes: 15 },
-              },
-            },
-          },
-        ],
-      };
-    }
+    // S3 Bucket for application data
+    const appBucket = new s3.Bucket(this, `s3-bucket-${environmentSuffix}`, {
+      bucketName: `app-bucket-${environmentSuffix}-${this.account}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
 
     // ECS Cluster and Fargate Service
     this.cluster = new ecs.Cluster(this, `ecs-cluster-${environmentSuffix}`, {
@@ -354,7 +202,7 @@ export class TapStack extends cdk.Stack {
     );
 
     container.addPortMappings({
-      containerPort: 8080,
+      containerPort: 80,
       protocol: ecs.Protocol.TCP,
     });
 
@@ -376,11 +224,11 @@ export class TapStack extends cdk.Stack {
       {
         targetGroupName: `tg-${environmentSuffix}`,
         vpc: this.vpc,
-        port: 8080,
+        port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: cdk.Duration.seconds(30),
           timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,
@@ -411,83 +259,42 @@ export class TapStack extends cdk.Stack {
 
     fargateService.attachToApplicationTargetGroup(targetGroup);
 
-    // Route 53 Hosted Zone and Health Checks (Primary region only)
-    if (isPrimaryRegion) {
-      this.hostedZone = new route53.HostedZone(
-        this,
-        `hosted-zone-${environmentSuffix}`,
-        {
-          zoneName: props.hostedZoneName || `example-${environmentSuffix}.com`,
-        }
-      );
+    // Route 53 Hosted Zone and Health Checks
+    this.hostedZone = new route53.HostedZone(
+      this,
+      `hosted-zone-${environmentSuffix}`,
+      {
+        zoneName: props.hostedZoneName || `example-${environmentSuffix}.com`,
+      }
+    );
 
-      const primaryHealthCheck = new route53.CfnHealthCheck(
-        this,
-        `health-check-primary-${environmentSuffix}`,
-        {
-          healthCheckConfig: {
-            type: 'HTTPS',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: this.loadBalancer.loadBalancerDnsName,
-            port: 80,
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-        }
-      );
+    new route53.CfnHealthCheck(this, `health-check-${environmentSuffix}`, {
+      healthCheckConfig: {
+        type: 'HTTP',
+        resourcePath: '/',
+        fullyQualifiedDomainName: this.loadBalancer.loadBalancerDnsName,
+        port: 80,
+        requestInterval: 30,
+        failureThreshold: 3,
+      },
+    });
 
-      // Primary DNS Record with failover
-      new route53.CfnRecordSet(this, `primary-record-${environmentSuffix}`, {
-        hostedZoneId: this.hostedZone.hostedZoneId,
-        name: `app.${this.hostedZone.zoneName}`,
-        type: 'A',
-        setIdentifier: 'primary',
-        failover: 'PRIMARY',
-        healthCheckId: primaryHealthCheck.attrHealthCheckId,
-        aliasTarget: {
-          hostedZoneId: this.loadBalancer.loadBalancerCanonicalHostedZoneId,
-          dnsName: this.loadBalancer.loadBalancerDnsName,
-          evaluateTargetHealth: true,
-        },
-      });
-    } else if (props.hostedZoneId) {
-      // Secondary health check and DNS record
-      const secondaryHealthCheck = new route53.CfnHealthCheck(
-        this,
-        `health-check-secondary-${environmentSuffix}`,
-        {
-          healthCheckConfig: {
-            type: 'HTTPS',
-            resourcePath: '/health',
-            fullyQualifiedDomainName: this.loadBalancer.loadBalancerDnsName,
-            port: 80,
-            requestInterval: 30,
-            failureThreshold: 3,
-          },
-        }
-      );
+    // DNS Record pointing to ALB
+    new route53.CfnRecordSet(this, `app-record-${environmentSuffix}`, {
+      hostedZoneId: this.hostedZone.hostedZoneId,
+      name: `app.${this.hostedZone.zoneName}`,
+      type: 'A',
+      aliasTarget: {
+        hostedZoneId: this.loadBalancer.loadBalancerCanonicalHostedZoneId,
+        dnsName: this.loadBalancer.loadBalancerDnsName,
+        evaluateTargetHealth: true,
+      },
+    });
 
-      new route53.CfnRecordSet(this, `secondary-record-${environmentSuffix}`, {
-        hostedZoneId: props.hostedZoneId,
-        name: `app.${props.hostedZoneName}`,
-        type: 'A',
-        setIdentifier: 'secondary',
-        failover: 'SECONDARY',
-        healthCheckId: secondaryHealthCheck.attrHealthCheckId,
-        aliasTarget: {
-          hostedZoneId: this.loadBalancer.loadBalancerCanonicalHostedZoneId,
-          dnsName: this.loadBalancer.loadBalancerDnsName,
-          evaluateTargetHealth: true,
-        },
-      });
-    }
-
-    // EventBridge Global Endpoint (Primary region only)
-    if (isPrimaryRegion) {
-      new events.EventBus(this, `event-bus-${environmentSuffix}`, {
-        eventBusName: `event-bus-${environmentSuffix}`,
-      });
-    }
+    // EventBridge Event Bus
+    new events.EventBus(this, `event-bus-${environmentSuffix}`, {
+      eventBusName: `event-bus-${environmentSuffix}`,
+    });
 
     // CloudWatch Synthetics Canary
     const canaryRole = new iam.Role(this, `canary-role-${environmentSuffix}`, {
@@ -502,14 +309,14 @@ export class TapStack extends cdk.Stack {
     canaryRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['s3:PutObject', 's3:GetObject'],
-        resources: [`${replicaBucket.bucketArn}/*`],
+        resources: [`${appBucket.bucketArn}/*`],
       })
     );
 
     canaryRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['s3:GetBucketLocation'],
-        resources: [replicaBucket.bucketArn],
+        resources: [appBucket.bucketArn],
       })
     );
 
@@ -553,8 +360,8 @@ export class TapStack extends cdk.Stack {
           };
         `,
       },
-      artifactS3Location: `s3://${replicaBucket.bucketName}/canary`,
-      runtimeVersion: 'syn-nodejs-puppeteer-4.0',
+      artifactS3Location: `s3://${appBucket.bucketName}/canary`,
+      runtimeVersion: 'syn-nodejs-puppeteer-9.1',
       schedule: {
         expression: 'rate(5 minutes)',
       },
@@ -590,73 +397,51 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    if (this.auroraCluster) {
-      backupPlan.addSelection(`aurora-backup-${environmentSuffix}`, {
-        resources: [
-          backup.BackupResource.fromRdsDatabaseCluster(this.auroraCluster),
-        ],
-      });
-    }
+    backupPlan.addSelection(`aurora-backup-${environmentSuffix}`, {
+      resources: [
+        backup.BackupResource.fromRdsDatabaseCluster(this.auroraCluster),
+      ],
+    });
 
-    // Step Functions State Machine for Failover
-    const promoteSecondaryTask = new tasks.CallAwsService(
+    // Step Functions State Machine for Operational Tasks
+    const checkHealthTask = new tasks.CallAwsService(
       this,
-      `promote-secondary-${environmentSuffix}`,
+      `check-health-${environmentSuffix}`,
+      {
+        service: 'elasticloadbalancingv2',
+        action: 'describeTargetHealth',
+        parameters: {
+          TargetGroupArn: targetGroup.targetGroupArn,
+        },
+        iamResources: ['*'],
+      }
+    );
+
+    const verifyBackupTask = new tasks.CallAwsService(
+      this,
+      `verify-backup-${environmentSuffix}`,
       {
         service: 'rds',
-        action: 'failoverGlobalCluster',
+        action: 'describeDBClusterSnapshots',
         parameters: {
-          GlobalClusterIdentifier: `global-db-${environmentSuffix}`,
-          TargetDbClusterIdentifier: this.auroraCluster?.clusterArn,
+          DbClusterIdentifier: this.auroraCluster.clusterIdentifier,
         },
         iamResources: ['*'],
       }
     );
 
-    const updateDnsTask = new tasks.CallAwsService(
-      this,
-      `update-dns-${environmentSuffix}`,
-      {
-        service: 'route53',
-        action: 'changeResourceRecordSets',
-        parameters: {
-          HostedZoneId: props.hostedZoneId,
-          ChangeBatch: {
-            Changes: [
-              {
-                Action: 'UPSERT',
-                ResourceRecordSet: {
-                  Name: `app.${props.hostedZoneName}`,
-                  Type: 'A',
-                  SetIdentifier: 'failover',
-                  Failover: 'PRIMARY',
-                  AliasTarget: {
-                    HostedZoneId:
-                      this.loadBalancer.loadBalancerCanonicalHostedZoneId,
-                    DNSName: this.loadBalancer.loadBalancerDnsName,
-                    EvaluateTargetHealth: true,
-                  },
-                },
-              },
-            ],
-          },
-        },
-        iamResources: ['*'],
-      }
-    );
+    const operationalDefinition = checkHealthTask.next(verifyBackupTask);
 
-    const failoverDefinition = promoteSecondaryTask.next(updateDnsTask);
-
-    new sfn.StateMachine(this, `failover-sm-${environmentSuffix}`, {
-      stateMachineName: `failover-sm-${environmentSuffix}`,
-      definition: failoverDefinition,
+    new sfn.StateMachine(this, `operational-sm-${environmentSuffix}`, {
+      stateMachineName: `operational-sm-${environmentSuffix}`,
+      definition: operationalDefinition,
       timeout: cdk.Duration.minutes(15),
     });
 
     // Systems Manager Parameter Store
     new ssm.StringParameter(this, `db-endpoint-${environmentSuffix}`, {
       parameterName: `/app/${environmentSuffix}/db-endpoint`,
-      stringValue: this.auroraCluster?.clusterEndpoint.hostname || 'pending',
+      stringValue: this.auroraCluster.clusterEndpoint.hostname,
       description: 'Aurora database endpoint',
       tier: ssm.ParameterTier.STANDARD,
     });
@@ -681,34 +466,22 @@ export class TapStack extends cdk.Stack {
       exportName: `alb-dns-${environmentSuffix}`,
     });
 
-    if (this.auroraCluster) {
-      new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-        value: this.auroraCluster.clusterEndpoint.hostname,
-        description: 'Aurora database endpoint',
-        exportName: `db-endpoint-${environmentSuffix}`,
-      });
-    }
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: this.auroraCluster.clusterEndpoint.hostname,
+      description: 'Aurora database endpoint',
+      exportName: `db-endpoint-${environmentSuffix}`,
+    });
 
-    if (this.globalDatabase && isPrimaryRegion) {
-      new cdk.CfnOutput(this, 'GlobalDatabaseId', {
-        value: this.globalDatabase.ref,
-        description: 'Global Database Identifier',
-        exportName: `global-db-id-${environmentSuffix}`,
-      });
-    }
+    new cdk.CfnOutput(this, 'HostedZoneId', {
+      value: this.hostedZone.hostedZoneId,
+      description: 'Route 53 Hosted Zone ID',
+      exportName: `hosted-zone-id-${environmentSuffix}`,
+    });
 
-    if (this.hostedZone && isPrimaryRegion) {
-      new cdk.CfnOutput(this, 'HostedZoneId', {
-        value: this.hostedZone.hostedZoneId,
-        description: 'Route 53 Hosted Zone ID',
-        exportName: `hosted-zone-id-${environmentSuffix}`,
-      });
-
-      new cdk.CfnOutput(this, 'HostedZoneName', {
-        value: this.hostedZone.zoneName,
-        description: 'Route 53 Hosted Zone Name',
-        exportName: `hosted-zone-name-${environmentSuffix}`,
-      });
-    }
+    new cdk.CfnOutput(this, 'HostedZoneName', {
+      value: this.hostedZone.zoneName,
+      description: 'Route 53 Hosted Zone Name',
+      exportName: `hosted-zone-name-${environmentSuffix}`,
+    });
   }
 }

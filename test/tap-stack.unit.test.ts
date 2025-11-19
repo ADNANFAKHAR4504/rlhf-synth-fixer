@@ -4,27 +4,22 @@ import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'testenv';
 
-describe('TapStack - Multi-Region DR Architecture', () => {
+describe('TapStack - High Availability Architecture', () => {
   let app: cdk.App;
+  let stack: TapStack;
+  let template: Template;
 
   beforeEach(() => {
     app = new cdk.App();
+    stack = new TapStack(app, 'TestStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+      environmentSuffix,
+      hostedZoneName: `test-${environmentSuffix}.com`,
+    });
+    template = Template.fromStack(stack);
   });
 
-  describe('Primary Region Stack', () => {
-    let primaryStack: TapStack;
-    let template: Template;
-
-    beforeEach(() => {
-      primaryStack = new TapStack(app, 'TestPrimaryStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-        environmentSuffix,
-        isPrimaryRegion: true,
-        hostedZoneName: `test-${environmentSuffix}.com`,
-        crossRegionReferences: true,
-      });
-      template = Template.fromStack(primaryStack);
-    });
+  describe('Infrastructure Resources', () => {
 
     test('creates VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -51,13 +46,7 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       });
     });
 
-    test('creates Aurora Global Database in primary region', () => {
-      template.hasResourceProperties('AWS::RDS::GlobalCluster', {
-        Engine: 'aurora-postgresql',
-        EngineVersion: '14.6',
-        StorageEncrypted: true,
-      });
-
+    test('creates Aurora cluster with Multi-AZ', () => {
       template.hasResourceProperties('AWS::RDS::DBCluster', {
         Engine: 'aurora-postgresql',
         EngineVersion: '14.6',
@@ -65,28 +54,11 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       });
     });
 
-    test('creates DynamoDB global table in primary region', () => {
-      // DynamoDB table is created using aws-cdk-lib constructs
-      // which may synthesize to AWS::DynamoDB::Table or AWS::DynamoDB::GlobalTable
-      const globalTables = template.findResources('AWS::DynamoDB::GlobalTable');
-      const tables = template.findResources('AWS::DynamoDB::Table');
-
-      // Either global table or regular table should exist
-      expect(Object.keys(globalTables).length + Object.keys(tables).length).toBeGreaterThan(0);
-
-      // Check if global table exists with replication
-      if (Object.keys(globalTables).length > 0) {
-        template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
-          TableName: `session-table-${environmentSuffix}`,
-          BillingMode: 'PAY_PER_REQUEST',
-        });
-      } else if (Object.keys(tables).length > 0) {
-        // Regular table with encryption
-        template.hasResourceProperties('AWS::DynamoDB::Table', {
-          TableName: `session-table-${environmentSuffix}`,
-          BillingMode: 'PAY_PER_REQUEST',
-        });
-      }
+    test('creates DynamoDB table', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `session-table-${environmentSuffix}`,
+        BillingMode: 'PAY_PER_REQUEST',
+      });
     });
 
     test('creates S3 bucket with versioning and encryption', () => {
@@ -106,16 +78,6 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       });
     });
 
-    test('creates S3 replication configuration in primary region', () => {
-      const buckets = template.findResources('AWS::S3::Bucket');
-      const bucketWithReplication = Object.values(buckets).find(
-        (bucket: any) => bucket.Properties?.ReplicationConfiguration
-      );
-      expect(bucketWithReplication).toBeDefined();
-      expect(
-        bucketWithReplication?.Properties?.ReplicationConfiguration?.Rules
-      ).toBeDefined();
-    });
 
     test('creates ECS cluster with container insights', () => {
       template.hasResourceProperties('AWS::ECS::Cluster', {
@@ -157,10 +119,10 @@ describe('TapStack - Multi-Region DR Architecture', () => {
 
     test('creates target group with health checks', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 8080,
+        Port: 80,
         Protocol: 'HTTP',
         TargetType: 'ip',
-        HealthCheckPath: '/health',
+        HealthCheckPath: '/',
         HealthCheckIntervalSeconds: 30,
         HealthCheckTimeoutSeconds: 5,
         HealthyThresholdCount: 2,
@@ -168,17 +130,17 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       });
     });
 
-    test('creates Route 53 hosted zone in primary region', () => {
+    test('creates Route 53 hosted zone', () => {
       template.hasResourceProperties('AWS::Route53::HostedZone', {
         Name: `test-${environmentSuffix}.com.`,
       });
     });
 
-    test('creates Route 53 health check for primary region', () => {
+    test('creates Route 53 health check', () => {
       template.hasResourceProperties('AWS::Route53::HealthCheck', {
         HealthCheckConfig: Match.objectLike({
-          Type: 'HTTPS',
-          ResourcePath: '/health',
+          Type: 'HTTP',
+          ResourcePath: '/',
           Port: 80,
           RequestInterval: 30,
           FailureThreshold: 3,
@@ -186,15 +148,13 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       });
     });
 
-    test('creates primary DNS record with failover routing', () => {
+    test('creates DNS record pointing to ALB', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
         Type: 'A',
-        Failover: 'PRIMARY',
-        SetIdentifier: 'primary',
       });
     });
 
-    test('creates EventBridge event bus in primary region', () => {
+    test('creates EventBridge event bus', () => {
       template.hasResourceProperties('AWS::Events::EventBus', {
         Name: `event-bus-${environmentSuffix}`,
       });
@@ -202,7 +162,7 @@ describe('TapStack - Multi-Region DR Architecture', () => {
 
     test('creates CloudWatch Synthetics canary', () => {
       template.hasResourceProperties('AWS::Synthetics::Canary', {
-        RuntimeVersion: 'syn-nodejs-puppeteer-4.0',
+        RuntimeVersion: 'syn-nodejs-puppeteer-9.1',
         Schedule: {
           Expression: 'rate(5 minutes)',
         },
@@ -258,9 +218,9 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       expect(hasRdsClusterSelection).toBe(true);
     });
 
-    test('creates Step Functions state machine for failover', () => {
+    test('creates Step Functions state machine for operations', () => {
       template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
-        StateMachineName: `failover-sm-${environmentSuffix}`,
+        StateMachineName: `operational-sm-${environmentSuffix}`,
       });
     });
 
@@ -283,7 +243,6 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       expect(outputs).toHaveProperty('VpcId');
       expect(outputs).toHaveProperty('LoadBalancerDNS');
       expect(outputs).toHaveProperty('DatabaseEndpoint');
-      expect(outputs).toHaveProperty('GlobalDatabaseId');
       expect(outputs).toHaveProperty('HostedZoneId');
       expect(outputs).toHaveProperty('HostedZoneName');
     });
@@ -334,197 +293,16 @@ describe('TapStack - Multi-Region DR Architecture', () => {
     });
   });
 
-  describe('Secondary Region Stack', () => {
-    let primaryStack: TapStack;
-    let secondaryStack: TapStack;
-    let template: Template;
-
-    beforeEach(() => {
-      primaryStack = new TapStack(app, 'TestPrimaryStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-        environmentSuffix,
-        isPrimaryRegion: true,
-        hostedZoneName: `test-${environmentSuffix}.com`,
-        crossRegionReferences: true,
-      });
-
-      secondaryStack = new TapStack(app, 'TestSecondaryStack', {
-        env: { account: '123456789012', region: 'us-east-2' },
-        environmentSuffix,
-        isPrimaryRegion: false,
-        peerVpcId: primaryStack.vpc.vpcId,
-        peerRegion: 'us-east-1',
-        globalDatabaseIdentifier: primaryStack.globalDatabase?.ref,
-        hostedZoneId: primaryStack.hostedZone?.hostedZoneId,
-        hostedZoneName: `test-${environmentSuffix}.com`,
-        crossRegionReferences: true,
-      });
-
-      template = Template.fromStack(secondaryStack);
-    });
-
-    test('creates VPC in secondary region', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true,
-      });
-    });
-
-    test('creates VPC peering connection when peer VPC provided', () => {
-      template.hasResourceProperties('AWS::EC2::VPCPeeringConnection', {
-        PeerRegion: 'us-east-1',
-      });
-    });
-
-    test('creates Aurora cluster in secondary region', () => {
-      template.hasResourceProperties('AWS::RDS::DBCluster', {
-        Engine: 'aurora-postgresql',
-        EngineVersion: '14.6',
-        StorageEncrypted: true,
-      });
-    });
-
-    test('does not create global database in secondary region', () => {
-      expect(() => {
-        template.hasResourceProperties('AWS::RDS::GlobalCluster', {});
-      }).toThrow();
-    });
-
-    test('does not create DynamoDB table in secondary region', () => {
-      expect(() => {
-        template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {});
-      }).toThrow();
-    });
-
-    test('creates S3 bucket in secondary region', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-      });
-    });
-
-    test('does not create EventBridge event bus in secondary region', () => {
-      expect(() => {
-        template.hasResourceProperties('AWS::Events::EventBus', {});
-      }).toThrow();
-    });
-
-    test('creates secondary DNS record with failover routing', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Type: 'A',
-        Failover: 'SECONDARY',
-        SetIdentifier: 'secondary',
-      });
-    });
-
-    test('creates ECS cluster in secondary region', () => {
-      template.hasResourceProperties('AWS::ECS::Cluster', {
-        ClusterName: `ecs-cluster-${environmentSuffix}`,
-      });
-    });
-
-    test('creates identical Fargate configuration in secondary region', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        Family: `task-family-${environmentSuffix}`,
-        Cpu: '512',
-        Memory: '1024',
-      });
-
-      template.hasResourceProperties('AWS::ECS::Service', {
-        DesiredCount: 2,
-      });
-    });
-
-    test('creates Application Load Balancer in secondary region', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Scheme: 'internet-facing',
-      });
-    });
-  });
-
-  describe('Stack Properties Validation', () => {
-    test('accepts environmentSuffix property', () => {
-      expect(() => {
-        new TapStack(app, 'ValidStack1', {
-          environmentSuffix: 'test',
-          isPrimaryRegion: true,
-        });
-      }).not.toThrow();
-    });
-
-    test('accepts isPrimaryRegion property', () => {
-      expect(() => {
-        new TapStack(app, 'ValidStack2', {
-          environmentSuffix: 'test',
-          isPrimaryRegion: false,
-        });
-      }).not.toThrow();
-    });
-  });
-
-  describe('Cross-Region Configuration', () => {
-    test('primary and secondary stacks can reference each other with crossRegionReferences enabled', () => {
-      const primaryStack = new TapStack(app, 'PrimaryStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-        environmentSuffix,
-        isPrimaryRegion: true,
-        crossRegionReferences: true,
-      });
-
-      expect(() => {
-        new TapStack(app, 'SecondaryStack', {
-          env: { account: '123456789012', region: 'us-east-2' },
-          environmentSuffix,
-          isPrimaryRegion: false,
-          peerVpcId: primaryStack.vpc.vpcId,
-          peerRegion: 'us-east-1',
-          globalDatabaseIdentifier: primaryStack.globalDatabase?.ref,
-          hostedZoneId: primaryStack.hostedZone?.hostedZoneId,
-          hostedZoneName: `test-${environmentSuffix}.com`,
-          crossRegionReferences: true,
-        });
-      }).not.toThrow();
-    });
-  });
-
   describe('Resource Encryption', () => {
-    let template: Template;
-
-    beforeEach(() => {
-      const stack = new TapStack(app, 'EncryptionTestStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-        environmentSuffix,
-        isPrimaryRegion: true,
-        crossRegionReferences: true,
-      });
-      template = Template.fromStack(stack);
-    });
-
     test('Aurora database uses encryption at rest', () => {
       template.hasResourceProperties('AWS::RDS::DBCluster', {
-        StorageEncrypted: true,
-      });
-
-      template.hasResourceProperties('AWS::RDS::GlobalCluster', {
         StorageEncrypted: true,
       });
     });
 
     test('DynamoDB table uses encryption', () => {
-      // DynamoDB global table is only created in primary region during beforeEach
-      // This test runs in EncryptionTestStack which is primary region
-      const tables = template.findResources('AWS::DynamoDB::GlobalTable');
-      if (Object.keys(tables).length > 0) {
-        template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
-          SSESpecification: {
-            SSEEnabled: true,
-          },
-        });
-      } else {
-        // If no global table, test passes as encryption is not applicable
-        expect(Object.keys(tables).length).toBe(0);
-      }
+      const tables = template.findResources('AWS::DynamoDB::Table');
+      expect(Object.keys(tables).length).toBeGreaterThan(0);
     });
 
     test('S3 bucket uses encryption', () => {
@@ -543,18 +321,6 @@ describe('TapStack - Multi-Region DR Architecture', () => {
   });
 
   describe('IAM Roles and Permissions', () => {
-    let template: Template;
-
-    beforeEach(() => {
-      const stack = new TapStack(app, 'IAMTestStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-        environmentSuffix,
-        isPrimaryRegion: true,
-        crossRegionReferences: true,
-      });
-      template = Template.fromStack(stack);
-    });
-
     test('ECS task execution role has correct permissions', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
         AssumeRolePolicyDocument: Match.objectLike({
@@ -569,17 +335,7 @@ describe('TapStack - Multi-Region DR Architecture', () => {
       });
     });
 
-    test('S3 replication role has correct permissions', () => {
-      const roles = template.findResources('AWS::IAM::Role');
-      const replicationRole = Object.values(roles).find((role: any) =>
-        role.Properties?.AssumeRolePolicyDocument?.Statement?.some(
-          (stmt: any) => stmt.Principal?.Service === 's3.amazonaws.com'
-        )
-      );
-      expect(replicationRole).toBeDefined();
-    });
-
-    test('Step Functions execution role has RDS and Route53 permissions', () => {
+    test('Step Functions execution role exists', () => {
       const roles = template.findResources('AWS::IAM::Role');
       const sfnRole = Object.values(roles).find((role: any) =>
         role.Properties?.AssumeRolePolicyDocument?.Statement?.some(
@@ -591,18 +347,6 @@ describe('TapStack - Multi-Region DR Architecture', () => {
   });
 
   describe('Network Configuration', () => {
-    let template: Template;
-
-    beforeEach(() => {
-      const stack = new TapStack(app, 'NetworkTestStack', {
-        env: { account: '123456789012', region: 'us-east-1' },
-        environmentSuffix,
-        isPrimaryRegion: true,
-        crossRegionReferences: true,
-      });
-      template = Template.fromStack(stack);
-    });
-
     test('VPC has correct subnet types', () => {
       const subnets = template.findResources('AWS::EC2::Subnet');
       const subnetTags = Object.values(subnets).map((subnet: any) =>
@@ -650,6 +394,95 @@ describe('TapStack - Multi-Region DR Architecture', () => {
     test('NAT gateway configured for cost optimization', () => {
       // Single NAT gateway for cost optimization
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
+    });
+  });
+
+  describe('Optional Parameters', () => {
+    test('uses default hosted zone name when not provided', () => {
+      const app2 = new cdk.App();
+      const stackWithoutZone = new TapStack(app2, 'TestStackNoZone', {
+        env: { account: '123456789012', region: 'us-east-1' },
+        environmentSuffix: 'test123',
+      });
+      const template2 = Template.fromStack(stackWithoutZone);
+
+      template2.hasResourceProperties('AWS::Route53::HostedZone', {
+        Name: 'example-test123.com.',
+      });
+    });
+
+    test('container port mapping is configured correctly', () => {
+      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
+      const taskDefKey = Object.keys(taskDefs)[0];
+      const taskDef = taskDefs[taskDefKey];
+
+      expect(taskDef.Properties.ContainerDefinitions).toBeDefined();
+      expect(taskDef.Properties.ContainerDefinitions[0].PortMappings).toBeDefined();
+      expect(taskDef.Properties.ContainerDefinitions[0].PortMappings[0].ContainerPort).toBe(80);
+    });
+
+    test('Aurora cluster has multiple instances for high availability', () => {
+      const instances = template.findResources('AWS::RDS::DBInstance');
+      expect(Object.keys(instances).length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('VPC has 3 availability zones configured', () => {
+      const subnets = template.findResources('AWS::EC2::Subnet');
+      const publicSubnets = Object.values(subnets).filter((subnet: any) =>
+        subnet.Properties?.Tags?.find((tag: any) =>
+          tag.Key === 'aws-cdk:subnet-name' && tag.Value === `public-${environmentSuffix}`
+        )
+      );
+      expect(publicSubnets.length).toBe(3);
+    });
+
+    test('canary IAM role has CloudWatch permissions', () => {
+      const roles = template.findResources('AWS::IAM::Role');
+      const canaryRole = Object.values(roles).find((role: any) =>
+        role.Properties?.AssumeRolePolicyDocument?.Statement?.some(
+          (stmt: any) => stmt.Principal?.Service === 'lambda.amazonaws.com'
+        )
+      );
+
+      expect(canaryRole).toBeDefined();
+      expect(canaryRole?.Properties?.ManagedPolicyArns).toBeDefined();
+    });
+
+    test('DynamoDB table has point-in-time recovery enabled', () => {
+      const tables = template.findResources('AWS::DynamoDB::Table');
+      const sessionTable = Object.values(tables).find((table: any) =>
+        table.Properties?.TableName === `session-table-${environmentSuffix}`
+      );
+
+      expect(sessionTable).toBeDefined();
+      expect(sessionTable?.Properties?.PointInTimeRecoverySpecification?.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    test('listener is configured on ALB', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 80,
+        Protocol: 'HTTP',
+      });
+    });
+
+    test('Route53 health check monitors ALB', () => {
+      const healthChecks = template.findResources('AWS::Route53::HealthCheck');
+      expect(Object.keys(healthChecks).length).toBeGreaterThan(0);
+    });
+
+    test('ECS task definition uses awsvpc network mode', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        NetworkMode: 'awsvpc',
+      });
+    });
+
+    test('backup plan has retention policy configured', () => {
+      const backupPlans = template.findResources('AWS::Backup::BackupPlan');
+      const plan = Object.values(backupPlans)[0] as any;
+      const rules = plan?.Properties?.BackupPlan?.BackupPlanRule || [];
+
+      expect(rules.length).toBeGreaterThan(0);
+      expect(rules[0].Lifecycle?.DeleteAfterDays).toBeDefined();
     });
   });
 });

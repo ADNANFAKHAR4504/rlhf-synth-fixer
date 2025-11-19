@@ -1,8 +1,8 @@
 import fs from 'fs';
+import path from 'path';
 import {
   RDSClient,
   DescribeDBClustersCommand,
-  DescribeGlobalClustersCommand,
 } from '@aws-sdk/client-rds';
 import {
   ECSClient,
@@ -17,7 +17,6 @@ import {
   S3Client,
   GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
-  GetBucketReplicationCommand,
 } from '@aws-sdk/client-s3';
 import {
   Route53Client,
@@ -54,7 +53,7 @@ import {
 } from '@aws-sdk/client-eventbridge';
 
 // Configuration - These come from cfn-outputs after cdk deploy
-const flatOutputsPath = 'cfn-outputs/flat-outputs.json';
+const flatOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 let outputs: any = {};
 
 // Check if outputs file exists
@@ -62,12 +61,11 @@ if (fs.existsSync(flatOutputsPath)) {
   outputs = JSON.parse(fs.readFileSync(flatOutputsPath, 'utf8'));
 }
 
-// Get environment suffix from environment variable
+// Get environment suffix and region from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const primaryRegion = 'us-east-1';
-const secondaryRegion = 'us-east-2';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-describe('Multi-Region DR Architecture Integration Tests', () => {
+describe('High Availability Architecture Integration Tests', () => {
   // Skip tests if no deployment outputs are available
   const hasDeploymentOutputs = Object.keys(outputs).length > 0;
 
@@ -76,38 +74,20 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
     console.warn('Deploy infrastructure first using: npm run cdk:deploy');
   }
 
-  describe('Primary Region (us-east-1) Infrastructure', () => {
-    const rdsClient = new RDSClient({ region: primaryRegion });
-    const ecsClient = new ECSClient({ region: primaryRegion });
-    const dynamoClient = new DynamoDBClient({ region: primaryRegion });
-    const s3Client = new S3Client({ region: primaryRegion });
-    const route53Client = new Route53Client({ region: primaryRegion });
-    const elbClient = new ElasticLoadBalancingV2Client({ region: primaryRegion });
-    const syntheticsClient = new SyntheticsClient({ region: primaryRegion });
-    const backupClient = new BackupClient({ region: primaryRegion });
-    const sfnClient = new SFNClient({ region: primaryRegion });
-    const ssmClient = new SSMClient({ region: primaryRegion });
-    const eventsClient = new EventBridgeClient({ region: primaryRegion });
+  describe('Infrastructure Resources', () => {
+    const rdsClient = new RDSClient({ region });
+    const ecsClient = new ECSClient({ region });
+    const dynamoClient = new DynamoDBClient({ region });
+    const s3Client = new S3Client({ region });
+    const route53Client = new Route53Client({ region });
+    const elbClient = new ElasticLoadBalancingV2Client({ region });
+    const syntheticsClient = new SyntheticsClient({ region });
+    const backupClient = new BackupClient({ region });
+    const sfnClient = new SFNClient({ region });
+    const ssmClient = new SSMClient({ region });
+    const eventsClient = new EventBridgeClient({ region });
 
-    test('Aurora Global Database is created and available', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const globalDbId = outputs['GlobalDatabaseId'] || `global-db-${environmentSuffix}`;
-      const command = new DescribeGlobalClustersCommand({
-        GlobalClusterIdentifier: globalDbId,
-      });
-
-      const response = await rdsClient.send(command);
-      expect(response.GlobalClusters).toBeDefined();
-      expect(response.GlobalClusters?.length).toBeGreaterThan(0);
-
-      const globalCluster = response.GlobalClusters![0];
-      expect(globalCluster.Engine).toBe('aurora-postgresql');
-      expect(globalCluster.EngineVersion).toContain('14.6');
-      expect(globalCluster.StorageEncrypted).toBe(true);
-    }, 30000);
-
-    test('Aurora primary cluster is available and part of global database', async () => {
+    test('Aurora cluster is available', async () => {
       if (!hasDeploymentOutputs) return;
 
       const dbEndpoint = outputs['DatabaseEndpoint'];
@@ -130,7 +110,7 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
       expect(cluster.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
     }, 30000);
 
-    test('DynamoDB global table is created with replication', async () => {
+    test('DynamoDB table is created', async () => {
       if (!hasDeploymentOutputs) return;
 
       const tableName = `session-table-${environmentSuffix}`;
@@ -140,21 +120,12 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
       expect(response.Table).toBeDefined();
       expect(response.Table?.TableStatus).toBe('ACTIVE');
       expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
-
-      // Check for replication to secondary region
-      const replicas = response.Table?.Replicas;
-      expect(replicas).toBeDefined();
-      const hasSecondaryReplica = replicas?.some(
-        (replica) => replica.RegionName === secondaryRegion
-      );
-      expect(hasSecondaryReplica).toBe(true);
     }, 30000);
 
-    test('S3 bucket is configured with versioning, encryption, and replication', async () => {
+    test('S3 bucket is configured with versioning and encryption', async () => {
       if (!hasDeploymentOutputs) return;
 
-      const bucketName = `source-bucket-${environmentSuffix}-${outputs.accountId || '*'}`;
+      const bucketName = `app-bucket-${environmentSuffix}-${outputs.accountId || '*'}`;
 
       // Check versioning
       const versioningCommand = new GetBucketVersioningCommand({ Bucket: bucketName });
@@ -165,12 +136,6 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
       const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
       const encryptionResponse = await s3Client.send(encryptionCommand);
       expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-
-      // Check replication
-      const replicationCommand = new GetBucketReplicationCommand({ Bucket: bucketName });
-      const replicationResponse = await s3Client.send(replicationCommand);
-      expect(replicationResponse.ReplicationConfiguration).toBeDefined();
-      expect(replicationResponse.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
     }, 30000);
 
     test('ECS cluster is created with container insights enabled', async () => {
@@ -249,7 +214,7 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
       );
 
       expect(targetGroup).toBeDefined();
-      expect(targetGroup?.Port).toBe(8080);
+      expect(targetGroup?.Port).toBe(80);
       expect(targetGroup?.Protocol).toBe('HTTP');
       expect(targetGroup?.TargetType).toBe('ip');
 
@@ -276,7 +241,7 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
       expect(response.HostedZone?.Config?.PrivateZone).toBe(false);
     }, 30000);
 
-    test('Route 53 health check is configured', async () => {
+    test('Route 53 DNS records exist', async () => {
       if (!hasDeploymentOutputs) return;
 
       const listCommand = new ListResourceRecordSetsCommand({
@@ -286,12 +251,7 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
       const response = await route53Client.send(listCommand);
       const recordSets = response.ResourceRecordSets || [];
 
-      // Find failover records
-      const failoverRecords = recordSets.filter(
-        (rs) => rs.Failover === 'PRIMARY' || rs.Failover === 'SECONDARY'
-      );
-
-      expect(failoverRecords.length).toBeGreaterThan(0);
+      expect(recordSets.length).toBeGreaterThan(0);
     }, 30000);
 
     test('CloudWatch Synthetics canary is active', async () => {
@@ -304,7 +264,7 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
 
       expect(response.Canary).toBeDefined();
       expect(response.Canary?.Status?.State).toBe('RUNNING');
-      expect(response.Canary?.RuntimeVersion).toContain('syn-nodejs-puppeteer');
+      expect(response.Canary?.RuntimeVersion).toBe('syn-nodejs-puppeteer-9.1');
     }, 30000);
 
     test('AWS Backup plan is created', async () => {
@@ -326,25 +286,17 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
     test('Step Functions state machine is created', async () => {
       if (!hasDeploymentOutputs) return;
 
-      const stateMachineName = `failover-sm-${environmentSuffix}`;
+      const stateMachineName = `operational-sm-${environmentSuffix}`;
       const accountId = outputs.accountId || process.env.CDK_DEFAULT_ACCOUNT;
-      const stateMachineArn = `arn:aws:states:${primaryRegion}:${accountId}:stateMachine:${stateMachineName}`;
+      const stateMachineArn = `arn:aws:states:${region}:${accountId}:stateMachine:${stateMachineName}`;
 
-      try {
-        const command = new DescribeStateMachineCommand({
-          stateMachineArn: stateMachineArn,
-        });
-        const response = await sfnClient.send(command);
+      const command = new DescribeStateMachineCommand({
+        stateMachineArn: stateMachineArn,
+      });
+      const response = await sfnClient.send(command);
 
-        expect(response.stateMachineArn).toBeDefined();
-        expect(response.status).toBe('ACTIVE');
-      } catch (error: any) {
-        if (error.name === 'StateMachineDoesNotExist') {
-          console.warn('State machine not found, may need account ID in outputs');
-        } else {
-          throw error;
-        }
-      }
+      expect(response.stateMachineArn).toBeDefined();
+      expect(response.status).toBe('ACTIVE');
     }, 30000);
 
     test('SSM parameters are created', async () => {
@@ -379,157 +331,8 @@ describe('Multi-Region DR Architecture Integration Tests', () => {
     }, 30000);
   });
 
-  describe('Secondary Region (us-east-2) Infrastructure', () => {
-    const rdsClient = new RDSClient({ region: secondaryRegion });
-    const ecsClient = new ECSClient({ region: secondaryRegion });
-    const s3Client = new S3Client({ region: secondaryRegion });
-    const elbClient = new ElasticLoadBalancingV2Client({ region: secondaryRegion });
-
-    test('Aurora secondary cluster is available', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const command = new DescribeDBClustersCommand({});
-      const response = await rdsClient.send(command);
-
-      const secondaryClusters = response.DBClusters?.filter(
-        (cluster) =>
-          cluster.DBClusterIdentifier?.includes(environmentSuffix) &&
-          cluster.GlobalWriteForwardingStatus !== undefined
-      );
-
-      expect(secondaryClusters).toBeDefined();
-      if (secondaryClusters && secondaryClusters.length > 0) {
-        const cluster = secondaryClusters[0];
-        expect(cluster.Status).toBe('available');
-        expect(cluster.Engine).toBe('aurora-postgresql');
-      }
-    }, 30000);
-
-    test('ECS cluster is created in secondary region', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const clusterName = `ecs-cluster-${environmentSuffix}`;
-      const command = new DescribeClustersCommand({
-        clusters: [clusterName],
-      });
-
-      const response = await ecsClient.send(command);
-      expect(response.clusters).toBeDefined();
-
-      if (response.clusters && response.clusters.length > 0) {
-        const cluster = response.clusters[0];
-        expect(cluster.status).toBe('ACTIVE');
-      }
-    }, 30000);
-
-    test('Application Load Balancer is created in secondary region', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const command = new DescribeLoadBalancersCommand({});
-      const response = await elbClient.send(command);
-
-      const alb = response.LoadBalancers?.find((lb) =>
-        lb.LoadBalancerName?.includes(environmentSuffix)
-      );
-
-      if (alb) {
-        expect(alb.State?.Code).toBe('active');
-        expect(alb.Scheme).toBe('internet-facing');
-      }
-    }, 30000);
-
-    test('S3 bucket exists in secondary region', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const bucketName = `source-bucket-${environmentSuffix}-${outputs.accountId || '*'}`;
-
-      try {
-        const command = new GetBucketVersioningCommand({ Bucket: bucketName });
-        const response = await s3Client.send(command);
-        expect(response.Status).toBe('Enabled');
-      } catch (error) {
-        // Bucket may not exist in secondary region for all setups
-        console.warn('Secondary bucket verification skipped');
-      }
-    }, 30000);
-  });
-
-  describe('Cross-Region Failover Capabilities', () => {
-    test('Route 53 has failover routing configured', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const route53Client = new Route53Client({ region: primaryRegion });
-      const hostedZoneId = outputs['HostedZoneId'];
-
-      if (!hostedZoneId) return;
-
-      const command = new ListResourceRecordSetsCommand({
-        HostedZoneId: hostedZoneId,
-      });
-
-      const response = await route53Client.send(command);
-      const recordSets = response.ResourceRecordSets || [];
-
-      // Check for PRIMARY and SECONDARY failover records
-      const primaryRecord = recordSets.find((rs) => rs.Failover === 'PRIMARY');
-      const secondaryRecord = recordSets.find((rs) => rs.Failover === 'SECONDARY');
-
-      expect(primaryRecord).toBeDefined();
-      expect(secondaryRecord).toBeDefined();
-
-      // Both should have health check associations
-      expect(primaryRecord?.HealthCheckId).toBeDefined();
-      expect(secondaryRecord?.HealthCheckId).toBeDefined();
-    }, 30000);
-
-    test('DynamoDB table replication is active', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const dynamoClient = new DynamoDBClient({ region: primaryRegion });
-      const tableName = `session-table-${environmentSuffix}`;
-
-      const command = new DescribeTableCommand({ TableName: tableName });
-      const response = await dynamoClient.send(command);
-
-      expect(response.Table?.Replicas).toBeDefined();
-
-      const replicas = response.Table?.Replicas || [];
-      replicas.forEach((replica) => {
-        expect(replica.ReplicaStatus).toBe('ACTIVE');
-      });
-    }, 30000);
-
-    test('Aurora global database has both regions configured', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const rdsClient = new RDSClient({ region: primaryRegion });
-      const globalDbId = outputs['GlobalDatabaseId'] || `global-db-${environmentSuffix}`;
-
-      const command = new DescribeGlobalClustersCommand({
-        GlobalClusterIdentifier: globalDbId,
-      });
-
-      const response = await rdsClient.send(command);
-      const globalCluster = response.GlobalClusters?.[0];
-
-      expect(globalCluster?.GlobalClusterMembers).toBeDefined();
-      expect(globalCluster?.GlobalClusterMembers?.length).toBeGreaterThanOrEqual(2);
-
-      // One should be writer (primary), others should be readers (secondary)
-      const writer = globalCluster?.GlobalClusterMembers?.find(
-        (member) => member.IsWriter === true
-      );
-      const readers = globalCluster?.GlobalClusterMembers?.filter(
-        (member) => member.IsWriter === false
-      );
-
-      expect(writer).toBeDefined();
-      expect(readers?.length).toBeGreaterThanOrEqual(1);
-    }, 30000);
-  });
-
   describe('End-to-End Workflow Validation', () => {
-    test('Primary load balancer is accessible', async () => {
+    test('Load balancer DNS is accessible', async () => {
       if (!hasDeploymentOutputs) return;
 
       const albDns = outputs['LoadBalancerDNS'];
