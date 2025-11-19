@@ -108,8 +108,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create Aurora global cluster
         self.global_cluster = aws.rds.GlobalCluster(
-            f"aurora-global-{self.environment_suffix}",
-            global_cluster_identifier=f"aurora-global-{self.environment_suffix}",
+            f"aurora-global-v2-{self.environment_suffix}",
+            global_cluster_identifier=f"aurora-global-v2-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="appdb",
@@ -120,8 +120,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create primary Aurora cluster in us-east-1
         self.primary_cluster = aws.rds.Cluster(
-            f"aurora-primary-{self.environment_suffix}",
-            cluster_identifier=f"aurora-primary-{self.environment_suffix}",
+            f"aurora-primary-v2-{self.environment_suffix}",
+            cluster_identifier=f"aurora-primary-v2-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="appdb",
@@ -144,8 +144,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create primary cluster instances
         self.primary_instance = aws.rds.ClusterInstance(
-            f"aurora-primary-instance-{self.environment_suffix}",
-            identifier=f"aurora-primary-instance-{self.environment_suffix}",
+            f"aurora-primary-instance-v2-{self.environment_suffix}",
+            identifier=f"aurora-primary-instance-v2-{self.environment_suffix}",
             cluster_identifier=self.primary_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
@@ -160,8 +160,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create secondary Aurora cluster in us-west-2
         self.secondary_cluster = aws.rds.Cluster(
-            f"aurora-secondary-{self.environment_suffix}",
-            cluster_identifier=f"aurora-secondary-{self.environment_suffix}",
+            f"aurora-secondary-v2-{self.environment_suffix}",
+            cluster_identifier=f"aurora-secondary-v2-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             db_subnet_group_name=self.secondary_subnet_group.name,
@@ -180,8 +180,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create secondary cluster instance
         self.secondary_instance = aws.rds.ClusterInstance(
-            f"aurora-secondary-instance-{self.environment_suffix}",
-            identifier=f"aurora-secondary-instance-{self.environment_suffix}",
+            f"aurora-secondary-instance-v2-{self.environment_suffix}",
+            identifier=f"aurora-secondary-instance-v2-{self.environment_suffix}",
             cluster_identifier=self.secondary_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
