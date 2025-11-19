@@ -286,7 +286,7 @@ class PrimaryRegionStack(TerraformStack):
             "primary_aurora_cluster",
             cluster_identifier=f"primary-aurora-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="14.6",
             database_name=f"transactions{environment_suffix.replace('-', '')}",
             master_username="dbadmin",
             master_password="ChangeMe123!",  # In production, use AWS Secrets Manager
@@ -989,7 +989,7 @@ class DrRegionStack(TerraformStack):
             "dr_aurora_cluster",
             cluster_identifier=f"dr-aurora-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="14.6",
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[aurora_sg.id],
             skip_final_snapshot=True,
@@ -1552,12 +1552,13 @@ class GlobalResourcesStack(TerraformStack):
         self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # 1. Aurora Global Cluster
+        # Note: Using Aurora PostgreSQL 14.6 which supports global clusters
         global_cluster = RdsGlobalCluster(
             self,
             "global_aurora_cluster",
             global_cluster_identifier=f"global-aurora-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="14.6",
             database_name=f"transactions{environment_suffix.replace('-', '')}",
             storage_encrypted=True,
             deletion_protection=False,
@@ -1636,10 +1637,11 @@ class GlobalResourcesStack(TerraformStack):
                 )
 
         # 4. Route53 Hosted Zone
+        # Using a custom domain pattern instead of example.com (reserved by AWS)
         hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"transactions-{environment_suffix}.example.com",
+            name=f"transactions-{environment_suffix}.internal",
             comment=f"Hosted zone for transaction processing {environment_suffix}",
             tags={"Name": f"transactions-zone-{environment_suffix}"},
             provider=primary_provider
