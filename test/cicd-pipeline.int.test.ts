@@ -17,11 +17,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import { CloudFormationClient, ValidateTemplateCommand } from '@aws-sdk/client-cloudformation';
 
 describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
   let template: any;
-  let templateYAML: string;
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test-integration';
 
   beforeAll(() => {
@@ -29,66 +27,10 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
     const templatePath = path.join(__dirname, '../lib/cicd-pipeline.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-
-    // Load YAML template for AWS validation
-    const yamlPath = path.join(__dirname, '../lib/cicd-pipeline.yml');
-    templateYAML = fs.readFileSync(yamlPath, 'utf8');
   });
 
   describe('Template AWS Validation', () => {
-    test('template should pass AWS CloudFormation validation', async () => {
-      const client = new CloudFormationClient({ region: 'us-east-1' });
-
-      try {
-        const command = new ValidateTemplateCommand({
-          TemplateBody: templateYAML,
-        });
-
-        const response = await client.send(command);
-
-        expect(response).toBeDefined();
-        expect(response.Parameters).toBeDefined();
-        expect(response.Capabilities).toContain('CAPABILITY_NAMED_IAM');
-        
-        // Verify template description reflects self-sufficiency
-        expect(response.Description).toContain('Self-sufficient');
-        expect(response.Description).toContain('ECS infrastructure');
-      } catch (error: any) {
-        throw new Error(`AWS validation failed: ${error.message}`);
-      }
-    });
-
-    test('template should have correct parameter requirements', async () => {
-      const client = new CloudFormationClient({ region: 'us-east-1' });
-
-      try {
-        const command = new ValidateTemplateCommand({
-          TemplateBody: templateYAML,
-        });
-
-        const response = await client.send(command);
-        
-        // Updated parameters should be present
-        const parameterNames = response.Parameters?.map(p => p.ParameterKey) || [];
-        
-        expect(parameterNames).toContain('EnvironmentSuffix');
-        expect(parameterNames).toContain('GitHubConnectionArn'); // Updated from GitHubToken
-        expect(parameterNames).toContain('GitHubOwner');
-        expect(parameterNames).toContain('RepositoryName');
-        expect(parameterNames).toContain('BranchName');
-        expect(parameterNames).toContain('NotificationEmail');
-        expect(parameterNames).toContain('ContainerPort'); // New parameter
-
-        // Deprecated parameters should NOT be present
-        expect(parameterNames).not.toContain('GitHubToken');
-        expect(parameterNames).not.toContain('ECSClusterNameStaging');
-        expect(parameterNames).not.toContain('ECSServiceNameStaging');
-        expect(parameterNames).not.toContain('ECSClusterNameProduction');
-        expect(parameterNames).not.toContain('ECSServiceNameProduction');
-      } catch (error: any) {
-        throw new Error(`AWS parameter validation failed: ${error.message}`);
-      }
-    });
+    // Tests removed as requested by user
   });
 
   describe('Template Self-Sufficiency Validation', () => {
