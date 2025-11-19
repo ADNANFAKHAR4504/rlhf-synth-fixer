@@ -117,8 +117,34 @@ resource "aws_route_table_association" "private" {
 # Encryption and Data Stores #
 ##############################
 
-# Using AWS-managed KMS key (alias/aws/emr) for EMR local disk encryption
-# This key is automatically available and managed by AWS, no custom key needed
+# KMS key for EMR local disk encryption
+# Using a simple policy that allows root account - IAM policies on roles handle permissions
+resource "aws_kms_key" "emr" {
+  description             = "KMS key for EMR local disk encryption (${var.project_name})"
+  deletion_window_in_days = var.emr_kms_key_deletion_window_days
+  enable_key_rotation     = true
+  tags                    = local.common_tags
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_kms_alias" "emr" {
+  name          = "alias/${local.bucket_prefix}-emr"
+  target_key_id = aws_kms_key.emr.key_id
+}
 
 resource "aws_s3_bucket" "raw" {
   bucket        = local.raw_bucket_name
@@ -376,7 +402,7 @@ resource "aws_emr_security_configuration" "main" {
         }
         LocalDiskEncryptionConfiguration = {
           EncryptionKeyProviderType = "AwsKms"
-          AwsKmsKey                 = data.aws_kms_alias.emr_managed.target_key_arn
+          AwsKmsKey                 = aws_kms_key.emr.arn
         }
       }
       }, var.enable_in_transit_encryption ? {
@@ -527,7 +553,8 @@ resource "aws_emr_cluster" "main" {
     aws_iam_role_policy.emr_service_s3_permissions,
     aws_iam_role_policy.emr_service_kms,
     aws_iam_role_policy_attachment.emr_service_role,
-    aws_emr_security_configuration.main
+    aws_emr_security_configuration.main,
+    aws_kms_key.emr
   ]
 }
 

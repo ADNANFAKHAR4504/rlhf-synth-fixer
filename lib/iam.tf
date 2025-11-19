@@ -23,8 +23,7 @@ resource "aws_iam_role_policy_attachment" "emr_service_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2"
 }
 
-# KMS permissions for EMR service role to use AWS-managed KMS key for local disk encryption
-# Note: AWS-managed keys have default policies, but we include this for explicit permissions
+# KMS permissions for EMR service role to use KMS key for local disk encryption
 resource "aws_iam_role_policy" "emr_service_kms" {
   name = "${local.bucket_prefix}-emr-service-kms"
   role = aws_iam_role.emr_service_role.id
@@ -45,7 +44,7 @@ resource "aws_iam_role_policy" "emr_service_kms" {
           "kms:RevokeGrant"
         ]
         Resource = [
-          data.aws_kms_alias.emr_managed.target_key_arn
+          aws_kms_key.emr.arn
         ]
       }
     ]
@@ -316,7 +315,7 @@ resource "aws_iam_role_policy" "emr_ec2_kms" {
           "kms:ListAliases"
         ]
         Resource = [
-          data.aws_kms_alias.emr_managed.target_key_arn
+          aws_kms_key.emr.arn
         ]
       }
     ]

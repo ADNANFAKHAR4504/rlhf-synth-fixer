@@ -25,11 +25,6 @@ data "aws_region" "current" {}
 
 data "aws_caller_identity" "current" {}
 
-# AWS-managed KMS key for EMR local disk encryption
-data "aws_kms_alias" "emr_managed" {
-  name = "alias/aws/emr"
-}
-
 output "emr_cluster_id" {
   description = "Identifier of the EMR cluster"
   value       = aws_emr_cluster.main.id
