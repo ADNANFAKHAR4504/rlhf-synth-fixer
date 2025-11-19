@@ -17,7 +17,8 @@
     },
     "BastionAllowedIP": {
       "Type": "String",
-      "Description": "IP address allowed to SSH to bastion host"
+      "Description": "IP address allowed to SSH to bastion host",
+      "Default": "10.0.0.0/8"
     },
     "Environment": {
       "Type": "String",
