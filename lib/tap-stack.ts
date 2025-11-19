@@ -591,9 +591,9 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
 
     // Create S3 Bucket for VPC Flow Logs
     const flowLogsBucket = new aws.s3.Bucket(
-      `vpc-flow-logs-${environmentSuffix}`,
+      `vpc-flow-logs-${environmentSuffix}-eu`,
       {
-        bucket: `vpc-flow-logs-${environmentSuffix}`,
+        bucket: `vpc-flow-logs-${environmentSuffix}-eu`,
         tags: {
           ...commonTags,
           Name: `vpc-flow-logs-${environmentSuffix}`,
@@ -603,7 +603,7 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
     );
 
     // Set bucket ACL
-    new aws.s3.BucketAclV2(
+    new aws.s3.BucketAcl(
       `flow-logs-bucket-acl-${environmentSuffix}`,
       {
         bucket: flowLogsBucket.id,
@@ -613,7 +613,7 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
     );
 
     // Configure server-side encryption
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `flow-logs-bucket-encryption-${environmentSuffix}`,
       {
         bucket: flowLogsBucket.id,
@@ -629,7 +629,7 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
     );
 
     // Configure lifecycle policy
-    new aws.s3.BucketLifecycleConfigurationV2(
+    new aws.s3.BucketLifecycleConfiguration(
       `flow-logs-bucket-lifecycle-${environmentSuffix}`,
       {
         bucket: flowLogsBucket.id,

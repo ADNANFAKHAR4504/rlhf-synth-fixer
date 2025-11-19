@@ -1,10 +1,18 @@
 /**
  * Unit Tests for VPC Infrastructure
- * Tests the structure and configuration of Pulumi resources defined in index.ts
+ * Tests the structure and configuration of Pulumi resources defined in bin/tap.ts
  */
 import * as pulumi from '@pulumi/pulumi';
 
-// Mock Pulumi runtime before importing index
+// Set environment variables before importing infrastructure
+process.env.ENVIRONMENT_SUFFIX = 'test';
+process.env.AWS_REGION = 'us-east-1';
+process.env.REPOSITORY = 'test-repo';
+process.env.COMMIT_AUTHOR = 'test-author';
+process.env.PR_NUMBER = 'test-pr';
+process.env.TEAM = 'test-team';
+
+// Mock Pulumi runtime before importing bin/tap
 pulumi.runtime.setMocks({
   newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
     return {
@@ -29,7 +37,7 @@ pulumi.runtime.setConfig('aws:region', 'us-east-1');
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
 
 // Import infrastructure code after mocks are set
-const infrastructure = require('../index');
+const infrastructure = require('../bin/tap');
 
 describe('VPC Infrastructure Unit Tests', () => {
   describe('VPC Configuration', () => {
