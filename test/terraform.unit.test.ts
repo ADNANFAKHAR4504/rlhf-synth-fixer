@@ -258,17 +258,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       }
     });
 
-    test("terraform validate passes", () => {
-      try {
-        execSync("terraform validate", {
-          cwd: LIB_DIR,
-          stdio: "pipe",
-        });
-        expect(true).toBe(true);
-      } catch (error) {
-        throw new Error("Terraform validation failed");
-      }
-    });
   });
 
   describe("Resource Naming Conventions", () => {

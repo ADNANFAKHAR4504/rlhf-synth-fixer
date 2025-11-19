@@ -1,6 +1,8 @@
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}|;:,.<>?~`"
+  # Excludes '/', '@', '"', and space which are not allowed in RDS master passwords
 }
 
 resource "aws_secretsmanager_secret" "db_credentials" {
