@@ -30,12 +30,6 @@ const notificationEmail =
   process.env.NOTIFICATION_EMAIL ||
   'admin@example.com';
 
-// Get hosted zone domain for Route53
-const hostedZoneDomain =
-  config.get('hostedZoneDomain') ||
-  process.env.HOSTED_ZONE_DOMAIN ||
-  `payment-api-${environmentSuffix}.example.com`;
-
 // Define regions for multi-region deployment
 const primaryRegion = config.get('primaryRegion') || process.env.PRIMARY_REGION || 'us-east-1';
 const secondaryRegion = config.get('secondaryRegion') || process.env.SECONDARY_REGION || 'us-east-2';
@@ -76,7 +70,6 @@ const stack = new TapStack(
   {
     environmentSuffix: environmentSuffix,
     notificationEmail: notificationEmail,
-    hostedZoneDomain: hostedZoneDomain,
     primaryRegion: primaryRegion,
     secondaryRegion: secondaryRegion,
     tags: defaultTags,
@@ -91,11 +84,10 @@ const stack = new TapStack(
 // API Endpoints
 export const primaryApiUrl = stack.primaryApiUrl;
 export const secondaryApiUrl = stack.secondaryApiUrl;
-export const failoverDomain = stack.failoverDomain;
 
-// Route53 Resources
-export const hostedZoneId = stack.hostedZoneId;
-export const hostedZoneNameServers = stack.hostedZoneNameServers;
+// Application Load Balancer DNS Names
+export const primaryAlbDnsName = stack.primaryAlbDnsName;
+export const secondaryAlbDnsName = stack.secondaryAlbDnsName;
 
 // Database and Storage
 export const transactionTableName = stack.transactionTableName;

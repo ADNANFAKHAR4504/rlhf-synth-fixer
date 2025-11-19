@@ -1636,46 +1636,6 @@ exports.handler = async (event) => {
     );
 
     // ========================================
-    // Route53 Health Checks and Failover DNS
-    // ========================================
-
-    const primaryHealthCheck = new aws.route53.HealthCheck(
-      `payment-health-check-primary-${environmentSuffix}`,
-      {
-        type: 'HTTP',
-        resourcePath: '/',
-        fqdn: primaryAlb.dnsName,
-        port: 80,
-        requestInterval: 30,
-        failureThreshold: 3,
-        measureLatency: true,
-        tags: {
-          Name: `payment-health-check-primary-${environmentSuffix}`,
-          Environment: environmentSuffix,
-        },
-      },
-      { parent: this }
-    );
-
-    const secondaryHealthCheck = new aws.route53.HealthCheck(
-      `payment-health-check-secondary-${environmentSuffix}`,
-      {
-        type: 'HTTP',
-        resourcePath: '/',
-        fqdn: secondaryAlb.dnsName,
-        port: 80,
-        requestInterval: 30,
-        failureThreshold: 3,
-        measureLatency: true,
-        tags: {
-          Name: `payment-health-check-secondary-${environmentSuffix}`,
-          Environment: environmentSuffix,
-        },
-      },
-      { parent: this }
-    );
-
-    // ========================================
     // Application Load Balancer Infrastructure
     // ========================================
 
@@ -1895,6 +1855,46 @@ exports.handler = async (event) => {
         ],
       },
       { provider: secondaryProvider, parent: this }
+    );
+
+    // ========================================
+    // Route53 Health Checks for ALB Monitoring
+    // ========================================
+
+    const primaryHealthCheck = new aws.route53.HealthCheck(
+      `payment-health-check-primary-${environmentSuffix}`,
+      {
+        type: 'HTTP',
+        resourcePath: '/',
+        fqdn: primaryAlb.dnsName,
+        port: 80,
+        requestInterval: 30,
+        failureThreshold: 3,
+        measureLatency: true,
+        tags: {
+          Name: `payment-health-check-primary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
+    const secondaryHealthCheck = new aws.route53.HealthCheck(
+      `payment-health-check-secondary-${environmentSuffix}`,
+      {
+        type: 'HTTP',
+        resourcePath: '/',
+        fqdn: secondaryAlb.dnsName,
+        port: 80,
+        requestInterval: 30,
+        failureThreshold: 3,
+        measureLatency: true,
+        tags: {
+          Name: `payment-health-check-secondary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { parent: this }
     );
 
     // ========================================
