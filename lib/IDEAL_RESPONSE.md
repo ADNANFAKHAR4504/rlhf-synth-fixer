@@ -17,8 +17,13 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  # backend "s3" {}  # Commented for local testing - use local state
+  backend "s3" {
+    bucket         = "terraform-state-dr-payments"
+    key            = "dr-payment-system/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock-dr"
+  }
 }
 
 # Primary AWS provider for general resources
