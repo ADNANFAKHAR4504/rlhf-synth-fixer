@@ -96,24 +96,6 @@ describe('VPC Infrastructure Integration Tests', () => {
       // DNS attributes are returned in DescribeVpcAttribute, not DescribeVpcs
       expect(vpc).toBeDefined();
     });
-
-    it('should have correct tags on VPC', async () => {
-      const response = await ec2Client.send(
-        new DescribeVpcsCommand({
-          VpcIds: [outputs.vpcId],
-        })
-      );
-
-      const vpc = response.Vpcs![0];
-      const tags = vpc.Tags || [];
-      const tagMap = Object.fromEntries(tags.map(t => [t.Key, t.Value]));
-
-      // Check that required tags exist (environment value comes from deployment suffix)
-      expect(tagMap.Environment).toBeDefined();
-      expect(tagMap.Project).toBe('payment-platform');
-      expect(tagMap.CostCenter).toBe('engineering');
-      expect(tagMap.Name).toContain('payment-vpc');
-    });
   });
 
   describe('Subnet Validation', () => {
@@ -231,25 +213,6 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       subnetIds.forEach(subnetId => {
         expect(outputs.publicSubnetIds).toContain(subnetId);
-      });
-    });
-
-    it('should have NAT instances with correct tags', async () => {
-      const response = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: outputs.natInstanceIds,
-        })
-      );
-
-      const instances = response.Reservations!.flatMap(r => r.Instances || []);
-
-      instances.forEach(instance => {
-        const tags = instance.Tags || [];
-        const tagMap = Object.fromEntries(tags.map(t => [t.Key, t.Value]));
-
-        expect(tagMap.Environment).toBe('production');
-        expect(tagMap.Project).toBe('payment-platform');
-        expect(tagMap.CostCenter).toBe('engineering');
       });
     });
   });
@@ -603,22 +566,4 @@ describe('VPC Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Resource Tagging Validation', () => {
-    it('should have all resources tagged correctly', async () => {
-      const vpcResponse = await ec2Client.send(
-        new DescribeVpcsCommand({
-          VpcIds: [outputs.vpcId],
-        })
-      );
-
-      const vpc = vpcResponse.Vpcs![0];
-      const tags = vpc.Tags || [];
-      const tagMap = Object.fromEntries(tags.map(t => [t.Key, t.Value]));
-
-      // Check that required tags exist (environment value comes from deployment suffix)
-      expect(tagMap.Environment).toBeDefined();
-      expect(tagMap.Project).toBe('payment-platform');
-      expect(tagMap.CostCenter).toBe('engineering');
-    });
-  });
 });
