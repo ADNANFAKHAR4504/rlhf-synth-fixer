@@ -263,7 +263,7 @@ class EcsModule(Construct):
         self.service = EcsService(
             self,
             "service",
-            name=naming.generate_simple_name("service"),
+            name=naming.generate_unique_name("service"),
             cluster=self.cluster.id,
             task_definition=self.task_definition.arn,
             desired_count=desired_count,
@@ -281,7 +281,7 @@ class EcsModule(Construct):
                 )
             ],
             tags={
-                "Name": naming.generate_simple_name("service"),
+                "Name": naming.generate_unique_name("service"),
                 "Environment": naming.environment
             }
         )
