@@ -776,71 +776,30 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
-                        "metricName": "TransactionSuccess"
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Successful Transactions",
-                    "id": "m1"
-                  },
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
-                        "metricName": "TransactionFailure"
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Failed Transactions",
-                    "id": "m2"
-                  }
+                  [ "PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", { "stat": "Sum" } ],
+                  [ ".", "TransactionFailure", { "stat": "Sum" } ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Transaction Volume",
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                }
+                "yAxis": { "left": { "min": 0 } }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
-                        "metricName": "AverageLatency"
-                      },
-                      "period": 300,
-                      "stat": "Average"
-                    },
-                    "label": "Average Latency",
-                    "id": "m1"
-                  }
+                  [ "PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", { "stat": "Average" } ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Average Payment Latency (ms)",
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                },
+                "yAxis": { "left": { "min": 0 } },
                 "annotations": {
                   "horizontal": [
                     {
                       "label": "High Latency Threshold",
-                      "value": ${HighLatencyThreshold}
+                      "value": "${HighLatencyThreshold}"
                     }
                   ]
                 }
@@ -850,33 +809,17 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
-                        "metricName": "ErrorRate"
-                      },
-                      "period": 300,
-                      "stat": "Average"
-                    },
-                    "label": "Error Rate",
-                    "id": "m1"
-                  }
+                  [ "PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", { "stat": "Average" } ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Error Rate (%)",
-                "yAxis": {
-                  "left": {
-                    "min": 0,
-                    "max": 100
-                  }
-                },
+                "yAxis": { "left": { "min": 0, "max": 100 } },
                 "annotations": {
                   "horizontal": [
                     {
                       "label": "Error Rate Threshold",
-                      "value": ${ErrorRateThreshold}
+                      "value": "${ErrorRateThreshold}"
                     }
                   ]
                 }
@@ -886,69 +829,20 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
-                        "metricName": "FraudDetected"
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Fraud Detections",
-                    "id": "m1"
-                  }
+                  [ "PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", { "stat": "Sum" } ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Fraud Detections",
-                "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
-                }
+                "yAxis": { "left": { "min": 0 } }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "AWS/Lambda",
-                        "metricName": "Invocations",
-                        "dimensions": [
-                          {
-                            "name": "FunctionName",
-                            "value": "payment-metrics-processor-${EnvironmentSuffix}"
-                          }
-                        ]
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Lambda Invocations",
-                    "id": "m1"
-                  },
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "AWS/Lambda",
-                        "metricName": "Errors",
-                        "dimensions": [
-                          {
-                            "name": "FunctionName",
-                            "value": "payment-metrics-processor-${EnvironmentSuffix}"
-                          }
-                        ]
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Lambda Errors",
-                    "id": "m2"
-                  }
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "payment-metrics-processor-${EnvironmentSuffix}", { "stat": "Sum" } ],
+                  [ ".", "Errors", ".", ".", { "stat": "Sum" } ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -959,75 +853,20 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "AWS/Kinesis",
-                        "metricName": "IncomingRecords",
-                        "dimensions": [
-                          {
-                            "name": "StreamName",
-                            "value": "payment-logs-stream-${EnvironmentSuffix}"
-                          }
-                        ]
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Incoming Records",
-                    "id": "m1"
-                  },
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "AWS/Kinesis",
-                        "metricName": "IncomingBytes",
-                        "dimensions": [
-                          {
-                            "name": "StreamName",
-                            "value": "payment-logs-stream-${EnvironmentSuffix}"
-                          }
-                        ]
-                      },
-                      "period": 300,
-                      "stat": "Sum"
-                    },
-                    "label": "Incoming Bytes",
-                    "id": "m2"
-                  }
+                  [ "AWS/Kinesis", "IncomingRecords", "StreamName", "payment-logs-stream-${EnvironmentSuffix}", { "stat": "Sum" } ],
+                  [ ".", "IncomingBytes", ".", ".", { "stat": "Sum" } ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Kinesis Stream Throughput",
-                "yAxis": {
-                  "right": {
-                    "min": 0
-                  }
-                }
+                "yAxis": { "right": { "min": 0 } }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  {
-                    "metricStat": {
-                      "metric": {
-                        "namespace": "AWS/AOSS",
-                        "metricName": "5xx",
-                        "dimensions": [
-                          {
-                            "name": "CollectionName",
-                            "value": "payment-logs-${EnvironmentSuffix}"
-                          }
-                        ]
-                      },
-                      "period": 60,
-                      "stat": "Maximum"
-                    },
-                    "label": "5xx Errors",
-                    "id": "m1"
-                  }
+                  [ "AWS/AOSS", "5xx", "CollectionName", "payment-logs-${EnvironmentSuffix}", { "stat": "Maximum" } ]
                 ],
                 "period": 60,
                 "region": "${AWS::Region}",
@@ -1044,9 +883,7 @@ Resources:
               }
             }
           ]
-        }  # ========================================
-    # X-Ray Sampling Rule
-    # ========================================
+        }
 
   XRaySamplingRule:
     Type: AWS::XRay::SamplingRule
