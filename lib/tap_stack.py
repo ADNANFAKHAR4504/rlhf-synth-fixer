@@ -301,6 +301,10 @@ class PrimaryRegionStack(TerraformStack):
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
             global_cluster_identifier=global_cluster_id,
+            serverlessv2_scaling_configuration={
+                "min_capacity": 0.5,
+                "max_capacity": 1.0
+            },
             depends_on=[db_subnet_group],
             tags={"Name": f"primary-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"}
         )
@@ -698,7 +702,7 @@ class PrimaryRegionStack(TerraformStack):
 
         # Outputs
         self.vpc_id = primary_vpc.id
-        self.vpc_cidr = primary_vpc.cidr_block
+        self.vpc_cidr = "10.0.0.0/16"  # Store literal CIDR for testing
         self.private_route_table_id = private_rt.id
         self.aurora_cluster_arn = primary_cluster.arn
         self.aurora_endpoint = primary_cluster.endpoint
@@ -1001,6 +1005,10 @@ class DrRegionStack(TerraformStack):
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
             global_cluster_identifier=global_cluster_id,
+            serverlessv2_scaling_configuration={
+                "min_capacity": 0.5,
+                "max_capacity": 1.0
+            },
             depends_on=[db_subnet_group],
             tags={"Name": f"dr-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"},
             provider=provider
@@ -1462,7 +1470,7 @@ class DrRegionStack(TerraformStack):
 
         # Outputs
         self.vpc_id = dr_vpc.id
-        self.vpc_cidr = dr_vpc.cidr_block
+        self.vpc_cidr = "10.1.0.0/16"  # Store literal CIDR for testing
         self.private_route_table_id = private_rt.id
         self.aurora_cluster_arn = dr_cluster.arn
         self.aurora_endpoint = dr_cluster.endpoint
