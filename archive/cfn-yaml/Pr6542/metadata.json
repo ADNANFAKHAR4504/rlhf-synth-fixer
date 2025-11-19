@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912439",
+  "team": "synth",
+  "startedAt": "2025-11-14T00:00:00.000Z",
+  "subtask": "AWS Config",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "Infrastructure Compliance",
+    "Security Configuration",
+    "AWS Config Rules",
+    "Governance",
+    "Compliance Monitoring"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Config",
+    "AWS CloudFormation",
+    "AWS IAM",
+    "Amazon S3",
+    "AWS Lambda",
+    "Amazon SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

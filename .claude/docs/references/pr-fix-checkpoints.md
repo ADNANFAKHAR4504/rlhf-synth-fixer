@@ -53,7 +53,7 @@ fi
 REQUIRED_SCRIPTS=(
   ".claude/scripts/pr-manager.sh"
   ".claude/scripts/pr-status.sh"
-  "scripts/pre-validate-iac.sh"
+  ".claude/scripts/pre-validate-iac.sh"
 )
 
 SCRIPTS_VALID=true
@@ -478,11 +478,11 @@ export ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-fix${PR_NUMBER}}"
 echo "Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
 
 # Run pre-deployment validation script
-if [ -f "scripts/pre-validate-iac.sh" ]; then
-  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
+  bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
   PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
 else
-  echo "⚠️ WARNING: scripts/pre-validate-iac.sh not found"
+  echo "⚠️ WARNING: .claude/scripts/pre-validate-iac.sh not found"
   echo "Skipping pre-validation (may miss common errors)"
   PRE_VALIDATE_STATUS=0
 fi
@@ -515,7 +515,7 @@ if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
   
   # Re-run validation
   echo "🔄 Re-running validation after fixes..."
-  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
+  bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
   PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
   
   if [ $PRE_VALIDATE_STATUS -eq 0 ]; then

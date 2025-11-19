@@ -1,0 +1,13 @@
+# Example backend configuration with KMS encryption
+# Uncomment and customize for your environment
+
+# terraform {
+#   backend "s3" {
+#     bucket         = "my-terraform-state-bucket"
+#     key            = "security/iam-kms/terraform.tfstate"
+#     region         = "us-east-1"
+#     encrypt        = true
+#     kms_key_id     = "arn:aws:kms:us-east-1:ACCOUNT_ID:key/KEY_ID"
+#     dynamodb_table = "terraform-state-lock"
+#   }
+# }

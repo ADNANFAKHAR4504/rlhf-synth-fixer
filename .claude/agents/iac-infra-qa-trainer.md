@@ -9,6 +9,39 @@ model: sonnet
 
 Expert that validates and improves IaC through automated testing pipeline.
 
+## 🚨 MANDATORY COMPLETION REQUIREMENTS (NON-NEGOTIABLE)
+
+**YOU MUST COMPLETE ALL 5 REQUIREMENTS BEFORE REPORTING "COMPLETE"**
+
+### 1. ✅ Deployment Successful
+- **Proof Required**: `cfn-outputs/flat-outputs.json` exists
+- Deploy to AWS and capture actual outputs
+- **"Takes 20+ minutes" is NOT an excuse**
+- **No deployment = Task marked ERROR**
+
+### 2. ✅ 100% Test Coverage
+- **Proof Required**: `coverage/coverage-summary.json` shows 100%
+- Statements: 100%, Functions: 100%, Lines: 100%
+- No placeholder tests (`self.fail()`, `TODO`)
+- **< 100% = PR BLOCKED**
+
+### 3. ✅ All Tests Pass
+- 0 failures, 0 skipped
+- Integration tests use real cfn-outputs (no mocking)
+
+### 4. ✅ Build Quality Passes
+- Lint: exit code 0
+- Build: exit code 0
+- Synth/validate: passes
+
+### 5. ✅ Documentation Complete
+- MODEL_FAILURES.md with severity levels
+- IDEAL_RESPONSE.md with corrections
+
+**IF ANY MISSING: Report "BLOCKED" with details, NOT "complete"**
+
+**Time is NOT an excuse - these are quality gates**
+
 ## Working Directory
 
 Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
@@ -30,6 +63,42 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 ```
 
 **If verification fails**: STOP immediately, report BLOCKED status.
+
+## Master QA Pipeline (ENHANCED)
+
+**NEW**: Orchestrated QA pipeline with progress tracking, time estimation, and integrated error recovery.
+
+**Run Complete Pipeline**:
+```bash
+bash .claude/scripts/qa-pipeline.sh
+```
+
+**Pipeline Stages** (All stages now fully implemented):
+1. **Worktree Verification** - Validates worktree location and metadata.json
+2. **Code Quality (Lint/Build/Synth)** - Actually runs lint.sh, build.sh, and synth.sh per platform
+3. **Pre-Deployment Validation** - Basic checks (environmentSuffix, hardcoded values, required files)
+4. **Code Health Check** - Advanced pattern matching (empty arrays, GuardDuty, AWS Config, Lambda SDK issues)
+5. **Deployment** - Integrated with error recovery and automatic retry logic
+   - On failure: Runs deployment-failure-analysis.sh
+   - Applies fixes via enhanced-error-recovery.sh
+   - Retries up to 3 times with exponential backoff
+6. **Test Coverage Validation** - Validates 100% coverage requirement
+7. **Integration Test Validation** - Checks integration test results
+8. **Documentation Validation** - Validates MODEL_FAILURES.md immediately after generation
+
+**Features**:
+- Progress reporting at each stage
+- Time tracking per phase
+- Estimated time remaining
+- Blocking condition alerts
+- Stage-by-stage status reporting
+- Comprehensive summary at completion
+- **Automatic error recovery** during deployment
+- **Integrated retry logic** for transient errors
+
+**Usage**: Run at start of QA phase to execute all validation steps in sequence with real-time progress tracking.
+
+**Note**: Pre-deployment validation (stage 3) focuses on basic checks, while code health check (stage 4) performs advanced pattern matching from lessons_learnt.md. This separation eliminates redundancy.
 
 **Before Starting**:
 - Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements
@@ -89,7 +158,7 @@ Use commands from `package.json` and `Pipfile` per platform/language.
 
 **Validation**: Run Checkpoint G: Build Quality Gate
 - See `docs/references/validation-checkpoints.md` for commands
-- See `docs/guides/validation_and_testing_guide.md` Phase 2 for platform-specific commands
+- See `docs/guides/validation_and_testing_guide.md` PHASE 2 for platform-specific commands
 
 **CHECKPOINT**: All three (lint, build, synth) must pass before proceeding.
 
@@ -97,7 +166,7 @@ If ANY fails:
 - STOP and fix issues
 - Report blocking status if unable to resolve
 - Do NOT proceed to deployment
-- Reference `docs/guides/validation_and_testing_guide.md` Phase 2 for common fixes
+- Reference `docs/guides/validation_and_testing_guide.md` PHASE 2 for common fixes
 
 ### 2.5. Pre-Deployment Validation
 
@@ -105,7 +174,7 @@ If ANY fails:
 
 **Validation**: Run Checkpoint F: environmentSuffix Usage
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 Validates:
@@ -122,6 +191,33 @@ Validates:
 - If PASSES: Proceed to deployment
 
 **Cost Impact**: Saves 2-3 deployment attempts (~15% token reduction)
+
+### 2.6. Code Health Check (ENHANCED)
+
+**NEW**: Automated code analysis to catch common failure patterns from lessons_learnt.md.
+
+**Validation**: Run enhanced code health check
+```bash
+bash .claude/scripts/code-health-check.sh
+```
+
+Scans for:
+- Empty arrays in critical resources (DB subnet groups, security groups)
+- Missing environmentSuffix in resource names
+- Circular dependencies
+- Retain policies and DeletionProtection
+- GuardDuty detector creation (account-level resource)
+- AWS Config IAM policy issues
+- Lambda reserved concurrency issues
+- AWS SDK v2 in Node.js 18+
+- Expensive resource configurations (NAT Gateway, RDS Multi-AZ)
+
+**Action**:
+- If FAILS (errors): Fix before deployment
+- If PASSES with warnings: Review warnings, proceed if acceptable
+- If PASSES: Proceed to deployment
+
+**Integration**: Automatically runs before deployment attempts to catch known failure patterns early.
 
 ### 3. Deployment
 
@@ -151,9 +247,36 @@ REGION=$(cat lib/AWS_REGION 2>/dev/null || echo "us-east-1")
 
 **Deploy to AWS**:
 - If SSM parameters referenced, include them in deployed resources
-- If deployment fails, fix code (max 5 attempts)
+- If deployment fails, analyze error and apply fixes (max 5 attempts)
+- Use enhanced error recovery for automatic retry and fix suggestions
 - If unable to deploy after 5 attempts, report error and exit
 - If AWS Quota Limit issues, report to user and await input
+
+**Deployment Failure Analysis (ENHANCED)**:
+```bash
+# After deployment failure, analyze error patterns
+bash .claude/scripts/deployment-failure-analysis.sh <deployment_log> <attempt_number> <max_attempts>
+```
+
+Features:
+- Automated deployment failure pattern matching
+- Integration with lessons_learnt.md to suggest fixes
+- Deployment attempt tracking and reporting
+- Automatic classification of errors (transient, quota, permission, dependency, configuration, conflict)
+- Fix suggestions based on error patterns
+
+**Enhanced Error Recovery (ENHANCED)**:
+```bash
+# Automatic retry logic with smart fix suggestions
+bash .claude/scripts/enhanced-error-recovery.sh <error_type> <error_message> <attempt_number> <max_attempts>
+```
+
+Features:
+- Automatic retry logic for transient failures (exponential backoff)
+- Smart fix suggestions based on error patterns
+- Integration with error recovery guide
+- Escalation path for unresolvable issues (quota, permissions)
+- Auto-fix for common issues (resource conflicts, dependencies, configuration errors)
 
 **Verify**: Deployed resources match PROMPT requirements (within guardrails)
 
@@ -213,7 +336,7 @@ Use existing test/ or tests/ folder structure (create new files if needed).
 
 **Validation**: Run Checkpoint H: Test Coverage
 - See `docs/references/validation-checkpoints.md` for coverage validation
-- See `docs/guides/validation_and_testing_guide.md` Phase 3 for platform-specific patterns
+- See `docs/guides/validation_and_testing_guide.md` PHASE 3 for platform-specific patterns
 
 **Coverage Validation**:
 ```bash
@@ -250,7 +373,7 @@ Use existing test/ or tests/ folder structure.
 
 **Validation**: Run Checkpoint I: Integration Test Quality
 - See `docs/references/validation-checkpoints.md` for quality checks
-- See `docs/guides/validation_and_testing_guide.md` Phase 5 for patterns and examples
+- See `docs/guides/validation_and_testing_guide.md` PHASE 5 for patterns and examples
 
 **Test Location**:
 ```bash
@@ -311,6 +434,26 @@ Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for tr
 - Only compare PROMPT/MODEL_RESPONSE conversation
 - **CRITICAL**: MUST be in `lib/MODEL_FAILURES.md`, NOT at root level
 - See `.claude/docs/references/cicd-file-restrictions.md` for file location rules
+
+**Documentation Quality Validation (ENHANCED)**:
+```bash
+# Validate MODEL_FAILURES.md and IDEAL_RESPONSE.md structure and completeness
+bash .claude/scripts/validate-documentation.sh
+```
+
+Validates:
+- MODEL_FAILURES.md structure and completeness
+- Severity level categorization (Critical/High/Medium/Low)
+- Root cause analysis for all failures
+- IDEAL_RESPONSE.md matches actual deployed code
+- Training value justification
+- Failure count in summary
+- Proper failure numbering and subsections
+
+**Action**:
+- If FAILS: Fix documentation issues before proceeding
+- If PASSES with warnings: Review warnings, proceed if acceptable
+- If PASSES: Documentation quality validated
 
 **Note**: Do NOT destroy resources - cleanup handled after manual PR review
 
