@@ -278,6 +278,55 @@
         ]
       }
     },
+    "SecondaryTransactionLogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "SecondaryTransactionLogBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowReplicationFromPrimary",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role-${EnvironmentSuffix}"
+                }
+              },
+              "Action": [
+                "s3:ReplicateObject",
+                "s3:ReplicateDelete",
+                "s3:ReplicateTags",
+                "s3:GetObjectVersionTagging",
+                "s3:ObjectOwnerOverrideToBucketOwner"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+              }
+            },
+            {
+              "Sid": "AllowReplicationRoleToListBucket",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role-${EnvironmentSuffix}"
+                }
+              },
+              "Action": [
+                "s3:List*",
+                "s3:GetBucketVersioning",
+                "s3:PutBucketVersioning"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+              }
+            }
+          ]
+        }
+      }
+    },
     "SecondaryTransactionProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
