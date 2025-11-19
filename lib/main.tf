@@ -6,12 +6,12 @@ terraform {
       version = "~> 4.0"
     }
   }
-  
-  backend "s3" {}
+
+  # backend "s3" {}
 }
 
 provider "aws" {
-  region = "us-west-2"  # Hardcoded as per requirements
+  region = "us-east-1" # Hardcoded as per requirements
   default_tags {
     tags = {
       iac-rlhf-amazon = "true"

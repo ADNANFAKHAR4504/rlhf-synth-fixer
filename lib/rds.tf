@@ -69,7 +69,7 @@ resource "aws_db_instance" "default" {
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
   skip_final_snapshot     = true
   deletion_protection     = false
-  backup_retention_period = 7  # 7 days backup retention
+  backup_retention_period = 1  # 1 day backup retention (free tier limit)
   backup_window           = "03:00-04:00"  # UTC
   maintenance_window      = "Mon:04:00-Mon:05:00"  # UTC
   identifier              = "mysql-db-${var.resource_suffix}"

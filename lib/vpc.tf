@@ -1,9 +1,9 @@
-# Hardcoded to us-west-2 as per requirements
+# Hardcoded to us-east-1 as per requirements
 data "aws_availability_zones" "available" {
   state = "available"
   filter {
     name   = "region-name"
-    values = ["us-west-2"]
+    values = ["us-east-1"]
   }
 }
 
@@ -13,8 +13,8 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags = {
-    Name                = "main-vpc-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "main-vpc-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -25,8 +25,8 @@ resource "aws_subnet" "public" {
   availability_zone       = data.aws_availability_zones.available.names[0]
 
   tags = {
-    Name                = "public-subnet-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "public-subnet-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -36,8 +36,8 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[1]
 
   tags = {
-    Name                = "private-subnet-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "private-subnet-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -48,8 +48,8 @@ resource "aws_subnet" "private_2" {
   availability_zone = data.aws_availability_zones.available.names[2]
 
   tags = {
-    Name                = "private-subnet-2-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "private-subnet-2-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -57,8 +57,8 @@ resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name                = "main-igw-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "main-igw-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -71,8 +71,8 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name                = "public-rt-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "public-rt-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
