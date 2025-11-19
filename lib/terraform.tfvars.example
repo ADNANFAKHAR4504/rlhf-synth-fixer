@@ -1,0 +1,12 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and update with your values
+
+environment_suffix = "prod-dr-001"
+
+master_username = "postgres"
+master_password = "YourSecurePassword123!"  # Change this!
+
+alert_email_addresses = [
+  "ops-team@example.com",
+  "devops@example.com"
+]
