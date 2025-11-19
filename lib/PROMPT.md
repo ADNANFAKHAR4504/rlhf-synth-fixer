@@ -18,21 +18,19 @@ Create a serverless payment webhook processing system using **AWS CDK with Pytho
    - Create REST API with `/webhook/{provider}` endpoint accepting POST requests
    - Path parameter `provider` should support multiple payment providers
    - Integrate with webhook receiver Lambda function
-   - Apply AWS WAF with rate limiting (10 requests per second per IP)
+   - Apply AWS WAF with rate limiting (10 requests per second per IP, 600 requests per 5 minutes)
    - Enable X-Ray tracing for observability
-   - Configure throttling settings (1000 requests per second burst)
+   - Configure throttling settings (2000 requests per second burst limit, 1000 requests per second steady-state rate limit)
 
 2. **Lambda Functions**
-   - **Webhook Receiver**: Python 3.11 runtime on ARM64 architecture with 30-second timeout and 100 reserved concurrent executions
-   - **Payment Processor**: Python 3.11 runtime on ARM64 architecture with 5-minute timeout and 50 reserved concurrent executions
-   - **Audit Logger**: Python 3.11 runtime on ARM64 architecture triggered by DynamoDB streams
+   - **Webhook Receiver**: Python 3.11 runtime on ARM64 architecture with 30-second timeout and 10 reserved concurrent executions
+   - **Payment Processor**: Python 3.11 runtime on ARM64 architecture with 5-minute timeout and 5 reserved concurrent executions
+   - **Audit Logger**: Python 3.11 runtime on ARM64 architecture with 60-second timeout triggered by DynamoDB streams
    - All Lambda functions must have X-Ray tracing enabled
+   - Uses AWS Lambda runtime's built-in boto3 library (no external dependencies required)
+   - Reserved concurrent execution limits are set conservatively to avoid account limits during deployment/testing
 
-3. **Lambda Layers**
-   - Create shared Lambda layers for common dependencies (boto3 and cryptography libraries)
-   - Attach layers to all Lambda functions for code reusability
-
-4. **DynamoDB Table**
+3. **DynamoDB Table**
    - Table name: `PaymentWebhooks` (must include environmentSuffix)
    - Partition key: `webhookId` (String)
    - Sort key: `timestamp` (String)
@@ -40,21 +38,21 @@ Create a serverless payment webhook processing system using **AWS CDK with Pytho
    - Enable DynamoDB Streams with NEW_AND_OLD_IMAGES stream view type
    - All data must be encrypted using customer-managed KMS key
 
-5. **Dead Letter Queue**
+4. **Dead Letter Queue**
    - Create SQS Dead Letter Queue for failed webhook processing
    - Configure 14-day message retention period
    - Subscribe SNS topic to DLQ for critical alerts
    - Encrypt queue using customer-managed KMS key
 
-6. **SNS Topic**
+5. **SNS Topic**
    - Create SNS topic for critical alerts when messages appear in DLQ
    - Configure CloudWatch alarm to monitor DLQ message count
    - Encrypt topic using customer-managed KMS key
 
-7. **Customer-Managed KMS Key**
-   - Create single KMS key for all encryption needs (DynamoDB, SQS, SNS, Lambda environment variables)
+6. **Customer-Managed KMS Key**
+   - Create single KMS key for all encryption needs (DynamoDB, SQS, SNS)
    - Enable key rotation
-   - Configure key policy for service access
+   - Configure key policy for service access (DynamoDB, SQS, SNS, Lambda services)
 
 ### Technical Requirements
 
@@ -75,15 +73,16 @@ Create a serverless payment webhook processing system using **AWS CDK with Pytho
 ### Constraints
 
 - Lambda functions must use ARM64 architecture for cost efficiency
-- Reserved concurrent executions: 100 for webhook receiver, 50 for payment processor
-- API Gateway must have rate limiting at 10 requests per second per IP address
-- API Gateway burst limit: 1000 requests per second
+- Reserved concurrent executions: 10 for webhook receiver, 5 for payment processor (conservative limits to avoid account quotas)
+- API Gateway must have rate limiting at 10 requests per second per IP address (600 requests per minute)
+- API Gateway burst limit: 2000 requests per second with 1000 requests per second steady-state rate limit
 - DynamoDB must use on-demand billing mode (no provisioned capacity)
-- All encryption must use single customer-managed KMS key
+- All encryption must use single customer-managed KMS key (for DynamoDB, SQS, SNS)
 - Dead letter queue retention must be exactly 14 days
 - X-Ray tracing must be enabled on all Lambda functions and API Gateway
 - All resources must support clean teardown (no retention policies)
 - Include proper error handling and logging in all Lambda functions
+- SQS processing queue configured with 6-minute visibility timeout (360 seconds) and batch size of 10
 
 ### Deployment Requirements (CRITICAL)
 
@@ -95,20 +94,20 @@ Create a serverless payment webhook processing system using **AWS CDK with Pytho
 ## Success Criteria
 
 - **Functionality**: Complete webhook processing pipeline from API Gateway through Lambda to DynamoDB with audit logging
-- **Performance**: Can handle burst traffic of 1000 requests per second with decoupled processing
+- **Performance**: Can handle burst traffic with API Gateway rate limiting (2000 burst, 1000 steady-state) and asynchronous SQS processing
 - **Reliability**: Failed webhooks captured in DLQ with SNS alerting, DynamoDB streams trigger audit logging
-- **Security**: All data encrypted with customer-managed KMS key, WAF rate limiting protecting API, X-Ray tracing enabled
+- **Security**: All data at rest encrypted with customer-managed KMS key (DynamoDB, SQS, SNS), WAF rate limiting (600 requests/min per IP) protecting API, X-Ray tracing enabled
 - **Compliance**: Audit trail via DynamoDB streams and dedicated audit logger Lambda function
 - **Resource Naming**: All resources include environmentSuffix in their names
-- **Cost Efficiency**: ARM64 Lambda functions, on-demand DynamoDB billing, no unnecessary resource over-provisioning
+- **Cost Efficiency**: ARM64 Lambda functions, on-demand DynamoDB billing, conservative concurrency limits to avoid quota issues
 - **Code Quality**: Python code following best practices, well-structured, documented
+- **Deployment**: Works within default AWS account limits without requiring quota increases
 
 ## What to deliver
 
 - Complete **AWS CDK with Python** implementation
 - API Gateway REST API with WAF and throttling
 - Three Lambda functions (webhook receiver, payment processor, audit logger) with Python 3.11 ARM64 runtime
-- Lambda layers for shared dependencies (boto3, cryptography)
 - DynamoDB table with streams enabled
 - SQS Dead Letter Queue with 14-day retention
 - SNS topic for critical alerts
