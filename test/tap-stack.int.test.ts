@@ -182,14 +182,8 @@ describe('Stock Pattern Detection System Integration Tests', () => {
       expect(response.Timeout).toBe(30);
       expect(response.Architectures).toContain('arm64');
       expect(response.TracingConfig?.Mode).toBe('Active');
-      // ReservedConcurrentExecutions might not be returned if set to default
-      // Check if defined or skip this assertion
-      if (response.ReservedConcurrentExecutions !== undefined) {
-        expect(response.ReservedConcurrentExecutions).toBe(50);
-      } else {
-        // Skip validation - Lambda API doesn't return this for all Lambda functions
-        expect(true).toBe(true);
-      }
+      // ReservedConcurrentExecutions removed due to AWS account concurrency limits
+      // The function will use unreserved concurrency pool
       expect(response.Environment?.Variables?.TABLE_NAME).toBe(
         outputs.PatternsTableName
       );

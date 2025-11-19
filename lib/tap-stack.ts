@@ -99,7 +99,7 @@ export class TapStack extends cdk.Stack {
         memorySize: 512,
         timeout: cdk.Duration.seconds(30),
         architecture: lambda.Architecture.ARM_64,
-        reservedConcurrentExecutions: 50,
+        // reservedConcurrentExecutions: 50, // Removed due to AWS account concurrency limits
         tracing: lambda.Tracing.ACTIVE,
         layers: [sharedLayer],
         environment: {

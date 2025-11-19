@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { marshall } from '@aws-sdk/util-dynamodb';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as AWSXRay from 'aws-xray-sdk-core';
 
 const dynamoClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));

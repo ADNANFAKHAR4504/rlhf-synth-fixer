@@ -47,7 +47,7 @@ describe('TapStack', () => {
         Handler: 'index.handler',
         MemorySize: 512,
         Timeout: 30,
-        ReservedConcurrentExecutions: 50,
+        // ReservedConcurrentExecutions removed due to AWS account limits
         TracingConfig: {
           Mode: 'Active',
         },

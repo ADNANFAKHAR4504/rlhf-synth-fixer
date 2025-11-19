@@ -2,6 +2,7 @@ import { ScheduledEvent } from 'aws-lambda';
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as AWSXRay from 'aws-xray-sdk-core';
 
 const dynamoClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));

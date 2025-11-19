@@ -1,5 +1,6 @@
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as AWSXRay from 'aws-xray-sdk-core';
 
 const snsClient = AWSXRay.captureAWSv3Client(new SNSClient({}));
