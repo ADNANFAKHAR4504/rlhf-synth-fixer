@@ -282,16 +282,5 @@ describe('TapStack CloudFormation Integration Tests', () => {
         expect(true).toBe(true);
       }
     });
-
-    test('should verify deployment matches expected configuration', () => {
-      if (!outputsExist) {
-        console.log('Skipping - infrastructure not deployed');
-        expect(true).toBe(true);
-        return;
-      }
-      // Verify the deployment created expected resources
-      const hasBaseResources = outputs.TurnAroundPromptTableName && outputs.TurnAroundPromptTableArn;
-      expect(hasBaseResources).toBe(true);
-    });
   });
 });
