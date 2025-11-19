@@ -122,7 +122,7 @@ Resources:
   EC2KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: !Sub 'ecommerce-keypair-${Environment}'
+      KeyName: !Sub 'ecommerce-keypair-${EnvironmentSuffix}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -171,7 +171,7 @@ Resources:
   MasterKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/ecommerce-${Environment}'
+      AliasName: !Sub 'alias/ecommerce-${EnvironmentSuffix}'
       TargetKeyId: !Ref MasterKMSKey
 
   # ==================== VPC and Networking ====================
@@ -183,7 +183,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'ECommerce-VPC-${Environment}'
+          Value: !Sub 'ECommerce-VPC-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -200,7 +200,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Public-Subnet-1-${Environment}'
+          Value: !Sub 'Public-Subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -217,7 +217,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Public-Subnet-2-${Environment}'
+          Value: !Sub 'Public-Subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -233,7 +233,7 @@ Resources:
       CidrBlock: 10.0.10.0/24
       Tags:
         - Key: Name
-          Value: !Sub 'Private-Subnet-1-${Environment}'
+          Value: !Sub 'Private-Subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -249,7 +249,7 @@ Resources:
       CidrBlock: 10.0.11.0/24
       Tags:
         - Key: Name
-          Value: !Sub 'Private-Subnet-2-${Environment}'
+          Value: !Sub 'Private-Subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -262,7 +262,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'ECommerce-IGW-${Environment}'
+          Value: !Sub 'ECommerce-IGW-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -283,7 +283,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-EIP-1-${Environment}'
+          Value: !Sub 'NAT-EIP-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -298,7 +298,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-EIP-2-${Environment}'
+          Value: !Sub 'NAT-EIP-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -313,7 +313,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-Gateway-1-${Environment}'
+          Value: !Sub 'NAT-Gateway-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -328,7 +328,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-Gateway-2-${Environment}'
+          Value: !Sub 'NAT-Gateway-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -342,7 +342,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'Public-Routes-${Environment}'
+          Value: !Sub 'Public-Routes-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -376,7 +376,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'Private-Routes-1-${Environment}'
+          Value: !Sub 'Private-Routes-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -403,7 +403,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'Private-Routes-2-${Environment}'
+          Value: !Sub 'Private-Routes-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -443,7 +443,7 @@ Resources:
           Description: HTTP from Internet (will redirect to HTTPS)
       Tags:
         - Key: Name
-          Value: !Sub 'ALB-SG-${Environment}'
+          Value: !Sub 'ALB-SG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -470,7 +470,7 @@ Resources:
           Description: HTTPS to Internet
       Tags:
         - Key: Name
-          Value: !Sub 'WebServer-SG-${Environment}'
+          Value: !Sub 'WebServer-SG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -485,7 +485,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'Database-SG-${Environment}'
+          Value: !Sub 'Database-SG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -506,7 +506,7 @@ Resources:
           Description: HTTPS to Internet
       Tags:
         - Key: Name
-          Value: !Sub 'Lambda-SG-${Environment}'
+          Value: !Sub 'Lambda-SG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -737,7 +737,7 @@ Resources:
     DependsOn:
       - CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub 'ECommerce-Trail-${Environment}'
+      TrailName: !Sub 'ECommerce-Trail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -836,7 +836,7 @@ Resources:
       - ConfigBucketPolicy
     Condition: CreateConfigRecorderCondition
     Properties:
-      Name: !Sub 'ECommerce-Recorder-${Environment}'
+      Name: !Sub 'ECommerce-Recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRecorderRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -847,7 +847,7 @@ Resources:
     # Only create delivery channel if both delivery channel creation is requested and recorder creation is enabled
     Condition: CreateConfigDeliveryChannelAndRecorderCondition
     Properties:
-      Name: !Sub 'ECommerce-DeliveryChannel-${Environment}'
+      Name: !Sub 'ECommerce-DeliveryChannel-${EnvironmentSuffix}'
       S3BucketName: !Ref ConfigBucket
 
   # ==================== IAM Roles and Policies ====================
@@ -955,7 +955,7 @@ Resources:
   MFAEnforcementPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub 'RequireMFA-${Environment}'
+      ManagedPolicyName: !Sub 'RequireMFA-${EnvironmentSuffix}'
       Description: Enforces MFA for IAM users
       PolicyDocument:
         Version: '2012-10-17'
@@ -979,7 +979,7 @@ Resources:
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '/ecommerce/database/credentials-${Environment}'
+      Name: !Sub '/ecommerce/database/credentials-${EnvironmentSuffix}'
       Description: RDS Database Credentials with auto-generated password
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -1000,7 +1000,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn: S3LoggingBucketPolicy
     Properties:
-      Name: !Sub 'ECommerce-ALB-${Environment}'
+      Name: !Sub 'ECommerce-ALB-${EnvironmentSuffix}'
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -1030,7 +1030,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'ECommerce-TG-${Environment}'
+      Name: !Sub 'ECommerce-TG-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -1078,7 +1078,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub 'ECommerce-WebACL-${Environment}'
+      Name: !Sub 'ECommerce-WebACL-${EnvironmentSuffix}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -1122,7 +1122,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'ECommerce-WebACL-${Environment}'
+        MetricName: !Sub 'ECommerce-WebACL-${EnvironmentSuffix}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -1141,7 +1141,7 @@ Resources:
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'ECommerce-LT-${Environment}'
+      LaunchTemplateName: !Sub 'ECommerce-LT-${EnvironmentSuffix}'
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: t3.medium
@@ -1163,7 +1163,7 @@ Resources:
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
               "metrics": {
-                "namespace": "ECommerce/${Environment}",
+                "namespace": "ECommerce/${EnvironmentSuffix}",
                 "metrics_collected": {
                   "cpu": {
                     "measurement": [
@@ -1193,12 +1193,12 @@ Resources:
                     "collect_list": [
                       {
                         "file_path": "/var/log/messages",
-                        "log_group_name": "/aws/ec2/ecommerce/${Environment}",
+                        "log_group_name": "/aws/ec2/ecommerce/${EnvironmentSuffix}",
                         "log_stream_name": "{instance_id}/messages"
                       },
                       {
                         "file_path": "/home/ec2-user/server.log",
-                        "log_group_name": "/aws/ec2/ecommerce/${Environment}",
+                        "log_group_name": "/aws/ec2/ecommerce/${EnvironmentSuffix}",
                         "log_stream_name": "{instance_id}/server"
                       }
                     ]
@@ -1295,7 +1295,7 @@ Resources:
             chmod +x /home/ec2-user/server.py
 
             REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-            export ENVIRONMENT="${Environment}"
+            export ENVIRONMENT="${EnvironmentSuffix}"
             export AWS_DEFAULT_REGION=$REGION
             export DB_SECRET_ARN="${DBSecret}"
             export DB_ENDPOINT_PARAMETER="/ecommerce/database/endpoint"
@@ -1305,7 +1305,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub 'ECommerce-Instance-${Environment}'
+                Value: !Sub 'ECommerce-Instance-${EnvironmentSuffix}'
               - Key: Environment
                 Value: !Ref Environment
               - Key: Owner
@@ -1315,7 +1315,7 @@ Resources:
           - ResourceType: volume
             Tags:
               - Key: Name
-                Value: !Sub 'ECommerce-Volume-${Environment}'
+                Value: !Sub 'ECommerce-Volume-${EnvironmentSuffix}'
               - Key: Environment
                 Value: !Ref Environment
               - Key: Owner
@@ -1332,7 +1332,7 @@ Resources:
         MaxBatchSize: 1
         PauseTime: PT5M
     Properties:
-      AutoScalingGroupName: !Sub 'ECommerce-ASG-${Environment}'
+      AutoScalingGroupName: !Sub 'ECommerce-ASG-${EnvironmentSuffix}'
       LaunchTemplate:
         LaunchTemplateId: !Ref EC2LaunchTemplate
         Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
@@ -1350,7 +1350,7 @@ Resources:
         - Granularity: 1Minute
       Tags:
         - Key: Name
-          Value: !Sub 'ECommerce-ASG-Instance-${Environment}'
+          Value: !Sub 'ECommerce-ASG-Instance-${EnvironmentSuffix}'
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
@@ -1416,7 +1416,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'ECommerce-DBSubnet-${Environment}'
+      DBSubnetGroupName: !Sub 'ECommerce-DBSubnet-${EnvironmentSuffix}'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -1434,7 +1434,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: !Sub 'ecommerce-db-${Environment}'
+      DBInstanceIdentifier: !Sub 'ecommerce-db-${EnvironmentSuffix}'
       DBName: ecommercedb
       Engine: postgres
       EngineVersion: '15.14'
@@ -1482,14 +1482,14 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/ECommerce-Function-${Environment}'
+      LogGroupName: !Sub '/aws/lambda/ECommerce-Function-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   LambdaFunction:
     Type: AWS::Lambda::Function
     DependsOn: LambdaLogGroup
     Properties:
-      FunctionName: !Sub 'ECommerce-Function-${Environment}'
+      FunctionName: !Sub 'ECommerce-Function-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -1541,7 +1541,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/ec2/ecommerce/${Environment}'
+      LogGroupName: !Sub '/aws/ec2/ecommerce/${EnvironmentSuffix}'
       RetentionInDays: 30
 
   RDSLogGroup:
@@ -1549,7 +1549,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/rds/instance/ecommerce-db-${Environment}/postgresql'
+      LogGroupName: !Sub '/aws/rds/instance/ecommerce-db-${EnvironmentSuffix}/postgresql'
       RetentionInDays: 30
 
 Outputs:
@@ -1557,48 +1557,48 @@ Outputs:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub 'ECommerce-VPC-${Environment}'
+      Name: !Sub 'ECommerce-VPC-${EnvironmentSuffix}'
 
   ALBDNSName:
     Description: Application Load Balancer DNS Name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub 'ECommerce-ALB-${Environment}'
+      Name: !Sub 'ECommerce-ALB-${EnvironmentSuffix}'
 
   S3ApplicationBucketName:
     Description: S3 Application Bucket Name
     Value: !Ref S3ApplicationBucket
     Export:
-      Name: !Sub 'ECommerce-S3App-${Environment}'
+      Name: !Sub 'ECommerce-S3App-${EnvironmentSuffix}'
 
   RDSEndpoint:
     Description: RDS Database Endpoint
     Value: !GetAtt RDSDatabase.Endpoint.Address
     Export:
-      Name: !Sub 'ECommerce-RDS-${Environment}'
+      Name: !Sub 'ECommerce-RDS-${EnvironmentSuffix}'
 
   LambdaFunctionArn:
     Description: Lambda Function ARN
     Value: !GetAtt LambdaFunction.Arn
     Export:
-      Name: !Sub 'ECommerce-Lambda-${Environment}'
+      Name: !Sub 'ECommerce-Lambda-${EnvironmentSuffix}'
 
   CloudTrailName:
     Description: CloudTrail Name
     Value: !Ref CloudTrail
     Export:
-      Name: !Sub 'ECommerce-Trail-${Environment}'
+      Name: !Sub 'ECommerce-Trail-${EnvironmentSuffix}'
 
   ConfigRecorderName:
     Description: AWS Config Recorder Name
     Condition: CreateConfigRecorderCondition
     Value: !Ref ConfigRecorder
     Export:
-      Name: !Sub 'ECommerce-Config-${Environment}'
+      Name: !Sub 'ECommerce-Config-${EnvironmentSuffix}'
 
   WebACLArn:
     Description: WAF WebACL ARN
     Value: !GetAtt WebACL.Arn
     Export:
-      Name: !Sub 'ECommerce-WAF-${Environment}'
+      Name: !Sub 'ECommerce-WAF-${EnvironmentSuffix}'
 ```
