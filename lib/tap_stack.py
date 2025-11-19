@@ -650,12 +650,16 @@ class TapStack(TerraformStack):
         )
 
         # User data script for EC2 instances
+        # Optimized for fast startup to pass health checks quickly
         user_data = f"""#!/bin/bash
-yum update -y
+set -e
+# Skip time-consuming updates for faster instance startup
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > /var/www/html/index.html
+# Signal completion
+echo "User data script completed at $(date)" > /var/log/userdata-complete.log
 """
 
         # Launch Template
@@ -719,9 +723,9 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             health_check=LbTargetGroupHealthCheck(
                 enabled=True,
                 healthy_threshold=2,
-                unhealthy_threshold=2,
+                unhealthy_threshold=3,  # More lenient: allow more failures before marking unhealthy
                 timeout=5,
-                interval=30,
+                interval=15,  # Check more frequently (every 15s instead of 30s)
                 path="/",
                 protocol="HTTP",
                 matcher="200"
@@ -764,11 +768,12 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             vpc_zone_identifier=[subnet.id for subnet in public_subnets],
             target_group_arns=[target_group.arn],
             health_check_type="ELB",
-            health_check_grace_period=300,
+            health_check_grace_period=600,  # Increased to 10 minutes to allow for slower instance startup
             launch_template={
                 "id": launch_template.id,
                 "version": "$Latest"
             },
+            wait_for_capacity_timeout="15m",  # Increase timeout to 15 minutes
             tag=[
                 AutoscalingGroupTag(
                     key="Name",
