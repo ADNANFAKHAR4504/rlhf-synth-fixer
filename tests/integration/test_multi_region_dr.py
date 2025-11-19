@@ -201,7 +201,7 @@ class TestMultiRegionDRIntegration:
         for func in secondary_functions['Functions']:
             if f'payment-processor-secondary-{environment_suffix}' in func['FunctionName']:
                 secondary_payment_function = func
-                    break
+                break
         
         assert secondary_payment_function is not None, "Secondary Lambda function not found"
         assert 'VpcConfig' in secondary_payment_function
