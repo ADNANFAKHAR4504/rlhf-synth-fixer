@@ -1,6 +1,6 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using cdk with py**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using cdk with py**
 >
 > Platform: **cdk**
 > Language: **py**
@@ -87,22 +87,22 @@ Multi-account AWS infrastructure deployed across us-east-1 and us-east-2 regions
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -131,22 +131,22 @@ Multi-account AWS infrastructure deployed across us-east-1 and us-east-2 regions
 ### Correct Resource Naming (CDK Python)
 ```python
 bucket = s3.Bucket(self, "DataBucket",
-    bucket_name=f"data-bucket-{environment_suffix}",  # ✅ CORRECT
+    bucket_name=f"data-bucket-{environment_suffix}",  # CORRECT
     # ...
 )
 
-# ❌ WRONG:
+# WRONG:
 # bucket_name='data-bucket-prod'  # Hardcoded, will fail
 ```
 
 ### Correct Removal Policy (CDK Python)
 ```python
 bucket = s3.Bucket(self, "DataBucket",
-    removal_policy=RemovalPolicy.DESTROY,  # ✅ CORRECT
+    removal_policy=RemovalPolicy.DESTROY,  # CORRECT
     # ...
 )
 
-# ❌ WRONG:
+# WRONG:
 # removal_policy=RemovalPolicy.RETAIN  # Will block cleanup
 ```
 
@@ -156,12 +156,12 @@ config_role = iam.Role(self, "ConfigRole",
     assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
     managed_policies=[
         iam.ManagedPolicy.from_aws_managed_policy_name(
-            "service-role/AWS_ConfigRole"  # ✅ CORRECT
+            "service-role/AWS_ConfigRole"  # CORRECT
         )
     ]
 )
 
-# ❌ WRONG:
+# WRONG:
 # "service-role/ConfigRole"  # Policy doesn't exist
 # "AWS_ConfigRole"  # Missing service-role/ prefix
 ```
