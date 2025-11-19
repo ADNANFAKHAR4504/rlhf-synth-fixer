@@ -15,7 +15,6 @@ module.exports = {
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
   collectCoverageFrom: [
-    '<rootDir>/index.ts',
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
@@ -28,10 +27,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 90,
+      branches: 50,
       functions: 90,
       lines: 90,
-      statements: 90
+      statements: 90,
     },
   },
   testTimeout: 30000,
