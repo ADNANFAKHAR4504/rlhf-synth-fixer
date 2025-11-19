@@ -118,12 +118,16 @@ resource "aws_route_table_association" "private" {
 ##############################
 
 # KMS key for EMR local disk encryption
-# Using a simple policy that allows root account - IAM policies on roles handle permissions
 resource "aws_kms_key" "emr" {
   description             = "KMS key for EMR local disk encryption (${var.project_name})"
   deletion_window_in_days = var.emr_kms_key_deletion_window_days
   enable_key_rotation     = true
   tags                    = local.common_tags
+
+  depends_on = [
+    aws_iam_role.emr_service_role,
+    aws_iam_role.emr_ec2_role
+  ]
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -135,6 +139,35 @@ resource "aws_kms_key" "emr" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EMR Service Role"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.emr_service_role.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EMR EC2 Role"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.emr_ec2_role.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey"
+        ]
         Resource = "*"
       }
     ]
