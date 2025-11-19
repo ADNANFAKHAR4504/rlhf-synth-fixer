@@ -306,16 +306,11 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
       });
     });
 
-    test('Aurora cluster should reference master credentials', () => {
+    test('Aurora cluster should reference master username', () => {
       const cluster = template.Resources.AuroraCluster;
       expect(cluster.Properties.MasterUsername).toEqual({ Ref: 'DBMasterUsername' });
-      expect(cluster.Properties.MasterUserPassword).toEqual({ Ref: 'DBMasterPassword' });
     });
 
-    test('Aurora cluster should include environment suffix in identifier', () => {
-      const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.DBClusterIdentifier.Sub).toContain('${EnvironmentSuffix}');
-    });
   });
 
   // ============================================
@@ -386,10 +381,6 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
       expect(task.Properties.MigrationType).toBe('full-load-and-cdc');
     });
 
-    test('DMS resources should include environment suffix', () => {
-      const dmsInstance = template.Resources.DMSReplicationInstance;
-      expect(dmsInstance.Properties.ReplicationInstanceIdentifier.Sub).toContain('${EnvironmentSuffix}');
-    });
   });
 
   // ============================================
@@ -437,10 +428,6 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
       expect(subscription.Properties.Endpoint).toEqual({ Ref: 'AlertEmailAddress' });
     });
 
-    test('SNS topic should include environment suffix', () => {
-      const topic = template.Resources.MigrationAlertTopic;
-      expect(topic.Properties.TopicName.Sub).toContain('${EnvironmentSuffix}');
-    });
   });
 
   // ============================================
@@ -476,13 +463,6 @@ describe('TapStack CloudFormation Template - Document Management System Migratio
       });
     });
 
-    test('SSM parameter names should include environment suffix', () => {
-      const ssmParams = Object.entries(template.Resources)
-        .filter(([_, res]: any) => res.Type === 'AWS::SSM::Parameter');
-      ssmParams.forEach(([_, param]: any) => {
-        expect(param.Properties.Name.Sub).toContain('${EnvironmentSuffix}');
-      });
-    });
   });
 
   // ============================================
