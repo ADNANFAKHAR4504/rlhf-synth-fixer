@@ -594,26 +594,54 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
       `vpc-flow-logs-${environmentSuffix}`,
       {
         bucket: `vpc-flow-logs-${environmentSuffix}`,
+        tags: {
+          ...commonTags,
+          Name: `vpc-flow-logs-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Set bucket ACL
+    new aws.s3.BucketAclV2(
+      `flow-logs-bucket-acl-${environmentSuffix}`,
+      {
+        bucket: flowLogsBucket.id,
         acl: 'private',
-        serverSideEncryptionConfiguration: {
-          rule: {
+      },
+      { parent: this }
+    );
+
+    // Configure server-side encryption
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `flow-logs-bucket-encryption-${environmentSuffix}`,
+      {
+        bucket: flowLogsBucket.id,
+        rules: [
+          {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'AES256',
             },
           },
-        },
-        lifecycleRules: [
+        ],
+      },
+      { parent: this }
+    );
+
+    // Configure lifecycle policy
+    new aws.s3.BucketLifecycleConfigurationV2(
+      `flow-logs-bucket-lifecycle-${environmentSuffix}`,
+      {
+        bucket: flowLogsBucket.id,
+        rules: [
           {
-            enabled: true,
+            id: 'expire-logs',
+            status: 'Enabled',
             expiration: {
               days: 7,
             },
           },
         ],
-        tags: {
-          ...commonTags,
-          Name: `vpc-flow-logs-${environmentSuffix}`,
-        },
       },
       { parent: this }
     );
