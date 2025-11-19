@@ -46,12 +46,12 @@ class ApiGatewayStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -60,7 +60,7 @@ class ApiGatewayStack(cdk.Stack):
         # Create CloudWatch Log Group with 7-day retention (Requirement 6)
         log_group = logs.LogGroup(
             self,
-            f"{self.environment}-payment-log-api",
+            f"{environment}-payment-log-api",
             retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
             removal_policy=cdk.RemovalPolicy.DESTROY
         )
@@ -69,11 +69,11 @@ class ApiGatewayStack(cdk.Stack):
         # Instead of multiple separate APIs, create one unified API
         self.api = apigw.RestApi(
             self,
-            f"{self.environment}-payment-api-main",
-            rest_api_name=f"{self.environment}-payment-api-consolidated",
+            f"{environment}-payment-api-main",
+            rest_api_name=f"{environment}-payment-api-consolidated",
             description="Consolidated payment processing API",
             deploy_options=apigw.StageOptions(
-                stage_name=self.environment,
+                stage_name=environment,
                 metrics_enabled=True,
                 logging_level=apigw.MethodLoggingLevel.INFO,
                 data_trace_enabled=True,
@@ -126,12 +126,12 @@ class ApiGatewayStack(cdk.Stack):
             self,
             "ApiUrl",
             value=self.api.url,
-            export_name=f"{self.environment}-payment-api-url"
+            export_name=f"{environment}-payment-api-url"
         )
 
         cdk.CfnOutput(
             self,
             "ApiId",
             value=self.api.rest_api_id,
-            export_name=f"{self.environment}-payment-api-id"
+            export_name=f"{environment}-payment-api-id"
         )

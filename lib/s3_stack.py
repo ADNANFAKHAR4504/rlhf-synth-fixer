@@ -37,12 +37,12 @@ class S3Stack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -51,8 +51,8 @@ class S3Stack(cdk.Stack):
         # Application logs bucket with Glacier transition (Requirement 5)
         self.logs_bucket = s3.Bucket(
             self,
-            f"{self.environment}-payment-bucket-logs",
-            bucket_name=f"{self.environment}-payment-logs-{cdk.Aws.ACCOUNT_ID}",
+            f"{environment}-payment-bucket-logs",
+            bucket_name=f"{environment}-payment-logs-{cdk.Aws.ACCOUNT_ID}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -74,8 +74,8 @@ class S3Stack(cdk.Stack):
         # Transaction audit logs bucket with Glacier transition (Requirement 5)
         self.audit_bucket = s3.Bucket(
             self,
-            f"{self.environment}-payment-bucket-audit",
-            bucket_name=f"{self.environment}-payment-audit-{cdk.Aws.ACCOUNT_ID}",
+            f"{environment}-payment-bucket-audit",
+            bucket_name=f"{environment}-payment-audit-{cdk.Aws.ACCOUNT_ID}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -97,8 +97,8 @@ class S3Stack(cdk.Stack):
         # Access logs bucket with Glacier transition (Requirement 5)
         self.access_logs_bucket = s3.Bucket(
             self,
-            f"{self.environment}-payment-bucket-access",
-            bucket_name=f"{self.environment}-payment-access-logs-{cdk.Aws.ACCOUNT_ID}",
+            f"{environment}-payment-bucket-access",
+            bucket_name=f"{environment}-payment-access-logs-{cdk.Aws.ACCOUNT_ID}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -128,19 +128,19 @@ class S3Stack(cdk.Stack):
             self,
             "LogsBucketName",
             value=self.logs_bucket.bucket_name,
-            export_name=f"{self.environment}-payment-bucket-logs-name"
+            export_name=f"{environment}-payment-bucket-logs-name"
         )
 
         cdk.CfnOutput(
             self,
             "AuditBucketName",
             value=self.audit_bucket.bucket_name,
-            export_name=f"{self.environment}-payment-bucket-audit-name"
+            export_name=f"{environment}-payment-bucket-audit-name"
         )
 
         cdk.CfnOutput(
             self,
             "AccessLogsBucketName",
             value=self.access_logs_bucket.bucket_name,
-            export_name=f"{self.environment}-payment-bucket-access-name"
+            export_name=f"{environment}-payment-bucket-access-name"
         )

@@ -44,12 +44,12 @@ class LambdaStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -58,7 +58,7 @@ class LambdaStack(cdk.Stack):
         # Payment processor Lambda - optimized from 3008MB to 1024MB
         self.payment_processor = _lambda.Function(
             self,
-            f"{self.environment}-payment-lambda-processor",
+            f"{environment}-payment-lambda-processor",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -79,7 +79,7 @@ def handler(event, context):
         # Transaction validator Lambda - optimized from 3008MB to 512MB
         self.transaction_validator = _lambda.Function(
             self,
-            f"{self.environment}-payment-lambda-validator",
+            f"{environment}-payment-lambda-validator",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -100,7 +100,7 @@ def handler(event, context):
         # Fraud detection Lambda - optimized from 3008MB to 1024MB
         self.fraud_detector = _lambda.Function(
             self,
-            f"{self.environment}-payment-lambda-fraud",
+            f"{environment}-payment-lambda-fraud",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -129,19 +129,19 @@ def handler(event, context):
             self,
             "PaymentProcessorArn",
             value=self.payment_processor.function_arn,
-            export_name=f"{self.environment}-payment-lambda-processor-arn"
+            export_name=f"{environment}-payment-lambda-processor-arn"
         )
 
         cdk.CfnOutput(
             self,
             "TransactionValidatorArn",
             value=self.transaction_validator.function_arn,
-            export_name=f"{self.environment}-payment-lambda-validator-arn"
+            export_name=f"{environment}-payment-lambda-validator-arn"
         )
 
         cdk.CfnOutput(
             self,
             "FraudDetectorArn",
             value=self.fraud_detector.function_arn,
-            export_name=f"{self.environment}-payment-lambda-fraud-arn"
+            export_name=f"{environment}-payment-lambda-fraud-arn"
         )

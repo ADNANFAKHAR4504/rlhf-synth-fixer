@@ -43,12 +43,12 @@ class EcsStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -57,15 +57,15 @@ class EcsStack(cdk.Stack):
         # Create ECS cluster
         self.cluster = ecs.Cluster(
             self,
-            f"{self.environment}-payment-cluster-main",
+            f"{environment}-payment-cluster-main",
             vpc=props.vpc,
-            cluster_name=f"{self.environment}-payment-cluster"
+            cluster_name=f"{environment}-payment-cluster"
         )
 
         # Create CloudWatch Log Group with 7-day retention (Requirement 6)
         log_group = logs.LogGroup(
             self,
-            f"{self.environment}-payment-log-ecs",
+            f"{environment}-payment-log-ecs",
             retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
             removal_policy=cdk.RemovalPolicy.DESTROY
         )
@@ -73,7 +73,7 @@ class EcsStack(cdk.Stack):
         # Create Fargate task definition
         task_definition = ecs.FargateTaskDefinition(
             self,
-            f"{self.environment}-payment-task-api",
+            f"{environment}-payment-task-api",
             cpu=256,
             memory_limit_mib=512
         )
@@ -95,7 +95,7 @@ class EcsStack(cdk.Stack):
         # Create Application Load Balancer
         alb = elbv2.ApplicationLoadBalancer(
             self,
-            f"{self.environment}-payment-alb-main",
+            f"{environment}-payment-alb-main",
             vpc=props.vpc,
             internet_facing=True
         )
@@ -103,11 +103,11 @@ class EcsStack(cdk.Stack):
         # Create Fargate service
         service = ecs.FargateService(
             self,
-            f"{self.environment}-payment-service-api",
+            f"{environment}-payment-service-api",
             cluster=self.cluster,
             task_definition=task_definition,
             desired_count=2,
-            service_name=f"{self.environment}-payment-service"
+            service_name=f"{environment}-payment-service"
         )
 
         # Add target group and listener
@@ -155,19 +155,19 @@ class EcsStack(cdk.Stack):
             self,
             "ClusterName",
             value=self.cluster.cluster_name,
-            export_name=f"{self.environment}-payment-cluster-name"
+            export_name=f"{environment}-payment-cluster-name"
         )
 
         cdk.CfnOutput(
             self,
             "ServiceName",
             value=service.service_name,
-            export_name=f"{self.environment}-payment-service-name"
+            export_name=f"{environment}-payment-service-name"
         )
 
         cdk.CfnOutput(
             self,
             "LoadBalancerDns",
             value=alb.load_balancer_dns_name,
-            export_name=f"{self.environment}-payment-alb-dns"
+            export_name=f"{environment}-payment-alb-dns"
         )

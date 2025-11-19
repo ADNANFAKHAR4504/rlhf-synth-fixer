@@ -43,12 +43,12 @@ class CostReportStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -57,7 +57,7 @@ class CostReportStack(cdk.Stack):
         # Cost comparison Lambda function (Requirement 10)
         self.cost_report_function = _lambda.Function(
             self,
-            f"{self.environment}-payment-lambda-costreport",
+            f"{environment}-payment-lambda-costreport",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -159,7 +159,7 @@ def handler(event, context):
         # Schedule cost report generation daily
         rule = events.Rule(
             self,
-            f"{self.environment}-payment-rule-costreport",
+            f"{environment}-payment-rule-costreport",
             schedule=events.Schedule.rate(cdk.Duration.days(1)),
             description="Generate daily cost comparison report"
         )
@@ -175,12 +175,12 @@ def handler(event, context):
             self,
             "CostReportFunctionArn",
             value=self.cost_report_function.function_arn,
-            export_name=f"{self.environment}-payment-lambda-costreport-arn"
+            export_name=f"{environment}-payment-lambda-costreport-arn"
         )
 
         cdk.CfnOutput(
             self,
             "CostReportFunctionName",
             value=self.cost_report_function.function_name,
-            export_name=f"{self.environment}-payment-lambda-costreport-name"
+            export_name=f"{environment}-payment-lambda-costreport-name"
         )

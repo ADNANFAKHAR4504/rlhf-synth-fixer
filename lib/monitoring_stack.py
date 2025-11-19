@@ -57,12 +57,12 @@ class MonitoringStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -71,8 +71,8 @@ class MonitoringStack(cdk.Stack):
         # Create comprehensive cost optimization dashboard (Requirement 9)
         self.dashboard = cloudwatch.Dashboard(
             self,
-            f"{self.environment}-payment-dashboard-cost",
-            dashboard_name=f"{self.environment}-payment-cost-optimization"
+            f"{environment}-payment-dashboard-cost",
+            dashboard_name=f"{environment}-payment-cost-optimization"
         )
 
         # Lambda metrics widget
@@ -208,5 +208,5 @@ class MonitoringStack(cdk.Stack):
             self,
             "DashboardName",
             value=self.dashboard.dashboard_name,
-            export_name=f"{self.environment}-payment-dashboard-name"
+            export_name=f"{environment}-payment-dashboard-name"
         )

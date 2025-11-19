@@ -39,12 +39,12 @@ class VpcStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment = props.environment
+        environment_suffix = props.environment_suffix
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -53,7 +53,7 @@ class VpcStack(cdk.Stack):
         # Create VPC with public and private subnets across 2 AZs
         self.vpc = ec2.Vpc(
             self,
-            f"{self.environment}-payment-vpc-main",
+            f"{environment}-payment-vpc-main",
             ip_addresses=ec2.IpAddresses.cidr(props.cidr),
             max_azs=2,
             # Use NAT Instances for dev to save costs (Requirement 7)
@@ -62,16 +62,16 @@ class VpcStack(cdk.Stack):
                     ec2.InstanceClass.T4G,  # ARM-based Graviton2
                     ec2.InstanceSize.NANO
                 )
-            ) if self.environment == "dev" else ec2.NatProvider.gateway(),
+            ) if environment == "dev" else ec2.NatProvider.gateway(),
             nat_gateways=2,
             subnet_configuration=[
                 ec2.SubnetConfiguration(
-                    name=f"{self.environment}-payment-subnet-public",
+                    name=f"{environment}-payment-subnet-public",
                     subnet_type=ec2.SubnetType.PUBLIC,
                     cidr_mask=24
                 ),
                 ec2.SubnetConfiguration(
-                    name=f"{self.environment}-payment-subnet-private",
+                    name=f"{environment}-payment-subnet-private",
                     subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
                     cidr_mask=24
                 )
@@ -87,5 +87,5 @@ class VpcStack(cdk.Stack):
             self,
             "VpcId",
             value=self.vpc.vpc_id,
-            export_name=f"{self.environment}-payment-vpc-id"
+            export_name=f"{environment}-payment-vpc-id"
         )

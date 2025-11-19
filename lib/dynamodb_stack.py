@@ -37,12 +37,12 @@ class DynamoDBStack(cdk.Stack):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix
-        self.environment = props.environment
+        environment_suffix = props.environment_suffix
+        environment = props.environment
 
         # Cost allocation tags
         tags = {
-            "Environment": self.environment,
+            "Environment": environment,
             "Team": "payments",
             "CostCenter": "engineering",
             "Project": "payment-processing"
@@ -51,7 +51,7 @@ class DynamoDBStack(cdk.Stack):
         # Transactions table - on-demand billing (Requirement 2)
         self.transactions_table = dynamodb.Table(
             self,
-            f"{self.environment}-payment-table-transactions",
+            f"{environment}-payment-table-transactions",
             partition_key=dynamodb.Attribute(
                 name="transactionId",
                 type=dynamodb.AttributeType.STRING
@@ -69,7 +69,7 @@ class DynamoDBStack(cdk.Stack):
         # Users table - on-demand billing (Requirement 2)
         self.users_table = dynamodb.Table(
             self,
-            f"{self.environment}-payment-table-users",
+            f"{environment}-payment-table-users",
             partition_key=dynamodb.Attribute(
                 name="userId",
                 type=dynamodb.AttributeType.STRING
@@ -82,7 +82,7 @@ class DynamoDBStack(cdk.Stack):
         # Payment methods table - on-demand billing (Requirement 2)
         self.payment_methods_table = dynamodb.Table(
             self,
-            f"{self.environment}-payment-table-methods",
+            f"{environment}-payment-table-methods",
             partition_key=dynamodb.Attribute(
                 name="methodId",
                 type=dynamodb.AttributeType.STRING
@@ -107,19 +107,19 @@ class DynamoDBStack(cdk.Stack):
             self,
             "TransactionsTableName",
             value=self.transactions_table.table_name,
-            export_name=f"{self.environment}-payment-table-transactions-name"
+            export_name=f"{environment}-payment-table-transactions-name"
         )
 
         cdk.CfnOutput(
             self,
             "UsersTableName",
             value=self.users_table.table_name,
-            export_name=f"{self.environment}-payment-table-users-name"
+            export_name=f"{environment}-payment-table-users-name"
         )
 
         cdk.CfnOutput(
             self,
             "PaymentMethodsTableName",
             value=self.payment_methods_table.table_name,
-            export_name=f"{self.environment}-payment-table-methods-name"
+            export_name=f"{environment}-payment-table-methods-name"
         )
