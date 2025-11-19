@@ -64,9 +64,44 @@ export class TapStack extends pulumi.ComponentResource {
     const kmsKey = new aws.kms.Key(
       `transaction-kms-${environmentSuffix}`,
       {
-        description: `KMS key for Lambda environment variables - ${environmentSuffix}`,
+        description: `KMS key for Lambda environment variables and CloudWatch Logs - ${environmentSuffix}`,
         deletionWindowInDays: 7,
         enableKeyRotation: true,
+        policy: pulumi.interpolate`{
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root"
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logs.${aws.getRegionOutput().name}.amazonaws.com"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:${aws.getRegionOutput().name}:${aws.getCallerIdentityOutput().accountId}:log-group:*"
+                }
+              }
+            }
+          ]
+        }`,
         tags: tags,
       },
       { parent: this }
