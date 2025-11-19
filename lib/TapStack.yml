@@ -776,11 +776,32 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", "Sum", "Successful Transactions"],
-                  [".", "TransactionFailure", "Sum", "Failed Transactions"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
+                        "metricName": "TransactionSuccess"
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Successful Transactions",
+                    "id": "m1"
+                  },
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
+                        "metricName": "TransactionFailure"
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Failed Transactions",
+                    "id": "m2"
+                  }
                 ],
                 "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Transaction Volume",
                 "yAxis": {
@@ -794,10 +815,20 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", "Average"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
+                        "metricName": "AverageLatency"
+                      },
+                      "period": 300,
+                      "stat": "Average"
+                    },
+                    "label": "Average Latency",
+                    "id": "m1"
+                  }
                 ],
                 "period": 300,
-                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "Average Payment Latency (ms)",
                 "yAxis": {
@@ -819,10 +850,20 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", "Average"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
+                        "metricName": "ErrorRate"
+                      },
+                      "period": 300,
+                      "stat": "Average"
+                    },
+                    "label": "Error Rate",
+                    "id": "m1"
+                  }
                 ],
                 "period": 300,
-                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "Error Rate (%)",
                 "yAxis": {
@@ -845,10 +886,20 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", "Sum"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "PaymentProcessing-${EnvironmentSuffix}",
+                        "metricName": "FraudDetected"
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Fraud Detections",
+                    "id": "m1"
+                  }
                 ],
                 "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Fraud Detections",
                 "yAxis": {
@@ -862,11 +913,44 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", "Sum", "Lambda Invocations", "FunctionName=${MetricsProcessorFunction}"],
-                  [".", "Errors", "Sum", "Lambda Errors", "FunctionName=${MetricsProcessorFunction}"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "AWS/Lambda",
+                        "metricName": "Invocations",
+                        "dimensions": [
+                          {
+                            "name": "FunctionName",
+                            "value": "${MetricsProcessorFunction}"
+                          }
+                        ]
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Lambda Invocations",
+                    "id": "m1"
+                  },
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "AWS/Lambda",
+                        "metricName": "Errors",
+                        "dimensions": [
+                          {
+                            "name": "FunctionName",
+                            "value": "${MetricsProcessorFunction}"
+                          }
+                        ]
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Lambda Errors",
+                    "id": "m2"
+                  }
                 ],
                 "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Lambda Metrics Processor Health"
               }
@@ -875,11 +959,44 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingRecords", "Sum", "", "StreamName=${LogStream}"],
-                  [".", "IncomingBytes", "Sum", "Incoming Bytes", "StreamName=${LogStream}"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "AWS/Kinesis",
+                        "metricName": "IncomingRecords",
+                        "dimensions": [
+                          {
+                            "name": "StreamName",
+                            "value": "${LogStream}"
+                          }
+                        ]
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Incoming Records",
+                    "id": "m1"
+                  },
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "AWS/Kinesis",
+                        "metricName": "IncomingBytes",
+                        "dimensions": [
+                          {
+                            "name": "StreamName",
+                            "value": "${LogStream}"
+                          }
+                        ]
+                      },
+                      "period": 300,
+                      "stat": "Sum"
+                    },
+                    "label": "Incoming Bytes",
+                    "id": "m2"
+                  }
                 ],
                 "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Kinesis Stream Throughput",
                 "yAxis": {
@@ -893,10 +1010,26 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/AOSS", "5xx", "Maximum", "5xx Errors", "CollectionName=${OpenSearchDomain}"]
+                  {
+                    "metricStat": {
+                      "metric": {
+                        "namespace": "AWS/AOSS",
+                        "metricName": "5xx",
+                        "dimensions": [
+                          {
+                            "name": "CollectionName",
+                            "value": "${OpenSearchDomain}"
+                          }
+                        ]
+                      },
+                      "period": 60,
+                      "stat": "Maximum"
+                    },
+                    "label": "5xx Errors",
+                    "id": "m1"
+                  }
                 ],
                 "period": 60,
-                "stat": "Maximum",
                 "region": "${AWS::Region}",
                 "title": "OpenSearch Serverless Errors"
               }
@@ -911,11 +1044,9 @@ Resources:
               }
             }
           ]
-        }
-
-  # ========================================
-  # X-Ray Sampling Rule
-  # ========================================
+        }  # ========================================
+    # X-Ray Sampling Rule
+    # ========================================
 
   XRaySamplingRule:
     Type: AWS::XRay::SamplingRule
