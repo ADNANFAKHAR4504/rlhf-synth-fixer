@@ -127,7 +127,7 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_ecs_service" "app" {
-  name            = "app-service-${var.environment}-${var.environment_suffix}"
+  name            = "app-service-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = var.desired_count
@@ -148,7 +148,7 @@ resource "aws_ecs_service" "app" {
   depends_on = [aws_lb_listener.http]
 
   tags = {
-    Name        = "app-service-${var.environment}-${var.environment_suffix}"
+    Name        = "app-service-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
