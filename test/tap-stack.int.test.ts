@@ -6,34 +6,32 @@
  */
 
 import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand,
-  PutObjectCommand,
-} from '@aws-sdk/client-s3';
+  APIGatewayClient
+} from '@aws-sdk/client-api-gateway';
 import {
-  DynamoDBClient,
+  DescribeContinuousBackupsCommand,
   DescribeTableCommand,
-  GetItemCommand,
+  DescribeTimeToLiveCommand,
+  DynamoDBClient,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
-  LambdaClient,
   GetFunctionCommand,
   GetFunctionConfigurationCommand,
+  LambdaClient,
 } from '@aws-sdk/client-lambda';
 import {
-  SQSClient,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   GetQueueAttributesCommand,
   GetQueueUrlCommand,
+  SQSClient,
 } from '@aws-sdk/client-sqs';
-import {
-  APIGatewayClient,
-  GetRestApiCommand,
-  GetStageCommand,
-  GetUsagePlanCommand,
-} from '@aws-sdk/client-api-gateway';
 
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -99,18 +97,18 @@ describe('Serverless File Processing Pipeline Integration Tests', () => {
     });
 
     it('should have TTL enabled', async () => {
-      const command = new DescribeTableCommand({ TableName: TABLE_NAME });
+      const command = new DescribeTimeToLiveCommand({ TableName: TABLE_NAME });
       const response = await dynamodbClient.send(command);
 
-      expect(response.Table!.TimeToLiveDescription?.TimeToLiveStatus).toMatch(/ENABLED|ENABLING/);
-      expect(response.Table!.TimeToLiveDescription?.AttributeName).toBe('expirationTime');
+      expect(response.TimeToLiveDescription?.TimeToLiveStatus).toMatch(/ENABLED|ENABLING/);
+      expect(response.TimeToLiveDescription?.AttributeName).toBe('expirationTime');
     });
 
     it('should have point-in-time recovery enabled', async () => {
-      const command = new DescribeTableCommand({ TableName: TABLE_NAME });
+      const command = new DescribeContinuousBackupsCommand({ TableName: TABLE_NAME });
       const response = await dynamodbClient.send(command);
 
-      expect(response.Table!.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toMatch(/ENABLED/);
+      expect(response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toMatch(/ENABLED/);
     });
 
     it('should have correct key schema', async () => {
