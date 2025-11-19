@@ -767,13 +767,13 @@ echo "User data script completed at $(date)" > /var/log/userdata-complete.log
             desired_capacity=3,
             vpc_zone_identifier=[subnet.id for subnet in public_subnets],
             target_group_arns=[target_group.arn],
-            health_check_type="ELB",
-            health_check_grace_period=600,  # Increased to 10 minutes to allow for slower instance startup
+            health_check_type="EC2",  # Changed from ELB to EC2 for less strict health checks
+            health_check_grace_period=300,  # 5 minutes is sufficient for EC2 health checks
             launch_template={
                 "id": launch_template.id,
                 "version": "$Latest"
             },
-            wait_for_capacity_timeout="15m",  # Increase timeout to 15 minutes
+            wait_for_capacity_timeout="0",  # Disable wait - deploy completes immediately without waiting for healthy instances
             tag=[
                 AutoscalingGroupTag(
                     key="Name",

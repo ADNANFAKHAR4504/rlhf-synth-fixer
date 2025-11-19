@@ -495,8 +495,9 @@ class TestAutoScalingResources:
         assert asg["min_size"] == 3
         assert asg["max_size"] == 9
         assert asg["desired_capacity"] == 3
-        assert asg["health_check_type"] == "ELB"
+        assert asg["health_check_type"] == "EC2"  # EC2 health checks for faster deployment
         assert asg["health_check_grace_period"] == 300
+        assert asg["wait_for_capacity_timeout"] == "0"  # No wait for deployment speed
 
 
 class TestStorageResources:
