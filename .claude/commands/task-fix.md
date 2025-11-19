@@ -20,19 +20,19 @@ python .claude/scripts/fetch_all_prs.py --assignee mayanksethi-turing --output .
 
 When you run `/task-fix`, the agent will:
 
-1. **Phase 0 - Pre-Execution Validation**: Review documentation, verify scripts, validate readiness
-2. **Phase 1 - PR Selection**: Check availability, atomically select next PR (prevents duplicates)
-3. **Phase 2.0 - Pre-Fix Analysis**: Document root cause, fix plan, and solution approach
-4. **Phase 2.2 - Worktree Setup**: Create isolated worktree, validate location
-5. **Phase 2.4 - Failure Analysis**: Analyze GitHub pipeline failures in detail
-6. **Phase 2.5 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
-7. **Phase 2.5+ - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
-8. **Phase 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
-9. **Phase 2.6.5 - Quality Gates**: Verify all quality gates pass before marking fixed
-10. **Phase 2.7 - Commit & Push**: Commit fixes and push to PR branch
-11. **Phase 2.8 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
-12. **Phase 2.11 - Update Status**: Mark as fixed/failed with detailed progress tracking
-13. **Phase 2.10 - Cleanup**: Remove worktrees after completion
+1. **PHASE 0 - Pre-Execution Validation**: Review documentation, verify scripts, validate readiness
+2. **PHASE 1 - PR Selection**: Check availability, atomically select next PR (prevents duplicates)
+3. **PHASE 2.1 - Pre-Fix Analysis**: Document root cause, fix plan, and solution approach
+4. **PHASE 2.2 - Worktree Setup**: Create isolated worktree, validate location
+5. **PHASE 2.3 - Failure Analysis**: Analyze GitHub pipeline failures in detail
+6. **PHASE 2.4 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
+7. **PHASE 2.5 - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
+8. **PHASE 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
+9. **PHASE 2.7 - Quality Gates**: Verify all quality gates pass before marking fixed
+10. **PHASE 2.8 - Commit & Push**: Commit fixes and push to PR branch
+11. **PHASE 2.9 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
+12. **PHASE 2.10 - Update Status**: Mark as fixed/failed with detailed progress tracking
+13. **PHASE 2.11 - Cleanup**: Remove worktrees after completion
 
 ## Parallel Execution Support
 
@@ -206,7 +206,7 @@ Systematic resource name updates following lessons_learnt.md
 
 The PR fixer agent follows a structured workflow with validation checkpoints and quality gates at each stage:
 
-### Phase 0: Pre-Execution Validation
+### PHASE 0: Pre-Execution Validation
 **Checkpoint PR-A**: Pre-Execution Validation
 - Review required documentation:
   - `lessons_learnt.md` - Common failure patterns and fixes
@@ -221,14 +221,14 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 - **Pass criteria**: All documentation reviewed, all scripts functional
 - **Fail action**: Report BLOCKED, install missing scripts, re-validate
 
-### Phase 1: PR Selection & Analysis
+### PHASE 1: PR Selection & Analysis
 - Check PR availability
 - Atomically select next PR (with locking)
 - Load PR details and failure information
 
-### Phase 2: PR Fixing Process
+### PHASE 2: PR Fixing Process
 
-#### 2.0 Pre-Fix Analysis
+#### 2.1 Pre-Fix Analysis
 **Checkpoint PR-C**: Failure Analysis Completeness
 **Checkpoint PR-D**: Fix Plan Validation
 **Quality Gate 1**: Pre-Fix Analysis Gate
@@ -253,7 +253,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 **Fail action**: Re-analyze, improve documentation, re-validate
 
 #### 2.2 Worktree Setup
-**Checkpoint PR-B**: PR Worktree Validation
+**Checkpoint PR-B**: PR Worktree Validation (PHASE 2.2)
 
 - Create isolated worktree at `worktree/pr-fix-<PR_NUMBER>`
 - Validate worktree location and branch match
@@ -263,14 +263,14 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 **Pass criteria**: Worktree at correct location, branch matches, metadata available
 **Fail action**: Remove worktree, recreate, re-validate
 
-#### 2.4 Failure Analysis
+#### 2.3 Failure Analysis
 - Fetch GitHub pipeline logs
 - Identify specific failed stages
 - Extract error details and error messages
 - Reference lessons_learnt.md for common patterns
 
-#### 2.4.5 Pre-Fix Build Validation (Baseline)
-**Checkpoint PR-D2**: Pre-Fix Build Validation
+#### 2.3 Pre-Fix Build Validation (Baseline)
+**Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3)
 
 - Establish baseline before fixes:
   - Lint baseline (errors/warnings count)
@@ -281,8 +281,8 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 
 **Note**: This is informational only - does not block fixes
 
-#### 2.5 Pre-Deployment Validation
-**Checkpoint PR-E**: Pre-Deployment Validation
+#### 2.4 Pre-Deployment Validation
+**Checkpoint PR-E**: Pre-Deployment Validation (PHASE 2.4)
 **Quality Gate 2**: Pre-Deployment Gate
 
 - Run `.claude/scripts/pre-validate-iac.sh`
@@ -297,7 +297,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 **Pass criteria**: Pre-validation passes OR common errors fixed
 **Fail action**: Fix issues, re-run validation, continue after pass
 
-#### 2.5+ Apply Fixes
+#### 2.5 Apply Fixes
 - Fix each failed stage in order:
   1. Detect Project Files (if metadata.json missing)
   2. Lint (auto-fix, then manual if needed)
@@ -310,7 +310,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 - Reference lessons_learnt.md for common fixes
 
 #### 2.6 Local Validation
-**Checkpoint PR-F**: Post-Fix Validation
+**Checkpoint PR-F**: Post-Fix Validation (PHASE 2.6)
 
 - Run all validations:
   - Lint: Zero errors
@@ -324,7 +324,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 **Pass criteria**: All validations passed, 100% coverage achieved
 **Fail action**: Report BLOCKED, fix failures, re-run validations
 
-#### 2.6.5 Quality Gates
+#### 2.7 Quality Gates
 **Quality Gates 1-5**: All quality gates validation
 
 Run all quality gates systematically:
@@ -339,14 +339,14 @@ Run all quality gates systematically:
 
 **Critical**: Cannot proceed to commit if ANY gate fails
 
-#### 2.7 Commit & Push
+#### 2.8 Commit & Push
 - Commit fixes with descriptive conventional commit message
 - Include fix details, validation results, iteration count
 - Push to PR branch
 - Update status: Changes pushed
 
-#### 2.8 Monitor Pipeline
-**Checkpoint PR-G**: GitHub Pipeline Validation
+#### 2.9 Monitor Pipeline
+**Checkpoint PR-G**: GitHub Pipeline Validation (PHASE 2.9)
 
 - Wait for GitHub Actions to start and complete
 - Monitor all pipeline stages:
@@ -363,12 +363,7 @@ Run all quality gates systematically:
 **Pass criteria**: All GitHub pipeline stages passed
 **Fail action**: If iteration < 5, analyze new failures and iterate; if iteration >= 5, mark as needs-manual-review
 
-#### 2.10 Cleanup
-- Return to main repository
-- Remove worktree: `git worktree remove worktree/pr-fix-<PR_NUMBER> --force`
-- Verify cleanup successful
-
-#### 2.11 Update Status
+#### 2.10 Update Status
 - Mark PR as fixed (if all stages passed) or failed (if max iterations reached)
 - Update status file with:
   - Final status
@@ -378,7 +373,19 @@ Run all quality gates systematically:
 - Add GitHub comment with results
 - Add labels (auto-fixed or needs-manual-review)
 
-### Phase 3: Final Summary
+#### 2.11 Cleanup
+- Remove worktree: `git worktree remove worktree/pr-fix-<PR_NUMBER> --force`
+- Verify cleanup successful
+- Mark PR as fixed (if all stages passed) or failed (if max iterations reached)
+- Update status file with:
+  - Final status
+  - Iterations count
+  - Fix details
+  - Timestamp
+- Add GitHub comment with results
+- Add labels (auto-fixed or needs-manual-review)
+
+### PHASE 3: Final Summary
 - Report summary of all PRs processed
 - Statistics and failure patterns
 - Recommendations
@@ -424,46 +431,46 @@ The agent uses structured validation checkpoints throughout the process to ensur
 
 ### Critical Checkpoints
 
-- **Checkpoint PR-A**: Pre-Execution Validation (Phase 0)
+- **Checkpoint PR-A**: Pre-Execution Validation (PHASE 0)
   - Documentation reviewed (lessons_learnt.md, pre-submission-checklist.md, cicd-file-restrictions.md)
   - Required scripts verified (pr-manager.sh, pr-status.sh, pre-validate-iac.sh)
   - Agent readiness confirmed
 
-- **Checkpoint PR-B**: PR Worktree Validation (Phase 2.2)
+- **Checkpoint PR-B**: PR Worktree Validation (PHASE 2.2)
   - Worktree location verified (worktree/pr-fix-<PR_NUMBER>)
   - Branch matches PR branch
   - Metadata available
 
-- **Checkpoint PR-C**: Failure Analysis Completeness (Phase 2.0)
+- **Checkpoint PR-C**: Failure Analysis Completeness (PHASE 2.1)
   - Root cause documented with evidence
   - Fix plan created with actionable steps
   - Solution approach justified
   - Analysis saved to status file
 
-- **Checkpoint PR-D**: Fix Plan Validation (Phase 2.0)
+- **Checkpoint PR-D**: Fix Plan Validation (PHASE 2.1)
   - Plan has specific file paths and line numbers
   - Plan includes validation steps
   - Plan addresses all failed stages
   - Plan is executable
 
-- **Checkpoint PR-D2**: Pre-Fix Build Validation (Phase 2.4.5)
+- **Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3)
   - Baseline lint status assessed
   - Baseline build status assessed
   - Baseline synth status assessed (if applicable)
   - Baseline documented for comparison
 
-- **Checkpoint PR-E**: Pre-Deployment Validation (Phase 2.5)
+- **Checkpoint PR-E**: Pre-Deployment Validation (PHASE 2.4)
   - Pre-validate-iac.sh executed
   - Common errors fixed (environmentSuffix, Retain policies, DeletionProtection)
   - Ready for deployment attempts
   - **Cost Impact**: Saves 2-3 deployment attempts (~15% token reduction)
 
-- **Checkpoint PR-F**: Post-Fix Validation (Phase 2.6)
+- **Checkpoint PR-F**: Post-Fix Validation (PHASE 2.6)
   - All local validations passed (lint, build, synth, test, deploy)
   - Test coverage: 100% (statements, functions, lines)
   - Ready for quality gates
 
-- **Checkpoint PR-G**: GitHub Pipeline Validation (Phase 2.8)
+- **Checkpoint PR-G**: GitHub Pipeline Validation (PHASE 2.9)
   - All GitHub pipeline stages passed (Detect, Lint, Build, Deploy, Unit Testing, Integration Testing)
   - PR marked as fixed or failed appropriately
   - Status file updated
@@ -480,7 +487,7 @@ Each checkpoint must pass before proceeding to the next phase.
 Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fixes meet production standards and will pass GitHub pipeline.
 
 ### Gate 1: Pre-Fix Analysis Gate
-**When**: After Phase 2.0 (Root Cause Analysis)
+**When**: After PHASE 2.1 (Root Cause Analysis)
 **Requirements**:
 - ✅ Root cause documented with evidence
   - Failure category (Critical/High/Medium/Low)
@@ -500,7 +507,7 @@ Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fi
 **If gate fails**: Report BLOCKED, complete missing analysis, re-validate
 
 ### Gate 2: Pre-Deployment Gate
-**When**: Phase 2.5 (Before any deployment attempt)
+**When**: PHASE 2.4 (Before any deployment attempt)
 **Requirements**:
 - ✅ Pre-deployment validation executed (.claude/scripts/pre-validate-iac.sh)
 - ✅ Common errors fixed:
@@ -516,7 +523,7 @@ Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fi
 **Impact**: Saves 2-3 deployment attempts per PR (~15% cost reduction)
 
 ### Gate 3: File Location Compliance Gate
-**When**: Phase 2.6.5 (Before commit)
+**When**: PHASE 2.7 (Before commit)
 **Requirements**:
 - ✅ All files in allowed directories:
   - Infrastructure code: `lib/`
@@ -540,7 +547,7 @@ Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fi
 **Reference**: `.claude/docs/references/cicd-file-restrictions.md`
 
 ### Gate 4: Pre-Submission Check Gate (Optional)
-**When**: Phase 2.6.5 (Before commit)
+**When**: PHASE 2.7 (Before commit)
 **Requirements**:
 - ✅ Pre-submission check script exists and passes
 - ✅ All checks from pre-submission-checklist.md validated
@@ -552,7 +559,7 @@ Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fi
 **Reference**: `.claude/docs/references/pre-submission-checklist.md`
 
 ### Gate 5: Post-Fix Local Validation Gate
-**When**: Phase 2.6 (After all fixes applied)
+**When**: PHASE 2.6 (After all fixes applied)
 **Requirements**:
 - ✅ Lint: Zero errors
 - ✅ Build: Successful compilation
@@ -582,7 +589,7 @@ If ANY gate fails, the agent will:
 
 ### Quality Gate Validation Script
 
-The agent runs all quality gates systematically in Phase 2.6.5 before committing changes. See `.claude/agents/iac-synth-trainer.md` Phase 2.6.5 for the complete validation script.
+The agent runs all quality gates systematically in PHASE 2.7 before committing changes. See `.claude/agents/iac-synth-trainer.md` PHASE 2.7 for the complete validation script.
 
 ### Cost Optimization Impact
 
@@ -595,7 +602,7 @@ The agent runs all quality gates systematically in Phase 2.6.5 before committing
 
 ### References
 
-- **Quality Gate Details**: `.claude/agents/iac-synth-trainer.md` Phase 2.6.5
+- **Quality Gate Details**: `.claude/agents/iac-synth-trainer.md` PHASE 2.7
 - **Checkpoint Details**: `.claude/docs/references/pr-fix-checkpoints.md`
 - **File Restrictions**: `.claude/docs/references/cicd-file-restrictions.md`
 - **Pre-Submission Checklist**: `.claude/docs/references/pre-submission-checklist.md`

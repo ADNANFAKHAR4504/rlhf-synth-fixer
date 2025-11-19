@@ -158,7 +158,7 @@ Use commands from `package.json` and `Pipfile` per platform/language.
 
 **Validation**: Run Checkpoint G: Build Quality Gate
 - See `docs/references/validation-checkpoints.md` for commands
-- See `docs/guides/validation_and_testing_guide.md` Phase 2 for platform-specific commands
+- See `docs/guides/validation_and_testing_guide.md` PHASE 2 for platform-specific commands
 
 **CHECKPOINT**: All three (lint, build, synth) must pass before proceeding.
 
@@ -166,7 +166,7 @@ If ANY fails:
 - STOP and fix issues
 - Report blocking status if unable to resolve
 - Do NOT proceed to deployment
-- Reference `docs/guides/validation_and_testing_guide.md` Phase 2 for common fixes
+- Reference `docs/guides/validation_and_testing_guide.md` PHASE 2 for common fixes
 
 ### 2.5. Pre-Deployment Validation
 
@@ -336,7 +336,7 @@ Use existing test/ or tests/ folder structure (create new files if needed).
 
 **Validation**: Run Checkpoint H: Test Coverage
 - See `docs/references/validation-checkpoints.md` for coverage validation
-- See `docs/guides/validation_and_testing_guide.md` Phase 3 for platform-specific patterns
+- See `docs/guides/validation_and_testing_guide.md` PHASE 3 for platform-specific patterns
 
 **Coverage Validation**:
 ```bash
@@ -373,7 +373,7 @@ Use existing test/ or tests/ folder structure.
 
 **Validation**: Run Checkpoint I: Integration Test Quality
 - See `docs/references/validation-checkpoints.md` for quality checks
-- See `docs/guides/validation_and_testing_guide.md` Phase 5 for patterns and examples
+- See `docs/guides/validation_and_testing_guide.md` PHASE 5 for patterns and examples
 
 **Test Location**:
 ```bash

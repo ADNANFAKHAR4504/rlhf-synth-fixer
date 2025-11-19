@@ -5,7 +5,7 @@ Standardized validation checkpoints used across all phases. Reference by name to
 ## Checkpoint A: Metadata Completeness
 
 **When**: Before any code generation or processing
-**Who**: task-coordinator (Phase 1.5), iac-infra-generator (Phase 0)
+**Who**: task-coordinator (PHASE 1.2), iac-infra-generator (PHASE 0)
 
 **Validation**:
 ```bash
@@ -22,7 +22,7 @@ jq -e '.platform, .language, .complexity, .turn_type, .po_id, .team, .subtask, .
 ## Checkpoint B: Platform-Language Compatibility
 
 **When**: After metadata validation, before code generation
-**Who**: task-coordinator (Phase 1.5), iac-infra-generator (Phase 0)
+**Who**: task-coordinator (PHASE 1.2), iac-infra-generator (PHASE 0)
 
 **Validation**:
 ```bash
@@ -43,7 +43,7 @@ bash ./.claude/scripts/validate-platform-lang.sh "$PLATFORM" "$LANGUAGE"
 ## Checkpoint C: Template Structure
 
 **When**: After worktree setup, before code generation
-**Who**: task-coordinator (Phase 1.5)
+**Who**: task-coordinator (PHASE 1.2)
 
 **Validation**:
 ```bash
@@ -61,7 +61,7 @@ test -d lib/ && test -d test/
 ## Checkpoint D: PROMPT.md Style Validation
 
 **When**: After PROMPT.md generation, before MODEL_RESPONSE
-**Who**: iac-infra-generator (Phase 2.5)
+**Who**: iac-infra-generator (PHASE 2.5)
 
 **Validation**:
 ```bash
@@ -84,7 +84,7 @@ grep -E '\*\*.*\swith\s.*\*\*' lib/PROMPT.md
 ## Checkpoint E: Platform Code Compliance
 
 **When**: After IDEAL_RESPONSE generation, before reporting ready
-**Who**: iac-code-reviewer (Phase 1.5), iac-infra-qa-trainer (Section 1)
+**Who**: iac-code-reviewer (PHASE 1.1), iac-infra-qa-trainer (Section 1)
 
 **Validation**:
 ```bash
@@ -162,7 +162,7 @@ npm run synth     # if applicable (CDK, Pulumi, CDKTF)
 
 **Pass criteria**: All three commands exit with code 0
 **Fail action**: Fix all errors before proceeding, do NOT attempt deployment
-**Reference**: validation_and_testing_guide.md Phase 2
+**Reference**: validation_and_testing_guide.md PHASE 2
 
 ---
 
@@ -189,7 +189,7 @@ test "$LINE_COV" -eq 100
 
 **Pass criteria**: 100% statement, function, and line coverage - all tests pass
 **Fail action**: Add tests until coverage reaches 100%
-**Reference**: validation_and_testing_guide.md Phase 3, pre-submission-checklist.md Section 5
+**Reference**: validation_and_testing_guide.md PHASE 3, pre-submission-checklist.md Section 5
 
 ---
 
@@ -213,14 +213,14 @@ npm run test:integration
 
 **Pass criteria**: Tests use cfn-outputs, no mocking, all tests pass
 **Fail action**: Rewrite tests to use live outputs
-**Reference**: validation_and_testing_guide.md Phase 5
+**Reference**: validation_and_testing_guide.md PHASE 5
 
 ---
 
 ## Checkpoint J: Training Quality Threshold
 
 **When**: Before PR creation
-**Who**: iac-code-reviewer (Phase 4), task-coordinator (Phase 5)
+**Who**: iac-code-reviewer (PHASE 4), task-coordinator (PHASE 5)
 
 **Validation**:
 ```bash
@@ -239,8 +239,8 @@ test "$TRAINING_QUALITY" -ge 8
 
 ## Checkpoint K: File Location Compliance
 
-**When**: Before PR creation (after code-reviewer, before task-coordinator Phase 5)
-**Who**: iac-code-reviewer (Phase 1.5 Step 9), task-coordinator (Phase 5)
+**When**: Before PR creation (after code-reviewer, before task-coordinator PHASE 5)
+**Who**: iac-code-reviewer (PHASE 1.1 Step 9), task-coordinator (PHASE 5)
 
 **Validation**:
 ```bash
@@ -295,7 +295,7 @@ git diff --name-only origin/main...HEAD
 ## Checkpoint L: PR Prerequisites
 
 **When**: Before PR creation
-**Who**: task-coordinator (Phase 5)
+**Who**: task-coordinator (PHASE 5)
 
 **Validation**:
 ```bash
