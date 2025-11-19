@@ -41,6 +41,16 @@ pulumi.runtime.setMocks({
 // Import infrastructure after mocks are set
 import TapStack from '../lib/tap-stack';
 
+// Helper function to convert Pulumi Output to Promise
+function outputToPromise<T>(output: pulumi.Output<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    output.apply(value => {
+      resolve(value);
+      return value;
+    });
+  });
+}
+
 describe('Infrastructure Unit Tests', () => {
   let stack: TapStack;
 
@@ -51,7 +61,7 @@ describe('Infrastructure Unit Tests', () => {
 
   describe('Stack Outputs', () => {
     it('should export apiGatewayUrl', async () => {
-      const url = await stack.apiGatewayUrl.promise();
+      const url = await outputToPromise(stack.apiGatewayUrl);
       expect(url).toBeDefined();
       expect(url).toContain('execute-api');
       expect(url).toContain('us-east-1');
@@ -60,13 +70,13 @@ describe('Infrastructure Unit Tests', () => {
     });
 
     it('should export s3BucketName', async () => {
-      const bucketName = await stack.s3BucketName.promise();
+      const bucketName = await outputToPromise(stack.s3BucketName);
       expect(bucketName).toBeDefined();
       expect(bucketName).toContain('market-data-');
     });
 
     it('should export dynamodbTableArn', async () => {
-      const tableArn = await stack.dynamodbTableArn.promise();
+      const tableArn = await outputToPromise(stack.dynamodbTableArn);
       expect(tableArn).toBeDefined();
       expect(tableArn).toContain('arn:aws:dynamodb');
       expect(tableArn).toContain('MarketDataState');
@@ -87,23 +97,23 @@ describe('Infrastructure Unit Tests', () => {
 
   describe('Resource Naming Convention', () => {
     it('should use environmentSuffix in bucket names', async () => {
-      const bucketName = await stack.s3BucketName.promise();
+      const bucketName = await outputToPromise(stack.s3BucketName);
       expect(bucketName).toMatch(/market-data-/);
     });
 
     it('should include environment suffix in table ARN', async () => {
-      const tableArn = await stack.dynamodbTableArn.promise();
+      const tableArn = await outputToPromise(stack.dynamodbTableArn);
       expect(tableArn).toMatch(/MarketDataState-/);
     });
 
     it('should include correct region in API Gateway URL', async () => {
-      const url = await stack.apiGatewayUrl.promise();
+      const url = await outputToPromise(stack.apiGatewayUrl);
       expect(url).toContain('us-east-1');
     });
 
     it('should use consistent naming pattern', async () => {
-      const bucketName = await stack.s3BucketName.promise();
-      const tableArn = await stack.dynamodbTableArn.promise();
+      const bucketName = await outputToPromise(stack.s3BucketName);
+      const tableArn = await outputToPromise(stack.dynamodbTableArn);
 
       expect(bucketName).toBeDefined();
       expect(tableArn).toBeDefined();
@@ -112,7 +122,7 @@ describe('Infrastructure Unit Tests', () => {
 
   describe('Infrastructure Configuration', () => {
     it('should configure resources with correct region', async () => {
-      const url = await stack.apiGatewayUrl.promise();
+      const url = await outputToPromise(stack.apiGatewayUrl);
       expect(url).toContain('us-east-1');
     });
 
