@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.test.js'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
@@ -18,6 +18,9 @@ module.exports = {
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
+    '<rootDir>/lib/**/*.json',
+    '!<rootDir>/lib/metadata.json',
+    '!<rootDir>/lib/**/*.md',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
