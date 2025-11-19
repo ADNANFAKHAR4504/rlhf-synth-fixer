@@ -416,6 +416,7 @@ class TapStack(pulumi.ComponentResource):
             f"validator-logs-{self.environment_suffix}",
             name=f"/aws/lambda/transaction-validator-{self.environment_suffix}",
             retention_in_days=30,
+            kms_key_id=kms_key.arn,  # Add KMS encryption
             tags={
                 "Name": f"validator-logs-{self.environment_suffix}"
             },
@@ -426,6 +427,7 @@ class TapStack(pulumi.ComponentResource):
             f"fraud-detector-logs-{self.environment_suffix}",
             name=f"/aws/lambda/fraud-detector-{self.environment_suffix}",
             retention_in_days=30,
+            kms_key_id=kms_key.arn,  # Add KMS encryption
             tags={
                 "Name": f"fraud-detector-logs-{self.environment_suffix}"
             },
@@ -436,6 +438,7 @@ class TapStack(pulumi.ComponentResource):
             f"failed-handler-logs-{self.environment_suffix}",
             name=f"/aws/lambda/failed-transaction-handler-{self.environment_suffix}",
             retention_in_days=30,
+            kms_key_id=kms_key.arn,  # Add KMS encryption
             tags={
                 "Name": f"failed-handler-logs-{self.environment_suffix}"
             },
