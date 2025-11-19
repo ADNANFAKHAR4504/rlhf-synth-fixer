@@ -1,5 +1,5 @@
 environment             = "staging"
-pr_number               = "staging"
+pr_number               = "pr6892"
 aws_region              = "ca-central-1"
 vpc_cidr                = "10.1.0.0/16"
 db_instance_class       = "db.t3.small"
