@@ -23,13 +23,6 @@ variable "db_username" {
   default     = "admin"
 }
 
-variable "db_password" {
-  description = "Password for the RDS database"
-  type        = string
-  sensitive   = true
-  default     = "TempPassword123!"
-}
-
 variable "db_name" {
   description = "Name of the database to create"
   type        = string

@@ -144,7 +144,7 @@ resource "aws_iam_role_policy" "ec2_secrets_access" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          "arn:aws:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:*"
+          "${aws_secretsmanager_secret.db_credentials.arn}*"
         ]
       }
     ]

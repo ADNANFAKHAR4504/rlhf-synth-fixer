@@ -1,3 +1,11 @@
+# Generate random password for RDS
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+  # Exclude characters that might cause issues in connection strings
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
 # AWS Secrets Manager for secure credential storage
 resource "aws_secretsmanager_secret" "db_credentials" {
   name                    = "rds-credentials-${local.secret_suffix}-${var.resource_suffix}"
@@ -9,7 +17,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = var.db_username
-    password = var.db_password
+    password = random_password.db_password.result
   })
 }
 
@@ -58,7 +66,7 @@ resource "aws_db_instance" "default" {
   instance_class          = var.db_instance_class
   db_name                 = var.db_name
   username                = var.db_username
-  password                = var.db_password
+  password                = random_password.db_password.result
   parameter_group_name    = "default.mysql8.0"
   db_subnet_group_name    = aws_db_subnet_group.default.name
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]

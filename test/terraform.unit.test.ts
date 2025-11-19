@@ -48,6 +48,8 @@ describe("Terraform lib/ .tf unit tests", () => {
       contains(mainTf, "required_providers {");
       contains(mainTf, "source  = \"hashicorp/aws\"");
       contains(mainTf, "version = \"~> 4.0\"");
+      contains(mainTf, "source  = \"hashicorp/random\"");
+      contains(mainTf, "version = \"~> 3.0\"");
     });
 
     test("should have S3 backend configuration uncommented", () => {
@@ -76,7 +78,6 @@ describe("Terraform lib/ .tf unit tests", () => {
       contains(variablesTf, "variable \"ssh_cidr_blocks\" {");
       contains(variablesTf, "variable \"ssh_public_key\" {");
       contains(variablesTf, "variable \"db_username\" {");
-      contains(variablesTf, "variable \"db_password\" {");
       contains(variablesTf, "variable \"db_name\" {");
       contains(variablesTf, "variable \"db_instance_class\" {");
       contains(variablesTf, "variable \"ec2_instance_type\" {");
@@ -85,17 +86,16 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should have proper variable types", () => {
       contains(variablesTf, "type        = string");
       contains(variablesTf, "type        = list(string)");
-      expect(variablesTf.match(/type\s+=\s+string/g)?.length).toBeGreaterThanOrEqual(6);
+      expect(variablesTf.match(/type\s+=\s+string/g)?.length).toBeGreaterThanOrEqual(5);
       expect(variablesTf.match(/type\s+=\s+list\(string\)/g)?.length).toBeGreaterThanOrEqual(1);
     });
 
     test("should mark sensitive variables as sensitive", () => {
       expect(variablesTf).toMatch(/variable "db_username"[\s\S]*?sensitive\s+=\s+true/);
-      expect(variablesTf).toMatch(/variable "db_password"[\s\S]*?sensitive\s+=\s+true/);
     });
 
     test("should have descriptions for all variables", () => {
-      expect(variablesTf.match(/description\s+=\s+"/g)?.length).toBeGreaterThanOrEqual(8);
+      expect(variablesTf.match(/description\s+=\s+"/g)?.length).toBeGreaterThanOrEqual(7);
     });
   });
 
@@ -249,7 +249,7 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should have Secrets Manager policy with correct permissions", () => {
       expect(ec2Tf).toMatch(/"secretsmanager:GetSecretValue"/);
       expect(ec2Tf).toMatch(/"secretsmanager:DescribeSecret"/);
-      expect(ec2Tf).toMatch(/data\.aws_caller_identity\.current\.account_id/);
+      expect(ec2Tf).toMatch(/aws_secretsmanager_secret\.db_credentials\.arn/);
     });
 
     test("should create IAM instance profile", () => {
@@ -277,6 +277,13 @@ describe("Terraform lib/ .tf unit tests", () => {
   });
 
   describe("rds.tf database validation", () => {
+    test("should create random password resource for RDS", () => {
+      contains(rdsTf, "resource \"random_password\" \"db_password\" {");
+      contains(rdsTf, "length  = 16");
+      contains(rdsTf, "special = true");
+      expect(rdsTf).toMatch(/override_special\s*=/);
+    });
+
     test("should create Secrets Manager secret for RDS credentials", () => {
       contains(rdsTf, "resource \"aws_secretsmanager_secret\" \"db_credentials\" {");
       contains(rdsTf, "name                    = \"rds-credentials-${local.secret_suffix}-${var.resource_suffix}\"");
@@ -289,7 +296,7 @@ describe("Terraform lib/ .tf unit tests", () => {
       contains(rdsTf, "secret_id = aws_secretsmanager_secret.db_credentials.id");
       expect(rdsTf).toMatch(/secret_string\s*=\s*jsonencode/);
       expect(rdsTf).toMatch(/username\s*=\s*var\.db_username/);
-      expect(rdsTf).toMatch(/password\s*=\s*var\.db_password/);
+      expect(rdsTf).toMatch(/password\s*=\s*random_password\.db_password\.result/);
     });
 
     test("should create MySQL database with proper configuration", () => {
@@ -353,7 +360,7 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should have proper RDS configuration", () => {
       contains(rdsTf, "instance_class          = var.db_instance_class");
       contains(rdsTf, "username                = var.db_username");
-      contains(rdsTf, "password                = var.db_password");
+      contains(rdsTf, "password                = random_password.db_password.result");
       contains(rdsTf, "db_name                 = var.db_name");
       contains(rdsTf, "db_subnet_group_name    = aws_db_subnet_group.default.name");
       contains(rdsTf, "vpc_security_group_ids  = [aws_security_group.rds_sg.id]");
@@ -457,8 +464,8 @@ describe("Terraform lib/ .tf unit tests", () => {
       expect(tfAll).not.toMatch(/secret\s*=\s*"[^$]/);
     });
 
-    test("should use variable references for sensitive data", () => {
-      expect(tfAll).toMatch(/password\s*=\s*var\.db_password/);
+    test("should use secure password generation and variable references for sensitive data", () => {
+      expect(tfAll).toMatch(/password\s*=\s*random_password\.db_password\.result/);
       expect(tfAll).toMatch(/username\s*=\s*var\.db_username/);
     });
 
