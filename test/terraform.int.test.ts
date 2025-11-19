@@ -13,6 +13,7 @@ import {
   EC2Client,
 } from "@aws-sdk/client-ec2";
 import {
+  GetRoleCommand,
   GetRolePolicyCommand,
   IAMClient,
   ListAttachedRolePoliciesCommand,
@@ -330,21 +331,24 @@ describe("Foundational Infrastructure - Live Traffic Tests", () => {
 
   describe("IAM Roles and Policies", () => {
     test("EC2 IAM role should exist with correct assume role policy", async () => {
-      const listRolesResponse = await iamClient.send(new ListRolesCommand({}));
+      const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: "ec2-ssm-role-dev" }));
 
-      // Find the role dynamically by matching pattern instead of hardcoding environment suffix
-      const role = listRolesResponse.Roles?.find((r) => r.RoleName?.startsWith("ec2-ssm-role-"));
+      expect(roleResponse.Role).toBeDefined();
+      const role = roleResponse.Role!;
 
-      expect(role).toBeDefined();
-      expect(role?.RoleName).toBeDefined();
+      expect(role.RoleName).toBe("ec2-ssm-role-dev");
 
       // Decode the assume role policy document
-      const policyDoc = decodeURIComponent(role?.AssumeRolePolicyDocument || "");
-      expect(policyDoc).toContain("ec2.amazonaws.com");
+      const assumeRolePolicy = JSON.parse(decodeURIComponent(role.AssumeRolePolicyDocument!));
+
+      expect(assumeRolePolicy.Version).toBe("2012-10-17");
+      expect(assumeRolePolicy.Statement[0].Effect).toBe("Allow");
+      expect(assumeRolePolicy.Statement[0].Action).toBe("sts:AssumeRole");
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe("ec2.amazonaws.com");
 
       // Verify the role has the expected managed policy attached
       const attachedPolicies = await iamClient.send(
-        new ListAttachedRolePoliciesCommand({ RoleName: role!.RoleName })
+        new ListAttachedRolePoliciesCommand({ RoleName: role.RoleName })
       );
 
       const ssmPolicy = attachedPolicies.AttachedPolicies?.find(
@@ -354,46 +358,45 @@ describe("Foundational Infrastructure - Live Traffic Tests", () => {
     });
 
     test("EC2 IAM role should have S3 access policy for terraform state bucket", async () => {
-      const listRolesResponse = await iamClient.send(new ListRolesCommand({}));
-      const role = listRolesResponse.Roles?.find((r) => r.RoleName?.startsWith("ec2-ssm-role-"));
-      expect(role).toBeDefined();
+      const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: "ec2-ssm-role-dev" }));
+
+      expect(roleResponse.Role).toBeDefined();
 
       const inlinePolicies = await iamClient.send(
-        new ListRolePoliciesCommand({ RoleName: role!.RoleName })
+        new ListRolePoliciesCommand({ RoleName: "ec2-ssm-role-dev" })
       );
 
-      const s3Policy = inlinePolicies.PolicyNames?.find((p) => p.includes("s3-access"));
-      expect(s3Policy).toBeDefined();
+      expect(inlinePolicies.PolicyNames).toContain("ec2-ssm-s3-access-dev");
 
       const policyDoc = await iamClient.send(
-        new GetRolePolicyCommand({ RoleName: role!.RoleName, PolicyName: s3Policy! })
+        new GetRolePolicyCommand({ RoleName: "ec2-ssm-role-dev", PolicyName: "ec2-ssm-s3-access-dev" })
       );
 
-      const policyJson = JSON.parse(decodeURIComponent(policyDoc.PolicyDocument || ""));
+      const policyJson = JSON.parse(decodeURIComponent(policyDoc.PolicyDocument!));
       const s3Actions = policyJson.Statement[0].Action;
 
       expect(s3Actions).toContain("s3:PutObject");
       expect(s3Actions).toContain("s3:GetObject");
       expect(s3Actions).toContain("s3:ListBucket");
+      expect(policyJson.Statement[0].Resource).toContain(outputs.s3_bucket_name);
     });
 
     test("EC2 IAM role should have Secrets Manager access policy", async () => {
-      const listRolesResponse = await iamClient.send(new ListRolesCommand({}));
-      const role = listRolesResponse.Roles?.find((r) => r.RoleName?.startsWith("ec2-ssm-role-"));
-      expect(role).toBeDefined();
+      const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: "ec2-ssm-role-dev" }));
+
+      expect(roleResponse.Role).toBeDefined();
 
       const inlinePolicies = await iamClient.send(
-        new ListRolePoliciesCommand({ RoleName: role!.RoleName })
+        new ListRolePoliciesCommand({ RoleName: "ec2-ssm-role-dev" })
       );
 
-      const secretsPolicy = inlinePolicies.PolicyNames?.find((p) => p.includes("secrets-access"));
-      expect(secretsPolicy).toBeDefined();
+      expect(inlinePolicies.PolicyNames).toContain("ec2-ssm-secrets-access-dev");
 
       const policyDoc = await iamClient.send(
-        new GetRolePolicyCommand({ RoleName: role!.RoleName, PolicyName: secretsPolicy! })
+        new GetRolePolicyCommand({ RoleName: "ec2-ssm-role-dev", PolicyName: "ec2-ssm-secrets-access-dev" })
       );
 
-      const policyJson = JSON.parse(decodeURIComponent(policyDoc.PolicyDocument || ""));
+      const policyJson = JSON.parse(decodeURIComponent(policyDoc.PolicyDocument!));
       const secretsActions = policyJson.Statement[0].Action;
 
       expect(secretsActions).toContain("secretsmanager:GetSecretValue");
@@ -522,8 +525,7 @@ sudo yum clean all 2>/dev/null || true
 set -e
 
 # Install Node.js from Amazon Linux Extras (provides both nodejs and npm)
-sudo amazon-linux-extras install -y epel 2>/dev/null || true
-sudo amazon-linux-extras install -y nodejs14 || sudo yum install -y nodejs npm
+sudo amazon-linux-extras install -y nodejs
 sudo yum install -y mariadb git awscli python3 || true
 
 # Create application directory
