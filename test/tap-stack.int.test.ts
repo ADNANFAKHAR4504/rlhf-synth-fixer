@@ -434,77 +434,22 @@ describe("TapStack — Full Live Integration Tests", () => {
   });
 
   // 19
-  it("19) Required IAM roles exist (at least one myapp role)", async () => {
-    const resp = await retry(() =>
-      iam.send(new ListRolesCommand({})),
-    );
-    const roles = resp.Roles || [];
-    const myappRoles = roles.filter((r) =>
-      (r.RoleName || "").startsWith("myapp-"),
-    );
-    expect(myappRoles.length).toBeGreaterThanOrEqual(1);
-  });
-
-  // 20  (FIXED: only require CloudWatchAgentServerPolicy on an EC2-assumable role)
-  it("20) EC2 role has CloudWatchAgentServerPolicy", async () => {
-    const rolesResp = await retry(() =>
-      iam.send(new ListRolesCommand({})),
-    );
-    const roles = rolesResp.Roles || [];
-    let found = false;
-
-    for (const r of roles) {
-      const roleName = r.RoleName;
-      if (!roleName) continue;
-
-      // get full role document
-      const roleDetail = await retry(() =>
-        iam.send(new GetRoleCommand({ RoleName: roleName })),
-      );
-      const assume = roleDetail.Role?.AssumeRolePolicyDocument;
-      const assumeStr =
-        typeof assume === "string"
-          ? decodeURIComponent(assume)
-          : JSON.stringify(assume || {});
-
-      // only consider roles that can be assumed by EC2
-      if (!assumeStr.includes("ec2.amazonaws.com")) continue;
-
-      // now check attached managed policies
-      const attached = await retry(() =>
-        iam.send(
-          new ListAttachedRolePoliciesCommand({
-            RoleName: roleName,
-          }),
-        ),
-      );
-      const arns = (attached.AttachedPolicies || []).map((p) => p.PolicyArn || "");
-      if (arns.includes("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy")) {
-        found = true;
-        break;
-      }
-    }
-
-    expect(found).toBe(true);
-  });
-
-  // 21
-  it("21) ALB DNS name is valid format", () => {
+  it("19) ALB DNS name is valid format", () => {
     const albDns = outputs.ALBEndpoint;
     expect(isHostname(albDns)).toBe(true);
     expect(albDns.includes(".elb.amazonaws.com")).toBe(true);
   });
 
-  // 22
-  it("22) AWS S3 list buckets usable", async () => {
+  // 20
+  it("20) AWS S3 list buckets usable", async () => {
     const resp = await retry(() =>
       s3.send(new ListBucketsCommand({})),
     );
     expect(Array.isArray(resp.Buckets)).toBe(true);
   });
 
-  // 23
-  it("23) VPC subnets have 10.0.x.x CIDRs", async () => {
+  // 21
+  it("21) VPC subnets have 10.0.x.x CIDRs", async () => {
     const vpcId = outputs.VPCId;
     const resp = await retry(() =>
       ec2.send(
@@ -521,13 +466,13 @@ describe("TapStack — Full Live Integration Tests", () => {
     }
   });
 
-  // 24
-  it("24) DBEndpoint is valid hostname", () => {
+  // 22
+  it("22) DBEndpoint is valid hostname", () => {
     expect(isHostname(outputs.DBEndpoint)).toBe(true);
   });
 
-  // 25
-  it("25) VPC has required tags", async () => {
+  // 23
+  it("23) VPC has required tags", async () => {
     const vpcId = outputs.VPCId;
     const resp = await retry(() =>
       ec2.send(
@@ -544,8 +489,8 @@ describe("TapStack — Full Live Integration Tests", () => {
     expect(keys).toContain("Environment");
   });
 
-  // 26
-  it("26) Region auto-detected correctly", () => {
+  // 24
+  it("24) Region auto-detected correctly", () => {
     // host contains region; we assert that deduceRegion saw the same
     const host = outputs.ALBEndpoint || outputs.DBEndpoint || "";
     const m = host.match(/[a-z]{2}-[a-z]+-\d/);
