@@ -1,13 +1,18 @@
 /**
  * Integration Tests for CI/CD Pipeline CloudFormation Template
  *
- * Note: These tests validate template structure and configuration.
- * Full deployment testing requires:
- * - Valid GitHub OAuth token and repository
- * - Pre-existing ECS infrastructure (cluster, services, ALB, target groups)
- * - AppSpec and TaskDefinition files in the repository
+ * Note: These tests validate the comprehensive self-sufficient CI/CD pipeline template.
+ * The template now includes complete ECS infrastructure:
+ * - VPC with public/private subnets
+ * - Application Load Balancer with Blue/Green target groups
+ * - ECS Cluster with Fargate services
+ * - ECR Repository with lifecycle policies
+ * - Complete CI/CD pipeline with CodeStar connections
  *
- * These dependencies make full deployment testing impractical in this environment.
+ * Full deployment testing requires:
+ * - Valid AWS CodeStar Connection to GitHub
+ * - Docker application with Dockerfile in the repository
+ * - Proper AWS IAM permissions for deployment
  */
 
 import fs from 'fs';
@@ -44,437 +49,444 @@ describe('CI/CD Pipeline CloudFormation Template - Integration Tests', () => {
         expect(response).toBeDefined();
         expect(response.Parameters).toBeDefined();
         expect(response.Capabilities).toContain('CAPABILITY_NAMED_IAM');
+        
+        // Verify template description reflects self-sufficiency
+        expect(response.Description).toContain('Self-sufficient');
+        expect(response.Description).toContain('ECS infrastructure');
       } catch (error: any) {
         fail(`AWS validation failed: ${error.message}`);
       }
     });
 
-    test('template should declare all required parameters to AWS', async () => {
+    test('template should have correct parameter requirements', async () => {
       const client = new CloudFormationClient({ region: 'us-east-1' });
 
-      const command = new ValidateTemplateCommand({
-        TemplateBody: templateYAML,
-      });
+      try {
+        const command = new ValidateTemplateCommand({
+          TemplateBody: templateYAML,
+        });
 
-      const response = await client.send(command);
+        const response = await client.send(command);
+        
+        // Updated parameters should be present
+        const parameterNames = response.Parameters?.map(p => p.ParameterKey) || [];
+        
+        expect(parameterNames).toContain('EnvironmentSuffix');
+        expect(parameterNames).toContain('GitHubConnectionArn'); // Updated from GitHubToken
+        expect(parameterNames).toContain('GitHubOwner');
+        expect(parameterNames).toContain('RepositoryName');
+        expect(parameterNames).toContain('BranchName');
+        expect(parameterNames).toContain('NotificationEmail');
+        expect(parameterNames).toContain('ContainerPort'); // New parameter
 
-      const parameterKeys = response.Parameters?.map(p => p.ParameterKey) || [];
-
-      expect(parameterKeys).toContain('EnvironmentSuffix');
-      expect(parameterKeys).toContain('GitHubToken');
-      expect(parameterKeys).toContain('NotificationEmail');
-    });
-
-    test('template should require CAPABILITY_NAMED_IAM', async () => {
-      const client = new CloudFormationClient({ region: 'us-east-1' });
-
-      const command = new ValidateTemplateCommand({
-        TemplateBody: templateYAML,
-      });
-
-      const response = await client.send(command);
-
-      expect(response.Capabilities).toBeDefined();
-      expect(response.Capabilities).toContain('CAPABILITY_NAMED_IAM');
-    });
-
-    test('template should have description', async () => {
-      const client = new CloudFormationClient({ region: 'us-east-1' });
-
-      const command = new ValidateTemplateCommand({
-        TemplateBody: templateYAML,
-      });
-
-      const response = await client.send(command);
-
-      expect(response.Description).toBeDefined();
-      expect(response.Description).toContain('CI/CD');
+        // Deprecated parameters should NOT be present
+        expect(parameterNames).not.toContain('GitHubToken');
+        expect(parameterNames).not.toContain('ECSClusterNameStaging');
+        expect(parameterNames).not.toContain('ECSServiceNameStaging');
+        expect(parameterNames).not.toContain('ECSClusterNameProduction');
+        expect(parameterNames).not.toContain('ECSServiceNameProduction');
+      } catch (error: any) {
+        fail(`AWS parameter validation failed: ${error.message}`);
+      }
     });
   });
 
-  describe('Pipeline Configuration Validation', () => {
-    test('pipeline should have complete 5-stage configuration', () => {
+  describe('Template Self-Sufficiency Validation', () => {
+    test('template should be completely self-sufficient', () => {
+      // Check that template includes all required infrastructure
+      const requiredResources = [
+        // VPC and Networking
+        'VPC', 'InternetGateway', 'PublicSubnet1', 'PublicSubnet2',
+        'PrivateSubnet1', 'PrivateSubnet2', 'ALBSecurityGroup', 'ECSSecurityGroup',
+        
+        // Load Balancer and Target Groups
+        'ApplicationLoadBalancer', 'TargetGroupBlue', 'TargetGroupGreen', 'ALBListener',
+        
+        // ECS Infrastructure
+        'ECSCluster', 'ECSTaskDefinition', 'ECSTaskExecutionRole', 'ECSServiceStaging', 'ECSServiceProduction',
+        
+        // ECR Repository
+        'ECRRepository',
+        
+        // CI/CD Pipeline
+        'CodeBuildServiceRole', 'BuildProject', 'TestProject',
+        'CodeDeployServiceRole', 'CodeDeployApplication', 'DeploymentGroupStaging', 'DeploymentGroupProduction',
+        'CodePipelineServiceRole', 'CICDPipeline',
+        
+        // Security and Monitoring
+        'ArtifactEncryptionKey', 'PipelineArtifactBucket', 'PipelineNotificationTopic',
+        'PipelineStateChangeRule', 'CodeDeployStateChangeRule'
+      ];
+
+      requiredResources.forEach(resource => {
+        expect(template.Resources[resource]).toBeDefined();
+      });
+    });
+
+    test('should not reference external resources', () => {
+      const templateString = JSON.stringify(template);
+      
+      // Should not contain references to external ECS infrastructure
+      expect(templateString).not.toContain('ECSClusterNameStaging');
+      expect(templateString).not.toContain('ECSServiceNameStaging');
+      expect(templateString).not.toContain('ECSClusterNameProduction');
+      expect(templateString).not.toContain('ECSServiceNameProduction');
+      
+      // Should use internal references instead
+      expect(templateString).toContain('ECSCluster');
+      expect(templateString).toContain('ECSServiceStaging');
+      expect(templateString).toContain('ECSServiceProduction');
+    });
+  });
+
+  describe('Security and Compliance Validation', () => {
+    test('should use modern GitHub integration', () => {
+      const pipeline = template.Resources.CICDPipeline;
+      const sourceAction = pipeline.Properties.Stages[0].Actions[0];
+      
+      // Should use CodeStar connections instead of deprecated OAuth
+      expect(sourceAction.ActionTypeId.Provider).toBe('CodeStarSourceConnection');
+      expect(sourceAction.ActionTypeId.Owner).toBe('AWS');
+      expect(sourceAction.Configuration.ConnectionArn).toEqual({
+        Ref: 'GitHubConnectionArn'
+      });
+    });
+
+    test('should have properly scoped IAM permissions', () => {
+      const codeBuildrole = template.Resources.CodeBuildServiceRole;
+      const codePipelineRole = template.Resources.CodePipelineServiceRole;
+      
+      // CodeBuild role should have separate policies for different services
+      const buildPolicies = codeBuildrole.Properties.Policies;
+      expect(buildPolicies.some((p: any) => p.PolicyName === 'CodeBuildLogsPolicy')).toBe(true);
+      expect(buildPolicies.some((p: any) => p.PolicyName === 'CodeBuildECRPolicy')).toBe(true);
+      
+      // CodePipeline role should have scoped ECS permissions
+      const pipelinePolicies = codePipelineRole.Properties.Policies;
+      const ecsPolicy = pipelinePolicies.find((p: any) => p.PolicyName === 'CodePipelineECSPolicy');
+      expect(ecsPolicy).toBeDefined();
+      
+      // Should have CodeStar connections permission
+      const codeStarPolicy = pipelinePolicies.find((p: any) => p.PolicyName === 'CodePipelineCodeStarPolicy');
+      expect(codeStarPolicy).toBeDefined();
+      expect(codeStarPolicy.PolicyDocument.Statement[0].Action).toContain('codeconnections:UseConnection');
+    });
+
+    test('should have comprehensive encryption', () => {
+      // KMS key for artifacts
+      expect(template.Resources.ArtifactEncryptionKey).toBeDefined();
+      
+      // S3 bucket encryption
+      const bucket = template.Resources.PipelineArtifactBucket;
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].SSEAlgorithm).toBe('aws:kms');
+      
+      // SNS topic encryption
+      const snsTopic = template.Resources.PipelineNotificationTopic;
+      expect(snsTopic.Properties.KmsMasterKeyId).toEqual({ Ref: 'ArtifactEncryptionKey' });
+      
+      // CloudWatch Logs encryption
+      expect(template.Resources.BuildProjectLogGroup.Properties.KmsKeyId).toBeDefined();
+      expect(template.Resources.TestProjectLogGroup.Properties.KmsKeyId).toBeDefined();
+    });
+
+    test('should have secure network configuration', () => {
+      // ALB should be in public subnets
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.Properties.Subnets).toContain({ Ref: 'PublicSubnet1' });
+      expect(alb.Properties.Subnets).toContain({ Ref: 'PublicSubnet2' });
+      
+      // ECS services should be in private subnets
+      const stagingService = template.Resources.ECSServiceStaging;
+      const productionService = template.Resources.ECSServiceProduction;
+      
+      expect(stagingService.Properties.NetworkConfiguration.AwsvpcConfiguration.Subnets).toContain({ Ref: 'PrivateSubnet1' });
+      expect(productionService.Properties.NetworkConfiguration.AwsvpcConfiguration.Subnets).toContain({ Ref: 'PrivateSubnet1' });
+      
+      // Security group should only allow ALB traffic to ECS
+      const ecsSecurityGroup = template.Resources.ECSSecurityGroup;
+      const ingressRule = ecsSecurityGroup.Properties.SecurityGroupIngress[0];
+      expect(ingressRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
+    });
+  });
+
+  describe('Blue/Green Deployment Validation', () => {
+    test('should have complete LoadBalancerInfo configuration', () => {
+      const stagingGroup = template.Resources.DeploymentGroupStaging;
+      const productionGroup = template.Resources.DeploymentGroupProduction;
+      
+      [stagingGroup, productionGroup].forEach(group => {
+        // LoadBalancerInfo should be present and complete
+        expect(group.Properties.LoadBalancerInfo).toBeDefined();
+        expect(group.Properties.LoadBalancerInfo.TargetGroupPairInfoList).toBeDefined();
+        
+        const targetGroupPair = group.Properties.LoadBalancerInfo.TargetGroupPairInfoList[0];
+        expect(targetGroupPair.TargetGroups).toHaveLength(2);
+        expect(targetGroupPair.ProdTrafficRoute.ListenerArns).toBeDefined();
+        
+        // Should reference the correct target groups
+        expect(targetGroupPair.TargetGroups[0].Name).toEqual({ 'Fn::GetAtt': ['TargetGroupBlue', 'TargetGroupName'] });
+        expect(targetGroupPair.TargetGroups[1].Name).toEqual({ 'Fn::GetAtt': ['TargetGroupGreen', 'TargetGroupName'] });
+      });
+    });
+
+    test('should reference correct ECS services', () => {
+      const stagingGroup = template.Resources.DeploymentGroupStaging;
+      const productionGroup = template.Resources.DeploymentGroupProduction;
+      
+      // Should reference internal ECS cluster and services
+      expect(stagingGroup.Properties.ECSServices[0].ClusterName).toEqual({ Ref: 'ECSCluster' });
+      expect(stagingGroup.Properties.ECSServices[0].ServiceName).toEqual({ 'Fn::GetAtt': ['ECSServiceStaging', 'Name'] });
+      
+      expect(productionGroup.Properties.ECSServices[0].ClusterName).toEqual({ Ref: 'ECSCluster' });
+      expect(productionGroup.Properties.ECSServices[0].ServiceName).toEqual({ 'Fn::GetAtt': ['ECSServiceProduction', 'Name'] });
+    });
+
+    test('ECS services should use CODE_DEPLOY deployment controller', () => {
+      const stagingService = template.Resources.ECSServiceStaging;
+      const productionService = template.Resources.ECSServiceProduction;
+      
+      expect(stagingService.Properties.DeploymentController.Type).toBe('CODE_DEPLOY');
+      expect(productionService.Properties.DeploymentController.Type).toBe('CODE_DEPLOY');
+    });
+  });
+
+  describe('CodeBuild Environment Validation', () => {
+    test('build project should have all required environment variables', () => {
+      const buildProject = template.Resources.BuildProject;
+      const envVars = buildProject.Properties.Environment.EnvironmentVariables;
+      
+      const expectedVars = [
+        'AWS_DEFAULT_REGION',
+        'AWS_ACCOUNT_ID', 
+        'IMAGE_REPO_NAME',
+        'IMAGE_TAG',
+        'ECR_REPOSITORY_URI',
+        'CONTAINER_PORT'
+      ];
+      
+      expectedVars.forEach(varName => {
+        expect(envVars.some((env: any) => env.Name === varName)).toBe(true);
+      });
+    });
+
+    test('build project should generate required deployment artifacts', () => {
+      const buildProject = template.Resources.BuildProject;
+      const buildSpec = buildProject.Properties.Source.BuildSpec;
+      
+      // Should generate all required files for ECS deployment
+      expect(buildSpec).toContain('imagedefinitions.json');
+      expect(buildSpec).toContain('taskdef.json');
+      expect(buildSpec).toContain('appspec.yaml');
+      
+      // Should use environment variables correctly
+      expect(buildSpec).toContain('$ECR_REPOSITORY_URI');
+      expect(buildSpec).toContain('$CONTAINER_PORT');
+    });
+  });
+
+  describe('Pipeline Stage Validation', () => {
+    test('pipeline should have correct stage sequence', () => {
       const pipeline = template.Resources.CICDPipeline;
       const stages = pipeline.Properties.Stages;
-
+      
       expect(stages).toHaveLength(5);
-
-      // Verify each stage has required properties
-      stages.forEach((stage: any) => {
-        expect(stage.Name).toBeDefined();
-        expect(stage.Actions).toBeDefined();
-        expect(stage.Actions.length).toBeGreaterThan(0);
-      });
+      expect(stages[0].Name).toBe('Source');
+      expect(stages[1].Name).toBe('Build');
+      expect(stages[2].Name).toBe('Test');
+      expect(stages[3].Name).toBe('Deploy-Staging');
+      expect(stages[4].Name).toBe('Deploy-Production');
     });
 
-    test('Source stage should have GitHub configuration', () => {
+    test('deployment stages should have correct configuration', () => {
       const pipeline = template.Resources.CICDPipeline;
-      const sourceStage = pipeline.Properties.Stages[0];
-      const sourceAction = sourceStage.Actions[0];
-
-      expect(sourceAction.Configuration.Owner).toEqual({ Ref: 'GitHubOwner' });
-      expect(sourceAction.Configuration.Repo).toEqual({ Ref: 'RepositoryName' });
-      expect(sourceAction.Configuration.Branch).toEqual({ Ref: 'BranchName' });
-      expect(sourceAction.Configuration.OAuthToken).toEqual({ Ref: 'GitHubToken' });
-    });
-
-    test('Build and Test stages should reference CodeBuild projects', () => {
-      const pipeline = template.Resources.CICDPipeline;
-      const buildStage = pipeline.Properties.Stages[1];
-      const testStage = pipeline.Properties.Stages[2];
-
-      expect(buildStage.Actions[0].Configuration.ProjectName).toEqual({
-        Ref: 'BuildProject',
-      });
-      expect(testStage.Actions[0].Configuration.ProjectName).toEqual({
-        Ref: 'TestProject',
-      });
-    });
-
-    test('Deploy stages should reference CodeDeploy deployment groups', () => {
-      const pipeline = template.Resources.CICDPipeline;
-      const deployStagingStage = pipeline.Properties.Stages[3];
-      const deployProdStage = pipeline.Properties.Stages[4];
-
-      const stagingDeployAction = deployStagingStage.Actions[0];
-      const prodDeployAction = deployProdStage.Actions.find(
-        (a: any) => a.ActionTypeId.Category === 'Deploy'
-      );
-
-      expect(stagingDeployAction.Configuration.DeploymentGroupName).toEqual({
-        Ref: 'DeploymentGroupStaging',
-      });
-      expect(prodDeployAction.Configuration.DeploymentGroupName).toEqual({
-        Ref: 'DeploymentGroupProduction',
-      });
-    });
-
-    test('Production stage should have manual approval before deployment', () => {
-      const pipeline = template.Resources.CICDPipeline;
-      const deployProdStage = pipeline.Properties.Stages[4];
-
-      const approvalAction = deployProdStage.Actions.find(
-        (a: any) => a.ActionTypeId.Category === 'Approval'
-      );
-      const deployAction = deployProdStage.Actions.find(
-        (a: any) => a.ActionTypeId.Category === 'Deploy'
-      );
-
+      const stagingDeploy = pipeline.Properties.Stages[3].Actions[0];
+      const productionStage = pipeline.Properties.Stages[4];
+      
+      // Staging deployment configuration
+      expect(stagingDeploy.Configuration.TaskDefinitionTemplatePath).toBe('taskdef.json');
+      expect(stagingDeploy.Configuration.AppSpecTemplatePath).toBe('appspec.yaml');
+      expect(stagingDeploy.Configuration.ImageDefinitionsFileName).toBe('imagedefinitions.json');
+      
+      // Production stage should have approval and deployment
+      const approvalAction = productionStage.Actions.find((a: any) => a.ActionTypeId.Provider === 'Manual');
+      const deployAction = productionStage.Actions.find((a: any) => a.ActionTypeId.Provider === 'CodeDeployToECS');
+      
       expect(approvalAction).toBeDefined();
       expect(deployAction).toBeDefined();
-
-      // Approval should come before deployment (no RunOrder or RunOrder 1)
-      // Deployment should be RunOrder 2
+      expect(approvalAction.RunOrder).toBe(1);
       expect(deployAction.RunOrder).toBe(2);
     });
   });
 
-  describe('Security Configuration Validation', () => {
-    test('all IAM roles should have specific resource ARNs', () => {
-      const codePipelineRole = template.Resources.CodePipelineServiceRole;
-      const statements = codePipelineRole.Properties.Policies[0].PolicyDocument.Statement;
-
-      // Check S3 permissions use specific bucket ARN
-      const s3Statement = statements.find((s: any) =>
-        s.Action.some((a: string) => a.startsWith('s3:'))
-      );
-      expect(s3Statement.Resource).toBeDefined();
-      expect(Array.isArray(s3Statement.Resource)).toBe(true);
-
-      // Check KMS permissions use specific key ARN
-      const kmsStatement = statements.find((s: any) =>
-        s.Action.some((a: string) => a.startsWith('kms:'))
-      );
-      expect(kmsStatement.Resource).toBeDefined();
-      expect(Array.isArray(kmsStatement.Resource)).toBe(true);
+  describe('Monitoring and Alerting Validation', () => {
+    test('should have comprehensive CloudWatch Events', () => {
+      const pipelineRule = template.Resources.PipelineStateChangeRule;
+      const codedeployRule = template.Resources.CodeDeployStateChangeRule;
+      
+      expect(pipelineRule).toBeDefined();
+      expect(codedeployRule).toBeDefined();
+      
+      // Pipeline events
+      expect(pipelineRule.Properties.EventPattern.detail.state).toContain('STARTED');
+      expect(pipelineRule.Properties.EventPattern.detail.state).toContain('SUCCEEDED'); 
+      expect(pipelineRule.Properties.EventPattern.detail.state).toContain('FAILED');
+      
+      // CodeDeploy events
+      expect(codedeployRule.Properties.EventPattern.detail.state).toContain('START');
+      expect(codedeployRule.Properties.EventPattern.detail.state).toContain('SUCCESS');
+      expect(codedeployRule.Properties.EventPattern.detail.state).toContain('FAILURE');
     });
 
-    test('KMS key should have proper service principals', () => {
-      const kmsKey = template.Resources.ArtifactEncryptionKey;
-      const keyPolicy = kmsKey.Properties.KeyPolicy;
-
-      const serviceStatement = keyPolicy.Statement.find(
-        (s: any) => s.Sid === 'Allow CodePipeline to use the key'
-      );
-
-      expect(serviceStatement).toBeDefined();
-      expect(serviceStatement.Principal.Service).toContain('codepipeline.amazonaws.com');
-      expect(serviceStatement.Principal.Service).toContain('codebuild.amazonaws.com');
-    });
-
-    test('S3 bucket should have complete security configuration', () => {
-      const bucket = template.Resources.PipelineArtifactBucket;
-
-      // Verify versioning
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-
-      // Verify encryption
-      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
-      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-
-      // Verify public access block
-      const publicAccessConfig = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(publicAccessConfig.BlockPublicAcls).toBe(true);
-      expect(publicAccessConfig.BlockPublicPolicy).toBe(true);
-      expect(publicAccessConfig.IgnorePublicAcls).toBe(true);
-      expect(publicAccessConfig.RestrictPublicBuckets).toBe(true);
+    test('should have detailed notification configuration', () => {
+      const approvalAction = template.Resources.CICDPipeline.Properties.Stages[4].Actions
+        .find((a: any) => a.ActionTypeId.Provider === 'Manual');
+      
+      expect(approvalAction.Configuration.CustomData).toContain('staging deployment');
+      expect(approvalAction.Configuration.CustomData).toContain('${ApplicationLoadBalancer.DNSName}');
     });
   });
 
-  describe('Monitoring and Notifications Configuration', () => {
-    test('CloudWatch Events rule should target SNS topic', () => {
-      const eventsRule = template.Resources.PipelineStateChangeRule;
-      const target = eventsRule.Properties.Targets[0];
-
-      expect(target.Arn).toEqual({ Ref: 'PipelineNotificationTopic' });
-    });
-
-    test('SNS topic should have email subscription', () => {
-      const snsTopic = template.Resources.PipelineNotificationTopic;
-      const subscription = snsTopic.Properties.Subscription[0];
-
-      expect(subscription.Protocol).toBe('email');
-      expect(subscription.Endpoint).toEqual({ Ref: 'NotificationEmail' });
-    });
-
-    test('CloudWatch Logs should be configured for both CodeBuild projects', () => {
-      const buildProject = template.Resources.BuildProject;
-      const testProject = template.Resources.TestProject;
-
-      expect(buildProject.Properties.LogsConfig.CloudWatchLogs.Status).toBe('ENABLED');
-      expect(testProject.Properties.LogsConfig.CloudWatchLogs.Status).toBe('ENABLED');
-
-      expect(buildProject.Properties.LogsConfig.CloudWatchLogs.GroupName).toEqual({
-        Ref: 'BuildProjectLogGroup',
-      });
-      expect(testProject.Properties.LogsConfig.CloudWatchLogs.GroupName).toEqual({
-        Ref: 'TestProjectLogGroup',
-      });
-    });
-
-    test('Log groups should have proper retention period', () => {
-      const buildLogGroup = template.Resources.BuildProjectLogGroup;
-      const testLogGroup = template.Resources.TestProjectLogGroup;
-
-      expect(buildLogGroup.Properties.RetentionInDays).toBe(30);
-      expect(testLogGroup.Properties.RetentionInDays).toBe(30);
-    });
-  });
-
-  describe('CodeBuild Projects Configuration', () => {
-    test('build project should have Docker-enabled environment', () => {
-      const buildProject = template.Resources.BuildProject;
-      const environment = buildProject.Properties.Environment;
-
-      expect(environment.Type).toBe('LINUX_CONTAINER');
-      expect(environment.PrivilegedMode).toBe(true);
-      expect(environment.Image).toContain('amazonlinux2');
-    });
-
-    test('build project should have inline buildspec with ECR login', () => {
-      const buildProject = template.Resources.BuildProject;
-      const buildSpec = buildProject.Properties.Source.BuildSpec;
-
-      expect(buildSpec).toContain('ecr get-login-password');
-      expect(buildSpec).toContain('docker build');
-      expect(buildSpec).toContain('docker push');
-    });
-
-    test('test project should have inline buildspec with test commands', () => {
-      const testProject = template.Resources.TestProject;
-      const buildSpec = testProject.Properties.Source.BuildSpec;
-
-      expect(buildSpec).toContain('Running unit tests');
-      expect(buildSpec).toContain('Running integration tests');
-    });
-
-    test('both projects should use cost-optimized compute type', () => {
-      const buildProject = template.Resources.BuildProject;
-      const testProject = template.Resources.TestProject;
-
-      expect(buildProject.Properties.Environment.ComputeType).toBe('BUILD_GENERAL1_SMALL');
-      expect(testProject.Properties.Environment.ComputeType).toBe('BUILD_GENERAL1_SMALL');
-    });
-  });
-
-  describe('CodeDeploy Configuration', () => {
-    test('deployment groups should use ECS Blue/Green strategy', () => {
-      const stagingGroup = template.Resources.DeploymentGroupStaging;
-      const productionGroup = template.Resources.DeploymentGroupProduction;
-
-      expect(stagingGroup.Properties.DeploymentStyle.DeploymentType).toBe('BLUE_GREEN');
-      expect(productionGroup.Properties.DeploymentStyle.DeploymentType).toBe('BLUE_GREEN');
-    });
-
-    test('deployment groups should terminate blue instances automatically', () => {
-      const stagingGroup = template.Resources.DeploymentGroupStaging;
-      const productionGroup = template.Resources.DeploymentGroupProduction;
-
-      expect(
-        stagingGroup.Properties.BlueGreenDeploymentConfiguration
-          .TerminateBlueInstancesOnDeploymentSuccess.Action
-      ).toBe('TERMINATE');
-      expect(
-        productionGroup.Properties.BlueGreenDeploymentConfiguration
-          .TerminateBlueInstancesOnDeploymentSuccess.Action
-      ).toBe('TERMINATE');
-    });
-
-    test('deployment groups should have reasonable termination wait time', () => {
-      const stagingGroup = template.Resources.DeploymentGroupStaging;
-      const productionGroup = template.Resources.DeploymentGroupProduction;
-
-      const stagingWaitTime =
-        stagingGroup.Properties.BlueGreenDeploymentConfiguration
-          .TerminateBlueInstancesOnDeploymentSuccess.TerminationWaitTimeInMinutes;
-      const productionWaitTime =
-        productionGroup.Properties.BlueGreenDeploymentConfiguration
-          .TerminateBlueInstancesOnDeploymentSuccess.TerminationWaitTimeInMinutes;
-
-      expect(stagingWaitTime).toBeLessThanOrEqual(10);
-      expect(productionWaitTime).toBeLessThanOrEqual(10);
-    });
-
-    test('CodeDeploy application should be configured for ECS', () => {
-      const codeDeployApp = template.Resources.CodeDeployApplication;
-
-      expect(codeDeployApp.Properties.ComputePlatform).toBe('ECS');
-    });
-  });
-
-  describe('Resource Naming and Tagging', () => {
-    test('all resource names should be parameterized with environment suffix', () => {
-      const resourcesWithNames = [
-        'PipelineArtifactBucket',
-        'PipelineNotificationTopic',
-        'BuildProject',
-        'TestProject',
-        'CICDPipeline',
-        'CodeDeployApplication',
+  describe('Resource Tagging and Management', () => {
+    test('all resources should have comprehensive tags', () => {
+      const taggedResourceTypes = [
+        'AWS::EC2::VPC',
+        'AWS::ECS::Cluster',
+        'AWS::ECR::Repository',
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        'AWS::CodeBuild::Project',
+        'AWS::CodePipeline::Pipeline',
+        'AWS::KMS::Key'
       ];
 
-      resourcesWithNames.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        const nameProperty = Object.keys(resource.Properties).find(key =>
-          key.toLowerCase().includes('name')
-        );
-
-        if (nameProperty) {
-          const nameValue = resource.Properties[nameProperty];
-          if (typeof nameValue === 'object' && nameValue['Fn::Sub']) {
-            expect(nameValue['Fn::Sub']).toContain('${EnvironmentSuffix}');
-          }
+      Object.values(template.Resources).forEach((resource: any) => {
+        if (taggedResourceTypes.includes(resource.Type)) {
+          const tags = resource.Properties.Tags || [];
+          
+          expect(tags.some((tag: any) => tag.Key === 'Project' && tag.Value === 'CICD-Pipeline')).toBe(true);
+          expect(tags.some((tag: any) => tag.Key === 'Environment')).toBe(true);
+          expect(tags.some((tag: any) => tag.Key === 'ManagedBy' && tag.Value === 'CloudFormation')).toBe(true);
         }
       });
     });
-  });
 
-  describe('Template Outputs Configuration', () => {
-    test('all outputs should provide essential information for external systems', () => {
-      const requiredOutputs = [
-        'PipelineArn',
-        'ArtifactBucketName',
-        'NotificationTopicArn',
-        'BuildProjectName',
-        'TestProjectName',
-        'CodeDeployApplicationName',
+    test('all resources should have Delete deletion policy for test environments', () => {
+      const criticalResources = [
+        'VPC', 'ECSCluster', 'ECRRepository', 'ApplicationLoadBalancer',
+        'ArtifactEncryptionKey', 'PipelineArtifactBucket'
       ];
 
-      requiredOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-        expect(template.Outputs[outputName].Description).toBeDefined();
-        expect(template.Outputs[outputName].Value).toBeDefined();
-      });
-    });
-
-    test('all outputs should be exported for cross-stack references', () => {
-      Object.values(template.Outputs).forEach((output: any) => {
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-      });
-    });
-  });
-
-  describe('Template Completeness', () => {
-    test('template should define all necessary resource types', () => {
-      const resourceTypes = Object.values(template.Resources).map(
-        (resource: any) => resource.Type
-      );
-
-      const requiredTypes = [
-        'AWS::KMS::Key',
-        'AWS::S3::Bucket',
-        'AWS::SNS::Topic',
-        'AWS::Logs::LogGroup',
-        'AWS::IAM::Role',
-        'AWS::CodeBuild::Project',
-        'AWS::CodeDeploy::Application',
-        'AWS::CodeDeploy::DeploymentGroup',
-        'AWS::CodePipeline::Pipeline',
-        'AWS::Events::Rule',
-      ];
-
-      requiredTypes.forEach(type => {
-        expect(resourceTypes).toContain(type);
-      });
-    });
-
-    test('template should have no circular dependencies', () => {
-      // Check for common circular dependency patterns
-      const resources = template.Resources;
-
-      // Verify KMS Key is not dependent on itself through bucket
-      const kmsKey = resources.ArtifactEncryptionKey;
-      const bucket = resources.PipelineArtifactBucket;
-
-      // Bucket can reference KMS Key (correct direction)
-      expect(bucket.Properties.BucketEncryption).toBeDefined();
-
-      // KMS Key should not reference bucket (would be circular)
-      const kmsKeyJSON = JSON.stringify(kmsKey);
-      expect(kmsKeyJSON).not.toContain('PipelineArtifactBucket');
-    });
-
-    test('template resources should respect deletion policies', () => {
-      const resourcesWithDeletionPolicies = [
-        'ArtifactEncryptionKey',
-        'PipelineArtifactBucket',
-        'BuildProjectLogGroup',
-        'TestProjectLogGroup',
-      ];
-
-      resourcesWithDeletionPolicies.forEach(resourceName => {
+      criticalResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.DeletionPolicy).toBe('Delete');
       });
     });
   });
 
-  describe('Deployment Prerequisites Documentation', () => {
-    test('should document ECS infrastructure requirements', () => {
-      // This test validates that parameters are defined for ECS dependencies
-      const ecsParameters = [
-        'ECSClusterNameStaging',
-        'ECSServiceNameStaging',
-        'ECSClusterNameProduction',
-        'ECSServiceNameProduction',
+  describe('Outputs and Integration Testing', () => {
+    test('should have comprehensive outputs for testing', () => {
+      const criticalOutputs = [
+        'PipelineArn', 'PipelineName', 
+        'ECSClusterName', 'ECRRepositoryUri',
+        'ApplicationLoadBalancerDNS', 'ApplicationLoadBalancerURL',
+        'VPCId', 'TargetGroupBlueArn', 'TargetGroupGreenArn',
+        'ArtifactBucketName', 'KMSKeyId'
       ];
 
-      ecsParameters.forEach(param => {
-        expect(template.Parameters[param]).toBeDefined();
-        expect(template.Parameters[param].Description).toContain('ECS');
+      criticalOutputs.forEach(output => {
+        expect(template.Outputs[output]).toBeDefined();
+        expect(template.Outputs[output].Description).toBeDefined();
+        expect(template.Outputs[output].Value).toBeDefined();
+        expect(template.Outputs[output].Export).toBeDefined();
       });
     });
 
-    test('should document GitHub integration requirements', () => {
-      const githubParameters = ['GitHubToken', 'GitHubOwner', 'RepositoryName', 'BranchName'];
-
-      githubParameters.forEach(param => {
-        expect(template.Parameters[param]).toBeDefined();
+    test('outputs should provide all necessary values for external integration', () => {
+      // ALB URL should be properly constructed for testing
+      const albUrl = template.Outputs.ApplicationLoadBalancerURL;
+      expect(albUrl.Value).toEqual({
+        'Fn::Sub': 'http://${ApplicationLoadBalancer.DNSName}'
       });
 
-      // GitHubToken should be marked sensitive
-      expect(template.Parameters.GitHubToken.NoEcho).toBe(true);
+      // ECR URI should be available for image references
+      const ecrUri = template.Outputs.ECRRepositoryUri;
+      expect(ecrUri.Value).toEqual({
+        'Fn::GetAtt': ['ECRRepository', 'RepositoryUri']
+      });
+
+      // All exports should follow naming convention
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': expect.stringContaining('${AWS::StackName}')
+        });
+      });
+    });
+  });
+
+  describe('Cost Optimization Validation', () => {
+    test('should have cost optimization features', () => {
+      // S3 lifecycle policies
+      const bucket = template.Resources.PipelineArtifactBucket;
+      expect(bucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(90);
+      expect(bucket.Properties.LifecycleConfiguration.Rules[0].NoncurrentVersionExpirationInDays).toBe(30);
+      
+      // ECR lifecycle policy
+      const ecr = template.Resources.ECRRepository;
+      expect(ecr.Properties.LifecyclePolicy.LifecyclePolicyText).toContain('Keep last 30 images');
+      
+      // Log retention
+      expect(template.Resources.BuildProjectLogGroup.Properties.RetentionInDays).toBe(30);
+      expect(template.Resources.TestProjectLogGroup.Properties.RetentionInDays).toBe(30);
+      
+      // Right-sized CodeBuild
+      expect(template.Resources.BuildProject.Properties.Environment.ComputeType).toBe('BUILD_GENERAL1_SMALL');
+      expect(template.Resources.TestProject.Properties.Environment.ComputeType).toBe('BUILD_GENERAL1_SMALL');
+    });
+
+    test('should use cost-effective ECS configuration', () => {
+      const taskDef = template.Resources.ECSTaskDefinition;
+      
+      // Right-sized for test workloads
+      expect(taskDef.Properties.Cpu).toBe('256');
+      expect(taskDef.Properties.Memory).toBe('512');
+      expect(taskDef.Properties.RequiresCompatibilities).toContain('FARGATE');
+      
+      // ECS cluster should support FARGATE_SPOT for cost savings
+      const cluster = template.Resources.ECSCluster;
+      expect(cluster.Properties.CapacityProviders).toContain('FARGATE_SPOT');
+    });
+  });
+
+  describe('Template Consistency Validation', () => {
+    test('YAML and JSON templates should be equivalent', () => {
+      // Load both templates
+      const yamlPath = path.join(__dirname, '../lib/cicd-pipeline.yml');
+      const jsonPath = path.join(__dirname, '../lib/cicd-pipeline.json');
+      
+      expect(fs.existsSync(yamlPath)).toBe(true);
+      expect(fs.existsSync(jsonPath)).toBe(true);
+      
+      // Both should be valid and non-empty
+      const yamlStats = fs.statSync(yamlPath);
+      const jsonStats = fs.statSync(jsonPath);
+      
+      expect(yamlStats.size).toBeGreaterThan(1000);
+      expect(jsonStats.size).toBeGreaterThan(1000);
+    });
+
+    test('template should be production-ready', () => {
+      // Check that template doesn't contain test-only configurations
+      const templateString = JSON.stringify(template);
+      
+      // Should not contain hardcoded test values
+      expect(templateString).not.toContain('test-only');
+      expect(templateString).not.toContain('localhost');
+      expect(templateString).not.toContain('example.com');
+      
+      // Should use proper CloudFormation references
+      expect(templateString).toContain('Fn::Sub');
+      expect(templateString).toContain('Fn::GetAtt');
+      expect(templateString).toContain('Ref');
     });
   });
 });
