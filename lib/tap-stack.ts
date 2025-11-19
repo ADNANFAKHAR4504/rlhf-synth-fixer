@@ -606,40 +606,31 @@ export class TapStack extends pulumi.ComponentResource {
     const clusterAutoscalerRole = new aws.iam.Role(
       `eks-cluster-autoscaler-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider) => {
-          if (!oidcProvider || typeof oidcProvider !== 'object') {
-            throw new Error('OIDC provider not available');
-          }
+        assumeRolePolicy: pulumi.all([
+          cluster.core.oidcProvider,
+        ]).apply(([oidcProvider]) => {
           const provider = oidcProvider as any;
+          const oidcUrl = provider.url.replace('https://', '');
+          const oidcArn = provider.arn;
 
-          // Extract the URL and ARN, handling both Output and plain string cases
-          return pulumi.all([
-            pulumi.output(provider.url),
-            pulumi.output(provider.arn)
-          ]).apply(([url, arn]) => {
-            if (!url || !arn) {
-              throw new Error('OIDC provider URL or ARN not available');
-            }
-            const oidcUrl = url.replace('https://', '');
-            return JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    Federated: arn,
-                  },
-                  Action: 'sts:AssumeRoleWithWebIdentity',
-                  Condition: {
-                    StringEquals: {
-                      [`${oidcUrl}:sub`]:
-                        'system:serviceaccount:kube-system:cluster-autoscaler',
-                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
-                    },
+          return JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  Federated: oidcArn,
+                },
+                Action: 'sts:AssumeRoleWithWebIdentity',
+                Condition: {
+                  StringEquals: {
+                    [`${oidcUrl}:sub`]:
+                      'system:serviceaccount:kube-system:cluster-autoscaler',
+                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
                   },
                 },
-              ],
-            });
+              },
+            ],
           });
         }),
         tags: {
@@ -701,40 +692,31 @@ export class TapStack extends pulumi.ComponentResource {
     const albControllerRole = new aws.iam.Role(
       `eks-alb-controller-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider) => {
-          if (!oidcProvider || typeof oidcProvider !== 'object') {
-            throw new Error('OIDC provider not available');
-          }
+        assumeRolePolicy: pulumi.all([
+          cluster.core.oidcProvider,
+        ]).apply(([oidcProvider]) => {
           const provider = oidcProvider as any;
+          const oidcUrl = provider.url.replace('https://', '');
+          const oidcArn = provider.arn;
 
-          // Extract the URL and ARN, handling both Output and plain string cases
-          return pulumi.all([
-            pulumi.output(provider.url),
-            pulumi.output(provider.arn)
-          ]).apply(([url, arn]) => {
-            if (!url || !arn) {
-              throw new Error('OIDC provider URL or ARN not available');
-            }
-            const oidcUrl = url.replace('https://', '');
-            return JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    Federated: arn,
-                  },
-                  Action: 'sts:AssumeRoleWithWebIdentity',
-                  Condition: {
-                    StringEquals: {
-                      [`${oidcUrl}:sub`]:
-                        'system:serviceaccount:kube-system:aws-load-balancer-controller',
-                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
-                    },
+          return JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  Federated: oidcArn,
+                },
+                Action: 'sts:AssumeRoleWithWebIdentity',
+                Condition: {
+                  StringEquals: {
+                    [`${oidcUrl}:sub`]:
+                      'system:serviceaccount:kube-system:aws-load-balancer-controller',
+                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
                   },
                 },
-              ],
-            });
+              },
+            ],
           });
         }),
         tags: {
@@ -969,18 +951,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.clusterName = cluster.eksCluster.name;
     this.clusterEndpoint = cluster.eksCluster.endpoint;
     this.clusterVersion = cluster.eksCluster.version;
-    this.oidcProviderUrl = cluster.core.oidcProvider!.apply((p) => {
-      if (p && typeof p === 'object' && 'url' in p) {
-        return (p as any).url;
-      }
-      return undefined;
-    });
-    this.oidcProviderArn = cluster.core.oidcProvider!.apply((p) => {
-      if (p && typeof p === 'object' && 'arn' in p) {
-        return (p as any).arn;
-      }
-      return undefined;
-    });
+    this.oidcProviderUrl = cluster.core.oidcProvider!.apply((p) => (p as any)?.url);
+    this.oidcProviderArn = cluster.core.oidcProvider!.apply((p) => (p as any)?.arn);
     this.kubeconfig = cluster.kubeconfig;
     this.onDemandNodeGroupName = onDemandNodeGroup.nodeGroupName;
     this.spotNodeGroupName = spotNodeGroup.nodeGroupName;
