@@ -1,6 +1,6 @@
 environment             = "prod"
 pr_number               = "prod"
-aws_region              = "us-east-1"
+aws_region              = "ca-central-1"
 vpc_cidr                = "10.2.0.0/16"
 db_instance_class       = "db.t3.medium"
 ec2_instance_type       = "t3.small"

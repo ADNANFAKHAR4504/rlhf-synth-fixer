@@ -22,7 +22,7 @@ variable "pr_number" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "ca-central-1"
 }
 
 variable "vpc_cidr" {
@@ -204,7 +204,7 @@ provider "aws" {
 ```hcl
 environment             = "dev"
 pr_number               = "dev"
-aws_region              = "us-east-1"
+aws_region              = "ca-central-1"
 vpc_cidr                = "10.0.0.0/16"
 db_instance_class       = "db.t3.micro"
 ec2_instance_type       = "t3.micro"
@@ -223,7 +223,7 @@ alb_internal            = false
 ```hcl
 environment             = "staging"
 pr_number               = "staging"
-aws_region              = "us-east-1"
+aws_region              = "ca-central-1"
 vpc_cidr                = "10.1.0.0/16"
 db_instance_class       = "db.t3.small"
 ec2_instance_type       = "t3.small"
@@ -242,7 +242,7 @@ alb_internal            = false
 ```hcl
 environment             = "prod"
 pr_number               = "prod"
-aws_region              = "us-east-1"
+aws_region              = "ca-central-1"
 vpc_cidr                = "10.2.0.0/16"
 db_instance_class       = "db.t3.medium"
 ec2_instance_type       = "t3.small"

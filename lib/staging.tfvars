@@ -1,6 +1,6 @@
 environment             = "staging"
 pr_number               = "staging"
-aws_region              = "us-east-1"
+aws_region              = "ca-central-1"
 vpc_cidr                = "10.1.0.0/16"
 db_instance_class       = "db.t3.small"
 ec2_instance_type       = "t3.small"
