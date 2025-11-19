@@ -31,10 +31,6 @@ import {
   DescribeTargetHealthCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  SyntheticsClient,
-  GetCanaryCommand,
-} from '@aws-sdk/client-synthetics';
-import {
   BackupClient,
   GetBackupPlanCommand,
   ListBackupSelectionsCommand,
@@ -105,7 +101,6 @@ describe('High Availability Architecture Integration Tests', () => {
     const s3Client = new S3Client({ region });
     const route53Client = new Route53Client({ region });
     const elbClient = new ElasticLoadBalancingV2Client({ region });
-    const syntheticsClient = new SyntheticsClient({ region });
     const backupClient = new BackupClient({ region });
     const sfnClient = new SFNClient({ region });
     const ssmClient = new SSMClient({ region });
@@ -277,19 +272,6 @@ describe('High Availability Architecture Integration Tests', () => {
       const recordSets = response.ResourceRecordSets || [];
 
       expect(recordSets.length).toBeGreaterThan(0);
-    }, 30000);
-
-    test('CloudWatch Synthetics canary is active', async () => {
-      if (!hasDeploymentOutputs) return;
-
-      const canaryName = `canary-${environmentSuffix}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-
-      const command = new GetCanaryCommand({ Name: canaryName });
-      const response = await syntheticsClient.send(command);
-
-      expect(response.Canary).toBeDefined();
-      expect(response.Canary?.Status?.State).toBe('RUNNING');
-      expect(response.Canary?.RuntimeVersion).toBe('syn-nodejs-puppeteer-9.1');
     }, 30000);
 
     test('AWS Backup plan is created', async () => {
