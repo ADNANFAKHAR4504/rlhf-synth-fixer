@@ -74,7 +74,11 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
 
       const response = await axios.get(albUrl, { timeout: HTTP_TIMEOUT });
       expect(response.status).toBe(200);
-      expect(response.data).toContain('Web Application Infrastructure');
+      // Response could be from static EC2 instances or ASG instances
+      expect(
+        response.data.includes('Web Application Infrastructure') ||
+        response.data.includes('Auto Scaled Instance')
+      ).toBe(true);
     });
 
     test('Load Balancer should route requests to healthy EC2 instances', async () => {
@@ -263,7 +267,11 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
       // Step 2: Access application via Load Balancer
       const webResponse = await axios.get(albUrl, { timeout: HTTP_TIMEOUT });
       expect(webResponse.status).toBe(200);
-      expect(webResponse.data).toContain('Web Application Infrastructure');
+      // Response could be from static EC2 instances or ASG instances
+      expect(
+        webResponse.data.includes('Web Application Infrastructure') ||
+        webResponse.data.includes('Auto Scaled Instance')
+      ).toBe(true);
 
       // Step 3: Verify the data is accessible 
       const getCommand = new GetObjectCommand({
@@ -293,7 +301,11 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
       expect(userRequest.status).toBe(200);
       
       // Step 2: Verify response contains instance information
-      expect(userRequest.data).toContain('Instance ID');
+      // Response could be from static EC2 instances or ASG instances
+      expect(
+        userRequest.data.includes('Instance ID') ||
+        userRequest.data.includes('Instance ID:')
+      ).toBe(true);
       expect(userRequest.data).toContain('S3 Bucket');
       
       // Step 3: Verify S3 bucket is accessible (EC2 instances can read/write)
@@ -325,10 +337,11 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
       });
       
       // Verify load balancing is working
+      // Responses may contain 'Instance ID' or 'Instance ID:' depending on instance type
       const uniqueInstanceIds = new Set(
         responses
           .map(r => r.data)
-          .filter(html => html.includes('Instance ID'))
+          .filter(html => html.includes('Instance ID') || html.includes('Instance ID:'))
       );
       expect(uniqueInstanceIds.size).toBeGreaterThan(0);
     });
