@@ -111,7 +111,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       QueueName: !Sub 'TransactionDLQ-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600 # 14 days
       VisibilityTimeout: 300
 
   # SQS Queue for transaction processing
@@ -121,14 +121,13 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       QueueName: !Sub 'TransactionQueue-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600  # 14 days (as per requirement)
-      VisibilityTimeout: 1800  # 6 times Lambda timeout (6 * 300 = 1800 seconds)
-      RedrivePolicy:
-        !If
-          - IsProduction
-          - deadLetterTargetArn: !GetAtt TransactionDLQ.Arn
-            maxReceiveCount: 3
-          - !Ref AWS::NoValue
+      MessageRetentionPeriod: 1209600 # 14 days (as per requirement)
+      VisibilityTimeout: 1800 # 6 times Lambda timeout (6 * 300 = 1800 seconds)
+      RedrivePolicy: !If
+        - IsProduction
+        - deadLetterTargetArn: !GetAtt TransactionDLQ.Arn
+          maxReceiveCount: 3
+        - !Ref AWS::NoValue
 
   # IAM Role for Lambda function
   TransactionProcessorRole:
@@ -189,12 +188,12 @@ Resources:
       Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt TransactionProcessorRole.Arn
-      Timeout: 300  # 5 minutes (maximum as per requirement)
-      MemorySize: 1024  # 1024MB as per requirement
-      ReservedConcurrentExecutions: 100  # Exactly 100 as per requirement
+      Timeout: 300 # 5 minutes (maximum as per requirement)
+      MemorySize: 1024 # 1024MB as per requirement
+      ReservedConcurrentExecutions: 100 # Exactly 100 as per requirement
       Architectures:
-        - arm64  # AWS Graviton2 for cost optimization
-      KmsKeyArn: !GetAtt LambdaKMSKey.Arn  # Encrypt environment variables
+        - arm64 # AWS Graviton2 for cost optimization
+      KmsKeyArn: !GetAtt LambdaKMSKey.Arn # Encrypt environment variables
       Environment:
         Variables:
           TABLE_NAME: !Ref TransactionRecordsTable
@@ -268,7 +267,7 @@ Resources:
     Properties:
       EventSourceArn: !GetAtt TransactionQueue.Arn
       FunctionName: !Ref TransactionProcessorFunction
-      BatchSize: 10  # Batch size of 10 as per requirement
+      BatchSize: 10 # Batch size of 10 as per requirement
       Enabled: true
 
 Outputs:
@@ -379,6 +378,7 @@ The solution implements an event-driven architecture with the following componen
    - Permissions to create Lambda, DynamoDB, SQS, KMS, and IAM resources
 
 2. **Deploy the stack**:
+
    ```bash
    aws cloudformation create-stack \
      --stack-name transaction-validator-dev \
@@ -386,10 +386,11 @@ The solution implements an event-driven architecture with the following componen
      --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
                   ParameterKey=Environment,ParameterValue=development \
      --capabilities CAPABILITY_NAMED_IAM \
-     --region us-east-1
+     --region ap-southeast-1
    ```
 
 3. **Test the system**:
+
    ```bash
    # Send a test message to the queue
    QUEUE_URL=$(aws cloudformation describe-stacks \
@@ -410,6 +411,7 @@ The solution implements an event-driven architecture with the following componen
 ## Compliance with Requirements
 
 ### Mandatory Requirements
+
 1. Lambda function 'TransactionProcessor' with arm64 and 1024MB - IMPLEMENTED
 2. DynamoDB table 'TransactionRecords' with transactionId/timestamp keys - IMPLEMENTED
 3. Global secondary index 'StatusIndex' with specific projections - IMPLEMENTED
@@ -420,6 +422,7 @@ The solution implements an event-driven architecture with the following componen
 8. CloudFormation Condition 'IsProduction' for DLQ - IMPLEMENTED
 
 ### Constraints Met
+
 - Lambda reserved concurrency: exactly 100
 - DynamoDB billing: on-demand with point-in-time recovery
 - Lambda architecture: arm64 (Graviton2)
@@ -433,12 +436,14 @@ The solution implements an event-driven architecture with the following componen
 ## Testing
 
 Run unit tests:
+
 ```bash
 pipenv run cfn-flip-to-json > lib/TapStack.json
 npm test -- test/tap-stack.unit.test.ts
 ```
 
 Run integration tests (requires deployed stack):
+
 ```bash
 npm test -- test/tap-stack.int.test.ts
 ```

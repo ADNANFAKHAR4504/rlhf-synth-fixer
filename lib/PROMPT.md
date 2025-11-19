@@ -5,6 +5,7 @@
 Create a CloudFormation template to deploy a serverless transaction validation system.
 
 MANDATORY REQUIREMENTS (Must complete):
+
 1. Create a Lambda function named 'TransactionProcessor' with arm64 architecture and 1024MB memory (CORE: Lambda)
 2. Configure DynamoDB table 'TransactionRecords' with partition key 'transactionId' and sort key 'timestamp' (CORE: DynamoDB)
 3. Add a global secondary index 'StatusIndex' on the DynamoDB table with partition key 'status' and projected attributes 'transactionId', 'amount', 'timestamp'
@@ -27,7 +28,7 @@ A fintech startup needs a serverless event processing system to handle real-time
 
 ## Environment
 
-Deploy serverless infrastructure in us-east-1 region for transaction processing. Core services include Lambda functions for event processing, DynamoDB for transaction storage and fraud rule lookups, SNS for alert notifications, and SQS for reliable message queuing. Infrastructure spans 3 availability zones with encryption at rest using customer-managed KMS keys. Requires AWS CLI configured with appropriate permissions, CloudFormation YAML knowledge, and understanding of Lambda event sources. No VPC required as all services are managed.
+Deploy serverless infrastructure in ap-southeast-1 region for transaction processing. Core services include Lambda functions for event processing, DynamoDB for transaction storage and fraud rule lookups, SNS for alert notifications, and SQS for reliable message queuing. Infrastructure spans 3 availability zones with encryption at rest using customer-managed KMS keys. Requires AWS CLI configured with appropriate permissions, CloudFormation YAML knowledge, and understanding of Lambda event sources. No VPC required as all services are managed.
 
 ## Constraints
 
