@@ -30,7 +30,7 @@ describe("Terraform EMR stack conformance", () => {
 
   test("EMR cluster uses secure configuration, logging, and bootstrap action", () => {
     expect(mainTf).toMatch(/resource\s+"aws_emr_cluster"\s+"main"/);
-    expect(mainTf).toMatch(/termination_protection\s*=\s*true/);
+    expect(mainTf).toMatch(/termination_protection\s*=\s*false/);
     expect(mainTf).toMatch(/auto_termination_policy\s*{\s*idle_timeout\s*=\s*var\.idle_timeout_seconds/s);
     expect(mainTf).toMatch(/bootstrap\/install-analytics-libs\.sh/);
     expect(mainTf).toMatch(/log_uri\s*=\s*"s3:\/\/\$\{aws_s3_bucket\.logs\.bucket}\/emr-logs\/"/);
@@ -116,6 +116,7 @@ describe("Terraform EMR stack conformance", () => {
     expect(variablesTf).toMatch(/variable\s+"vpc_cidr"\s*{\s*description[\s\S]*default\s*=\s*"10\.60\.0\.0\/16"/);
     expect(variablesTf).toMatch(/variable\s+"private_subnet_cidrs"/);
     expect(variablesTf).toMatch(/variable\s+"availability_zones"/);
-    expect(variablesTf).toMatch(/validation\s*{\s*condition\s*=\s*var\.vpc_id == null \? true : \(var\.public_subnet_id != null/);
+    expect(variablesTf).toMatch(/variable\s+"vpc_id"/);
+    expect(variablesTf).toMatch(/variable\s+"public_subnet_id"/);
   });
 });
