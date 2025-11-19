@@ -562,7 +562,6 @@ resource "aws_emr_instance_group" "task" {
         Name        = "ScaleOutOnYarnMemory"
         Description = "Increase task nodes when available YARN memory falls below threshold"
         Action = {
-          Market = "SPOT"
           SimpleScalingPolicyConfiguration = {
             AdjustmentType    = "CHANGE_IN_CAPACITY"
             ScalingAdjustment = 1
@@ -592,7 +591,6 @@ resource "aws_emr_instance_group" "task" {
         Name        = "ScaleInOnYarnMemory"
         Description = "Reduce task nodes when the cluster has ample YARN memory available"
         Action = {
-          Market = "SPOT"
           SimpleScalingPolicyConfiguration = {
             AdjustmentType    = "CHANGE_IN_CAPACITY"
             ScalingAdjustment = -1
