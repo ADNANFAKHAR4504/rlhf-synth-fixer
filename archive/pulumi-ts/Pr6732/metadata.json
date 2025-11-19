@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T00:12:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "7pn7n4",
+  "aws_services": [
+    "IAM",
+    "EC2 Transit Gateway",
+    "RAM",
+    "Step Functions",
+    "EventBridge",
+    "Systems Manager",
+    "Route 53",
+    "AWS Config",
+    "CloudWatch",
+    "STS"
+  ],
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,18 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912472",
+  "team": "synth",
+  "startedAt": "2025-11-18T10:17:55+00:00",
+  "subtask": "VPC",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "networking",
+    "vpc",
+    "transit-gateway"
+  ],
+  "aws_services": []
+}

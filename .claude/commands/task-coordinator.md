@@ -25,17 +25,21 @@ ALL CSV operations MUST:
 - ✅ CORRECT: `feat(synth-{task_id}): add infrastructure for healthcare`
 - ❌ WRONG: `feat(synth-{task_id}): Add infrastructure for healthcare`
 
-The CI/CD pipeline validates commits using `commitlint` and will **FAIL** if subject starts with uppercase. See Phase 5 for detailed instructions.
+The CI/CD pipeline validates commits using `commitlint` and will **FAIL** if subject starts with uppercase. See PHASE 5 for detailed instructions.
 
 ## Workflow
 
 Execute these phases in sequence to deliver production-ready IaC:
 
-### Phase 1: Task Selection
+### PHASE 1: Task Selection & Setup
+
+**Agent**: `task-coordinator`
+
+### PHASE 1.1: Task Selection
 
 **Agent**: `iac-task-selector`
 
-### Phase 1.5: Validate Task Selection and Setup
+### PHASE 1.2: Task Validation & Setup
 
 **Goal**: Ensure selected task and metadata.json match CLI tool expectations.
 
@@ -68,11 +72,11 @@ Do NOT summarize or paraphrase requirements
 **CHECKPOINT**:
 ```
 If all pass:
-- Report: "✅ Phase 1.5: Task setup validated - ready for code generation"
-- Proceed to Phase 2 (iac-infra-generator)
+- Report: "✅ PHASE 1.2: Task setup validated - ready for code generation"
+- Proceed to PHASE 2 (iac-infra-generator)
 
 If any fail:
-- Report: "❌ Phase 1.5: Validation FAILED"
+- Report: "❌ PHASE 1.2: Validation FAILED"
 - List specific issues
 - Fix metadata.json or task setup
 - Re-validate before proceeding
@@ -93,15 +97,15 @@ Provide:
 Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 ```
 
-### Phase 2: Code Generation
+### PHASE 2: Code Generation
 
 **Agent**: `iac-infra-generator`
 
-### Phase 3: QA Training & Validation
+### PHASE 3: QA Training & Validation
 
 **Agent**: `iac-infra-qa-trainer`
 
-### Phase 4: Code Review & Compliance
+### PHASE 4: Code Review & Compliance
 
 **Agent**: `iac-code-reviewer`
 
@@ -115,12 +119,12 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Decision Authority**: iac-code-reviewer recommends, task-coordinator enforces
 
-### Phase 5: PR Creation & Task Completion
+### PHASE 5: PR Creation & Task Completion
 
 **Agent**: `task-coordinator` (orchestrates final steps)
 
 **Prerequisites**:
-- Phase 4 (code-reviewer) reports "Ready"
+- PHASE 4 (code-reviewer) reports "Ready"
 - **ALL pre-submission requirements met** (see below)
 - GitHub CLI (`gh`) installed and authenticated
 - Git remote origin accessible
@@ -202,7 +206,7 @@ fi
 echo "✅ Training quality validated: $TRAINING_QUALITY/10"
 ```
 
-If fails: Return to Phase 4, improve implementation, re-validate
+If fails: Return to PHASE 4, improve implementation, re-validate
 
 3. **Stage changes**:
    ```bash
@@ -405,7 +409,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - Now in: `worktree/synth-{task_id}/`
    - All file paths relative to this directory
    - All sub-agents work in this directory
-   - Do not return to main repo until Phase 5
+   - Do not return to main repo until PHASE 5
 
 7. **Generate metadata.json** (CRITICAL - all fields required):
 
@@ -541,7 +545,7 @@ If PR creation fails:
    Error: ${ERROR_MESSAGE}
 
    Recovery:
-   - Auth issues: Run 'gh auth login' and retry Phase 5
+   - Auth issues: Run 'gh auth login' and retry PHASE 5
    - Network issues: Check connectivity and retry
    - Permission issues: Verify repository write access
    - Git issues: Check branch state and remote status
@@ -557,13 +561,15 @@ Always report in each log: taskId and deployment region (default: us-east-1).
 All subagents MUST report using this format:
 
 ```markdown
-**AGENT STATUS**: [PHASE] - [STATUS] - [CURRENT_STEP]
+**AGENT STATUS**: PHASE X.Y - [STATUS] - [CURRENT_STEP]
 **TASK**: [Specific task being worked on]
-**PROGRESS**: [X/Y] steps completed
+**PROGRESS**: [X.Y/Z] phases completed
 **NEXT ACTION**: [Next planned action]
 **ISSUES**: [Blocking issues or NONE]
 **BLOCKED**: [YES/NO - If YES, explain and resolution needed]
 ```
+
+**Note**: Use standardized phase names (e.g., `PHASE 1.2`, `PHASE 2`, `PHASE 3`) as defined in `.claude/docs/references/phase-naming-convention.md`.
 
 **Required Updates**:
 - Start of execution

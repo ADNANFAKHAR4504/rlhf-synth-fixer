@@ -1,0 +1,437 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Database Infrastructure for Multi-Region DR Payment Processing'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+
+  VPCId:
+    Type: String
+    Description: VPC ID
+
+  VPCCIDR:
+    Type: String
+    Description: CIDR block for VPC
+    Default: 10.0.0.0/16
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/(1[6-9]|2[0-8])$'
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+
+  PrivateSubnet1:
+    Type: String
+    Description: Private Subnet 1 ID
+
+  PrivateSubnet2:
+    Type: String
+    Description: Private Subnet 2 ID
+
+  PrivateSubnet3:
+    Type: String
+    Description: Private Subnet 3 ID
+
+  DBSecretArn:
+    Type: String
+    Description: ARN of existing Secrets Manager secret
+
+
+  DeploymentRegion:
+    Type: String
+    Description: Primary or DR region
+    AllowedValues:
+      - primary
+      - dr
+    Default: primary
+
+  SourceRegion:
+    Type: String
+    Description: Source region for read replica
+    Default: ap-southeast-1
+
+  DRRegion:
+    Type: String
+    Description: Disaster Recovery region for S3 replication
+    Default: ap-southeast-2
+
+Conditions:
+  IsPrimaryRegion: !Equals [!Ref DeploymentRegion, 'primary']
+  IsDRRegion: !Equals [!Ref DeploymentRegion, 'dr']
+
+Resources:
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for payment processing encryption - ${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow RDS to use the key
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-kms-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/payment-processing-${EnvironmentSuffix}'
+      TargetKeyId: !Ref KMSKey
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'payment-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: Subnet group for payment processing database
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-db-subnet-group-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'payment-db-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for payment processing database
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: !Ref VPCCIDR
+          Description: Allow MySQL access from VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-db-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: Aurora MySQL cluster parameter group for payment processing
+      Family: aurora-mysql8.0
+      Parameters:
+        character_set_server: utf8mb4
+        collation_server: utf8mb4_unicode_ci
+        max_connections: 1000
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-cluster-params-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    Condition: IsPrimaryRegion
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DatabaseName: payments
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecretArn}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretArn}:SecretString:password}}'
+      DBClusterIdentifier: !Sub 'payment-cluster-${EnvironmentSuffix}'
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - general
+        - slowquery
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-cluster-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  DBInstance1:
+    Type: AWS::RDS::DBInstance
+    Condition: IsPrimaryRegion
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-instance-1-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref DBCluster
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DBInstanceClass: db.t4g.medium
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-instance-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  DBInstance2:
+    Type: AWS::RDS::DBInstance
+    Condition: IsPrimaryRegion
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-instance-2-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref DBCluster
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DBInstanceClass: db.t4g.medium
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-instance-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Cross-Region Read Replica Cluster for DR
+  ReadReplicaCluster:
+    Type: AWS::RDS::DBCluster
+    Condition: IsDRRegion
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DBClusterIdentifier: !Sub 'payment-cluster-replica-${EnvironmentSuffix}'
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      ReplicationSourceIdentifier: !Sub 'arn:aws:rds:${SourceRegion}:${AWS::AccountId}:cluster:payment-cluster-${EnvironmentSuffix}'
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - general
+        - slowquery
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-cluster-replica-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Type
+          Value: 'read-replica'
+        - Key: Project
+          Value: payment-processing-dr
+
+  ReadReplicaInstance1:
+    Type: AWS::RDS::DBInstance
+    Condition: IsDRRegion
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-replica-instance-1-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref ReadReplicaCluster
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DBInstanceClass: db.t4g.medium
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-replica-instance-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ReadReplicaInstance2:
+    Type: AWS::RDS::DBInstance
+    Condition: IsDRRegion
+    Properties:
+      DBInstanceIdentifier: !Sub 'payment-replica-instance-2-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref ReadReplicaCluster
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      DBInstanceClass: db.t4g.medium
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-replica-instance-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SessionTable:
+    Type: AWS::DynamoDB::GlobalTable
+    Condition: IsPrimaryRegion
+    Properties:
+      TableName: !Sub 'payment-sessions-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user-index
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      Replicas:
+        - Region: !Ref SourceRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+          Tags:
+            - Key: Environment
+              Value: !Ref EnvironmentSuffix
+        - Region: !Ref DRRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+          Tags:
+            - Key: Environment
+              Value: !Ref EnvironmentSuffix
+
+  TransactionLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'payment-transaction-logs-${AWS::Region}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      ReplicationConfiguration: !If
+        - IsPrimaryRegion
+        - Role: !GetAtt ReplicationRole.Arn
+          Rules:
+            - Id: ReplicateToSecondaryRegion
+              Status: Enabled
+              Priority: 1
+              Filter:
+                Prefix: ''
+              Destination:
+                Bucket: !Sub 'arn:aws:s3:::payment-transaction-logs-${DRRegion}-${EnvironmentSuffix}'
+                ReplicationTime:
+                  Status: Enabled
+                  Time:
+                    Minutes: 15
+                Metrics:
+                  Status: Enabled
+                  EventThreshold:
+                    Minutes: 15
+                StorageClass: STANDARD_IA
+        - !Ref AWS::NoValue
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-transaction-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # S3 Replication Role for cross-region replication
+  ReplicationRole:
+    Type: AWS::IAM::Role
+    Condition: IsPrimaryRegion
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3ReplicationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetReplicationConfiguration'
+                  - 's3:ListBucket'
+                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-${AWS::Region}-${EnvironmentSuffix}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObjectVersionForReplication'
+                  - 's3:GetObjectVersionAcl'
+                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-${AWS::Region}-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ReplicateObject'
+                  - 's3:ReplicateDelete'
+                  - 's3:ReplicateTags'
+                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-${DRRegion}-${EnvironmentSuffix}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt KMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !Sub 'arn:aws:kms:${DRRegion}:${AWS::AccountId}:key/*'
+                Condition:
+                  StringLike:
+                    'kms:ViaService': !Sub 's3.${DRRegion}.amazonaws.com'
+
+Outputs:
+  DBClusterEndpoint:
+    Description: RDS Cluster Endpoint
+    Value: !If [IsPrimaryRegion, !GetAtt DBCluster.Endpoint.Address, '']
+
+  DBClusterReadEndpoint:
+    Description: RDS Cluster Read Endpoint
+    Value: !If [IsPrimaryRegion, !GetAtt DBCluster.ReadEndpoint.Address, '']
+
+  DBClusterIdentifier:
+    Description: RDS Cluster Identifier
+    Value: !If [IsPrimaryRegion, !Ref DBCluster, '']
+
+  SessionTableName:
+    Description: DynamoDB Session Table Name
+    Value: !If [IsPrimaryRegion, !Ref SessionTable, '']
+
+  TransactionLogBucketName:
+    Description: S3 Bucket for Transaction Logs
+    Value: !Ref TransactionLogBucket
+
+  KMSKeyId:
+    Description: KMS Key ID
+    Value: !Ref KMSKey

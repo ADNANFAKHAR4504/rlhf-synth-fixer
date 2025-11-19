@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Production-ready EKS cluster infrastructure
+main: lib/index.ts

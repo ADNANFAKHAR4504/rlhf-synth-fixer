@@ -343,7 +343,7 @@ if [ -z "$SUBTASK" ] || [ "$SUBTASK" = "" ]; then
         *"Application"*|*"Deployment"*|*"Serverless"*)
             SUBTASK="Application Deployment"
             ;;
-        *"CI"*"CD"*|*"Pipeline"*)
+        *"CI"*|*"CD"*|*"Pipeline"*)
             SUBTASK="CI/CD Pipeline Integration"
             ;;
         *"Failure"*|*"Recovery"*|*"Availability"*)
