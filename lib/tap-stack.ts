@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as path from 'path';
@@ -407,7 +408,7 @@ export default class TapStack extends pulumi.ComponentResource {
 
     // ===== Lambda Functions =====
     const lambdaCodeArchive = new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive(path.join(__dirname, '../lambda')),
+      '.': new pulumi.asset.FileArchive(path.join(__dirname, 'lambda')),
     });
 
     const dataIngestionLambda = new aws.lambda.Function(
