@@ -692,10 +692,18 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # ===== Auto Scaling =====
+        # Build resource_id with fallback for None values
+        resource_id = Output.all(
+            self.ecs_cluster.name,
+            self.ecs_service.name
+        ).apply(
+            lambda args: f"service/{args[0] or 'default-cluster'}/{args[1] or 'default-service'}"
+        )
+        
         self.ecs_target = aws.appautoscaling.Target(
             f"ml-api-autoscaling-target-{self.environment_suffix}",
             service_namespace="ecs",
-            resource_id=Output.concat("service/", self.ecs_cluster.name, "/", self.ecs_service.name),
+            resource_id=resource_id,
             scalable_dimension="ecs:service:DesiredCount",
             min_capacity=2,
             max_capacity=10,
@@ -703,6 +711,14 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Auto Scaling Policy based on ALB request count
+        # Build resource_label with fallback for None values
+        resource_label = Output.all(
+            self.alb.arn_suffix,
+            self.target_group.arn_suffix
+        ).apply(
+            lambda args: f"{args[0] or 'default-alb'}/{args[1] or 'default-tg'}"
+        )
+        
         self.ecs_scaling_policy = aws.appautoscaling.Policy(
             f"ml-api-scaling-policy-{self.environment_suffix}",
             name=f"ml-api-scaling-policy-{self.environment_suffix}",
@@ -716,11 +732,7 @@ class TapStack(pulumi.ComponentResource):
                     predefined_metric_specification=(
                         aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecificationArgs(  # pylint: disable=line-too-long
                             predefined_metric_type="ALBRequestCountPerTarget",
-                            resource_label=Output.concat(
-                                self.alb.arn_suffix,
-                                "/",
-                                self.target_group.arn_suffix
-                            )
+                            resource_label=resource_label
                         )
                     ),
                     scale_in_cooldown=300,
@@ -812,7 +824,9 @@ class TapStack(pulumi.ComponentResource):
         self.register_outputs({
             "alb_dns_name": self.alb_dns_name,
             "cloudfront_domain_name": self.cloudfront_domain_name,
-            "cloudfront_distribution_url": self.cloudfront_distribution.domain_name.apply(lambda d: f"https://{d}"),
+            "cloudfront_distribution_url": self.cloudfront_distribution.domain_name.apply(
+                lambda d: f"https://{d}" if d else "https://default.cloudfront.net"
+            ),
             "rds_cluster_endpoint": self.rds_endpoint,
             "dynamodb_table_name": self.dynamodb_table_name,
             "ecs_cluster_name": self.ecs_cluster_name,
