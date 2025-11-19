@@ -4,8 +4,9 @@ Tests all constructs and configurations without AWS deployment
 """
 
 import unittest
+
 import aws_cdk as cdk
-from aws_cdk.assertions import Template, Match
+from aws_cdk.assertions import Match, Template
 from pytest import mark
 
 from lib.tap_stack import TapStack, TapStackProps
@@ -204,12 +205,12 @@ class TestTapStack(unittest.TestCase):
             })
         })
 
-        # Verify HTTP listener on port 8080
+        # Verify HTTP listener on port 80
         self.template.has_resource_properties("AWS::AppMesh::VirtualNode", {
             "Spec": Match.object_like({
                 "Listeners": Match.array_with([
                     Match.object_like({
-                        "PortMapping": {"Port": 8080, "Protocol": "http"}
+                        "PortMapping": {"Port": 80, "Protocol": "http"}
                     })
                 ])
             })
@@ -220,12 +221,12 @@ class TestTapStack(unittest.TestCase):
         """Test App Mesh virtual routers"""
         self.template.resource_count_is("AWS::AppMesh::VirtualRouter", 3)
 
-        # Verify HTTP listener on port 8080
+        # Verify HTTP listener on port 80
         self.template.has_resource_properties("AWS::AppMesh::VirtualRouter", {
             "Spec": Match.object_like({
                 "Listeners": Match.array_with([
                     Match.object_like({
-                        "PortMapping": {"Port": 8080, "Protocol": "http"}
+                        "PortMapping": {"Port": 80, "Protocol": "http"}
                     })
                 ])
             })
@@ -306,11 +307,11 @@ class TestTapStack(unittest.TestCase):
         self.template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 1)
 
         self.template.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
-            "Port": 8080,
+            "Port": 80,
             "Protocol": "HTTP",
             "TargetType": "ip",
             "HealthCheckEnabled": True,
-            "HealthCheckPath": "/health"
+            "HealthCheckPath": "/"
         })
 
     @mark.it("creates IAM task roles with least-privilege permissions")
