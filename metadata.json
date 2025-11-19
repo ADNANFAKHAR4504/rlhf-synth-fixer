@@ -5,11 +5,9 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-11-19T11:35:00+00:00",
-  "subtask": "Infrastructure as Code",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "web-application-deployment"
+    "Cloud Environment Setup"
   ],
   "po_id": "101912383",
   "aws_services": [
@@ -25,5 +23,7 @@
     "Auto Scaling"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }

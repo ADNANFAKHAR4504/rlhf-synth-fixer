@@ -1,4 +1,0 @@
-encryptionsalt: v1:w60lETdaXKk=:v1:DrXdlwm2kR7DeP/+:lURvxmcOaM75eIwxyrxE2DcvDiUJkA==
-config:
-  pulumi-infra:db_password:
-    secure: v1:zPQeoJFZOZKWakv/:XOlLairV9WNcym68HZmsraDgnhyM6+kKTMdUyw==
