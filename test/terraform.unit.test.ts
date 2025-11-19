@@ -99,6 +99,11 @@ describe("Terraform Configuration Files", () => {
       expect(variablesContent).toMatch(/variable\s+"data_classification"/);
       expect(variablesContent).toMatch(/variable\s+"cost_center"/);
     });
+
+    test("declares transit_gateway_id variable with default value", () => {
+      expect(variablesContent).toMatch(/variable\s+"transit_gateway_id"/);
+      expect(variablesContent).toMatch(/default\s*=\s*"tgw-xxxxxxxxxxxxxxxxx"/);
+    });
   });
 
   describe("Stack Configuration - Variables", () => {
@@ -124,10 +129,6 @@ describe("Terraform Configuration Files", () => {
     test("does NOT declare environment variable (uses environment_suffix)", () => {
       const envVarMatch = stackContent.match(/variable\s+"environment"\s*{/);
       expect(envVarMatch).toBeNull();
-    });
-
-    test("declares transit_gateway_id variable", () => {
-      expect(stackContent).toMatch(/variable\s+"transit_gateway_id"/);
     });
 
     test("declares preexisting_kms_key_arn variable with empty default", () => {
@@ -264,11 +265,15 @@ describe("Terraform Configuration Files", () => {
     test("creates Transit Gateway attachment", () => {
       expect(stackContent).toMatch(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"security_vpc_attachment"/);
       expect(stackContent).toMatch(/transit_gateway_id\s*=\s*var\.transit_gateway_id/);
+      // Check for conditional creation logic
+      expect(stackContent).toMatch(/count\s*=\s*var\.transit_gateway_id\s*!=\s*"tgw-xxxxxxxxxxxxxxxxx"\s*\?\s*1\s*:\s*0/);
     });
 
     test("creates default route through Transit Gateway", () => {
       expect(stackContent).toMatch(/resource\s+"aws_route"\s+"default_route_to_tgw"/);
       expect(stackContent).toMatch(/destination_cidr_block\s*=\s*"0\.0\.0\.0\/0"/);
+      // Check for conditional creation logic
+      expect(stackContent).toMatch(/count\s*=\s*var\.transit_gateway_id\s*!=\s*"tgw-xxxxxxxxxxxxxxxxx"\s*\?\s*1\s*:\s*0/);
     });
 
     test("creates Network ACL", () => {
@@ -893,6 +898,16 @@ describe("Terraform Configuration Files", () => {
     test("data source for existing KMS key is conditional", () => {
       const dataMatch = stackContent.match(/data\s+"aws_kms_key"\s+"existing_data_key"[\s\S]*?count\s*=\s*var\.preexisting_kms_key_arn\s*!=\s*""\s*\?\s*1\s*:\s*0/);
       expect(dataMatch).not.toBeNull();
+    });
+
+    test("Transit Gateway resources created conditionally", () => {
+      // Transit Gateway attachment should only be created when a real TGW ID is provided
+      const attachmentMatch = stackContent.match(/resource\s+"aws_ec2_transit_gateway_vpc_attachment"\s+"security_vpc_attachment"[\s\S]*?count\s*=\s*var\.transit_gateway_id\s*!=\s*"tgw-xxxxxxxxxxxxxxxxx"\s*\?\s*1\s*:\s*0/);
+      expect(attachmentMatch).not.toBeNull();
+      
+      // Transit Gateway route should also be conditional
+      const routeMatch = stackContent.match(/resource\s+"aws_route"\s+"default_route_to_tgw"[\s\S]*?count\s*=\s*var\.transit_gateway_id\s*!=\s*"tgw-xxxxxxxxxxxxxxxxx"\s*\?\s*1\s*:\s*0/);
+      expect(routeMatch).not.toBeNull();
     });
   });
 

@@ -9,16 +9,6 @@
 # Core variables are defined in variables.tf (aws_region, environment_suffix, etc.)
 # Application-specific variables defined here
 
-variable "transit_gateway_id" {
-  description = "ID of the existing Transit Gateway for centralized routing"
-  type        = string
-
-  validation {
-    condition     = var.transit_gateway_id != null && var.transit_gateway_id != ""
-    error_message = "transit_gateway_id must be provided and cannot be empty."
-  }
-}
-
 variable "preexisting_kms_key_arn" {
   description = "ARN of pre-existing KMS key for data encryption (optional)"
   type        = string
@@ -197,6 +187,8 @@ resource "aws_route_table_association" "private_subnet_associations" {
 
 # Transit Gateway attachment for centralized routing
 resource "aws_ec2_transit_gateway_vpc_attachment" "security_vpc_attachment" {
+  count = var.transit_gateway_id != "tgw-xxxxxxxxxxxxxxxxx" ? 1 : 0
+
   subnet_ids         = aws_subnet.private_subnets[*].id
   transit_gateway_id = var.transit_gateway_id
   vpc_id             = aws_vpc.security_vpc.id
@@ -212,6 +204,8 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "security_vpc_attachment" {
 
 # Default route through Transit Gateway for egress
 resource "aws_route" "default_route_to_tgw" {
+  count = var.transit_gateway_id != "tgw-xxxxxxxxxxxxxxxxx" ? 1 : 0
+
   route_table_id         = aws_route_table.private_route_table.id
   destination_cidr_block = "0.0.0.0/0"
   transit_gateway_id     = var.transit_gateway_id

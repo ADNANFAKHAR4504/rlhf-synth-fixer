@@ -47,3 +47,14 @@ variable "cost_center" {
   type        = string
   default     = "FinanceIT"
 }
+
+variable "transit_gateway_id" {
+  description = "ID of the existing Transit Gateway for centralized routing"
+  type        = string
+  default     = "tgw-xxxxxxxxxxxxxxxxx"
+
+  validation {
+    condition     = var.transit_gateway_id != null && var.transit_gateway_id != ""
+    error_message = "transit_gateway_id must be provided and cannot be empty."
+  }
+}

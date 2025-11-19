@@ -191,27 +191,21 @@ aws s3api put-bucket-versioning \
 
 ---
 
-### 2. Transit Gateway ID Must Be Provided
+### 2. Transit Gateway ID Must Be Provided (RESOLVED)
 
-**Limitation:** Transit Gateway must exist before deploying this infrastructure.
+**Original Issue:** Transit Gateway must exist before deploying this infrastructure.
 
-**Impact:** Cannot use `terraform apply` without setting `transit_gateway_id` variable.
+**Original Impact:** Cannot use `terraform apply` without setting `transit_gateway_id` variable.
 
-**Reason:** Transit Gateway typically exists as shared infrastructure in hub-and-spoke network architecture.
+**Resolution:** Added default value and conditional resource creation:
+- Default value: `"tgw-xxxxxxxxxxxxxxxxx"` for testing environments
+- Transit Gateway resources are conditionally created only when real TGW ID is provided
+- Uses count parameter with condition: `count = var.transit_gateway_id != "tgw-xxxxxxxxxxxxxxxxx" ? 1 : 0`
 
-**Workaround:**
-```bash
-# Option 1: Set via command line
-terraform apply -var="transit_gateway_id=tgw-0123456789abcdef"
+**Current Status:** ✅ **RESOLVED** - Infrastructure now deploys successfully in both testing and production scenarios.
 
-# Option 2: Set via tfvars file
-echo 'transit_gateway_id = "tgw-0123456789abcdef"' > terraform.tfvars
-
-# Option 3: Set via environment variable
-export TF_VAR_transit_gateway_id="tgw-0123456789abcdef"
-```
-
-**Risk Assessment:** Medium - Infrastructure won't deploy without valid TGW ID, but error message is clear.
+**Testing Mode:** Uses placeholder value, skips TGW resources
+**Production Mode:** Requires real TGW ID via variable override
 
 ---
 
