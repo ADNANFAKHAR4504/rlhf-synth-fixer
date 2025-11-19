@@ -6,8 +6,16 @@
   "team": "synth",
   "startedAt": "2025-11-18T00:04:00-08:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "po_id": "w8r7z4",
   "aws_services": [],
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
