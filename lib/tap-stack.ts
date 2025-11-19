@@ -78,11 +78,7 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     // Define availability zones
-    const availabilityZones = [
-      'us-east-1a',
-      'us-east-1b',
-      'us-east-1c',
-    ];
+    const availabilityZones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
 
     // Create VPC
     const vpc = new aws.ec2.Vpc(
