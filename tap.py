@@ -1,52 +1,50 @@
 #!/usr/bin/env python3
 """
-CDK application entry point for the TAP (Test Automation Platform) infrastructure.
-
-This module defines the core CDK application and instantiates the TapStack with appropriate
-configuration based on the deployment environment. It handles environment-specific settings,
-tagging, and deployment configuration for AWS resources.
-
-The stack created by this module uses environment suffixes to distinguish between
-different deployment environments (development, staging, production, etc.).
+Multi-region disaster recovery application entry point.
+Deploys payment processing infrastructure to both us-east-1 and us-east-2.
 """
 import os
-from datetime import datetime, timezone
-
 import aws_cdk as cdk
-from aws_cdk import Tags
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack
+
+# Get environment suffix from environment variable or use default
+environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
 
 app = cdk.App()
 
-# Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
-STACK_NAME = f"TapStack{environment_suffix}"
-
-repository_name = os.getenv('REPOSITORY', 'unknown')
-commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
-pr_number = os.getenv('PR_NUMBER', 'unknown')
-team = os.getenv('TEAM', 'unknown')
-created_at = datetime.now(timezone.utc).isoformat()
-
-# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environment_suffix)
-Tags.of(app).add('Repository', repository_name)
-Tags.of(app).add('Author', commit_author)
-Tags.of(app).add('PRNumber', pr_number)
-Tags.of(app).add('Team', team)
-Tags.of(app).add('CreatedAt', created_at)
-
-# Create a TapStackProps object to pass environment_suffix
-
-props = TapStackProps(
+# Create primary stack in us-east-1
+primary_stack = TapStack(
+    app,
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
+    is_primary=True,
+    primary_region="us-east-1",
+    secondary_region="us-east-2",
     env=cdk.Environment(
-        account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION')
-    )
+        account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
+        region="us-east-1",
+    ),
+    description=f"Multi-region DR Payment Processing Stack - Primary ({environment_suffix})",
 )
 
-# Initialize the stack with proper parameters
-TapStack(app, STACK_NAME, props=props)
+# Create secondary stack in us-east-2
+secondary_stack = TapStack(
+    app,
+    f"TapStack{environment_suffix}",
+    environment_suffix=environment_suffix,
+    is_primary=False,
+    primary_region="us-east-1",
+    secondary_region="us-east-2",
+    env=cdk.Environment(
+        account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
+        region="us-east-2",
+    ),
+    description=f"Multi-region DR Payment Processing Stack - Secondary ({environment_suffix})",
+)
+
+# Add stack tags
+cdk.Tags.of(app).add("Project", "PaymentProcessing")
+cdk.Tags.of(app).add("Environment", environment_suffix)
+cdk.Tags.of(app).add("ManagedBy", "CDK")
 
 app.synth()
