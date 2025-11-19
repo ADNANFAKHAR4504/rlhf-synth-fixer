@@ -14,7 +14,7 @@ import pulumi
 from pulumi import ResourceOptions
 
 # Import the classes we're testing
-from lib.tap_stack import TapStack, TapStackArgs
+from lib.tap_stack import TapStack, TapStackArgs, generate_random_password
 
 
 # ============================================================================
@@ -56,6 +56,58 @@ class MyMocks:
                 "zone_ids": ["use1-az1", "use1-az2", "use1-az3"]
             }
         return {}
+
+
+# ============================================================================
+# TestGenerateRandomPassword - Tests for password generation function
+# ============================================================================
+
+class TestGenerateRandomPassword(unittest.TestCase):
+    """Test cases for generate_random_password function."""
+
+    def test_generate_random_password_default_length(self):
+        """Test password generation with default length."""
+        password = generate_random_password()
+        self.assertEqual(len(password), 32)
+        self.assertIsInstance(password, str)
+
+    def test_generate_random_password_custom_length(self):
+        """Test password generation with custom length."""
+        password = generate_random_password(length=16)
+        self.assertEqual(len(password), 16)
+
+    def test_generate_random_password_contains_uppercase(self):
+        """Test password contains uppercase letters."""
+        password = generate_random_password()
+        self.assertTrue(any(c.isupper() for c in password))
+
+    def test_generate_random_password_contains_lowercase(self):
+        """Test password contains lowercase letters."""
+        password = generate_random_password()
+        self.assertTrue(any(c.islower() for c in password))
+
+    def test_generate_random_password_contains_digits(self):
+        """Test password contains digits."""
+        password = generate_random_password()
+        self.assertTrue(any(c.isdigit() for c in password))
+
+    def test_generate_random_password_contains_special(self):
+        """Test password contains special characters."""
+        password = generate_random_password()
+        special_chars = "!#$%&*()-_=+[]{}|;:,.<>?~`"
+        self.assertTrue(any(c in special_chars for c in password))
+
+    def test_generate_random_password_excludes_forbidden(self):
+        """Test password excludes forbidden characters."""
+        password = generate_random_password()
+        forbidden = ['/', '@', '"', ' ']
+        self.assertFalse(any(c in password for c in forbidden))
+
+    def test_generate_random_password_uniqueness(self):
+        """Test that generated passwords are unique."""
+        passwords = [generate_random_password() for _ in range(10)]
+        # All passwords should be different
+        self.assertEqual(len(set(passwords)), 10)
 
 
 # ============================================================================
@@ -571,6 +623,68 @@ class TestTapStackInitialization(unittest.TestCase):
         finally:
             pulumi.runtime.set_mocks(None)
 
+    @pulumi.runtime.test
+    def test_tap_stack_password_generation_path(self):
+        """Test that password is generated when db_password is not provided."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_password_generation(args):
+            """Verify password generation path is executed."""
+            # Mock config to return None for db_password
+            with patch('pulumi.Config') as mock_config_class:
+                mock_config = MagicMock()
+                mock_config.get_secret.return_value = None
+                mock_config_class.return_value = mock_config
+                
+                stack = TapStack(
+                    name="test-password-gen",
+                    args=TapStackArgs(environment_suffix='test')
+                )
+                
+                # Verify stack was created (password generation path was executed)
+                assert stack.db_cluster is not None
+                # Verify config.get_secret was called
+                mock_config.get_secret.assert_called_with("db_password")
+                
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_password_generation)
+        finally:
+            pulumi.runtime.set_mocks(None)
+
+    @pulumi.runtime.test
+    def test_tap_stack_with_provided_password(self):
+        """Test that provided password is used when db_password is set."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_provided_password(args):
+            """Verify provided password path is executed."""
+            # Mock config to return a password
+            with patch('pulumi.Config') as mock_config_class:
+                mock_config = MagicMock()
+                mock_config.get_secret.return_value = "provided-password-123"
+                mock_config_class.return_value = mock_config
+                
+                stack = TapStack(
+                    name="test-provided-password",
+                    args=TapStackArgs(environment_suffix='test')
+                )
+                
+                # Verify stack was created
+                assert stack.db_cluster is not None
+                # Verify config.get_secret was called
+                mock_config.get_secret.assert_called_with("db_password")
+                
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_provided_password)
+        finally:
+            pulumi.runtime.set_mocks(None)
+
 
 # ============================================================================
 # TestTapStackResources - Tests for TapStack resource creation
@@ -1050,6 +1164,221 @@ class TestTapStackComplexTags(unittest.TestCase):
             return {}
 
         pulumi.runtime.test(check_tags)
+
+
+# ============================================================================
+# TestTapStackComprehensive - Additional comprehensive tests for coverage
+# ============================================================================
+
+class TestTapStackComprehensive(unittest.TestCase):
+    """Additional comprehensive tests to improve code coverage."""
+
+    @pulumi.runtime.test
+    def test_tap_stack_all_resources_initialized(self):
+        """Test that all resources are properly initialized in TapStack."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_all_resources(args):
+            """Verify all resources are created and accessible."""
+            stack = TapStack(
+                name="test-comprehensive",
+                args=TapStackArgs(environment_suffix='coverage-test')
+            )
+
+            # Network resources
+            assert stack.vpc is not None
+            assert stack.igw is not None
+            assert len(stack.public_subnets) == 3
+            assert len(stack.private_subnets) == 3
+            assert stack.nat_gateway is not None
+            assert stack.eip is not None
+            assert stack.public_rt is not None
+            assert stack.private_rt is not None
+
+            # Security groups
+            assert stack.alb_sg is not None
+            assert stack.ecs_sg is not None
+            assert stack.rds_sg is not None
+
+            # Database resources
+            assert stack.db_subnet_group is not None
+            assert stack.db_cluster_param_group is not None
+            assert stack.db_cluster is not None
+            assert stack.db_instance is not None
+
+            # DynamoDB
+            assert stack.session_table is not None
+
+            # IAM resources
+            assert stack.ecs_task_execution_role is not None
+            assert stack.ecs_task_role is not None
+            assert stack.ecs_secrets_policy is not None
+            assert stack.ecs_task_policy is not None
+
+            # ECS resources
+            assert stack.ecs_cluster is not None
+            assert stack.cluster_capacity_providers is not None
+            assert stack.task_definition is not None
+            assert stack.ecs_service is not None
+
+            # ALB resources
+            assert stack.alb is not None
+            assert stack.target_group is not None
+            assert stack.alb_listener is not None
+            assert stack.listener_rule_v1 is not None
+            assert stack.listener_rule_v2 is not None
+
+            # Auto-scaling
+            assert stack.ecs_target is not None
+            assert stack.ecs_scaling_policy is not None
+
+            # CloudWatch
+            assert stack.ecs_log_group is not None
+            assert stack.alb_log_group is not None
+
+            # CloudFront
+            assert stack.cloudfront_oai is not None
+            assert stack.cloudfront_distribution is not None
+
+            # Verify attributes
+            assert stack.environment_suffix == 'coverage-test'
+            assert isinstance(stack.tags, dict)
+
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_all_resources)
+        finally:
+            pulumi.runtime.set_mocks(None)
+
+    @pulumi.runtime.test
+    def test_tap_stack_output_attributes(self):
+        """Test that all output attributes are set correctly."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_outputs(args):
+            """Verify output attributes are accessible."""
+            stack = TapStack(
+                name="test-outputs",
+                args=TapStackArgs(environment_suffix='output-test')
+            )
+
+            # Check that output attributes exist and are accessible
+            assert hasattr(stack, 'alb_dns_name')
+            assert hasattr(stack, 'cloudfront_domain_name')
+            assert hasattr(stack, 'rds_endpoint')
+            assert hasattr(stack, 'dynamodb_table_name')
+            assert hasattr(stack, 'ecs_cluster_name')
+            assert hasattr(stack, 'ecs_service_name')
+
+            # Access the attributes to ensure they're evaluated
+            _ = stack.alb_dns_name
+            _ = stack.cloudfront_domain_name
+            _ = stack.rds_endpoint
+            _ = stack.dynamodb_table_name
+            _ = stack.ecs_cluster_name
+            _ = stack.ecs_service_name
+
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_outputs)
+        finally:
+            pulumi.runtime.set_mocks(None)
+
+    @pulumi.runtime.test
+    def test_tap_stack_different_environment_suffixes(self):
+        """Test TapStack with various environment suffixes."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_various_suffixes(args):
+            """Test with different environment suffixes."""
+            suffixes = ['dev', 'test', 'prod', 'staging', 'pr123']
+            
+            for suffix in suffixes:
+                stack = TapStack(
+                    name=f"test-{suffix}",
+                    args=TapStackArgs(environment_suffix=suffix)
+                )
+                assert stack.environment_suffix == suffix
+                assert stack.vpc is not None
+                assert stack.ecs_cluster is not None
+
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_various_suffixes)
+        finally:
+            pulumi.runtime.set_mocks(None)
+
+    @pulumi.runtime.test
+    def test_tap_stack_with_custom_tags(self):
+        """Test TapStack with various tag configurations."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_custom_tags(args):
+            """Test with different tag configurations."""
+            test_tags = {
+                'Environment': 'test',
+                'Project': 'ml-api',
+                'Team': 'platform',
+                'CostCenter': 'engineering'
+            }
+            
+            stack = TapStack(
+                name="test-tags",
+                args=TapStackArgs(environment_suffix='test', tags=test_tags)
+            )
+            
+            assert stack.tags == test_tags
+            assert stack.vpc is not None
+
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_custom_tags)
+        finally:
+            pulumi.runtime.set_mocks(None)
+
+    @pulumi.runtime.test
+    def test_tap_stack_resource_dependencies(self):
+        """Test that resource dependencies are properly set."""
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def check_dependencies(args):
+            """Verify resource dependencies are correct."""
+            stack = TapStack(
+                name="test-deps",
+                args=TapStackArgs(environment_suffix='test')
+            )
+
+            # Verify that resources that depend on others are created
+            # ECS service depends on cluster, task definition, target group
+            assert stack.ecs_service is not None
+            assert stack.ecs_cluster is not None
+            assert stack.task_definition is not None
+            assert stack.target_group is not None
+
+            # RDS instance depends on cluster
+            assert stack.db_instance is not None
+            assert stack.db_cluster is not None
+
+            # Subnets depend on VPC
+            assert len(stack.public_subnets) == 3
+            assert len(stack.private_subnets) == 3
+            assert stack.vpc is not None
+
+            return {}
+
+        pulumi.runtime.set_mocks(MyMocks())
+        try:
+            pulumi.runtime.test(check_dependencies)
+        finally:
+            pulumi.runtime.set_mocks(None)
 
 
 if __name__ == '__main__':

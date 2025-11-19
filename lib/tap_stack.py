@@ -9,10 +9,44 @@ with ECS Fargate, Aurora Serverless v2, DynamoDB, CloudFront, and comprehensive 
 
 from typing import Optional
 import json
+import secrets
+import string
 
 import pulumi
 import pulumi_aws as aws
 from pulumi import Output, ResourceOptions
+
+
+def generate_random_password(length: int = 32) -> str:
+    """
+    Generate a secure random password that meets RDS requirements.
+    
+    RDS password requirements:
+    - Must contain uppercase, lowercase, numbers, and special characters
+    - Cannot contain: /, @, ", or space
+    """
+    # Characters allowed in RDS passwords (excluding forbidden: /, @, ", space)
+    uppercase = string.ascii_uppercase
+    lowercase = string.ascii_lowercase
+    digits = string.digits
+    special = "!#$%&*()-_=+[]{}|;:,.<>?~`"
+    
+    # Ensure at least one of each required type
+    password = [
+        secrets.choice(uppercase),
+        secrets.choice(lowercase),
+        secrets.choice(digits),
+        secrets.choice(special)
+    ]
+    
+    # Fill the rest randomly
+    all_chars = uppercase + lowercase + digits + special
+    password.extend(secrets.choice(all_chars) for _ in range(length - 4))
+    
+    # Shuffle to avoid predictable pattern
+    secrets.SystemRandom().shuffle(password)
+    
+    return ''.join(password)
 
 
 class TapStackArgs:
@@ -301,6 +335,16 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Get or generate database password
+        config = pulumi.Config()
+        db_password = config.get_secret("db_password")
+        if db_password is None:
+            # Generate a random password if not provided
+            generated_password = generate_random_password()
+            # Create a secret Output from the generated password
+            db_password = Output.secret(generated_password)
+            pulumi.log.info(f"Generated random database password for cluster {self.environment_suffix}")
+        
         # RDS Aurora Serverless v2 Cluster
         self.db_cluster = aws.rds.Cluster(
             f"ml-api-aurora-cluster-{self.environment_suffix}",
@@ -310,7 +354,7 @@ class TapStack(pulumi.ComponentResource):
             engine_mode="provisioned",
             database_name="mlapi",
             master_username="dbadmin",
-            master_password=pulumi.Config().require_secret("db_password"),
+            master_password=db_password,
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_sg.id],
             db_cluster_parameter_group_name=self.db_cluster_param_group.name,
