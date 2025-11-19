@@ -43,6 +43,13 @@ from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
 from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
 from cdktf_cdktf_provider_aws.route_table_association import \
     RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
+    S3BucketVersioning, S3BucketVersioningVersioningConfiguration)
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
     SecretsmanagerSecretVersion
@@ -108,6 +115,43 @@ class TapStack(TerraformStack):
 
         # Add S3 state locking using escape hatch
         self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # S3 Bucket for artifacts/logs
+        self.bucket = S3Bucket(
+            self,
+            f"artifacts_bucket_{environment_suffix}",
+            bucket=f"payment-artifacts-{environment_suffix}",
+            force_destroy=True,  # Required for destroyability
+            tags={
+                "Name": f"payment-artifacts-{environment_suffix}",
+                "Environment": environment_suffix
+            }
+        )
+
+        # S3 Bucket Versioning
+        self.bucket_versioning = S3BucketVersioning(
+            self,
+            f"artifacts_bucket_versioning_{environment_suffix}",
+            bucket=self.bucket.id,
+            versioning_configuration=S3BucketVersioningVersioningConfiguration(
+                status="Enabled"
+            )
+        )
+
+        # S3 Bucket Encryption
+        self.bucket_encryption = S3BucketServerSideEncryptionConfigurationA(
+            self,
+            f"artifacts_bucket_encryption_{environment_suffix}",
+            bucket=self.bucket.id,
+            rule=[
+                S3BucketServerSideEncryptionConfigurationRuleA(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                        sse_algorithm="AES256"
+                    ),
+                    bucket_key_enabled=True
+                )
+            ]
+        )
 
         # Get availability zones
         azs = DataAwsAvailabilityZones(
@@ -990,4 +1034,18 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             "workspace",
             value=workspace,
             description="Current Terraform workspace"
+        )
+
+        TerraformOutput(
+            self,
+            "artifacts_bucket_name",
+            value=self.bucket.bucket,
+            description="Name of the artifacts S3 bucket"
+        )
+
+        TerraformOutput(
+            self,
+            "artifacts_bucket_arn",
+            value=self.bucket.arn,
+            description="ARN of the artifacts S3 bucket"
         )
