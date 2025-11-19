@@ -1,44 +1,57 @@
 """Payment Processing Migration Stack - CDKTF Python Implementation."""
 
+import json
 from typing import Dict, List, Optional
-from constructs import Construct
-from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
-from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
-from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate, LaunchTemplateTagSpecifications
-from cdktf_cdktf_provider_aws.autoscaling_group import AutoscalingGroup, AutoscalingGroupTag
-from cdktf_cdktf_provider_aws.lb import Lb
-from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup, LbTargetGroupHealthCheck
-from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
-from cdktf_cdktf_provider_aws.dms_replication_subnet_group import DmsReplicationSubnetGroup
-from cdktf_cdktf_provider_aws.dms_replication_instance import DmsReplicationInstance
-from cdktf_cdktf_provider_aws.dms_endpoint import DmsEndpoint
-from cdktf_cdktf_provider_aws.dms_replication_task import DmsReplicationTask
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
-from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
-from cdktf_cdktf_provider_aws.route53_record import Route53Record, Route53RecordWeightedRoutingPolicy
+
+from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.autoscaling_group import (AutoscalingGroup,
+                                                        AutoscalingGroupTag)
 from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
-    CloudwatchMetricAlarm,
-    CloudwatchMetricAlarmMetricQuery,
-    CloudwatchMetricAlarmMetricQueryMetric
-)
-from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
-from cdktf_cdktf_provider_aws.data_aws_vpn_connection import DataAwsVpnConnection
+    CloudwatchMetricAlarm, CloudwatchMetricAlarmMetricQuery,
+    CloudwatchMetricAlarmMetricQueryMetric)
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
+from cdktf_cdktf_provider_aws.data_aws_availability_zones import \
+    DataAwsAvailabilityZones
+from cdktf_cdktf_provider_aws.data_aws_vpn_connection import \
+    DataAwsVpnConnection
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+from cdktf_cdktf_provider_aws.dms_endpoint import DmsEndpoint
+from cdktf_cdktf_provider_aws.dms_replication_instance import \
+    DmsReplicationInstance
+from cdktf_cdktf_provider_aws.dms_replication_subnet_group import \
+    DmsReplicationSubnetGroup
+from cdktf_cdktf_provider_aws.dms_replication_task import DmsReplicationTask
+from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.launch_template import (
+    LaunchTemplate, LaunchTemplateTagSpecifications)
+from cdktf_cdktf_provider_aws.lb import Lb
+from cdktf_cdktf_provider_aws.lb_listener import (LbListener,
+                                                  LbListenerDefaultAction)
+from cdktf_cdktf_provider_aws.lb_target_group import (LbTargetGroup,
+                                                      LbTargetGroupHealthCheck)
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
+from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+from cdktf_cdktf_provider_aws.route53_record import (
+    Route53Record, Route53RecordWeightedRoutingPolicy)
+from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-import json
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
+    SecretsmanagerSecretVersion
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -690,7 +703,7 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             replication_subnet_group_id=dms_subnet_group.id,
             publicly_accessible=False,
             multi_az=False,  # Single AZ for cost optimization
-            engine_version="3.5.2",
+            engine_version="3.5.3",
             tags={
                 "Name": f"payment-dms-instance-{environment_suffix}",
                 "Environment": environment_suffix
@@ -783,7 +796,7 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
         hosted_zone = Route53Zone(
             self,
             f"hosted_zone_{environment_suffix}",
-            name=f"payment-{environment_suffix}.example.com",
+            name=f"payment-{environment_suffix}.internal.local",
             tags={
                 "Name": f"payment-zone-{environment_suffix}",
                 "Environment": environment_suffix
@@ -795,7 +808,7 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             self,
             f"route53_aws_{environment_suffix}",
             zone_id=hosted_zone.zone_id,
-            name=f"app.payment-{environment_suffix}.example.com",
+            name=f"app.payment-{environment_suffix}.internal.local",
             type="CNAME",
             ttl=60,
             records=[alb.dns_name],
