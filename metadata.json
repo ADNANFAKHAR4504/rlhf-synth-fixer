@@ -13,6 +13,8 @@
   ],
   "startedAt": "2025-11-19T09:30:00Z",
   "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
   "aws_services": [
     "CodePipeline",
     "CodeBuild",
