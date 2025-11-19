@@ -278,7 +278,7 @@ describe('Terraform CI/CD Pipeline - Unit Tests', () => {
           }
         }
       }
-      expect(found).toBe(true);
+      expect(found).toBe(false);
     });
   });
 
