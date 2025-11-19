@@ -239,7 +239,8 @@ class TapStack(TerraformStack):
             "validator_log_group",
             name=f"/aws/lambda/csv-validator-{environment_suffix}",
             retention_in_days=7,
-            tags=common_tags
+            tags=common_tags,
+            lifecycle={"create_before_destroy": True}
         )
 
         transformer_log_group = CloudwatchLogGroup(
@@ -247,7 +248,8 @@ class TapStack(TerraformStack):
             "transformer_log_group",
             name=f"/aws/lambda/data-transformer-{environment_suffix}",
             retention_in_days=7,
-            tags=common_tags
+            tags=common_tags,
+            lifecycle={"create_before_destroy": True}
         )
 
         notifier_log_group = CloudwatchLogGroup(
@@ -255,7 +257,8 @@ class TapStack(TerraformStack):
             "notifier_log_group",
             name=f"/aws/lambda/notification-sender-{environment_suffix}",
             retention_in_days=7,
-            tags=common_tags
+            tags=common_tags,
+            lifecycle={"create_before_destroy": True}
         )
 
         api_log_group = CloudwatchLogGroup(
@@ -263,7 +266,8 @@ class TapStack(TerraformStack):
             "api_log_group",
             name=f"/aws/apigateway/transaction-api-{environment_suffix}",
             retention_in_days=7,
-            tags=common_tags
+            tags=common_tags,
+            lifecycle={"create_before_destroy": True}
         )
 
         sfn_log_group = CloudwatchLogGroup(
@@ -271,7 +275,8 @@ class TapStack(TerraformStack):
             "sfn_log_group",
             name=f"/aws/states/transaction-workflow-{environment_suffix}",
             retention_in_days=7,
-            tags=common_tags
+            tags=common_tags,
+            lifecycle={"create_before_destroy": True}
         )
 
         # ========================================

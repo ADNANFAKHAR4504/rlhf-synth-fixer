@@ -1605,7 +1605,7 @@ Integration tests verify:
 
 1. Set environment variables:
 ```bash
-export ENVIRONMENT_SUFFIX="pr6801"
+export ENVIRONMENT_SUFFIX="pr6875"
 export TERRAFORM_STATE_BUCKET="iac-rlhf-tf-states"
 export AWS_REGION="us-east-1"
 ```
@@ -1615,20 +1615,55 @@ export AWS_REGION="us-east-1"
 pip install -r requirements.txt
 ```
 
-3. Synthesize CDKTF:
+3. Clean up existing resources (if needed):
+```bash
+# Make the cleanup script executable (first time only)
+chmod +x cleanup-resources.sh
+
+# Run cleanup for your environment
+./cleanup-resources.sh $ENVIRONMENT_SUFFIX
+```
+
+4. Synthesize CDKTF:
 ```bash
 cdktf synth
 ```
 
-4. Deploy infrastructure:
+5. Deploy infrastructure:
 ```bash
 cdktf deploy TapStack${ENVIRONMENT_SUFFIX}
 ```
 
-5. Destroy infrastructure (when done):
+6. Destroy infrastructure (when done):
 ```bash
 cdktf destroy TapStack${ENVIRONMENT_SUFFIX}
 ```
+
+### Handling Resource Conflicts
+
+If you encounter errors about existing resources during deployment, use the provided cleanup script:
+
+```bash
+# Run cleanup for a specific environment
+./cleanup-resources.sh [environment_suffix]
+
+# Example for pr6875 environment
+./cleanup-resources.sh pr6875
+```
+
+The cleanup script (`cleanup-resources.sh`) removes:
+- S3 buckets (with --force to delete all contents)
+- DynamoDB tables
+- Lambda functions
+- CloudWatch Log Groups
+- SNS topics
+- SQS queues
+- Step Functions state machines
+- API Gateway resources
+- IAM roles
+- CloudWatch alarms
+
+This ensures idempotent deployments by cleaning up any resources that might cause naming conflicts.
 
 ## Validation
 
