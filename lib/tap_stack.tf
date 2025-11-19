@@ -6,6 +6,7 @@ data "aws_region" "current" {}
 variable "environment_suffix" {
   description = "Unique suffix for resource names"
   type        = string
+  default     = "prod-v1"
 }
 
 variable "aws_region" {
