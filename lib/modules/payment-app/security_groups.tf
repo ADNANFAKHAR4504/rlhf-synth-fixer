@@ -1,8 +1,8 @@
 # Security group for ALB
 resource "aws_security_group" "alb" {
-  name        = "${var.environment}-payment-app-alb-sg"
+  name        = "alb-sg-${var.environment_suffix}"
   description = "Security group for Application Load Balancer"
-  vpc_id      = data.aws_vpc.existing.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description = "HTTPS from Internet"
@@ -29,7 +29,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name        = "${var.environment}-payment-app-alb-sg"
+    Name        = "alb-sg-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -38,9 +38,9 @@ resource "aws_security_group" "alb" {
 
 # Security group for EC2 instances
 resource "aws_security_group" "ec2" {
-  name        = "${var.environment}-payment-app-ec2-sg"
+  name        = "ec2-sg-${var.environment_suffix}"
   description = "Security group for EC2 instances"
-  vpc_id      = data.aws_vpc.existing.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description     = "HTTP from ALB"
@@ -67,7 +67,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name        = "${var.environment}-payment-app-ec2-sg"
+    Name        = "ec2-sg-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -76,9 +76,9 @@ resource "aws_security_group" "ec2" {
 
 # Security group for RDS
 resource "aws_security_group" "rds" {
-  name        = "${var.environment}-payment-app-rds-sg"
+  name        = "rds-sg-${var.environment_suffix}"
   description = "Security group for RDS PostgreSQL instance"
-  vpc_id      = data.aws_vpc.existing.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description     = "PostgreSQL from EC2"
@@ -97,7 +97,7 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name        = "${var.environment}-payment-app-rds-sg"
+    Name        = "rds-sg-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"

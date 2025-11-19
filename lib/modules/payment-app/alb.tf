@@ -1,23 +1,23 @@
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${var.environment}-payment-app-alb"
-  internal           = false
+  name               = "alb-${var.environment_suffix}"
+  internal           = var.alb_internal
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = data.aws_subnets.public.ids
-  
-  enable_deletion_protection = var.environment == "prod" ? true : false
-  enable_http2              = true
+  subnets            = local.public_subnet_ids
+
+  enable_deletion_protection       = var.environment == "prod" ? true : false
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
-  
+
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.id
     prefix  = "alb"
     enabled = true
   }
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-alb"
+    Name        = "alb-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -26,10 +26,10 @@ resource "aws_lb" "main" {
 
 # S3 bucket for ALB logs
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${var.environment}-payment-app-alb-logs-${data.aws_caller_identity.current.account_id}"
-  
+  bucket = "alb-logs-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+
   tags = {
-    Name        = "${var.environment}-payment-app-alb-logs"
+    Name        = "alb-logs-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -40,7 +40,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_public_access_block" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -51,7 +51,7 @@ data "aws_elb_service_account" "main" {}
 
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -69,11 +69,11 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 
 # Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${var.environment}-payment-app-tg"
+  name     = "tg-${var.environment_suffix}"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = data.aws_vpc.existing.id
-  
+  vpc_id   = local.vpc_id
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -83,17 +83,17 @@ resource "aws_lb_target_group" "main" {
     path                = "/health"
     matcher             = "200"
   }
-  
+
   deregistration_delay = var.environment == "prod" ? 300 : 30
-  
+
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400
     enabled         = true
   }
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-tg"
+    Name        = "tg-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -103,7 +103,7 @@ resource "aws_lb_target_group" "main" {
 # Target Group Attachment
 resource "aws_lb_target_group_attachment" "main" {
   count = var.instance_count
-  
+
   target_group_arn = aws_lb_target_group.main.arn
   target_id        = aws_instance.app[count.index].id
   port             = 80
@@ -114,56 +114,40 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
-    type = "redirect"
-    
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    # If certificate exists, redirect to HTTPS. Otherwise, forward to instances.
+    type             = var.certificate_arn != "" ? "redirect" : "forward"
+    target_group_arn = var.certificate_arn != "" ? null : aws_lb_target_group.main.arn
+
+    dynamic "redirect" {
+      for_each = var.certificate_arn != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
   }
 }
 
-# HTTPS Listener
+/*
+  HTTPS listener is optional and depends on supplying an existing ACM certificate ARN.
+  Creating ACM certificates and validating them via DNS requires Route53 or external manual steps
+  which block automated apply in many development setups. To keep the module usable without
+  external DNS, the HTTPS listener is created only when `certificate_arn` is provided.
+*/
+
 resource "aws_lb_listener" "https" {
+  count             = var.certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
-  port              = "443"
+  port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = aws_acm_certificate.main.arn
-  
+  certificate_arn   = var.certificate_arn
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-  
-  depends_on = [aws_acm_certificate_validation.main]
-}
-
-# ACM Certificate (self-signed for demo)
-resource "aws_acm_certificate" "main" {
-  domain_name       = "${var.environment}.payment-app.example.com"
-  validation_method = "DNS"
-  
-  subject_alternative_names = [
-    "www.${var.environment}.payment-app.example.com"
-  ]
-  
-  lifecycle {
-    create_before_destroy = true
-  }
-  
-  tags = {
-    Name        = "${var.environment}-payment-app-cert"
-    Environment = var.environment
-    Project     = "payment-processing"
-    ManagedBy   = "Terraform"
-  }
-}
-
-# For demo purposes - in production, you'd validate with Route53
-resource "aws_acm_certificate_validation" "main" {
-  certificate_arn = aws_acm_certificate.main.arn
 }

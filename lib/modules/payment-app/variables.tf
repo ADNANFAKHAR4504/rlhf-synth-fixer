@@ -3,6 +3,11 @@ variable "environment" {
   type        = string
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
@@ -11,6 +16,12 @@ variable "aws_region" {
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   type        = string
+}
+
+variable "vpc_id" {
+  description = "Optional existing VPC ID to use. If provided, the module will use this VPC instead of looking up by CIDR. Useful when the VPC was created/destroyed outside this module or to avoid accidental data-source mismatches."
+  type        = string
+  default     = ""
 }
 
 variable "db_instance_class" {
@@ -58,4 +69,17 @@ variable "ssh_key_name" {
 variable "ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
+  default     = ""
+}
+
+variable "certificate_arn" {
+  description = "Optional ACM Certificate ARN to use for HTTPS listener. If empty, HTTPS listener will not be created by this module."
+  type        = string
+  default     = ""
+}
+
+variable "alb_internal" {
+  description = "If true, create the ALB as internal. Set to true when VPC has no Internet Gateway or you want internal-only ALB."
+  type        = bool
+  default     = false
 }

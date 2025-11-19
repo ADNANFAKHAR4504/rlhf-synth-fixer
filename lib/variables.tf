@@ -1,11 +1,17 @@
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
-  
+
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be dev, staging, or prod."
   }
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming (e.g., dev-001, staging-prod, prod-us-east-1)"
+  type        = string
+  default     = ""
 }
 
 variable "aws_region" {
@@ -66,4 +72,16 @@ variable "ssh_key_name" {
 variable "ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
+}
+
+variable "certificate_arn" {
+  description = "Optional ACM certificate ARN to use for HTTPS listener in the module. If empty, no HTTPS listener will be created."
+  type        = string
+  default     = ""
+}
+
+variable "alb_internal" {
+  description = "If true, create the ALB as internal. Useful when the target VPC has no Internet Gateway."
+  type        = bool
+  default     = false
 }

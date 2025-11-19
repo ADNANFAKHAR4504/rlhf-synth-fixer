@@ -1,13 +1,19 @@
 #!/bin/bash
 # User data script for EC2 instances
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-# Update system
+echo "Starting User Data Script..."
+
+# 2. Update system
 yum update -y
 
-# Install necessary packages
-yum install -y postgresql15 nginx amazon-cloudwatch-agent
+# 3. Install packages 
+amazon-linux-extras enable postgresql14
+amazon-linux-extras enable nginx1
+yum clean metadata
+yum install -y postgresql nginx amazon-cloudwatch-agent
 
-# Configure CloudWatch agent
+# 4. Configure CloudWatch agent (Your config)
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
 {
   "metrics": {
@@ -40,12 +46,12 @@ EOF
 
 # Start CloudWatch agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
-# Configure nginx as a simple web server for health checks
-cat > /etc/nginx/conf.d/default.conf << EOF
+# 5. Configure Nginx
+cat > /etc/nginx/conf.d/payment-app.conf << EOF
 server {
-    listen 80;
+    listen 80 default_server;
     server_name _;
     
     location /health {
@@ -55,25 +61,25 @@ server {
     }
     
     location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        # Serve a static page to prove the server is working
+        return 200 "<h1>Welcome to Payment App (${environment})</h1><p>DB Endpoint: ${db_endpoint}</p>";
+        add_header Content-Type text/html;
     }
 }
 EOF
 
-# Start nginx
-systemctl enable nginx
-systemctl start nginx
+# Remove default config to prevent conflicts
+rm -f /etc/nginx/conf.d/default.conf
 
-# Store database connection info (for application use)
+# 6. Start Nginx
+systemctl enable nginx
+systemctl restart nginx
+
+# 7. Store DB info
 cat > /etc/payment-app/db.conf << EOF
 DB_ENDPOINT=${db_endpoint}
 DB_NAME=${db_name}
 ENVIRONMENT=${environment}
 EOF
 
-# Log the initialization
-echo "EC2 instance initialized for ${environment} environment" >> /var/log/payment-app.log
+echo "User Data Script Completed Successfully"

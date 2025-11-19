@@ -1,7 +1,7 @@
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2" {
-  name = "${var.environment}-payment-app-ec2-role"
-  
+  name = "ec2-role-${var.environment_suffix}"
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -14,9 +14,9 @@ resource "aws_iam_role" "ec2" {
       }
     ]
   })
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-ec2-role"
+    Name        = "ec2-role-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -37,11 +37,11 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 
 # Instance profile
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.environment}-payment-app-ec2-profile"
+  name = "ec2-profile-${var.environment_suffix}"
   role = aws_iam_role.ec2.name
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-ec2-profile"
+    Name        = "ec2-profile-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -51,38 +51,53 @@ resource "aws_iam_instance_profile" "ec2" {
 # EC2 instances
 resource "aws_instance" "app" {
   count = var.instance_count
-  
-  ami           = var.ami_id
+
+  ami           = var.ami_id != "" ? var.ami_id : data.aws_ami.default.id
   instance_type = var.ec2_instance_type
-  
-  subnet_id                   = data.aws_subnets.private.ids[count.index % length(data.aws_subnets.private.ids)]
-  vpc_security_group_ids      = [aws_security_group.ec2.id]
-  iam_instance_profile        = aws_iam_instance_profile.ec2.name
-  key_name                    = var.ssh_key_name
-  
+
+  subnet_id              = local.private_subnet_ids[count.index % length(local.private_subnet_ids)]
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
+  key_name               = var.ssh_key_name != "" ? var.ssh_key_name : aws_key_pair.generated[0].key_name
+
   monitoring = var.environment == "prod" ? true : false
-  
+
   root_block_device {
     volume_type           = "gp3"
     volume_size           = var.environment == "prod" ? 50 : 20
-    encrypted            = true
+    encrypted             = true
     delete_on_termination = true
   }
-  
+
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
     db_endpoint = aws_db_instance.main.endpoint
     db_name     = aws_db_instance.main.db_name
     environment = var.environment
   }))
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-ec2-${count.index + 1}"
+    Name        = "ec2-${var.environment_suffix}-${count.index + 1}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
   }
-  
+
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+data "aws_ami" "default" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }

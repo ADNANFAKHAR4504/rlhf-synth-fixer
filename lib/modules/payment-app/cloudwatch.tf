@@ -1,9 +1,9 @@
 # SNS Topic for alarms
 resource "aws_sns_topic" "alarms" {
-  name = "${var.environment}-payment-app-alarms"
-  
+  name = "sns-alarms-${var.environment_suffix}"
+
   tags = {
-    Name        = "${var.environment}-payment-app-alarms"
+    Name        = "sns-alarms-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -19,23 +19,23 @@ resource "aws_sns_topic_subscription" "alarm_email" {
 
 # CloudWatch Alarm for RDS CPU Utilization
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "${var.environment}-payment-app-rds-cpu-high"
+  alarm_name          = "alarm-rds-cpu-${var.environment_suffix}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name        = "CPUUtilization"
-  namespace          = "AWS/RDS"
-  period             = "300"
-  statistic          = "Average"
-  threshold          = var.rds_cpu_threshold
-  alarm_description  = "This metric monitors RDS CPU utilization"
-  alarm_actions      = [aws_sns_topic.alarms.arn]
-  
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = var.rds_cpu_threshold
+  alarm_description   = "This metric monitors RDS CPU utilization"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-rds-cpu-alarm"
+    Name        = "alarm-rds-cpu-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -44,23 +44,23 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
 
 # CloudWatch Alarm for RDS Storage Space
 resource "aws_cloudwatch_metric_alarm" "rds_storage" {
-  alarm_name          = "${var.environment}-payment-app-rds-storage-low"
+  alarm_name          = "alarm-rds-storage-${var.environment_suffix}"
   comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "1"
-  metric_name        = "FreeStorageSpace"
-  namespace          = "AWS/RDS"
-  period             = "300"
-  statistic          = "Average"
-  threshold          = 2000000000  # 2GB in bytes
-  alarm_description  = "This metric monitors RDS free storage space"
-  alarm_actions      = [aws_sns_topic.alarms.arn]
-  
+  evaluation_periods  = 1
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 2000000000 # 2GB in bytes
+  alarm_description   = "This metric monitors RDS free storage space"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-rds-storage-alarm"
+    Name        = "alarm-rds-storage-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -69,25 +69,25 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage" {
 
 # CloudWatch Alarm for ALB Target Health
 resource "aws_cloudwatch_metric_alarm" "alb_healthy_hosts" {
-  alarm_name          = "${var.environment}-payment-app-alb-unhealthy-hosts"
+  alarm_name          = "alarm-alb-health-${var.environment_suffix}"
   comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "2"
-  metric_name        = "HealthyHostCount"
-  namespace          = "AWS/ApplicationELB"
-  period             = "60"
-  statistic          = "Average"
-  threshold          = var.instance_count * 0.5
-  alarm_description  = "Alert when we have less than 50% healthy hosts"
-  alarm_actions      = [aws_sns_topic.alarms.arn]
-  treat_missing_data = "breaching"
-  
+  evaluation_periods  = 2
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Average"
+  threshold           = var.instance_count * 0.5
+  alarm_description   = "Alert when we have less than 50% healthy hosts"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  treat_missing_data  = "breaching"
+
   dimensions = {
     TargetGroup  = aws_lb_target_group.main.arn_suffix
     LoadBalancer = aws_lb.main.arn_suffix
   }
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-alb-healthy-hosts-alarm"
+    Name        = "alarm-alb-health-${var.environment_suffix}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -97,24 +97,24 @@ resource "aws_cloudwatch_metric_alarm" "alb_healthy_hosts" {
 # CloudWatch Alarm for EC2 CPU Utilization
 resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
   count = var.instance_count
-  
-  alarm_name          = "${var.environment}-payment-app-ec2-${count.index + 1}-cpu-high"
+
+  alarm_name          = "alarm-ec2-cpu-${var.environment_suffix}-${count.index + 1}"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name        = "CPUUtilization"
-  namespace          = "AWS/EC2"
-  period             = "300"
-  statistic          = "Average"
-  threshold          = var.environment == "prod" ? 70 : 80
-  alarm_description  = "This metric monitors EC2 CPU utilization"
-  alarm_actions      = [aws_sns_topic.alarms.arn]
-  
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = var.environment == "prod" ? 70 : 80
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+
   dimensions = {
     InstanceId = aws_instance.app[count.index].id
   }
-  
+
   tags = {
-    Name        = "${var.environment}-payment-app-ec2-${count.index + 1}-cpu-alarm"
+    Name        = "alarm-ec2-cpu-${var.environment_suffix}-${count.index + 1}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -123,8 +123,8 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu" {
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.environment}-payment-app-dashboard"
-  
+  dashboard_name = "dashboard-${var.environment_suffix}"
+
   dashboard_body = jsonencode({
     widgets = [
       {
