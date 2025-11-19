@@ -46,9 +46,11 @@ resource "aws_eks_node_group" "frontend" {
   }
 
   depends_on = [
+    aws_iam_role.frontend_nodes,
     aws_iam_role_policy_attachment.frontend_worker_node_policy,
     aws_iam_role_policy_attachment.frontend_cni_policy,
     aws_iam_role_policy_attachment.frontend_ecr_ro,
+    aws_iam_role_policy_attachment.frontend_node_ecr_access,
     aws_cloudwatch_log_group.eks
   ]
 }
@@ -101,9 +103,11 @@ resource "aws_eks_node_group" "backend" {
   }
 
   depends_on = [
+    aws_iam_role.backend_nodes,
     aws_iam_role_policy_attachment.backend_worker_node_policy,
     aws_iam_role_policy_attachment.backend_cni_policy,
     aws_iam_role_policy_attachment.backend_ecr_ro,
+    aws_iam_role_policy_attachment.backend_node_ecr_access,
     aws_cloudwatch_log_group.eks
   ]
 }
@@ -121,8 +125,7 @@ resource "aws_launch_template" "frontend" {
       volume_size           = 100
       volume_type           = "gp3"
       delete_on_termination = true
-      # Encryption disabled to avoid account default KMS key state issues
-      # encrypted             = true
+      encrypted             = false # Explicitly disable to override account default encryption
     }
   }
 
@@ -174,8 +177,7 @@ resource "aws_launch_template" "backend" {
       volume_size           = 100
       volume_type           = "gp3"
       delete_on_termination = true
-      # Encryption disabled to avoid account default KMS key state issues
-      # encrypted             = true
+      encrypted             = false # Explicitly disable to override account default encryption
     }
   }
 
