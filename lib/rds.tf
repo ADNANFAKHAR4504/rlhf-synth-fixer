@@ -9,7 +9,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = var.db_username
-    password = "SecureTestPassword123!"
+    password = var.db_password
   })
 }
 
@@ -58,7 +58,7 @@ resource "aws_db_instance" "default" {
   instance_class          = var.db_instance_class
   db_name                 = var.db_name
   username                = var.db_username
-  password                = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["password"]
+  password                = var.db_password
   parameter_group_name    = "default.mysql8.0"
   db_subnet_group_name    = aws_db_subnet_group.default.name
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
