@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid conflicts"
   type        = string
+  default     = "devtest"
   validation {
     condition     = length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 20
     error_message = "Environment suffix must be between 1 and 20 characters"
