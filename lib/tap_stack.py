@@ -19,7 +19,7 @@ from typing import Dict, Any
 import json
 
 
-class PaymentStack(Stack):
+class TapStack(Stack):
     """Base stack class for payment processing infrastructure"""
 
     def __init__(
@@ -27,13 +27,25 @@ class PaymentStack(Stack):
         scope: Construct,
         construct_id: str,
         environment_suffix: str,
-        env_config: Dict[str, Any],
+        env_config: Dict[str, Any] = None,
         **kwargs
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         self.environment_suffix = environment_suffix
-        self.env_config = env_config
+
+        # Set default env_config if not provided
+        if env_config is None:
+            self.env_config = {
+                "environment": "dev",
+                "region": "us-east-1",
+                "api_rate_limit": 100,
+                "cost_center": "Engineering",
+                "owner": "DevTeam",
+                "data_classification": "Internal",
+            }
+        else:
+            self.env_config = env_config
 
         # Create VPC for the environment
         self.vpc = self._create_vpc()

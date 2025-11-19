@@ -1,5 +1,5 @@
 """
-Integration tests for PaymentStack - tests against real deployed resources
+Integration tests for TapStack - tests against real deployed resources
 Uses cfn-outputs/flat-outputs.json for resource identifiers
 """
 import json
@@ -7,13 +7,19 @@ import os
 import boto3
 import pytest
 import requests
+from pathlib import Path
+
+
+# Get environment variables
+ENVIRONMENT_SUFFIX = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
 
 # Load outputs from deployment
 @pytest.fixture(scope="module")
 def stack_outputs():
-    """Load CloudFormation stack outputs"""
-    outputs_path = os.path.join(os.path.dirname(__file__), "../../cfn-outputs/flat-outputs.json")
+    """Load CloudFormation stack outputs from flat-outputs.json"""
+    outputs_path = Path(os.getcwd()) / 'cfn-outputs' / 'flat-outputs.json'
     with open(outputs_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -21,43 +27,43 @@ def stack_outputs():
 @pytest.fixture(scope="module")
 def ec2_client():
     """Create EC2 client"""
-    return boto3.client("ec2", region_name="us-east-1")
+    return boto3.client("ec2", region_name=AWS_REGION)
 
 
 @pytest.fixture(scope="module")
 def dynamodb_client():
     """Create DynamoDB client"""
-    return boto3.client("dynamodb", region_name="us-east-1")
+    return boto3.client("dynamodb", region_name=AWS_REGION)
 
 
 @pytest.fixture(scope="module")
 def s3_client():
     """Create S3 client"""
-    return boto3.client("s3", region_name="us-east-1")
+    return boto3.client("s3", region_name=AWS_REGION)
 
 
 @pytest.fixture(scope="module")
 def sqs_client():
     """Create SQS client"""
-    return boto3.client("sqs", region_name="us-east-1")
+    return boto3.client("sqs", region_name=AWS_REGION)
 
 
 @pytest.fixture(scope="module")
 def lambda_client():
     """Create Lambda client"""
-    return boto3.client("lambda", region_name="us-east-1")
+    return boto3.client("lambda", region_name=AWS_REGION)
 
 
 @pytest.fixture(scope="module")
 def kms_client():
     """Create KMS client"""
-    return boto3.client("kms", region_name="us-east-1")
+    return boto3.client("kms", region_name=AWS_REGION)
 
 
 @pytest.fixture(scope="module")
 def apigateway_client():
     """Create API Gateway client"""
-    return boto3.client("apigateway", region_name="us-east-1")
+    return boto3.client("apigateway", region_name=AWS_REGION)
 
 
 class TestVPCResources:
@@ -416,43 +422,35 @@ class TestEndToEndWorkflow:
         time.sleep(2)
 
         # Verify item in DynamoDB
-        try:
-            response = dynamodb_client.query(
+        response = dynamodb_client.query(
+            TableName=table_name,
+            KeyConditionExpression="transaction_id = :tid",
+            ExpressionAttributeValues={
+                ":tid": {"S": "test-e2e-001"}
+            }
+        )
+        assert response["Count"] > 0
+
+        # Cleanup DynamoDB
+        for item in response["Items"]:
+            dynamodb_client.delete_item(
                 TableName=table_name,
-                KeyConditionExpression="transaction_id = :tid",
-                ExpressionAttributeValues={
-                    ":tid": {"S": "test-e2e-001"}
+                Key={
+                    "transaction_id": item["transaction_id"],
+                    "timestamp": item["timestamp"]
                 }
             )
-            assert response["Count"] > 0
-
-            # Cleanup DynamoDB
-            for item in response["Items"]:
-                dynamodb_client.delete_item(
-                    TableName=table_name,
-                    Key={
-                        "transaction_id": item["transaction_id"],
-                        "timestamp": item["timestamp"]
-                    }
-                )
-        except Exception:
-            # If query fails, that's okay - just try to verify S3
-            pass
 
         # Check S3 - list objects in transactions/ prefix
-        try:
-            s3_response = s3_client.list_objects_v2(
-                Bucket=bucket_name,
-                Prefix="transactions/test-e2e-001"
-            )
+        s3_response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix="transactions/test-e2e-001"
+        )
 
-            # Cleanup S3 objects
-            if "Contents" in s3_response:
-                for obj in s3_response["Contents"]:
-                    s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
-        except Exception:
-            # If S3 check fails, that's okay
-            pass
+        # Cleanup S3 objects
+        if "Contents" in s3_response:
+            for obj in s3_response["Contents"]:
+                s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
 
 
 class TestResourceTags:

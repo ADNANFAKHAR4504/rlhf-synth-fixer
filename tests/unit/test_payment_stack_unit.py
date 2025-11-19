@@ -1,11 +1,11 @@
 """
-Unit tests for PaymentStack - comprehensive coverage for all methods and paths
+Unit tests for TapStack - comprehensive coverage for all methods and paths
 """
 import os
 import pytest
 from aws_cdk import App, Aspects
 from aws_cdk.assertions import Template, Match
-from lib.payment_stack import PaymentStack
+from lib.tap_stack import TapStack
 from lib.tagging_aspect import MandatoryTagsAspect
 
 
@@ -57,12 +57,12 @@ def production_env_config():
     }
 
 
-class TestPaymentStackStructure:
+class TestTapStackStructure:
     """Test basic stack structure and resource counts"""
 
     def test_stack_creates_successfully(self, app, dev_env_config):
         """Test that stack can be created without errors"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -73,7 +73,7 @@ class TestPaymentStackStructure:
 
     def test_stack_has_all_required_resources(self, app, dev_env_config):
         """Test that all required resource types are present"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -98,7 +98,7 @@ class TestVPCConfiguration:
 
     def test_vpc_has_correct_name(self, app, dev_env_config):
         """Test VPC naming includes environment suffix"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -114,7 +114,7 @@ class TestVPCConfiguration:
 
     def test_vpc_has_nat_gateway(self, app, dev_env_config):
         """Test that NAT gateway is created"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -126,7 +126,7 @@ class TestVPCConfiguration:
 
     def test_vpc_has_internet_gateway(self, app, dev_env_config):
         """Test that Internet Gateway is created"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -142,7 +142,7 @@ class TestKMSKeyConfiguration:
 
     def test_kms_key_has_correct_alias(self, app, dev_env_config):
         """Test KMS key alias includes environment suffix"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -156,7 +156,7 @@ class TestKMSKeyConfiguration:
 
     def test_kms_key_has_rotation_enabled(self, app, dev_env_config):
         """Test KMS key rotation is enabled"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -170,7 +170,7 @@ class TestKMSKeyConfiguration:
 
     def test_kms_key_has_deletion_policy(self, app, dev_env_config):
         """Test KMS key has Delete removal policy"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -188,7 +188,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_dev_uses_on_demand_billing(self, app, dev_env_config):
         """Test dev environment uses PAY_PER_REQUEST billing"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -202,7 +202,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_staging_uses_on_demand_billing(self, app, staging_env_config):
         """Test staging environment uses PAY_PER_REQUEST billing"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -216,7 +216,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_production_uses_provisioned_billing(self, app, production_env_config):
         """Test production uses PROVISIONED billing with 5 RCU/WCU"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -234,7 +234,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_has_correct_keys(self, app, dev_env_config):
         """Test DynamoDB has correct partition and sort keys"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -251,7 +251,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_has_encryption(self, app, dev_env_config):
         """Test DynamoDB has customer-managed encryption"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -268,7 +268,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_pitr_enabled_for_staging(self, app, staging_env_config):
         """Test point-in-time recovery enabled for staging"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -284,7 +284,7 @@ class TestDynamoDBConfiguration:
 
     def test_dynamodb_pitr_enabled_for_production(self, app, production_env_config):
         """Test point-in-time recovery enabled for production"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -304,7 +304,7 @@ class TestS3Configuration:
 
     def test_s3_has_versioning_enabled(self, app, dev_env_config):
         """Test S3 bucket has versioning enabled"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -320,7 +320,7 @@ class TestS3Configuration:
 
     def test_s3_has_encryption(self, app, dev_env_config):
         """Test S3 bucket has KMS encryption"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -343,7 +343,7 @@ class TestS3Configuration:
 
     def test_s3_dev_has_30_day_glacier_transition(self, app, dev_env_config):
         """Test dev S3 bucket transitions to Glacier after 30 days"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -370,7 +370,7 @@ class TestS3Configuration:
 
     def test_s3_production_has_90_day_glacier_transition(self, app, production_env_config):
         """Test production S3 bucket transitions to Glacier after 90 days"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -401,7 +401,7 @@ class TestSQSConfiguration:
 
     def test_sqs_dev_has_3_day_retention(self, app, dev_env_config):
         """Test dev DLQ has 3 day retention"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -415,7 +415,7 @@ class TestSQSConfiguration:
 
     def test_sqs_staging_has_7_day_retention(self, app, staging_env_config):
         """Test staging DLQ has 7 day retention"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -429,7 +429,7 @@ class TestSQSConfiguration:
 
     def test_sqs_production_has_14_day_retention(self, app, production_env_config):
         """Test production DLQ has 14 day retention"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -443,7 +443,7 @@ class TestSQSConfiguration:
 
     def test_sqs_has_kms_encryption(self, app, dev_env_config):
         """Test DLQ has KMS encryption"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -461,7 +461,7 @@ class TestLambdaConfiguration:
 
     def test_lambda_has_512mb_memory(self, app, dev_env_config):
         """Test Lambda has 512MB memory"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -475,7 +475,7 @@ class TestLambdaConfiguration:
 
     def test_lambda_has_30_second_timeout(self, app, dev_env_config):
         """Test Lambda has 30 second timeout"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -489,7 +489,7 @@ class TestLambdaConfiguration:
 
     def test_lambda_has_environment_variables(self, app, dev_env_config):
         """Test Lambda has correct environment variables"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -510,7 +510,7 @@ class TestLambdaConfiguration:
 
     def test_lambda_attached_to_vpc(self, app, dev_env_config):
         """Test Lambda is attached to VPC"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -527,7 +527,7 @@ class TestLambdaConfiguration:
 
     def test_lambda_has_dlq_configured(self, app, dev_env_config):
         """Test Lambda has dead letter queue configured"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -547,7 +547,7 @@ class TestAPIGatewayConfiguration:
 
     def test_api_gateway_has_correct_name(self, app, dev_env_config):
         """Test API Gateway name includes environment suffix"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -561,7 +561,7 @@ class TestAPIGatewayConfiguration:
 
     def test_api_dev_has_100_rate_limit(self, app, dev_env_config):
         """Test dev API has 100 req/sec rate limit"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -583,7 +583,7 @@ class TestAPIGatewayConfiguration:
 
     def test_api_staging_has_1000_rate_limit(self, app, staging_env_config):
         """Test staging API has 1000 req/sec rate limit"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -604,7 +604,7 @@ class TestAPIGatewayConfiguration:
 
     def test_api_production_has_10000_rate_limit(self, app, production_env_config):
         """Test production API has 10000 req/sec rate limit"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -625,7 +625,7 @@ class TestAPIGatewayConfiguration:
 
     def test_api_has_payments_resource(self, app, dev_env_config):
         """Test API has /payments resource"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -639,7 +639,7 @@ class TestAPIGatewayConfiguration:
 
     def test_api_has_api_key_required(self, app, dev_env_config):
         """Test API method requires API key"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -657,7 +657,7 @@ class TestCloudWatchAlarms:
 
     def test_dev_has_no_alarms(self, app, dev_env_config):
         """Test dev environment does not create CloudWatch alarms"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -669,7 +669,7 @@ class TestCloudWatchAlarms:
 
     def test_staging_has_alarms(self, app, staging_env_config):
         """Test staging environment creates CloudWatch alarms"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -681,7 +681,7 @@ class TestCloudWatchAlarms:
 
     def test_production_has_alarms(self, app, production_env_config):
         """Test production environment creates CloudWatch alarms"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -697,7 +697,7 @@ class TestStackOutputs:
 
     def test_stack_has_vpc_id_output(self, app, dev_env_config):
         """Test stack exports VPC ID"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -711,7 +711,7 @@ class TestStackOutputs:
 
     def test_stack_has_api_endpoint_output(self, app, dev_env_config):
         """Test stack exports API endpoint"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -725,7 +725,7 @@ class TestStackOutputs:
 
     def test_stack_has_all_required_outputs(self, app, dev_env_config):
         """Test stack has all required outputs"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -750,7 +750,7 @@ class TestTaggingAspect:
 
     def test_tagging_aspect_applies_environment_tag(self, app, dev_env_config):
         """Test Environment tag is applied"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -776,7 +776,7 @@ class TestTaggingAspect:
 
     def test_tagging_aspect_applies_all_required_tags(self, app, production_env_config):
         """Test all mandatory tags are applied"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
@@ -810,7 +810,7 @@ class TestEnvironmentSuffixUsage:
 
     def test_all_named_resources_include_suffix(self, app, dev_env_config):
         """Test that all resources with names include environment suffix"""
-        stack = PaymentStack(
+        stack = TapStack(
             app,
             "TestStack",
             environment_suffix="test123",
