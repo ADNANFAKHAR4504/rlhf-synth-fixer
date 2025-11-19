@@ -34,7 +34,7 @@ const defaultTags = {
 
 // Configure AWS provider with default tags
 const provider = new aws.Provider('aws', {
-  region: process.env.AWS_REGION || 'eu-central-1',
+  region: process.env.AWS_REGION || 'us-east-1',
   defaultTags: {
     tags: defaultTags,
   },
@@ -47,7 +47,7 @@ const stack = new TapStack(
   {
     environmentSuffix: environmentSuffix,
     tags: defaultTags,
-    region: process.env.AWS_REGION || 'eu-central-1',
+    region: process.env.AWS_REGION || 'us-east-1',
   },
   { provider }
 );

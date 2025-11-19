@@ -35,7 +35,7 @@ describe('VPC Infrastructure Integration Tests', () => {
   let s3Client: S3Client;
   let logsClient: CloudWatchLogsClient;
   let iamClient: IAMClient;
-  const region = 'eu-central-1';
+  const region = 'us-east-1';
 
   beforeAll(() => {
     // Load deployment outputs

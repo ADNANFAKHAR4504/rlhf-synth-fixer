@@ -10,14 +10,14 @@ We also need comprehensive logging and monitoring from day one. Auditors will wa
 
 ## What we need to build
 
-Create a production VPC infrastructure using **Pulumi with TypeScript** for a payment processing platform in eu-central-1.
+Create a production VPC infrastructure using **Pulumi with TypeScript** for a payment processing platform in us-east-1.
 
 ### Core Requirements
 
 1. **VPC Foundation**
    - CIDR block: 10.0.0.0/16
    - Enable DNS hostnames and DNS resolution
-   - Deploy across 3 availability zones (eu-central-1a, eu-central-1b, eu-central-1c)
+   - Deploy across 3 availability zones (us-east-1a, us-east-1b, us-east-1c)
    - Internet Gateway for public internet access
 
 2. **Three-Tier Subnet Architecture**
@@ -80,7 +80,7 @@ Create a production VPC infrastructure using **Pulumi with TypeScript** for a pa
 - Use **IAM** roles with least privilege for Flow Logs service
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-${environmentSuffix}`
-- Deploy to **eu-central-1** region spanning 3 availability zones
+- Deploy to **us-east-1** region spanning 3 availability zones
 - Use Pulumi AWS Classic provider
 
 ### Deployment Requirements (CRITICAL)
@@ -102,7 +102,7 @@ Create a production VPC infrastructure using **Pulumi with TypeScript** for a pa
 - VPC Flow Logs must be encrypted and have 7-day lifecycle
 - Network ACLs must restrict ephemeral ports to 32768-65535
 - All resources must be destroyable (no retention policies)
-- Must span exactly 3 availability zones in eu-central-1
+- Must span exactly 3 availability zones in us-east-1
 
 ## Success Criteria
 
@@ -112,7 +112,7 @@ Create a production VPC infrastructure using **Pulumi with TypeScript** for a pa
 - **Compliance**: VPC Flow Logs to S3 with encryption and lifecycle policy
 - **Resource Naming**: All resources include environmentSuffix for uniqueness
 - **Destroyability**: All resources can be cleanly destroyed without errors
-- **High Availability**: Resources distributed across eu-central-1a, eu-central-1b, eu-central-1c
+- **High Availability**: Resources distributed across us-east-1a, us-east-1b, us-east-1c
 - **Code Quality**: TypeScript, well-structured, properly typed, documented
 
 ## What to deliver

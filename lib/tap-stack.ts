@@ -70,7 +70,7 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const region = args.region || 'eu-central-1';
+    const region = args.region || 'us-east-1';
     const commonTags = args.tags || {
       Environment: 'production',
       Project: 'payment-platform',
@@ -78,7 +78,11 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     // Define availability zones
-    const availabilityZones = ['eu-central-1a', 'eu-central-1b', 'eu-central-1c'];
+    const availabilityZones = [
+      'us-east-1a',
+      'us-east-1b',
+      'us-east-1c',
+    ];
 
     // Create VPC
     const vpc = new aws.ec2.Vpc(
