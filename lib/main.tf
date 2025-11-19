@@ -539,6 +539,62 @@ resource "aws_emr_cluster" "main" {
   ]
 }
 
+# Disable termination protection before destroying the cluster
+# This resource depends on the cluster, so during destroy it will be
+# destroyed first, running the provisioner to disable termination protection
+resource "null_resource" "disable_termination_protection" {
+  # Depend on cluster so this is destroyed before cluster during terraform destroy
+  depends_on = [aws_emr_cluster.main]
+
+  # Use cluster name as trigger to avoid circular dependency
+  triggers = {
+    cluster_name = aws_emr_cluster.main.name
+  }
+
+  # This runs when this null_resource is being destroyed (before cluster destroy)
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      # Use Terraform's AWS provider credentials to disable termination protection
+      # This uses the same credentials Terraform uses, no AWS CLI needed
+      # Python3 and boto3 are required (usually available in CI/CD environments)
+      python3 <<'PYTHON'
+import boto3
+import sys
+import os
+
+# Get AWS credentials from environment (same as Terraform uses)
+# Terraform sets these automatically from provider configuration
+session = boto3.Session(
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+    aws_session_token=os.environ.get('AWS_SESSION_TOKEN'),
+    region_name=os.environ.get('AWS_REGION', 'us-east-1')
+)
+
+emr = session.client('emr')
+cluster_id = '${aws_emr_cluster.main.id}'
+
+try:
+    emr.set_termination_protection(
+        JobFlowIds=[cluster_id],
+        TerminationProtected=False
+    )
+    print(f"Successfully disabled termination protection for cluster {cluster_id}")
+except Exception as e:
+    # If cluster is already terminated or protection already disabled, that's fine
+    error_msg = str(e).lower()
+    if 'not found' in error_msg or 'terminated' in error_msg or 'does not exist' in error_msg:
+        print(f"Cluster {cluster_id} already terminated or protection already disabled")
+    else:
+        print(f"Warning: Could not disable termination protection: {e}", file=sys.stderr)
+        # Don't fail destroy if this fails - cluster might already be terminated
+    sys.exit(0)
+PYTHON
+    EOT
+  }
+}
+
 resource "aws_emr_instance_group" "task" {
   cluster_id     = aws_emr_cluster.main.id
   instance_type  = var.task_instance_type
