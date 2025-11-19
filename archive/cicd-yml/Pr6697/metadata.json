@@ -9,5 +9,11 @@
   "subtask": "CI/CD Pipeline",
   "subject_labels": [
     "CI/CD Pipeline"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
