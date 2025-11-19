@@ -56,9 +56,9 @@ The CloudFormation template in lib/TapStack.yml implements all required componen
 
 ### VPC Endpoints (Systems Manager)
 All three VPCs have:
-- SSM endpoint (com.amazonaws.us-east-1.ssm)
-- SSM Messages endpoint (com.amazonaws.us-east-1.ssmmessages)
-- EC2 Messages endpoint (com.amazonaws.us-east-1.ec2messages)
+- SSM endpoint (com.amazonaws.us-east-2.ssm)
+- SSM Messages endpoint (com.amazonaws.us-east-2.ssmmessages)
+- EC2 Messages endpoint (com.amazonaws.us-east-2.ec2messages)
 - All interface type with PrivateDnsEnabled: true
 
 ### VPC Flow Logs
@@ -105,7 +105,7 @@ aws cloudformation create-stack \
   --stack-name "${STACK_NAME}" \
   --template-body file://lib/TapStack.yml \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue="${ENVIRONMENT_SUFFIX}" \
-  --region us-east-1 \
+  --region us-east-2 \
   --tags Key=Environment,Value=dev
 ```
 
@@ -171,7 +171,7 @@ aws cloudformation create-stack \
 - Network segmentation for compliance
 - Centralized logging and monitoring
 
-## Cost Estimate (Monthly, us-east-1)
+## Cost Estimate (Monthly, us-east-2)
 
 - Transit Gateway: $36.50
 - Transit Gateway Attachments: $109.50 (3 attachments)

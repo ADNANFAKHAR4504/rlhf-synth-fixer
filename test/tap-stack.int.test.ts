@@ -1,31 +1,31 @@
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
-  DescribeTransitGatewaysCommand,
   DescribeTransitGatewayAttachmentsCommand,
   DescribeTransitGatewayRouteTablesCommand,
-  GetTransitGatewayRouteTablePropagationsCommand,
+  DescribeTransitGatewaysCommand,
   DescribeVpcEndpointsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeRouteTablesCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+  GetTransitGatewayRouteTablePropagationsCommand,
 } from '@aws-sdk/client-ec2';
 import {
-  S3Client,
-  HeadBucketCommand,
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Load deployment outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const ec2Client = new EC2Client({ region: 'us-east-1' });
-const s3Client = new S3Client({ region: 'us-east-1' });
+const ec2Client = new EC2Client({ region: 'us-east-2' });
+const s3Client = new S3Client({ region: 'us-east-2' });
 
 describe('Hub-and-Spoke Network Architecture Integration Tests', () => {
   describe('VPC Resources', () => {

@@ -1,6 +1,6 @@
 Hey team,
 
-We're building out a hub-and-spoke network architecture for a financial services company that's expanding their AWS footprint. They need a solid foundation that allows multiple workloads to communicate in a controlled way while maintaining strict security boundaries. The business is starting in us-east-1 and planning to expand to eu-west-1 and ap-southeast-1 later, so we need an architecture that scales.
+We're building out a hub-and-spoke network architecture for a financial services company that's expanding their AWS footprint. They need a solid foundation that allows multiple workloads to communicate in a controlled way while maintaining strict security boundaries. The business is starting in us-east-2 and planning to expand to eu-west-1 and ap-southeast-1 later, so we need an architecture that scales.
 
 The key challenge here is they want isolated workload environments that can still reach shared services and the internet, but they absolutely cannot have spoke-to-spoke traffic. Think of it like a wheel - everything goes through the hub, but the spokes don't talk to each other directly. This gives them the segmentation they need for compliance while keeping management centralized.
 
@@ -68,7 +68,7 @@ Create a hub-and-spoke network infrastructure using **CloudFormation with YAML**
 - Use **NAT Gateway** for outbound internet access from spokes
 - Resource names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **us-east-1** region
+- Deploy to **us-east-2** region
 
 ### Deployment Requirements (CRITICAL)
 

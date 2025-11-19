@@ -153,7 +153,7 @@ The model demonstrated exceptional CloudFormation knowledge in multiple areas:
 - Proper S3 bucket policy for log delivery
 
 ### 7. **VPC Endpoints Implementation**
-- Correct service names for us-east-1 region
+- Correct service names for us-east-2 region
 - All three required endpoints per VPC (SSM, SSM Messages, EC2 Messages)
 - Interface type endpoints
 - Private DNS enabled
