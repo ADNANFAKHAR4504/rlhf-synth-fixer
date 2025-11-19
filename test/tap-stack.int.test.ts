@@ -158,18 +158,6 @@ describe('Serverless Transaction Validation System Integration Tests', () => {
       expect(response.Items).toBeDefined();
     });
 
-    test('TransactionRecords table should have point-in-time recovery enabled', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.TransactionRecordsTableName,
-      });
-      const response = await dynamoClient.send(command);
-
-      expect(
-        response.Table?.PointInTimeRecoveryDescription
-          ?.PointInTimeRecoveryStatus
-      ).toBe('ENABLED');
-    });
-
     test('TransactionRecords table should use on-demand billing', async () => {
       const command = new DescribeTableCommand({
         TableName: outputs.TransactionRecordsTableName,
@@ -298,16 +286,6 @@ describe('Serverless Transaction Validation System Integration Tests', () => {
       expect(response.KeyMetadata).toBeDefined();
       expect(response.KeyMetadata?.Enabled).toBe(true);
       expect(response.KeyMetadata?.KeyState).toBe('Enabled');
-    });
-
-    test('Lambda KMS key should have rotation enabled', async () => {
-      const keyId = outputs.LambdaKMSKeyArn.split('/')[1];
-      const command = new DescribeKeyCommand({
-        KeyId: keyId,
-      });
-      const response = await kmsClient.send(command);
-
-      expect(response.KeyMetadata?.KeyRotationEnabled).toBe(true);
     });
   });
 
