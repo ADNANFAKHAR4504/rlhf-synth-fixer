@@ -1,5 +1,5 @@
 # Terraform variables for CI/CD Pipeline deployment
-environment_suffix = "synth101912402v1"
+environment_suffix = "synth101912402v4"
 
 aws_region = "us-east-1"
 
