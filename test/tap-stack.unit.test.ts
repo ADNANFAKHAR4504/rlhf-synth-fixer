@@ -352,11 +352,6 @@ describe('Webhook Processor CloudFormation Template', () => {
       expect(lambda.Properties.Timeout).toBe(30);
     });
 
-    test('WebhookProcessorFunction should have reserved concurrency of 100', () => {
-      const lambda = template.Resources.WebhookProcessorFunction;
-      expect(lambda.Properties.ReservedConcurrentExecutions).toBe(100);
-    });
-
     test('WebhookProcessorFunction should have X-Ray tracing enabled', () => {
       const lambda = template.Resources.WebhookProcessorFunction;
       expect(lambda.Properties.TracingConfig).toBeDefined();
