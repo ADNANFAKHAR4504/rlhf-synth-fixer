@@ -431,16 +431,16 @@ describe("Multi-Environment ECS Infrastructure - ECS Module", () => {
     expect(ecsContent).toMatch(/awslogs-group/);
   });
 
-  test("creates Application Load Balancer with name_prefix", () => {
+  test("creates Application Load Balancer with name", () => {
     expect(ecsContent).toMatch(/resource\s+"aws_lb"\s+"main"\s*{/);
-    expect(ecsContent).toMatch(/name_prefix\s*=\s*"alb-\$\{var\.environment\}-\$\{var\.environment_suffix\}-"/);
+    expect(ecsContent).toMatch(/name\s*=\s*"alb-\$\{var\.environment\}-\$\{var\.environment_suffix\}-\$\{random_id\.suffix\.hex\}"/);
     expect(ecsContent).toMatch(/load_balancer_type\s*=\s*"application"/);
     expect(ecsContent).toMatch(/internal\s*=\s*false/);
   });
 
-  test("creates target group with name_prefix", () => {
+  test("creates target group with name", () => {
     expect(ecsContent).toMatch(/resource\s+"aws_lb_target_group"\s+"app"\s*{/);
-    expect(ecsContent).toMatch(/name_prefix\s*=\s*"tg-\$\{var\.environment\}-\$\{var\.environment_suffix\}-"/);
+    expect(ecsContent).toMatch(/name\s*=\s*"tg-\$\{var\.environment\}-\$\{var\.environment_suffix\}-\$\{random_id\.suffix\.hex\}"/);
     expect(ecsContent).toMatch(/target_type\s*=\s*"ip"/);
     expect(ecsContent).toMatch(/port\s*=\s*var\.container_port/);
   });
@@ -461,7 +461,7 @@ describe("Multi-Environment ECS Infrastructure - ECS Module", () => {
 
   test("creates ECS service", () => {
     expect(ecsContent).toMatch(/resource\s+"aws_ecs_service"\s+"app"\s*{/);
-    expect(ecsContent).toMatch(/name\s*=\s*"app-service-\$\{var\.environment\}-\$\{var\.environment_suffix\}"/);
+    expect(ecsContent).toMatch(/name\s*=\s*"app-service-\$\{var\.environment\}-\$\{var\.environment_suffix\}-\$\{random_id\.suffix\.hex\}"/);
   });
 
   test("ECS service uses Fargate launch type", () => {
