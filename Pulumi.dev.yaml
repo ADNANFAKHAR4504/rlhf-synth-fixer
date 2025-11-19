@@ -1,0 +1,30 @@
+config:
+  aws:region: eu-west-1
+  fraud-detection-infrastructure:region: eu-west-1
+  fraud-detection-infrastructure:environmentSuffix: dev001
+  fraud-detection-infrastructure:azCount: "2"
+  fraud-detection-infrastructure:owner: fraud-detection-dev-team
+  fraud-detection-infrastructure:costCenter: fraud-detection-dev
+  # ECS Configuration - smaller for dev
+  fraud-detection-infrastructure:ecsCpu: "256"
+  fraud-detection-infrastructure:ecsMemory: "512"
+  fraud-detection-infrastructure:containerImage: myregistry/fraud-detection:dev
+  fraud-detection-infrastructure:desiredCount: "1"
+  # Aurora Configuration - minimal for dev
+  fraud-detection-infrastructure:auroraInstanceClass: db.t4g.medium
+  fraud-detection-infrastructure:auroraInstanceCount: "1"
+  fraud-detection-infrastructure:enableAuroraReplica: "true"
+  # DynamoDB Configuration
+  fraud-detection-infrastructure:enableGlobalTable: "false"
+  fraud-detection-infrastructure:replicaRegions: []
+  # IAM - read-only for dev
+  fraud-detection-infrastructure:iamMode: read-only
+  # Alerting - relaxed thresholds for dev
+  fraud-detection-infrastructure:alertEmail: dev-team@example.com
+  fraud-detection-infrastructure:cpuThreshold: "90"
+  fraud-detection-infrastructure:errorRateThreshold: "10"
+  # Cross-stack reference
+  fraud-detection-infrastructure:orgName: organization
+  fraud-detection-infrastructure:dbPassword:
+    secure: v1:DTOT1RYh4LZbqEU0:zR1vMmuzZfVyLftwhd8yre22Png79JejtttHeNzVeJCib7M=
+encryptionsalt: v1:ke9KFRCY/J8=:v1:QRhdIJA6HXlU1Mv4:2QnW3MUuWjqqhxlvGjL0p73KfW52ew==

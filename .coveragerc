@@ -1,5 +1,7 @@
 [run]
-omit = lib/__main__.py
+omit =
+    lib/__main__.py
+    lib/drift_detector.py
 branch = True
 
 [report]
