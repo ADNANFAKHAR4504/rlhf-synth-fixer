@@ -155,15 +155,16 @@ class TestTapStack(unittest.TestCase):
         """Test that all Lambda functions are created"""
         self.template.resource_count_is("AWS::Lambda::Function", 3)
 
-    @mark.it("verifies Lambda functions have log retention configured")
-    def test_lambda_log_retention(self):
-        """Test that Lambda functions have log retention configured"""
-        # Lambda functions should have log retention which creates custom resources
-        # These custom resources can handle existing log groups gracefully
+    @mark.it("verifies Lambda functions configuration")
+    def test_lambda_configuration(self):
+        """Test that Lambda functions are properly configured"""
+        # Lambda functions will automatically create log groups on first invocation
+        # This avoids conflicts with existing log groups from failed deployments
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
                 "FunctionName": f"webhook-receiver-{self.env_suffix}",
+                "Runtime": "python3.11",
             },
         )
 
