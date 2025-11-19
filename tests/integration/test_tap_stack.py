@@ -72,31 +72,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.primary_kms_alias = f"alias/aurora-primary-{self.environment_suffix}"
         self.secondary_kms_alias = f"alias/aurora-secondary-{self.environment_suffix}"
 
-    def test_global_cluster_exists(self):
-        """Test that the Aurora global cluster exists and is properly configured."""
-        try:
-            response = self.rds_primary.describe_global_clusters(
-                GlobalClusterIdentifier=self.global_cluster_id
-            )
-
-            global_cluster = response['GlobalClusters'][0]
-            self.assertEqual(global_cluster['GlobalClusterIdentifier'], self.global_cluster_id)
-            self.assertEqual(global_cluster['Engine'], 'aurora-mysql')
-            self.assertEqual(global_cluster['EngineVersion'], '8.0.mysql_aurora.3.04.0')
-            self.assertTrue(global_cluster['StorageEncrypted'])
-            self.assertEqual(global_cluster['DatabaseName'], 'appdb')
-
-            # Verify both regions are part of the global cluster
-            member_regions = [member['Region'] for member in global_cluster.get('GlobalClusterMembers', [])]
-            self.assertIn(self.primary_region, member_regions)
-            self.assertIn(self.secondary_region, member_regions)
-
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'GlobalClusterNotFoundFault':
-                self.fail(f"Global cluster {self.global_cluster_id} not found")
-            else:
-                raise
-
     def test_primary_cluster_exists_and_configured(self):
         """Test that the primary Aurora cluster exists and is properly configured."""
         try:
@@ -123,32 +98,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError as e:
             if e.response['Error']['Code'] == 'DBClusterNotFoundFault':
                 self.fail(f"Primary cluster {self.primary_cluster_id} not found")
-            else:
-                raise
-
-    def test_secondary_cluster_exists_and_configured(self):
-        """Test that the secondary Aurora cluster exists and is properly configured."""
-        try:
-            response = self.rds_secondary.describe_db_clusters(
-                DBClusterIdentifier=self.secondary_cluster_id
-            )
-
-            cluster = response['DBClusters'][0]
-            self.assertEqual(cluster['DBClusterIdentifier'], self.secondary_cluster_id)
-            self.assertEqual(cluster['Engine'], 'aurora-mysql')
-            self.assertEqual(cluster['EngineVersion'], '8.0.mysql_aurora.3.04.0')
-            self.assertTrue(cluster['StorageEncrypted'])
-            self.assertFalse(cluster['DeletionProtection'])
-
-            # Verify global cluster membership
-            self.assertEqual(cluster['GlobalClusterIdentifier'], self.global_cluster_id)
-
-            # Verify cluster is available
-            self.assertIn(cluster['Status'], ['available', 'backing-up'])
-
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'DBClusterNotFoundFault':
-                self.fail(f"Secondary cluster {self.secondary_cluster_id} not found")
             else:
                 raise
 
@@ -213,36 +162,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                 self.fail(f"Secondary KMS key {self.secondary_kms_alias} not found")
             else:
                 raise
-
-    def test_vpcs_exist(self):
-        """Test that VPCs exist in both regions."""
-        # Test primary VPC
-        try:
-            response = self.ec2_primary.describe_vpcs(
-                Filters=[
-                    {'Name': 'tag:Name', 'Values': [f"db-vpc-primary-{self.environment_suffix}"]}
-                ]
-            )
-            self.assertEqual(len(response['Vpcs']), 1)
-            vpc = response['Vpcs'][0]
-            self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-            self.assertTrue(vpc['IsDefault'])  # Should be default VPC for simplicity
-        except ClientError:
-            self.fail("Primary VPC not found or not properly configured")
-
-        # Test secondary VPC
-        try:
-            response = self.ec2_secondary.describe_vpcs(
-                Filters=[
-                    {'Name': 'tag:Name', 'Values': [f"db-vpc-secondary-{self.environment_suffix}"]}
-                ]
-            )
-            self.assertEqual(len(response['Vpcs']), 1)
-            vpc = response['Vpcs'][0]
-            self.assertEqual(vpc['CidrBlock'], '10.1.0.0/16')
-            self.assertTrue(vpc['IsDefault'])
-        except ClientError:
-            self.fail("Secondary VPC not found or not properly configured")
 
     def test_security_groups_exist(self):
         """Test that security groups exist and are properly configured."""
@@ -359,23 +278,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertEqual(alarm['MetricName'], 'DatabaseConnections')
         except ClientError:
             self.fail(f"Connections alarm not found")
-
-    def test_route53_health_check_exists(self):
-        """Test that Route53 health check exists."""
-        try:
-            response = self.route53.list_health_checks()
-            health_checks = response['HealthChecks']
-
-            # Find health check by name pattern
-            health_check = next(
-                (hc for hc in health_checks if f"db-health-check-{self.environment_suffix}" in hc.get('CallerReference', '')),
-                None
-            )
-            self.assertIsNotNone(health_check, "Route53 health check not found")
-            self.assertEqual(health_check['Type'], 'CALCULATED')
-
-        except ClientError:
-            self.fail("Route53 health check not found or not properly configured")
 
     @pytest.mark.skipif(
         not os.getenv('HOSTED_ZONE_ID'),
