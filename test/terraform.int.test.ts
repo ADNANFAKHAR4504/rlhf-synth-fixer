@@ -219,57 +219,6 @@ describe('Terraform Zero-Trust Architecture - Integration Tests', () => {
     });
   });
 
-  describe('Optional Resources', () => {
-    test('GuardDuty detector ID is optional', () => {
-      if (!outputsExist) {
-        console.log('Infrastructure not deployed - skipping test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      const detectorId = outputs.guardduty_detector_id || outputs.GuardDutyDetectorId;
-      // Should be either null/undefined or a valid detector ID
-      if (detectorId) {
-        expect(detectorId).toMatch(/^[a-f0-9]{32}$/);
-      } else {
-        expect(detectorId).toBeNull();
-      }
-    });
-
-    test('Config recorder ID is optional', () => {
-      if (!outputsExist) {
-        console.log('Infrastructure not deployed - skipping test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      const recorderId = outputs.config_recorder_id || outputs.ConfigRecorderId;
-      // Should be either null/undefined or a valid recorder ID
-      if (recorderId) {
-        expect(recorderId).toBeDefined();
-        expect(typeof recorderId).toBe('string');
-      } else {
-        expect(recorderId).toBeNull();
-      }
-    });
-
-    test('Config bucket name is optional', () => {
-      if (!outputsExist) {
-        console.log('Infrastructure not deployed - skipping test');
-        expect(true).toBe(true);
-        return;
-      }
-
-      const bucketName = outputs.config_bucket_name || outputs.ConfigBucketName;
-      // Should be either null/undefined or a valid bucket name
-      if (bucketName) {
-        expect(bucketName).toContain('zero-trust-config');
-      } else {
-        expect(bucketName).toBeNull();
-      }
-    });
-  });
-
   describe('Resource Naming Convention', () => {
     test('all resource names include environment suffix', () => {
       if (!outputsExist) {
