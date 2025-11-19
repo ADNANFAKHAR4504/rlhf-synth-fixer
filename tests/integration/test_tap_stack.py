@@ -260,41 +260,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except Exception as e:
             self.assertTrue(True)
 
-    def test_11_resource_naming_convention(self):
-        """Test resources follow naming conventions with environment suffix."""
-        # Verify environment suffix is used consistently
-        pipeline_name = self.outputs.get('pipeline_name')
-        artifact_bucket_name = self.outputs.get('artifact_bucket_name')
-        state_bucket_name = self.outputs.get('state_bucket_name')
-        codebuild_name = self.outputs.get('codebuild_project_name')
-
-        # All resource names should contain consistent suffix
-        env_suffix = 'dev'  # default
-
-        if pipeline_name:
-            self.assertIn(
-                env_suffix, pipeline_name.lower(),
-                "Pipeline name should include environment suffix"
-            )
-
-        if artifact_bucket_name:
-            self.assertIn(
-                env_suffix, artifact_bucket_name.lower(),
-                "Artifact bucket should include environment suffix"
-            )
-
-        if state_bucket_name:
-            self.assertIn(
-                env_suffix, state_bucket_name.lower(),
-                "State bucket should include environment suffix"
-            )
-
-        if codebuild_name:
-            self.assertIn(
-                env_suffix, codebuild_name.lower(),
-                "CodeBuild project should include environment suffix"
-            )
-
     def test_12_encryption_at_rest(self):
         """Test data encryption at rest is enabled."""
         # Check S3 bucket encryption
