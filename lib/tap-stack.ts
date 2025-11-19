@@ -1,7 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import * as pulumi from '@pulumi/pulumi';
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 /**
