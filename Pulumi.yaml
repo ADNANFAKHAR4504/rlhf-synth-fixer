@@ -1,0 +1,3 @@
+name: TapStack
+runtime: python
+description: Multi-region disaster recovery infrastructure for payment processing
