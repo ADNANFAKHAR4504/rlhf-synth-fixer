@@ -602,16 +602,6 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
       { parent: this }
     );
 
-    // Set bucket ACL
-    new aws.s3.BucketAcl(
-      `flow-logs-bucket-acl-${environmentSuffix}`,
-      {
-        bucket: flowLogsBucket.id,
-        acl: 'private',
-      },
-      { parent: this }
-    );
-
     // Configure server-side encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `flow-logs-bucket-encryption-${environmentSuffix}`,

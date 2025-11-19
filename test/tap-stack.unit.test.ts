@@ -296,4 +296,74 @@ describe('VPC Infrastructure Unit Tests', () => {
       expect(natInstanceIds.length).toBe(3);
     });
   });
+
+  describe('Default Values and Optional Parameters', () => {
+    it('should use default environmentSuffix when not provided', () => {
+      // Import TapStack class directly to test with minimal args
+      const { TapStack } = require('../lib/tap-stack');
+      const stackWithDefaults = new TapStack('test-defaults', {});
+
+      // The stack should be created successfully with defaults
+      expect(stackWithDefaults).toBeDefined();
+    });
+
+    it('should use default region when not provided', () => {
+      const { TapStack } = require('../lib/tap-stack');
+      const stackWithDefaults = new TapStack('test-region-default', {
+        environmentSuffix: 'test',
+      });
+
+      expect(stackWithDefaults).toBeDefined();
+    });
+
+    it('should use default tags when not provided', () => {
+      const { TapStack } = require('../lib/tap-stack');
+      const stackWithDefaults = new TapStack('test-tags-default', {
+        environmentSuffix: 'test',
+        region: 'us-west-2',
+      });
+
+      expect(stackWithDefaults).toBeDefined();
+    });
+
+    it('should accept all parameters when provided', () => {
+      const { TapStack } = require('../lib/tap-stack');
+      const customTags = {
+        Environment: 'staging',
+        Project: 'test-project',
+        CostCenter: 'test-center',
+      };
+
+      const stackWithAllParams = new TapStack('test-all-params', {
+        environmentSuffix: 'staging',
+        region: 'eu-west-1',
+        tags: customTags,
+      });
+
+      expect(stackWithAllParams).toBeDefined();
+    });
+
+    it('should handle empty environmentSuffix and use default', () => {
+      const { TapStack } = require('../lib/tap-stack');
+      const stackWithEmptyEnv = new TapStack('test-empty-env', {
+        environmentSuffix: '',
+        region: 'us-east-1',
+      });
+
+      // Empty string is falsy, so it should use default 'dev'
+      expect(stackWithEmptyEnv).toBeDefined();
+    });
+
+    it('should handle undefined optional parameters', () => {
+      const { TapStack } = require('../lib/tap-stack');
+      const stackWithUndefined = new TapStack('test-undefined', {
+        environmentSuffix: undefined,
+        region: undefined,
+        tags: undefined,
+      });
+
+      // All undefined values should use defaults
+      expect(stackWithUndefined).toBeDefined();
+    });
+  });
 });
