@@ -17,21 +17,31 @@ from aws_cdk import (
     CfnOutput,
 )
 from constructs import Construct
+import hashlib
 
 
 class TapStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # S3 Bucket for file storage
+        # Generate a deterministic unique suffix based on environment and account
+        # This ensures idempotency while avoiding naming conflicts
+        account_id = self.account or "default"
+        region = self.region or "us-east-1"
+        seed_str = f"{environment_suffix}-{account_id}-{region}"
+        unique_id = hashlib.sha256(seed_str.encode()).hexdigest()[:8]
+
+        # S3 Bucket for file storage with dynamic naming
         processing_bucket = s3.Bucket(
             self,
             "ProcessingBucket",
-            bucket_name=f"etl-processing-{environment_suffix}",
+            bucket_name=f"etl-processing-{environment_suffix}-{unique_id}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             versioned=True,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
+            enforce_ssl=True,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="MoveToGlacier",
@@ -47,11 +57,11 @@ class TapStack(Stack):
             ],
         )
 
-        # DynamoDB table for tracking processing status
+        # DynamoDB table for tracking processing status with dynamic naming
         status_table = dynamodb.Table(
             self,
             "StatusTable",
-            table_name=f"etl-status-{environment_suffix}",
+            table_name=f"etl-status-{environment_suffix}-{unique_id}",
             partition_key=dynamodb.Attribute(
                 name="file_id", type=dynamodb.AttributeType.STRING
             ),
@@ -61,6 +71,7 @@ class TapStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             point_in_time_recovery=True,
             removal_policy=RemovalPolicy.DESTROY,
+            deletion_protection=False,
         )
 
         # Lambda Layer with pandas and boto3
@@ -72,11 +83,11 @@ class TapStack(Stack):
             description="Layer with pandas and boto3 for data processing",
         )
 
-        # Lambda function for file splitting
+        # Lambda function for file splitting with dynamic naming
         splitter_function = lambda_.Function(
             self,
             "FileSplitter",
-            function_name=f"etl-splitter-{environment_suffix}",
+            function_name=f"etl-splitter-{environment_suffix}-{unique_id}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="splitter.handler",
             code=lambda_.Code.from_asset("lib/lambda/splitter"),
@@ -91,11 +102,11 @@ class TapStack(Stack):
             log_retention=logs.RetentionDays.ONE_MONTH,
         )
 
-        # Lambda function for data validation
+        # Lambda function for data validation with dynamic naming
         validator_function = lambda_.Function(
             self,
             "DataValidator",
-            function_name=f"etl-validator-{environment_suffix}",
+            function_name=f"etl-validator-{environment_suffix}-{unique_id}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="validator.handler",
             code=lambda_.Code.from_asset("lib/lambda/validator"),
@@ -109,11 +120,11 @@ class TapStack(Stack):
             log_retention=logs.RetentionDays.ONE_MONTH,
         )
 
-        # Lambda function for chunk processing
+        # Lambda function for chunk processing with dynamic naming
         processor_function = lambda_.Function(
             self,
             "ChunkProcessor",
-            function_name=f"etl-processor-{environment_suffix}",
+            function_name=f"etl-processor-{environment_suffix}-{unique_id}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="processor.handler",
             code=lambda_.Code.from_asset("lib/lambda/processor"),
@@ -135,19 +146,19 @@ class TapStack(Stack):
         status_table.grant_read_write_data(validator_function)
         status_table.grant_read_write_data(processor_function)
 
-        # SNS Topic for failure alerts (optional)
+        # SNS Topic for failure alerts with dynamic naming
         failure_topic = sns.Topic(
             self,
             "FailureTopic",
-            topic_name=f"etl-failures-{environment_suffix}",
+            topic_name=f"etl-failures-{environment_suffix}-{unique_id}",
             display_name="ETL Pipeline Failure Notifications",
         )
 
-        # SQS FIFO Queue for processing results (optional)
+        # SQS FIFO Queue for processing results with dynamic naming
         results_queue = sqs.Queue(
             self,
             "ResultsQueue",
-            queue_name=f"etl-results-{environment_suffix}.fifo",
+            queue_name=f"etl-results-{environment_suffix}-{unique_id}.fifo",
             fifo=True,
             content_based_deduplication=True,
             visibility_timeout=Duration.minutes(15),
@@ -240,11 +251,11 @@ class TapStack(Stack):
             .next(process_chunks_map)
         )
 
-        # Step Functions state machine
+        # Step Functions state machine with dynamic naming
         state_machine = sfn.StateMachine(
             self,
             "ETLStateMachine",
-            state_machine_name=f"etl-pipeline-{environment_suffix}",
+            state_machine_name=f"etl-pipeline-{environment_suffix}-{unique_id}",
             definition=workflow_definition,
             timeout=Duration.hours(2),
             tracing_enabled=True,
@@ -252,7 +263,7 @@ class TapStack(Stack):
                 destination=logs.LogGroup(
                     self,
                     "StateMachineLogGroup",
-                    log_group_name=f"/aws/stepfunctions/etl-{environment_suffix}",
+                    log_group_name=f"/aws/stepfunctions/etl-{environment_suffix}-{unique_id}",
                     removal_policy=RemovalPolicy.DESTROY,
                     retention=logs.RetentionDays.ONE_MONTH,
                 ),
@@ -264,11 +275,11 @@ class TapStack(Stack):
         state_machine.node.add_metadata("Environment", "Production")
         state_machine.node.add_metadata("Project", "ETL")
 
-        # EventBridge rule to trigger on S3 file uploads
+        # EventBridge rule to trigger on S3 file uploads with dynamic naming
         s3_event_rule = events.Rule(
             self,
             "S3FileUploadRule",
-            rule_name=f"etl-s3-trigger-{environment_suffix}",
+            rule_name=f"etl-s3-trigger-{environment_suffix}-{unique_id}",
             event_pattern=events.EventPattern(
                 source=["aws.s3"],
                 detail_type=["Object Created"],
@@ -290,11 +301,11 @@ class TapStack(Stack):
         # Enable S3 EventBridge notifications
         processing_bucket.enable_event_bridge_notification()
 
-        # CloudWatch Dashboard
+        # CloudWatch Dashboard with dynamic naming
         dashboard = cloudwatch.Dashboard(
             self,
             "ETLDashboard",
-            dashboard_name=f"etl-pipeline-{environment_suffix}",
+            dashboard_name=f"etl-pipeline-{environment_suffix}-{unique_id}",
         )
 
         # Add widgets to dashboard
