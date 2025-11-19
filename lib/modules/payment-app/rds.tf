@@ -1,12 +1,12 @@
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name = "db-subnet-group-${var.environment_suffix}"
+  name = "db-subnet-group-${var.pr_number}"
   # Use local fallback list so module still plans if private tag filtering returns empty
   # (falls back to public subnets as a last resort)
   subnet_ids = local.private_subnet_ids
 
   tags = {
-    Name        = "db-subnet-group-${var.environment_suffix}"
+    Name        = "db-subnet-group-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -15,7 +15,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS PostgreSQL Instance
 resource "aws_db_instance" "main" {
-  identifier = "rds-${var.environment_suffix}"
+  identifier = "rds-${var.pr_number}"
 
   engine         = "postgres"
   engine_version = "15.14"
@@ -37,7 +37,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot       = var.environment == "dev" ? true : false
-  final_snapshot_identifier = var.environment != "dev" ? "rds-${var.environment_suffix}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
+  final_snapshot_identifier = var.environment != "dev" ? "rds-${var.pr_number}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   deletion_protection = var.environment == "prod" ? true : false
 
@@ -51,7 +51,7 @@ resource "aws_db_instance" "main" {
   enabled_cloudwatch_logs_exports = var.environment != "dev" ? ["postgresql"] : []
 
   tags = {
-    Name        = "rds-${var.environment_suffix}"
+    Name        = "rds-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -62,7 +62,7 @@ resource "aws_db_instance" "main" {
 resource "aws_iam_role" "rds_monitoring" {
   count = var.environment == "prod" ? 1 : 0
 
-  name = "rds-monitoring-role-${var.environment_suffix}"
+  name = "rds-monitoring-role-${var.pr_number}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -78,7 +78,7 @@ resource "aws_iam_role" "rds_monitoring" {
   })
 
   tags = {
-    Name        = "rds-monitoring-role-${var.environment_suffix}"
+    Name        = "rds-monitoring-role-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"

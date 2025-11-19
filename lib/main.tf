@@ -2,7 +2,7 @@ module "payment_app" {
   source = "./modules/payment-app"
 
   environment             = var.environment
-  environment_suffix      = var.environment_suffix != "" ? var.environment_suffix : var.environment
+  pr_number               = var.pr_number != "" ? var.pr_number : var.environment
   aws_region              = var.aws_region
   vpc_cidr                = var.vpc_cidr
   db_instance_class       = var.db_instance_class

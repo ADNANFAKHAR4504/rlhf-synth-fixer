@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "vpc-${var.environment_suffix}"
+    Name        = "vpc-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "subnet-public-${var.environment_suffix}-${count.index + 1}"
+    Name        = "subnet-public-${var.pr_number}-${count.index + 1}"
     Type        = "public"
     Environment = var.environment
     Project     = "payment-processing"
@@ -43,7 +43,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name        = "subnet-private-${var.environment_suffix}-${count.index + 1}"
+    Name        = "subnet-private-${var.pr_number}-${count.index + 1}"
     Type        = "private"
     Environment = var.environment
     Project     = "payment-processing"
@@ -52,10 +52,10 @@ resource "aws_subnet" "private" {
 
 # 5. Internet Gateway (for Public Subnets)
 resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
+  vpc_id = local.vpc_id
 
   tags = {
-    Name        = "igw-${var.environment_suffix}"
+    Name        = "igw-${var.pr_number}"
     Environment = var.environment
   }
 }
@@ -64,16 +64,16 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags = {
-    Name = "eip-nat-${var.environment_suffix}"
+    Name = "eip-nat-${var.pr_number}"
   }
 }
 
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
+  subnet_id     = local.public_subnet_ids[0]
 
   tags = {
-    Name        = "nat-gw-${var.environment_suffix}"
+    Name        = "nat-gw-${var.pr_number}"
     Environment = var.environment
   }
 
@@ -90,7 +90,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "rt-public-${var.environment_suffix}"
+    Name = "rt-public-${var.pr_number}"
   }
 }
 
@@ -103,7 +103,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "rt-private-${var.environment_suffix}"
+    Name = "rt-private-${var.pr_number}"
   }
 }
 

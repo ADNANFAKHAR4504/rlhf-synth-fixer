@@ -1,6 +1,6 @@
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "alb-${var.environment_suffix}"
+  name               = "alb-${var.pr_number}"
   internal           = var.alb_internal
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -17,7 +17,7 @@ resource "aws_lb" "main" {
   }
 
   tags = {
-    Name        = "alb-${var.environment_suffix}"
+    Name        = "alb-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -26,10 +26,10 @@ resource "aws_lb" "main" {
 
 # S3 bucket for ALB logs
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "alb-logs-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket = "alb-logs-${var.pr_number}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name        = "alb-logs-${var.environment_suffix}"
+    Name        = "alb-logs-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -67,9 +67,9 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   })
 }
 
-# Target Group
+# Target group
 resource "aws_lb_target_group" "main" {
-  name     = "tg-${var.environment_suffix}"
+  name     = "tg-${var.pr_number}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = local.vpc_id
@@ -93,7 +93,7 @@ resource "aws_lb_target_group" "main" {
   }
 
   tags = {
-    Name        = "tg-${var.environment_suffix}"
+    Name        = "tg-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"

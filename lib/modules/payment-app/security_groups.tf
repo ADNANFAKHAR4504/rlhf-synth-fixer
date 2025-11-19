@@ -1,6 +1,6 @@
 # Security group for ALB
 resource "aws_security_group" "alb" {
-  name        = "alb-sg-${var.environment_suffix}"
+  name        = "alb-sg-${var.pr_number}"
   description = "Security group for Application Load Balancer"
   vpc_id      = local.vpc_id
 
@@ -29,7 +29,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name        = "alb-sg-${var.environment_suffix}"
+    Name        = "alb-sg-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -38,7 +38,7 @@ resource "aws_security_group" "alb" {
 
 # Security group for EC2 instances
 resource "aws_security_group" "ec2" {
-  name        = "ec2-sg-${var.environment_suffix}"
+  name        = "ec2-sg-${var.pr_number}"
   description = "Security group for EC2 instances"
   vpc_id      = local.vpc_id
 
@@ -67,7 +67,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name        = "ec2-sg-${var.environment_suffix}"
+    Name        = "ec2-sg-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -76,8 +76,8 @@ resource "aws_security_group" "ec2" {
 
 # Security group for RDS
 resource "aws_security_group" "rds" {
-  name        = "rds-sg-${var.environment_suffix}"
-  description = "Security group for RDS PostgreSQL instance"
+  name        = "rds-sg-${var.pr_number}"
+  description = "Security group for RDS instance"
   vpc_id      = local.vpc_id
 
   ingress {
@@ -97,7 +97,7 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name        = "rds-sg-${var.environment_suffix}"
+    Name        = "rds-sg-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"

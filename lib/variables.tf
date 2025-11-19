@@ -8,8 +8,8 @@ variable "environment" {
   }
 }
 
-variable "environment_suffix" {
-  description = "Environment suffix for resource naming (e.g., dev-001, staging-prod, prod-us-east-1)"
+variable "pr_number" {
+  description = "PR number for resource naming"
   type        = string
   default     = ""
 }

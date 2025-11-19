@@ -3,8 +3,8 @@ variable "environment" {
   type        = string
 }
 
-variable "environment_suffix" {
-  description = "Environment suffix for resource naming"
+variable "pr_number" {
+  description = "PR number for resource naming"
   type        = string
 }
 

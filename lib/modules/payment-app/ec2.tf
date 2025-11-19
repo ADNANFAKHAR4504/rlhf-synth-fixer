@@ -1,6 +1,6 @@
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2" {
-  name = "ec2-role-${var.environment_suffix}"
+  name = "ec2-role-${var.pr_number}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -16,7 +16,7 @@ resource "aws_iam_role" "ec2" {
   })
 
   tags = {
-    Name        = "ec2-role-${var.environment_suffix}"
+    Name        = "ec2-role-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -37,11 +37,11 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 
 # Instance profile
 resource "aws_iam_instance_profile" "ec2" {
-  name = "ec2-profile-${var.environment_suffix}"
+  name = "ec2-profile-${var.pr_number}"
   role = aws_iam_role.ec2.name
 
   tags = {
-    Name        = "ec2-profile-${var.environment_suffix}"
+    Name        = "ec2-profile-${var.pr_number}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
@@ -76,7 +76,7 @@ resource "aws_instance" "app" {
   }))
 
   tags = {
-    Name        = "ec2-${var.environment_suffix}-${count.index + 1}"
+    Name        = "ec2-${var.pr_number}-${count.index + 1}"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
