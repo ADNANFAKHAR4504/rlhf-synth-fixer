@@ -33,8 +33,9 @@ resource "kubernetes_service_account" "cluster_autoscaler" {
 }
 
 resource "aws_sns_topic" "eks_alerts" {
-  name              = local.sns_topic_name
-  kms_master_key_id = aws_kms_key.eks.arn
+  name = local.sns_topic_name
+  # KMS encryption removed to avoid key state issues
+  # kms_master_key_id = aws_kms_key.eks.arn
 
   tags = local.common_tags
 }
