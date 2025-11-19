@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth-2",
+  "turn_type": "single",
+  "po_id": "a5p3b5",
+  "startedAt": "2025-11-19T13:12:08.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "aws_services": [
+    "AWS Config",
+    "Lambda",
+    "EventBridge",
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "VPC",
+    "IAM",
+    "KMS"
+  ],
+  "training_quality": 9
+}
