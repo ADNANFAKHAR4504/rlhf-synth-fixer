@@ -267,6 +267,7 @@ class TapStack(pulumi.ComponentResource):
         dlq = aws.sqs.Queue(
             f"failed-transactions-dlq-{self.environment_suffix}",
             name=f"failed-transactions-dlq-{self.environment_suffix}",
+            visibility_timeout_seconds=120,  # 2x Lambda timeout (60s) for safety
             message_retention_seconds=1209600,  # 14 days
             kms_master_key_id=kms_key.id,
             tags={
@@ -812,9 +813,9 @@ class TapStack(pulumi.ComponentResource):
                         "height": 6,
                         "properties": {
                             "metrics": [
-                                ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Validator"}, {"dimensions": {"FunctionName": names[0]}}],
-                                ["...", {"stat": "Sum", "label": "Fraud Detector"}, {"dimensions": {"FunctionName": names[1]}}],
-                                ["...", {"stat": "Sum", "label": "Failed Handler"}, {"dimensions": {"FunctionName": names[2]}}]
+                                ["AWS/Lambda", "Invocations", "FunctionName", names[0], {"stat": "Sum", "label": "Validator"}],
+                                [".", ".", ".", names[1], {"stat": "Sum", "label": "Fraud Detector"}],
+                                [".", ".", ".", names[2], {"stat": "Sum", "label": "Failed Handler"}]
                             ],
                             "period": 300,
                             "stat": "Sum",
@@ -835,9 +836,9 @@ class TapStack(pulumi.ComponentResource):
                         "height": 6,
                         "properties": {
                             "metrics": [
-                                ["AWS/Lambda", "Errors", {"stat": "Sum", "label": "Validator", "color": "#d62728"}, {"dimensions": {"FunctionName": names[0]}}],
-                                ["...", {"stat": "Sum", "label": "Fraud Detector", "color": "#ff7f0e"}, {"dimensions": {"FunctionName": names[1]}}],
-                                ["...", {"stat": "Sum", "label": "Failed Handler", "color": "#e377c2"}, {"dimensions": {"FunctionName": names[2]}}]
+                                ["AWS/Lambda", "Errors", "FunctionName", names[0], {"stat": "Sum", "label": "Validator", "color": "#d62728"}],
+                                [".", ".", ".", names[1], {"stat": "Sum", "label": "Fraud Detector", "color": "#ff7f0e"}],
+                                [".", ".", ".", names[2], {"stat": "Sum", "label": "Failed Handler", "color": "#e377c2"}]
                             ],
                             "period": 300,
                             "stat": "Sum",
@@ -858,9 +859,9 @@ class TapStack(pulumi.ComponentResource):
                         "height": 6,
                         "properties": {
                             "metrics": [
-                                ["AWS/Lambda", "Duration", {"stat": "Average", "label": "Validator"}, {"dimensions": {"FunctionName": names[0]}}],
-                                ["...", {"stat": "Average", "label": "Fraud Detector"}, {"dimensions": {"FunctionName": names[1]}}],
-                                ["...", {"stat": "Average", "label": "Failed Handler"}, {"dimensions": {"FunctionName": names[2]}}]
+                                ["AWS/Lambda", "Duration", "FunctionName", names[0], {"stat": "Average", "label": "Validator"}],
+                                [".", ".", ".", names[1], {"stat": "Average", "label": "Fraud Detector"}],
+                                [".", ".", ".", names[2], {"stat": "Average", "label": "Failed Handler"}]
                             ],
                             "period": 300,
                             "stat": "Average",
@@ -881,9 +882,9 @@ class TapStack(pulumi.ComponentResource):
                         "height": 6,
                         "properties": {
                             "metrics": [
-                                ["AWS/SQS", "NumberOfMessagesSent", {"dimensions": {"QueueName": f"valid-transactions-queue-{self.environment_suffix}"}}],
-                                [".", "NumberOfMessagesReceived", {"dimensions": {"QueueName": f"valid-transactions-queue-{self.environment_suffix}"}}],
-                                [".", "ApproximateNumberOfMessagesVisible", {"dimensions": {"QueueName": f"valid-transactions-queue-{self.environment_suffix}"}}]
+                                ["AWS/SQS", "NumberOfMessagesSent", "QueueName", f"valid-transactions-queue-{self.environment_suffix}"],
+                                [".", "NumberOfMessagesReceived", ".", "."],
+                                [".", "ApproximateNumberOfMessagesVisible", ".", "."]
                             ],
                             "period": 300,
                             "stat": "Sum",
