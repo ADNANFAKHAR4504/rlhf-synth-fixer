@@ -35,10 +35,13 @@ resource "aws_iam_role_policy" "emr_service_kms" {
         Effect = "Allow"
         Action = [
           "kms:Decrypt",
+          "kms:Encrypt",
           "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext",
           "kms:DescribeKey",
-          "kms:CreateGrant"
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
         ]
         Resource = [
           aws_kms_key.emr.arn

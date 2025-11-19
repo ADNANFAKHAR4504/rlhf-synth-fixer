@@ -125,7 +125,8 @@ resource "aws_kms_key" "emr" {
 
   depends_on = [
     aws_iam_role.emr_service_role,
-    aws_iam_role.emr_ec2_role
+    aws_iam_role.emr_ec2_role,
+    aws_iam_role.emr_autoscaling_role
   ]
 
   policy = jsonencode({
@@ -148,10 +149,13 @@ resource "aws_kms_key" "emr" {
         }
         Action = [
           "kms:Decrypt",
+          "kms:Encrypt",
           "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext",
           "kms:DescribeKey",
-          "kms:CreateGrant"
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
         ]
         Resource = "*"
       },
@@ -166,6 +170,34 @@ resource "aws_kms_key" "emr" {
           "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext",
           "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EMR Autoscaling Role"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.emr_autoscaling_role.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EMR Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticmapreduce.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey",
+          "kms:CreateGrant"
         ]
         Resource = "*"
       }
