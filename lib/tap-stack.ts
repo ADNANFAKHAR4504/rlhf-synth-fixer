@@ -29,11 +29,21 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix =
       args.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-    // Validate environment
-    if (!['dev', 'staging', 'prod'].includes(environmentSuffix)) {
-      throw new Error(
-        `Invalid environment: ${environmentSuffix}. Must be one of: dev, staging, prod`
-      );
+    // Determine the base environment for configuration
+    // PR environments (pr*, synth-*) use dev configuration
+    let baseEnvironment: 'dev' | 'staging' | 'prod' = 'dev';
+    if (environmentSuffix === 'prod') {
+      baseEnvironment = 'prod';
+    } else if (environmentSuffix === 'staging') {
+      baseEnvironment = 'staging';
+    } else if (environmentSuffix.startsWith('pr') || environmentSuffix.startsWith('synth-')) {
+      // PR and synthetic environments use dev configuration
+      baseEnvironment = 'dev';
+    } else if (['dev', 'development'].includes(environmentSuffix)) {
+      baseEnvironment = 'dev';
+    } else {
+      // Default to dev for any other environment
+      baseEnvironment = 'dev';
     }
 
     // Create environment infrastructure
@@ -41,6 +51,7 @@ export class TapStack extends pulumi.ComponentResource {
       `env-${environmentSuffix}`,
       {
         environmentSuffix,
+        baseEnvironment,
       },
       { parent: this }
     );

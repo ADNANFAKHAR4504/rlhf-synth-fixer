@@ -11,6 +11,7 @@ import { getEnvironmentConfig, getResourceTags } from './config';
 
 export interface EnvironmentComponentArgs {
   environmentSuffix: string;
+  baseEnvironment?: 'dev' | 'staging' | 'prod';
 }
 
 /**
@@ -34,11 +35,16 @@ export class EnvironmentComponent extends pulumi.ComponentResource {
   ) {
     super('custom:environment:EnvironmentComponent', name, {}, opts);
 
-    const { environmentSuffix } = args;
+    const { environmentSuffix, baseEnvironment } = args;
 
-    // Get environment configuration
-    this.config = getEnvironmentConfig(environmentSuffix);
-    const tags = getResourceTags(this.config.environment);
+    // Use baseEnvironment for configuration, fallback to environmentSuffix for backward compatibility
+    const configEnvironment = baseEnvironment || environmentSuffix;
+
+    // Get environment configuration using the base environment
+    this.config = getEnvironmentConfig(configEnvironment);
+
+    // Use environmentSuffix for resource tags to maintain unique naming
+    const tags = getResourceTags(environmentSuffix);
 
     // Create VPC and networking
     this.vpc = new VpcComponent(
