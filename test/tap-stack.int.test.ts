@@ -37,27 +37,40 @@ describe('TapStack Integration Tests - Secure Transaction Processing Pipeline', 
     ec2Client = new EC2Client({ region });
     cwClient = new CloudWatchClient({ region });
 
-    // Dynamically discover the stack name by listing stacks
-    const listCommand = new ListStacksCommand({
-      StackStatusFilter: [
-        'CREATE_COMPLETE',
-        'UPDATE_COMPLETE',
-        'UPDATE_ROLLBACK_COMPLETE',
-      ],
-    });
-    const listResponse = await cfnClient.send(listCommand);
+    // Use ENVIRONMENT_SUFFIX if available, otherwise discover dynamically
+    const envSuffix = process.env.ENVIRONMENT_SUFFIX;
+    
+    if (envSuffix) {
+      // Use environment suffix to construct stack name
+      stackName = `TapStack${envSuffix}`;
+      console.log(`Using stack from ENVIRONMENT_SUFFIX: ${stackName}`);
+    } else {
+      // Dynamically discover the stack name by listing stacks
+      const listCommand = new ListStacksCommand({
+        StackStatusFilter: [
+          'CREATE_COMPLETE',
+          'UPDATE_COMPLETE',
+          'UPDATE_ROLLBACK_COMPLETE',
+        ],
+      });
+      const listResponse = await cfnClient.send(listCommand);
 
-    // Find the first stack that starts with "TapStack"
-    const tapStack = listResponse.StackSummaries?.find(
-      stack => stack.StackName?.startsWith('TapStack')
-    );
+      // Find stacks that start with "TapStack" and sort by creation time (most recent first)
+      const tapStacks = (listResponse.StackSummaries || [])
+        .filter(stack => stack.StackName?.startsWith('TapStack'))
+        .sort((a, b) => {
+          const timeA = a.CreationTime?.getTime() || 0;
+          const timeB = b.CreationTime?.getTime() || 0;
+          return timeB - timeA; // Most recent first
+        });
 
-    if (!tapStack || !tapStack.StackName) {
-      throw new Error('No TapStack CloudFormation stack found. Please deploy the stack first.');
+      if (tapStacks.length === 0 || !tapStacks[0].StackName) {
+        throw new Error('No TapStack CloudFormation stack found. Please deploy the stack first.');
+      }
+
+      stackName = tapStacks[0].StackName;
+      console.log(`Discovered stack: ${stackName}`);
     }
-
-    stackName = tapStack.StackName;
-    console.log(`Discovered stack: ${stackName}`);
 
     // Get stack outputs directly from CloudFormation
     const describeCommand = new DescribeStacksCommand({ StackName: stackName });
@@ -91,6 +104,11 @@ describe('TapStack Integration Tests - Secure Transaction Processing Pipeline', 
           environmentSuffix = match[1];
         }
       }
+    }
+    
+    // Use ENVIRONMENT_SUFFIX if available and outputs don't match
+    if (envSuffix && !environmentSuffix) {
+      environmentSuffix = envSuffix;
     }
 
     console.log(`Environment suffix: ${environmentSuffix}`);
