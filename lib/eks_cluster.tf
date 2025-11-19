@@ -154,16 +154,18 @@ resource "aws_kms_alias" "eks" {
   }
 }
 
-resource "time_sleep" "wait_for_kms" {
-  create_duration = "60s"
-
-  depends_on = [aws_kms_key.eks]
-}
+# KMS key wait removed since we're not using KMS encryption
+# resource "time_sleep" "wait_for_kms" {
+#   create_duration = "60s"
+#
+#   depends_on = [aws_kms_key.eks]
+# }
 
 resource "aws_cloudwatch_log_group" "eks" {
   name              = local.log_group_name
   retention_in_days = var.cluster_log_retention_days
-  kms_key_id        = aws_kms_key.eks.arn
+  # KMS encryption removed to avoid key state issues
+  # kms_key_id        = aws_kms_key.eks.arn
 
   tags = local.common_tags
 }
@@ -182,13 +184,14 @@ resource "aws_eks_cluster" "main" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator"]
 
-  encryption_config {
-    resources = ["secrets"]
-
-    provider {
-      key_arn = aws_kms_key.eks.arn
-    }
-  }
+  # KMS encryption removed to avoid key state issues
+  # encryption_config {
+  #   resources = ["secrets"]
+  #
+  #   provider {
+  #     key_arn = aws_kms_key.eks.arn
+  #   }
+  # }
 
   tags = merge(local.common_tags, {
     Name = local.cluster_name

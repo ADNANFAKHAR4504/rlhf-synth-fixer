@@ -49,8 +49,6 @@ resource "aws_eks_node_group" "frontend" {
     aws_iam_role_policy_attachment.frontend_worker_node_policy,
     aws_iam_role_policy_attachment.frontend_cni_policy,
     aws_iam_role_policy_attachment.frontend_ecr_ro,
-    aws_kms_key.eks,
-    time_sleep.wait_for_kms,
     aws_cloudwatch_log_group.eks
   ]
 }
@@ -106,8 +104,6 @@ resource "aws_eks_node_group" "backend" {
     aws_iam_role_policy_attachment.backend_worker_node_policy,
     aws_iam_role_policy_attachment.backend_cni_policy,
     aws_iam_role_policy_attachment.backend_ecr_ro,
-    aws_kms_key.eks,
-    time_sleep.wait_for_kms,
     aws_cloudwatch_log_group.eks
   ]
 }
