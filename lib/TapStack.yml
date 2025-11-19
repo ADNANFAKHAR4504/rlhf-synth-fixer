@@ -4,9 +4,9 @@ Description: 'Master CloudFormation template for multi-environment payment proce
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: 'Unique suffix for environment resources (e.g., dev-001, staging-001, prod-001)'
-    AllowedPattern: '^[a-z]+-[0-9]{3}$'
-    ConstraintDescription: 'Must be in format: environment-###'
+    Description: 'Unique suffix for environment resources (e.g., dev-001, staging-001, pr6766)'
+    AllowedPattern: '^[a-z0-9]+-?[0-9]+$|^[a-z0-9]+$'
+    ConstraintDescription: 'Must be alphanumeric with optional dash and numbers'
 
   Environment:
     Type: String
