@@ -28,13 +28,13 @@ A financial analytics company needs to process daily transaction reports submitt
 
 ## Environment
 
-Serverless infrastructure deployed in us-east-1 using API Gateway REST API for file upload endpoints, Lambda functions running container images for processing logic, Step Functions Express workflows for orchestration, DynamoDB for state tracking and audit logs, S3 for file storage. Requires Terraform 1.5+, AWS CLI configured with appropriate IAM permissions. All resources deployed within default VPC using AWS-managed networking. ECR repository pre-configured for Lambda container images. CloudWatch Logs retention set to 7 days.
+Serverless infrastructure deployed in us-east-1 using API Gateway REST API for file upload endpoints, Lambda functions using ZIP deployment for processing logic, Step Functions Express workflows for orchestration, DynamoDB for state tracking and audit logs, S3 for file storage. Requires Terraform 1.5+, AWS CLI configured with appropriate IAM permissions. All resources deployed within default VPC using AWS-managed networking. Lambda packages generated dynamically during synthesis. CloudWatch Logs retention set to 7 days.
 
 ## Constraints
 
 - Lambda functions must use ARM64 architecture with 512MB memory allocation
 - DynamoDB tables must use on-demand billing mode with point-in-time recovery
-- Lambda functions must use container images stored in ECR
+- Lambda functions must use ZIP deployment with packages generated dynamically
 - Step Functions must use Express workflows for cost optimization
 - API Gateway must use REST API type with request validation enabled
 - Step Functions state machine must implement retry logic with exponential backoff

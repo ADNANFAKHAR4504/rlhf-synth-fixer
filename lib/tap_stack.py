@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
+from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn, TerraformAsset, AssetType
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -13,7 +13,6 @@ from cdktf_cdktf_provider_aws.dynamodb_table import (
 )
 from cdktf_cdktf_provider_aws.iam_role import IamRole, IamRoleInlinePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.ecr_repository import EcrRepository
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
@@ -35,6 +34,11 @@ from cdktf_cdktf_provider_aws.api_gateway_usage_plan import (
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
 import json
+import os
+import tempfile
+import shutil
+import subprocess
+from pathlib import Path
 
 
 class TapStack(TerraformStack):
@@ -64,15 +68,18 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend with DynamoDB state locking
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-            dynamodb_table="terraform-state-lock"
-        )
+        # Configure S3 Backend conditionally
+        # Only configure backend if state bucket is provided (for CI/CD environments)
+        if state_bucket and state_bucket.strip():
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"{environment_suffix}/{construct_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            # Use S3's native state locking instead of deprecated dynamodb_table
+            self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Resource tags
         common_tags = {
@@ -166,32 +173,60 @@ class TapStack(TerraformStack):
         )
 
         # ========================================
-        # ECR Repositories
+        # Lambda Assets (ZIP packages)
         # ========================================
-
-        validator_ecr = EcrRepository(
-            self,
-            "validator_ecr",
-            name=f"csv-validator-{environment_suffix}",
-            force_delete=True,
-            tags=common_tags
-        )
-
-        transformer_ecr = EcrRepository(
-            self,
-            "transformer_ecr",
-            name=f"data-transformer-{environment_suffix}",
-            force_delete=True,
-            tags=common_tags
-        )
-
-        notifier_ecr = EcrRepository(
-            self,
-            "notifier_ecr",
-            name=f"notification-sender-{environment_suffix}",
-            force_delete=True,
-            tags=common_tags
-        )
+        
+        # Package Lambda functions as ZIP files
+        def package_lambda(lambda_dir: str, function_name: str) -> TerraformAsset:
+            """Package Lambda function as a ZIP file using TerraformAsset."""
+            lambda_path = Path(__file__).parent / "lambda" / lambda_dir
+            
+            # Create a temporary directory for packaging
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                
+                # Copy Lambda code
+                app_file = lambda_path / "app.py"
+                if app_file.exists():
+                    shutil.copy(str(app_file), str(temp_path / "app.py"))
+                
+                # Install dependencies if requirements.txt exists
+                requirements_file = lambda_path / "requirements.txt"
+                if requirements_file.exists():
+                    # Install dependencies to the temp directory
+                    subprocess.run([
+                        "pip", "install",
+                        "-r", str(requirements_file),
+                        "-t", str(temp_path),
+                        "--platform", "manylinux2014_aarch64",
+                        "--only-binary=:all:",
+                        "--python-version", "3.11",
+                        "--quiet"
+                    ], check=False)  # Don't fail if pip install has issues
+                
+                # Create ZIP file
+                output_dir = Path("lambda_packages")
+                output_dir.mkdir(exist_ok=True)
+                zip_path = output_dir / f"{function_name}_{environment_suffix}.zip"
+                
+                shutil.make_archive(
+                    str(zip_path.with_suffix('')),
+                    'zip',
+                    str(temp_path)
+                )
+                
+                # Create TerraformAsset from the ZIP file
+                return TerraformAsset(
+                    self,
+                    f"{function_name}_asset",
+                    path=str(zip_path),
+                    type=AssetType.FILE
+                )
+        
+        # Create assets for each Lambda function
+        validator_asset = package_lambda("csv_validator", "csv-validator")
+        transformer_asset = package_lambda("data_transformer", "data-transformer")
+        notifier_asset = package_lambda("notification_sender", "notification-sender")
 
         # ========================================
         # CloudWatch Log Groups
@@ -510,8 +545,10 @@ class TapStack(TerraformStack):
             "validator_lambda",
             function_name=f"csv-validator-{environment_suffix}",
             role=validator_role.arn,
-            package_type="Image",
-            image_uri=f"{validator_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="app.handler",
+            filename=validator_asset.path,
+            source_code_hash=validator_asset.asset_hash,
             architectures=["arm64"],
             memory_size=512,
             timeout=60,
@@ -533,8 +570,10 @@ class TapStack(TerraformStack):
             "transformer_lambda",
             function_name=f"data-transformer-{environment_suffix}",
             role=transformer_role.arn,
-            package_type="Image",
-            image_uri=f"{transformer_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="app.handler",
+            filename=transformer_asset.path,
+            source_code_hash=transformer_asset.asset_hash,
             architectures=["arm64"],
             memory_size=512,
             timeout=300,
@@ -557,8 +596,10 @@ class TapStack(TerraformStack):
             "notifier_lambda",
             function_name=f"notification-sender-{environment_suffix}",
             role=notifier_role.arn,
-            package_type="Image",
-            image_uri=f"{notifier_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="app.handler",
+            filename=notifier_asset.path,
+            source_code_hash=notifier_asset.asset_hash,
             architectures=["arm64"],
             memory_size=512,
             timeout=30,

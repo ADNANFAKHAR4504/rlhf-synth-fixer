@@ -91,8 +91,8 @@ class TestTapStackResources:
         assert status["billing_mode"] == "PAY_PER_REQUEST"
         assert status["hash_key"] == "file_id"
 
-    def test_ecr_repositories_created(self):
-        """Test ECR repositories are created for Lambda container images."""
+    def test_lambda_functions_with_zip_deployment(self):
+        """Test Lambda functions are created with ZIP deployment."""
         app = App()
         stack = TapStack(
             app,
@@ -103,22 +103,27 @@ class TestTapStackResources:
         synth = Testing.synth(stack)
         resources = json.loads(synth)["resource"]
 
-        # Check ECR repositories exist
-        assert "aws_ecr_repository" in resources
-        ecr_repos = resources["aws_ecr_repository"]
+        # Check Lambda functions exist
+        assert "aws_lambda_function" in resources
+        lambda_functions = resources["aws_lambda_function"]
 
-        # Verify validator ECR
-        assert "validator_ecr" in ecr_repos
-        assert ecr_repos["validator_ecr"]["name"] == "csv-validator-test"
-        assert ecr_repos["validator_ecr"]["force_delete"] is True
+        # Verify validator Lambda with ZIP deployment
+        assert "validator_lambda" in lambda_functions
+        validator = lambda_functions["validator_lambda"]
+        assert validator["function_name"] == "csv-validator-test"
+        assert validator["runtime"] == "python3.11"
+        assert validator["handler"] == "app.handler"
+        assert "filename" in validator  # ZIP file path
 
-        # Verify transformer ECR
-        assert "transformer_ecr" in ecr_repos
-        assert ecr_repos["transformer_ecr"]["name"] == "data-transformer-test"
+        # Verify transformer Lambda
+        assert "transformer_lambda" in lambda_functions
+        transformer = lambda_functions["transformer_lambda"]
+        assert transformer["function_name"] == "data-transformer-test"
 
-        # Verify notifier ECR
-        assert "notifier_ecr" in ecr_repos
-        assert ecr_repos["notifier_ecr"]["name"] == "notification-sender-test"
+        # Verify notifier Lambda
+        assert "notifier_lambda" in lambda_functions
+        notifier = lambda_functions["notifier_lambda"]
+        assert notifier["function_name"] == "notification-sender-test"
 
     def test_lambda_functions_created(self):
         """Test Lambda functions are created with correct configuration."""
@@ -140,7 +145,8 @@ class TestTapStackResources:
         assert "validator_lambda" in lambdas
         validator = lambdas["validator_lambda"]
         assert validator["function_name"] == "csv-validator-test"
-        assert validator["package_type"] == "Image"
+        assert validator["runtime"] == "python3.11"
+        assert validator["handler"] == "app.handler"
         assert validator["architectures"] == ["arm64"]
         assert validator["memory_size"] == 512
         assert validator["timeout"] == 60
