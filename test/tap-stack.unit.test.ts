@@ -1,12 +1,12 @@
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('CloudFormation Template Unit Tests', () => {
-  let primaryTemplate;
-  let secondaryTemplate;
+  let primaryTemplate: any;
+  let secondaryTemplate: any;
 
   beforeAll(() => {
-    const primaryPath = path.join(__dirname, '../lib/tap-stack.json');
+    const primaryPath = path.join(__dirname, '../lib/TapStack.json');
     const secondaryPath = path.join(__dirname, '../lib/secondary-stack.json');
 
     primaryTemplate = JSON.parse(fs.readFileSync(primaryPath, 'utf8'));
@@ -297,9 +297,11 @@ describe('CloudFormation Template Unit Tests', () => {
   });
 
   describe('Resource Dependencies', () => {
-    test('should have proper DependsOn for S3 bucket', () => {
+    test('should have S3 bucket defined without circular dependency', () => {
       const bucket = primaryTemplate.Resources.TransactionLogBucket;
-      expect(bucket.DependsOn).toBe('S3ReplicationRole');
+      expect(bucket).toBeDefined();
+      // DependsOn was removed to fix circular dependency issue
+      expect(bucket.DependsOn).toBeUndefined();
     });
 
     test('should have API Gateway deployment depending on method', () => {
@@ -316,7 +318,7 @@ describe('CloudFormation Template Unit Tests', () => {
   describe('Disaster Recovery Configuration', () => {
     test('should have multi-region DynamoDB configuration', () => {
       const table = primaryTemplate.Resources.TransactionTable;
-      const regions = table.Properties.Replicas.map(r => r.Region.Ref);
+      const regions = table.Properties.Replicas.map((r: any) => r.Region.Ref);
       expect(regions).toContain('PrimaryRegion');
       expect(regions).toContain('SecondaryRegion');
     });
