@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = ">= 2.27"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.11"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time

@@ -130,7 +130,7 @@ locals {
 resource "aws_ssm_parameter" "vpc_id" {
   count = var.vpc_id_parameter_name != "" && var.manage_vpc_ssm_parameter ? 1 : 0
 
-  name        = var.vpc_id_parameter_name
+  name        = "${var.vpc_id_parameter_name}${local.resource_suffix}"
   description = "VPC ID for the payments EKS environment"
   type        = "String"
   value       = local.base_vpc_id
@@ -141,7 +141,7 @@ resource "aws_ssm_parameter" "vpc_id" {
 
 data "aws_ssm_parameter" "vpc_id" {
   count = var.vpc_id_parameter_name != "" && !var.manage_vpc_ssm_parameter ? 1 : 0
-  name  = var.vpc_id_parameter_name
+  name  = "${var.vpc_id_parameter_name}${local.resource_suffix}"
 }
 
 locals {

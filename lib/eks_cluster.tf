@@ -154,6 +154,12 @@ resource "aws_kms_alias" "eks" {
   }
 }
 
+resource "time_sleep" "wait_for_kms" {
+  create_duration = "60s"
+
+  depends_on = [aws_kms_key.eks]
+}
+
 resource "aws_cloudwatch_log_group" "eks" {
   name              = local.log_group_name
   retention_in_days = var.cluster_log_retention_days
