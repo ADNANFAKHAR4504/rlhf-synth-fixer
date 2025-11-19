@@ -108,7 +108,7 @@ class TestTapStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"webhook-receiver-{self.env_suffix}",
+                "FunctionName": f"webhook-receiver-{self.env_suffix}-lo",
                 "Runtime": "python3.11",
                 "Handler": "receiver.handler",
                 "Timeout": 30,
@@ -124,7 +124,7 @@ class TestTapStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"payment-processor-{self.env_suffix}",
+                "FunctionName": f"payment-processor-{self.env_suffix}-lo",
                 "Runtime": "python3.11",
                 "Handler": "processor.handler",
                 "Timeout": 300,  # 5 minutes
@@ -141,7 +141,7 @@ class TestTapStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"audit-logger-{self.env_suffix}",
+                "FunctionName": f"audit-logger-{self.env_suffix}-lo",
                 "Runtime": "python3.11",
                 "Handler": "audit.handler",
                 "Timeout": 60,
@@ -163,7 +163,7 @@ class TestTapStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"webhook-receiver-{self.env_suffix}",
+                "FunctionName": f"webhook-receiver-{self.env_suffix}-lo",
                 "Runtime": "python3.11",
             },
         )
@@ -405,7 +405,7 @@ class TestTapStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"webhook-receiver-{self.env_suffix}",
+                "FunctionName": f"webhook-receiver-{self.env_suffix}-lo",
                 "Environment": {
                     "Variables": {
                         "TABLE_NAME": Match.any_value(),
@@ -419,7 +419,7 @@ class TestTapStack(unittest.TestCase):
         self.template.has_resource_properties(
             "AWS::Lambda::Function",
             {
-                "FunctionName": f"payment-processor-{self.env_suffix}",
+                "FunctionName": f"payment-processor-{self.env_suffix}-lo",
                 "Environment": {
                     "Variables": {
                         "TABLE_NAME": Match.any_value(),

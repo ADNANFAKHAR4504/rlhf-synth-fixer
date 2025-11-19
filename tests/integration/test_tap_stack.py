@@ -135,9 +135,9 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_lambda_functions_exist(self):
         """Test Lambda functions are deployed"""
         expected_functions = [
-            f"webhook-receiver-{self.env_suffix}",
-            f"payment-processor-{self.env_suffix}",
-            f"audit-logger-{self.env_suffix}",
+            f"webhook-receiver-{self.env_suffix}-lo",
+            f"payment-processor-{self.env_suffix}-lo",
+            f"audit-logger-{self.env_suffix}-lo",
         ]
 
         for func_name in expected_functions:
@@ -256,12 +256,12 @@ class TestTapStackIntegration(unittest.TestCase):
         try:
             # Get payment processor function
             processor_func = lambda_client.get_function(
-                FunctionName=f"payment-processor-{self.env_suffix}"
+                FunctionName=f"payment-processor-{self.env_suffix}-lo"
             )
             processor_arn = processor_func["Configuration"]["FunctionArn"]
 
             # Get audit logger function
-            audit_func = lambda_client.get_function(FunctionName=f"audit-logger-{self.env_suffix}")
+            audit_func = lambda_client.get_function(FunctionName=f"audit-logger-{self.env_suffix}-lo")
             audit_arn = audit_func["Configuration"]["FunctionArn"]
 
             # List event source mappings

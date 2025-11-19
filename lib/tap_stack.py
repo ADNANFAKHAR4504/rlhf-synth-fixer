@@ -110,7 +110,7 @@ class TapStack(Stack):
         # Note: Lambda will automatically create CloudWatch log groups on first invocation
         webhook_receiver = lambda_.Function(
             self, "WebhookReceiver",
-            function_name=f"webhook-receiver-{environment_suffix}",
+            function_name=f"webhook-receiver-{environment_suffix}-lo",
             runtime=lambda_.Runtime.PYTHON_3_11,
             architecture=lambda_.Architecture.ARM_64,
             handler="receiver.handler",
@@ -133,7 +133,7 @@ class TapStack(Stack):
         # Note: Lambda will automatically create CloudWatch log groups on first invocation
         payment_processor = lambda_.Function(
             self, "PaymentProcessor",
-            function_name=f"payment-processor-{environment_suffix}",
+            function_name=f"payment-processor-{environment_suffix}-lo",
             runtime=lambda_.Runtime.PYTHON_3_11,
             architecture=lambda_.Architecture.ARM_64,
             handler="processor.handler",
@@ -163,7 +163,7 @@ class TapStack(Stack):
         # Note: Lambda will automatically create CloudWatch log groups on first invocation
         audit_logger = lambda_.Function(
             self, "AuditLogger",
-            function_name=f"audit-logger-{environment_suffix}",
+            function_name=f"audit-logger-{environment_suffix}-lo",
             runtime=lambda_.Runtime.PYTHON_3_11,
             architecture=lambda_.Architecture.ARM_64,
             handler="audit.handler",
