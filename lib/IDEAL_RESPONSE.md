@@ -1,6 +1,6 @@
 # CloudFormation Templates - Complete Infrastructure as Code
 
-This document contains all the CloudFormation templates for the TAP (Task Assignment Platform) infrastructure with CI/CD pipeline integration.
+This document contains all the CloudFormation templates for the TAP (Task Assignment Platform) infrastructure with CI/CD pipeline integration
 
 ## Table of Contents
 
