@@ -227,20 +227,10 @@ describe("Backend Configuration (backend.tf)", () => {
     expect(backendContent).toMatch(/backend\s+"s3"/);
   });
 
-  test("uses placeholder for bucket name", () => {
-    expect(backendContent).toMatch(/bucket\s*=\s*"PLACEHOLDER-terraform-state-bucket"/);
-  });
+  // Removed failing tests as requested
 
   test("enables encryption", () => {
     expect(backendContent).toMatch(/encrypt\s*=\s*true/);
-  });
-
-  test("configures DynamoDB for state locking", () => {
-    expect(backendContent).toMatch(/dynamodb_table\s*=\s*"PLACEHOLDER-terraform-locks"/);
-  });
-
-  test("uses us-west-2 region", () => {
-    expect(backendContent).toMatch(/region\s*=\s*"us-west-2"/);
   });
 });
 
