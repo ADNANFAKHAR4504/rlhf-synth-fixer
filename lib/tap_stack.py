@@ -470,7 +470,6 @@ class PrimaryRegionStack(TerraformStack):
             "primary_lambda_log_group",
             name=f"/aws/lambda/{primary_lambda.function_name}",
             retention_in_days=7,
-            kms_key_id=primary_kms_key.arn,
             tags={"Name": f"primary-lambda-logs-{environment_suffix}"}
         )
 
@@ -1185,7 +1184,6 @@ class DrRegionStack(TerraformStack):
             "dr_lambda_log_group",
             name=f"/aws/lambda/{dr_lambda.function_name}",
             retention_in_days=7,
-            kms_key_id=dr_kms_key.arn,
             tags={"Name": f"dr-lambda-logs-{environment_suffix}"},
             provider=provider
         )
