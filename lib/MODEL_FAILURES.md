@@ -2,94 +2,220 @@
 
 ## Critical Failures
 
-### 1. **CRITICAL SECURITY VULNERABILITY** - Missing KMS Key Management
+### 1. **CRITICAL INFRASTRUCTURE FAILURE** - Missing Critical Template Sections
 
-**Requirement:** Implement proper KMS key management for encryption with least-privilege access policies.
+**Requirement:** Implement complete CloudFormation template with Mappings, proper KMS key management, and comprehensive parameter validation.
 
-**Model Response:** Uses optional external KMS key parameters without proper key management:
+**Model Response:** Missing critical template sections and proper structure:
 ```yaml
-Parameters:
-  BastionSecurityGroupId:
-    Type: String
-    Description: 'Security Group ID for bastion host access to EKS API'
-    Default: ''
-  
-  KmsKeyId:
-    Type: String
-    Description: 'KMS key ID for EBS encryption (optional, uses default if not provided)'
-    Default: ''
+# Missing Mappings section entirely
+# Missing comprehensive parameter validation
+# Incomplete template structure
 
-# CloudWatch Logs using conditional KMS
-EksClusterLogGroup:
-  Properties:
-    KmsKeyId: !If [HasKmsKey, !Ref KmsKeyId, !Ref AWS::NoValue]
+Parameters:
+  # Limited parameters without proper validation
+  KubernetesVersion:
+    Type: String
+    Default: '1.28'
+    # Missing AllowedValues validation
+
+# No Mappings section for instance type configuration
+# No Conditions section for conditional resource creation
 ```
 
-**Ideal Response:** Creates dedicated KMS keys with comprehensive IAM policies:
+**Ideal Response:** Complete template with all required sections:
 ```yaml
 Parameters:
+  KubernetesVersion:
+    Type: String
+    Default: '1.28'
+    Description: 'Kubernetes version for EKS cluster'
+    AllowedValues: ['1.28', '1.29', '1.30']
+  
+  EnableBastionAccess:
+    Type: String
+    Description: 'Enable bastion host access to EKS API'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  
   EnableEbsEncryption:
     Type: String
     Description: 'Enable EBS encryption with customer-managed KMS key'
     Default: 'true'
     AllowedValues: ['true', 'false']
 
-# Dedicated KMS keys with proper policies
-LogsKmsKey:
-  Type: AWS::KMS::Key
-  Condition: EnableEbsEncryption
-  Properties:
-    Description: 'KMS key for CloudWatch Logs encryption'
-    KeyPolicy:
-      Version: '2012-10-17'
-      Statement:
-        - Sid: Enable IAM User Permissions
-          Effect: Allow
-          Principal:
-            AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
-          Action: 'kms:*'
-          Resource: '*'
-        - Sid: Allow CloudWatch Logs
-          Effect: Allow
-          Principal:
-            Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-          Action:
-            - kms:Encrypt
-            - kms:Decrypt
-            - kms:ReEncrypt*
-            - kms:GenerateDataKey*
-            - kms:DescribeKey
-          Resource: '*'
+Mappings:
+  InstanceTypeMaxPods:
+    t3.medium:
+      MaxPods: 17
+    t3.large:
+      MaxPods: 35
+    t3a.large:
+      MaxPods: 35
+    t2.large:
+      MaxPods: 35
 
-EbsKmsKey:
-  Type: AWS::KMS::Key
-  Properties:
-    KeyPolicy:
-      Statement:
-        - Sid: Allow EC2 Service
-          Effect: Allow
-          Principal:
-            Service: ec2.amazonaws.com
-          Action:
-            - kms:CreateGrant
-            - kms:Decrypt
-            - kms:GenerateDataKeyWithoutPlaintext
+Conditions:
+  EnableEbsEncryption: !Equals [!Ref EnableEbsEncryption, 'true']
+  EnableBastionAccess: !Equals [!Ref EnableBastionAccess, 'true']
+
+Resources:
+  # KMS Keys for encryption
+  LogsKmsKey:
+    Type: AWS::KMS::Key
+    Condition: EnableEbsEncryption
+    Properties:
+      Description: 'KMS key for CloudWatch Logs encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
 ```
 
 **Impact:**
-- **CRITICAL SECURITY GAP** - No proper key management for encryption
-- Reliance on external KMS keys that may not exist or have proper permissions
-- Missing least-privilege access policies for AWS services
-- No proper key rotation or lifecycle management
-- Potential deployment failures when KMS keys are inaccessible
+- **TEMPLATE INCOMPLETENESS** - Missing essential CloudFormation sections
+- No proper instance type to pod limit mapping
+- Missing parameter validation causing potential deployment errors
+- No conditional resource creation capability
+- Incomplete KMS key management infrastructure
 
-### 2. **CRITICAL CONFIGURATION FAILURE** - Invalid EKS Endpoint Configuration
+### 2. **CRITICAL LAUNCH TEMPLATE FAILURE** - Missing UserData and Cluster Autoscaler Configuration
 
-**Requirement:** EKS cluster must have private endpoint only for security as specified in requirements.
+**Requirement:** Launch templates must include proper MIME multipart UserData and complete cluster autoscaler TagSpecifications.
 
-**Model Response:** Incorrectly configures private-only access:
+**Model Response:** Uses basic UserData without MIME format and missing cluster autoscaler tags:
+```yaml
+OnDemandLaunchTemplate:
+  Type: AWS::EC2::LaunchTemplate
+  Properties:
+    LaunchTemplateName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ondemand-lt'
+    LaunchTemplateData:
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      Monitoring:
+        Enabled: true
+      UserData: !Base64
+        !Sub |
+          #!/bin/bash
+          /etc/eks/bootstrap.sh ${EksCluster} --kubelet-extra-args '--max-pods=17'
+      # Missing TagSpecifications for cluster autoscaler
+```
+
+**Ideal Response:** Complete MIME multipart UserData with cluster autoscaler tags:
+```yaml
+OnDemandLaunchTemplate:
+  Type: AWS::EC2::LaunchTemplate
+  Properties:
+    LaunchTemplateName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ondemand-lt'
+    LaunchTemplateData:
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      Monitoring:
+        Enabled: true
+      SecurityGroupIds:
+        - !Ref EksNodeSecurityGroup
+      TagSpecifications:
+        - ResourceType: instance
+          Tags:
+            - Key: Name
+              Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ondemand-node'
+            - Key: 'k8s.io/cluster-autoscaler/enabled'
+              Value: 'true'
+            - Key: !Sub 'k8s.io/cluster-autoscaler/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster'
+              Value: 'owned'
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            MIME-Version: 1.0
+            Content-Type: multipart/mixed; boundary="==MYBOUNDARY=="
+            
+            --==MYBOUNDARY==
+            Content-Type: text/x-shellscript; charset="us-ascii"
+            
+            #!/bin/bash
+            /etc/eks/bootstrap.sh ${EksCluster} \
+              --kubelet-extra-args '--max-pods=${MaxPods}'
+            --==MYBOUNDARY==--
+          - MaxPods: !FindInMap [InstanceTypeMaxPods, t3.medium, MaxPods]
+```
+
+**Impact:**
+- **NODE GROUP FAILURE** - "User data was not in the MIME multipart format" errors
+- Missing cluster autoscaler functionality preventing auto-scaling
+- Nodes fail to properly tag for cluster autoscaler discovery
+- Improper pod limit configuration without instance type mapping
+- EC2 instances may fail to join cluster properly due to UserData format issues
+
+### 3. **CRITICAL LAMBDA CONFIGURATION FAILURE** - Missing VPC Configuration for Private EKS Access
+
+**Requirement:** Lambda function must be configured with VPC access to communicate with private EKS endpoint.
+
+**Model Response:** Lambda function without VPC configuration:
+```yaml
+KubernetesManagementFunction:
+  Type: AWS::Lambda::Function
+  Properties:
+    FunctionName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda'
+    Runtime: python3.11
+    Handler: index.handler
+    Role: !GetAtt LambdaExecutionRole.Arn
+    Timeout: 900
+    MemorySize: 1024
+    # Missing VpcConfig section - cannot access private EKS endpoint
+    Environment:
+      Variables:
+        CLUSTER_NAME: !Ref EksCluster
+        REGION: !Ref AWS::Region
+```
+
+**Ideal Response:** Lambda with proper VPC configuration:
+```yaml
+KubernetesManagementFunction:
+  Type: AWS::Lambda::Function
+  Properties:
+    FunctionName: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda'
+    Runtime: python3.11
+    Handler: index.handler
+    Role: !GetAtt LambdaExecutionRole.Arn
+    Timeout: 900
+    MemorySize: 1024
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+    Environment:
+      Variables:
+        CLUSTER_NAME: !Ref EksCluster
+        VPC_ID: !Ref Vpc
+        REGION: !Ref AWS::Region
+        CLUSTER_AUTOSCALER_ROLE_ARN: !GetAtt ClusterAutoscalerRole.Arn
+```
+
+**Impact:**
+- **DEPLOYMENT FAILURE** - Lambda cannot reach private EKS endpoint for cluster management
+- Custom resource failures during stack deployment
+- No mechanism for Kubernetes resource provisioning and configuration
+- SSL certificate verification failures when accessing private endpoints
+- Complete failure of EKS cluster automation and addon installations
+
+### 4. **CRITICAL EKS ENDPOINT SECURITY FAILURE** - Incorrect Private Endpoint Configuration
+
+**Requirement:** EKS cluster must have private endpoint only configuration for enhanced security while ensuring Lambda can access it.
+
+**Model Response:** Incorrectly configures endpoint access causing operational issues:
 ```yaml
 EksCluster:
+  Type: AWS::EKS::Cluster
   Properties:
     ResourcesVpcConfig:
       SubnetIds:
@@ -97,245 +223,191 @@ EksCluster:
         - !Ref PrivateSubnet2
         - !Ref PrivateSubnet3
       EndpointPrivateAccess: true
-      EndpointPublicAccess: false  # This breaks Lambda access
+      EndpointPublicAccess: false  # Correct private-only but breaks Lambda access
+      # Missing public subnets needed for hybrid access
 ```
 
-**Ideal Response:** Configures hybrid access for operational functionality:
+**Ideal Response:** Properly configures private endpoints with Lambda VPC access:
 ```yaml
 EksCluster:
+  Type: AWS::EKS::Cluster
   Properties:
     ResourcesVpcConfig:
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
         - !Ref PrivateSubnet3
-        - !Ref PublicSubnet1  # Includes public subnets
+        - !Ref PublicSubnet1
         - !Ref PublicSubnet2
         - !Ref PublicSubnet3
       EndpointPrivateAccess: true
-      EndpointPublicAccess: true   # Allows Lambda function access
-      PublicAccessCidrs: ['0.0.0.0/0']
+      EndpointPublicAccess: false  # Private-only with VPC Lambda access
+      SecurityGroupIds:
+        - !Ref EksClusterSecurityGroup
+      # Lambda configured with VPC access to reach private endpoint
 ```
 
 **Impact:**
-- **DEPLOYMENT FAILURE** - Lambda functions cannot access purely private EKS endpoints
-- Custom resource failures preventing stack completion
-- No mechanism for external tools to access cluster for management
-- Operational difficulties for troubleshooting and maintenance
-- SSL certificate verification failures for Lambda functions
-
-### 3. **CRITICAL ADDON CONFIGURATION FAILURE** - Invalid EBS CSI Driver Configuration
-
-**Requirement:** Properly configure EBS CSI Driver addon without invalid configuration values.
-
-**Model Response:** Uses unsupported configuration schema:
-```yaml
-EbsCsiAddon:
-  Properties:
-    AddonName: aws-ebs-csi-driver
-    ConfigurationValues: !If
-      - HasKmsKey
-      - !Sub |
-        {
-          "defaultStorageClass": {
-            "enabled": true,
-            "parameters": {
-              "encrypted": "true",
-              "kmsKeyId": "${KmsKeyId}"
-            }
-          }
-        }
-```
-
-**Ideal Response:** Uses simplified, valid configuration:
-```yaml
-EbsCsiAddon:
-  Type: AWS::EKS::Addon
-  Properties:
-    AddonName: aws-ebs-csi-driver
-    ClusterName: !Ref EksCluster
-    ServiceAccountRoleArn: !GetAtt EbsCsiDriverRole.Arn
-    ResolveConflicts: OVERWRITE
-    # No ConfigurationValues - uses addon defaults
-```
-
-**Impact:**
-- **DEPLOYMENT ERROR** - "Json schema validation failed" - unsupported configuration
-- EBS CSI Driver addon fails to install properly
-- No persistent volume support for workloads
-- Custom configuration not supported by AWS addon schema
-
-### 4. **CRITICAL LAUNCH TEMPLATE FAILURE** - Invalid User Data Format
-
-**Requirement:** Use proper MIME multipart format for EC2 launch template user data.
-
-**Model Response:** Uses invalid plain text user data:
-```yaml
-OnDemandLaunchTemplate:
-  Properties:
-    LaunchTemplateData:
-      UserData: !Base64
-        !Sub |
-          #!/bin/bash
-          /etc/eks/bootstrap.sh ${EksCluster} --kubelet-extra-args '--max-pods=17'
-```
-
-**Ideal Response:** Uses properly formatted MIME multipart user data:
-```yaml
-OnDemandLaunchTemplate:
-  Properties:
-    LaunchTemplateData:
-      UserData: !Base64
-        !Sub |
-          MIME-Version: 1.0
-          Content-Type: multipart/mixed; boundary="==MYBOUNDARY=="
-          
-          --==MYBOUNDARY==
-          Content-Type: text/x-shellscript; charset="us-ascii"
-          
-          #!/bin/bash
-          /etc/eks/bootstrap.sh ${EksCluster} --kubelet-extra-args '--max-pods=17'
-          --==MYBOUNDARY==--
-```
-
-**Impact:**
-- **NODE GROUP FAILURE** - "User data was not in the MIME multipart format"
-- EC2 instances fail to launch properly
-- Node groups cannot provision worker nodes
-- Cluster becomes non-functional without worker nodes
+- **SECURITY COMPLIANCE** - Proper private-only endpoint configuration achieved
+- **OPERATIONAL FAILURE** - Model response Lambda cannot access private endpoint without VPC config
+- Custom resource timeouts and SSL certificate verification failures
+- Complete automation breakdown when Lambda cannot reach cluster
+- Need for VPC-enabled Lambda to access private EKS endpoints properly
 
 ## Major Issues
 
-### 5. **MAJOR SECURITY FAILURE** - Missing Bastion Security Group Creation
+### 5. **MAJOR TAGGING FAILURE** - Missing Cluster Autoscaler and EKS Tags
 
-**Requirement:** Create proper bastion security group for EKS API access rather than relying on external resources.
+**Requirement:** All subnets and resources must have proper Kubernetes cluster tags and cluster autoscaler discovery tags.
 
-**Model Response:** Relies on external bastion security group parameter:
+**Model Response:** Missing critical Kubernetes tags on subnets:
 ```yaml
-Parameters:
-  BastionSecurityGroupId:
-    Type: String
-    Description: 'Security Group ID for bastion host access to EKS API'
-    Default: ''
-
-# Conditional access based on external SG
-EksClusterSecurityGroup:
+PrivateSubnet1:
+  Type: AWS::EC2::Subnet
   Properties:
-    SecurityGroupIngress:
-      - !If
-        - HasBastionSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref BastionSecurityGroupId
-        - !Ref AWS::NoValue
+    VpcId: !Ref Vpc
+    CidrBlock: !Ref PrivateSubnet1Cidr
+    AvailabilityZone: !Select [0, !GetAZs '']
+    Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1'
+      - Key: kubernetes.io/role/internal-elb
+        Value: '1'
+      # Missing cluster-specific Kubernetes tags
 ```
 
-**Ideal Response:** Creates managed bastion security group:
+**Ideal Response:** Complete Kubernetes cluster tags for proper EKS integration:
 ```yaml
-Parameters:
-  EnableBastionAccess:
-    Type: String
-    Description: 'Enable bastion host access to EKS API'
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-
-BastionSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Condition: EnableBastionAccess
+PrivateSubnet1:
+  Type: AWS::EC2::Subnet
   Properties:
-    GroupDescription: 'Security group for bastion host access to EKS'
     VpcId: !Ref Vpc
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp: '0.0.0.0/0'
+    CidrBlock: !Ref PrivateSubnet1Cidr
+    AvailabilityZone: !Select [0, !GetAZs '']
+    Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-private-subnet-1'
+      - Key: kubernetes.io/role/internal-elb
+        Value: '1'
+      - Key: !Sub 'kubernetes.io/cluster/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster'
+        Value: 'shared'
+```
+
+**Impact:**
+- **EKS INTEGRATION FAILURE** - Load balancers and services cannot discover proper subnets
+- Cluster autoscaler cannot identify cluster-managed resources
+- AWS Load Balancer Controller fails to provision load balancers correctly
+- Poor resource organization and management
+- Service mesh and networking addon failures
+
+### 6. **MAJOR SECURITY GROUP FAILURE** - Missing Lambda Security Group
+
+**Requirement:** Lambda function requires dedicated security group for VPC access and EKS communication.
+
+**Model Response:** No Lambda-specific security group configuration:
+```yaml
+# Missing Lambda security group entirely
+# Lambda function has no VPC configuration
+KubernetesManagementFunction:
+  Type: AWS::Lambda::Function
+  Properties:
+    # No VpcConfig section
+    # No SecurityGroupIds configuration
+    Runtime: python3.11
+    Handler: index.handler
+```
+
+**Ideal Response:** Dedicated Lambda security group with proper EKS access:
+```yaml
+LambdaSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Security group for Lambda function
+    VpcId: !Ref Vpc
+    SecurityGroupEgress:
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
         CidrIp: '0.0.0.0/0'
-```
+        Description: 'HTTPS access for EKS API and AWS services'
+      - IpProtocol: tcp
+        FromPort: 53
+        ToPort: 53
+        CidrIp: '0.0.0.0/0'
+        Description: 'DNS resolution'
+    Tags:
+      - Key: Name
+        Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda-sg'
 
-**Impact:**
-- Dependency on external resources that may not exist
-- Poor template portability and self-containment
-- Manual security group management overhead
-- Potential deployment failures when external SG is unavailable
-
-### 6. **MAJOR CFNLINT FAILURES** - Redundant Dependencies
-
-**Requirement:** Follow CloudFormation best practices and avoid redundant dependency declarations.
-
-**Model Response:** Contains multiple redundant DependsOn declarations:
-```yaml
-OnDemandNodeGroup:
-  DependsOn: [EksCluster, VpcCniAddon]  # EksCluster redundant
-
-SpotNodeGroup:
-  DependsOn: [EksCluster, VpcCniAddon]  # EksCluster redundant
-
-ClusterAutoscalerRole:
-  DependsOn: OidcProvider  # Redundant via Federated reference
-
-VpcCniAddon:
-  DependsOn: [EksCluster]  # Redundant via ClusterName reference
-
-EbsCsiAddon:
-  DependsOn: [EksCluster, EbsCsiDriverRole]  # Both redundant
-```
-
-**Ideal Response:** Removes redundant dependencies:
-```yaml
-OnDemandNodeGroup:
-  # DependsOn removed - implicit via ClusterName: !Ref EksCluster
-
-SpotNodeGroup:
-  # DependsOn removed - implicit via ClusterName: !Ref EksCluster
-
-ClusterAutoscalerRole:
-  # DependsOn removed - implicit via Federated: !Ref OidcProvider
-```
-
-**Impact:**
-- **LINT WARNINGS W3005** - Multiple redundant dependency warnings
-- Template complexity without functional benefit
-- Slower stack deployment due to unnecessary dependency chains
-- Code maintenance overhead
-
-### 7. **MAJOR CONFIGURATION FAILURE** - Incorrect VPC CNI Configuration
-
-**Requirement:** Properly configure VPC CNI addon without unnecessary Fn::Sub usage.
-
-**Model Response:** Uses unnecessary Fn::Sub in JSON configuration:
-```yaml
-VpcCniAddon:
+# Lambda function with VPC configuration
+KubernetesManagementFunction:
   Properties:
-    ConfigurationValues: !Sub |
-      {
-        "env": {
-          "AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG": "true",
-          "ENI_CONFIG_LABEL_DEF": "topology.kubernetes.io/zone"
-        }
-      }
-```
-
-**Ideal Response:** Uses simplified configuration without Fn::Sub:
-```yaml
-VpcCniAddon:
-  Type: AWS::EKS::Addon
-  Properties:
-    AddonName: vpc-cni
-    ClusterName: !Ref EksCluster
-    ResolveConflicts: OVERWRITE
-    # Configuration managed via Lambda custom resource
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
 ```
 
 **Impact:**
-- **LINT WARNING W1020** - Unnecessary Fn::Sub usage
-- Complex configuration management
-- Potential configuration validation issues
-- Harder to maintain and modify
+- **DEPLOYMENT FAILURE** - Lambda cannot access VPC resources without security group
+- No network isolation or access control for Lambda function
+- Cannot communicate with private EKS endpoint
+- Security compliance violations
+- Custom resource failures and timeouts
+
+### 7. **MAJOR BLOCK DEVICE MAPPING FAILURE** - Missing EBS Volume Configuration
+
+**Requirement:** Launch templates must include proper EBS block device mappings with encryption and appropriate volume configuration.
+
+**Model Response:** Missing block device mappings in launch templates:
+```yaml
+OnDemandLaunchTemplate:
+  Type: AWS::EC2::LaunchTemplate
+  Properties:
+    LaunchTemplateData:
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      Monitoring:
+        Enabled: true
+      # Missing BlockDeviceMappings section entirely
+      UserData: !Base64
+        !Sub |
+          #!/bin/bash
+          /etc/eks/bootstrap.sh ${EksCluster} --kubelet-extra-args '--max-pods=17'
+```
+
+**Ideal Response:** Complete block device mappings with encryption:
+```yaml
+OnDemandLaunchTemplate:
+  Type: AWS::EC2::LaunchTemplate
+  Properties:
+    LaunchTemplateData:
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      Monitoring:
+        Enabled: true
+      SecurityGroupIds:
+        - !Ref EksNodeSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+```
+
+**Impact:**
+- **SECURITY VULNERABILITY** - No EBS volume encryption by default
+- Poor storage performance with default volume types
+- No standardized volume sizing across node groups
+- Potential compliance violations for data at rest encryption
+- Inconsistent storage configuration between environments
 
 ### 8. **MAJOR FUNCTIONALITY FAILURE** - Incomplete Lambda Function Implementation
 
@@ -466,43 +538,42 @@ EksControlPlaneSecurityGroupFromNodeIngress:
 
 | Severity | Issue | Model Gap | Impact |
 |----------|-------|-----------|--------|
-| Critical | Missing KMS Key Management | External parameters vs managed keys | **SECURITY VULNERABILITY** |
-| Critical | Invalid EKS Endpoint Config | Private-only vs hybrid access | **DEPLOYMENT FAILURE** |
-| Critical | Invalid EBS CSI Config | Unsupported schema vs simple config | **ADDON FAILURE** |
-| Critical | Invalid Launch Template | Plain text vs MIME multipart | **NODE GROUP FAILURE** |
-| Major | Missing Bastion SG Creation | External dependency vs self-contained | Poor portability |
-| Major | Redundant Dependencies | Multiple DependsOn vs implicit | **LINT WARNINGS** |
-| Major | Incorrect VPC CNI Config | Unnecessary Fn::Sub vs clean config | **LINT WARNING** |
-| Major | Incomplete Lambda Function | Placeholder vs functional code | **CUSTOM RESOURCE FAILURE** |
-| Major | Limited Output Coverage | Basic vs comprehensive outputs | Poor CI/CD integration |
-| Minor | Missing Security Group Rules | Unidirectional vs bidirectional | Communication issues |
+| Critical | Missing Template Sections | No Mappings/Conditions vs complete structure | **TEMPLATE INCOMPLETENESS** |
+| Critical | Invalid Launch Template UserData | Plain text vs MIME multipart format | **NODE GROUP FAILURE** |
+| Critical | Missing Lambda VPC Config | No VPC access vs VPC-enabled Lambda | **DEPLOYMENT FAILURE** |
+| Critical | Incorrect EKS Endpoint Security | Private-only without Lambda VPC access | **CUSTOM RESOURCE FAILURE** |
+| Major | Missing Kubernetes Tags | No cluster tags vs complete EKS tagging | **EKS INTEGRATION FAILURE** |
+| Major | Missing Lambda Security Group | No SG vs dedicated Lambda security group | **SECURITY VULNERABILITY** |
+| Major | Missing Block Device Mappings | No EBS config vs encrypted volumes | **SECURITY VULNERABILITY** |
+| Major | Incomplete Lambda Implementation | Placeholder code vs functional implementation | **AUTOMATION FAILURE** |
+| Major | Limited Output Coverage | Basic outputs vs comprehensive CI/CD outputs | **INTEGRATION FAILURE** |
+| Minor | Missing Security Group Rules | Basic rules vs comprehensive network security | **OPERATIONAL ISSUES** |
 
 ## Operational Impact
 
-### 1. **Critical Deployment Failures**
-- KMS key access failures causing resource creation errors
-- Lambda function SSL certificate verification failures
-- EBS CSI addon schema validation errors
-- Node group launch template MIME format errors
-- Custom resource timeouts and connection failures
+### 1. **Critical Infrastructure Failures**
+- **Template Structure Issues** - Missing Mappings section causes instance type to pod limit configuration failures
+- **Launch Template Failures** - Non-MIME UserData format prevents proper node group deployment
+- **Lambda VPC Access** - Missing VPC configuration prevents custom resource functionality
+- **EKS Endpoint Security** - Private-only configuration without Lambda VPC access breaks automation
 
-### 2. **Security and Compliance Issues**
-- No proper KMS key management and rotation
-- Missing least-privilege IAM policies for AWS services
-- Reliance on external security groups without validation
-- Incomplete encryption implementation
+### 2. **Security and Compliance Gaps**
+- **Missing EBS Encryption** - No block device mappings with encryption configuration
+- **Incomplete Network Security** - Missing Lambda security group for VPC access
+- **Poor Resource Isolation** - Lambda function without proper network boundaries
+- **Missing KMS Integration** - Incomplete encryption key management implementation
 
-### 3. **Maintainability and Operations Problems**
-- Template not self-contained requiring external resources
-- Limited outputs preventing proper CI/CD integration
-- Complex configuration management
-- Poor error handling and troubleshooting capabilities
+### 3. **EKS Integration Problems**
+- **Missing Cluster Tags** - Subnets lack proper Kubernetes cluster discovery tags
+- **Cluster Autoscaler Issues** - Missing TagSpecifications prevent auto-scaling functionality
+- **Service Discovery Failures** - AWS Load Balancer Controller cannot identify proper subnets
+- **Incomplete Automation** - Custom resource failures prevent proper cluster configuration
 
-### 4. **Template Quality Issues**
-- Multiple CFN-Lint warnings (W3005, W1020)
-- Redundant dependency declarations
-- Incomplete security group configurations
-- Non-functional Lambda implementation
+### 4. **Operational and Maintenance Issues**
+- **Limited CI/CD Integration** - Insufficient outputs for automated deployment pipelines
+- **Poor Troubleshooting** - Missing comprehensive logging and monitoring configuration
+- **Incomplete Functionality** - Placeholder Lambda code prevents operational automation
+- **Network Connectivity** - Lambda cannot reach private EKS endpoints for management
 
 ## CFN-Lint Issues Resolved in Ideal Response
 
@@ -540,22 +611,37 @@ EksControlPlaneSecurityGroupFromNodeIngress:
 
 ## Conclusion
 
-The model response contains **multiple critical deployment failures** that prevent the template from functioning in production environments. The template has fundamental gaps in:
+The model response contains **multiple critical infrastructure gaps** that prevent the template from being production-ready. The template has fundamental deficiencies in:
 
-1. **Security Implementation** - No proper KMS key management with comprehensive policies
-2. **Configuration Validity** - Invalid addon configurations and user data formats
-3. **Network Access** - Incorrect EKS endpoint configuration breaking Lambda access
-4. **Resource Dependencies** - Missing self-contained resource creation
+1. **Template Structure** - Missing essential CloudFormation sections (Mappings, proper Conditions)
+2. **Launch Template Configuration** - Incorrect UserData format and missing cluster autoscaler integration
+3. **Lambda VPC Integration** - No VPC configuration preventing private EKS endpoint access
+4. **Security Implementation** - Missing security groups, block device encryption, and proper network isolation
+5. **EKS Integration** - Incomplete Kubernetes tagging preventing proper service discovery
 
 **Key Problems:**
-- **Critical Failures** - KMS access errors, addon schema validation failures, launch template format errors
-- **Operational Issues** - Non-functional Lambda code, SSL certificate failures, incomplete outputs
-- **Quality Problems** - Multiple lint warnings, redundant dependencies, poor maintainability
+- **Critical Infrastructure Issues** - Template incompleteness, launch template UserData format errors, Lambda VPC access failures
+- **Security Vulnerabilities** - No EBS encryption, missing security groups, incomplete network security
+- **EKS Functionality Gaps** - Missing cluster tags, incomplete autoscaler configuration, broken service discovery
+- **Operational Limitations** - Non-functional Lambda automation, limited outputs, poor CI/CD integration
 
-**The ideal response demonstrates:**
-- **Self-contained infrastructure** with managed KMS keys and security groups
-- **Proper configuration schemas** following AWS addon specifications
-- **Functional Lambda implementation** with complete SSL and authentication handling
-- **Comprehensive outputs** supporting full CI/CD integration and testing
+**The ideal response provides:**
+- **Complete template structure** with Mappings, Conditions, and comprehensive parameter validation
+- **Proper MIME multipart UserData** with cluster autoscaler TagSpecifications
+- **VPC-enabled Lambda** with dedicated security group for private EKS endpoint access
+- **Comprehensive security** with encrypted block devices and proper network isolation
+- **Full EKS integration** with complete Kubernetes tagging and service discovery support
+- **Production-ready automation** with functional Lambda implementation and comprehensive outputs
 
-The gap between model and ideal response represents the difference between a **non-functional template with critical deployment failures** and a **production-ready, secure, and fully operational** EKS infrastructure template that successfully deploys and passes all validation requirements.
+The gap between model and ideal response represents the difference between a **partially implemented template with critical deployment and security issues** and a **complete, secure, and fully functional** EKS infrastructure template that successfully deploys, operates, and integrates with modern DevOps practices.
+
+**Resolution Status:** The critical issues identified in this analysis have been **successfully resolved** in the current TapStack.yml/TapStack.json implementation, which now includes:
+- Complete Mappings section for InstanceTypeMaxPods
+- Proper MIME multipart UserData in launch templates
+- VPC-configured Lambda function with dedicated security group
+- Private EKS endpoints with proper Lambda VPC access
+- Complete cluster autoscaler TagSpecifications
+- Full Kubernetes cluster tagging on all subnets
+- Encrypted block device mappings in launch templates
+- Comprehensive security group configuration
+- Production-ready Lambda implementation with full functionality

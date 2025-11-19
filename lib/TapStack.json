@@ -74,6 +74,22 @@
             ]
         }
     },
+    "Mappings": {
+        "InstanceTypeMaxPods": {
+            "t3.medium": {
+                "MaxPods": 17
+            },
+            "t3.large": {
+                "MaxPods": 35
+            },
+            "t3a.large": {
+                "MaxPods": 35
+            },
+            "t2.large": {
+                "MaxPods": 35
+            }
+        }
+    },
     "Resources": {
         "LogsKmsKey": {
             "Type": "AWS::KMS::Key",
@@ -925,6 +941,61 @@
                 }
             }
         },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda function to access EKS API",
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS access to EKS API"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 53,
+                        "ToPort": 53,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "DNS resolution"
+                    },
+                    {
+                        "IpProtocol": "udp",
+                        "FromPort": 53,
+                        "ToPort": 53,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "DNS resolution"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda-sg"
+                        }
+                    }
+                ]
+            }
+        },
+        "EksControlPlaneSecurityGroupFromLambdaIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "EksClusterSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "SourceSecurityGroupId": {
+                    "Ref": "LambdaSecurityGroup"
+                },
+                "Description": "Allow Lambda function access to EKS API"
+            }
+        },
         "EksClusterRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -1055,10 +1126,7 @@
                         }
                     ],
                     "EndpointPrivateAccess": true,
-                    "EndpointPublicAccess": true,
-                    "PublicAccessCidrs": [
-                        "0.0.0.0/0"
-                    ]
+                    "EndpointPublicAccess": false
                 },
                 "Logging": {
                     "ClusterLogging": {
@@ -1110,6 +1178,29 @@
                             "Ref": "EksNodeSecurityGroup"
                         }
                     ],
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ondemand-node"
+                                    }
+                                },
+                                {
+                                    "Key": "k8s.io/cluster-autoscaler/enabled",
+                                    "Value": "true"
+                                },
+                                {
+                                    "Key": {
+                                        "Fn::Sub": "k8s.io/cluster-autoscaler/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster"
+                                    },
+                                    "Value": "owned"
+                                }
+                            ]
+                        }
+                    ],
                     "BlockDeviceMappings": [
                         {
                             "DeviceName": "/dev/xvda",
@@ -1120,7 +1211,23 @@
                                 "DeleteOnTermination": true
                             }
                         }
-                    ]
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": [
+                                "MIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"==MYBOUNDARY==\"\n\n--==MYBOUNDARY==\nContent-Type: text/x-shellscript; charset=\"us-ascii\"\n\n#!/bin/bash\n/etc/eks/bootstrap.sh ${EksCluster} \\\n  --kubelet-extra-args '--max-pods=${MaxPods}'\n--==MYBOUNDARY==--\n",
+                                {
+                                    "MaxPods": {
+                                        "Fn::FindInMap": [
+                                            "InstanceTypeMaxPods",
+                                            "t3.medium",
+                                            "MaxPods"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
                 }
             }
         },
@@ -1143,6 +1250,29 @@
                             "Ref": "EksNodeSecurityGroup"
                         }
                     ],
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-spot-node"
+                                    }
+                                },
+                                {
+                                    "Key": "k8s.io/cluster-autoscaler/enabled",
+                                    "Value": "true"
+                                },
+                                {
+                                    "Key": {
+                                        "Fn::Sub": "k8s.io/cluster-autoscaler/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster"
+                                    },
+                                    "Value": "owned"
+                                }
+                            ]
+                        }
+                    ],
                     "BlockDeviceMappings": [
                         {
                             "DeviceName": "/dev/xvda",
@@ -1153,7 +1283,23 @@
                                 "DeleteOnTermination": true
                             }
                         }
-                    ]
+                    ],
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": [
+                                "MIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"==MYBOUNDARY==\"\n\n--==MYBOUNDARY==\nContent-Type: text/x-shellscript; charset=\"us-ascii\"\n\n#!/bin/bash\n/etc/eks/bootstrap.sh ${EksCluster} \\\n  --kubelet-extra-args '--max-pods=${MaxPods}'\n--==MYBOUNDARY==--\n",
+                                {
+                                    "MaxPods": {
+                                        "Fn::FindInMap": [
+                                            "InstanceTypeMaxPods",
+                                            "t3.large",
+                                            "MaxPods"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
                 }
             }
         },
@@ -1493,6 +1639,9 @@
                 "ManagedPolicyArns": [
                     {
                         "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                    },
+                    {
+                        "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
                     }
                 ],
                 "Policies": [
@@ -1538,6 +1687,24 @@
                 },
                 "Timeout": 900,
                 "MemorySize": 1024,
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        },
+                        {
+                            "Ref": "PrivateSubnet3"
+                        }
+                    ]
+                },
                 "Environment": {
                     "Variables": {
                         "CLUSTER_NAME": {
