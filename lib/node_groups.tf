@@ -1,3 +1,8 @@
+# AWS-managed EBS encryption key
+data "aws_kms_alias" "ebs" {
+  name = "alias/aws/ebs"
+}
+
 # Frontend Node Group
 resource "aws_eks_node_group" "frontend" {
   cluster_name    = aws_eks_cluster.main.name
@@ -125,7 +130,8 @@ resource "aws_launch_template" "frontend" {
       volume_size           = 100
       volume_type           = "gp3"
       delete_on_termination = true
-      encrypted             = false # Explicitly disable to override account default encryption
+      encrypted             = true
+      kms_key_id            = data.aws_kms_alias.ebs.target_key_id # Use AWS-managed EBS key
     }
   }
 
@@ -177,7 +183,8 @@ resource "aws_launch_template" "backend" {
       volume_size           = 100
       volume_type           = "gp3"
       delete_on_termination = true
-      encrypted             = false # Explicitly disable to override account default encryption
+      encrypted             = true
+      kms_key_id            = data.aws_kms_alias.ebs.target_key_id # Use AWS-managed EBS key
     }
   }
 
