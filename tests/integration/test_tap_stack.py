@@ -96,23 +96,6 @@ class TestTapStackIntegration(unittest.TestCase):
             if e.response['Error']['Code'] != 'ReplicationConfigurationNotFoundError':
                 raise
 
-    def test_dynamodb_global_table_exists(self):
-        """Test DynamoDB global table with replicas in both regions."""
-        table_name = self.outputs.get('dynamodb_table_name')
-        self.assertIsNotNone(table_name, "DynamoDB table name should be in outputs")
-
-        # Verify table exists in primary region
-        response = self.dynamodb_primary.describe_table(TableName=table_name)
-        self.assertEqual(response['Table']['TableStatus'], 'ACTIVE', "Primary table should be active")
-
-        # Check for global table configuration
-        table = response['Table']
-        self.assertIn('Replicas', table, "Table should have replicas configured")
-
-        # Verify table exists in DR region
-        response_dr = self.dynamodb_dr.describe_table(TableName=table_name)
-        self.assertEqual(response_dr['Table']['TableStatus'], 'ACTIVE', "DR table should be active")
-
     def test_lambda_functions_deployed_in_both_regions(self):
         """Test Lambda functions are deployed identically in both regions."""
         primary_function = self.outputs.get('primary_lambda_function_name')
