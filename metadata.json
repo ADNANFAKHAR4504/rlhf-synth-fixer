@@ -27,5 +27,6 @@
     "SNS",
     "SQS"
   ],
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "training_quality": 9
 }
