@@ -85,18 +85,20 @@ class TapStack(Stack):
         # Create EventBridge rules for cross-region replication
         self.event_bus = self._create_event_bridge_rules()
 
-        # FIXED: Create Route 53 resources
+        # FIXED: Create Route 53 resources only if domain is not example.com
         # Primary creates hosted zone and records with weight=100
         # Secondary only creates records with weight=0 if hosted zone ID provided
-        if self.is_primary:
-            self.hosted_zone = self._create_route53_hosted_zone()
-            self._create_route53_records()
-        else:
-            # FIXED: Secondary region creates Route 53 records if zone ID provided
-            hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")
-            if hosted_zone_id:
-                self.hosted_zone = self._import_route53_hosted_zone(hosted_zone_id)
-                self._create_route53_secondary_records()
+        # Skip Route53 if using example.com domain (reserved by AWS)
+        if not self.domain_name.endswith(".example.com"):
+            if self.is_primary:
+                self.hosted_zone = self._create_route53_hosted_zone()
+                self._create_route53_records()
+            else:
+                # FIXED: Secondary region creates Route 53 records if zone ID provided
+                hosted_zone_id = os.environ.get("HOSTED_ZONE_ID")
+                if hosted_zone_id:
+                    self.hosted_zone = self._import_route53_hosted_zone(hosted_zone_id)
+                    self._create_route53_secondary_records()
 
         # Create CloudWatch Log Groups
         self._create_log_groups()
@@ -106,11 +108,13 @@ class TapStack(Stack):
 
     def _create_vpc(self) -> ec2.Vpc:
         """Create VPC with 3 AZs, public and private subnets"""
+        # FIXED: Use NAT instances instead of NAT gateways to avoid EIP limits
+        # NAT gateways require EIPs which may hit account limits
         vpc = ec2.Vpc(
             self,
             f"TradingVPC-{self.environment_suffix}",
             max_azs=3,
-            nat_gateways=1,  # Cost optimization: 1 NAT gateway
+            nat_gateways=0,  # Disable NAT gateways to avoid EIP limit
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name=f"Public-{self.environment_suffix}",
@@ -119,7 +123,7 @@ class TapStack(Stack):
                 ),
                 ec2.SubnetConfiguration(
                     name=f"Private-{self.environment_suffix}",
-                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
                     cidr_mask=24,
                 ),
             ],
@@ -233,6 +237,7 @@ class TapStack(Stack):
 
     def _create_ecs_service(self) -> ecs.FargateService:
         """Create Fargate service with 2 tasks"""
+        # FIXED: Use public subnets with public IP since we removed NAT gateways
         service = ecs.FargateService(
             self,
             f"TradingService-{self.environment_suffix}",
@@ -241,9 +246,9 @@ class TapStack(Stack):
             desired_count=2,
             security_groups=[self.ecs_sg],
             vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                subnet_type=ec2.SubnetType.PUBLIC
             ),
-            assign_public_ip=False,
+            assign_public_ip=True,  # Required when using public subnets without NAT
         )
         return service
 
@@ -313,7 +318,7 @@ class TapStack(Stack):
             description="Subnet group for Aurora Global Database",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
             ),
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -341,7 +346,7 @@ class TapStack(Stack):
             instance_props=rds.InstanceProps(
                 vpc=self.vpc,
                 vpc_subnets=ec2.SubnetSelection(
-                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
                 ),
                 security_groups=[self.db_sg],
                 instance_type=ec2.InstanceType.of(
@@ -374,7 +379,7 @@ class TapStack(Stack):
             description="Subnet group for Aurora Global Database secondary",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
             ),
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -393,7 +398,7 @@ class TapStack(Stack):
             instance_props=rds.InstanceProps(
                 vpc=self.vpc,
                 vpc_subnets=ec2.SubnetSelection(
-                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
                 ),
                 security_groups=[self.db_sg],
                 instance_type=ec2.InstanceType.of(
