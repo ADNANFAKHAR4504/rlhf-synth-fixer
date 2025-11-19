@@ -1,5 +1,5 @@
-name: payment-migration-stack
+name: TapStack
 runtime:
   name: nodejs
-description: Payment processing migration infrastructure on AWS
-main: lib/index.ts
+description: Pulumi infrastructure for TAP
+main: bin/tap.ts
