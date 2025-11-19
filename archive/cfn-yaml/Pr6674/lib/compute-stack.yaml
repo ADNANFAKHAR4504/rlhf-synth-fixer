@@ -1,0 +1,484 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Compute Infrastructure for Multi-Region DR Payment Processing'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+
+  VPCId:
+    Type: String
+    Description: VPC ID
+
+  PublicSubnet1:
+    Type: String
+    Description: Public Subnet 1 ID
+
+  PublicSubnet2:
+    Type: String
+    Description: Public Subnet 2 ID
+
+  PrivateSubnet1:
+    Type: String
+    Description: Private Subnet 1 ID
+
+  PrivateSubnet2:
+    Type: String
+    Description: Private Subnet 2 ID
+
+  DBEndpoint:
+    Type: String
+    Description: Database Cluster Endpoint
+
+  TransactionQueueUrl:
+    Type: String
+    Description: Transaction Queue URL
+
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for domain validation
+    Default: ''
+
+Conditions:
+  HasHostedZone: !Not [!Equals [!Ref HostedZoneId, '']]
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'payment-lambda-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies:
+        - PolicyName: PaymentProcessingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sqs:SendMessage'
+                  - 'sqs:ReceiveMessage'
+                  - 'sqs:DeleteMessage'
+                  - 'sqs:GetQueueAttributes'
+                Resource: !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:payment-*-${EnvironmentSuffix}'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/payment-*-${EnvironmentSuffix}'
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:payment-*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/payment-*:*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTraceSegments'
+                  - 'xray:PutTelemetryRecords'
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'payment-lambda-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPCId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-lambda-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  TransactionProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'payment-transaction-processor-${EnvironmentSuffix}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      ReservedConcurrentExecutions: 100
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          DB_ENDPOINT: !Ref DBEndpoint
+          TRANSACTION_QUEUE_URL: !Ref TransactionQueueUrl
+          REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from datetime import datetime
+
+          def lambda_handler(event, context):
+              """Process payment transactions"""
+              print(f"Processing transaction: {json.dumps(event)}")
+
+              try:
+                  # Extract transaction data
+                  if 'Records' in event:
+                      for record in event['Records']:
+                          body = json.loads(record['body'])
+                          process_transaction(body)
+                  else:
+                      process_transaction(event)
+
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'Transaction processed successfully'})
+                  }
+              except Exception as e:
+                  print(f"Error processing transaction: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+          def process_transaction(transaction_data):
+              """Process individual transaction"""
+              transaction_id = transaction_data.get('transaction_id')
+              amount = transaction_data.get('amount')
+              print(f"Processing transaction {transaction_id} for amount {amount}")
+
+              # Store in DynamoDB (placeholder)
+              dynamodb = boto3.resource('dynamodb')
+              # Additional processing logic here
+
+              return True
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-transaction-processor-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PaymentGatewayFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'payment-gateway-${EnvironmentSuffix}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      ReservedConcurrentExecutions: 50
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      TracingConfig:
+        Mode: Active
+      Environment:
+        Variables:
+          TRANSACTION_QUEUE_URL: !Ref TransactionQueueUrl
+          REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          import uuid
+          from datetime import datetime
+
+          sqs = boto3.client('sqs')
+
+          def lambda_handler(event, context):
+              """API Gateway integration for payment processing"""
+              print(f"Received payment request: {json.dumps(event)}")
+
+              try:
+                  # Parse request body
+                  if isinstance(event.get('body'), str):
+                      body = json.loads(event['body'])
+                  else:
+                      body = event.get('body', {})
+
+                  transaction_id = str(uuid.uuid4())
+
+                  # Send to SQS for processing
+                  message = {
+                      'transaction_id': transaction_id,
+                      'amount': body.get('amount'),
+                      'currency': body.get('currency', 'USD'),
+                      'timestamp': datetime.utcnow().isoformat()
+                  }
+
+                  sqs.send_message(
+                      QueueUrl=os.environ['TRANSACTION_QUEUE_URL'],
+                      MessageBody=json.dumps(message)
+                  )
+
+                  return {
+                      'statusCode': 202,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'transaction_id': transaction_id,
+                          'status': 'accepted'
+                      })
+                  }
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-gateway-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SQSEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:payment-transaction-queue-${EnvironmentSuffix}'
+      FunctionName: !Ref TransactionProcessorFunction
+      BatchSize: 10
+      Enabled: true
+
+  # ACM Certificate for HTTPS
+  ALBCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasHostedZone
+    Properties:
+      DomainName: !Sub 'payment-${EnvironmentSuffix}.example.com'
+      SubjectAlternativeNames:
+        - !Sub 'payment-${EnvironmentSuffix}.example.com'
+        - !Sub 'www.payment-${EnvironmentSuffix}.example.com'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub 'payment-${EnvironmentSuffix}.example.com'
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-alb-cert-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'payment-alb-sg-${EnvironmentSuffix}'
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-alb-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'payment-alb-${EnvironmentSuffix}'
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-alb-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: ALBInvokeLambdaPermission
+    Properties:
+      Name: !Sub 'payment-tg-${EnvironmentSuffix}'
+      TargetType: lambda
+      HealthCheckEnabled: false  # Lambda targets don't support health checks
+      Targets:
+        - Id: !GetAtt PaymentGatewayFunction.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-tg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Permission for ALB to invoke Lambda
+  ALBInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PaymentGatewayFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/*/*'
+
+  # HTTP Listener - Redirects to HTTPS if certificate exists, otherwise forwards
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions: !If
+        - HasHostedZone
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              Host: '#{host}'
+              Path: '/#{path}'
+              Query: '#{query}'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
+
+  # HTTPS Listener
+  ALBListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasHostedZone
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref ALBCertificate
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  PaymentAPI:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'payment-api-${EnvironmentSuffix}'
+      ProtocolType: HTTP
+      Description: Payment Processing API
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - '*'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Project: payment-processing-dr
+
+  PaymentAPIIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentAPI
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt PaymentGatewayFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  PaymentAPIRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentAPI
+      RouteKey: 'POST /transactions'
+      Target: !Sub 'integrations/${PaymentAPIIntegration}'
+
+  HealthCheckRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentAPI
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${HealthCheckIntegration}'
+
+  HealthCheckIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentAPI
+      IntegrationType: MOCK
+      PayloadFormatVersion: '2.0'
+      RequestTemplates:
+        application/json: '{"statusCode": 200, "body": "{\"status\": \"healthy\"}"}'
+
+  PaymentAPIStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref PaymentAPI
+      StageName: prod
+      AutoDeploy: true
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+
+  APIGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PaymentGatewayFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PaymentAPI}/*'
+
+Outputs:
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  ALBFullName:
+    Description: ALB Full Name for CloudWatch
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+
+  APIEndpoint:
+    Description: API Gateway Endpoint
+    Value: !Sub 'https://${PaymentAPI}.execute-api.${AWS::Region}.amazonaws.com/prod'
+
+  APIGatewayId:
+    Description: API Gateway ID
+    Value: !Ref PaymentAPI
+
+  TransactionProcessorArn:
+    Description: Transaction Processor Lambda ARN
+    Value: !GetAtt TransactionProcessorFunction.Arn
+
+  LambdaSecurityGroupId:
+    Description: Lambda Security Group ID for database access
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaSecurityGroupId'
