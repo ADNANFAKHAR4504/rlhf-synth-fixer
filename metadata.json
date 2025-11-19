@@ -5,7 +5,11 @@
   "complexity": "expert",
   "region": "us-east-1",
   "subtask": "AWS CloudFormation",
-  "subject_labels": "aws; infrastructure; security-configuration-as-code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-19T08:03:05.067296",
