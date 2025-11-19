@@ -1,0 +1,3 @@
+name: payment-api-failover
+runtime: nodejs
+description: Multi-region payment processing API with automated failover
