@@ -30,7 +30,7 @@ primary_stack = TapStack(
 # Create secondary stack in us-east-2
 secondary_stack = TapStack(
     app,
-    f"TapStack{environment_suffix}",
+    f"TapStackSecondary{environment_suffix}",
     environment_suffix=environment_suffix,
     is_primary=False,
     primary_region="us-east-1",

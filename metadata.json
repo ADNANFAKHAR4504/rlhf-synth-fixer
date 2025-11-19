@@ -2,7 +2,7 @@
   "platform": "cdk",
   "language": "py",
   "complexity": "expert",
-  "team": "synth-2",
+  "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-19T13:10:51+05:30",
   "subtask": "Failure Recovery and High Availability",
