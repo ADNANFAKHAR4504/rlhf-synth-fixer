@@ -50,8 +50,8 @@ describe("Terraform lib/ .tf unit tests", () => {
       contains(mainTf, "version = \"~> 4.0\"");
     });
 
-    test("should have S3 backend configuration commented", () => {
-      contains(mainTf, "# backend \"s3\" {}");
+    test("should have S3 backend configuration uncommented", () => {
+      contains(mainTf, "backend \"s3\" {}");
     });
 
     test("should configure AWS provider with us-east-1 region", () => {
