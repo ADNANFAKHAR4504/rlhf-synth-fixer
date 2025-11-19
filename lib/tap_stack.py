@@ -1,23 +1,20 @@
 """Payment Webhook Processing Stack"""
 
 from typing import Optional
+
 import aws_cdk as cdk
-from aws_cdk import (
-    Stack,
-    RemovalPolicy,
-    Duration,
-    aws_apigateway as apigw,
-    aws_lambda as lambda_,
-    aws_dynamodb as dynamodb,
-    aws_sqs as sqs,
-    aws_sns as sns,
-    aws_kms as kms,
-    aws_iam as iam,
-    aws_wafv2 as wafv2,
-    aws_cloudwatch as cloudwatch,
-    aws_cloudwatch_actions as cw_actions,
-    aws_lambda_event_sources as lambda_event_sources,
-)
+from aws_cdk import Duration, RemovalPolicy, Stack
+from aws_cdk import aws_apigateway as apigw
+from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_cloudwatch_actions as cw_actions
+from aws_cdk import aws_dynamodb as dynamodb
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_kms as kms
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_lambda_event_sources as lambda_event_sources
+from aws_cdk import aws_sns as sns
+from aws_cdk import aws_sqs as sqs
+from aws_cdk import aws_wafv2 as wafv2
 from constructs import Construct
 
 
@@ -109,14 +106,6 @@ class TapStack(Stack):
             ),
         )
 
-        # Create Lambda Layer with proper structure
-        shared_layer = lambda_.LayerVersion(
-            self, "SharedLayer",
-            code=lambda_.Code.from_asset("lib/lambda/layer"),
-            compatible_runtimes=[lambda_.Runtime.PYTHON_3_11],
-            description="Shared dependencies for webhook processing",
-        )
-
         # Create Webhook Receiver Lambda with reduced concurrency
         webhook_receiver = lambda_.Function(
             self, "WebhookReceiver",
@@ -127,7 +116,6 @@ class TapStack(Stack):
             code=lambda_.Code.from_asset("lib/lambda/receiver"),
             timeout=Duration.seconds(30),
             reserved_concurrent_executions=10,  # Reduced from 100 to avoid account limits
-            layers=[shared_layer],
             tracing=lambda_.Tracing.ACTIVE,
             environment={
                 "TABLE_NAME": webhooks_table.table_name,
@@ -150,7 +138,6 @@ class TapStack(Stack):
             code=lambda_.Code.from_asset("lib/lambda/processor"),
             timeout=Duration.minutes(5),
             reserved_concurrent_executions=5,  # Reduced from 50
-            layers=[shared_layer],
             tracing=lambda_.Tracing.ACTIVE,
             environment={
                 "TABLE_NAME": webhooks_table.table_name,
@@ -179,7 +166,6 @@ class TapStack(Stack):
             handler="audit.handler",
             code=lambda_.Code.from_asset("lib/lambda/audit"),
             timeout=Duration.seconds(60),
-            layers=[shared_layer],
             tracing=lambda_.Tracing.ACTIVE,
             environment={
                 "TABLE_NAME": webhooks_table.table_name,
