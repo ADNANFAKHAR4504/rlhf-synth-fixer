@@ -590,7 +590,7 @@ class TapStack(pulumi.ComponentResource):
             aws.cloudwatch.MetricAlarm(
                 f"{provider}-queue-depth-alarm-{self.environment_suffix}",
                 name=f"{provider}-queue-depth-alarm-{self.environment_suffix}",
-                description=f"Alarm for {provider} SQS queue depth exceeding 1000",
+                alarm_description=f"Alarm for {provider} SQS queue depth exceeding 1000",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=2,
                 metric_name="ApproximateNumberOfMessages",
@@ -616,9 +616,9 @@ class TapStack(pulumi.ComponentResource):
         
         for lambda_func in all_lambdas:
             aws.cloudwatch.MetricAlarm(
-                f"{lambda_func._name}-error-rate-alarm",
-                name=f"{lambda_func._name}-error-rate-alarm",
-                description=f"Alarm for {lambda_func._name} error rate exceeding 1%",
+                f"{lambda_func._name}-error-alarm",
+                name=f"{lambda_func._name}-error-alarm",
+                alarm_description=f"Alarm for {lambda_func._name} errors exceeding 1",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=2,
                 metric_name="Errors",
@@ -632,7 +632,7 @@ class TapStack(pulumi.ComponentResource):
                 },
                 tags={
                     **self.tags,
-                    "Name": f"{lambda_func._name}-error-rate-alarm",
+                    "Name": f"{lambda_func._name}-error-alarm",
                     "Component": "CloudWatch"
                 },
                 opts=ResourceOptions(parent=self)
