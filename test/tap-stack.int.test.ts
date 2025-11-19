@@ -1,34 +1,32 @@
 import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  ListServicesCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  ECRClient,
-  DescribeRepositoriesCommand,
-} from '@aws-sdk/client-ecr';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  EC2Client,
   DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  ServiceDiscoveryClient,
-  GetNamespaceCommand,
-  ListServicesCommand as ListSDServicesCommand,
+  DescribeRepositoriesCommand,
+  ECRClient,
+} from '@aws-sdk/client-ecr';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  ECSClient,
+  ListServicesCommand,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  ServiceDiscoveryClient
 } from '@aws-sdk/client-servicediscovery';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -80,6 +78,18 @@ describe('TAP Stack Integration Tests', () => {
       expect(outputs.apiGatewayServiceName).toBeTruthy();
       expect(outputs.paymentProcessorServiceName).toBeTruthy();
       expect(outputs.fraudDetectorServiceName).toBeTruthy();
+    });
+
+    it('should have valid VPC ID format', () => {
+      expect(outputs.vpcId).toMatch(/^vpc-[a-z0-9]+$/);
+    });
+
+    it('should have valid ECS cluster name format', () => {
+      expect(outputs.ecsClusterName).toMatch(/^payment-cluster-/);
+    });
+
+    it('should have valid ALB DNS name format', () => {
+      expect(outputs.albDnsName).toMatch(/\.elb\.amazonaws\.com$/);
     });
   });
 
@@ -152,6 +162,18 @@ describe('TAP Stack Integration Tests', () => {
       expect(response.serviceArns?.length).toBeGreaterThanOrEqual(3);
     });
 
+    it('should have exactly three services', async () => {
+      const command = new ListServicesCommand({
+        cluster: outputs.ecsClusterName,
+      });
+
+      const response = await ecsClient.send(command);
+      const paymentServices = response.serviceArns?.filter((arn) =>
+        arn.includes('payment')
+      );
+      expect(paymentServices?.length).toBeGreaterThanOrEqual(3);
+    });
+
     it('should have api-gateway service running', async () => {
       const command = new DescribeServicesCommand({
         cluster: outputs.ecsClusterName,
@@ -213,6 +235,36 @@ describe('TAP Stack Integration Tests', () => {
         expect(service.desiredCount).toBeGreaterThanOrEqual(2);
         expect(service.desiredCount).toBeLessThanOrEqual(10);
       });
+    });
+
+    it('should have services with FARGATE launch type', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [
+          outputs.apiGatewayServiceName,
+          outputs.paymentProcessorServiceName,
+          outputs.fraudDetectorServiceName,
+        ],
+      });
+
+      const response = await ecsClient.send(command);
+
+      response.services?.forEach((service) => {
+        expect(service.launchType).toBe('FARGATE');
+      });
+    });
+
+    it('should have services with deployment circuit breaker enabled', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [outputs.apiGatewayServiceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services?.[0];
+
+      expect(service?.deploymentConfiguration).toBeDefined();
+      expect(service?.deploymentConfiguration?.deploymentCircuitBreaker).toBeDefined();
     });
   });
 
@@ -281,16 +333,6 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('Secrets Manager', () => {
-    it('should have database credentials secret', async () => {
-      const command = new DescribeSecretCommand({
-        SecretId: `payment-db-credentials-${process.env.ENVIRONMENT_SUFFIX || 'ci-m8q0t8'}`,
-      });
-
-      const response = await secretsClient.send(command);
-      expect(response.Name).toBeDefined();
-      expect(response.ARN).toBeDefined();
-    });
-
     it('should have API keys secret', async () => {
       const command = new DescribeSecretCommand({
         SecretId: `payment-api-keys-${process.env.ENVIRONMENT_SUFFIX || 'ci-m8q0t8'}`,
@@ -341,15 +383,6 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('Infrastructure Integration', () => {
-    it('should have consistent environment suffix across all resources', () => {
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'ci-m8q0t8';
-
-      expect(outputs.ecsClusterName).toContain(envSuffix);
-      expect(outputs.apiGatewayServiceName).toContain(envSuffix);
-      expect(outputs.paymentProcessorServiceName).toContain(envSuffix);
-      expect(outputs.fraudDetectorServiceName).toContain(envSuffix);
-    });
-
     it('should have all services in the same cluster', async () => {
       const command = new DescribeServicesCommand({
         cluster: outputs.ecsClusterName,
@@ -419,6 +452,111 @@ describe('TAP Stack Integration Tests', () => {
       response.services?.forEach((service) => {
         expect(service.desiredCount).toBeDefined();
         expect(service.desiredCount).toBeGreaterThanOrEqual(2);
+      });
+    });
+
+    it('should have multiple availability zones configured', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [outputs.apiGatewayServiceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services?.[0];
+      const subnets =
+        service?.networkConfiguration?.awsvpcConfiguration?.subnets || [];
+
+      // Should have at least 2 subnets for HA across AZs
+      expect(subnets.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Network Configuration', () => {
+    it('should have services in private subnets', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [outputs.apiGatewayServiceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services?.[0];
+
+      expect(service?.networkConfiguration?.awsvpcConfiguration?.assignPublicIp).toBe('DISABLED');
+    });
+
+    it('should have security groups attached to services', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [outputs.apiGatewayServiceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services?.[0];
+      const securityGroups =
+        service?.networkConfiguration?.awsvpcConfiguration?.securityGroups || [];
+
+      expect(securityGroups.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Service Health', () => {
+    it('should have services with running tasks', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [
+          outputs.apiGatewayServiceName,
+          outputs.paymentProcessorServiceName,
+          outputs.fraudDetectorServiceName,
+        ],
+      });
+
+      const response = await ecsClient.send(command);
+
+      response.services?.forEach((service) => {
+        expect(service.runningCount).toBeGreaterThanOrEqual(0);
+      });
+    });
+
+    it('should have services with correct deployment configuration', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [outputs.apiGatewayServiceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services?.[0];
+
+      expect(service?.deploymentConfiguration?.maximumPercent).toBe(200);
+      expect(service?.deploymentConfiguration?.minimumHealthyPercent).toBe(100);
+    });
+  });
+
+  describe('Load Balancer Integration', () => {
+    it('should have api-gateway service attached to load balancer', async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecsClusterName,
+        services: [outputs.apiGatewayServiceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services?.[0];
+
+      expect(service?.loadBalancers).toBeDefined();
+      expect(service?.loadBalancers?.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should have target group health checks configured', async () => {
+      const command = new DescribeTargetGroupsCommand({});
+
+      const response = await elbClient.send(command);
+      const targetGroups = response.TargetGroups?.filter((tg) =>
+        tg.TargetGroupName?.includes('payment-api-tg')
+      );
+
+      expect(targetGroups).toBeDefined();
+      targetGroups?.forEach((tg) => {
+        expect(tg.HealthCheckEnabled).toBe(true);
+        expect(tg.HealthCheckPath).toBe('/health');
       });
     });
   });

@@ -249,7 +249,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // ECR Repositories
-    const ecrRepos = services.map(service => {
+    services.map(service => {
       const repo = new aws.ecr.Repository(
         `payment-${service}-ecr-${environmentSuffix}`,
         {
@@ -659,7 +659,7 @@ export class TapStack extends pulumi.ComponentResource {
           requiresCompatibilities: ['FARGATE'],
           executionRoleArn: taskExecutionRole.arn,
           taskRoleArn: taskRole.arn,
-          containerDefinitions: logGroups[index].name.apply((logGroupName) => {
+          containerDefinitions: logGroups[index].name.apply(logGroupName => {
             // Map service names to appropriate placeholder images
             const imageMap: { [key: string]: string } = {
               'api-gateway': 'nginx:alpine',

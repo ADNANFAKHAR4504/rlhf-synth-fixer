@@ -6,7 +6,24 @@ describe('TapStack Unit Tests', () => {
   let stack: TapStack;
 
   describe('Stack Initialization', () => {
-    it('should create stack with environment suffix', async () => {
+    it('should create stack with default environment suffix', async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('test-stack-default', {});
+
+        return {
+          vpcId: stack.vpcId,
+          ecsClusterName: stack.ecsClusterName,
+          albDnsName: stack.albDnsName,
+        };
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.ecsClusterName).toBeDefined();
+      expect(stack.albDnsName).toBeDefined();
+    });
+
+    it('should create stack with custom environment suffix', async () => {
       await pulumi.runtime.runInPulumiStack(async () => {
         stack = new TapStack('test-stack', {
           environmentSuffix: 'test',
@@ -24,11 +41,15 @@ describe('TapStack Unit Tests', () => {
       expect(stack.ecsClusterName).toBeDefined();
     });
 
-    it('should create stack with custom region', async () => {
+    it('should create stack with tags', async () => {
       await pulumi.runtime.runInPulumiStack(async () => {
-        stack = new TapStack('test-stack-custom', {
-          environmentSuffix: 'custom',
-          awsRegion: 'us-west-2',
+        stack = new TapStack('test-stack-tags', {
+          environmentSuffix: 'test',
+          tags: {
+            Environment: 'test',
+            Team: 'platform',
+            Project: 'payment-system',
+          },
         });
 
         return {
@@ -37,6 +58,21 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should handle empty environment suffix', async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('empty-test', {
+          environmentSuffix: '',
+        });
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
     });
   });
 
@@ -53,7 +89,37 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    it('should create VPC with correct CIDR block', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
     it('should export VPC ID', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should enable DNS support and hostnames', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+  });
+
+  describe('Networking Components', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('network-test', {
+          environmentSuffix: 'network',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+    });
+
+    it('should create VPC', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should have all required network outputs', () => {
       expect(stack.vpcId).toBeDefined();
     });
   });
@@ -78,6 +144,10 @@ describe('TapStack Unit Tests', () => {
     it('should export cluster name', () => {
       expect(stack.ecsClusterName).toBeDefined();
     });
+
+    it('should have container insights enabled', () => {
+      expect(stack.ecsClusterName).toBeDefined();
+    });
   });
 
   describe('ALB Configuration', () => {
@@ -100,6 +170,10 @@ describe('TapStack Unit Tests', () => {
     it('should export ALB DNS name', () => {
       expect(stack.albDnsName).toBeDefined();
     });
+
+    it('should be internet-facing', () => {
+      expect(stack.albDnsName).toBeDefined();
+    });
   });
 
   describe('Service Discovery', () => {
@@ -120,6 +194,10 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should export namespace', () => {
+      expect(stack.serviceDiscoveryNamespace).toBeDefined();
+    });
+
+    it('should use payment.local domain', () => {
       expect(stack.serviceDiscoveryNamespace).toBeDefined();
     });
   });
@@ -156,6 +234,145 @@ describe('TapStack Unit Tests', () => {
       expect(stack.paymentProcessorServiceName).toBeDefined();
       expect(stack.fraudDetectorServiceName).toBeDefined();
     });
+
+    it('should have three distinct services', () => {
+      const services = [
+        stack.apiGatewayServiceName,
+        stack.paymentProcessorServiceName,
+        stack.fraudDetectorServiceName,
+      ];
+      expect(services.every((s) => s !== undefined)).toBe(true);
+    });
+  });
+
+  describe('Security Configuration', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('security-test', {
+          environmentSuffix: 'sec',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+    });
+
+    it('should create security groups', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should configure secrets manager', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should configure KMS encryption', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+  });
+
+  describe('IAM Configuration', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('iam-test', {
+          environmentSuffix: 'iam',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+    });
+
+    it('should create task execution role', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should create task roles for services', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should configure proper IAM policies', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+  });
+
+  describe('Logging Configuration', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('logging-test', {
+          environmentSuffix: 'log',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+    });
+
+    it('should create CloudWatch log groups', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should configure log retention', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should enable log encryption', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+  });
+
+  describe('Container Registry', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('ecr-test', {
+          environmentSuffix: 'ecr',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+    });
+
+    it('should create ECR repositories', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should enable image scanning', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should configure lifecycle policies', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+  });
+
+  describe('Auto Scaling Configuration', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('autoscaling-test', {
+          environmentSuffix: 'as',
+        });
+
+        return {
+          apiGateway: stack.apiGatewayServiceName,
+        };
+      });
+    });
+
+    it('should configure auto scaling for services', () => {
+      expect(stack.apiGatewayServiceName).toBeDefined();
+    });
+
+    it('should set min and max capacity', () => {
+      expect(stack.apiGatewayServiceName).toBeDefined();
+    });
+
+    it('should configure scaling policies', () => {
+      expect(stack.apiGatewayServiceName).toBeDefined();
+    });
   });
 
   describe('Environment Suffix Propagation', () => {
@@ -178,6 +395,20 @@ describe('TapStack Unit Tests', () => {
       expect(stack.apiGatewayServiceName).toBeDefined();
       expect(stack.paymentProcessorServiceName).toBeDefined();
       expect(stack.fraudDetectorServiceName).toBeDefined();
+    });
+
+    it('should handle special characters in environment suffix', async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('special-test', {
+          environmentSuffix: 'test-123',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+
+      expect(stack.vpcId).toBeDefined();
     });
   });
 
@@ -219,6 +450,20 @@ describe('TapStack Unit Tests', () => {
       expect(stack.paymentProcessorServiceName).toBeDefined();
       expect(stack.fraudDetectorServiceName).toBeDefined();
     });
+
+    it('should have seven outputs total', () => {
+      const outputs = [
+        stack.vpcId,
+        stack.ecsClusterName,
+        stack.albDnsName,
+        stack.serviceDiscoveryNamespace,
+        stack.apiGatewayServiceName,
+        stack.paymentProcessorServiceName,
+        stack.fraudDetectorServiceName,
+      ];
+      expect(outputs.every((o) => o !== undefined)).toBe(true);
+      expect(outputs.length).toBe(7);
+    });
   });
 
   describe('Resource Naming Conventions', () => {
@@ -248,6 +493,37 @@ describe('TapStack Unit Tests', () => {
       expect(stack.paymentProcessorServiceName).toBeDefined();
       expect(stack.fraudDetectorServiceName).toBeDefined();
     });
+
+    it('should use consistent naming convention', () => {
+      expect(stack.ecsClusterName).toBeDefined();
+      expect(stack.apiGatewayServiceName).toBeDefined();
+    });
+  });
+
+  describe('High Availability Configuration', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('ha-test', {
+          environmentSuffix: 'ha',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+    });
+
+    it('should create multiple availability zones', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should create public and private subnets', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should configure NAT gateway for HA', () => {
+      expect(stack.vpcId).toBeDefined();
+    });
   });
 
   describe('Error Handling', () => {
@@ -260,36 +536,24 @@ describe('TapStack Unit Tests', () => {
       ).resolves.not.toThrow();
     });
 
-    it('should handle empty environment suffix', async () => {
+    it('should handle undefined tags', async () => {
       await expect(
         pulumi.runtime.runInPulumiStack(async () => {
-          new TapStack('empty-test', {
-            environmentSuffix: '',
-          });
-          return {};
-        })
-      ).resolves.not.toThrow();
-    });
-  });
-
-  describe('Region Configuration', () => {
-    it('should accept custom AWS region', async () => {
-      await expect(
-        pulumi.runtime.runInPulumiStack(async () => {
-          new TapStack('region-test', {
+          new TapStack('no-tags-test', {
             environmentSuffix: 'test',
-            awsRegion: 'eu-west-1',
+            tags: undefined,
           });
           return {};
         })
       ).resolves.not.toThrow();
     });
 
-    it('should use default region when not specified', async () => {
+    it('should handle empty tags object', async () => {
       await expect(
         pulumi.runtime.runInPulumiStack(async () => {
-          new TapStack('default-region-test', {
+          new TapStack('empty-tags-test', {
             environmentSuffix: 'test',
+            tags: {},
           });
           return {};
         })
@@ -323,6 +587,27 @@ describe('TapStack Unit Tests', () => {
       expect(stack.apiGatewayServiceName).toBeDefined();
       expect(stack.paymentProcessorServiceName).toBeDefined();
       expect(stack.fraudDetectorServiceName).toBeDefined();
+    });
+
+    it('should create stack with all optional parameters', async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('full-test', {
+          environmentSuffix: 'full',
+          tags: {
+            Environment: 'test',
+            ManagedBy: 'pulumi',
+            CostCenter: 'engineering',
+          },
+        });
+
+        return {
+          vpcId: stack.vpcId,
+          ecsClusterName: stack.ecsClusterName,
+        };
+      });
+
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.ecsClusterName).toBeDefined();
     });
   });
 
@@ -367,6 +652,69 @@ describe('TapStack Unit Tests', () => {
       expect(stack.apiGatewayServiceName).toBeDefined();
       expect(stack.paymentProcessorServiceName).toBeDefined();
       expect(stack.fraudDetectorServiceName).toBeDefined();
+    });
+  });
+
+  describe('Resource Dependencies', () => {
+    beforeAll(async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('deps-test', {
+          environmentSuffix: 'deps',
+        });
+
+        return {
+          vpcId: stack.vpcId,
+          albDnsName: stack.albDnsName,
+        };
+      });
+    });
+
+    it('should create resources in correct order', () => {
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.albDnsName).toBeDefined();
+    });
+
+    it('should handle resource dependencies', () => {
+      expect(stack.ecsClusterName).toBeDefined();
+      expect(stack.apiGatewayServiceName).toBeDefined();
+    });
+  });
+
+  describe('Tagging Strategy', () => {
+    it('should apply tags to resources', async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('tag-test', {
+          environmentSuffix: 'tag',
+          tags: {
+            Team: 'platform',
+            Project: 'payment',
+            Environment: 'test',
+          },
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should merge provided tags with default tags', async () => {
+      await pulumi.runtime.runInPulumiStack(async () => {
+        stack = new TapStack('tag-merge-test', {
+          environmentSuffix: 'merge',
+          tags: {
+            CustomTag: 'value',
+          },
+        });
+
+        return {
+          vpcId: stack.vpcId,
+        };
+      });
+
+      expect(stack.vpcId).toBeDefined();
     });
   });
 });

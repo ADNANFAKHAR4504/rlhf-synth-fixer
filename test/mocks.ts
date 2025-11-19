@@ -1,211 +1,170 @@
+// Mock utilities for Pulumi testing
 import * as pulumi from '@pulumi/pulumi';
 
-// Set up Pulumi mocks for testing
-pulumi.runtime.setMocks({
-  newResource: function (args: pulumi.runtime.MockResourceArgs): {
-    id: string;
-    state: any;
-  } {
-    // Generate deterministic IDs for resources
-    const id = `${args.name}-${args.type.replace(/:/g, '-')}-id`;
+// Enhanced mock for Pulumi resources with realistic AWS resource properties
+export const setupPulumiMocks = () => {
+  pulumi.runtime.setMocks({
+    newResource: (args: pulumi.runtime.MockResourceArgs) => {
+      const { type, name, inputs } = args;
 
-    // Mock state based on resource type
-    const state: any = {
-      ...args.inputs,
-      id: id,
-      arn: `arn:aws:${args.type.split(':')[0]}:us-east-1:123456789012:${args.name}`,
-    };
+      // Generate realistic mock data based on resource type
+      const mockState: any = {
+        ...inputs,
+        name: inputs.name || name,
+        id: `${name}-mock-id`,
+        arn: `arn:aws:${type.split(':')[1] || 'component'}:us-east-1:123456789012:${name}`,
+      };
 
-    // Special handling for specific resource types
-    switch (args.type) {
-      case 'aws:ec2/vpc:Vpc':
-        state.cidrBlock = args.inputs.cidrBlock || '10.0.0.0/16';
-        state.enableDnsHostnames = true;
-        state.enableDnsSupport = true;
-        break;
+      // Add type-specific properties
+      if (type.includes('Vpc')) {
+        mockState.cidrBlock = inputs.cidrBlock || '10.0.0.0/16';
+        mockState.enableDnsHostnames = inputs.enableDnsHostnames ?? true;
+        mockState.enableDnsSupport = inputs.enableDnsSupport ?? true;
+      }
 
-      case 'aws:ec2/subnet:Subnet':
-        state.availabilityZone = args.inputs.availabilityZone || 'us-east-1a';
-        state.cidrBlock = args.inputs.cidrBlock || '10.0.1.0/24';
-        break;
+      if (type.includes('Subnet')) {
+        mockState.availabilityZone = 'us-east-1a';
+        mockState.cidrBlock = inputs.cidrBlock || '10.0.1.0/24';
+        mockState.mapPublicIpOnLaunch = inputs.mapPublicIpOnLaunch || false;
+      }
 
-      case 'aws:ecs/cluster:Cluster':
-        state.name = args.inputs.name || args.name;
-        state.arn = `arn:aws:ecs:us-east-1:123456789012:cluster/${args.name}`;
-        break;
+      if (type.includes('InternetGateway')) {
+        mockState.vpcId = inputs.vpcId;
+      }
 
-      case 'aws:ecs/taskDefinition:TaskDefinition':
-        state.family = args.inputs.family || args.name;
-        state.arn = `arn:aws:ecs:us-east-1:123456789012:task-definition/${args.name}:1`;
-        break;
+      if (type.includes('NatGateway')) {
+        mockState.allocationId = inputs.allocationId || 'eipalloc-12345678';
+        mockState.subnetId = inputs.subnetId;
+      }
 
-      case 'aws:ecs/service:Service':
-        state.name = args.inputs.name || args.name;
-        break;
+      if (type.includes('Eip')) {
+        mockState.publicIp = '203.0.113.1';
+        mockState.allocationId = 'eipalloc-12345678';
+        mockState.domain = inputs.domain || 'vpc';
+      }
 
-      case 'aws:ecr/repository:Repository':
-        state.name = args.inputs.name || args.name;
-        state.repositoryUrl = `123456789012.dkr.ecr.us-east-1.amazonaws.com/${args.name}`;
-        break;
+      if (type.includes('RouteTable')) {
+        mockState.vpcId = inputs.vpcId;
+      }
 
-      case 'aws:lb/loadBalancer:LoadBalancer':
-        state.dnsName = `${args.name}-123456789.us-east-1.elb.amazonaws.com`;
-        state.zoneId = 'Z35SXDOTRQ7X7K';
-        break;
+      if (type.includes('Route')) {
+        mockState.routeTableId = inputs.routeTableId;
+        mockState.destinationCidrBlock = inputs.destinationCidrBlock;
+      }
 
-      case 'aws:lb/targetGroup:TargetGroup':
-        state.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/${args.name}`;
-        break;
+      if (type.includes('SecurityGroup')) {
+        mockState.vpcId = inputs.vpcId;
+        mockState.ingress = inputs.ingress || [];
+        mockState.egress = inputs.egress || [];
+      }
 
-      case 'aws:lb/listener:Listener':
-        state.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/${args.name}`;
-        break;
+      if (type.includes('LoadBalancer')) {
+        mockState.dnsName = `${name}.us-east-1.elb.amazonaws.com`;
+        mockState.hostedZoneId = 'Z35SXDOTRQ7X7K';
+        mockState.loadBalancerType = inputs.loadBalancerType || 'application';
+      }
 
-      case 'aws:iam/role:Role':
-        state.arn = `arn:aws:iam::123456789012:role/${args.name}`;
-        state.assumeRolePolicy = args.inputs.assumeRolePolicy;
-        break;
+      if (type.includes('TargetGroup')) {
+        mockState.port = inputs.port || 8080;
+        mockState.protocol = inputs.protocol || 'HTTP';
+        mockState.targetType = inputs.targetType || 'ip';
+      }
 
-      case 'aws:ec2/securityGroup:SecurityGroup':
-        state.vpcId = args.inputs.vpcId || 'vpc-123456';
-        state.ingress = args.inputs.ingress || [];
-        state.egress = args.inputs.egress || [];
-        break;
+      if (type.includes('Cluster')) {
+        mockState.clusterName = inputs.name || name;
+        mockState.status = 'ACTIVE';
+      }
 
-      case 'aws:ec2/eip:Eip':
-        state.publicIp = `54.${Math.floor(Math.random() * 256)}.${Math.floor(
-          Math.random() * 256
-        )}.${Math.floor(Math.random() * 256)}`;
-        state.allocationId = `eipalloc-${args.name}`;
-        break;
+      if (type.includes('Service')) {
+        mockState.serviceName = inputs.name || name;
+        mockState.desiredCount = inputs.desiredCount || 2;
+        mockState.launchType = inputs.launchType || 'FARGATE';
+      }
 
-      case 'aws:ec2/natGateway:NatGateway':
-        state.allocationId =
-          args.inputs.allocationId || `eipalloc-${args.name}`;
-        state.subnetId = args.inputs.subnetId || `subnet-${args.name}`;
-        break;
+      if (type.includes('TaskDefinition')) {
+        mockState.family = inputs.family || name;
+        mockState.cpu = inputs.cpu || '1024';
+        mockState.memory = inputs.memory || '2048';
+      }
 
-      case 'aws:ec2/internetGateway:InternetGateway':
-        state.vpcId = args.inputs.vpcId || 'vpc-123456';
-        break;
+      if (type.includes('Repository')) {
+        mockState.repositoryUrl = `123456789012.dkr.ecr.us-east-1.amazonaws.com/${name}`;
+      }
 
-      case 'aws:ec2/routeTable:RouteTable':
-        state.vpcId = args.inputs.vpcId || 'vpc-123456';
-        break;
+      if (type.includes('LogGroup')) {
+        mockState.logGroupName = inputs.name || name;
+        mockState.retentionInDays = inputs.retentionInDays || 30;
+      }
 
-      case 'aws:ec2/route:Route':
-        state.routeTableId = args.inputs.routeTableId || 'rtb-123456';
-        break;
+      if (type.includes('Secret')) {
+        mockState.secretName = inputs.name || name;
+      }
 
-      case 'aws:ec2/routeTableAssociation:RouteTableAssociation':
-        state.routeTableId = args.inputs.routeTableId || 'rtb-123456';
-        state.subnetId = args.inputs.subnetId || 'subnet-123456';
-        break;
+      if (type.includes('Key')) {
+        mockState.keyId = `key-${name}`;
+        mockState.enableKeyRotation = inputs.enableKeyRotation ?? true;
+      }
 
-      case 'aws:servicediscovery/privateDnsNamespace:PrivateDnsNamespace':
-        state.name = args.inputs.name || args.name;
-        state.hostedZone = 'Z1234567890ABC';
-        break;
+      if (type.includes('Role')) {
+        mockState.roleName = inputs.name || name;
+      }
 
-      case 'aws:servicediscovery/service:Service':
-        state.name = args.inputs.name || args.name;
-        state.arn = `arn:aws:servicediscovery:us-east-1:123456789012:service/${args.name}`;
-        break;
+      if (type.includes('PrivateDnsNamespace')) {
+        mockState.namespace = inputs.name || name;
+        mockState.hostedZone = 'Z1234567890ABC';
+      }
 
-      case 'aws:secretsmanager/secret:Secret':
-        state.name = args.inputs.name || args.name;
-        state.arn = `arn:aws:secretsmanager:us-east-1:123456789012:secret:${args.name}`;
-        break;
+      if (type.includes('servicediscovery')) {
+        mockState.serviceName = inputs.name || name;
+      }
 
-      case 'aws:secretsmanager/secretVersion:SecretVersion':
-        state.secretId = args.inputs.secretId;
-        state.versionId = 'mock-version-id';
-        break;
+      return {
+        id: mockState.id,
+        state: mockState,
+      };
+    },
 
-      case 'aws:cloudwatch/logGroup:LogGroup':
-        state.name = args.inputs.name || args.name;
-        state.arn = `arn:aws:logs:us-east-1:123456789012:log-group:${args.name}`;
-        break;
-
-      case 'aws:kms/key:Key':
-        state.arn = `arn:aws:kms:us-east-1:123456789012:key/${args.name}`;
-        state.keyId = `key-${args.name}`;
-        break;
-
-      case 'aws:kms/alias:Alias':
-        state.name = args.inputs.name || `alias/${args.name}`;
-        state.targetKeyId = args.inputs.targetKeyId || 'mock-key-id';
-        break;
-
-      case 'aws:appautoscaling/target:Target':
-        state.resourceId = args.inputs.resourceId;
-        state.scalableDimension = args.inputs.scalableDimension;
-        break;
-
-      case 'aws:appautoscaling/policy:Policy':
-        state.name = args.inputs.name || args.name;
-        state.arn = `arn:aws:autoscaling:us-east-1:123456789012:scalingPolicy/${args.name}`;
-        break;
-
-      case 'aws:ecr/lifecyclePolicy:LifecyclePolicy':
-        state.repository = args.inputs.repository;
-        state.policy = args.inputs.policy;
-        break;
-
-      case 'aws:iam/rolePolicy:RolePolicy':
-        state.role = args.inputs.role;
-        state.policy = args.inputs.policy;
-        break;
-
-      case 'aws:iam/rolePolicyAttachment:RolePolicyAttachment':
-        state.role = args.inputs.role;
-        state.policyArn = args.inputs.policyArn;
-        break;
-
-      case 'aws:providers:aws':
-        state.region = args.inputs.region || 'us-east-1';
-        break;
-    }
-
-    return {
-      id: state.id,
-      state: state,
-    };
-  },
-
-  call: function (args: pulumi.runtime.MockCallArgs) {
-    // Mock function calls (e.g., aws.getAvailabilityZones)
-    switch (args.token) {
-      case 'aws:index/getAvailabilityZones:getAvailabilityZones':
-        return {
+    call: (args: pulumi.runtime.MockCallArgs) => {
+      // Mock AWS API calls
+      if (
+        args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones'
+      ) {
+        return Promise.resolve({
           names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-          zoneIds: ['use1-az1', 'use1-az2', 'use1-az4'],
-        };
+          zoneIds: ['use1-az1', 'use1-az2', 'use1-az3'],
+          state: 'available',
+        });
+      }
 
-      default:
-        return args.inputs;
-    }
-  },
-});
+      if (args.token === 'aws:index/getCallerIdentity:getCallerIdentity') {
+        return Promise.resolve({
+          accountId: '123456789012',
+          arn: 'arn:aws:iam::123456789012:user/test-user',
+          userId: 'AIDACKCEVSQ6C2EXAMPLE',
+        });
+      }
 
-// Helper to run tests in a Pulumi stack context
-pulumi.runtime.runInPulumiStack = async (
-  fn: () => Promise<any>
-): Promise<any> => {
-  const result = await fn();
-  return result;
+      if (args.token === 'aws:ec2/getAmi:getAmi') {
+        return Promise.resolve({
+          id: 'ami-12345678',
+          name: 'amzn2-ami-hvm-2.0.20231101.0-x86_64-gp2',
+          ownerId: '137112412989',
+        });
+      }
+
+      if (args.token === 'aws:index/getRegion:getRegion') {
+        return Promise.resolve({
+          name: 'us-east-1',
+          endpoint: 'ec2.us-east-1.amazonaws.com',
+        });
+      }
+
+      return args;
+    },
+  });
 };
 
-// Export mock implementations for direct use in tests
-export const mockOutput = <T>(value: T): pulumi.Output<T> => {
-  return {
-    apply: <U>(func: (t: T) => pulumi.Input<U>) => mockOutput(func(value)),
-    get: () => Promise.resolve(value),
-  } as any;
-};
+// Setup mocks for testing
+setupPulumiMocks();
 
-export const mockAll = <T extends readonly unknown[]>(
-  values: T
-): pulumi.Output<any> => {
-  return mockOutput(values as any);
-};
+export default setupPulumiMocks;
