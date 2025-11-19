@@ -260,19 +260,32 @@ export class TapStack extends pulumi.ComponentResource {
     super('custom:infrastructure:TapStack', name, {}, opts);
 
     const config = new pulumi.Config();
-    const environmentSuffix = config.require('environmentSuffix');
 
-    // Load environment-specific configuration
+    // Get environmentSuffix from config, environment variable, or use default
+    const environmentSuffix = config.get('environmentSuffix') ||
+                             process.env.ENVIRONMENT_SUFFIX ||
+                             process.env.PR_NUMBER ||
+                             'dev';
+
+    // Load environment-specific configuration with defaults
+    const environment = config.get('environment') || environmentSuffix;
+
+    // Determine environment-specific defaults based on environmentSuffix or environment
+    const envType = environment.toLowerCase();
+    const isDev = envType.includes('dev') || envType === 'dev';
+    const isStaging = envType.includes('staging') || envType === 'staging';
+    const isProd = envType.includes('prod') || envType === 'production';
+
     const envConfig: EnvironmentConfig = {
-      environment: config.require('environment'),
-      vpcCidr: config.require('vpcCidr'),
-      rdsInstanceClass: config.require('rdsInstanceClass'),
-      lambdaMemory: config.requireNumber('lambdaMemory'),
-      lambdaTimeout: config.requireNumber('lambdaTimeout'),
-      s3RetentionDays: config.requireNumber('s3RetentionDays'),
-      logRetentionDays: config.requireNumber('logRetentionDays'),
-      rdsAlarmThreshold: config.requireNumber('rdsAlarmThreshold'),
-      multiAz: config.requireBoolean('multiAz'),
+      environment: environment,
+      vpcCidr: config.get('vpcCidr') || (isDev ? '10.0.0.0/16' : isStaging ? '10.1.0.0/16' : '10.2.0.0/16'),
+      rdsInstanceClass: config.get('rdsInstanceClass') || (isDev ? 'db.t3.micro' : isStaging ? 'db.t3.small' : 'db.t3.medium'),
+      lambdaMemory: config.getNumber('lambdaMemory') || (isDev ? 128 : isStaging ? 256 : 512),
+      lambdaTimeout: config.getNumber('lambdaTimeout') || (isDev ? 30 : isStaging ? 60 : 120),
+      s3RetentionDays: config.getNumber('s3RetentionDays') || (isDev ? 7 : isStaging ? 30 : 90),
+      logRetentionDays: config.getNumber('logRetentionDays') || (isDev ? 7 : isStaging ? 14 : 30),
+      rdsAlarmThreshold: config.getNumber('rdsAlarmThreshold') || (isDev ? 80 : isStaging ? 75 : 70),
+      multiAz: config.getBoolean('multiAz') !== undefined ? config.getBoolean('multiAz')! : !isDev,
     };
 
     // Validate configuration
@@ -375,7 +388,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         identifier: `rds-${environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '15.15',
+        engineVersion: '15.4',
         instanceClass: envConfig.rdsInstanceClass,
         allocatedStorage: 20,
         storageType: 'gp3',
@@ -383,12 +396,14 @@ export class TapStack extends pulumi.ComponentResource {
         dbSubnetGroupName: rdsSubnetGroup.name,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         multiAz: envConfig.multiAz,
-        backupRetentionPeriod: 7,
+        backupRetentionPeriod: 1,
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'mon:04:00-mon:05:00',
         skipFinalSnapshot: true,
+        deleteAutomatedBackups: true,
+        deletionProtection: false,
         username: 'dbadmin',
-        password: config.requireSecret('dbPassword'),
+        password: config.getSecret('dbPassword') || pulumi.secret('TempPassword123!'),
         tags: {
           Name: `rds-${environmentSuffix}`,
           ...commonTags,
@@ -429,6 +444,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         // Let AWS generate unique bucket name with prefix
         bucketPrefix: bucketNamePrefix + '-',
+        forceDestroy: true,
         versioning: {
           enabled: true,
         },
