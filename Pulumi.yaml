@@ -1,0 +1,5 @@
+name: payment-migration-stack
+runtime:
+  name: nodejs
+description: Payment processing migration infrastructure on AWS
+main: lib/index.ts
