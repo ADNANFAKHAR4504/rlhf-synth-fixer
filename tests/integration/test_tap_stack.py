@@ -75,8 +75,13 @@ class TestDeploymentOutputs(unittest.TestCase):
                        "API endpoint should use HTTPS")
         self.assertIn('execute-api', api_endpoint,
                      "API endpoint should be API Gateway endpoint")
-        self.assertTrue(api_endpoint.endswith('/prod'),
-                       "API endpoint should have /prod stage")
+        
+        # Extract environment suffix from DynamoDB table name to validate stage
+        table_name = self.outputs.get('dynamodb_table_name', '')
+        environment_suffix = table_name.replace('webhook-processing-', '')
+        expected_stage = f'/{environment_suffix}'
+        self.assertTrue(api_endpoint.endswith(expected_stage),
+                       f"API endpoint should have {expected_stage} stage")
 
         # Test API key ID format
         api_key_id = self.outputs.get('api_key_id', '')
