@@ -18,8 +18,8 @@ resource "aws_db_subnet_group" "default" {
   subnet_ids = [aws_subnet.private.id, aws_subnet.private_2.id]
 
   tags = {
-    Name                = "DB subnet group-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "DB subnet group-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -45,8 +45,8 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = {
-    Name                = "rds-sg-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "rds-sg-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -64,14 +64,14 @@ resource "aws_db_instance" "default" {
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
   skip_final_snapshot     = true
   deletion_protection     = false
-  backup_retention_period = 7  
-  backup_window           = "03:00-04:00"  # UTC
-  maintenance_window      = "Mon:04:00-Mon:05:00"  # UTC
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"         # UTC
+  maintenance_window      = "Mon:04:00-Mon:05:00" # UTC
   identifier              = "mysql-db-${var.resource_suffix}"
-  storage_encrypted       = true  # Enable encryption at rest
-  
+  storage_encrypted       = true # Enable encryption at rest
+
   tags = {
-    Name                = "mysql-db-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "mysql-db-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }

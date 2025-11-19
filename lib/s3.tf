@@ -4,14 +4,14 @@ resource "aws_s3_bucket" "terraform_state" {
   bucket = "terraform-state-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}"
 
   tags = {
-    Name                = "Terraform State Bucket-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "Terraform State Bucket-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
 resource "aws_s3_bucket_versioning" "terraform_state_versioning" {
   bucket = aws_s3_bucket.terraform_state.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }

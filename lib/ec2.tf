@@ -36,8 +36,8 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = {
-    Name                = "ec2-sg-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "ec2-sg-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -48,8 +48,8 @@ resource "aws_key_pair" "deployer" {
   public_key = var.ssh_public_key
 
   tags = {
-    Name                = "deployer-key-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "deployer-key-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -71,8 +71,8 @@ resource "aws_iam_role" "ec2_ssm_role" {
   })
 
   tags = {
-    Name                = "ec2-ssm-role-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "ec2-ssm-role-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -110,8 +110,8 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_ssm_role.name
 
   tags = {
-    Name                = "ec2-profile-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "ec2-profile-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
@@ -124,8 +124,8 @@ resource "aws_instance" "web" {
   key_name               = var.ssh_public_key != "" ? aws_key_pair.deployer[0].key_name : null
 
   tags = {
-    Name                = "web-instance-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
+    Name            = "web-instance-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
