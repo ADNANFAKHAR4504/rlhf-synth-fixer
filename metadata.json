@@ -7,7 +7,18 @@
   "team": "synth-2",
   "startedAt": "2025-11-19T18:04:44+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
-  "aws_services": ["S3", "Lambda", "SQS", "DynamoDB", "API Gateway", "CloudWatch", "IAM"],
-  "training_quality": 9
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "SQS",
+    "DynamoDB",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10
 }

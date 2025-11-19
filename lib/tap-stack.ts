@@ -268,13 +268,7 @@ export class TapStack extends pulumi.ComponentResource {
                       'sqs:DeleteMessage',
                       'sqs:GetQueueAttributes',
                     ],
-                    Resource: [
-                      queue1Arn,
-                      queue2Arn,
-                      dlq1Arn,
-                      dlq2Arn,
-                      dlq3Arn,
-                    ],
+                    Resource: [queue1Arn, queue2Arn, dlq1Arn, dlq2Arn, dlq3Arn],
                   },
                   {
                     Effect: 'Allow',
