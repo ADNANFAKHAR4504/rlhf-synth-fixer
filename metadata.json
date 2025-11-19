@@ -16,5 +16,9 @@
     "Must implement cost allocation tags: Environment, Team, CostCenter, Project"
   ],
   "timestamp": "2025-11-20T03:56:00Z",
-  "status": "in_progress"
+  "status": "completed",
+  "training_quality": 8,
+  "training_quality_rationale": "High-value training data. The model made a systematic architectural error (using instance variables instead of local variables in CDK Stack classes) that was subtle, framework-specific, and affected all 8 stack files. This demonstrates good learning value for understanding CDK synthesis patterns and variable scope. The error required CDK-specific knowledge to identify and fix. Score: 8/10 (+3 systematic architectural misunderstanding, +2 subtle/framework-specific, +2 requires CDK knowledge, +1 pattern consistency, -2 only one major error category).",
+  "qa_completed": true,
+  "qa_timestamp": "2025-11-20T04:58:00Z"
 }
