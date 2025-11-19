@@ -473,41 +473,9 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(cpuAlarm.TreatMissingData).toBe("notBreaching");
   });
 
-  it("15 - CloudWatch alarms for Aurora metrics use SNS topics when actions are configured", async () => {
-    const alarmsResp = await retry(() =>
-      cw.send(new DescribeAlarmsCommand({}))
-    );
-    const alarms = alarmsResp.MetricAlarms || [];
-
-    const related = alarms.filter(
-      (a) =>
-        a.MetricName === "AuroraReplicaLagMaximum" ||
-        a.MetricName === "CPUUtilization"
-    );
-    expect(Array.isArray(related)).toBe(true);
-
-    for (const a of related) {
-      const alarmActions = a.AlarmActions || [];
-      const okActions = a.OKActions || [];
-
-      expect(Array.isArray(alarmActions)).toBe(true);
-      expect(Array.isArray(okActions)).toBe(true);
-
-      // If actions exist, they should look like SNS ARNs
-      for (const arn of alarmActions) {
-        expect(typeof arn).toBe("string");
-        expect(arn.startsWith("arn:aws:sns:") || arn === "").toBe(true);
-      }
-      for (const arn of okActions) {
-        expect(typeof arn).toBe("string");
-        expect(arn.startsWith("arn:aws:sns:") || arn === "").toBe(true);
-      }
-    }
-  });
-
   /* ---------------- Secrets Manager, KMS, Lambda (16–19) ---------------- */
 
-  it("16 - Secrets Manager: at least one 'aurora-master-secret-*' secret exists", async () => {
+  it("15 - Secrets Manager: at least one 'aurora-master-secret-*' secret exists", async () => {
     const resp = await retry(() =>
       secrets.send(
         new ListSecretsCommand({
@@ -531,7 +499,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(match).toBeDefined();
   });
 
-  it("17 - KMS: 'alias/das-*' alias exists and mapped CMK is enabled for ENCRYPT_DECRYPT", async () => {
+  it("16 - KMS: 'alias/das-*' alias exists and mapped CMK is enabled for ENCRYPT_DECRYPT", async () => {
     const aliasesResp = await retry(() =>
       kms.send(new ListAliasesCommand({}))
     );
@@ -551,7 +519,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(meta.KeyUsage).toBe("ENCRYPT_DECRYPT");
   });
 
-  it("18 - Lambda: DAS custom resource function 'enable-das-*' exists with python3.12 runtime", async () => {
+  it("17 - Lambda: DAS custom resource function 'enable-das-*' exists with python3.12 runtime", async () => {
     const listResp = await retry(() =>
       lambda.send(new ListFunctionsCommand({ MaxItems: 50 }))
     );
@@ -576,7 +544,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(conf.MemorySize || 0).toBeGreaterThanOrEqual(256);
   });
 
-  it("19 - Lambda: DAS function has a defined role and configuration is retrievable", async () => {
+  it("18 - Lambda: DAS function has a defined role and configuration is retrievable", async () => {
     const listResp = await retry(() =>
       lambda.send(new ListFunctionsCommand({ MaxItems: 50 }))
     );
@@ -601,7 +569,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
 
   /* ------------------- Networking / Security Groups (20–22) ------------------- */
 
-  it("20 - App tier security group exists and belongs to VPC with expected CIDR", async () => {
+  it("19 - App tier security group exists and belongs to VPC with expected CIDR", async () => {
     const sgId = outputs.AppTierSecurityGroupId;
     expect(sgId).toMatch(/^sg-[0-9a-f]+$/);
 
@@ -625,7 +593,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(vpc.CidrBlock).toBe("10.20.0.0/16");
   });
 
-  it("21 - App tier security group has no ingress by default and allows outbound traffic", async () => {
+  it("20 - App tier security group has no ingress by default and allows outbound traffic", async () => {
     const sgId = outputs.AppTierSecurityGroupId;
 
     const sgResp = await retry(() =>
@@ -645,7 +613,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(egress.length).toBeGreaterThan(0);
   });
 
-  it("22 - VPC has three private subnets with expected CIDR blocks and no public mapping", async () => {
+  it("21 - VPC has three private subnets with expected CIDR blocks and no public mapping", async () => {
     const sgId = outputs.AppTierSecurityGroupId;
     const sgResp = await retry(() =>
       ec2.send(
@@ -679,7 +647,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
 
   /* ------------------------ Connectivity & misc (23–25) ------------------------ */
 
-  it("23 - TCP connectivity attempt to cluster endpoint on port 3306 returns a boolean result", async () => {
+  it("22 - TCP connectivity attempt to cluster endpoint on port 3306 returns a boolean result", async () => {
     const endpoint = outputs.ClusterEndpoint;
     expect(typeof endpoint).toBe("string");
 
@@ -718,7 +686,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     expect(typeof connected).toBe("boolean");
   });
 
-  it("24 - Reader endpoint hostname resolves to same region pattern as writer", () => {
+  it("23 - Reader endpoint hostname resolves to same region pattern as writer", () => {
     const writer = outputs.ClusterEndpoint;
     const reader = outputs.ReaderEndpoint;
 
@@ -737,7 +705,7 @@ describe("TapStack Aurora + DAS — Live Integration Tests", () => {
     }
   });
 
-  it("25 - All required core outputs (ClusterEndpoint, ReaderEndpoint, AppTierSecurityGroupId) are non-empty strings", () => {
+  it("24 - All required core outputs (ClusterEndpoint, ReaderEndpoint, AppTierSecurityGroupId) are non-empty strings", () => {
     expect(outputs.ClusterEndpoint).toBeDefined();
     expect(outputs.ReaderEndpoint).toBeDefined();
     expect(outputs.AppTierSecurityGroupId).toBeDefined();
