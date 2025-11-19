@@ -25,5 +25,6 @@
     "WAFv2"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "author": "mayanksethi-turing",
+  "training_quality": 10
 }
