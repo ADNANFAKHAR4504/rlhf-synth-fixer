@@ -514,7 +514,7 @@ const key = event.Records[0].s3.object.key;
 - ALL resource names must include `environmentSuffix` or `environment_suffix`
 - Pattern: `resourceName-${environmentSuffix}` or `resourceName-${props.environmentSuffix}`
 
-**Check with**: `bash scripts/pre-validate-iac.sh`
+**Check with**: `bash .claude/scripts/pre-validate-iac.sh`
 
 ---
 
@@ -830,7 +830,7 @@ Add entries when you discover:
 
 **Pre-validate before deployment**:
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 **Check resource naming**:

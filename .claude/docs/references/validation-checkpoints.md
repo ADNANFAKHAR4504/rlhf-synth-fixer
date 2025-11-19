@@ -135,7 +135,7 @@ When `metadata.json` has `"subtask": "IaC Optimization"`:
 **Validation**:
 ```bash
 # Run pre-validation script
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 
 # Check resource naming includes environmentSuffix
 # Must have ≥80% of resources with suffix

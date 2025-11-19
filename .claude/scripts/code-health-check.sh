@@ -1,6 +1,7 @@
 #!/bin/bash
-# Code Health Check - Scans for known failure patterns from lessons_learnt.md
-# Runs automatically before deployment to catch common issues early
+# Code Health Check - Advanced pattern matching from lessons_learnt.md
+# Scans for: empty arrays, GuardDuty, AWS Config, Lambda SDK issues, etc.
+# For basic validation, see pre-validate-iac.sh
 
 set -euo pipefail
 
@@ -12,21 +13,47 @@ ERROR_COUNT=0
 WARNING_COUNT=0
 ISSUES=()
 
-# Colors for output
+# Standardized colors for output
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo "🔍 Running Code Health Check..."
+# Prerequisite checks
+check_prerequisites() {
+    local missing_deps=()
+    
+    if ! command -v jq &> /dev/null; then
+        missing_deps+=("jq")
+    fi
+    
+    if ! command -v grep &> /dev/null; then
+        missing_deps+=("grep")
+    fi
+    
+    # Check grep supports extended regex
+    if ! echo "test" | grep -E "test" &> /dev/null; then
+        echo -e "${RED}❌ grep does not support extended regex (-E)${NC}"
+        exit 1
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo -e "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NC}"
+        exit 1
+    fi
+    
+    # Check if we're in a worktree
+    if [ ! -f "metadata.json" ]; then
+        echo -e "${YELLOW}⚠️  Not in worktree directory (metadata.json not found)${NC}"
+        echo "   This script should be run from worktree/synth-{task_id}/"
+        exit 1
+    fi
+}
+
+check_prerequisites
+
+echo "🔍 Running Code Health Check (Advanced Pattern Matching)..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Check if we're in a worktree
-if [ ! -f "metadata.json" ]; then
-    echo "⚠️  Not in worktree directory (metadata.json not found)"
-    echo "   This script should be run from worktree/synth-{task_id}/"
-    exit 1
-fi
 
 # Read platform and language
 PLATFORM=$(jq -r '.platform // "unknown"' metadata.json 2>/dev/null || echo "unknown")
@@ -66,43 +93,7 @@ if [ -d "lib" ]; then
 fi
 
 # ============================================================================
-# Pattern 2: Missing environmentSuffix
-# ============================================================================
-echo ""
-echo "📋 Checking for missing environmentSuffix in resource names..."
-
-if [ -d "lib" ]; then
-    case "$PLATFORM" in
-        cdk|cdktf)
-            case "$LANGUAGE" in
-                ts|js)
-                    NO_SUFFIX=$(grep -rniE "(bucketName|functionName|roleName|tableName|queueName|topicName|streamName|clusterName|dbInstanceIdentifier)\s*:\s*['\"][^'\"]*['\"]" lib/ --include="*.ts" --include="*.js" 2>/dev/null | grep -v "environmentSuffix" | grep -v "\${" || true)
-                    ;;
-                py)
-                    NO_SUFFIX=$(grep -rniE "(bucket_name|function_name|role_name|table_name|queue_name|topic_name|stream_name|cluster_name|db_instance_identifier)\s*=\s*['\"][^'\"]*['\"]" lib/ --include="*.py" 2>/dev/null | grep -v "environment_suffix" | grep -v "\${" || true)
-                    ;;
-            esac
-            ;;
-        cfn)
-            NO_SUFFIX=$(grep -rniE "Name\s*:\s*['\"][^'\"]*['\"]" lib/ --include="*.yaml" --include="*.yml" --include="*.json" 2>/dev/null | grep -v "Ref.*ENVIRONMENT_SUFFIX" | grep -v "environmentSuffix" | grep -v "!Sub" || true)
-            ;;
-        tf|pulumi)
-            NO_SUFFIX=$(grep -rniE "(name|bucket|identifier)\s*=\s*['\"][^'\"]*['\"]" lib/ --include="*.tf" --include="*.hcl" --include="*.py" --include="*.ts" 2>/dev/null | grep -v "environment_suffix" | grep -v "var.environment_suffix" | grep -v "\${" || true)
-            ;;
-    esac
-    
-    if [ -n "$NO_SUFFIX" ]; then
-        echo -e "${RED}❌ ERROR: Resource names without environmentSuffix detected${NC}"
-        echo "$NO_SUFFIX" | head -5
-        ((ERROR_COUNT++))
-        ISSUES+=("Missing environmentSuffix in resource names")
-    else
-        echo -e "${GREEN}✅ All resource names include environmentSuffix${NC}"
-    fi
-fi
-
-# ============================================================================
-# Pattern 3: Circular Dependencies
+# Pattern 2: Circular Dependencies
 # ============================================================================
 echo ""
 echo "📋 Checking for potential circular dependencies..."
@@ -122,26 +113,7 @@ if [ -d "lib" ]; then
 fi
 
 # ============================================================================
-# Pattern 4: Retain Policies and DeletionProtection
-# ============================================================================
-echo ""
-echo "📋 Checking for Retain policies and DeletionProtection..."
-
-if [ -d "lib" ]; then
-    RETAIN_POLICIES=$(grep -rniE "(RemovalPolicy\.RETAIN|DeletionPolicy.*Retain|deletion_protection.*true|skip_final_snapshot.*false)" lib/ --include="*.ts" --include="*.py" --include="*.js" --include="*.yaml" --include="*.yml" --include="*.json" --include="*.hcl" --include="*.tf" 2>/dev/null || true)
-    
-    if [ -n "$RETAIN_POLICIES" ]; then
-        echo -e "${RED}❌ ERROR: Retain policies or DeletionProtection found${NC}"
-        echo "$RETAIN_POLICIES" | head -5
-        ((ERROR_COUNT++))
-        ISSUES+=("Retain policies or DeletionProtection enabled (resources must be destroyable)")
-    else
-        echo -e "${GREEN}✅ No Retain policies found${NC}"
-    fi
-fi
-
-# ============================================================================
-# Pattern 5: GuardDuty Detector Creation
+# Pattern 3: GuardDuty Detector Creation
 # ============================================================================
 echo ""
 echo "📋 Checking for GuardDuty detector creation..."
@@ -162,7 +134,7 @@ if [ -d "lib" ]; then
 fi
 
 # ============================================================================
-# Pattern 6: AWS Config IAM Policy Issues
+# Pattern 4: AWS Config IAM Policy Issues
 # ============================================================================
 echo ""
 echo "📋 Checking for AWS Config IAM policy issues..."
@@ -182,7 +154,7 @@ if [ -d "lib" ]; then
 fi
 
 # ============================================================================
-# Pattern 7: Lambda Reserved Concurrency Issues
+# Pattern 5: Lambda Reserved Concurrency Issues
 # ============================================================================
 echo ""
 echo "📋 Checking for Lambda reserved concurrency issues..."
@@ -202,7 +174,7 @@ if [ -d "lib" ]; then
 fi
 
 # ============================================================================
-# Pattern 8: AWS SDK v2 in Node.js 18+
+# Pattern 6: AWS SDK v2 in Node.js 18+
 # ============================================================================
 echo ""
 echo "📋 Checking for AWS SDK v2 usage in Node.js 18+..."
@@ -223,7 +195,7 @@ if [ -d "lib" ]; then
 fi
 
 # ============================================================================
-# Pattern 9: Expensive Resources (NAT Gateway, RDS Multi-AZ)
+# Pattern 7: Expensive Resources (NAT Gateway, RDS Multi-AZ)
 # ============================================================================
 echo ""
 echo "📋 Checking for expensive resource configurations..."

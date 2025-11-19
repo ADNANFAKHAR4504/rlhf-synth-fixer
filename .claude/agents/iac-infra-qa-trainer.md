@@ -66,22 +66,25 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 ## Master QA Pipeline (ENHANCED)
 
-**NEW**: Orchestrated QA pipeline with progress tracking and time estimation.
+**NEW**: Orchestrated QA pipeline with progress tracking, time estimation, and integrated error recovery.
 
 **Run Complete Pipeline**:
 ```bash
 bash .claude/scripts/qa-pipeline.sh
 ```
 
-**Pipeline Stages**:
-1. Worktree Verification
-2. Code Quality (Lint/Build/Synth)
-3. Pre-Deployment Validation
-4. Code Health Check
-5. Deployment
-6. Test Coverage Validation
-7. Integration Test Validation
-8. Documentation Validation
+**Pipeline Stages** (All stages now fully implemented):
+1. **Worktree Verification** - Validates worktree location and metadata.json
+2. **Code Quality (Lint/Build/Synth)** - Actually runs lint.sh, build.sh, and synth.sh per platform
+3. **Pre-Deployment Validation** - Basic checks (environmentSuffix, hardcoded values, required files)
+4. **Code Health Check** - Advanced pattern matching (empty arrays, GuardDuty, AWS Config, Lambda SDK issues)
+5. **Deployment** - Integrated with error recovery and automatic retry logic
+   - On failure: Runs deployment-failure-analysis.sh
+   - Applies fixes via enhanced-error-recovery.sh
+   - Retries up to 3 times with exponential backoff
+6. **Test Coverage Validation** - Validates 100% coverage requirement
+7. **Integration Test Validation** - Checks integration test results
+8. **Documentation Validation** - Validates MODEL_FAILURES.md immediately after generation
 
 **Features**:
 - Progress reporting at each stage
@@ -90,8 +93,12 @@ bash .claude/scripts/qa-pipeline.sh
 - Blocking condition alerts
 - Stage-by-stage status reporting
 - Comprehensive summary at completion
+- **Automatic error recovery** during deployment
+- **Integrated retry logic** for transient errors
 
 **Usage**: Run at start of QA phase to execute all validation steps in sequence with real-time progress tracking.
+
+**Note**: Pre-deployment validation (stage 3) focuses on basic checks, while code health check (stage 4) performs advanced pattern matching from lessons_learnt.md. This separation eliminates redundancy.
 
 **Before Starting**:
 - Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements
@@ -167,7 +174,7 @@ If ANY fails:
 
 **Validation**: Run Checkpoint F: environmentSuffix Usage
 ```bash
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 Validates:

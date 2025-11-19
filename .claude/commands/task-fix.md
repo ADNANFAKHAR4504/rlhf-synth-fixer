@@ -216,7 +216,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 - Verify required scripts exist and are functional:
   - `.claude/scripts/pr-manager.sh` - PR locking and status management
   - `.claude/scripts/pr-status.sh` - Visibility and monitoring
-  - `scripts/pre-validate-iac.sh` - Pre-deployment validation
+  - `.claude/scripts/pre-validate-iac.sh` - Pre-deployment validation
 - Validate agent readiness
 - **Pass criteria**: All documentation reviewed, all scripts functional
 - **Fail action**: Report BLOCKED, install missing scripts, re-validate
@@ -285,7 +285,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 **Checkpoint PR-E**: Pre-Deployment Validation
 **Quality Gate 2**: Pre-Deployment Gate
 
-- Run `scripts/pre-validate-iac.sh`
+- Run `.claude/scripts/pre-validate-iac.sh`
 - Fix common errors automatically:
   - Add environmentSuffix to resource names
   - Change RemovalPolicy.RETAIN to RemovalPolicy.DESTROY
@@ -502,7 +502,7 @@ Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fi
 ### Gate 2: Pre-Deployment Gate
 **When**: Phase 2.5 (Before any deployment attempt)
 **Requirements**:
-- ✅ Pre-deployment validation executed (scripts/pre-validate-iac.sh)
+- ✅ Pre-deployment validation executed (.claude/scripts/pre-validate-iac.sh)
 - ✅ Common errors fixed:
   - Resource naming includes environmentSuffix
   - No hardcoded environment values (prod-, dev-, stage-)

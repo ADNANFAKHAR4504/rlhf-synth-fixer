@@ -1,18 +1,47 @@
 #!/bin/bash
 
 # Pre-Deployment IaC Validation Script
-# Validates Infrastructure as Code before AWS deployment to catch common errors early
-# This reduces unnecessary AWS deployment attempts and associated costs
+# Basic validation: environmentSuffix, hardcoded values, required files
+# For advanced pattern matching, see code-health-check.sh
 
-set -e
+set -euo pipefail
 
-echo "🔍 Starting Pre-Deployment IaC Validation..."
+# Standardized error reporting
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
 
-# Check if metadata.json exists
-if [ ! -f "metadata.json" ]; then
-  echo "❌ metadata.json not found"
-  exit 1
-fi
+# Prerequisite checks
+check_prerequisites() {
+    local missing_deps=()
+    
+    if ! command -v jq &> /dev/null; then
+        missing_deps+=("jq")
+    fi
+    
+    if ! command -v grep &> /dev/null; then
+        missing_deps+=("grep")
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo -e "${RED}❌ Missing required dependencies: ${missing_deps[*]}${NC}"
+        echo "Please install missing dependencies before running this script"
+        exit 1
+    fi
+    
+    # Check if we're in a worktree
+    if [ ! -f "metadata.json" ]; then
+        echo -e "${YELLOW}⚠️  Not in worktree directory (metadata.json not found)${NC}"
+        echo "   This script should be run from worktree/synth-{task_id}/"
+        exit 1
+    fi
+}
+
+check_prerequisites
+
+echo "🔍 Starting Pre-Deployment IaC Validation (Basic Checks)..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Read metadata
 PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
@@ -120,13 +149,13 @@ echo "📋 3. Checking for Retain policies and DeletionProtection..."
 
 if [ -d "lib" ]; then
   RETAIN_POLICIES=$(grep -rniE "(RemovalPolicy\.RETAIN|DeletionPolicy.*Retain|deletion_protection.*true|skip_final_snapshot.*false)" lib/ --include="*.ts" --include="*.py" --include="*.js" --include="*.yaml" --include="*.yml" --include="*.json" --include="*.hcl" --include="*.tf" 2>/dev/null || true)
-  if [ -n "$RETAIN_POLICIES" ]; then
-    echo "❌ ERROR: Retain policies or DeletionProtection found (resources must be destroyable):"
-    echo "$RETAIN_POLICIES"
-    ((ERROR_COUNT++))
-  else
-    echo "✅ No Retain policies found"
-  fi
+    if [ -n "$RETAIN_POLICIES" ]; then
+      echo -e "${RED}❌ ERROR: Retain policies or DeletionProtection found (resources must be destroyable):${NC}"
+      echo "$RETAIN_POLICIES"
+      ((ERROR_COUNT++))
+    else
+      echo -e "${GREEN}✅ No Retain policies found${NC}"
+    fi
 fi
 
 # ============================================================================
@@ -279,15 +308,15 @@ echo "  Warnings: $WARNING_COUNT"
 echo ""
 
 if [ $ERROR_COUNT -gt 0 ]; then
-  echo "❌ Pre-deployment validation FAILED with $ERROR_COUNT error(s)"
+  echo -e "${RED}❌ Pre-deployment validation FAILED with $ERROR_COUNT error(s)${NC}"
   echo "   Please fix the errors above before attempting AWS deployment"
   exit 1
 elif [ $WARNING_COUNT -gt 3 ]; then
-  echo "⚠️  Pre-deployment validation completed with $WARNING_COUNT warnings"
+  echo -e "${YELLOW}⚠️  Pre-deployment validation completed with $WARNING_COUNT warnings${NC}"
   echo "   Consider reviewing the warnings, but proceeding with deployment"
   exit 0
 else
-  echo "✅ Pre-deployment validation PASSED"
+  echo -e "${GREEN}✅ Pre-deployment validation PASSED${NC}"
   echo "   Ready to proceed with AWS deployment"
   exit 0
 fi

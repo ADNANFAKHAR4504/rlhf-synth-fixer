@@ -1,6 +1,6 @@
 #!/bin/bash
-# Enhanced Error Recovery - Automatic retry logic and smart fix suggestions
-# Integrates with error recovery guide and lessons_learnt.md
+# Enhanced Error Recovery - Applies fixes based on error analysis
+# Integrates with deployment-failure-analysis.sh to automatically fix recoverable errors
 
 set -euo pipefail
 
@@ -8,228 +8,200 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 ERROR_TYPE="${1:-}"
-ERROR_MESSAGE="${2:-}"
+ERROR_MSG="${2:-}"
 ATTEMPT_NUMBER="${3:-1}"
 MAX_ATTEMPTS="${4:-5}"
 
-# Colors
+# Standardized colors
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Retry configuration
-INITIAL_RETRY_DELAY=30  # seconds
-MAX_RETRY_DELAY=300     # 5 minutes
-BACKOFF_MULTIPLIER=2
+# Check prerequisites
+if [ ! -f "metadata.json" ]; then
+    echo -e "${RED}❌ Not in worktree directory (metadata.json not found)${NC}"
+    exit 1
+fi
 
-# Determine error category and recovery action
-classify_error() {
-    local error_msg="$1"
-    
-    # Transient errors (can retry)
-    if echo "$error_msg" | grep -qiE "Throttling|Rate exceeded|ServiceUnavailable|RequestTimeout|Temporary"; then
-        echo "transient"
-        return
-    fi
-    
-    # Quota errors (requires escalation)
-    if echo "$error_msg" | grep -qiE "quota|limit exceeded|ServiceLimitExceeded|LimitExceeded"; then
-        echo "quota"
-        return
-    fi
-    
-    # Permission errors (requires escalation)
-    if echo "$error_msg" | grep -qiE "AccessDenied|InvalidCredentials|UnauthorizedOperation|Permission denied"; then
-        echo "permission"
-        return
-    fi
-    
-    # Dependency errors (can auto-fix)
-    if echo "$error_msg" | grep -qiE "not found|SecurityGroup.*not found|VPC.*not found|Subnet.*not found"; then
-        echo "dependency"
-        return
-    fi
-    
-    # Configuration errors (can auto-fix)
-    if echo "$error_msg" | grep -qiE "InvalidParameterValue|ValidationError|Invalid.*value"; then
-        echo "configuration"
-        return
-    fi
-    
-    # Resource conflict (can auto-fix)
-    if echo "$error_msg" | grep -qiE "AlreadyExists|ResourceConflict|BucketAlreadyExists|NameInUse"; then
-        echo "conflict"
-        return
-    fi
-    
-    # Unknown
-    echo "unknown"
-}
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json 2>/dev/null || echo "unknown")
+LANGUAGE=$(jq -r '.language // "unknown"' metadata.json 2>/dev/null || echo "unknown")
 
-# Calculate retry delay with exponential backoff
-calculate_retry_delay() {
-    local attempt=$1
-    local delay=$INITIAL_RETRY_DELAY
-    
-    for ((i=1; i<attempt; i++)); do
-        delay=$((delay * BACKOFF_MULTIPLIER))
-        if [ $delay -gt $MAX_RETRY_DELAY ]; then
-            delay=$MAX_RETRY_DELAY
-            break
-        fi
-    done
-    
-    echo $delay
-}
+echo "🔧 Enhanced Error Recovery"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Error Type: $ERROR_TYPE"
+echo "Attempt: $ATTEMPT_NUMBER / $MAX_ATTEMPTS"
+echo "Platform: $PLATFORM, Language: $LANGUAGE"
+echo ""
 
-# Apply automatic fixes based on error type
-apply_auto_fix() {
-    local error_category="$1"
-    local error_msg="$2"
-    
-    case "$error_category" in
-        "conflict")
-            echo "🔧 Applying fix for resource conflict..."
-            echo "   Adding environmentSuffix to resource names..."
-            # This would call actual fix scripts
-            return 0
+# Determine if error is recoverable
+is_recoverable() {
+    case "$ERROR_TYPE" in
+        "aws_quota"|"permission_error")
+            return 1  # Not recoverable
             ;;
-        "dependency")
-            echo "🔧 Applying fix for dependency error..."
-            echo "   Checking resource dependencies..."
-            # This would analyze and fix dependencies
-            return 0
-            ;;
-        "configuration")
-            echo "🔧 Applying fix for configuration error..."
-            echo "   Validating parameter values..."
-            # This would fix configuration issues
-            return 0
+        "transient_error"|"timeout_error")
+            return 0  # Can retry
             ;;
         *)
-            return 1  # Cannot auto-fix
+            return 0  # Can attempt fix
             ;;
     esac
 }
 
-# Escalate to user for manual intervention
-escalate_to_user() {
-    local error_type="$1"
-    local error_msg="$2"
-    local required_action="$3"
+# Apply fixes based on error type
+apply_fix() {
+    local fix_type="$1"
     
-    echo ""
-    echo "╔════════════════════════════════════════╗"
-    echo "║   USER INTERVENTION REQUIRED          ║"
-    echo "╚════════════════════════════════════════╝"
-    echo ""
-    echo "Error Type: $error_type"
-    echo "Error: $error_msg"
-    echo ""
-    echo "Required Action:"
-    echo "$required_action"
-    echo ""
-    echo "Attempt: $ATTEMPT_NUMBER / $MAX_ATTEMPTS"
-    echo ""
-    echo "Deployment paused. Type 'continue' when resolved, or 'cancel' to abort:"
-    
-    # In automated mode, log and exit
-    if [ "${AUTOMATED_MODE:-false}" = "true" ]; then
-        echo "AUTOMATED MODE: Logging escalation and exiting"
-        return 1
-    fi
-    
-    read USER_INPUT
-    
-    if [ "$USER_INPUT" = "continue" ]; then
-        return 0
-    else
-        echo "Deployment cancelled by user"
-        return 1
-    fi
+    case "$fix_type" in
+        "missing_environment_suffix")
+            echo -e "${YELLOW}⚠️  Fix: Adding environmentSuffix to resource names${NC}"
+            echo "   This requires manual code changes - please review and update"
+            return 1  # Requires manual intervention
+            ;;
+        
+        "retain_policy")
+            echo -e "${BLUE}🔧 Fix: Removing Retain policies...${NC}"
+            if [ -d "lib" ]; then
+                case "$LANGUAGE" in
+                    ts|js)
+                        # Remove RemovalPolicy.RETAIN
+                        find lib -type f \( -name "*.ts" -o -name "*.js" \) -exec sed -i.bak 's/removalPolicy:\s*RemovalPolicy\.RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' {} \;
+                        find lib -type f \( -name "*.ts" -o -name "*.js" \) -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
+                        ;;
+                    py)
+                        # Remove RemovalPolicy.RETAIN
+                        find lib -type f -name "*.py" -exec sed -i.bak 's/removal_policy=RemovalPolicy\.RETAIN/removal_policy=RemovalPolicy.DESTROY/g' {} \;
+                        find lib -type f -name "*.py" -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
+                        ;;
+                esac
+                # Clean up backup files
+                find lib -name "*.bak" -delete 2>/dev/null || true
+                echo -e "${GREEN}✅ Removed Retain policies${NC}"
+                return 0
+            fi
+            ;;
+        
+        "deletion_protection")
+            echo -e "${BLUE}🔧 Fix: Disabling deletion protection...${NC}"
+            if [ -d "lib" ]; then
+                find lib -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" -o -name "*.tf" -o -name "*.hcl" \) \
+                    -exec sed -i.bak 's/deletionProtection:\s*true/deletionProtection: false/g' {} \;
+                find lib -type f \( -name "*.py" \) \
+                    -exec sed -i.bak 's/deletion_protection=True/deletion_protection=False/g' {} \;
+                find lib -type f \( -name "*.tf" -o -name "*.hcl" \) \
+                    -exec sed -i.bak 's/deletion_protection\s*=\s*true/deletion_protection = false/g' {} \;
+                find lib -name "*.bak" -delete 2>/dev/null || true
+                echo -e "${GREEN}✅ Disabled deletion protection${NC}"
+                return 0
+            fi
+            ;;
+        
+        "guardduty_detector")
+            echo -e "${BLUE}🔧 Fix: Removing GuardDuty detector creation...${NC}"
+            echo "   GuardDuty is account-level - removing from infrastructure code"
+            if [ -d "lib" ]; then
+                # Comment out GuardDuty resources (safer than deletion)
+                case "$LANGUAGE" in
+                    ts|js)
+                        find lib -type f \( -name "*.ts" -o -name "*.js" \) \
+                            -exec sed -i.bak '/GuardDuty\|guardduty/s/^/\/\/ REMOVED: /' {} \;
+                        ;;
+                    py)
+                        find lib -type f -name "*.py" \
+                            -exec sed -i.bak '/GuardDuty\|guardduty/s/^/# REMOVED: /' {} \;
+                        ;;
+                esac
+                find lib -name "*.bak" -delete 2>/dev/null || true
+                echo -e "${GREEN}✅ Commented out GuardDuty detector${NC}"
+                return 0
+            fi
+            ;;
+        
+        "lambda_concurrency")
+            echo -e "${BLUE}🔧 Fix: Removing high Lambda reserved concurrency...${NC}"
+            if [ -d "lib" ]; then
+                case "$LANGUAGE" in
+                    ts|js)
+                        find lib -type f \( -name "*.ts" -o -name "*.js" \) \
+                            -exec sed -i.bak 's/reservedConcurrentExecutions:\s*[5-9][0-9]*/\/\/ removed: reservedConcurrentExecutions/g' {} \;
+                        ;;
+                    py)
+                        find lib -type f -name "*.py" \
+                            -exec sed -i.bak 's/reserved_concurrent_executions\s*=\s*[5-9][0-9]*/# removed: reserved_concurrent_executions/g' {} \;
+                        ;;
+                esac
+                find lib -name "*.bak" -delete 2>/dev/null || true
+                echo -e "${GREEN}✅ Removed high Lambda concurrency${NC}"
+                return 0
+            fi
+            ;;
+        
+        "aws_sdk_v2")
+            echo -e "${YELLOW}⚠️  Fix: AWS SDK v2 issue requires manual code changes${NC}"
+            echo "   Replace 'aws-sdk' with '@aws-sdk/client-*' or extract from event"
+            return 1  # Requires manual intervention
+            ;;
+        
+        "config_iam_policy")
+            echo -e "${BLUE}🔧 Fix: Updating AWS Config IAM policy name...${NC}"
+            if [ -d "lib" ]; then
+                find lib -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+                    -exec sed -i.bak 's/service-role\/ConfigRole/service-role\/AWS_ConfigRole/g' {} \;
+                find lib -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+                    -exec sed -i.bak 's/AWS_ConfigRole[^"]/service-role\/AWS_ConfigRole/g' {} \;
+                find lib -name "*.bak" -delete 2>/dev/null || true
+                echo -e "${GREEN}✅ Updated AWS Config IAM policy name${NC}"
+                return 0
+            fi
+            ;;
+        
+        "transient_error"|"timeout_error")
+            echo -e "${YELLOW}⚠️  Transient error detected - will retry${NC}"
+            return 0  # Can retry
+            ;;
+        
+        *)
+            echo -e "${YELLOW}⚠️  Unknown error type: $fix_type${NC}"
+            echo "   Manual review required"
+            return 1
+            ;;
+    esac
 }
 
-# Main recovery logic
+# Main function
 main() {
-    if [ -z "$ERROR_TYPE" ] || [ -z "$ERROR_MESSAGE" ]; then
-        echo "Usage: $0 <error_type> <error_message> [attempt_number] [max_attempts]"
+    if [ -z "$ERROR_TYPE" ]; then
+        echo "Usage: $0 <error_type> <error_msg> [attempt_number] [max_attempts]"
         echo ""
-        echo "Error Recovery with automatic retry and fix suggestions"
+        echo "Error types: missing_environment_suffix, retain_policy, deletion_protection,"
+        echo "            guardduty_detector, lambda_concurrency, aws_sdk_v2, config_iam_policy,"
+        echo "            transient_error, timeout_error, aws_quota, permission_error"
         exit 1
     fi
     
-    echo "🔍 Error Recovery Analysis"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Error Type: $ERROR_TYPE"
-    echo "Error Message: $ERROR_MESSAGE"
-    echo "Attempt: $ATTEMPT_NUMBER / $MAX_ATTEMPTS"
-    echo ""
+    if ! is_recoverable; then
+        echo -e "${RED}❌ Error type '$ERROR_TYPE' is not recoverable${NC}"
+        echo "   Requires manual intervention"
+        exit 1
+    fi
     
-    # Classify error
-    local error_category=$(classify_error "$ERROR_MESSAGE")
-    echo "Error Category: $error_category"
-    echo ""
+    if [ "$ATTEMPT_NUMBER" -ge "$MAX_ATTEMPTS" ]; then
+        echo -e "${RED}❌ Max attempts ($MAX_ATTEMPTS) reached${NC}"
+        exit 1
+    fi
     
-    # Determine recovery action
-    case "$error_category" in
-        "transient")
-            if [ $ATTEMPT_NUMBER -lt $MAX_ATTEMPTS ]; then
-                local delay=$(calculate_retry_delay $ATTEMPT_NUMBER)
-                echo -e "${YELLOW}⚠️  Transient error detected${NC}"
-                echo "   Retrying in ${delay}s (attempt $ATTEMPT_NUMBER/$MAX_ATTEMPTS)..."
-                sleep $delay
-                echo -e "${GREEN}✅ Retry delay completed - ready to retry${NC}"
-                exit 0  # Signal to retry
-            else
-                echo -e "${RED}❌ Max retries reached for transient error${NC}"
-                exit 1
-            fi
-            ;;
-        "quota")
-            escalate_to_user \
-                "AWS Quota Limit" \
-                "$ERROR_MESSAGE" \
-                "Request quota increase via AWS Support Console\nRegion: Check AWS_REGION\nResource: Identify from error message"
-            exit $?
-            ;;
-        "permission")
-            escalate_to_user \
-                "Permission Error" \
-                "$ERROR_MESSAGE" \
-                "Check IAM permissions and AWS account configuration\nVerify credentials and access policies"
-            exit $?
-            ;;
-        "dependency"|"configuration"|"conflict")
-            if apply_auto_fix "$error_category" "$ERROR_MESSAGE"; then
-                echo -e "${GREEN}✅ Auto-fix applied successfully${NC}"
-                echo "   Ready to retry deployment"
-                exit 0  # Signal to retry
-            else
-                echo -e "${RED}❌ Auto-fix failed${NC}"
-                exit 1
-            fi
-            ;;
-        "unknown")
-            if [ $ATTEMPT_NUMBER -lt $MAX_ATTEMPTS ]; then
-                echo -e "${YELLOW}⚠️  Unknown error - attempting retry${NC}"
-                local delay=$(calculate_retry_delay $ATTEMPT_NUMBER)
-                sleep $delay
-                exit 0  # Signal to retry
-            else
-                echo -e "${RED}❌ Unknown error - max retries reached${NC}"
-                echo "   Manual review required"
-                exit 1
-            fi
-            ;;
-        *)
-            echo -e "${RED}❌ Unhandled error category: $error_category${NC}"
-            exit 1
-            ;;
-    esac
+    if apply_fix "$ERROR_TYPE"; then
+        echo ""
+        echo -e "${GREEN}✅ Fix applied successfully${NC}"
+        echo "   Ready to retry deployment"
+        exit 0
+    else
+        echo ""
+        echo -e "${YELLOW}⚠️  Fix requires manual intervention${NC}"
+        exit 1
+    fi
 }
 
-# Run main function
 main "$@"
-

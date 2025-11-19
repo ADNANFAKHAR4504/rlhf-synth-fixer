@@ -195,7 +195,7 @@ echo "🔍 Verifying required scripts..."
 REQUIRED_SCRIPTS=(
   ".claude/scripts/pr-manager.sh"
   ".claude/scripts/pr-status.sh"
-  "scripts/pre-validate-iac.sh"
+  ".claude/scripts/pre-validate-iac.sh"
 )
 
 MISSING_SCRIPTS=()
@@ -243,7 +243,7 @@ else
 fi
 
 # Test pre-validate-iac.sh (if in worktree context)
-if [ -f "scripts/pre-validate-iac.sh" ]; then
+if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
   echo "✅ pre-validate-iac.sh found (will test in worktree)"
 else
   echo "⚠️ WARNING: pre-validate-iac.sh not found (may not be needed for all PRs)"
@@ -1433,11 +1433,11 @@ VALIDATION_FIXES_NEEDED=false
 
 # Step 1: Run pre-deployment validation script
 echo "🔍 Step 1: Running pre-deployment validation script..."
-if [ -f "scripts/pre-validate-iac.sh" ]; then
-  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
+  bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
   PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
 else
-  echo "⚠️ WARNING: scripts/pre-validate-iac.sh not found"
+  echo "⚠️ WARNING: .claude/scripts/pre-validate-iac.sh not found"
   echo "Skipping script validation (will rely on code analysis)"
   PRE_VALIDATE_STATUS=0
 fi
@@ -1587,8 +1587,8 @@ if [ $PRE_VALIDATE_STATUS -ne 0 ] || [ "$VALIDATION_FIXES_NEEDED" = true ]; then
   # Re-run validation after fixes
   echo ""
   echo "🔄 Re-running validation after fixes..."
-  if [ -f "scripts/pre-validate-iac.sh" ]; then
-    bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
+  if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
+    bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
     PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
   fi
   
@@ -1647,7 +1647,7 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
   # If not, run it now as fallback
   if [ ! -f "/tmp/pre-validate-output.txt" ]; then
     echo "⚠️ Pre-validation not run, running now..."
-    bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+    bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
     PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
   fi
 
@@ -1686,7 +1686,7 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
     fi
 
     # Re-run pre-validation
-    bash scripts/pre-validate-iac.sh
+    bash .claude/scripts/pre-validate-iac.sh
   fi
 
   # Setup environment
