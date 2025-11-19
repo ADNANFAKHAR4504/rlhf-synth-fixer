@@ -72,7 +72,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_lb" "main" {
-  name_prefix        = "alb-${var.environment}-${var.environment_suffix}-"
+  name               = "alb-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [var.alb_security_group_id]
@@ -88,10 +88,10 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name_prefix = "tg-${var.environment}-${var.environment_suffix}-"
-  port        = var.container_port
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
+  name     = "tg-${var.environment}-${var.environment_suffix}-${random_id.suffix.hex}"
+  port     = var.container_port
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
   target_type = "ip"
 
   health_check {
