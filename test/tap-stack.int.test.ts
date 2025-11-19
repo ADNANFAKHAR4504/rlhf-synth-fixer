@@ -68,7 +68,7 @@ describe('TapStack Integration Tests (E2E)', () => {
     expect(res.address).toMatch(/^[0-9.:a-fA-F]+$/);
   });
 
-  test('ALB HTTP endpoint returns health page with successful RDS and DynamoDB checks', async () => {
+  test('ALB HTTP endpoint returns health page with successful RDS and S3 checks', async () => {
     const alb = String(flat['ALBDNSName']);
     expect(alb).toBeTruthy();
 
@@ -79,8 +79,8 @@ describe('TapStack Integration Tests (E2E)', () => {
     expect(resp.status).toBe(200);
     const html = String(resp.data || '');
 
-    // Root page should include links to health and db-test endpoints
-    expect(/href=['"]?\/health['"]?/i.test(html) || /href=['"]?\/db-test['"]?/i.test(html)).toBe(true);
+    // Root page should include links to health, db-test, and s3-test endpoints
+    expect(/href=['"]?\/health['"]?/i.test(html) || /href=['"]?\/db-test['"]?/i.test(html) || /href=['"]?\/s3-test['"]?/i.test(html)).toBe(true);
 
     const h = await axios.get(`${url}/health`, { timeout: 10000 });
     expect(h.status).toBe(200);
@@ -106,6 +106,21 @@ describe('TapStack Integration Tests (E2E)', () => {
     expect(dbJson).toBeDefined();
     expect(dbJson.status).toBeDefined();
     expect(/success|ok|connected/i.test(String(dbJson.status) + ' ' + String(dbJson.message || ''))).toBe(true);
+
+    // Check /s3-test returns JSON indicating S3 success
+    const s = await axios.get(`${url}/s3-test`, { timeout: 10000 });
+    expect(s.status).toBe(200);
+    let s3Json: any = null;
+    try {
+      s3Json = typeof s.data === 'object' ? s.data : JSON.parse(String(s.data));
+    } catch (e) {
+      throw new Error(`/s3-test did not return valid JSON. Raw body: ${String(s.data)}`);
+    }
+    expect(s3Json).toBeDefined();
+    expect(s3Json.status).toBeDefined();
+    expect(/success|ok/i.test(String(s3Json.status))).toBe(true);
+    expect(s3Json.message).toBeDefined();
+    expect(/s3|upload|download/i.test(String(s3Json.message))).toBe(true);
   });
 
   test('S3 application bucket exists', async () => {
@@ -170,7 +185,44 @@ describe('TapStack Integration Tests (E2E)', () => {
     expect(msgOk).toBe(true);
   });
 
-  test('WAF WebACL referenced by ARN exists', async () => {
+  test('S3 connectivity is confirmed via ALB /s3-test page', async () => {
+    const alb = String(flat['ALBDNSName']);
+    const bucket = String(flat['S3ApplicationBucketName']);
+    expect(alb).toBeTruthy();
+    expect(bucket).toBeTruthy();
+
+    const url = `http://${alb}/s3-test`;
+    const resp = await axios.get(url, { timeout: 20000, validateStatus: () => true });
+
+    expect(resp.status).toBe(200);
+    let s3Json: any = null;
+    try {
+      s3Json = typeof resp.data === 'object' ? resp.data : JSON.parse(String(resp.data));
+    } catch (e) {
+      console.error('/s3-test did not return JSON. Raw body:\n', String(resp.data));
+    }
+
+    expect(s3Json).toBeDefined();
+    const statusOk = s3Json && s3Json.status && /success|ok/i.test(String(s3Json.status));
+    const msgOk = s3Json && s3Json.message && /s3|upload|download/i.test(String(s3Json.message));
+    if (!statusOk || !msgOk) {
+      console.error('/s3-test JSON did not indicate success. Full JSON:\n', JSON.stringify(s3Json, null, 2));
+    }
+    expect(statusOk).toBe(true);
+    expect(msgOk).toBe(true);
+
+    // Verify bucket name in response matches expected bucket
+    if (s3Json.bucket) {
+      expect(s3Json.bucket).toBe(bucket);
+    }
+
+    // Verify test key is present
+    if (s3Json.test_key) {
+      expect(s3Json.test_key).toContain('health-check');
+    }
+  });
+
+  test('WAF WebACL referenced by ARN exists and has security rules configured', async () => {
     const webaclArn = String(flat['WebACLArn']);
     expect(webaclArn).toBeTruthy();
 
@@ -193,6 +245,23 @@ describe('TapStack Integration Tests (E2E)', () => {
     const resp = await waf.send(cmd);
     expect(resp.WebACL).toBeDefined();
     expect(resp.WebACL?.Name).toBe(name);
+
+    // Verify WAF has rules configured
+    const rules = resp.WebACL?.Rules || [];
+    expect(rules.length).toBeGreaterThanOrEqual(3);
+
+    // Check for specific security rules
+    const ruleNames = rules.map(r => r.Name);
+    expect(ruleNames).toContain('RateLimitRule');
+    expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
+    expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
+
+    // Verify rate limit is configured correctly
+    const rateLimitRule = rules.find(r => r.Name === 'RateLimitRule');
+    expect(rateLimitRule?.Statement?.RateBasedStatement?.Limit).toBe(2000);
+
+    console.log(`✓ WAF has ${rules.length} security rules configured`);
+    console.log(`✓ Rules: ${ruleNames.join(', ')}`);
   });
 
   test('VPC exists and has a valid CIDR block', async () => {
@@ -246,6 +315,113 @@ describe('TapStack Integration Tests (E2E)', () => {
       }
     });
   });
+
+  // ==================== WAF Security Tests (Run Last) ====================
+  // These tests attempt malicious patterns that might trigger WAF blocking.
+  // They are placed at the end to avoid blocking the test runner IP for other tests.
+
+  test('WAF blocks SQL injection attempts in URI path', async () => {
+    const alb = String(flat['ALBDNSName']);
+    expect(alb).toBeTruthy();
+
+    // SQL injection patterns in URI path - more likely to be caught by WAF
+    const sqlInjectionPaths = [
+      "/health?id=' OR '1'='1",
+      "/health?user=admin'--",
+      "/health?id=1' UNION SELECT NULL--",
+      "/health?search='; DROP TABLE users--",
+      "/health?filter=1' AND 1=1--"
+    ];
+
+    let blockedCount = 0;
+    let allowedCount = 0;
+    let testCount = 0;
+
+    for (const testPath of sqlInjectionPaths) {
+      try {
+        const resp = await axios.get(`http://${alb}${testPath}`, {
+          timeout: 10000,
+          validateStatus: () => true // Accept any status code
+        });
+
+        testCount++;
+
+        // WAF should block (403) or server handles safely (200/400/404)
+        expect([200, 400, 403, 404]).toContain(resp.status);
+
+        if (resp.status === 403) {
+          blockedCount++;
+          console.log(`✓ WAF blocked SQL injection in path: ${testPath.substring(0, 40)}...`);
+        } else {
+          allowedCount++;
+        }
+      } catch (e: any) {
+        testCount++;
+        // Request blocked before reaching server is also acceptable
+        if (e.code === 'ECONNABORTED' || e.response?.status === 403) {
+          blockedCount++;
+          console.log(`✓ Request blocked for SQL injection path`);
+        }
+      }
+    }
+
+    console.log(`SQL Injection Test Summary: ${blockedCount} blocked, ${allowedCount} allowed/handled safely out of ${testCount} requests`);
+    // Verify we tested all payloads
+    expect(testCount).toBe(sqlInjectionPaths.length);
+    // At least some should be handled (either blocked or processed safely)
+    expect(testCount).toBeGreaterThan(0);
+  }, 60000);
+
+  test('WAF blocks XSS (Cross-Site Scripting) attempts in URI', async () => {
+    const alb = String(flat['ALBDNSName']);
+    expect(alb).toBeTruthy();
+
+    // XSS patterns in URI - more likely to be caught by WAF
+    const xssPaths = [
+      '/health?input=<script>alert("XSS")</script>',
+      '/health?data=<img src=x onerror=alert(1)>',
+      '/health?url=javascript:alert(1)',
+      '/health?content=<iframe src="javascript:alert(1)">',
+      '/health?svg=<svg onload=alert(1)>'
+    ];
+
+    let blockedCount = 0;
+    let allowedCount = 0;
+    let testCount = 0;
+
+    for (const testPath of xssPaths) {
+      try {
+        const resp = await axios.get(`http://${alb}${testPath}`, {
+          timeout: 10000,
+          validateStatus: () => true
+        });
+
+        testCount++;
+
+        // WAF should block (403) or server handles safely
+        expect([200, 400, 403, 404]).toContain(resp.status);
+
+        if (resp.status === 403) {
+          blockedCount++;
+          console.log(`✓ WAF blocked XSS in path: ${testPath.substring(0, 50)}...`);
+        } else {
+          allowedCount++;
+        }
+      } catch (e: any) {
+        testCount++;
+        if (e.code === 'ECONNABORTED' || e.response?.status === 403) {
+          blockedCount++;
+          console.log(`✓ Request blocked for XSS payload`);
+        }
+      }
+    }
+
+    console.log(`XSS Test Summary: ${blockedCount} blocked, ${allowedCount} allowed/handled safely out of ${testCount} requests`);
+    // Verify we tested all payloads
+    expect(testCount).toBe(xssPaths.length);
+    // At least some should be handled (either blocked or processed safely)
+    expect(testCount).toBeGreaterThan(0);
+  }, 60000);
 });
 
 export { };

@@ -18,11 +18,10 @@
     "CloudWatch LogGroup",
     "VPC"
   ],
-   "coverage": {
+  "coverage": {
     "lines": 100,
     "branches": 100
   },
-  "training_quality": 10,
   "author": "kanishkah-turing",
   "dockerS3Location": ""
 }

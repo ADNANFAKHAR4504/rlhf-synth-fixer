@@ -1225,9 +1225,11 @@ Resources:
             AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
             DB_SECRET_ARN = os.environ.get("DB_SECRET_ARN", "")
             DB_ENDPOINT_PARAMETER = os.environ.get("DB_ENDPOINT_PARAMETER", "/ecommerce/database/endpoint")
+            S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", "")
 
             ssm = boto3.client("ssm", region_name=AWS_REGION)
             secrets = boto3.client("secretsmanager", region_name=AWS_REGION)
+            s3 = boto3.client("s3", region_name=AWS_REGION)
 
             def get_db_connection():
                 endpoint = ssm.get_parameter(Name=DB_ENDPOINT_PARAMETER)["Parameter"]["Value"]
@@ -1249,7 +1251,7 @@ Resources:
                         self.send_header("Content-type", "text/html")
                         self.end_headers()
                         html = f"<h1>E-Commerce Application ({ENVIRONMENT})</h1>" \
-                               "<p><a href='/health'>Health Check</a> | <a href='/db-test'>Database Test</a></p>"
+                               "<p><a href='/health'>Health Check</a> | <a href='/db-test'>Database Test</a> | <a href='/s3-test'>S3 Test</a></p>"
                         self.wfile.write(html.encode())
                     elif self.path == "/health":
                         self.send_response(200)
@@ -1259,6 +1261,8 @@ Resources:
                         self.wfile.write(json.dumps(response).encode())
                     elif self.path.startswith("/db-test"):
                         self.handle_db_test()
+                    elif self.path.startswith("/s3-test"):
+                        self.handle_s3_test()
                     else:
                         super().do_GET()
 
@@ -1284,6 +1288,48 @@ Resources:
                     self.end_headers()
                     self.wfile.write(json.dumps(response).encode())
 
+                def handle_s3_test(self):
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    try:
+                        if not S3_BUCKET_NAME:
+                            raise Exception("S3_BUCKET_NAME environment variable not set")
+                        
+                        # Test file upload
+                        test_key = "health-check/test-file.txt"
+                        test_content = "E-Commerce health check test file"
+                        
+                        s3.put_object(
+                            Bucket=S3_BUCKET_NAME,
+                            Key=test_key,
+                            Body=test_content.encode('utf-8')
+                        )
+                        
+                        # Test file download
+                        s3_response = s3.get_object(Bucket=S3_BUCKET_NAME, Key=test_key)
+                        downloaded_content = s3_response['Body'].read().decode('utf-8')
+                        
+                        # Verify content matches
+                        if downloaded_content == test_content:
+                            response = {
+                                "status": "success",
+                                "message": "S3 upload and download successful",
+                                "bucket": S3_BUCKET_NAME,
+                                "test_key": test_key
+                            }
+                        else:
+                            response = {
+                                "status": "error",
+                                "message": "Content mismatch between upload and download"
+                            }
+                    except Exception as error:
+                        response = {
+                            "status": "error",
+                            "message": f"S3 operation failed: {error}"
+                        }
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode())
+
             if __name__ == "__main__":
                 PORT = 80
                 with socketserver.TCPServer(("", PORT), Handler) as httpd:
@@ -1299,6 +1345,7 @@ Resources:
             export AWS_DEFAULT_REGION=$REGION
             export DB_SECRET_ARN="${DBSecret}"
             export DB_ENDPOINT_PARAMETER="/ecommerce/database/endpoint"
+            export S3_BUCKET_NAME="${S3ApplicationBucket}"
 
             nohup python3 /home/ec2-user/server.py > /home/ec2-user/server.log 2>&1 &
         TagSpecifications:
