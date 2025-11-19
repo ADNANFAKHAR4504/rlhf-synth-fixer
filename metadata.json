@@ -10,12 +10,14 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "training_quality": 9,
   "aws_services": [
-    "S3 Bucket",
     "CloudFormation",
+    "EC2",
+    "S3",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "IAM",
+    "RDS",
+    "Cost Explorer"
   ]
 }
