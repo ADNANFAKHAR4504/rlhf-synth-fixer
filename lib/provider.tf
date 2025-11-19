@@ -28,3 +28,33 @@ provider "aws" {
     }
   }
 }
+
+# Primary region provider (us-east-1)
+provider "aws" {
+  alias  = "primary"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Environment = "DR"
+      Region      = "primary"
+      CostCenter  = "payments"
+      ManagedBy   = "Terraform"
+    }
+  }
+}
+
+# Secondary region provider (us-west-2)
+provider "aws" {
+  alias  = "secondary"
+  region = "us-west-2"
+
+  default_tags {
+    tags = {
+      Environment = "DR"
+      Region      = "secondary"
+      CostCenter  = "payments"
+      ManagedBy   = "Terraform"
+    }
+  }
+}

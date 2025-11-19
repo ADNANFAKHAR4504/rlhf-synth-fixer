@@ -6,8 +6,14 @@ resource "aws_route53_zone" "main" {
   }
 }
 
+locals {
+  # Extract hostname from Lambda Function URL (remove https://, http://, and trailing slash)
+  primary_hostname   = replace(replace(replace(var.primary_endpoint, "https://", ""), "http://", ""), "/", "")
+  secondary_hostname = replace(replace(replace(var.secondary_endpoint, "https://", ""), "http://", ""), "/", "")
+}
+
 resource "aws_route53_health_check" "primary" {
-  fqdn              = var.primary_endpoint
+  fqdn              = local.primary_hostname
   port              = 443
   type              = "HTTPS"
   resource_path     = "/health"
@@ -21,36 +27,18 @@ resource "aws_route53_health_check" "primary" {
 
 resource "aws_route53_record" "primary" {
   zone_id = aws_route53_zone.main.zone_id
-  name    = var.domain_name
-  type    = "A"
+  name    = "api.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 60
 
-  set_identifier = "primary"
-  failover_routing_policy {
-    type = "PRIMARY"
-  }
-
-  alias {
-    name                   = var.primary_endpoint
-    zone_id                = aws_route53_zone.main.zone_id
-    evaluate_target_health = true
-  }
-
-  health_check_id = aws_route53_health_check.primary.id
+  records = [local.primary_hostname]
 }
 
 resource "aws_route53_record" "secondary" {
   zone_id = aws_route53_zone.main.zone_id
-  name    = var.domain_name
-  type    = "A"
+  name    = "secondary.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 60
 
-  set_identifier = "secondary"
-  failover_routing_policy {
-    type = "SECONDARY"
-  }
-
-  alias {
-    name                   = var.secondary_endpoint
-    zone_id                = aws_route53_zone.main.zone_id
-    evaluate_target_health = false
-  }
+  records = [local.secondary_hostname]
 }

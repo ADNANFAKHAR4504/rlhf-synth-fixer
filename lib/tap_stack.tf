@@ -1,32 +1,71 @@
-# Primary region provider (us-east-1)
-provider "aws" {
-  alias  = "primary"
-  region = "us-east-1"
+# tap_stack.tf
 
-  default_tags {
-    tags = {
-      Environment = "DR"
-      Region      = "primary"
-      CostCenter  = "payments"
-      ManagedBy   = "Terraform"
-    }
+# ===========================
+# VARIABLES
+# ===========================
+
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "dev"
+}
+
+variable "repository" {
+  description = "Repository name for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "commit_author" {
+  description = "Commit author for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "pr_number" {
+  description = "PR number for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "team" {
+  description = "Team name for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "alert_email_addresses" {
+  description = "Email addresses for CloudWatch alarm notifications"
+  type        = list(string)
+  default     = []
+}
+
+variable "master_username" {
+  description = "Master username for Aurora database"
+  type        = string
+  default     = "postgres"
+  sensitive   = true
+}
+
+variable "master_password" {
+  description = "Master password for Aurora database (minimum 8 characters)"
+  type        = string
+  sensitive   = true
+  validation {
+    condition     = length(var.master_password) >= 8
+    error_message = "Master password must be at least 8 characters"
   }
 }
 
-# Secondary region provider (us-west-2)
-provider "aws" {
-  alias  = "secondary"
-  region = "us-west-2"
-
-  default_tags {
-    tags = {
-      Environment = "DR"
-      Region      = "secondary"
-      CostCenter  = "payments"
-      ManagedBy   = "Terraform"
-    }
-  }
-}
+# ===========================
+# RESOURCES
+# ===========================
 
 # Primary region VPC module
 module "vpc_primary" {
@@ -103,7 +142,7 @@ module "aurora_global" {
   environment_suffix        = var.environment_suffix
   global_cluster_identifier = "payment-dr-global-cluster-${var.environment_suffix}"
   engine                    = "aurora-postgresql"
-  engine_version            = "13.7"
+  engine_version            = "15.12"
   database_name             = "payments"
   master_username           = var.master_username
   master_password           = var.master_password
@@ -191,7 +230,6 @@ module "lambda_primary" {
   environment_variables = {
     AURORA_ENDPOINT     = module.aurora_global.primary_cluster_endpoint
     DYNAMODB_TABLE_NAME = module.dynamodb_global.table_name
-    AWS_REGION          = "us-east-1"
   }
 }
 
@@ -219,7 +257,6 @@ module "lambda_secondary" {
   environment_variables = {
     AURORA_ENDPOINT     = module.aurora_global.secondary_cluster_endpoint
     DYNAMODB_TABLE_NAME = module.dynamodb_global.table_name
-    AWS_REGION          = "us-west-2"
   }
 }
 
@@ -232,7 +269,7 @@ module "route53_failover" {
   }
 
   environment_suffix = var.environment_suffix
-  domain_name        = "payments-${var.environment_suffix}.example.com"
+  domain_name        = "payment-dr-${var.environment_suffix}.internal"
 
   primary_endpoint   = module.lambda_primary.function_url
   secondary_endpoint = module.lambda_secondary.function_url
@@ -275,3 +312,85 @@ module "cloudwatch_secondary" {
   sns_topic_name  = "dr-payment-alerts-secondary-${var.environment_suffix}"
   email_endpoints = var.alert_email_addresses
 }
+
+# ===========================
+# OUTPUTS
+# ===========================
+
+output "environment_suffix" {
+  description = "Environment suffix used for this deployment"
+  value       = var.environment_suffix
+}
+
+output "primary_vpc_id" {
+  description = "Primary region VPC ID"
+  value       = module.vpc_primary.vpc_id
+}
+
+output "secondary_vpc_id" {
+  description = "Secondary region VPC ID"
+  value       = module.vpc_secondary.vpc_id
+}
+
+output "aurora_global_cluster_id" {
+  description = "Aurora Global Database cluster identifier"
+  value       = module.aurora_global.global_cluster_id
+}
+
+output "primary_aurora_endpoint" {
+  description = "Primary Aurora cluster endpoint"
+  value       = module.aurora_global.primary_cluster_endpoint
+  sensitive   = true
+}
+
+output "secondary_aurora_endpoint" {
+  description = "Secondary Aurora cluster endpoint"
+  value       = module.aurora_global.secondary_cluster_endpoint
+  sensitive   = true
+}
+
+output "dynamodb_table_name" {
+  description = "DynamoDB global table name"
+  value       = module.dynamodb_global.table_name
+}
+
+output "primary_lambda_function_name" {
+  description = "Primary Lambda function name"
+  value       = module.lambda_primary.function_name
+}
+
+output "secondary_lambda_function_name" {
+  description = "Secondary Lambda function name"
+  value       = module.lambda_secondary.function_name
+}
+
+output "route53_zone_id" {
+  description = "Route 53 hosted zone ID"
+  value       = module.route53_failover.zone_id
+}
+
+output "route53_domain_name" {
+  description = "Route 53 domain name for payment system"
+  value       = module.route53_failover.domain_name
+}
+
+output "primary_sns_topic_arn" {
+  description = "Primary region SNS topic ARN for alerts"
+  value       = module.cloudwatch_primary.sns_topic_arn
+}
+
+output "secondary_sns_topic_arn" {
+  description = "Secondary region SNS topic ARN for alerts"
+  value       = module.cloudwatch_secondary.sns_topic_arn
+}
+
+output "lambda_iam_role_arn" {
+  description = "IAM role ARN used by Lambda functions"
+  value       = module.lambda_iam_role.role_arn
+}
+
+output "vpc_peering_connection_id" {
+  description = "VPC peering connection ID between regions"
+  value       = aws_vpc_peering_connection.primary_to_secondary.id
+}
+

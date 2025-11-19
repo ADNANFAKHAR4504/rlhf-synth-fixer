@@ -91,6 +91,25 @@ resource "aws_db_subnet_group" "secondary" {
   }
 }
 
+resource "aws_kms_key" "secondary" {
+  provider = aws.secondary
+
+  description             = "KMS key for Aurora secondary cluster encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name = "${var.secondary_cluster_identifier}-kms-key"
+  }
+}
+
+resource "aws_kms_alias" "secondary" {
+  provider = aws.secondary
+
+  name          = "alias/${var.secondary_cluster_identifier}-kms"
+  target_key_id = aws_kms_key.secondary.key_id
+}
+
 resource "aws_rds_cluster" "secondary" {
   provider = aws.secondary
 
@@ -105,6 +124,7 @@ resource "aws_rds_cluster" "secondary" {
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
   storage_encrypted               = true
+  kms_key_id                      = aws_kms_key.secondary.arn
   deletion_protection             = false
 
   skip_final_snapshot       = true
