@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T12:00:00-08:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
@@ -27,5 +27,6 @@
     "lines": 100,
     "branches": 100
   },
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "training_qulity": 9
 }
