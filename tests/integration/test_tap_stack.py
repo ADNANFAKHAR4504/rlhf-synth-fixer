@@ -19,10 +19,22 @@ class TestTapStackIntegration:
     @pytest.fixture(scope="class")
     def outputs(self):
         """Load outputs from flat-outputs.json."""
-        outputs_path = Path(__file__).parent.parent.parent / "flat-outputs.json"
-
-        if not outputs_path.exists():
-            pytest.skip("Infrastructure not deployed")
+        # Try multiple possible locations for the outputs file
+        possible_paths = [
+            Path(__file__).parent.parent.parent / "cfn-outputs" / "flat-outputs.json",
+            Path(__file__).parent.parent.parent / "flat-outputs.json",
+            Path("cfn-outputs/flat-outputs.json"),
+            Path("flat-outputs.json"),
+        ]
+        
+        outputs_path = None
+        for path in possible_paths:
+            if path.exists():
+                outputs_path = path
+                break
+        
+        if not outputs_path:
+            pytest.skip(f"Infrastructure not deployed - flat-outputs.json not found in any of: {[str(p) for p in possible_paths]}")
 
         with open(outputs_path, 'r') as f:
             raw_outputs = json.load(f)

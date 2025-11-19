@@ -1,4 +1,68 @@
-"""Payment Processing Migration Stack - CDKTF Python Implementation."""
+"""Payment Processing Migration Stack - CDKTF Python Implementation.
+
+SECURITY CONSIDERATIONS:
+========================
+This implementation uses ENVIRONMENT VARIABLES for sensitive credentials.
+Passwords are NEVER hardcoded in the source code.
+
+REQUIRED ENVIRONMENT VARIABLES:
+--------------------------------
+Dev/Test Environments:
+  export DB_PASSWORD="your-secure-database-password"
+  export DB_USERNAME="dbadmin"  # Optional, defaults to 'dbadmin'
+  export DB_NAME="payment_db"    # Optional, defaults to 'payment_db'
+  export DMS_SOURCE_PASSWORD="source-database-password"
+  export DMS_SOURCE_SERVER="10.0.0.10"  # Optional, defaults to placeholder
+  export DMS_SOURCE_USERNAME="replication_user"  # Optional
+  export DMS_SOURCE_DB="payment_db"  # Optional
+
+Loading from AWS Secrets Manager:
+  export DB_PASSWORD=$(aws secretsmanager get-secret-value \
+    --secret-id payment-db-secret-${ENV_SUFFIX} \
+    --query 'SecretString' --output text | jq -r '.password')
+
+PRODUCTION SECURITY REQUIREMENTS:
+----------------------------------
+1. Database Passwords:
+   - Use AWS RDS managed secrets: set manage_master_user_password=True
+   - OR load from AWS Secrets Manager via environment variables (shown above)
+   - OR reference secrets directly via secret ARN
+   - Enable automatic password rotation (30-90 day intervals)
+   - Use IAM database authentication where possible
+
+2. DMS Endpoint Credentials:
+   - Load from environment variables sourced from Secrets Manager
+   - OR use secrets_manager_secret_id parameter to reference stored secrets
+   - OR use secrets_manager_access_role_arn for IAM-based authentication
+   - Never commit credentials to version control or CI/CD configs
+
+3. Additional Security Best Practices:
+   - Store all secrets in AWS Secrets Manager or HashiCorp Vault
+   - Enable AWS Secrets Manager automatic rotation
+   - Use AWS KMS for encryption keys
+   - Implement least-privilege IAM policies
+   - Enable AWS CloudTrail for audit logging
+   - Use AWS Systems Manager Parameter Store for non-sensitive configs
+   - Enable MFA for production deployments
+   - Regularly audit and rotate all credentials and secrets
+   - Use separate secrets per environment
+
+4. Environment Separation:
+   - Use separate AWS accounts for dev/test/prod
+   - Implement AWS Organizations SCPs for security guardrails
+   - Use different encryption keys per environment
+   - Never share credentials across environments
+   - Use CI/CD pipeline secrets management (GitHub Secrets, GitLab CI/CD vars)
+
+5. CI/CD Integration:
+   - Store credentials as encrypted secrets in your CI/CD platform
+   - Inject environment variables at runtime
+   - Never log or print sensitive values
+   - Use short-lived credentials where possible
+
+For production deployment, refer to AWS Security Best Practices:
+https://docs.aws.amazon.com/prescriptive-guidance/latest/security-reference-architecture/
+"""
 
 import json
 from typing import Dict, List, Optional
@@ -419,13 +483,22 @@ class TapStack(TerraformStack):
             }
         )
 
+        # SECURITY: Use environment variable for database password
+        # Set DB_PASSWORD environment variable or use Secrets Manager in production
+        # Example: export DB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id payment-db-secret --query SecretString --output text)
+        import os as os_env
+        db_password = os_env.getenv('DB_PASSWORD', 'REPLACE_WITH_SECURE_PASSWORD')
+        
+        if db_password == 'REPLACE_WITH_SECURE_PASSWORD':
+            print("WARNING: Using placeholder password. Set DB_PASSWORD environment variable or configure Secrets Manager.")
+        
         db_credentials = {
-            "username": "dbadmin",
-            "password": "ChangeMe123!",  # In production, use generated passwords
+            "username": os_env.getenv('DB_USERNAME', 'dbadmin'),
+            "password": db_password,
             "engine": "aurora-mysql",
             "host": "",  # Will be updated after cluster creation
             "port": 3306,
-            "dbname": "payment_db"
+            "dbname": os_env.getenv('DB_NAME', 'payment_db')
         }
 
         SecretsmanagerSecretVersion(
@@ -449,15 +522,17 @@ class TapStack(TerraformStack):
         )
 
         # RDS Aurora MySQL Cluster
+        # SECURITY: Password loaded from environment variable
+        # PRODUCTION: Use manage_master_user_password=True for RDS-managed secrets
         aurora_cluster = RdsCluster(
             self,
             f"aurora_cluster_{environment_suffix}",
             cluster_identifier=f"payment-aurora-{environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
-            database_name="payment_db",
-            master_username="dbadmin",
-            master_password="ChangeMe123!",  # In production, use Secrets Manager
+            database_name=os_env.getenv('DB_NAME', 'payment_db'),
+            master_username=os_env.getenv('DB_USERNAME', 'dbadmin'),
+            master_password=db_password,  # Uses environment variable DB_PASSWORD
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
             skip_final_snapshot=True,  # Required for destroyability
@@ -755,17 +830,23 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
         )
 
         # DMS Source Endpoint (on-premises database)
+        # SECURITY: Credentials loaded from environment variables
+        # PRODUCTION: Use secrets_manager_secret_id or secrets_manager_access_role_arn
+        dms_source_password = os_env.getenv('DMS_SOURCE_PASSWORD', 'REPLACE_WITH_SOURCE_PASSWORD')
+        if dms_source_password == 'REPLACE_WITH_SOURCE_PASSWORD':
+            print("WARNING: Using placeholder DMS source password. Set DMS_SOURCE_PASSWORD environment variable.")
+        
         source_endpoint = DmsEndpoint(
             self,
             f"dms_source_{environment_suffix}",
             endpoint_id=f"payment-source-{environment_suffix}",
             endpoint_type="source",
             engine_name="mysql",
-            server_name="10.0.0.10",  # Placeholder - on-premises DB IP via VPN
+            server_name=os_env.getenv('DMS_SOURCE_SERVER', '10.0.0.10'),  # Set via environment
             port=3306,
-            database_name="payment_db",
-            username="replication_user",
-            password="ChangeMe123!",  # In production, use Secrets Manager
+            database_name=os_env.getenv('DMS_SOURCE_DB', 'payment_db'),
+            username=os_env.getenv('DMS_SOURCE_USERNAME', 'replication_user'),
+            password=dms_source_password,  # Uses environment variable DMS_SOURCE_PASSWORD
             ssl_mode="none",
             tags={
                 "Name": f"payment-source-endpoint-{environment_suffix}",
@@ -774,6 +855,8 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
         )
 
         # DMS Target Endpoint (Aurora)
+        # SECURITY: Uses same credentials as RDS cluster from environment variables
+        # PRODUCTION: Use secrets_manager_secret_id or IAM database authentication
         target_endpoint = DmsEndpoint(
             self,
             f"dms_target_{environment_suffix}",
@@ -782,9 +865,9 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             engine_name="aurora",
             server_name=aurora_cluster.endpoint,
             port=3306,
-            database_name="payment_db",
-            username="dbadmin",
-            password="ChangeMe123!",  # In production, use Secrets Manager
+            database_name=os_env.getenv('DB_NAME', 'payment_db'),
+            username=os_env.getenv('DB_USERNAME', 'dbadmin'),
+            password=db_password,  # Reuses RDS password from environment variable DB_PASSWORD
             ssl_mode="none",
             tags={
                 "Name": f"payment-target-endpoint-{environment_suffix}",
