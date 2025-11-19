@@ -19,5 +19,11 @@
     "IAM",
     "RDS",
     "Cost Explorer"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
