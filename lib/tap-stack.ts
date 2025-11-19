@@ -606,31 +606,32 @@ export class TapStack extends pulumi.ComponentResource {
     const clusterAutoscalerRole = new aws.iam.Role(
       `eks-cluster-autoscaler-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: pulumi.all([
-          cluster.core.oidcProvider,
-        ]).apply(([oidcProvider]) => {
-          const provider = oidcProvider as any;
-          const oidcUrl = provider.url.replace('https://', '');
-          const oidcArn = provider.arn;
+        assumeRolePolicy: cluster.core.oidcProvider.apply((oidcProvider: any) => {
+          return pulumi.all([
+            pulumi.output(oidcProvider.url),
+            pulumi.output(oidcProvider.arn)
+          ]).apply(([url, arn]) => {
+            const oidcUrl = url.replace('https://', '');
 
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: oidcArn,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${oidcUrl}:sub`]:
-                      'system:serviceaccount:kube-system:cluster-autoscaler',
-                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${oidcUrl}:sub`]:
+                        'system:serviceaccount:kube-system:cluster-autoscaler',
+                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+                    },
                   },
                 },
-              },
-            ],
+              ],
+            });
           });
         }),
         tags: {
@@ -692,31 +693,32 @@ export class TapStack extends pulumi.ComponentResource {
     const albControllerRole = new aws.iam.Role(
       `eks-alb-controller-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: pulumi.all([
-          cluster.core.oidcProvider,
-        ]).apply(([oidcProvider]) => {
-          const provider = oidcProvider as any;
-          const oidcUrl = provider.url.replace('https://', '');
-          const oidcArn = provider.arn;
+        assumeRolePolicy: cluster.core.oidcProvider.apply((oidcProvider: any) => {
+          return pulumi.all([
+            pulumi.output(oidcProvider.url),
+            pulumi.output(oidcProvider.arn)
+          ]).apply(([url, arn]) => {
+            const oidcUrl = url.replace('https://', '');
 
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: oidcArn,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${oidcUrl}:sub`]:
-                      'system:serviceaccount:kube-system:aws-load-balancer-controller',
-                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${oidcUrl}:sub`]:
+                        'system:serviceaccount:kube-system:aws-load-balancer-controller',
+                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+                    },
                   },
                 },
-              },
-            ],
+              ],
+            });
           });
         }),
         tags: {
