@@ -24,11 +24,6 @@
             "Default": "10.0.0.0/16",
             "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
         },
-        "PrimaryRegion": {
-            "Type": "String",
-            "Description": "Primary AWS region",
-            "Default": "us-east-1"
-        },
         "ReplicaRegion": {
             "Type": "String",
             "Description": "Replica AWS region for DR",
@@ -37,6 +32,7 @@
         "DevOpsEmail": {
             "Type": "String",
             "Description": "Email address for DevOps team notifications",
+            "Default": "devops@example.com",
             "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
         },
         "Application": {
@@ -56,50 +52,12 @@
         }
     },
     "Conditions": {
-        "IsProduction": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "prod"
-            ]
-        },
-        "IsStaging": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "staging"
-            ]
-        },
         "IsDevelopment": {
             "Fn::Equals": [
                 {
                     "Ref": "Environment"
                 },
                 "dev"
-            ]
-        },
-        "IsProductionOrStaging": {
-            "Fn::Or": [
-                {
-                    "Condition": "IsProduction"
-                },
-                {
-                    "Condition": "IsStaging"
-                }
-            ]
-        },
-        "HasTransitGateway": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "TransitGatewayId"
-                        },
-                        ""
-                    ]
-                }
             ]
         }
     },
@@ -158,7 +116,6 @@
         },
         "SecurityStack": {
             "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": "NetworkStack",
             "Properties": {
                 "TemplateURL": {
                     "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/security-stack.yml"
@@ -207,10 +164,6 @@
         },
         "DatabaseStack": {
             "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": [
-                "NetworkStack",
-                "SecurityStack"
-            ],
             "Properties": {
                 "TemplateURL": {
                     "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/database-stack.yml"
@@ -325,8 +278,6 @@
         "ComputeStack": {
             "Type": "AWS::CloudFormation::Stack",
             "DependsOn": [
-                "NetworkStack",
-                "SecurityStack",
                 "DatabaseStack"
             ],
             "Properties": {
@@ -421,7 +372,6 @@
         },
         "MonitoringStack": {
             "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": "SecurityStack",
             "Properties": {
                 "TemplateURL": {
                     "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/monitoring-stack.yml"

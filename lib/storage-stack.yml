@@ -10,10 +10,6 @@ Parameters:
     Type: String
     Description: 'Environment name'
 
-  ReplicaRegion:
-    Type: String
-    Description: 'Replica region for cross-region replication'
-
   Application:
     Type: String
     Description: 'Application name'

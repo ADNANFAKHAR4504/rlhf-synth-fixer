@@ -10,10 +10,6 @@ Parameters:
     Type: String
     Description: 'Environment name'
 
-  VpcId:
-    Type: String
-    Description: 'VPC ID'
-
   PrivateSubnetIds:
     Type: CommaDelimitedList
     Description: 'Private subnet IDs'
@@ -21,11 +17,6 @@ Parameters:
   DatabaseSecurityGroupId:
     Type: String
     Description: 'Database security group ID'
-
-  DBInstanceClass:
-    Type: String
-    Description: 'Database instance class'
-    Default: 'db.t3.medium'
 
   Application:
     Type: String
