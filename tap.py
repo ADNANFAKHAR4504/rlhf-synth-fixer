@@ -11,9 +11,11 @@ different deployment environments (development, staging, production, etc.).
 """
 import os
 from datetime import datetime, timezone
+
 import pulumi
 import pulumi_aws as aws
 from pulumi import Config, ResourceOptions
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
@@ -54,7 +56,7 @@ domain_name = config.get('domain_name')
 
 # Create the main stack
 stack = TapStack(
-    name="pulumi-infra",
+    name="TapStack",
     args=TapStackArgs(
         environment_suffix=environment_suffix,
         tags=default_tags,
