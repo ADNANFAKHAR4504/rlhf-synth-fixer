@@ -92,7 +92,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should create an alias for the master key', () => {
       const alias = getResource('MasterKMSKeyAlias');
       expect(alias.Type).toBe('AWS::KMS::Alias');
-      expect(alias.Properties.AliasName['Fn::Sub']).toBe('alias/ecommerce-${Environment}');
+      expect(alias.Properties.AliasName['Fn::Sub']).toBe('alias/ecommerce-${EnvironmentSuffix}');
       expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'MasterKMSKey' });
     });
   });
@@ -355,14 +355,14 @@ describe('TapStack CloudFormation Template', () => {
     test('database connection details should be stored securely', () => {
       const secret = getResource('DBSecret');
       expect(secret.Type).toBe('AWS::SecretsManager::Secret');
-      
+
       // Verify auto-generated password configuration
       expect(secret.Properties.GenerateSecretString).toBeDefined();
       expect(secret.Properties.GenerateSecretString.SecretStringTemplate).toBeDefined();
       expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
       expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
       expect(secret.Properties.GenerateSecretString.RequireEachIncludedType).toBe(true);
-      
+
       // SecretString should NOT exist when using GenerateSecretString
       expect(secret.Properties.SecretString).toBeUndefined();
 
@@ -420,7 +420,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('outputs should export names scoped by environment', () => {
-      expect(template.Outputs.VPCId.Export.Name['Fn::Sub']).toBe('ECommerce-VPC-${Environment}');
+      expect(template.Outputs.VPCId.Export.Name['Fn::Sub']).toBe('ECommerce-VPC-${EnvironmentSuffix}');
       expect(template.Outputs.WebACLArn.Value).toEqual({ 'Fn::GetAtt': ['WebACL', 'Arn'] });
       expect(template.Outputs.ALBDNSName.Value).toEqual({
         'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'],

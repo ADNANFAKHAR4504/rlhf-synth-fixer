@@ -180,7 +180,7 @@
             "Type": "AWS::EC2::KeyPair",
             "Properties": {
                 "KeyName": {
-                    "Fn::Sub": "ecommerce-keypair-${Environment}"
+                    "Fn::Sub": "ecommerce-keypair-${EnvironmentSuffix}"
                 },
                 "Tags": [
                     {
@@ -266,7 +266,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/ecommerce-${Environment}"
+                    "Fn::Sub": "alias/ecommerce-${EnvironmentSuffix}"
                 },
                 "TargetKeyId": {
                     "Ref": "MasterKMSKey"
@@ -283,7 +283,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ECommerce-VPC-${Environment}"
+                            "Fn::Sub": "ECommerce-VPC-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -325,7 +325,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Public-Subnet-1-${Environment}"
+                            "Fn::Sub": "Public-Subnet-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -367,7 +367,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Public-Subnet-2-${Environment}"
+                            "Fn::Sub": "Public-Subnet-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -408,7 +408,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Private-Subnet-1-${Environment}"
+                            "Fn::Sub": "Private-Subnet-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -449,7 +449,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Private-Subnet-2-${Environment}"
+                            "Fn::Sub": "Private-Subnet-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -478,7 +478,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ECommerce-IGW-${Environment}"
+                            "Fn::Sub": "ECommerce-IGW-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -520,7 +520,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "NAT-EIP-1-${Environment}"
+                            "Fn::Sub": "NAT-EIP-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -551,7 +551,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "NAT-EIP-2-${Environment}"
+                            "Fn::Sub": "NAT-EIP-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -589,7 +589,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "NAT-Gateway-1-${Environment}"
+                            "Fn::Sub": "NAT-Gateway-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -627,7 +627,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "NAT-Gateway-2-${Environment}"
+                            "Fn::Sub": "NAT-Gateway-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -659,7 +659,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Public-Routes-${Environment}"
+                            "Fn::Sub": "Public-Routes-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -726,7 +726,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Private-Routes-1-${Environment}"
+                            "Fn::Sub": "Private-Routes-1-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -781,7 +781,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Private-Routes-2-${Environment}"
+                            "Fn::Sub": "Private-Routes-2-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -853,7 +853,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ALB-SG-${Environment}"
+                            "Fn::Sub": "ALB-SG-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -904,7 +904,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "WebServer-SG-${Environment}"
+                            "Fn::Sub": "WebServer-SG-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -937,7 +937,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Database-SG-${Environment}"
+                            "Fn::Sub": "Database-SG-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -979,7 +979,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Lambda-SG-${Environment}"
+                            "Fn::Sub": "Lambda-SG-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -1402,7 +1402,7 @@
             ],
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "ECommerce-Trail-${Environment}"
+                    "Fn::Sub": "ECommerce-Trail-${EnvironmentSuffix}"
                 },
                 "S3BucketName": {
                     "Ref": "CloudTrailBucket"
@@ -1589,7 +1589,7 @@
             "Condition": "CreateConfigRecorderCondition",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-Recorder-${Environment}"
+                    "Fn::Sub": "ECommerce-Recorder-${EnvironmentSuffix}"
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [
@@ -1608,7 +1608,7 @@
             "Condition": "CreateConfigDeliveryChannelAndRecorderCondition",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-DeliveryChannel-${Environment}"
+                    "Fn::Sub": "ECommerce-DeliveryChannel-${EnvironmentSuffix}"
                 },
                 "S3BucketName": {
                     "Ref": "ConfigBucket"
@@ -1821,7 +1821,7 @@
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
                 "ManagedPolicyName": {
-                    "Fn::Sub": "RequireMFA-${Environment}"
+                    "Fn::Sub": "RequireMFA-${EnvironmentSuffix}"
                 },
                 "Description": "Enforces MFA for IAM users",
                 "PolicyDocument": {
@@ -1854,7 +1854,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/ecommerce/database/credentials-${Environment}"
+                    "Fn::Sub": "/ecommerce/database/credentials-${EnvironmentSuffix}"
                 },
                 "Description": "RDS Database Credentials with auto-generated password",
                 "GenerateSecretString": {
@@ -1891,7 +1891,7 @@
             "DependsOn": "S3LoggingBucketPolicy",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-ALB-${Environment}"
+                    "Fn::Sub": "ECommerce-ALB-${EnvironmentSuffix}"
                 },
                 "Type": "application",
                 "Scheme": "internet-facing",
@@ -1956,7 +1956,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-TG-${Environment}"
+                    "Fn::Sub": "ECommerce-TG-${EnvironmentSuffix}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -2013,7 +2013,7 @@
             "Type": "AWS::WAFv2::WebACL",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-WebACL-${Environment}"
+                    "Fn::Sub": "ECommerce-WebACL-${EnvironmentSuffix}"
                 },
                 "Scope": "REGIONAL",
                 "DefaultAction": {
@@ -2079,7 +2079,7 @@
                     "SampledRequestsEnabled": true,
                     "CloudWatchMetricsEnabled": true,
                     "MetricName": {
-                        "Fn::Sub": "ECommerce-WebACL-${Environment}"
+                        "Fn::Sub": "ECommerce-WebACL-${EnvironmentSuffix}"
                     }
                 },
                 "Tags": [
@@ -2120,7 +2120,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "ECommerce-LT-${Environment}"
+                    "Fn::Sub": "ECommerce-LT-${EnvironmentSuffix}"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
@@ -2145,7 +2145,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nset -euo pipefail\nyum update -y\nyum install -y python3 python3-pip awscli amazon-cloudwatch-agent\n\npip3 install --upgrade pip\npip3 install boto3 psycopg2-binary\n\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"metrics\": {\n    \"namespace\": \"ECommerce/${Environment}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\"name\": \"cpu_usage_idle\", \"rename\": \"CPU_IDLE\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_iowait\", \"rename\": \"CPU_IOWAIT\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\"name\": \"used_percent\", \"rename\": \"DISK_USED\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\"name\": \"mem_used_percent\", \"rename\": \"MEM_USED\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/ecommerce/${Environment}\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          },\n          {\n            \"file_path\": \"/home/ec2-user/server.log\",\n            \"log_group_name\": \"/aws/ec2/ecommerce/${Environment}\",\n            \"log_stream_name\": \"{instance_id}/server\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\ncat > /home/ec2-user/server.py <<'EOF'\nimport http.server\nimport socketserver\nimport json\nimport os\nimport boto3\nimport psycopg2\nimport json\n\nENVIRONMENT = os.environ.get(\"ENVIRONMENT\", \"production\")\nAWS_REGION = os.environ.get(\"AWS_DEFAULT_REGION\", \"us-east-1\")\nDB_SECRET_ARN = os.environ.get(\"DB_SECRET_ARN\", \"\")\nDB_ENDPOINT_PARAMETER = os.environ.get(\"DB_ENDPOINT_PARAMETER\", \"/ecommerce/database/endpoint\")\n\nssm = boto3.client(\"ssm\", region_name=AWS_REGION)\nsecrets = boto3.client(\"secretsmanager\", region_name=AWS_REGION)\n\ndef get_db_connection():\n    endpoint = ssm.get_parameter(Name=DB_ENDPOINT_PARAMETER)[\"Parameter\"][\"Value\"]\n    secret_value = secrets.get_secret_value(SecretId=DB_SECRET_ARN)\n    secret = json.loads(secret_value[\"SecretString\"])\n    return psycopg2.connect(\n        host=endpoint,\n        user=secret[\"username\"],\n        password=secret[\"password\"],\n        dbname=\"postgres\",\n        connect_timeout=5,\n        sslmode=\"require\"\n    )\n\nclass Handler(http.server.SimpleHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == \"/\":\n            self.send_response(200)\n            self.send_header(\"Content-type\", \"text/html\")\n            self.end_headers()\n            html = f\"<h1>E-Commerce Application ({ENVIRONMENT})</h1>\" \\\n                   \"<p><a href='/health'>Health Check</a> | <a href='/db-test'>Database Test</a></p>\"\n            self.wfile.write(html.encode())\n        elif self.path == \"/health\":\n            self.send_response(200)\n            self.send_header(\"Content-type\", \"application/json\")\n            self.end_headers()\n            response = {\"status\": \"healthy\", \"service\": \"python-server\", \"environment\": ENVIRONMENT}\n            self.wfile.write(json.dumps(response).encode())\n        elif self.path.startswith(\"/db-test\"):\n            self.handle_db_test()\n        else:\n            super().do_GET()\n\n    def handle_db_test(self):\n        self.send_response(200)\n        self.send_header(\"Content-type\", \"application/json\")\n        try:\n            connection = get_db_connection()\n            cursor = connection.cursor()\n            cursor.execute(\"SELECT 1\")\n            cursor.fetchone()\n            cursor.close()\n            connection.close()\n            response = {\n                \"status\": \"success\",\n                \"message\": \"Database connection successful\"\n            }\n        except Exception as error:\n            response = {\n                \"status\": \"error\",\n                \"message\": f\"{error}\"\n            }\n        self.end_headers()\n        self.wfile.write(json.dumps(response).encode())\n\nif __name__ == \"__main__\":\n    PORT = 80\n    with socketserver.TCPServer((\"\", PORT), Handler) as httpd:\n        print(f\"Server running on port {PORT}\")\n        httpd.serve_forever()\nEOF\n\nchown ec2-user:ec2-user /home/ec2-user/server.py\nchmod +x /home/ec2-user/server.py\n\nREGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)\nexport ENVIRONMENT=\"${Environment}\"\nexport AWS_DEFAULT_REGION=$REGION\nexport DB_SECRET_ARN=\"${DBSecret}\"\nexport DB_ENDPOINT_PARAMETER=\"/ecommerce/database/endpoint\"\n\nnohup python3 /home/ec2-user/server.py > /home/ec2-user/server.log 2>&1 &\n"
+                            "Fn::Sub": "#!/bin/bash\nset -euo pipefail\nyum update -y\nyum install -y python3 python3-pip awscli amazon-cloudwatch-agent\n\npip3 install --upgrade pip\npip3 install boto3 psycopg2-binary\n\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"metrics\": {\n    \"namespace\": \"ECommerce/${EnvironmentSuffix}\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\"name\": \"cpu_usage_idle\", \"rename\": \"CPU_IDLE\", \"unit\": \"Percent\"},\n          {\"name\": \"cpu_usage_iowait\", \"rename\": \"CPU_IOWAIT\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\"name\": \"used_percent\", \"rename\": \"DISK_USED\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\"name\": \"mem_used_percent\", \"rename\": \"MEM_USED\", \"unit\": \"Percent\"}\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/ecommerce/${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          },\n          {\n            \"file_path\": \"/home/ec2-user/server.log\",\n            \"log_group_name\": \"/aws/ec2/ecommerce/${EnvironmentSuffix}\",\n            \"log_stream_name\": \"{instance_id}/server\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\ncat > /home/ec2-user/server.py <<'EOF'\nimport http.server\nimport socketserver\nimport json\nimport os\nimport boto3\nimport psycopg2\nimport json\n\nENVIRONMENT = os.environ.get(\"ENVIRONMENT\", \"production\")\nAWS_REGION = os.environ.get(\"AWS_DEFAULT_REGION\", \"us-east-1\")\nDB_SECRET_ARN = os.environ.get(\"DB_SECRET_ARN\", \"\")\nDB_ENDPOINT_PARAMETER = os.environ.get(\"DB_ENDPOINT_PARAMETER\", \"/ecommerce/database/endpoint\")\n\nssm = boto3.client(\"ssm\", region_name=AWS_REGION)\nsecrets = boto3.client(\"secretsmanager\", region_name=AWS_REGION)\n\ndef get_db_connection():\n    endpoint = ssm.get_parameter(Name=DB_ENDPOINT_PARAMETER)[\"Parameter\"][\"Value\"]\n    secret_value = secrets.get_secret_value(SecretId=DB_SECRET_ARN)\n    secret = json.loads(secret_value[\"SecretString\"])\n    return psycopg2.connect(\n        host=endpoint,\n        user=secret[\"username\"],\n        password=secret[\"password\"],\n        dbname=\"postgres\",\n        connect_timeout=5,\n        sslmode=\"require\"\n    )\n\nclass Handler(http.server.SimpleHTTPRequestHandler):\n    def do_GET(self):\n        if self.path == \"/\":\n            self.send_response(200)\n            self.send_header(\"Content-type\", \"text/html\")\n            self.end_headers()\n            html = f\"<h1>E-Commerce Application ({ENVIRONMENT})</h1>\" \\\n                   \"<p><a href='/health'>Health Check</a> | <a href='/db-test'>Database Test</a></p>\"\n            self.wfile.write(html.encode())\n        elif self.path == \"/health\":\n            self.send_response(200)\n            self.send_header(\"Content-type\", \"application/json\")\n            self.end_headers()\n            response = {\"status\": \"healthy\", \"service\": \"python-server\", \"environment\": ENVIRONMENT}\n            self.wfile.write(json.dumps(response).encode())\n        elif self.path.startswith(\"/db-test\"):\n            self.handle_db_test()\n        else:\n            super().do_GET()\n\n    def handle_db_test(self):\n        self.send_response(200)\n        self.send_header(\"Content-type\", \"application/json\")\n        try:\n            connection = get_db_connection()\n            cursor = connection.cursor()\n            cursor.execute(\"SELECT 1\")\n            cursor.fetchone()\n            cursor.close()\n            connection.close()\n            response = {\n                \"status\": \"success\",\n                \"message\": \"Database connection successful\"\n            }\n        except Exception as error:\n            response = {\n                \"status\": \"error\",\n                \"message\": f\"{error}\"\n            }\n        self.end_headers()\n        self.wfile.write(json.dumps(response).encode())\n\nif __name__ == \"__main__\":\n    PORT = 80\n    with socketserver.TCPServer((\"\", PORT), Handler) as httpd:\n        print(f\"Server running on port {PORT}\")\n        httpd.serve_forever()\nEOF\n\nchown ec2-user:ec2-user /home/ec2-user/server.py\nchmod +x /home/ec2-user/server.py\n\nREGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)\nexport ENVIRONMENT=\"${EnvironmentSuffix}\"\nexport AWS_DEFAULT_REGION=$REGION\nexport DB_SECRET_ARN=\"${DBSecret}\"\nexport DB_ENDPOINT_PARAMETER=\"/ecommerce/database/endpoint\"\n\nnohup python3 /home/ec2-user/server.py > /home/ec2-user/server.log 2>&1 &\n"
                         }
                     },
                     "TagSpecifications": [
@@ -2155,7 +2155,7 @@
                                 {
                                     "Key": "Name",
                                     "Value": {
-                                        "Fn::Sub": "ECommerce-Instance-${Environment}"
+                                        "Fn::Sub": "ECommerce-Instance-${EnvironmentSuffix}"
                                     }
                                 },
                                 {
@@ -2182,7 +2182,7 @@
                                 {
                                     "Key": "Name",
                                     "Value": {
-                                        "Fn::Sub": "ECommerce-Volume-${Environment}"
+                                        "Fn::Sub": "ECommerce-Volume-${EnvironmentSuffix}"
                                     }
                                 },
                                 {
@@ -2218,7 +2218,7 @@
             },
             "Properties": {
                 "AutoScalingGroupName": {
-                    "Fn::Sub": "ECommerce-ASG-${Environment}"
+                    "Fn::Sub": "ECommerce-ASG-${EnvironmentSuffix}"
                 },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
@@ -2258,7 +2258,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "ECommerce-ASG-Instance-${Environment}"
+                            "Fn::Sub": "ECommerce-ASG-Instance-${EnvironmentSuffix}"
                         },
                         "PropagateAtLaunch": true
                     },
@@ -2362,7 +2362,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "ECommerce-DBSubnet-${Environment}"
+                    "Fn::Sub": "ECommerce-DBSubnet-${EnvironmentSuffix}"
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -2399,7 +2399,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "ecommerce-db-${Environment}"
+                    "Fn::Sub": "ecommerce-db-${EnvironmentSuffix}"
                 },
                 "DBName": "ecommercedb",
                 "Engine": "postgres",
@@ -2483,7 +2483,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/ECommerce-Function-${Environment}"
+                    "Fn::Sub": "/aws/lambda/ECommerce-Function-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30
             }
@@ -2493,7 +2493,7 @@
             "DependsOn": "LambdaLogGroup",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "ECommerce-Function-${Environment}"
+                    "Fn::Sub": "ECommerce-Function-${EnvironmentSuffix}"
                 },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
@@ -2562,7 +2562,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/ec2/ecommerce/${Environment}"
+                    "Fn::Sub": "/aws/ec2/ecommerce/${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30
             }
@@ -2573,7 +2573,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/rds/instance/ecommerce-db-${Environment}/postgresql"
+                    "Fn::Sub": "/aws/rds/instance/ecommerce-db-${EnvironmentSuffix}/postgresql"
                 },
                 "RetentionInDays": 30
             }
@@ -2587,7 +2587,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-VPC-${Environment}"
+                    "Fn::Sub": "ECommerce-VPC-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2601,7 +2601,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-ALB-${Environment}"
+                    "Fn::Sub": "ECommerce-ALB-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2612,7 +2612,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-S3App-${Environment}"
+                    "Fn::Sub": "ECommerce-S3App-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2626,7 +2626,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-RDS-${Environment}"
+                    "Fn::Sub": "ECommerce-RDS-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2640,7 +2640,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-Lambda-${Environment}"
+                    "Fn::Sub": "ECommerce-Lambda-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2651,7 +2651,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-Trail-${Environment}"
+                    "Fn::Sub": "ECommerce-Trail-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2663,7 +2663,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-Config-${Environment}"
+                    "Fn::Sub": "ECommerce-Config-${EnvironmentSuffix}"
                 }
             }
         },
@@ -2677,7 +2677,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "ECommerce-WAF-${Environment}"
+                    "Fn::Sub": "ECommerce-WAF-${EnvironmentSuffix}"
                 }
             }
         }
