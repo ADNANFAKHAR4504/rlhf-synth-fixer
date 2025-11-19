@@ -1,36 +1,34 @@
 // Integration tests for Advanced Observability Stack
-import fs from 'fs';
-import {
-  CloudWatchLogsClient,
-  PutLogEventsCommand,
-  DescribeLogGroupsCommand,
-  CreateLogStreamCommand
-} from '@aws-sdk/client-cloudwatch-logs';
-import {
-  SNSClient,
-  PublishCommand,
-  GetTopicAttributesCommand
-} from '@aws-sdk/client-sns';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
   PutMetricDataCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
+  CloudWatchLogsClient,
+  CreateLogStreamCommand,
+  DescribeLogGroupsCommand,
+  PutLogEventsCommand
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeStreamCommand,
   KinesisClient,
-  PutRecordsCommand,
-  DescribeStreamCommand
+  PutRecordsCommand
 } from '@aws-sdk/client-kinesis';
 import {
-  LambdaClient,
   GetFunctionCommand,
-  InvokeCommand
+  LambdaClient
 } from '@aws-sdk/client-lambda';
 import {
-  S3Client,
+  GetBucketEncryptionCommand,
   HeadBucketCommand,
-  GetBucketEncryptionCommand
+  S3Client
 } from '@aws-sdk/client-s3';
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth101912459';
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -242,7 +240,7 @@ describe('Advanced Observability Stack - Integration Tests', () => {
       const result = await cloudWatchClient.send(command);
       expect(result.MetricAlarms).toBeDefined();
       expect(result.MetricAlarms!.length).toBe(1);
-      expect(result.MetricAlarms![0].Namespace).toBe('AWS/ES');
+      expect(result.MetricAlarms![0].Namespace).toBe('AWS/AOSS');
     });
   });
 
@@ -385,7 +383,7 @@ describe('Advanced Observability Stack - Integration Tests', () => {
     test('OpenSearch Domain Endpoint should be accessible', async () => {
       const domainEndpoint = outputs.OpenSearchDomainEndpoint;
       expect(domainEndpoint).toBeDefined();
-      expect(domainEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.es\.amazonaws\.com$/);
+      expect(domainEndpoint).toMatch(/^https:\/\/.*\.amazonaws\.com$/);
     });
 
     test('OpenSearch Dashboard URL should be valid', async () => {

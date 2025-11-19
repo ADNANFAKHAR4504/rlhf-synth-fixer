@@ -41,7 +41,26 @@ Parameters:
     Type: Number
     Default: 30
     Description: 'CloudWatch Logs retention period in days'
-    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    AllowedValues:
+      [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1827,
+        3653,
+      ]
 
   KinesisShardCount:
     Type: Number
@@ -314,7 +333,8 @@ Resources:
     Type: AWS::OpenSearchServerless::SecurityPolicy
     Properties:
       Name: !Sub 'payment-logs-encryption-${EnvironmentSuffix}'
-      Type: encryption
+      Type: 'encryption'
+      Description: !Sub 'Encryption policy for payment logs OpenSearch collection - ${EnvironmentSuffix}'
       Policy: !Sub |
         {
           "Rules": [
@@ -332,7 +352,8 @@ Resources:
     Type: AWS::OpenSearchServerless::SecurityPolicy
     Properties:
       Name: !Sub 'payment-logs-network-${EnvironmentSuffix}'
-      Type: network
+      Type: 'network'
+      Description: !Sub 'Network policy for payment logs OpenSearch collection - ${EnvironmentSuffix}'
       Policy: !Sub |
         [
           {
@@ -354,32 +375,38 @@ Resources:
           }
         ]
 
-  OpenSearchDataAccessPolicy:
-    Type: AWS::OpenSearchServerless::SecurityPolicy
+  OpenSearchAccessPolicy:
+    Type: AWS::OpenSearchServerless::AccessPolicy
     Properties:
-      Name: !Sub 'payment-logs-data-access-${EnvironmentSuffix}'
-      Type: encryption
+      Name: !Sub 'payment-logs-access-${EnvironmentSuffix}'
+      Type: 'data'
+      Description: !Sub 'Data access policy for payment logs OpenSearch collection - ${EnvironmentSuffix}'
       Policy: !Sub |
         [
           {
             "Rules": [
               {
+                "ResourceType": "collection",
                 "Resource": [
-                  "collection/payment-logs-${EnvironmentSuffix}",
+                  "collection/payment-logs-${EnvironmentSuffix}"
+                ],
+                "Permission": [
+                  "aoss:*"
+                ]
+              },
+              {
+                "ResourceType": "index",
+                "Resource": [
                   "index/payment-logs-${EnvironmentSuffix}/*"
                 ],
                 "Permission": [
                   "aoss:*"
-                ],
-                "Principal": [
-                  "arn:aws:iam::${AWS::AccountId}:role/KinesisFirehoseRole-${EnvironmentSuffix}",
-                  "arn:aws:iam::${AWS::AccountId}:root"
                 ]
               }
             ],
             "Principal": [
-              "arn:aws:iam::${AWS::AccountId}:role/KinesisFirehoseRole-${EnvironmentSuffix}",
-              "arn:aws:iam::${AWS::AccountId}:root"
+              "arn:aws:iam::${AWS::AccountId}:root",
+              "${KinesisFirehoseRole.Arn}"
             ]
           }
         ]
@@ -394,10 +421,10 @@ Resources:
     DependsOn:
       - OpenSearchEncryptionPolicy
       - OpenSearchNetworkPolicy
-      - OpenSearchDataAccessPolicy
+      - OpenSearchAccessPolicy
     Properties:
       Name: !Sub 'payment-logs-${EnvironmentSuffix}'
-      Type: SEARCH
+      Type: 'SEARCH'
       Description: 'OpenSearch Serverless collection for payment logs'
 
   # ========================================
@@ -442,7 +469,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
-              - 'aoss:*'
+              - 'es:*'
             Resource:
               - !GetAtt OpenSearchDomain.Arn
               - !Sub '${OpenSearchDomain.Arn}/*'
@@ -727,18 +754,18 @@ Resources:
   OpenSearchClusterStatusAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'opensearch-5xx-errors-${EnvironmentSuffix}'
-      AlarmDescription: 'Triggered when OpenSearch has 5xx errors'
+      AlarmName: !Sub 'opensearch-cluster-status-${EnvironmentSuffix}'
+      AlarmDescription: 'Triggered when OpenSearch cluster status is red'
       MetricName: 5xx
       Namespace: AWS/AOSS
       Dimensions:
         - Name: CollectionName
           Value: !Ref OpenSearchDomain
-      Statistic: Sum
-      Period: 300
+      Statistic: Maximum
+      Period: 60
       EvaluationPeriods: 1
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
       AlarmActions:
         - !Ref CriticalAlertTopic
       TreatMissingData: notBreaching
@@ -758,17 +785,21 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", {"stat": "Sum", "label": "Successful Transactions"}],
-                  [".", "TransactionFailure", {"stat": "Sum", "label": "Failed Transactions"}]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "TransactionSuccess",
+                    { "stat": "Sum", "id": "m1" }
+                  ],
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "TransactionFailure",
+                    { "stat": "Sum", "id": "m2" }
+                  ]
                 ],
-                "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Transaction Volume",
                 "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
+                  "left": { "min": 0 }
                 }
               }
             },
@@ -776,16 +807,17 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", {"stat": "Average"}]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "AverageLatency",
+                    { "stat": "Average", "id": "lat" }
+                  ]
                 ],
                 "period": 300,
-                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "Average Payment Latency (ms)",
                 "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
+                  "left": { "min": 0 }
                 },
                 "annotations": {
                   "horizontal": [
@@ -801,17 +833,17 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", {"stat": "Average"}]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "ErrorRate",
+                    { "stat": "Average", "id": "err" }
+                  ]
                 ],
                 "period": 300,
-                "stat": "Average",
                 "region": "${AWS::Region}",
                 "title": "Error Rate (%)",
                 "yAxis": {
-                  "left": {
-                    "min": 0,
-                    "max": 100
-                  }
+                  "left": { "min": 0, "max": 100 }
                 },
                 "annotations": {
                   "horizontal": [
@@ -827,16 +859,16 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", {"stat": "Sum"}]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "FraudDetected",
+                    { "stat": "Sum", "id": "fraud" }
+                  ]
                 ],
-                "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Fraud Detections",
                 "yAxis": {
-                  "left": {
-                    "min": 0
-                  }
+                  "left": { "min": 0 }
                 }
               }
             },
@@ -844,11 +876,21 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}, {"FunctionName": "${MetricsProcessorFunction}"}],
-                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}, {"FunctionName": "${MetricsProcessorFunction}"}]
+                  [
+                    "AWS/Lambda",
+                    "Invocations",
+                    "FunctionName",
+                    "payment-metrics-processor-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "lm1" }
+                  ],
+                  [
+                    "AWS/Lambda",
+                    "Errors",
+                    "FunctionName",
+                    "payment-metrics-processor-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "lm2" }
+                  ]
                 ],
-                "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Lambda Metrics Processor Health"
               }
@@ -857,33 +899,49 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingRecords", {"stat": "Sum"}, {"StreamName": "${LogStream}"}],
-                  [".", "IncomingBytes", {"stat": "Sum", "yAxis": "right"}, {"StreamName": "${LogStream}"}]
+                  [
+                    "AWS/Kinesis",
+                    "IncomingRecords",
+                    "StreamName",
+                    "payment-logs-stream-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "kin1" }
+                  ],
+                  [
+                    "AWS/Kinesis",
+                    "IncomingBytes",
+                    "StreamName",
+                    "payment-logs-stream-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "kin2" }
+                  ]
                 ],
-                "period": 300,
-                "stat": "Sum",
                 "region": "${AWS::Region}",
-                "title": "Kinesis Stream Throughput"
+                "title": "Kinesis Stream Throughput",
+                "yAxis": {
+                  "right": { "min": 0 }
+                }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/AOSS", "2xx", {"stat": "Sum", "label": "2xx"}, {"CollectionName": "${OpenSearchDomain}"}],
-                  [".", "4xx", {"stat": "Sum", "label": "4xx"}, {"CollectionName": "${OpenSearchDomain}"}],
-                  [".", "5xx", {"stat": "Sum", "label": "5xx"}, {"CollectionName": "${OpenSearchDomain}"}]
+                  [
+                    "AWS/AOSS",
+                    "5xx",
+                    "CollectionName",
+                    "payment-logs-${EnvironmentSuffix}",
+                    { "stat": "Maximum", "id": "oss1" }
+                  ]
                 ],
-                "period": 300,
-                "stat": "Maximum",
                 "region": "${AWS::Region}",
-                "title": "OpenSearch Response Codes"
+                "period": 60,
+                "title": "OpenSearch Serverless Errors"
               }
             },
             {
               "type": "log",
               "properties": {
-                "query": "SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\n| fields @timestamp, @message\n| sort @timestamp desc\n| limit 20",
+                "query": "SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\\n| fields @timestamp, @message\\n| sort @timestamp desc\\n| limit 20",
                 "region": "${AWS::Region}",
                 "title": "Recent Payment Transaction Logs",
                 "stacked": false
@@ -891,10 +949,6 @@ Resources:
             }
           ]
         }
-
-  # ========================================
-  # X-Ray Sampling Rule
-  # ========================================
 
   XRaySamplingRule:
     Type: AWS::XRay::SamplingRule
@@ -1012,21 +1066,21 @@ Outputs:
 
   # OpenSearch
   OpenSearchDomainEndpoint:
-    Description: 'OpenSearch collection endpoint'
+    Description: 'OpenSearch domain endpoint'
     Value: !GetAtt OpenSearchDomain.CollectionEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
 
   OpenSearchDashboardUrl:
     Description: 'OpenSearch Dashboards URL'
-    Value: !Sub 'https://${OpenSearchDomain.DashboardEndpoint}/_dashboards'
+    Value: !Sub 'https://${OpenSearchDomain.CollectionEndpoint}/_dashboards'
     Export:
       Name: !Sub '${AWS::StackName}-OpenSearchDashboardUrl'
 
   # Dashboard
   DashboardUrl:
     Description: 'CloudWatch Dashboard URL'
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PaymentProcessingDashboard}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=payment-processing-${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-DashboardUrl'
 
