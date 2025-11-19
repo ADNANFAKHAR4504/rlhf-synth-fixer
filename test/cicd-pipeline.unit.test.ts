@@ -68,7 +68,7 @@ describe('CI/CD Pipeline CloudFormation Template - Unit Tests', () => {
     test('parameter validation patterns should be secure', () => {
       expect(template.Parameters.GitHubOwner.AllowedPattern).toBe('^[a-zA-Z0-9_.-]+$');
       expect(template.Parameters.RepositoryName.AllowedPattern).toBe('^[a-zA-Z0-9_.-]+$');
-      expect(template.Parameters.BranchName.AllowedPattern).toBe('^[a-zA-Z0-9_./\\\\-]+$');
+      expect(template.Parameters.BranchName.AllowedPattern).toBe('^[a-zA-Z0-9_./\\-]+$');
     });
   });
 
@@ -244,7 +244,7 @@ describe('CI/CD Pipeline CloudFormation Template - Unit Tests', () => {
 
     test('KMS key should have proper security configuration', () => {
       const kmsKey = template.Resources.ArtifactEncryptionKey;
-      expect(kmsKey.Properties.Description).toContain('Customer-managed KMS key');
+      expect(kmsKey.Properties.Description['Fn::Sub']).toContain('Customer-managed KMS key');
       expect(kmsKey.Properties.PendingWindowInDays).toBe(7);
       expect(kmsKey.DeletionPolicy).toBe('Delete');
     });
