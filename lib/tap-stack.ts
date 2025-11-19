@@ -106,6 +106,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: pulumi.interpolate`/aws/lambda/transaction-validator-${environmentSuffix}`,
         retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
         tags: tags,
       },
       { parent: this }
@@ -116,6 +117,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: pulumi.interpolate`/aws/lambda/fraud-detection-${environmentSuffix}`,
         retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
         tags: tags,
       },
       { parent: this }
@@ -126,6 +128,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: pulumi.interpolate`/aws/lambda/notification-${environmentSuffix}`,
         retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
         tags: tags,
       },
       { parent: this }
