@@ -1,5 +1,0 @@
-config:
-  iac-test-automations:primaryCertificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/test-primary"
-  iac-test-automations:secondaryCertificateArn: "arn:aws:acm:us-east-2:123456789012:certificate/test-secondary"
-  iac-test-automations:primaryDomain: "api-test.example.com"
-  iac-test-automations:secondaryDomain: "api-test-secondary.example.com"

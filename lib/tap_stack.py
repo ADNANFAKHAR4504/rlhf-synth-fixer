@@ -507,14 +507,26 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self.primary_api_method, provider=self.primary_provider)
         )
         
+        # FIX: Create Deployment WITHOUT stage_name
         self.primary_api_deployment = aws.apigateway.Deployment(
             f'api-deployment-primary-{self.environment_suffix}',
             rest_api=self.primary_api.id,
-            stage_name='prod',
             opts=ResourceOptions(
                 parent=self.primary_api,
                 provider=self.primary_provider,
                 depends_on=[self.primary_api_integration]
+            )
+        )
+        
+        # FIX: Create Stage separately
+        self.primary_api_stage = aws.apigateway.Stage(
+            f'api-stage-primary-{self.environment_suffix}',
+            rest_api=self.primary_api.id,
+            deployment=self.primary_api_deployment.id,
+            stage_name='prod',
+            opts=ResourceOptions(
+                parent=self.primary_api_deployment,
+                provider=self.primary_provider
             )
         )
         
@@ -534,7 +546,7 @@ class TapStack(ComponentResource):
             self.primary_base_path_mapping = aws.apigateway.BasePathMapping(
                 f'api-mapping-primary-{self.environment_suffix}',
                 rest_api=self.primary_api.id,
-                stage_name=self.primary_api_deployment.stage_name,
+                stage_name=self.primary_api_stage.stage_name,  # FIX: Use stage.stage_name
                 domain_name=self.primary_domain_name.domain_name,
                 opts=ResourceOptions(parent=self.primary_domain_name, provider=self.primary_provider)
             )
@@ -575,14 +587,26 @@ class TapStack(ComponentResource):
             opts=ResourceOptions(parent=self.secondary_api_method, provider=self.secondary_provider)
         )
         
+        # FIX: Create Deployment WITHOUT stage_name
         self.secondary_api_deployment = aws.apigateway.Deployment(
             f'api-deployment-secondary-{self.environment_suffix}',
             rest_api=self.secondary_api.id,
-            stage_name='prod',
             opts=ResourceOptions(
                 parent=self.secondary_api,
                 provider=self.secondary_provider,
                 depends_on=[self.secondary_api_integration]
+            )
+        )
+        
+        # FIX: Create Stage separately
+        self.secondary_api_stage = aws.apigateway.Stage(
+            f'api-stage-secondary-{self.environment_suffix}',
+            rest_api=self.secondary_api.id,
+            deployment=self.secondary_api_deployment.id,
+            stage_name='prod',
+            opts=ResourceOptions(
+                parent=self.secondary_api_deployment,
+                provider=self.secondary_provider
             )
         )
         
@@ -601,7 +625,7 @@ class TapStack(ComponentResource):
             self.secondary_base_path_mapping = aws.apigateway.BasePathMapping(
                 f'api-mapping-secondary-{self.environment_suffix}',
                 rest_api=self.secondary_api.id,
-                stage_name=self.secondary_api_deployment.stage_name,
+                stage_name=self.secondary_api_stage.stage_name,  # FIX: Use stage.stage_name
                 domain_name=self.secondary_domain_name.domain_name,
                 opts=ResourceOptions(parent=self.secondary_domain_name, provider=self.secondary_provider)
             )
