@@ -1,0 +1,32 @@
+{
+  "task_id": "101912381",
+  "status": "in_progress",
+  "platform": "cfn",
+  "language": "yaml",
+  "difficulty": "expert",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "web-application-deployment"
+  ],
+  "po_id": "101912381",
+  "team": "synth",
+  "startedAt": "2025-11-19",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "training_quality": 10,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "ALB",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "ApplicationAutoScaling"
+  ]
+}
