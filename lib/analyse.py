@@ -15,6 +15,8 @@ import boto3
 from botocore.exceptions import ClientError
 from tabulate import tabulate
 import os
+import matplotlib.pyplot as plt
+import pandas as pd
 
 # Configure logging
 logging.basicConfig(
@@ -307,17 +309,16 @@ class CloudWatchLogsAnalyzer:
 
         # Issue 11: No Saved Queries
         if self._is_application_log(lg_name):
-            # Note: AWS CloudWatch Logs does not provide API to check saved queries per log group
-            # This is a limitation of the AWS API
-            issues.append(
-                {
-                    "type": "no_saved_queries",
-                    "description": "No saved Log Insights queries (cannot verify programmatically)",
-                    "recommendation": "Save common troubleshooting queries in Log Insights for faster incident response",
-                    "severity": "Low",
-                    "potential_savings": 0,  # Operational efficiency
-                }
-            )
+            if not self._has_saved_queries(lg_name):
+                issues.append(
+                    {
+                        "type": "no_saved_queries",
+                        "description": "No saved Log Insights queries found referencing this log group",
+                        "recommendation": "Save common troubleshooting queries in Log Insights for faster incident response. Note: Detection is best-effort due to AWS API limitations.",
+                        "severity": "Low",
+                        "potential_savings": 0,  # Operational efficiency
+                    }
+                )
 
         # Issue 12: VPC Flow Logs Cost
         if self._is_vpc_flow_log(lg_name):
@@ -400,6 +401,18 @@ class CloudWatchLogsAnalyzer:
             return len(response.get("logStreams", []))
         except ClientError:
             return 0
+
+    def _check_specific_log_stream_exists(self, log_group_name: str, stream_prefix: str) -> bool:
+        """Check if a specific log stream exists in a log group"""
+        try:
+            response = self.logs_client.describe_log_streams(
+                logGroupName=log_group_name,
+                logStreamNamePrefix=stream_prefix,
+                limit=1
+            )
+            return len(response.get("logStreams", [])) > 0
+        except ClientError:
+            return False
 
     def _calculate_daily_ingestion(self, log_group_name: str) -> float:
         """Calculate average daily ingestion in MB"""
@@ -536,10 +549,35 @@ class CloudWatchLogsAnalyzer:
         return source1.lower() == source2.lower()
 
     def _has_saved_queries(self, log_group_name: str) -> bool:
-        """Check if log group has saved Log Insights queries"""
-        # AWS CloudWatch Logs does not provide API to list saved queries by log group
-        # This is a limitation of the AWS API
-        return False
+        """Check if log group has saved Log Insights queries
+
+        Note: AWS API doesn't allow filtering saved queries by log group,
+        so we check if ANY saved queries exist that reference this log group.
+        This is a best-effort approach given API limitations.
+        """
+        try:
+            # Get all saved query definitions
+            response = self.logs_client.describe_query_definitions(maxResults=100)
+
+            query_definitions = response.get('queryDefinitions', [])
+
+            # Check if any query references this log group
+            for query_def in query_definitions:
+                # Check if log group is in the query's log group identifiers
+                log_group_names = query_def.get('logGroupNames', [])
+                if log_group_name in log_group_names:
+                    return True
+
+                # Also check if log group name appears in the query string itself
+                query_string = query_def.get('queryString', '')
+                if log_group_name in query_string:
+                    return True
+
+            return False
+        except ClientError as e:
+            logger.warning(f"Error checking saved queries for {log_group_name}: {e}")
+            # If API call fails, assume queries might exist (benefit of doubt)
+            return True
 
     def _is_capturing_all_traffic(self, log_group_name: str) -> bool:
         """Check if VPC Flow Logs are configured to capture ALL traffic"""
@@ -692,27 +730,49 @@ class CloudWatchLogsAnalyzer:
             lambda_paginator = self.lambda_client.get_paginator("list_functions")
             for page in lambda_paginator.paginate():
                 for function in page["Functions"]:
-                    expected_lg = f"/aws/lambda/{function['FunctionName']}"
+                    function_name = function['FunctionName']
+                    expected_lg = f"/aws/lambda/{function_name}"
+
                     if not self._log_group_exists(expected_lg):
                         self.monitoring_gaps.append(
                             {
                                 "resource_type": "Lambda",
-                                "resource_id": function["FunctionName"],
+                                "resource_id": function_name,
                                 "expected_log_group": expected_lg,
+                                "expected_log_stream": "N/A - Log group missing",
                                 "status": "Missing Log Group",
                                 "issue": "No log group found for Lambda function",
                             }
                         )
-                    elif self._get_log_streams_count(expected_lg) == 0:
-                        self.monitoring_gaps.append(
-                            {
-                                "resource_type": "Lambda",
-                                "resource_id": function["FunctionName"],
-                                "expected_log_group": expected_lg,
-                                "status": "Missing Log Streams",
-                                "issue": "Log group exists but no log streams found",
-                            }
-                        )
+                    else:
+                        # Check for specific expected log streams
+                        # Lambda creates streams with date-based format: YYYY/MM/DD/[$LATEST]<request-id>
+                        today = datetime.now(timezone.utc)
+                        expected_stream_prefix = today.strftime("%Y/%m/%d")
+
+                        if self._get_log_streams_count(expected_lg) == 0:
+                            self.monitoring_gaps.append(
+                                {
+                                    "resource_type": "Lambda",
+                                    "resource_id": function_name,
+                                    "expected_log_group": expected_lg,
+                                    "expected_log_stream": f"{expected_stream_prefix}/[$LATEST]*",
+                                    "status": "No Log Streams",
+                                    "issue": "Log group exists but has never received any logs",
+                                }
+                            )
+                        elif not self._check_specific_log_stream_exists(expected_lg, expected_stream_prefix):
+                            # Has old streams but no recent activity
+                            self.monitoring_gaps.append(
+                                {
+                                    "resource_type": "Lambda",
+                                    "resource_id": function_name,
+                                    "expected_log_group": expected_lg,
+                                    "expected_log_stream": f"{expected_stream_prefix}/[$LATEST]*",
+                                    "status": "Missing Recent Streams",
+                                    "issue": "No log streams from today - function may not have executed recently",
+                                }
+                            )
         except ClientError as e:
             logger.error(f"Error checking Lambda functions: {e}")
 
@@ -723,6 +783,12 @@ class CloudWatchLogsAnalyzer:
                 for reservation in page["Reservations"]:
                     for instance in reservation["Instances"]:
                         instance_id = instance["InstanceId"]
+                        instance_state = instance.get("State", {}).get("Name", "unknown")
+
+                        # Skip terminated instances
+                        if instance_state == "terminated":
+                            continue
+
                         # Check common log group patterns
                         patterns = [
                             f"/aws/ec2/{instance_id}",
@@ -731,20 +797,49 @@ class CloudWatchLogsAnalyzer:
 
                         found = False
                         for pattern in patterns:
-                            if self._log_group_exists_pattern(pattern):
-                                if self._get_log_streams_count(pattern) > 0:
-                                    found = True
-                                else:
+                            # Try to find log groups matching pattern
+                            matching_lg = None
+                            try:
+                                response = self.logs_client.describe_log_groups(
+                                    logGroupNamePrefix=pattern, limit=1
+                                )
+                                if response.get("logGroups"):
+                                    matching_lg = response["logGroups"][0]["logGroupName"]
+                            except ClientError:
+                                pass
+
+                            if matching_lg:
+                                # Check for expected log streams (instance-id based)
+                                expected_stream = instance_id
+                                stream_count = self._get_log_streams_count(matching_lg)
+
+                                if stream_count == 0:
                                     self.monitoring_gaps.append(
                                         {
                                             "resource_type": "EC2",
                                             "resource_id": instance_id,
-                                            "expected_log_group": pattern,
-                                            "status": "Missing Log Streams",
-                                            "issue": "Log group exists but no log streams found",
+                                            "expected_log_group": matching_lg,
+                                            "expected_log_stream": expected_stream,
+                                            "status": "No Log Streams",
+                                            "issue": "Log group exists but no log streams found - CloudWatch agent may not be configured",
                                         }
                                     )
-                                    found = True  # Mark as found but with issue
+                                    found = True
+                                elif not self._check_specific_log_stream_exists(matching_lg, instance_id):
+                                    # Has streams but not for this instance
+                                    self.monitoring_gaps.append(
+                                        {
+                                            "resource_type": "EC2",
+                                            "resource_id": instance_id,
+                                            "expected_log_group": matching_lg,
+                                            "expected_log_stream": expected_stream,
+                                            "status": "Missing Expected Stream",
+                                            "issue": f"Log group has streams but none match instance ID {instance_id}",
+                                        }
+                                    )
+                                    found = True
+                                else:
+                                    found = True  # All good
                                 break
 
                         if not found:
@@ -753,8 +848,9 @@ class CloudWatchLogsAnalyzer:
                                     "resource_type": "EC2",
                                     "resource_id": instance_id,
                                     "expected_log_group": patterns[0],
+                                    "expected_log_stream": instance_id,
                                     "status": "Missing Log Group",
-                                    "issue": "No log group found for EC2 instance",
+                                    "issue": "No log group found for EC2 instance - CloudWatch agent not installed/configured",
                                 }
                             )
         except ClientError as e:
@@ -958,47 +1054,62 @@ class CloudWatchLogsAnalyzer:
             }
         }
 
-        with open("aws_audit_results.json", "w") as f:
+        with open("cloudwatch_logs_optimization.json", "w") as f:
             json.dump(output, f, indent=2)
 
-        logger.info("JSON output saved to aws_audit_results.json")
+        logger.info("JSON output saved to cloudwatch_logs_optimization.json")
 
     def _generate_chart(self):
-        """Generate retention vs cost analysis chart (text-based summary)"""
+        """Generate retention vs cost analysis chart showing retention period vs monthly cost"""
         if not self.log_groups_data:
             logger.info("No log groups to analyze - skipping chart generation")
             return
 
-        # Prepare data without pandas
-        total_cost = sum(lg['monthly_cost'] for lg in self.log_groups_data)
-        total_savings = sum(lg['optimization']['estimated_savings'] for lg in self.log_groups_data)
-        optimized_cost = total_cost - total_savings
+        # Prepare data using pandas
+        data = []
+        for lg in self.log_groups_data:
+            retention_days = lg['retention_days'] if lg['retention_days'] else 0  # 0 for indefinite
+            data.append({
+                'log_group': lg['log_group_name'],
+                'retention_days': retention_days,
+                'current_cost': lg['monthly_cost'],
+                'optimized_cost': lg['monthly_cost'] - lg['optimization']['estimated_savings']
+            })
 
-        chart_summary = f"""
-CloudWatch Logs Cost Analysis Chart Summary
-============================================
+        df = pd.DataFrame(data)
 
-Current State:
-  Total Monthly Cost: ${total_cost:,.2f}
-  Total Log Groups: {len(self.log_groups_data)}
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
-Optimized State:
-  Optimized Monthly Cost: ${optimized_cost:,.2f}
-  Total Potential Savings: ${total_savings:,.2f}
-  Savings Percentage: {(total_savings / total_cost * 100) if total_cost > 0 else 0:.1f}%
+        # Plot 1: Retention vs Current Cost (scatter plot)
+        ax1.scatter(df['retention_days'], df['current_cost'], alpha=0.6, s=100, color='red', label='Current Cost')
+        ax1.set_xlabel('Retention Period (days, 0=indefinite)', fontsize=12)
+        ax1.set_ylabel('Monthly Cost ($)', fontsize=12)
+        ax1.set_title('Current: Retention Period vs Monthly Cost', fontsize=14, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
 
-Top 5 Cost Contributors:
-"""
-        # Sort by cost
-        sorted_logs = sorted(self.log_groups_data, key=lambda x: x['monthly_cost'], reverse=True)[:5]
-        for i, lg in enumerate(sorted_logs, 1):
-            chart_summary += f"  {i}. {lg['log_group_name'][:50]}: ${lg['monthly_cost']:,.2f}/month\n"
+        # Plot 2: Retention vs Optimized Cost (scatter plot)
+        ax2.scatter(df['retention_days'], df['optimized_cost'], alpha=0.6, s=100, color='green', label='Optimized Cost')
+        ax2.set_xlabel('Retention Period (days, 0=indefinite)', fontsize=12)
+        ax2.set_ylabel('Monthly Cost ($)', fontsize=12)
+        ax2.set_title('Optimized: Retention Period vs Monthly Cost', fontsize=14, fontweight='bold')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
 
-        # Write to text file
-        with open("log_retention_analysis.txt", "w", encoding='utf-8') as f:
-            f.write(chart_summary)
+        # Add summary text
+        total_current = df['current_cost'].sum()
+        total_optimized = df['optimized_cost'].sum()
+        savings = total_current - total_optimized
 
-        logger.info("Chart summary saved to log_retention_analysis.txt")
+        fig.suptitle(f'CloudWatch Logs Cost Analysis - Current: ${total_current:.2f}/mo | Optimized: ${total_optimized:.2f}/mo | Savings: ${savings:.2f}/mo ({(savings/total_current*100) if total_current > 0 else 0:.1f}%)',
+                     fontsize=16, fontweight='bold', y=1.02)
+
+        plt.tight_layout()
+        plt.savefig('log_retention_analysis.png', dpi=150, bbox_inches='tight')
+        plt.close()
+
+        logger.info("Chart saved to log_retention_analysis.png")
 
     def _generate_csv_report(self):
         """Generate CSV monitoring coverage report with detailed issue information"""
