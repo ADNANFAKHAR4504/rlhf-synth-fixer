@@ -132,7 +132,7 @@ class GlobalResources(pulumi.ComponentResource):
         # Hosted zone
         self.hosted_zone = aws.route53.Zone(
             f'dr-zone-{args.environment_suffix}',
-            name=f'payments-{args.environment_suffix}.example.com',
+            name=f'payments-{args.environment_suffix}.yourdomain.com',
             tags={**args.tags, 'Name': f'dr-zone-{args.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
@@ -173,7 +173,7 @@ class GlobalResources(pulumi.ComponentResource):
         self.primary_record = aws.route53.Record(
             f'route53-primary-{args.environment_suffix}',
             zone_id=self.hosted_zone.zone_id,
-            name=f'api.payments-{args.environment_suffix}.example.com',
+            name=f'api.payments-{args.environment_suffix}.yourdomain.com',
             type='CNAME',
             ttl=60,
             records=[args.primary_api_endpoint.apply(
@@ -191,7 +191,7 @@ class GlobalResources(pulumi.ComponentResource):
         self.dr_record = aws.route53.Record(
             f'route53-dr-{args.environment_suffix}',
             zone_id=self.hosted_zone.zone_id,
-            name=f'api.payments-{args.environment_suffix}.example.com',
+            name=f'api.payments-{args.environment_suffix}.yourdomain.com',
             type='CNAME',
             ttl=60,
             records=[args.dr_api_endpoint.apply(
@@ -209,7 +209,7 @@ class GlobalResources(pulumi.ComponentResource):
         self.route53_fqdn = pulumi.Output.concat(
             'api.payments-',
             args.environment_suffix,
-            '.example.com'
+            '.yourdomain.com'
         )
 
     def _create_s3_replication(self, args: GlobalResourcesArgs):

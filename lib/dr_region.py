@@ -434,23 +434,23 @@ def handler(event, context):
             opts=ResourceOptions(parent=self, provider=self.provider)
         )
 
-        self.bucket_versioning = aws.s3.BucketVersioningV2(
+        self.bucket_versioning = aws.s3.BucketVersioning(
             f'bucket-versioning-dr-{args.environment_suffix}',
             bucket=self.bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status='Enabled'
             ),
             opts=ResourceOptions(parent=self, provider=self.provider)
         )
 
         # pylint: disable=line-too-long
-        sse_default = aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        sse_default = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm='AES256'
         )
-        rule_args = aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+        rule_args = aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
             apply_server_side_encryption_by_default=sse_default
         )
-        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f'bucket-encryption-dr-{args.environment_suffix}',
             bucket=self.bucket.id,
             rules=[rule_args],
