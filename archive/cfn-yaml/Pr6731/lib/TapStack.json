@@ -1,0 +1,2577 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-Grade Distributed Event Processing System for Financial Services Platform with Exactly-Once Processing",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Deployment environment"
+        },
+        "SecondaryRegion": {
+            "Type": "String",
+            "Default": "eu-west-1",
+            "AllowedValues": [
+                "eu-west-1",
+                "eu-central-1",
+                "ap-southeast-1",
+                "ap-northeast-1"
+            ],
+            "Description": "Secondary region for cross-region replication"
+        },
+        "EventProcessingCapacity": {
+            "Type": "Number",
+            "Default": 100000,
+            "MinValue": 10000,
+            "MaxValue": 1000000,
+            "Description": "Target events per minute processing capacity"
+        },
+        "LambdaMemorySize": {
+            "Type": "Number",
+            "Default": 1024,
+            "AllowedValues": [
+                128,
+                256,
+                512,
+                1024,
+                2048,
+                3072
+            ],
+            "Description": "Memory allocation for Lambda functions in MB"
+        },
+        "RetentionDays": {
+            "Type": "Number",
+            "Default": 30,
+            "MinValue": 7,
+            "MaxValue": 90,
+            "Description": "Event archive retention period in days"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "ops-team@company.com",
+            "Description": "Email address for CloudWatch alerts"
+        },
+        "GlobalEndpointHealthCheckArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing Route53 Recovery Control health check ARN used for EventBridge global endpoint failover routing"
+        }
+    },
+    "Mappings": {
+        "RegionConfig": {
+            "us-east-1": {
+                "VpcCidr": "10.0.0.0/16",
+                "PrivateSubnet1Cidr": "10.0.1.0/24",
+                "PrivateSubnet2Cidr": "10.0.2.0/24",
+                "AvailabilityZones": 2
+            },
+            "eu-west-1": {
+                "VpcCidr": "10.1.0.0/16",
+                "PrivateSubnet1Cidr": "10.1.1.0/24",
+                "PrivateSubnet2Cidr": "10.1.2.0/24",
+                "AvailabilityZones": 2
+            },
+            "eu-central-1": {
+                "VpcCidr": "10.2.0.0/16",
+                "PrivateSubnet1Cidr": "10.2.1.0/24",
+                "PrivateSubnet2Cidr": "10.2.2.0/24",
+                "AvailabilityZones": 2
+            },
+            "ap-southeast-1": {
+                "VpcCidr": "10.3.0.0/16",
+                "PrivateSubnet1Cidr": "10.3.1.0/24",
+                "PrivateSubnet2Cidr": "10.3.2.0/24",
+                "AvailabilityZones": 2
+            },
+            "ap-northeast-1": {
+                "VpcCidr": "10.4.0.0/16",
+                "PrivateSubnet1Cidr": "10.4.1.0/24",
+                "PrivateSubnet2Cidr": "10.4.2.0/24",
+                "AvailabilityZones": 2
+            }
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "production"
+            ]
+        },
+        "IsUSEast1": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-east-1"
+            ]
+        },
+        "CreateSecondaryResources": {
+            "Fn::And": [
+                {
+                    "Condition": "IsProduction"
+                },
+                {
+                    "Condition": "IsUSEast1"
+                }
+            ]
+        },
+        "HasGlobalEndpointHealthCheck": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "GlobalEndpointHealthCheckArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateGlobalEndpoint": {
+            "Fn::And": [
+                {
+                    "Condition": "CreateSecondaryResources"
+                },
+                {
+                    "Condition": "HasGlobalEndpointHealthCheck"
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "VpcCidr"
+                    ]
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PrivateSubnet1Cidr"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-PrivateSubnet1"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "RegionConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PrivateSubnet2Cidr"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-PrivateSubnet2"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DynamoDBEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "S3Endpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "EventBridgeEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.events"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "EndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "StepFunctionsEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.states"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "EndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "SQSEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.sqs"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "EndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "XRayEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.xray"
+                },
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "EndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-PrivateRouteTable"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "EndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for VPC endpoints",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-EndpointSG"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-LambdaSG"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "MasterKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "Master KMS key for all service encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow services to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "dynamodb.amazonaws.com",
+                                    "sqs.amazonaws.com",
+                                    "logs.amazonaws.com",
+                                    "lambda.amazonaws.com",
+                                    "events.amazonaws.com",
+                                    "states.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-MasterKey"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "MasterKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-master"
+                },
+                "TargetKeyId": {
+                    "Ref": "MasterKMSKey"
+                }
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-Alerts"
+                },
+                "DisplayName": "Event Processing System Alerts",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "TransactionStateTable": {
+            "Type": "AWS::DynamoDB::GlobalTable",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionState"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    },
+                    {
+                        "AttributeName": "lockId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "partitionKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": [
+                    {
+                        "IndexName": "LockIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "lockId",
+                                "KeyType": "HASH"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    },
+                    {
+                        "IndexName": "PartitionIndex",
+                        "KeySchema": [
+                            {
+                                "AttributeName": "partitionKey",
+                                "KeyType": "HASH"
+                            },
+                            {
+                                "AttributeName": "timestamp",
+                                "KeyType": "RANGE"
+                            }
+                        ],
+                        "Projection": {
+                            "ProjectionType": "ALL"
+                        }
+                    }
+                ],
+                "Replicas": [
+                    {
+                        "Region": {
+                            "Ref": "AWS::Region"
+                        },
+                        "GlobalSecondaryIndexes": [
+                            {
+                                "IndexName": "LockIndex",
+                                "ContributorInsightsSpecification": {
+                                    "Enabled": true
+                                }
+                            },
+                            {
+                                "IndexName": "PartitionIndex",
+                                "ContributorInsightsSpecification": {
+                                    "Enabled": true
+                                }
+                            }
+                        ],
+                        "ContributorInsightsSpecification": {
+                            "Enabled": true
+                        },
+                        "PointInTimeRecoverySpecification": {
+                            "PointInTimeRecoveryEnabled": true
+                        },
+                        "Tags": [
+                            {
+                                "Key": "Environment",
+                                "Value": {
+                                    "Ref": "Environment"
+                                }
+                            },
+                            {
+                                "Key": "iac-rlhf-amazon",
+                                "Value": "true"
+                            }
+                        ]
+                    },
+                    {
+                        "Region": {
+                            "Ref": "SecondaryRegion"
+                        },
+                        "GlobalSecondaryIndexes": [
+                            {
+                                "IndexName": "LockIndex",
+                                "ContributorInsightsSpecification": {
+                                    "Enabled": true
+                                }
+                            },
+                            {
+                                "IndexName": "PartitionIndex",
+                                "ContributorInsightsSpecification": {
+                                    "Enabled": true
+                                }
+                            }
+                        ],
+                        "ContributorInsightsSpecification": {
+                            "Enabled": true
+                        },
+                        "PointInTimeRecoverySpecification": {
+                            "PointInTimeRecoveryEnabled": true
+                        },
+                        "Tags": [
+                            {
+                                "Key": "Environment",
+                                "Value": {
+                                    "Ref": "Environment"
+                                }
+                            },
+                            {
+                                "Key": "iac-rlhf-amazon",
+                                "Value": "true"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "IdempotencyTable": {
+            "Type": "AWS::DynamoDB::GlobalTable",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-Idempotency"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "idempotencyKey",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "idempotencyKey",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "TimeToLiveSpecification": {
+                    "AttributeName": "expiryTime",
+                    "Enabled": true
+                },
+                "Replicas": [
+                    {
+                        "Region": {
+                            "Ref": "AWS::Region"
+                        },
+                        "ContributorInsightsSpecification": {
+                            "Enabled": true
+                        },
+                        "PointInTimeRecoverySpecification": {
+                            "PointInTimeRecoveryEnabled": true
+                        },
+                        "Tags": [
+                            {
+                                "Key": "iac-rlhf-amazon",
+                                "Value": "true"
+                            }
+                        ]
+                    },
+                    {
+                        "Region": {
+                            "Ref": "SecondaryRegion"
+                        },
+                        "ContributorInsightsSpecification": {
+                            "Enabled": true
+                        },
+                        "PointInTimeRecoverySpecification": {
+                            "PointInTimeRecoveryEnabled": true
+                        },
+                        "Tags": [
+                            {
+                                "Key": "iac-rlhf-amazon",
+                                "Value": "true"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "OrderProcessingQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-OrderProcessing.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "DeduplicationScope": "messageGroup",
+                "FifoThroughputLimit": "perMessageGroupId",
+                "MessageRetentionPeriod": 1209600,
+                "VisibilityTimeout": 300,
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "OrderProcessingDLQ",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 3
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Purpose",
+                        "Value": "OrderProcessing"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "OrderProcessingDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-OrderProcessing-DLQ.fifo"
+                },
+                "FifoQueue": true,
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PaymentValidationQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidation.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "DeduplicationScope": "messageGroup",
+                "FifoThroughputLimit": "perMessageGroupId",
+                "MessageRetentionPeriod": 1209600,
+                "VisibilityTimeout": 300,
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "PaymentValidationDLQ",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 3
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Purpose",
+                        "Value": "PaymentValidation"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PaymentValidationDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidation-DLQ.fifo"
+                },
+                "FifoQueue": true,
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "FraudDetectionQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudDetection.fifo"
+                },
+                "FifoQueue": true,
+                "ContentBasedDeduplication": true,
+                "DeduplicationScope": "messageGroup",
+                "FifoThroughputLimit": "perMessageGroupId",
+                "MessageRetentionPeriod": 1209600,
+                "VisibilityTimeout": 300,
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "FraudDetectionDLQ",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 3
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Purpose",
+                        "Value": "FraudDetection"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "FraudDetectionDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudDetection-DLQ.fifo"
+                },
+                "FifoQueue": true,
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DeploymentArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "MasterKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EventTransformerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-EventTransformer"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport uuid\nimport os\nimport time\nfrom datetime import datetime\ntry:\n    from aws_xray_sdk.core import xray_recorder  # type: ignore\n    from aws_xray_sdk.core import patch_all  # type: ignore\nexcept ImportError:\n    class _DummySubsegment:\n        def add_exception(self, *_args, **_kwargs):\n            pass\n    \n    class _DummyRecorder:\n        def capture(self, *_args, **_kwargs):\n            def decorator(func):\n                return func\n            return decorator\n        \n        def begin_subsegment(self, *_args, **_kwargs):\n            pass\n        \n        def end_subsegment(self):\n            pass\n        \n        def current_subsegment(self):\n            return _DummySubsegment()\n    \n    def patch_all():\n        pass\n    \n    xray_recorder = _DummyRecorder()\n\n# Patch boto3 for X-Ray tracing when available\npatch_all()\n\ndynamodb = boto3.resource('dynamodb')\nsqs = boto3.client('sqs')\n\nIDEMPOTENCY_TABLE = os.environ['IDEMPOTENCY_TABLE']\nTRANSACTION_TABLE = os.environ['DYNAMODB_TABLE']\n\n@xray_recorder.capture('transform_event')\ndef transform_event(raw_event):\n    \"\"\"Transform raw event into standardized format with validation\"\"\"\n    # Generate unique transaction ID if not present\n    transaction_id = raw_event.get('transactionId', str(uuid.uuid4()))\n    \n    # Validate required fields\n    required_fields = ['amount', 'type']\n    for field in required_fields:\n        if field not in raw_event:\n            raise ValueError(f'Missing required field: {field}')\n    \n    # Apply transformation logic\n    transformed = {\n        'transactionId': transaction_id,\n        'timestamp': raw_event.get('timestamp', int(time.time() * 1000)),\n        'amount': float(raw_event.get('amount')),\n        'currency': raw_event.get('currency', 'USD'),\n        'type': raw_event.get('type'),\n        'customerId': raw_event.get('customerId'),\n        'merchantId': raw_event.get('merchantId'),\n        'metadata': raw_event.get('metadata', {}),\n        'processingTime': datetime.utcnow().isoformat(),\n        'region': os.environ['AWS_REGION']\n    }\n    \n    # Add partition key for even distribution\n    transformed['partitionKey'] = f\"tx-{transaction_id[:8]}\"\n    \n    return transformed\n\n@xray_recorder.capture('check_idempotency')\ndef check_idempotency(transaction_id):\n    \"\"\"Check if this transaction has already been processed\"\"\"\n    table = dynamodb.Table(IDEMPOTENCY_TABLE)\n    \n    try:\n        # Try to insert with conditional check\n        table.put_item(\n            Item={\n                'idempotencyKey': transaction_id,\n                'processedAt': int(time.time()),\n                'expiryTime': int(time.time()) + 86400  # 24 hour TTL\n            },\n            ConditionExpression='attribute_not_exists(idempotencyKey)'\n        )\n        return False  # Not a duplicate\n    except table.meta.client.exceptions.ConditionalCheckFailedException:\n        return True  # Duplicate transaction\n\ndef lambda_handler(event, context):\n    \"\"\"Main handler for event transformation with idempotency check\"\"\"\n    xray_recorder.begin_subsegment('event_processing')\n    \n    try:\n        # Handle both direct invocation and SQS events\n        if 'Records' in event:\n            # SQS event\n            results = []\n            for record in event['Records']:\n                body = json.loads(record['body'])\n                transaction_id = body.get('transactionId', str(uuid.uuid4()))\n                \n                # Check idempotency\n                if check_idempotency(transaction_id):\n                    print(f\"Duplicate transaction detected: {transaction_id}\")\n                    continue\n                \n                transformed = transform_event(body)\n                results.append(transformed)\n                \n                # Store in DynamoDB for state tracking\n                table = dynamodb.Table(TRANSACTION_TABLE)\n                table.put_item(Item=transformed)\n            \n            return {\n                'statusCode': 200,\n                'processedCount': len(results),\n                'results': results\n            }\n        else:\n            # Direct invocation\n            transaction_id = event.get('transactionId', str(uuid.uuid4()))\n            \n            # Check idempotency\n            if check_idempotency(transaction_id):\n                return {\n                    'statusCode': 200,\n                    'duplicate': True,\n                    'transactionId': transaction_id\n                }\n            \n            transformed = transform_event(event)\n            \n            # Store in DynamoDB\n            table = dynamodb.Table(TRANSACTION_TABLE)\n            table.put_item(Item=transformed)\n            \n            return {\n                'statusCode': 200,\n                'body': json.dumps(transformed)\n            }\n    \n    except Exception as e:\n        xray_recorder.current_subsegment().add_exception(e)\n        print(f\"Error processing event: {str(e)}\")\n        raise\n    finally:\n        xray_recorder.end_subsegment()\n"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Timeout": 60,
+                "ReservedConcurrentExecutions": 100,
+                "Architectures": [
+                    "arm64"
+                ],
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE": {
+                            "Ref": "TransactionStateTable"
+                        },
+                        "IDEMPOTENCY_TABLE": {
+                            "Ref": "IdempotencyTable"
+                        },
+                        "XRAY_ENABLED": "true",
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "Purpose",
+                        "Value": "EventTransformation"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "DistributedLockFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-DistributedLock"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport time\nimport os\nfrom datetime import datetime, timedelta\ntry:\n    from aws_xray_sdk.core import xray_recorder  # type: ignore\n    from aws_xray_sdk.core import patch_all  # type: ignore\nexcept ImportError:\n    class _DummySubsegment:\n        def add_exception(self, *_args, **_kwargs):\n            pass\n    \n    class _DummyRecorder:\n        def capture(self, *_args, **_kwargs):\n            def decorator(func):\n                return func\n            return decorator\n        \n        def begin_subsegment(self, *_args, **_kwargs):\n            pass\n        \n        def end_subsegment(self):\n            pass\n        \n        def current_subsegment(self):\n            return _DummySubsegment()\n    \n    def patch_all():\n        pass\n    \n    xray_recorder = _DummyRecorder()\n\npatch_all()\n\ndynamodb = boto3.resource('dynamodb')\ncloudwatch = boto3.client('cloudwatch')\n\nLOCK_TABLE = os.environ['LOCK_TABLE']\nLOCK_TTL_SECONDS = int(os.environ.get('LOCK_TTL', '300'))\n\n@xray_recorder.capture('acquire_lock')\ndef acquire_lock(lock_id, owner_id, ttl_seconds=None):\n    \"\"\"Acquire distributed lock with automatic expiry\"\"\"\n    table = dynamodb.Table(LOCK_TABLE)\n    ttl = ttl_seconds or LOCK_TTL_SECONDS\n    expiry_time = int(time.time()) + ttl\n    \n    try:\n        # Attempt to acquire lock with conditional write\n        response = table.put_item(\n            Item={\n                'lockId': lock_id,\n                'transactionId': lock_id,  # Required for table schema\n                'timestamp': int(time.time() * 1000),\n                'ownerId': owner_id,\n                'acquiredAt': datetime.utcnow().isoformat(),\n                'expiryTime': expiry_time,\n                'lockType': 'DISTRIBUTED',\n                'partitionKey': f\"lock-{lock_id[:8]}\"\n            },\n            ConditionExpression='attribute_not_exists(lockId) OR expiryTime < :now',\n            ExpressionAttributeValues={\n                ':now': int(time.time())\n            }\n        )\n        \n        # Log metric for successful lock acquisition\n        cloudwatch.put_metric_data(\n            Namespace='DistributedLocking',\n            MetricData=[\n                {\n                    'MetricName': 'LocksAcquired',\n                    'Value': 1,\n                    'Unit': 'Count',\n                    'Dimensions': [\n                        {'Name': 'Environment', 'Value': os.environ['ENVIRONMENT']}\n                    ]\n                }\n            ]\n        )\n        \n        return {\n            'locked': True,\n            'lockId': lock_id,\n            'ownerId': owner_id,\n            'expiryTime': expiry_time\n        }\n        \n    except table.meta.client.exceptions.ConditionalCheckFailedException:\n        # Lock is already held, check if we can steal expired lock\n        existing_lock = table.get_item(Key={'lockId': lock_id, 'timestamp': 0})\n        \n        if 'Item' in existing_lock:\n            current_expiry = existing_lock['Item'].get('expiryTime', 0)\n            if current_expiry < int(time.time()):\n                # Lock has expired, try to steal it\n                return acquire_lock(lock_id, owner_id, ttl_seconds)\n        \n        # Log metric for failed lock acquisition\n        cloudwatch.put_metric_data(\n            Namespace='DistributedLocking',\n            MetricData=[\n                {\n                    'MetricName': 'LocksFailed',\n                    'Value': 1,\n                    'Unit': 'Count'\n                }\n            ]\n        )\n        \n        return {\n            'locked': False,\n            'message': 'Lock already held',\n            'currentOwner': existing_lock.get('Item', {}).get('ownerId', 'unknown')\n        }\n\n@xray_recorder.capture('release_lock')\ndef release_lock(lock_id, owner_id):\n    \"\"\"Release a distributed lock\"\"\"\n    table = dynamodb.Table(LOCK_TABLE)\n    \n    try:\n        # Delete lock only if we own it\n        table.delete_item(\n            Key={\n                'lockId': lock_id,\n                'timestamp': 0  # Use 0 for lock entries\n            },\n            ConditionExpression='ownerId = :owner',\n            ExpressionAttributeValues={\n                ':owner': owner_id\n            }\n        )\n        return {'released': True, 'lockId': lock_id}\n        \n    except table.meta.client.exceptions.ConditionalCheckFailedException:\n        return {'released': False, 'message': 'Lock not owned by caller'}\n\n@xray_recorder.capture('extend_lock')\ndef extend_lock(lock_id, owner_id, extension_seconds=None):\n    \"\"\"Extend the TTL of an existing lock\"\"\"\n    table = dynamodb.Table(LOCK_TABLE)\n    extension = extension_seconds or LOCK_TTL_SECONDS\n    new_expiry = int(time.time()) + extension\n    \n    try:\n        table.update_item(\n            Key={\n                'lockId': lock_id,\n                'timestamp': 0\n            },\n            UpdateExpression='SET expiryTime = :new_expiry',\n            ConditionExpression='ownerId = :owner AND expiryTime > :now',\n            ExpressionAttributeValues={\n                ':new_expiry': new_expiry,\n                ':owner': owner_id,\n                ':now': int(time.time())\n            }\n        )\n        return {'extended': True, 'newExpiry': new_expiry}\n        \n    except table.meta.client.exceptions.ConditionalCheckFailedException:\n        return {'extended': False, 'message': 'Lock expired or not owned'}\n\ndef lambda_handler(event, context):\n    \"\"\"Main handler for distributed lock operations\"\"\"\n    operation = event.get('operation', 'acquire')\n    lock_id = event['lockId']\n    owner_id = event['ownerId']\n    \n    if operation == 'acquire':\n        ttl = event.get('ttlSeconds')\n        return acquire_lock(lock_id, owner_id, ttl)\n    elif operation == 'release':\n        return release_lock(lock_id, owner_id)\n    elif operation == 'extend':\n        extension = event.get('extensionSeconds')\n        return extend_lock(lock_id, owner_id, extension)\n    else:\n        return {'error': f'Unknown operation: {operation}'}\n"
+                },
+                "MemorySize": 512,
+                "Timeout": 30,
+                "Architectures": [
+                    "arm64"
+                ],
+                "Environment": {
+                    "Variables": {
+                        "LOCK_TABLE": {
+                            "Ref": "TransactionStateTable"
+                        },
+                        "LOCK_TTL": "300",
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "SagaCoordinatorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-SagaCoordinator"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\ntry:\n    from aws_xray_sdk.core import xray_recorder  # type: ignore\n    from aws_xray_sdk.core import patch_all  # type: ignore\nexcept ImportError:\n    class _DummySubsegment:\n        def add_exception(self, *_args, **_kwargs):\n            pass\n    \n    class _DummyRecorder:\n        def capture(self, *_args, **_kwargs):\n            def decorator(func):\n                return func\n            return decorator\n        \n        def begin_subsegment(self, *_args, **_kwargs):\n            pass\n        \n        def end_subsegment(self):\n            pass\n        \n        def current_subsegment(self):\n            return _DummySubsegment()\n    \n    def patch_all():\n        pass\n    \n    xray_recorder = _DummyRecorder()\n\npatch_all()\n\nstepfunctions = boto3.client('stepfunctions')\ndynamodb = boto3.resource('dynamodb')\nevents = boto3.client('events')\n\nSTATE_TABLE = os.environ['STATE_TABLE']\nEVENT_BUS = os.environ['EVENT_BUS']\n\ntable = dynamodb.Table(STATE_TABLE)\n\ndef load_saga_state(transaction_id, timestamp):\n    if not transaction_id:\n        return None\n    try:\n        response = table.get_item(\n            Key={\n                'transactionId': transaction_id,\n                'timestamp': timestamp\n            }\n        )\n        return response.get('Item')\n    except Exception:\n        return None\n\ndef persist_saga_state(state, status='IN_PROGRESS'):\n    transaction_id = state.get('transactionId')\n    timestamp = state.get('timestamp', 0)\n    if not transaction_id:\n        return\n    \n    merged_state = dict(state)\n    merged_state.setdefault('completedSteps', [])\n    merged_state['sagaStatus'] = status\n    \n    table.put_item(\n        Item={\n            'transactionId': transaction_id,\n            'timestamp': timestamp,\n            'completedSteps': merged_state.get('completedSteps', []),\n            'sagaStatus': merged_state['sagaStatus'],\n            'sagaState': merged_state\n        }\n    )\n\n@xray_recorder.capture('handle_rollback')\ndef handle_rollback(saga_state, compensation_type):\n    \"\"\"Handle rollback for failed saga transactions\"\"\"\n    transaction_id = saga_state.get('transactionId')\n    \n    compensation_steps = {\n        'ORDER': ['cancel_order', 'release_inventory', 'notify_customer'],\n        'PAYMENT': ['reverse_payment', 'update_balance', 'log_reversal'],\n        'FRAUD': ['unblock_account', 'reset_risk_score', 'notify_security']\n    }\n    \n    steps = compensation_steps.get(compensation_type, [])\n    rollback_results = []\n    \n    for step in steps:\n        try:\n            # Execute compensation step\n            result = execute_compensation_step(step, saga_state)\n            rollback_results.append({\n                'step': step,\n                'status': 'SUCCESS',\n                'timestamp': datetime.utcnow().isoformat()\n            })\n            \n            # Update state table\n            table.update_item(\n                Key={\n                    'transactionId': transaction_id,\n                    'timestamp': saga_state.get('timestamp', 0)\n                },\n                UpdateExpression='SET compensationStatus = :status, compensationSteps = :steps',\n                ExpressionAttributeValues={\n                    ':status': f'COMPENSATED_{compensation_type}',\n                    ':steps': rollback_results\n                }\n            )\n            \n        except Exception as e:\n            rollback_results.append({\n                'step': step,\n                'status': 'FAILED',\n                'error': str(e),\n                'timestamp': datetime.utcnow().isoformat()\n            })\n            \n            # Send compensation failure event\n            events.put_events(\n                Entries=[\n                    {\n                        'Source': 'saga.coordinator',\n                        'DetailType': 'CompensationFailed',\n                        'Detail': json.dumps({\n                            'transactionId': transaction_id,\n                            'compensationType': compensation_type,\n                            'failedStep': step,\n                            'error': str(e)\n                        }),\n                        'EventBusName': EVENT_BUS\n                    }\n                ]\n            )\n    \n    return {\n        'compensationType': compensation_type,\n        'transactionId': transaction_id,\n        'rollbackResults': rollback_results,\n        'status': 'COMPLETED'\n    }\n\ndef execute_compensation_step(step, saga_state):\n    \"\"\"Execute individual compensation step\"\"\"\n    # Implementation would include actual compensation logic\n    # For now, return success\n    return {'step': step, 'executed': True}\n\n@xray_recorder.capture('determine_next_step')\ndef determine_next_step(saga_state):\n    \"\"\"Determine the next step in the saga\"\"\"\n    completed_steps = saga_state.get('completedSteps', [])\n    \n    saga_flow = [\n        'validate_order',\n        'reserve_inventory',\n        'process_payment',\n        'check_fraud',\n        'confirm_order',\n        'notify_customer'\n    ]\n    \n    for step in saga_flow:\n        if step not in completed_steps:\n            return step\n    \n    return 'saga_complete'\n\n@xray_recorder.capture('coordinate_saga')\ndef lambda_handler(event, context):\n    \"\"\"Main saga coordinator handler\"\"\"\n    saga_state = event.get('sagaState', {})\n    saga_state.setdefault('completedSteps', [])\n    \n    transaction_id = saga_state.get('transactionId')\n    saga_timestamp = saga_state.get('timestamp', 0)\n    \n    persisted = load_saga_state(transaction_id, saga_timestamp)\n    if persisted:\n        stored_state = persisted.get('sagaState', {})\n        stored_steps = stored_state.get('completedSteps', [])\n        incoming_steps = saga_state.get('completedSteps', [])\n        saga_state = {**stored_state, **saga_state}\n        saga_state['completedSteps'] = list({step: None for step in stored_steps + incoming_steps}.keys())\n    else:\n        saga_state.setdefault('timestamp', saga_timestamp)\n        persist_saga_state(saga_state)\n    \n    # Handle rollback if requested\n    if event.get('rollback'):\n        compensation_type = event.get('compensationType')\n        result = handle_rollback(saga_state, compensation_type)\n        persist_saga_state(saga_state, status=f\"COMPENSATING_{compensation_type}\")\n        return result\n    \n    # Continue with next saga step\n    next_step = determine_next_step(saga_state)\n    \n    if next_step == 'saga_complete':\n        # Update final state\n        table = dynamodb.Table(STATE_TABLE)\n        table.update_item(\n            Key={\n                'transactionId': saga_state.get('transactionId'),\n                'timestamp': saga_state.get('timestamp', 0)\n            },\n            UpdateExpression='SET sagaStatus = :status, completedAt = :time',\n            ExpressionAttributeValues={\n                ':status': 'COMPLETED',\n                ':time': datetime.utcnow().isoformat()\n            }\n        )\n        \n        # Send completion event\n        events.put_events(\n            Entries=[\n                {\n                    'Source': 'saga.coordinator',\n                    'DetailType': 'SagaCompleted',\n                    'Detail': json.dumps(saga_state),\n                    'EventBusName': EVENT_BUS\n                }\n            ]\n        )\n        persist_saga_state(saga_state, status='COMPLETED')\n    else:\n        persist_saga_state(saga_state)\n    \n    return {\n        'statusCode': 200,\n        'sagaState': saga_state,\n        'nextStep': next_step,\n        'timestamp': datetime.utcnow().isoformat()\n    }\n"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Timeout": 120,
+                "Architectures": [
+                    "arm64"
+                ],
+                "Environment": {
+                    "Variables": {
+                        "STATE_TABLE": {
+                            "Ref": "TransactionStateTable"
+                        },
+                        "EVENT_BUS": {
+                            "Ref": "MainEventBus"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "VisibilityTimeoutAdjusterFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-VisibilityTimeoutAdjuster"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport os\nfrom datetime import datetime, timedelta\ntry:\n    from aws_xray_sdk.core import xray_recorder  # type: ignore\n    from aws_xray_sdk.core import patch_all  # type: ignore\nexcept ImportError:\n    class _DummySubsegment:\n        def add_exception(self, *_args, **_kwargs):\n            pass\n    \n    class _DummyRecorder:\n        def capture(self, *_args, **_kwargs):\n            def decorator(func):\n                return func\n            return decorator\n        \n        def begin_subsegment(self, *_args, **_kwargs):\n            pass\n        \n        def end_subsegment(self):\n            pass\n        \n        def current_subsegment(self):\n            return _DummySubsegment()\n    \n    def patch_all():\n        pass\n    \n    xray_recorder = _DummyRecorder()\n\npatch_all()\n\nsqs = boto3.client('sqs')\ncloudwatch = boto3.client('cloudwatch')\n\n@xray_recorder.capture('calculate_optimal_timeout')\ndef calculate_optimal_timeout(function_name, queue_name):\n    \"\"\"Calculate optimal visibility timeout based on processing metrics\"\"\"\n    \n    # Get average processing time from CloudWatch\n    end_time = datetime.utcnow()\n    start_time = end_time - timedelta(minutes=15)\n    \n    response = cloudwatch.get_metric_statistics(\n        Namespace='AWS/Lambda',\n        MetricName='Duration',\n        Dimensions=[\n            {'Name': 'FunctionName', 'Value': function_name}\n        ],\n        StartTime=start_time,\n        EndTime=end_time,\n        Period=300,\n        Statistics=['Average', 'Maximum']\n    )\n    \n    if response['Datapoints']:\n        # Sort by timestamp to get most recent\n        datapoints = sorted(response['Datapoints'], key=lambda x: x['Timestamp'], reverse=True)\n        avg_duration = datapoints[0]['Average'] / 1000  # Convert to seconds\n        max_duration = datapoints[0]['Maximum'] / 1000\n        \n        # Calculate timeout with buffer (1.5x max or 2x average, whichever is higher)\n        optimal_timeout = max(int(max_duration * 1.5), int(avg_duration * 2))\n        \n        # Enforce min/max boundaries\n        optimal_timeout = min(max(optimal_timeout, 30), 43200)  # Min 30s, Max 12 hours\n    else:\n        # Default timeout if no metrics available\n        optimal_timeout = 300\n    \n    return optimal_timeout\n\n@xray_recorder.capture('adjust_visibility')\ndef lambda_handler(event, context):\n    \"\"\"Dynamically adjust SQS visibility timeout based on processing patterns\"\"\"\n    \n    # This can be triggered by CloudWatch Events or direct invocation\n    queues = event.get('queues', [\n        {\n            'queueUrl': os.environ.get('ORDER_QUEUE_URL'),\n            'processingFunction': os.environ.get('ORDER_PROCESSOR_FUNCTION')\n        },\n        {\n            'queueUrl': os.environ.get('PAYMENT_QUEUE_URL'),\n            'processingFunction': os.environ.get('PAYMENT_PROCESSOR_FUNCTION')\n        },\n        {\n            'queueUrl': os.environ.get('FRAUD_QUEUE_URL'),\n            'processingFunction': os.environ.get('FRAUD_PROCESSOR_FUNCTION')\n        }\n    ])\n    \n    results = []\n    \n    for queue_config in queues:\n        if not queue_config.get('queueUrl'):\n            continue\n            \n        queue_url = queue_config['queueUrl']\n        function_name = queue_config['processingFunction']\n        \n        # Calculate optimal timeout\n        optimal_timeout = calculate_optimal_timeout(\n            function_name,\n            queue_url.split('/')[-1]\n        )\n        \n        # Update queue attributes\n        try:\n            sqs.set_queue_attributes(\n                QueueUrl=queue_url,\n                Attributes={\n                    'VisibilityTimeout': str(optimal_timeout)\n                }\n            )\n            \n            results.append({\n                'queue': queue_url,\n                'newTimeout': optimal_timeout,\n                'status': 'SUCCESS'\n            })\n            \n            # Log metric\n            cloudwatch.put_metric_data(\n                Namespace='SQSOptimization',\n                MetricData=[\n                    {\n                        'MetricName': 'VisibilityTimeout',\n                        'Value': optimal_timeout,\n                        'Unit': 'Seconds',\n                        'Dimensions': [\n                            {'Name': 'QueueName', 'Value': queue_url.split('/')[-1]}\n                        ]\n                    }\n                ]\n            )\n            \n        except Exception as e:\n            results.append({\n                'queue': queue_url,\n                'error': str(e),\n                'status': 'FAILED'\n            })\n    \n    # Handle individual message visibility timeout adjustments if needed\n    if 'receiptHandle' in event and 'queueUrl' in event:\n        try:\n            new_timeout = event.get('visibilityTimeout', optimal_timeout)\n            sqs.change_message_visibility(\n                QueueUrl=event['queueUrl'],\n                ReceiptHandle=event['receiptHandle'],\n                VisibilityTimeout=new_timeout\n            )\n            \n            return {\n                'statusCode': 200,\n                'adjustedTimeout': new_timeout,\n                'message': 'Individual message visibility updated'\n            }\n        except Exception as e:\n            return {\n                'statusCode': 500,\n                'error': str(e)\n            }\n    \n    return {\n        'statusCode': 200,\n        'adjustments': results,\n        'timestamp': datetime.utcnow().isoformat()\n    }\n"
+                },
+                "MemorySize": 512,
+                "Timeout": 30,
+                "Architectures": [
+                    "arm64"
+                ],
+                "Environment": {
+                    "Variables": {
+                        "ORDER_QUEUE_URL": {
+                            "Ref": "OrderProcessingQueue"
+                        },
+                        "PAYMENT_QUEUE_URL": {
+                            "Ref": "PaymentValidationQueue"
+                        },
+                        "FRAUD_QUEUE_URL": {
+                            "Ref": "FraudDetectionQueue"
+                        },
+                        "ORDER_PROCESSOR_FUNCTION": {
+                            "Ref": "EventTransformerFunction"
+                        },
+                        "PAYMENT_PROCESSOR_FUNCTION": {
+                            "Ref": "EventTransformerFunction"
+                        },
+                        "FRAUD_PROCESSOR_FUNCTION": {
+                            "Ref": "EventTransformerFunction"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaExecutionRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:ConditionCheckItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionStateTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "IdempotencyTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${TransactionStateTable.Arn}/index/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${IdempotencyTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SQSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage",
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage",
+                                        "sqs:ChangeMessageVisibility",
+                                        "sqs:GetQueueAttributes",
+                                        "sqs:SetQueueAttributes"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "OrderProcessingQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PaymentValidationQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudDetectionQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "OrderProcessingDLQ",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PaymentValidationDLQ",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudDetectionDLQ",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CloudWatchMetrics",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData",
+                                        "cloudwatch:GetMetricStatistics",
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "KMSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MasterKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "StepFunctionsExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-StepFunctionsRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "states.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "StepFunctionsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:InvokeFunction"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "EventTransformerFunction",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DistributedLockFunction",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "SagaCoordinatorFunction",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "OrderProcessingQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PaymentValidationQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudDetectionQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "OrderProcessingDLQ",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TransactionStateTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "IdempotencyTable",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "events:PutEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MainEventBus",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogDelivery",
+                                        "logs:GetLogDelivery",
+                                        "logs:UpdateLogDelivery",
+                                        "logs:DeleteLogDelivery",
+                                        "logs:ListLogDeliveries",
+                                        "logs:PutResourcePolicy",
+                                        "logs:DescribeResourcePolicies",
+                                        "logs:DescribeLogGroups"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "xray:PutTraceSegments",
+                                        "xray:PutTelemetryRecords"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EventBridgeRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-EventBridgeRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "EventBridgePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "states:StartExecution"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "OrderProcessingStateMachine"
+                                        },
+                                        {
+                                            "Ref": "PaymentValidationStateMachine"
+                                        },
+                                        {
+                                            "Ref": "FraudDetectionStateMachine"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "OrderProcessingQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PaymentValidationQueue",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "FraudDetectionQueue",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "events:PutEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${AWS::StackName}-MainBus"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "OrderProcessingStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Sub": "${AWS::StackName}-OrderProcessing"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionsExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfiguration": {
+                    "Enabled": true
+                },
+                "LoggingConfiguration": {
+                    "Level": "ALL",
+                    "IncludeExecutionData": true,
+                    "Destinations": [
+                        {
+                            "CloudWatchLogsLogGroup": {
+                                "LogGroupArn": {
+                                    "Fn::GetAtt": [
+                                        "OrderProcessingLogGroup",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "DefinitionString": {
+                    "Fn::Sub": "{\n  \"Comment\": \"Order Processing State Machine with Saga Pattern and Circuit Breaker\",\n  \"StartAt\": \"AcquireLock\",\n  \"States\": {\n    \"AcquireLock\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${DistributedLockFunction.Arn}\",\n      \"Parameters\": {\n        \"operation\": \"acquire\",\n        \"lockId.$\": \"$.transactionId\",\n        \"ownerId.$\": \"$$.Execution.Name\",\n        \"ttlSeconds\": 300\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0,\n          \"MaxDelaySeconds\": 30\n        }\n      ],\n      \"Next\": \"CheckLockStatus\",\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"HandleError\",\n          \"ResultPath\": \"$.error\"\n        }\n      ],\n      \"ResultPath\": \"$.lockResult\"\n    },\n    \"CheckLockStatus\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.lockResult.locked\",\n          \"BooleanEquals\": true,\n          \"Next\": \"ValidateOrder\"\n        }\n      ],\n      \"Default\": \"WaitAndRetry\"\n    },\n    \"WaitAndRetry\": {\n      \"Type\": \"Wait\",\n      \"Seconds\": 5,\n      \"Next\": \"AcquireLock\"\n    },\n    \"ValidateOrder\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${EventTransformerFunction.Arn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"Lambda.ServiceException\", \"Lambda.AWSLambdaException\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0\n        }\n      ],\n      \"Next\": \"ProcessPayment\",\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"ValidationError\"],\n          \"Next\": \"CompensateOrder\",\n          \"ResultPath\": \"$.validationError\"\n        }\n      ],\n      \"ResultPath\": \"$.validationResult\"\n    },\n    \"ProcessPayment\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::sqs:sendMessage\",\n      \"Parameters\": {\n        \"QueueUrl\": \"${PaymentValidationQueue}\",\n        \"MessageBody.$\": \"$\",\n        \"MessageGroupId.$\": \"$.transactionId\",\n        \"MessageDeduplicationId.$\": \"$.transactionId\"\n      },\n      \"Next\": \"CheckFraud\",\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"CompensatePayment\",\n          \"ResultPath\": \"$.paymentError\"\n        }\n      ],\n      \"ResultPath\": \"$.paymentResult\"\n    },\n    \"CheckFraud\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::sqs:sendMessage\",\n      \"Parameters\": {\n        \"QueueUrl\": \"${FraudDetectionQueue}\",\n        \"MessageBody.$\": \"$\",\n        \"MessageGroupId.$\": \"$.transactionId\",\n        \"MessageDeduplicationId.$\": \"States.UUID()\"\n      },\n      \"Next\": \"CompleteOrder\",\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"FraudDetected\"],\n          \"Next\": \"CompensateFraud\",\n          \"ResultPath\": \"$.fraudError\"\n        }\n      ],\n      \"ResultPath\": \"$.fraudResult\"\n    },\n    \"CompleteOrder\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:updateItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Key\": {\n          \"transactionId\": {\"S.$\": \"$.transactionId\"},\n          \"timestamp\": {\"N.$\": \"States.JsonToString($.timestamp)\"}\n        },\n        \"UpdateExpression\": \"SET orderStatus = :status, completedAt = :completedAt\",\n        \"ExpressionAttributeValues\": {\n          \":status\": {\"S\": \"COMPLETED\"},\n          \":completedAt\": {\"S.$\": \"$$.State.EnteredTime\"}\n        }\n      },\n      \"Next\": \"ReleaseLock\",\n      \"ResultPath\": \"$.completionResult\"\n    },\n    \"ReleaseLock\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${DistributedLockFunction.Arn}\",\n      \"Parameters\": {\n        \"operation\": \"release\",\n        \"lockId.$\": \"$.transactionId\",\n        \"ownerId.$\": \"$$.Execution.Name\"\n      },\n      \"End\": true,\n      \"ResultPath\": \"$.releaseResult\"\n    },\n    \"CompensateOrder\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${SagaCoordinatorFunction.Arn}\",\n      \"Parameters\": {\n        \"rollback\": true,\n        \"sagaState.$\": \"$\",\n        \"compensationType\": \"ORDER\"\n      },\n      \"Next\": \"ReleaseLock\",\n      \"ResultPath\": \"$.compensationResult\"\n    },\n    \"CompensatePayment\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${SagaCoordinatorFunction.Arn}\",\n      \"Parameters\": {\n        \"rollback\": true,\n        \"sagaState.$\": \"$\",\n        \"compensationType\": \"PAYMENT\"\n      },\n      \"Next\": \"CompensateOrder\",\n      \"ResultPath\": \"$.compensationResult\"\n    },\n    \"CompensateFraud\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${SagaCoordinatorFunction.Arn}\",\n      \"Parameters\": {\n        \"rollback\": true,\n        \"sagaState.$\": \"$\",\n        \"compensationType\": \"FRAUD\"\n      },\n      \"Next\": \"CompensatePayment\",\n      \"ResultPath\": \"$.compensationResult\"\n    },\n    \"HandleError\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::sqs:sendMessage\",\n      \"Parameters\": {\n        \"QueueUrl\": \"${OrderProcessingDLQ}\",\n        \"MessageBody.$\": \"$\",\n        \"MessageGroupId\": \"error\"\n      },\n      \"End\": true,\n      \"ResultPath\": \"$.errorHandled\"\n    }\n  }\n}\n"
+                }
+            }
+        },
+        "PaymentValidationStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentValidation"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionsExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfiguration": {
+                    "Enabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "DefinitionString": {
+                    "Fn::Sub": "{\n  \"Comment\": \"Payment Validation with Circuit Breaker Pattern\",\n  \"StartAt\": \"CheckCircuitBreaker\",\n  \"States\": {\n    \"CheckCircuitBreaker\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:getItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Key\": {\n          \"transactionId\": {\"S\": \"circuit-breaker-payment\"},\n          \"timestamp\": {\"N\": \"0\"}\n        }\n      },\n      \"ResultPath\": \"$.circuitBreaker\",\n      \"Next\": \"EvaluateCircuit\",\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"InitializeCircuitBreaker\",\n          \"ResultPath\": \"$.error\"\n        }\n      ]\n    },\n    \"InitializeCircuitBreaker\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:putItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Item\": {\n          \"transactionId\": {\"S\": \"circuit-breaker-payment\"},\n          \"timestamp\": {\"N\": \"0\"},\n          \"status\": {\"S\": \"CLOSED\"},\n          \"failureCount\": {\"N\": \"0\"},\n          \"lastFailure\": {\"S\": \"\"},\n          \"partitionKey\": {\"S\": \"circuit-breaker\"}\n        }\n      },\n      \"Next\": \"ValidatePayment\"\n    },\n    \"EvaluateCircuit\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"And\": [\n            {\n              \"Variable\": \"$.circuitBreaker.Item.status.S\",\n              \"StringEquals\": \"OPEN\"\n            },\n            {\n              \"Variable\": \"$.circuitBreaker.Item.failureCount.N\",\n              \"NumericGreaterThan\": 5\n            }\n          ],\n          \"Next\": \"CircuitOpen\"\n        },\n        {\n          \"Variable\": \"$.circuitBreaker.Item.status.S\",\n          \"StringEquals\": \"HALF_OPEN\",\n          \"Next\": \"ValidatePaymentWithCaution\"\n        }\n      ],\n      \"Default\": \"ValidatePayment\"\n    },\n    \"CircuitOpen\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"CircuitBreakerOpen\",\n      \"Cause\": \"Payment validation circuit breaker is open due to excessive failures\"\n    },\n    \"ValidatePayment\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${EventTransformerFunction.Arn}\",\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\"],\n          \"IntervalSeconds\": 1,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0\n        },\n        {\n          \"ErrorEquals\": [\"States.Timeout\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 2,\n          \"BackoffRate\": 2.5\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"UpdateCircuitBreaker\"\n        }\n      ],\n      \"Next\": \"ResetCircuitBreaker\"\n    },\n    \"ValidatePaymentWithCaution\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${EventTransformerFunction.Arn}\",\n      \"TimeoutSeconds\": 10,\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"OpenCircuitBreaker\"\n        }\n      ],\n      \"Next\": \"ResetCircuitBreaker\"\n    },\n    \"ResetCircuitBreaker\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:updateItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Key\": {\n          \"transactionId\": {\"S\": \"circuit-breaker-payment\"},\n          \"timestamp\": {\"N\": \"0\"}\n        },\n        \"UpdateExpression\": \"SET #status = :status, failureCount = :zero\",\n        \"ExpressionAttributeNames\": {\n          \"#status\": \"status\"\n        },\n        \"ExpressionAttributeValues\": {\n          \":status\": {\"S\": \"CLOSED\"},\n          \":zero\": {\"N\": \"0\"}\n        }\n      },\n      \"Next\": \"PaymentSuccess\"\n    },\n    \"UpdateCircuitBreaker\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:updateItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Key\": {\n          \"transactionId\": {\"S\": \"circuit-breaker-payment\"},\n          \"timestamp\": {\"N\": \"0\"}\n        },\n        \"UpdateExpression\": \"SET #status = :status, failureCount = failureCount + :inc, lastFailure = :time\",\n        \"ExpressionAttributeNames\": {\n          \"#status\": \"status\"\n        },\n        \"ExpressionAttributeValues\": {\n          \":status\": {\"S\": \"HALF_OPEN\"},\n          \":inc\": {\"N\": \"1\"},\n          \":time\": {\"S.$\": \"$$.State.EnteredTime\"}\n        }\n      },\n      \"End\": true\n    },\n    \"OpenCircuitBreaker\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:updateItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Key\": {\n          \"transactionId\": {\"S\": \"circuit-breaker-payment\"},\n          \"timestamp\": {\"N\": \"0\"}\n        },\n        \"UpdateExpression\": \"SET #status = :status, lastFailure = :time\",\n        \"ExpressionAttributeNames\": {\n          \"#status\": \"status\"\n        },\n        \"ExpressionAttributeValues\": {\n          \":status\": {\"S\": \"OPEN\"},\n          \":time\": {\"S.$\": \"$$.State.EnteredTime\"}\n        }\n      },\n      \"Next\": \"CircuitOpen\"\n    },\n    \"PaymentSuccess\": {\n      \"Type\": \"Succeed\"\n    }\n  }\n}\n"
+                }
+            }
+        },
+        "FraudDetectionStateMachine": {
+            "Type": "AWS::StepFunctions::StateMachine",
+            "Properties": {
+                "StateMachineName": {
+                    "Fn::Sub": "${AWS::StackName}-FraudDetection"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "StepFunctionsExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TracingConfiguration": {
+                    "Enabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ],
+                "DefinitionString": {
+                    "Fn::Sub": "{\n  \"Comment\": \"Fraud Detection with Parallel Checks\",\n  \"StartAt\": \"EnrichTransaction\",\n  \"States\": {\n    \"EnrichTransaction\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"${EventTransformerFunction.Arn}\",\n      \"Next\": \"ParallelFraudChecks\",\n      \"ResultPath\": \"$.enrichedData\"\n    },\n    \"ParallelFraudChecks\": {\n      \"Type\": \"Parallel\",\n      \"Branches\": [\n        {\n          \"StartAt\": \"VelocityCheck\",\n          \"States\": {\n            \"VelocityCheck\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${EventTransformerFunction.Arn}\",\n                \"Payload\": {\n                  \"checkType\": \"velocity\",\n                  \"transaction.$\": \"$\"\n                }\n              },\n              \"End\": true\n            }\n          }\n        },\n        {\n          \"StartAt\": \"PatternAnalysis\",\n          \"States\": {\n            \"PatternAnalysis\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${EventTransformerFunction.Arn}\",\n                \"Payload\": {\n                  \"checkType\": \"pattern\",\n                  \"transaction.$\": \"$\"\n                }\n              },\n              \"End\": true\n            }\n          }\n        },\n        {\n          \"StartAt\": \"BlacklistCheck\",\n          \"States\": {\n            \"BlacklistCheck\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${EventTransformerFunction.Arn}\",\n                \"Payload\": {\n                  \"checkType\": \"blacklist\",\n                  \"transaction.$\": \"$\"\n                }\n              },\n              \"End\": true\n            }\n          }\n        }\n      ],\n      \"Next\": \"EvaluateRiskScore\",\n      \"ResultPath\": \"$.fraudChecks\"\n    },\n    \"EvaluateRiskScore\": {\n      \"Type\": \"Choice\",\n      \"Choices\": [\n        {\n          \"Variable\": \"$.fraudChecks[0].Payload.riskScore\",\n          \"NumericGreaterThan\": 80,\n          \"Next\": \"FraudDetected\"\n        },\n        {\n          \"Variable\": \"$.fraudChecks[1].Payload.riskScore\",\n          \"NumericGreaterThan\": 80,\n          \"Next\": \"FraudDetected\"\n        },\n        {\n          \"Variable\": \"$.fraudChecks[2].Payload.riskScore\",\n          \"NumericGreaterThan\": 80,\n          \"Next\": \"FraudDetected\"\n        }\n      ],\n      \"Default\": \"TransactionClean\"\n    },\n    \"FraudDetected\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::events:putEvents\",\n      \"Parameters\": {\n        \"Entries\": [\n          {\n            \"Source\": \"fraud.detection\",\n            \"DetailType\": \"Fraud Alert\",\n            \"Detail.$\": \"States.JsonToString($)\",\n            \"EventBusName\": \"${MainEventBus}\"\n          }\n        ]\n      },\n      \"Next\": \"BlockTransaction\"\n    },\n    \"BlockTransaction\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::dynamodb:updateItem\",\n      \"Parameters\": {\n        \"TableName\": \"${TransactionStateTable}\",\n        \"Key\": {\n          \"transactionId\": {\"S.$\": \"$.transactionId\"},\n          \"timestamp\": {\"N.$\": \"States.JsonToString($.timestamp)\"}\n        },\n        \"UpdateExpression\": \"SET fraudStatus = :status, blockedAt = :time\",\n        \"ExpressionAttributeValues\": {\n          \":status\": {\"S\": \"BLOCKED\"},\n          \":time\": {\"S.$\": \"$$.State.EnteredTime\"}\n        }\n      },\n      \"End\": true\n    },\n    \"TransactionClean\": {\n      \"Type\": \"Succeed\"\n    }\n  }\n}\n"
+                }
+            }
+        },
+        "MainEventBus": {
+            "Type": "AWS::Events::EventBus",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MainBus"
+                },
+                "Tags": [
+                    {
+                        "Key": "Purpose",
+                        "Value": "MainEventRouter"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EventArchive": {
+            "Type": "AWS::Events::Archive",
+            "Properties": {
+                "ArchiveName": {
+                    "Fn::Sub": "${AWS::StackName}-EventArchive"
+                },
+                "Description": "Event archive with configurable retention for replay capability",
+                "EventPattern": {
+                    "source": [
+                        "transaction.processing",
+                        "payment.validation",
+                        "fraud.detection",
+                        "saga.coordinator"
+                    ]
+                },
+                "RetentionDays": {
+                    "Ref": "RetentionDays"
+                },
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "MainEventBus",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "OrderRoutingRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OrderRouting"
+                },
+                "Description": "Route order events to processing workflow using content-based filtering",
+                "EventBusName": {
+                    "Ref": "MainEventBus"
+                },
+                "EventPattern": {
+                    "source": [
+                        "transaction.processing"
+                    ],
+                    "detail-type": [
+                        "ORDER"
+                    ],
+                    "detail": {
+                        "currency": [
+                            {
+                                "exists": true
+                            }
+                        ],
+                        "type": [
+                            {
+                                "anything-but": [
+                                    "REVERSAL",
+                                    "CANCEL"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "OrderProcessingStateMachineTarget",
+                        "Arn": {
+                            "Ref": "OrderProcessingStateMachine"
+                        },
+                        "RoleArn": {
+                            "Fn::GetAtt": [
+                                "EventBridgeRole",
+                                "Arn"
+                            ]
+                        },
+                        "RetryPolicy": {
+                            "MaximumRetryAttempts": 2,
+                            "MaximumEventAgeInSeconds": 86400
+                        },
+                        "InputTransformer": {
+                            "InputPathsMap": {
+                                "transactionId": "$.detail.transactionId",
+                                "amount": "$.detail.amount",
+                                "timestamp": "$.time"
+                            },
+                            "InputTemplate": "{\n  \"transactionId\": \"<transactionId>\",\n  \"amount\": <amount>,\n  \"timestamp\": \"<timestamp>\"\n}\n"
+                        }
+                    }
+                ]
+            }
+        },
+        "PaymentRoutingRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentRouting"
+                },
+                "Description": "Route payment events using JSONPath expressions",
+                "EventBusName": {
+                    "Ref": "MainEventBus"
+                },
+                "EventPattern": {
+                    "source": [
+                        "payment.validation"
+                    ],
+                    "detail": {
+                        "paymentMethod": [
+                            {
+                                "prefix": "CARD"
+                            }
+                        ],
+                        "currency": [
+                            "USD",
+                            "EUR",
+                            "GBP"
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "PaymentValidationQueueTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "PaymentValidationQueue",
+                                "Arn"
+                            ]
+                        },
+                        "SqsParameters": {
+                            "MessageGroupId": "$.detail.transactionId"
+                        }
+                    },
+                    {
+                        "Id": "PaymentValidationStateMachineTarget",
+                        "Arn": {
+                            "Ref": "PaymentValidationStateMachine"
+                        },
+                        "RoleArn": {
+                            "Fn::GetAtt": [
+                                "EventBridgeRole",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "FraudRoutingRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FraudRouting"
+                },
+                "Description": "High-risk transaction routing with advanced filtering",
+                "EventBusName": {
+                    "Ref": "MainEventBus"
+                },
+                "EventPattern": {
+                    "source": [
+                        "fraud.detection"
+                    ],
+                    "detail": {
+                        "transactionType": [
+                            {
+                                "anything-but": [
+                                    "REVERSAL",
+                                    "ADJUSTMENT"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "FraudDetectionQueueTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "FraudDetectionQueue",
+                                "Arn"
+                            ]
+                        },
+                        "SqsParameters": {
+                            "MessageGroupId": "$.detail.customerId"
+                        }
+                    },
+                    {
+                        "Id": "FraudDetectionStateMachineTarget",
+                        "Arn": {
+                            "Ref": "FraudDetectionStateMachine"
+                        },
+                        "RoleArn": {
+                            "Fn::GetAtt": [
+                                "EventBridgeRole",
+                                "Arn"
+                            ]
+                        },
+                        "InputTransformer": {
+                            "InputPathsMap": {
+                                "transactionId": "$.detail.transactionId",
+                                "amount": "$.detail.amount",
+                                "riskFactors": "$.detail.riskFactors"
+                            },
+                            "InputTemplate": "{\n  \"transactionId\": \"<transactionId>\",\n  \"amount\": <amount>,\n  \"riskFactors\": <riskFactors>,\n  \"timestamp\": <aws.events.event.ingestion-time>\n}\n"
+                        }
+                    }
+                ]
+            }
+        },
+        "CrossRegionReplicationRule": {
+            "Type": "AWS::Events::Rule",
+            "Condition": "CreateSecondaryResources",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CrossRegionReplication"
+                },
+                "Description": "Replicate critical events to secondary region",
+                "EventBusName": {
+                    "Ref": "MainEventBus"
+                },
+                "EventPattern": {
+                    "source": [
+                        "transaction.processing",
+                        "payment.validation"
+                    ],
+                    "detail": {
+                        "priority": [
+                            "HIGH",
+                            "CRITICAL"
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "CrossRegionEventBusTarget",
+                        "Arn": {
+                            "Fn::Sub": "arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${AWS::StackName}-MainBus"
+                        },
+                        "RoleArn": {
+                            "Fn::GetAtt": [
+                                "EventBridgeRole",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "GlobalEventBridgeEndpoint": {
+            "Type": "AWS::Events::Endpoint",
+            "Condition": "CreateGlobalEndpoint",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GlobalEndpoint"
+                },
+                "Description": "Global endpoint for failover between primary and secondary EventBridge buses",
+                "EventBuses": [
+                    {
+                        "EventBusArn": {
+                            "Fn::GetAtt": [
+                                "MainEventBus",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    {
+                        "EventBusArn": {
+                            "Fn::Sub": "arn:aws:events:${SecondaryRegion}:${AWS::AccountId}:event-bus/${AWS::StackName}-MainBus"
+                        }
+                    }
+                ],
+                "RoutingConfig": {
+                    "FailoverConfig": {
+                        "Primary": {
+                            "HealthCheck": {
+                                "Ref": "GlobalEndpointHealthCheckArn"
+                            }
+                        },
+                        "Secondary": {
+                            "Route": "secondary"
+                        }
+                    }
+                }
+            }
+        },
+        "VisibilityTimeoutSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VisibilityTimeoutSchedule"
+                },
+                "Description": "Periodically adjust SQS visibility timeouts",
+                "ScheduleExpression": "rate(5 minutes)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "VisibilityTimeoutAdjusterFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "VisibilityTimeoutAdjuster"
+                    }
+                ]
+            }
+        },
+        "VisibilityTimeoutPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "VisibilityTimeoutAdjusterFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "VisibilityTimeoutSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "OrderProcessingLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/stepfunctions/${AWS::StackName}-OrderProcessing"
+                },
+                "RetentionInDays": {
+                    "Ref": "RetentionDays"
+                }
+            }
+        },
+        "PaymentValidationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/stepfunctions/${AWS::StackName}-PaymentValidation"
+                },
+                "RetentionInDays": {
+                    "Ref": "RetentionDays"
+                }
+            }
+        },
+        "FraudDetectionLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/stepfunctions/${AWS::StackName}-FraudDetection"
+                },
+                "RetentionInDays": {
+                    "Ref": "RetentionDays"
+                }
+            }
+        },
+        "HighEventVolumeAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-HighEventVolume"
+                },
+                "AlarmDescription": "Alert when event processing exceeds threshold",
+                "MetricName": "InvocationAttempts",
+                "Namespace": "AWS/Events",
+                "Dimensions": [
+                    {
+                        "Name": "Rule",
+                        "Value": {
+                            "Ref": "OrderRoutingRule"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Ref": "EventProcessingCapacity"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "DLQMessageAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-DLQMessages"
+                },
+                "AlarmDescription": "Alert when messages arrive in DLQ",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Namespace": "AWS/SQS",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "OrderProcessingDLQ",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "DynamoDBThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBThrottle"
+                },
+                "AlarmDescription": "Alert on DynamoDB throttling",
+                "MetricName": "UserErrors",
+                "Namespace": "AWS/DynamoDB",
+                "Dimensions": [
+                    {
+                        "Name": "TableName",
+                        "Value": {
+                            "Ref": "TransactionStateTable"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 2,
+                "Threshold": 10,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaErrors"
+                },
+                "AlarmDescription": "Alert on Lambda function errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "EventTransformerFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "StepFunctionsFailureAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-StepFunctionsFailures"
+                },
+                "AlarmDescription": "Alert on Step Functions execution failures",
+                "MetricName": "ExecutionsFailed",
+                "Namespace": "AWS/States",
+                "Dimensions": [
+                    {
+                        "Name": "StateMachineArn",
+                        "Value": {
+                            "Ref": "OrderProcessingStateMachine"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 3,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "${AWS::StackName}-Monitoring"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Event Processing Rate\",\n        \"metrics\": [\n          [\"AWS/Events\", \"InvocationAttempts\", {\"stat\": \"Sum\"}],\n          [\".\", \"SuccessfulRuleMatches\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 60,\n        \"stat\": \"Sum\",\n        \"region\": \"${AWS::Region}\",\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"Lambda Function Performance\",\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", {\"stat\": \"Sum\"}],\n          [\".\", \"Errors\", {\"stat\": \"Sum\"}],\n          [\".\", \"Duration\", {\"stat\": \"Average\"}]\n        ],\n        \"period\": 300,\n        \"region\": \"${AWS::Region}\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"SQS Queue Metrics\",\n        \"metrics\": [\n          [\"AWS/SQS\", \"NumberOfMessagesSent\", {\"stat\": \"Sum\"}],\n          [\".\", \"ApproximateNumberOfMessagesVisible\", {\"stat\": \"Average\"}],\n          [\".\", \"ApproximateAgeOfOldestMessage\", {\"stat\": \"Maximum\"}]\n        ],\n        \"period\": 300,\n        \"region\": \"${AWS::Region}\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"title\": \"DynamoDB Performance\",\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\"}],\n          [\".\", \"UserErrors\", {\"stat\": \"Sum\"}],\n          [\".\", \"SystemErrors\", {\"stat\": \"Sum\"}]\n        ],\n        \"period\": 300,\n        \"region\": \"${AWS::Region}\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "MainEventBusArn": {
+            "Description": "ARN of the main EventBridge bus",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MainEventBus",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MainEventBus"
+                }
+            }
+        },
+        "MainEventBusName": {
+            "Description": "Name of the main EventBridge bus",
+            "Value": {
+                "Ref": "MainEventBus"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MainEventBusName"
+                }
+            }
+        },
+        "OrderProcessingQueueUrl": {
+            "Description": "URL of the order processing FIFO queue",
+            "Value": {
+                "Ref": "OrderProcessingQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OrderQueue"
+                }
+            }
+        },
+        "PaymentValidationQueueUrl": {
+            "Description": "URL of the payment validation FIFO queue",
+            "Value": {
+                "Ref": "PaymentValidationQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentQueue"
+                }
+            }
+        },
+        "FraudDetectionQueueUrl": {
+            "Description": "URL of the fraud detection FIFO queue",
+            "Value": {
+                "Ref": "FraudDetectionQueue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FraudQueue"
+                }
+            }
+        },
+        "TransactionStateTableName": {
+            "Description": "Name of the transaction state global table",
+            "Value": {
+                "Ref": "TransactionStateTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StateTable"
+                }
+            }
+        },
+        "TransactionStateTableArn": {
+            "Description": "ARN of the transaction state global table",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionStateTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StateTableArn"
+                }
+            }
+        },
+        "IdempotencyTableName": {
+            "Description": "Name of the idempotency global table",
+            "Value": {
+                "Ref": "IdempotencyTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IdempotencyTable"
+                }
+            }
+        },
+        "OrderProcessingStateMachineArn": {
+            "Description": "ARN of the order processing state machine",
+            "Value": {
+                "Ref": "OrderProcessingStateMachine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OrderStateMachine"
+                }
+            }
+        },
+        "PaymentValidationStateMachineArn": {
+            "Description": "ARN of the payment validation state machine",
+            "Value": {
+                "Ref": "PaymentValidationStateMachine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PaymentStateMachine"
+                }
+            }
+        },
+        "FraudDetectionStateMachineArn": {
+            "Description": "ARN of the fraud detection state machine",
+            "Value": {
+                "Ref": "FraudDetectionStateMachine"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FraudStateMachine"
+                }
+            }
+        },
+        "EventTransformerFunctionArn": {
+            "Description": "ARN of the event transformer Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EventTransformerFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EventTransformer"
+                }
+            }
+        },
+        "DistributedLockFunctionArn": {
+            "Description": "ARN of the distributed lock Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DistributedLockFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DistributedLock"
+                }
+            }
+        },
+        "SagaCoordinatorFunctionArn": {
+            "Description": "ARN of the saga coordinator Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SagaCoordinatorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SagaCoordinator"
+                }
+            }
+        },
+        "DashboardUrl": {
+            "Description": "URL to CloudWatch Dashboard",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-Monitoring"
+            }
+        },
+        "AlertTopicArn": {
+            "Description": "ARN of the SNS topic for alerts",
+            "Value": {
+                "Ref": "AlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopic"
+                }
+            }
+        },
+        "EventArchiveName": {
+            "Description": "Name of the event archive",
+            "Value": {
+                "Ref": "EventArchive"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EventArchive"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID for the infrastructure",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "ID of private subnet 1",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "ID of private subnet 2",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2"
+                }
+            }
+        },
+        "LambdaSecurityGroupId": {
+            "Description": "Security group ID for Lambda functions",
+            "Value": {
+                "Ref": "LambdaSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaSG"
+                }
+            }
+        },
+        "MasterKMSKeyId": {
+            "Description": "ID of the master KMS key",
+            "Value": {
+                "Ref": "MasterKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MasterKey"
+                }
+            }
+        },
+        "MasterKMSKeyArn": {
+            "Description": "ARN of the master KMS key",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MasterKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MasterKeyArn"
+                }
+            }
+        },
+        "StackRegion": {
+            "Description": "AWS Region where stack is deployed",
+            "Value": {
+                "Ref": "AWS::Region"
+            }
+        },
+        "SecondaryRegionConfig": {
+            "Description": "Secondary region for disaster recovery",
+            "Value": {
+                "Ref": "SecondaryRegion"
+            }
+        },
+        "Environment": {
+            "Description": "Deployment environment",
+            "Value": {
+                "Ref": "Environment"
+            }
+        },
+        "ProcessingCapacity": {
+            "Description": "Configured event processing capacity per minute",
+            "Value": {
+                "Ref": "EventProcessingCapacity"
+            }
+        }
+    }
+}
