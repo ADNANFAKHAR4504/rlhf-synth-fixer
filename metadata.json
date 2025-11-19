@@ -1,0 +1,25 @@
+{
+  "po_id": "y0b2v6",
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T02:27:50+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery and High Availability"
+  ],
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "Backup",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9
+}
