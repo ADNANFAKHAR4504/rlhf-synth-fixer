@@ -2,6 +2,7 @@
 from typing import Dict
 import hashlib
 import uuid
+import time
 
 
 class NamingModule:
@@ -12,14 +13,11 @@ class NamingModule:
         self.region = region
         self.environment_suffix = environment_suffix
         # Generate a unique identifier for this naming instance to avoid conflicts
-        # Include stack_id if provided to ensure uniqueness across different stack instances
-        # Use UUID as fallback to ensure uniqueness even with same inputs
-        if stack_id:
-            unique_str = f"{environment}-{region}-{environment_suffix}-{stack_id}"
-        else:
-            # Use UUID to ensure uniqueness when stack_id is not available
-            # This ensures each deployment gets unique resource names to avoid conflicts
-            unique_str = f"{environment}-{region}-{environment_suffix}-{str(uuid.uuid4())}"
+        # Always use timestamp + UUID to ensure uniqueness across deployments
+        # This prevents resource name collisions when deploying multiple times
+        timestamp = str(int(time.time()))
+        unique_id = str(uuid.uuid4())[:8]
+        unique_str = f"{environment}-{region}-{environment_suffix}-{timestamp}-{unique_id}"
         self.unique_suffix = hashlib.md5(unique_str.encode()).hexdigest()[:8]
 
     def generate_name(self, service: str, resource: str) -> str:
