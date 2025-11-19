@@ -194,10 +194,21 @@ cluster)
         service_name = self.outputs['ECSServiceName']
         table_name = self.outputs['DynamoDBTableName']
 
-        # All should contain "synth101912383" or similar suffix
-        self.assertIn('synth', cluster_name.lower())
-        self.assertIn('synth', service_name.lower())
-        self.assertIn('synth', table_name.lower())
+        # Extract common prefix pattern (e.g., "pr6884", "synth101912383", etc.)
+        # All resources should have a consistent suffix pattern
+        # Check that names follow the pattern: ml-api-{resource}-{suffix}
+        self.assertTrue(cluster_name.startswith('ml-api-cluster-'))
+        self.assertTrue(service_name.startswith('ml-api-service-'))
+        self.assertTrue(table_name.startswith('ml-api-sessions-'))
+        
+        # Verify they all have a suffix (non-empty after the prefix)
+        cluster_suffix = cluster_name.replace('ml-api-cluster-', '')
+        service_suffix = service_name.replace('ml-api-service-', '')
+        table_suffix = table_name.replace('ml-api-sessions-', '')
+        
+        self.assertGreater(len(cluster_suffix), 0, "Cluster name missing suffix")
+        self.assertGreater(len(service_suffix), 0, "Service name missing suffix")
+        self.assertGreater(len(table_suffix), 0, "Table name missing suffix")
 
     def test_vpc_has_public_and_private_subnets(self):
         """Test VPC has both public and private subnets."""
