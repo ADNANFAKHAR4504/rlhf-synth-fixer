@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+import * as cdk from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
+const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+const stackName = `TapStack${environmentSuffix}`;
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+const prNumber = process.env.PR_NUMBER || 'unknown';
+const team = process.env.TEAM || 'unknown';
+const createdAt = new Date().toISOString();
+
+// Apply tags to all stacks in this app
+Tags.of(app).add('Environment', environmentSuffix);
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
+Tags.of(app).add('PRNumber', prNumber);
+Tags.of(app).add('Team', team);
+Tags.of(app).add('CreatedAt', createdAt);
+
+// Multi-region deployment configuration
+const primaryRegion = 'us-east-1';
+const drRegion = 'us-east-2';
+
+// Create primary stack in us-east-1
+new TapStack(app, `${stackName}-primary`, {
+  stackName: `${stackName}-primary`,
+  environmentSuffix: environmentSuffix,
+  isPrimary: true,
+  primaryRegion: primaryRegion,
+  drRegion: drRegion,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: primaryRegion,
+  },
+});
+
+// Create DR stack in us-east-2
+new TapStack(app, `${stackName}-dr`, {
+  stackName: `${stackName}-dr`,
+  environmentSuffix: environmentSuffix,
+  isPrimary: false,
+  primaryRegion: primaryRegion,
+  drRegion: drRegion,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: drRegion,
+  },
+});
