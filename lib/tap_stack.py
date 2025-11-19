@@ -666,7 +666,11 @@ echo '<h1>Payment Processing System - Environment: {environment_suffix}</h1>' > 
             image_id=ami.id,
             instance_type="t3.medium",
             iam_instance_profile={"arn": instance_profile.arn},
-            vpc_security_group_ids=[ec2_sg.id],
+            network_interfaces=[{
+                "associate_public_ip_address": "true",
+                "device_index": 0,
+                "security_groups": [ec2_sg.id]
+            }],
             user_data=Fn.base64encode(Fn.raw_string(user_data)),
             tag_specifications=[
                 LaunchTemplateTagSpecifications(
