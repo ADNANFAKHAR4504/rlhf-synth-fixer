@@ -64,17 +64,6 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
-Mappings:
-  InstanceTypeMaxPods:
-    t3.medium:
-      MaxPods: 17
-    t3.large:
-      MaxPods: 35
-    t3a.large:
-      MaxPods: 35
-    t2.large:
-      MaxPods: 35
-
 Resources:
   # KMS Key for CloudWatch Logs Encryption
   LogsKmsKey:
@@ -536,42 +525,6 @@ Resources:
       ToPort: 443
       SourceSecurityGroupId: !Ref EksNodeSecurityGroup
 
-  # Lambda Security Group for VPC access
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for Lambda function to access EKS API'
-      VpcId: !Ref Vpc
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS access to EKS API'
-        - IpProtocol: tcp
-          FromPort: 53
-          ToPort: 53
-          CidrIp: '0.0.0.0/0'
-          Description: 'DNS resolution'
-        - IpProtocol: udp
-          FromPort: 53
-          ToPort: 53
-          CidrIp: '0.0.0.0/0'
-          Description: 'DNS resolution'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lambda-sg'
-
-  EksControlPlaneSecurityGroupFromLambdaIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EksClusterSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      SourceSecurityGroupId: !Ref LambdaSecurityGroup
-      Description: 'Allow Lambda function access to EKS API'
-
   # IAM Roles
   EksClusterRole:
     Type: AWS::IAM::Role
@@ -632,7 +585,8 @@ Resources:
         SecurityGroupIds:
           - !Ref EksClusterSecurityGroup
         EndpointPrivateAccess: true
-        EndpointPublicAccess: false
+        EndpointPublicAccess: true
+        PublicAccessCidrs: ['0.0.0.0/0']
       Logging:
         ClusterLogging:
           EnabledTypes:
@@ -658,15 +612,6 @@ Resources:
           Enabled: true
         SecurityGroupIds:
           - !Ref EksNodeSecurityGroup
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-ondemand-node'
-              - Key: 'k8s.io/cluster-autoscaler/enabled'
-                Value: 'true'
-              - Key: !Sub 'k8s.io/cluster-autoscaler/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster'
-                Value: 'owned'
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
@@ -674,20 +619,6 @@ Resources:
               VolumeType: gp3
               Encrypted: true
               DeleteOnTermination: true
-        UserData:
-          Fn::Base64: !Sub
-            - |
-              MIME-Version: 1.0
-              Content-Type: multipart/mixed; boundary="==MYBOUNDARY=="
-              
-              --==MYBOUNDARY==
-              Content-Type: text/x-shellscript; charset="us-ascii"
-              
-              #!/bin/bash
-              /etc/eks/bootstrap.sh ${EksCluster} \
-                --kubelet-extra-args '--max-pods=${MaxPods}'
-              --==MYBOUNDARY==--
-            - MaxPods: !FindInMap [InstanceTypeMaxPods, t3.medium, MaxPods]
 
   SpotLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -701,15 +632,6 @@ Resources:
           Enabled: true
         SecurityGroupIds:
           - !Ref EksNodeSecurityGroup
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-spot-node'
-              - Key: 'k8s.io/cluster-autoscaler/enabled'
-                Value: 'true'
-              - Key: !Sub 'k8s.io/cluster-autoscaler/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster'
-                Value: 'owned'
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
@@ -717,20 +639,6 @@ Resources:
               VolumeType: gp3
               Encrypted: true
               DeleteOnTermination: true
-        UserData:
-          Fn::Base64: !Sub
-            - |
-              MIME-Version: 1.0
-              Content-Type: multipart/mixed; boundary="==MYBOUNDARY=="
-              
-              --==MYBOUNDARY==
-              Content-Type: text/x-shellscript; charset="us-ascii"
-              
-              #!/bin/bash
-              /etc/eks/bootstrap.sh ${EksCluster} \
-                --kubelet-extra-args '--max-pods=${MaxPods}'
-              --==MYBOUNDARY==--
-            - MaxPods: !FindInMap [InstanceTypeMaxPods, t3.large, MaxPods]
 
   # Node Groups
   OnDemandNodeGroup:
@@ -940,7 +848,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
       Policies:
         - PolicyName: EksManagementPolicy
           PolicyDocument:
@@ -969,13 +876,6 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 900
       MemorySize: 1024
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
-          - !Ref PrivateSubnet3
       Environment:
         Variables:
           CLUSTER_NAME: !Ref EksCluster

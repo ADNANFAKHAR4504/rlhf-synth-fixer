@@ -155,22 +155,6 @@ describe('TapStack - Production-Grade EKS Cluster Unit Tests', () => {
       expect(templateYaml).toContain('Condition: EnableEbsEncryption');
       expect(templateYaml).toContain('Condition: EnableBastionAccess');
     });
-
-    test('Template contains Mappings section for instance type configurations', () => {
-      expect(templateYaml).toContain('Mappings:');
-      expect(templateYaml).toContain('InstanceTypeMaxPods:');
-    });
-
-    test('InstanceTypeMaxPods mapping contains proper instance types and max pod values', () => {
-      // Check for instance types that are actually in the template
-      expect(templateYaml).toContain('t3.medium:');
-      expect(templateYaml).toContain('MaxPods: 17');
-      expect(templateYaml).toContain('t3.large:');
-      expect(templateYaml).toContain('MaxPods: 35');
-      expect(templateYaml).toContain('t3a.large:');
-      expect(templateYaml).toContain('t2.large:');
-      // All large instances have MaxPods: 35 in this template
-    });
   });
 
   // ===========
@@ -470,32 +454,6 @@ describe('TapStack - Production-Grade EKS Cluster Unit Tests', () => {
       expect(templateYaml).toContain('Encrypted: true');
       expect(templateYaml).toContain('DeleteOnTermination: true');
     });
-
-    test('Launch Templates contain UserData with MIME multipart format', () => {
-      expect(templateYaml).toContain('UserData:');
-      expect(templateYaml).toContain('Fn::Base64:');
-      expect(templateYaml).toContain('MIME-Version: 1.0');
-      expect(templateYaml).toContain('Content-Type: multipart/mixed; boundary=');
-      expect(templateYaml).toContain('Content-Type: text/x-shellscript; charset=');
-      expect(templateYaml).toContain('--==MYBOUNDARY==');
-    });
-
-    test('Launch Templates contain kubelet max pods configuration', () => {
-      expect(templateYaml).toContain('/etc/eks/bootstrap.sh');
-      expect(templateYaml).toContain('--kubelet-extra-args');
-      expect(templateYaml).toContain('--max-pods=');
-      expect(templateYaml).toContain('!FindInMap [InstanceTypeMaxPods,');
-      expect(templateYaml).toContain('MaxPods]');
-    });
-
-    test('Launch Templates have TagSpecifications for cluster autoscaler', () => {
-      expect(templateYaml).toContain('TagSpecifications:');
-      expect(templateYaml).toContain('ResourceType: instance');
-      expect(templateYaml).toContain('k8s.io/cluster-autoscaler/enabled');
-      expect(templateYaml).toContain('Value: \'true\'');
-      expect(templateYaml).toContain('k8s.io/cluster-autoscaler/${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-cluster');
-      expect(templateYaml).toContain('Value: \'owned\'');
-    });
   });
 
   // ==================
@@ -600,16 +558,6 @@ describe('TapStack - Production-Grade EKS Cluster Unit Tests', () => {
       validateResourceExists('KubernetesCustomResource', 'Custom::KubernetesSetup');
       expect(templateYaml).toContain('ServiceToken: !GetAtt KubernetesManagementFunction.Arn');
       expect(templateYaml).toContain('ClusterName: !Ref EksCluster');
-    });
-
-    test('Lambda function has VPC configuration for private EKS access', () => {
-      expect(templateYaml).toContain('VpcConfig:');
-      expect(templateYaml).toContain('SecurityGroupIds:');
-      expect(templateYaml).toContain('- !Ref LambdaSecurityGroup');
-      expect(templateYaml).toContain('SubnetIds:');
-      expect(templateYaml).toContain('- !Ref PrivateSubnet1');
-      expect(templateYaml).toContain('- !Ref PrivateSubnet2');
-      expect(templateYaml).toContain('- !Ref PrivateSubnet3');
     });
   });
 
@@ -1164,7 +1112,7 @@ describe('TapStack - Production-Grade EKS Cluster Unit Tests', () => {
 
       // Count Name tag occurrences (should be multiple for EKS infrastructure)
       const nameTagMatches = (templateYaml.match(/Key: Name/g) || []).length;
-      expect(nameTagMatches).toBeGreaterThanOrEqual(15); 
+      expect(nameTagMatches).toBeGreaterThanOrEqual(15); // Many resources need naming
     });
 
     test('Secondary CIDR blocks integrate with VPC for custom networking', () => {
