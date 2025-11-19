@@ -5,7 +5,9 @@ import dns from 'dns/promises';
 import fs from 'fs';
 import path from 'path';
 
+import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
 import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
+import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 
 jest.setTimeout(120000);
@@ -24,6 +26,13 @@ const flat = readFlatOutputs();
 
 function awsConfigForRegion(region?: string) {
   const cfg: any = { region: region || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1' };
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    cfg.credentials = {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      sessionToken: process.env.AWS_SESSION_TOKEN,
+    };
+  }
   return cfg;
 }
 
@@ -165,13 +174,11 @@ describe('TapStack Integration Tests (E2E)', () => {
     const webaclArn = String(flat['WebACLArn']);
     expect(webaclArn).toBeTruthy();
 
-    // ARN expected like: arn:aws:wafv2:<region>:<acct>:regional/webacl/<name>/<id>
     const arnParts = webaclArn.split(':');
     expect(arnParts[2]).toBe('wafv2');
     const region = arnParts[3] || undefined;
 
     const afterResource = webaclArn.split(':').slice(5).join(':');
-    // afterResource like regional/webacl/Name/Id
     const resourceParts = afterResource.split('/');
     expect(resourceParts.length).toBeGreaterThanOrEqual(4);
     const scope = resourceParts[0] === 'regional' ? 'REGIONAL' : 'CLOUDFRONT';
@@ -186,6 +193,58 @@ describe('TapStack Integration Tests (E2E)', () => {
     const resp = await waf.send(cmd);
     expect(resp.WebACL).toBeDefined();
     expect(resp.WebACL?.Name).toBe(name);
+  });
+
+  test('VPC exists and has a valid CIDR block', async () => {
+    const vpcId = String(flat['VPCId']);
+    expect(vpcId).toBeTruthy();
+
+    const ec2 = new EC2Client(awsConfigForRegion());
+    const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+    expect(resp.Vpcs).toBeDefined();
+    expect((resp.Vpcs || []).length).toBeGreaterThan(0);
+    const vpc = resp.Vpcs ? resp.Vpcs[0] : null;
+    expect(vpc).toBeDefined();
+    const cidr = String(vpc?.CidrBlock || '');
+    expect(cidr.length).toBeGreaterThan(0);
+    // Basic CIDR format check (IPv4)
+    expect(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/.test(cidr)).toBe(true);
+  });
+
+  test('Subnets for the VPC exist and have CIDR ranges and AZs', async () => {
+    const vpcId = String(flat['VPCId']);
+    expect(vpcId).toBeTruthy();
+
+    const ec2 = new EC2Client(awsConfigForRegion());
+    const resp = await ec2.send(new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] }));
+    expect(resp.Subnets).toBeDefined();
+    const subnets = resp.Subnets || [];
+    expect(subnets.length).toBeGreaterThan(0);
+    subnets.forEach(s => {
+      expect(s.CidrBlock).toBeDefined();
+      expect(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/.test(String(s.CidrBlock))).toBe(true);
+      expect(s.AvailabilityZone).toBeDefined();
+    });
+  });
+
+  test('AutoScaling Group(s) created by the stack have sensible min/max/desired sizes', async () => {
+    const asg = new AutoScalingClient(awsConfigForRegion());
+    const resp = await asg.send(new DescribeAutoScalingGroupsCommand({}));
+    const groups = resp.AutoScalingGroups || [];
+
+    // Try to find ASGs created by CloudFormation stack (tag key aws:cloudformation:stack-name)
+    const matching = groups.filter(g => (g.Tags || []).some(t => t.Key === 'aws:cloudformation:stack-name' && /TapStack/i.test(String(t.Value))));
+    expect(matching.length).toBeGreaterThan(0);
+
+    matching.forEach(g => {
+      expect(typeof g.MinSize).toBe('number');
+      expect(typeof g.MaxSize).toBe('number');
+      expect((g.MaxSize || 0)).toBeGreaterThanOrEqual((g.MinSize || 0));
+      if (typeof g.DesiredCapacity === 'number') {
+        expect(g.DesiredCapacity).toBeGreaterThanOrEqual(g.MinSize || 0);
+        expect(g.DesiredCapacity).toBeLessThanOrEqual(g.MaxSize || g.DesiredCapacity);
+      }
+    });
   });
 });
 
