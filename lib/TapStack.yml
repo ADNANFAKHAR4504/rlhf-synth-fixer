@@ -43,14 +43,24 @@ Parameters:
     Default: 'admin'
     NoEcho: true
 
+  DBMasterPassword:
+    Type: String
+    Description: 'Master password for RDS Aurora MySQL (for testing, use direct password instead of Secrets Manager)'
+    Default: 'TestDbPassword123!'
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+
   DBMasterPasswordSecretArn:
     Type: String
-    Description: 'ARN of AWS Secrets Manager secret containing RDS master password'
+    Description: 'ARN of AWS Secrets Manager secret containing RDS master password (optional, leave default if using DBMasterPassword)'
+    Default: ''
     NoEcho: true
 
   SourceDatabaseEndpoint:
     Type: String
     Description: 'Source database endpoint for DMS'
+    Default: 'test-source-db.example.com'
 
   SourceDatabasePort:
     Type: String
@@ -60,20 +70,24 @@ Parameters:
   SourceDatabaseName:
     Type: String
     Description: 'Source database name'
+    Default: 'testdb'
 
   SourceDatabaseUsername:
     Type: String
     Description: 'Source database username'
+    Default: 'testuser'
     NoEcho: true
 
   SourceDatabasePassword:
     Type: String
     Description: 'Source database password'
+    Default: 'TestPassword123!'
     NoEcho: true
 
   AlertEmailAddress:
     Type: String
     Description: 'Email address for migration alerts'
+    Default: 'test@example.com'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 Resources:
@@ -413,7 +427,7 @@ Resources:
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.04.0'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}'
+      MasterUserPassword: !Ref DBMasterPassword
       DatabaseName: documents
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
@@ -573,7 +587,7 @@ Resources:
       Port: !GetAtt AuroraCluster.Endpoint.Port
       DatabaseName: documents
       Username: !Ref DBMasterUsername
-      Password: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}'
+      Password: !Ref DBMasterPassword
       Tags:
         - Key: Name
           Value: !Sub 'dms-target-${EnvironmentSuffix}'
