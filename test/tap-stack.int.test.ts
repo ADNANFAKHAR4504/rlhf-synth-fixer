@@ -8,6 +8,7 @@ import {
 import {
   DescribeInternetGatewaysCommand,
   DescribeLaunchTemplatesCommand,
+  DescribeLaunchTemplateVersionsCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -543,11 +544,31 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
       expect(cluster?.resourcesVpcConfig?.clusterSecurityGroupId).toBeDefined();
       expect(cluster?.resourcesVpcConfig?.clusterSecurityGroupId).toContain("sg-");
 
-      // Verify endpoint access
+      // Verify endpoint access configuration
       expect(cluster?.resourcesVpcConfig?.endpointPublicAccess).toBeDefined();
       expect(cluster?.resourcesVpcConfig?.endpointPrivateAccess).toBeDefined();
 
       console.log(`EKS Cluster validated: ${cluster?.name}, Status: ${cluster?.status}, Version: ${cluster?.version}`);
+    });
+
+    test("EKS cluster has hybrid endpoint access for operational functionality", async () => {
+      const res = await eksClient.send(
+        new DescribeClusterCommand({ name: outputs.ClusterName })
+      );
+
+      const cluster = res.cluster;
+      expect(cluster).toBeDefined();
+
+      // Verify endpoint configuration supports both private and public access
+      const vpcConfig = cluster?.resourcesVpcConfig;
+      expect(vpcConfig?.endpointPublicAccess).toBe(true);
+      expect(vpcConfig?.endpointPrivateAccess).toBe(true);
+
+      // Verify public access is configured
+      expect(vpcConfig?.publicAccessCidrs).toBeDefined();
+      expect(vpcConfig?.publicAccessCidrs).toContain("0.0.0.0/0");
+
+      console.log("EKS cluster endpoint is configured for hybrid access (private + public)");
     });
 
     test("EKS cluster has encryption enabled", async () => {
@@ -657,6 +678,31 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
   });
 
   // ---------------------------
+  // TEMPLATE CONFIGURATION VALIDATION  
+  // ---------------------------
+  describe("Template Mappings and Configuration", () => {
+    test("Instance type mappings validate against expected MaxPods values", () => {
+      // Verify template contains the InstanceTypeMaxPods mappings
+      const templateStr = JSON.stringify(template);
+      expect(templateStr).toContain("InstanceTypeMaxPods");
+      expect(templateStr).toContain("t3.medium");
+      expect(templateStr).toContain("t3.large");
+      expect(templateStr).toContain("t3a.large");
+      expect(templateStr).toContain("t2.large");
+
+      // Verify the mapping values in template
+      if (template.Mappings?.InstanceTypeMaxPods) {
+        expect(template.Mappings.InstanceTypeMaxPods["t3.medium"]?.MaxPods).toBe(17);
+        expect(template.Mappings.InstanceTypeMaxPods["t3.large"]?.MaxPods).toBe(35);
+        expect(template.Mappings.InstanceTypeMaxPods["t3a.large"]?.MaxPods).toBe(35);
+        expect(template.Mappings.InstanceTypeMaxPods["t2.large"]?.MaxPods).toBe(35);
+      }
+
+      console.log("Template InstanceTypeMaxPods mappings validated");
+    });
+  });
+
+  // ---------------------------
   // NODE GROUPS VALIDATION
   // ---------------------------
   describe("EKS Node Groups Configuration", () => {
@@ -762,6 +808,63 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
           }
         }
       });
+    });
+
+    test("Launch templates have proper UserData and cluster autoscaler tags", async () => {
+      const launchTemplateIds = [
+        outputs.OnDemandLaunchTemplateId,
+        outputs.SpotLaunchTemplateId,
+      ].filter(Boolean);
+
+      expect(launchTemplateIds.length).toBe(2);
+
+      for (const ltId of launchTemplateIds) {
+        const res = await ec2Client.send(
+          new DescribeLaunchTemplateVersionsCommand({
+            LaunchTemplateId: ltId,
+            Versions: ["$Default"]
+          })
+        );
+
+        const ltVersion = res.LaunchTemplateVersions?.[0];
+        expect(ltVersion).toBeDefined();
+
+        const ltData = ltVersion?.LaunchTemplateData;
+        expect(ltData).toBeDefined();
+
+        // Verify UserData exists and is base64 encoded
+        expect(ltData?.UserData).toBeDefined();
+        expect(ltData?.UserData).not.toBe("");
+
+        // Decode UserData to verify it contains kubelet configuration
+        const userDataDecoded = Buffer.from(ltData?.UserData || "", 'base64').toString('utf-8');
+        expect(userDataDecoded).toContain("Content-Type: multipart/mixed");
+        expect(userDataDecoded).toContain("--==MYBOUNDARY==");
+        expect(userDataDecoded).toContain("#!/bin/bash");
+        expect(userDataDecoded).toContain("/etc/eks/bootstrap.sh");
+        expect(userDataDecoded).toContain(outputs.ClusterName);
+
+        // Verify TagSpecifications for cluster autoscaler
+        expect(ltData?.TagSpecifications).toBeDefined();
+        expect(ltData?.TagSpecifications?.length).toBeGreaterThan(0);
+
+        // Find instance tag specifications
+        const instanceTagSpec = ltData?.TagSpecifications?.find((ts: any) => ts.ResourceType === "instance");
+        expect(instanceTagSpec).toBeDefined();
+
+        const tags = instanceTagSpec?.Tags || [];
+
+        // Verify cluster autoscaler tags
+        const autoscalerEnabledTag = tags.find((t: any) => t.Key === "k8s.io/cluster-autoscaler/enabled");
+        const autoscalerClusterTag = tags.find((t: any) => t.Key === `k8s.io/cluster-autoscaler/${outputs.ClusterName}`);
+
+        expect(autoscalerEnabledTag).toBeDefined();
+        expect(autoscalerEnabledTag?.Value).toBe("true");
+        expect(autoscalerClusterTag).toBeDefined();
+        expect(autoscalerClusterTag?.Value).toBe("owned");
+
+        console.log(`Launch template ${ltId} validated with proper UserData and cluster autoscaler tags`);
+      }
     });
 
     test("Node group IAM role has required policies attached", async () => {
@@ -1040,14 +1143,38 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
       // Verify memory
       expect(res.Configuration?.MemorySize).toBeGreaterThanOrEqual(128);
 
-      // Verify function has VPC configuration for EKS access
-      if (res.Configuration?.VpcConfig) {
-        expect(res.Configuration.VpcConfig.VpcId).toBe(outputs.VpcId);
-        expect(res.Configuration.VpcConfig.SubnetIds).toBeDefined();
-        expect(res.Configuration.VpcConfig.SecurityGroupIds).toBeDefined();
-      }
-
       console.log(`Lambda function validated: ${functionName}, Status: ${res.Configuration?.State}`);
+    });
+
+    test("Lambda function has VPC configuration for private EKS cluster access", async () => {
+      const functionName = outputs.KubernetesManagementFunctionName;
+
+      const res = await lambdaClient.send(
+        new GetFunctionCommand({ FunctionName: functionName })
+      );
+
+      expect(res.Configuration).toBeDefined();
+
+      // Lambda must have VPC configuration to access private EKS cluster
+      expect(res.Configuration?.VpcConfig).toBeDefined();
+      expect(res.Configuration?.VpcConfig?.VpcId).toBe(outputs.VpcId);
+
+      // Lambda should be deployed in private subnets
+      const vpcConfig = res.Configuration?.VpcConfig;
+      expect(vpcConfig?.SubnetIds).toBeDefined();
+      expect(vpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
+
+      // Verify Lambda is using private subnets
+      const privateSubnetIds = outputs.AllPrivateSubnetIds.split(',');
+      vpcConfig?.SubnetIds?.forEach(subnetId => {
+        expect(privateSubnetIds).toContain(subnetId);
+      });
+
+      // Verify security groups are configured
+      expect(vpcConfig?.SecurityGroupIds).toBeDefined();
+      expect(vpcConfig?.SecurityGroupIds?.length).toBeGreaterThan(0);
+
+      console.log(`Lambda VPC configuration validated for private EKS access`);
     });
 
     test("Lambda function has required environment variables", async () => {
@@ -1378,7 +1505,6 @@ describe("TapStack - Live AWS EKS Cluster Infrastructure Integration Tests", () 
       );
 
       privateRtRes.RouteTables?.forEach(rt => {
-        // Should NOT have route to IGW
         const igwRoute = rt.Routes?.find(r => r.GatewayId?.startsWith("igw-"));
         expect(igwRoute).toBeUndefined();
 
