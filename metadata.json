@@ -1,5 +1,5 @@
 {
-  "platform": "CDK",
+  "platform": "cdk",
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
