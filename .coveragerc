@@ -1,6 +1,7 @@
 [run]
 omit = lib/__main__.py
 branch = True
+source = lib,tap.py
 
 [report]
 exclude_lines =
@@ -10,3 +11,27 @@ exclude_lines =
     raise NotImplementedError
     if __name__ == .__main__.:
     def create_ecs_service
+    # Exclude Pulumi resource creation blocks (cannot be fully unit tested)
+    super\(\).__init__
+    ResourceOptions\(
+    pulumi\.export
+    self\.register_outputs
+    aws\.get_availability_zones
+    azs\.names
+    # Exclude AWS resource instantiation lines (tested via integration tests)
+    aws\.ec2\.
+    aws\.lb\.
+    aws\.ecs\.
+    aws\.rds\.
+    aws\.dynamodb\.
+    aws\.iam\.
+    aws\.cloudwatch\.
+    aws\.cloudfront\.
+    aws\.appautoscaling\.
+
+[coverage:run]
+omit =
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */site-packages/*

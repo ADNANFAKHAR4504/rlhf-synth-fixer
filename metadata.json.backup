@@ -1,0 +1,13 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-19T11:35:00+00:00",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": ["aws", "infrastructure", "web-application-deployment"],
+  "po_id": "101912383",
+  "aws_services": [],
+  "region": "us-east-1"
+}
