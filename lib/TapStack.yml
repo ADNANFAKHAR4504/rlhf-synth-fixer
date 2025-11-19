@@ -43,20 +43,6 @@ Parameters:
     Default: 'admin'
     NoEcho: true
 
-  DBMasterPassword:
-    Type: String
-    Description: 'Master password for RDS Aurora MySQL (for testing, use direct password instead of Secrets Manager)'
-    Default: 'TestDbPassword123!'
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-
-  DBMasterPasswordSecretArn:
-    Type: String
-    Description: 'ARN of AWS Secrets Manager secret containing RDS master password (optional, leave default if using DBMasterPassword)'
-    Default: ''
-    NoEcho: true
-
   SourceDatabaseEndpoint:
     Type: String
     Description: 'Source database endpoint for DMS'
@@ -91,6 +77,26 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
 Resources:
+  # ========================================
+  # Secrets Manager Secret for RDS Password
+  # ========================================
+
+  DBMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'rds-master-password-${EnvironmentSuffix}'
+      Description: 'Master password for RDS Aurora MySQL cluster'
+      SecretString: !Sub |
+        {
+          "username": "${DBMasterUsername}",
+          "password": "TestDbPassword123!"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub 'rds-master-password-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # ========================================
   # VPC and Network Infrastructure
   # NOTE: Simplified to 2 AZs for testing (minimum for DMS). Production should use 3 AZs.
@@ -427,7 +433,7 @@ Resources:
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.04.0'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
       DatabaseName: documents
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
@@ -587,7 +593,7 @@ Resources:
       Port: !GetAtt AuroraCluster.Endpoint.Port
       DatabaseName: documents
       Username: !Ref DBMasterUsername
-      Password: !Ref DBMasterPassword
+      Password: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
       Tags:
         - Key: Name
           Value: !Sub 'dms-target-${EnvironmentSuffix}'
