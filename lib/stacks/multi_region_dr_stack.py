@@ -558,7 +558,8 @@ class MultiRegionDRStack(Construct):
             kms_key_id=self.kms_primary.arn,
             skip_final_snapshot=True, 
             backup_retention_period=1,
-            depends_on=[self.aurora_global]
+            depends_on=[self.aurora_global],
+            lifecycle={'ignore_changes': ['master_password']}
         )
 
         RdsClusterInstance(
@@ -583,7 +584,8 @@ class MultiRegionDRStack(Construct):
             storage_encrypted=True, 
             kms_key_id=self.kms_secondary.arn,
             skip_final_snapshot=True,
-            depends_on=[self.aurora_primary]
+            depends_on=[self.aurora_primary],
+            lifecycle={'ignore_changes': ['global_cluster_identifier']}
         )
 
         RdsClusterInstance(
@@ -597,8 +599,8 @@ class MultiRegionDRStack(Construct):
 
     def create_dynamodb_global(self):
         """Create DynamoDB Global Table"""
-        # Generate unique table name with timestamp to avoid conflicts
-        table_suffix = str(int(time.time()))[-6:]
+        # Use deterministic suffix based on environment for idempotency
+        table_suffix = hashlib.md5(self.environment_suffix.encode()).hexdigest()[:6]
         self.dynamodb_table = DynamodbTable(
             self, 'dynamodb_global', 
             provider=self.primary_provider,
@@ -624,10 +626,9 @@ class MultiRegionDRStack(Construct):
 
     def create_s3_replication(self):
         """Create S3 buckets with cross-region replication"""
-        # Generate unique bucket names
-        unique_id = hashlib.md5(
-            f"{self.environment_suffix}-{int(time.time())}".encode()
-        ).hexdigest()[:8]
+        # Generate deterministic unique bucket names based on environment for idempotency
+        # Use a fixed prefix to ensure consistency across deployments
+        unique_id = hashlib.md5(f"payment-dr-{self.environment_suffix}".encode()).hexdigest()[:8]
 
         # IAM Role for replication
         assume_role_policy = json.dumps({
