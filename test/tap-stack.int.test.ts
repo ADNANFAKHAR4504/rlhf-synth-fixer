@@ -385,7 +385,7 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         .map(r => r.data)
         .filter(html => html.includes(instance1Id) || html.includes(instance2Id));
       
-      // Should see responses from multiple instances (load balancing working)
+      // Should see responses from multiple instances
       expect(responses.length).toBe(10);
       expect(responses.every(r => r.status === 200)).toBe(true);
     });
