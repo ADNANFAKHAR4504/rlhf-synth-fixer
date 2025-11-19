@@ -11,7 +11,7 @@ variable "environment" {
 variable "pr_number" {
   description = "PR number for resource naming"
   type        = string
-  default     = ""
+  default     = "1234"
 }
 
 variable "aws_region" {
