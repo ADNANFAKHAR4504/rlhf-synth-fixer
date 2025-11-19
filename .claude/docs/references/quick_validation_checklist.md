@@ -15,7 +15,7 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 ## Pre-Deployment Checklist (QA Agent)
 
 ### Code Quality Gate
-- [ ] `bash scripts/pre-validate-iac.sh` PASSED
+- [ ] `bash .claude/scripts/pre-validate-iac.sh` PASSED
 - [ ] Platform/language matches metadata.json (CRITICAL)
 - [ ] Lint passed with zero errors
 - [ ] Build passed with zero errors
@@ -58,7 +58,7 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 cat metadata.json | jq -r '"\(.platform) - \(.language)"'
 
 # Pre-validate
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 
 # Run full pipeline (NOTE: destroy.sh is NOT run - cleanup after PR review)
 bash scripts/build.sh && \

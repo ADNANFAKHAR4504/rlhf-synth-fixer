@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T00:00:00-08:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "2w6a2g",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NATGateway",
+    "EIP",
+    "RouteTable",
+    "NetworkACL",
+    "SecurityGroup",
+    "VPCEndpoint",
+    "VPCFlowLogs",
+    "S3",
+    "DBSubnetGroup"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
