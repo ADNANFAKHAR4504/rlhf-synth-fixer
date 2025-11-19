@@ -442,7 +442,6 @@ class PrimaryRegionStack(TerraformStack):
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "AWS_REGION": aws_region,
                     "DB_CLUSTER_ARN": primary_cluster.arn,
                     "DB_NAME": primary_cluster.database_name,
                     "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
@@ -1156,7 +1155,6 @@ class DrRegionStack(TerraformStack):
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "AWS_REGION": aws_region,
                     "DB_CLUSTER_ARN": dr_cluster.arn,
                     "DB_NAME": dr_cluster.database_name if hasattr(dr_cluster, 'database_name') else f"transactions{environment_suffix.replace('-', '')}",
                     "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
