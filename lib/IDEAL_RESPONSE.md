@@ -367,15 +367,15 @@ The Lambda function code from MODEL_RESPONSE was correct and functional:
 
 ### Requirements Met
 
-✅ **Platform/Language**: CDK with Python (matches metadata.json)
-✅ **Lint**: Passes with 10.00/10 score
-✅ **Synth**: Successful CloudFormation generation
-✅ **Deployment**: Successfully deployed to us-east-1
-✅ **Outputs**: cfn-outputs/flat-outputs.json created
-✅ **Unit Tests**: 16 tests, 100% coverage
-✅ **Integration Tests**: 10 tests, all passing with real AWS
-✅ **Destroyability**: All resources have RemovalPolicy.DESTROY
-✅ **Environment Suffix**: Used in 24 resource names
+- **Platform/Language**: CDK with Python (matches metadata.json)
+- **Lint**: Passes with 10.00/10 score
+- **Synth**: Successful CloudFormation generation
+- **Deployment**: Successfully deployed to us-east-1
+- **Outputs**: cfn-outputs/flat-outputs.json created
+- **Unit Tests**: 16 tests, 100% coverage
+- **Integration Tests**: 10 tests, all passing with real AWS
+- **Destroyability**: All resources have RemovalPolicy.DESTROY
+- **Environment Suffix**: Used in 24 resource names
 
 ### Stack Outputs
 
@@ -434,7 +434,7 @@ The Lambda function code from MODEL_RESPONSE was correct and functional:
 | Code Formatting | 2-space indentation | PEP 8 (4-space) |
 | Lint Score | 6.74/10 | 10.00/10 |
 | Production Ready | No | Yes |
-| Infrastructure Code | ✅ Correct | ✅ Unchanged (was correct) |
+| Infrastructure Code | Correct | Unchanged (was correct) |
 
 ---
 
