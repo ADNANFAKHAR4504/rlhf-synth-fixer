@@ -4,11 +4,11 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "w6x8o0",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-18T00:00:00-08:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Environment Migration"
   ],
   "aws_services": [
     "VPC",
@@ -21,5 +21,6 @@
     "IAM",
     "SecretsManager"
   ],
-  "training_quality": 9
+  "author": "aj-turing",
+  "training_quality": 10
 }
