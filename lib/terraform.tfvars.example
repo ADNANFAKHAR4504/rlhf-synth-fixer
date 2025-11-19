@@ -1,0 +1,16 @@
+# Example Terraform variables configuration
+# Copy this file to terraform.tfvars and update with your values
+
+environment_suffix = "dev-001"
+
+aws_region = "us-east-1"
+
+github_repository_id = "myorg/infrastructure-repo"
+
+github_branch = "main"
+
+notification_email = "devops-team@example.com"
+
+terraform_version = "1.6.0"
+
+log_retention_days = 7
