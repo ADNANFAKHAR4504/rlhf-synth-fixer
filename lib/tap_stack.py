@@ -1326,17 +1326,11 @@ class DrRegionStack(TerraformStack):
             provider=provider
         )
 
-        # Cross-region SNS subscription (if primary topic ARN provided)
-        if primary_sns_topic_arn:
-            # Note: Cross-region SNS subscriptions require manual confirmation
-            SnsTopicSubscription(
-                self,
-                "dr_to_primary_sns_sub",
-                topic_arn=primary_sns_topic_arn,
-                protocol="sns",
-                endpoint=dr_sns_topic.arn,
-                provider=provider
-            )
+        # Note: Cross-region SNS-to-SNS subscriptions are not directly supported.
+        # For cross-region alarm notifications, you would typically:
+        # 1. Use CloudWatch Events/EventBridge to forward alarms cross-region
+        # 2. Use Lambda functions to forward notifications
+        # 3. Configure separate email/SMS subscriptions in each region
 
         # 11. CloudWatch Alarms
         # Aurora replication lag alarm
