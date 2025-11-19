@@ -103,7 +103,7 @@ export class RdsComponent extends pulumi.ComponentResource {
       {
         identifier: `postgres-${environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '15.4',
+        engineVersion: '15',
         instanceClass: config.rdsInstanceClass,
         allocatedStorage: 20,
         storageType: 'gp3',
