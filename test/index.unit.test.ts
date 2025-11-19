@@ -39,12 +39,19 @@ pulumi.runtime.setMocks({
 });
 
 // Import infrastructure after mocks are set
-import * as infra from '../index';
+import TapStack from '../lib/tap-stack';
 
 describe('Infrastructure Unit Tests', () => {
+  let stack: TapStack;
+
+  beforeAll(() => {
+    // Instantiate the stack for testing
+    stack = new TapStack('test-stack', {});
+  });
+
   describe('Stack Outputs', () => {
     it('should export apiGatewayUrl', async () => {
-      const url = await infra.apiGatewayUrl.promise();
+      const url = await stack.apiGatewayUrl.promise();
       expect(url).toBeDefined();
       expect(url).toContain('execute-api');
       expect(url).toContain('us-east-1');
@@ -53,50 +60,50 @@ describe('Infrastructure Unit Tests', () => {
     });
 
     it('should export s3BucketName', async () => {
-      const bucketName = await infra.s3BucketName.promise();
+      const bucketName = await stack.s3BucketName.promise();
       expect(bucketName).toBeDefined();
       expect(bucketName).toContain('market-data-');
     });
 
     it('should export dynamodbTableArn', async () => {
-      const tableArn = await infra.dynamodbTableArn.promise();
+      const tableArn = await stack.dynamodbTableArn.promise();
       expect(tableArn).toBeDefined();
       expect(tableArn).toContain('arn:aws:dynamodb');
       expect(tableArn).toContain('MarketDataState');
     });
 
     it('should have all required exports', () => {
-      expect(infra.apiGatewayUrl).toBeDefined();
-      expect(infra.s3BucketName).toBeDefined();
-      expect(infra.dynamodbTableArn).toBeDefined();
+      expect(stack.apiGatewayUrl).toBeDefined();
+      expect(stack.s3BucketName).toBeDefined();
+      expect(stack.dynamodbTableArn).toBeDefined();
     });
 
     it('should export values as Pulumi Outputs', () => {
-      expect(infra.apiGatewayUrl).toHaveProperty('apply');
-      expect(infra.s3BucketName).toHaveProperty('apply');
-      expect(infra.dynamodbTableArn).toHaveProperty('apply');
+      expect(stack.apiGatewayUrl).toHaveProperty('apply');
+      expect(stack.s3BucketName).toHaveProperty('apply');
+      expect(stack.dynamodbTableArn).toHaveProperty('apply');
     });
   });
 
   describe('Resource Naming Convention', () => {
     it('should use environmentSuffix in bucket names', async () => {
-      const bucketName = await infra.s3BucketName.promise();
+      const bucketName = await stack.s3BucketName.promise();
       expect(bucketName).toMatch(/market-data-/);
     });
 
     it('should include environment suffix in table ARN', async () => {
-      const tableArn = await infra.dynamodbTableArn.promise();
+      const tableArn = await stack.dynamodbTableArn.promise();
       expect(tableArn).toMatch(/MarketDataState-/);
     });
 
     it('should include correct region in API Gateway URL', async () => {
-      const url = await infra.apiGatewayUrl.promise();
+      const url = await stack.apiGatewayUrl.promise();
       expect(url).toContain('us-east-1');
     });
 
     it('should use consistent naming pattern', async () => {
-      const bucketName = await infra.s3BucketName.promise();
-      const tableArn = await infra.dynamodbTableArn.promise();
+      const bucketName = await stack.s3BucketName.promise();
+      const tableArn = await stack.dynamodbTableArn.promise();
 
       expect(bucketName).toBeDefined();
       expect(tableArn).toBeDefined();
@@ -105,7 +112,7 @@ describe('Infrastructure Unit Tests', () => {
 
   describe('Infrastructure Configuration', () => {
     it('should configure resources with correct region', async () => {
-      const url = await infra.apiGatewayUrl.promise();
+      const url = await stack.apiGatewayUrl.promise();
       expect(url).toContain('us-east-1');
     });
 
