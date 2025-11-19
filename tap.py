@@ -57,8 +57,16 @@ stack = TapStack(
 # Export all outputs expected by integration tests
 # Global Accelerator
 pulumi.export("GlobalAcceleratorDnsName", stack.accelerator.dns_name)
-pulumi.export("GlobalAcceleratorStaticIP1", stack.accelerator.ip_sets[0].ip_addresses[0] if stack.accelerator.ip_sets else "")
-pulumi.export("GlobalAcceleratorStaticIP2", stack.accelerator.ip_sets[0].ip_addresses[1] if stack.accelerator.ip_sets and len(stack.accelerator.ip_sets[0].ip_addresses) > 1 else "")
+
+# FIX: Use Output.apply() to safely access ip_sets (it's an Output, not a regular list)
+static_ip1 = stack.accelerator.ip_sets.apply(
+    lambda ip_sets: ip_sets[0].ip_addresses[0] if ip_sets and len(ip_sets) > 0 and len(ip_sets[0].ip_addresses) > 0 else ""
+)
+static_ip2 = stack.accelerator.ip_sets.apply(
+    lambda ip_sets: ip_sets[0].ip_addresses[1] if ip_sets and len(ip_sets) > 0 and len(ip_sets[0].ip_addresses) > 1 else ""
+)
+pulumi.export("GlobalAcceleratorStaticIP1", static_ip1)
+pulumi.export("GlobalAcceleratorStaticIP2", static_ip2)
 
 # VPC Networking
 pulumi.export("PrimaryVpcId", stack.primary_vpc.id)
