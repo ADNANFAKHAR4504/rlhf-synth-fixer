@@ -233,7 +233,8 @@ describe('TapStack Multi-Region Payment Processing Infrastructure', () => {
       expect(stack).toBeDefined();
       expect(stack.primaryApiUrl).toBeDefined();
       expect(stack.secondaryApiUrl).toBeDefined();
-      expect(stack.failoverDomain).toBeDefined();
+      expect(stack.primaryAlbDnsName).toBeDefined();
+      expect(stack.secondaryAlbDnsName).toBeDefined();
     });
 
     it('should create stack with custom environment suffix', () => {
@@ -261,13 +262,18 @@ describe('TapStack Multi-Region Payment Processing Infrastructure', () => {
       });
     });
 
-    it('should create stack with custom hosted zone domain', () => {
-      stack = new TapStack('test-stack-domain', {
+    it('should create Application Load Balancers', () => {
+      stack = new TapStack('test-stack-alb', {
         environmentSuffix: 'test',
-        hostedZoneDomain: 'custom.example.com',
       });
 
-      expect(stack.failoverDomain).toBe('custom.example.com');
+      expect(stack.primaryAlbDnsName).toBeDefined();
+      expect(stack.secondaryAlbDnsName).toBeDefined();
+
+      const albs = createdResources.filter(
+        r => r.type === 'aws:lb/loadBalancer:LoadBalancer'
+      );
+      expect(albs.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should create stack with custom regions', () => {
@@ -710,9 +716,8 @@ describe('TapStack Multi-Region Payment Processing Infrastructure', () => {
     it('should export all required outputs', () => {
       expect(stack.primaryApiUrl).toBeDefined();
       expect(stack.secondaryApiUrl).toBeDefined();
-      expect(stack.failoverDomain).toBeDefined();
-      expect(stack.hostedZoneId).toBeDefined();
-      expect(stack.hostedZoneNameServers).toBeDefined();
+      expect(stack.primaryAlbDnsName).toBeDefined();
+      expect(stack.secondaryAlbDnsName).toBeDefined();
       expect(stack.transactionTableName).toBeDefined();
       expect(stack.primaryAuditBucketName).toBeDefined();
       expect(stack.secondaryAuditBucketName).toBeDefined();
@@ -750,7 +755,8 @@ describe('TapStack Multi-Region Payment Processing Infrastructure', () => {
   describe('Edge Cases', () => {
     it('should handle missing optional parameters', () => {
       const testStack = new TapStack('edge-test', {});
-      expect(testStack.failoverDomain).toBeDefined();
+      expect(testStack.primaryAlbDnsName).toBeDefined();
+      expect(testStack.secondaryAlbDnsName).toBeDefined();
     });
 
     it('should handle empty tags', () => {

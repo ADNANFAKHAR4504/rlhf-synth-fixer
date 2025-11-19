@@ -10,7 +10,6 @@ import { ResourceOptions } from '@pulumi/pulumi';
 export interface TapStackArgs {
   environmentSuffix?: string;
   notificationEmail?: string;
-  hostedZoneDomain?: string;
   primaryRegion?: string;
   secondaryRegion?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
@@ -23,18 +22,18 @@ export interface TapStackArgs {
  * - Dual-region deployment (us-east-1, us-east-2)
  * - DynamoDB Global Tables for transaction storage
  * - Lambda functions for payment processing
- * - API Gateway with Route53 failover
+ * - Application Load Balancers with health checks
+ * - API Gateway for Lambda invocation
  * - Cross-region S3 replication for audit logs
  * - CloudWatch monitoring and alarms
- * - Synthetics canaries for endpoint testing
+ * - Route53 health checks for ALB monitoring
  */
 export class TapStack extends pulumi.ComponentResource {
   // Primary outputs
   public readonly primaryApiUrl: pulumi.Output<string>;
   public readonly secondaryApiUrl: pulumi.Output<string>;
-  public readonly failoverDomain: string;
-  public readonly hostedZoneId: pulumi.Output<string>;
-  public readonly hostedZoneNameServers: pulumi.Output<string[]>;
+  public readonly primaryAlbDnsName: pulumi.Output<string>;
+  public readonly secondaryAlbDnsName: pulumi.Output<string>;
   public readonly transactionTableName: pulumi.Output<string>;
   public readonly primaryAuditBucketName: pulumi.Output<string>;
   public readonly secondaryAuditBucketName: pulumi.Output<string>;
@@ -49,7 +48,6 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const notificationEmail = args.notificationEmail || 'admin@example.com';
-    const hostedZoneDomain = args.hostedZoneDomain || `payment-api-${environmentSuffix}.example.com`;
     const primaryRegion = args.primaryRegion || 'us-east-1';
     const secondaryRegion = args.secondaryRegion || 'us-east-2';
 
@@ -138,6 +136,90 @@ export class TapStack extends pulumi.ComponentResource {
       {
         subnetId: primaryPrivateSubnet2.id,
         routeTableId: primaryPrivateRt.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Public subnets for ALB
+    const primaryPublicSubnet1 = new aws.ec2.Subnet(
+      `payment-public-subnet-1a-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        cidrBlock: '10.0.10.0/24',
+        availabilityZone: `${primaryRegion}a`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `payment-public-subnet-1a-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    const primaryPublicSubnet2 = new aws.ec2.Subnet(
+      `payment-public-subnet-1b-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        cidrBlock: '10.0.11.0/24',
+        availabilityZone: `${primaryRegion}b`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `payment-public-subnet-1b-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Internet Gateway for public subnets
+    const primaryIgw = new aws.ec2.InternetGateway(
+      `payment-igw-primary-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        tags: {
+          Name: `payment-igw-primary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    const primaryPublicRt = new aws.ec2.RouteTable(
+      `public-rt-primary-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        tags: {
+          Name: `public-rt-primary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    new aws.ec2.Route(
+      `public-route-primary-${environmentSuffix}`,
+      {
+        routeTableId: primaryPublicRt.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: primaryIgw.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `rta-public-1a-${environmentSuffix}`,
+      {
+        subnetId: primaryPublicSubnet1.id,
+        routeTableId: primaryPublicRt.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `rta-public-1b-${environmentSuffix}`,
+      {
+        subnetId: primaryPublicSubnet2.id,
+        routeTableId: primaryPublicRt.id,
       },
       { provider: primaryProvider, parent: this }
     );
@@ -285,6 +367,90 @@ export class TapStack extends pulumi.ComponentResource {
       {
         subnetId: secondaryPrivateSubnet2.id,
         routeTableId: secondaryPrivateRt.id,
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    // Public subnets for ALB
+    const secondaryPublicSubnet1 = new aws.ec2.Subnet(
+      `payment-public-subnet-2a-${environmentSuffix}`,
+      {
+        vpcId: secondaryVpc.id,
+        cidrBlock: '10.1.10.0/24',
+        availabilityZone: `${secondaryRegion}a`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `payment-public-subnet-2a-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    const secondaryPublicSubnet2 = new aws.ec2.Subnet(
+      `payment-public-subnet-2b-${environmentSuffix}`,
+      {
+        vpcId: secondaryVpc.id,
+        cidrBlock: '10.1.11.0/24',
+        availabilityZone: `${secondaryRegion}b`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `payment-public-subnet-2b-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    // Internet Gateway for public subnets
+    const secondaryIgw = new aws.ec2.InternetGateway(
+      `payment-igw-secondary-${environmentSuffix}`,
+      {
+        vpcId: secondaryVpc.id,
+        tags: {
+          Name: `payment-igw-secondary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    const secondaryPublicRt = new aws.ec2.RouteTable(
+      `public-rt-secondary-${environmentSuffix}`,
+      {
+        vpcId: secondaryVpc.id,
+        tags: {
+          Name: `public-rt-secondary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    new aws.ec2.Route(
+      `public-route-secondary-${environmentSuffix}`,
+      {
+        routeTableId: secondaryPublicRt.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: secondaryIgw.id,
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `rta-public-2a-${environmentSuffix}`,
+      {
+        subnetId: secondaryPublicSubnet1.id,
+        routeTableId: secondaryPublicRt.id,
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `rta-public-2b-${environmentSuffix}`,
+      {
+        subnetId: secondaryPublicSubnet2.id,
+        routeTableId: secondaryPublicRt.id,
       },
       { provider: secondaryProvider, parent: this }
     );
@@ -1476,10 +1642,10 @@ exports.handler = async (event) => {
     const primaryHealthCheck = new aws.route53.HealthCheck(
       `payment-health-check-primary-${environmentSuffix}`,
       {
-        type: 'HTTPS',
-        resourcePath: '/prod/health',
-        fqdn: pulumi.interpolate`${primaryApi.id}.execute-api.${primaryRegion}.amazonaws.com`,
-        port: 443,
+        type: 'HTTP',
+        resourcePath: '/',
+        fqdn: primaryAlb.dnsName,
+        port: 80,
         requestInterval: 30,
         failureThreshold: 3,
         measureLatency: true,
@@ -1494,10 +1660,10 @@ exports.handler = async (event) => {
     const secondaryHealthCheck = new aws.route53.HealthCheck(
       `payment-health-check-secondary-${environmentSuffix}`,
       {
-        type: 'HTTPS',
-        resourcePath: '/prod/health',
-        fqdn: pulumi.interpolate`${secondaryApi.id}.execute-api.${secondaryRegion}.amazonaws.com`,
-        port: 443,
+        type: 'HTTP',
+        resourcePath: '/',
+        fqdn: secondaryAlb.dnsName,
+        port: 80,
         requestInterval: 30,
         failureThreshold: 3,
         measureLatency: true,
@@ -1509,62 +1675,226 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
-    // Create Route53 Hosted Zone
-    const hostedZone = new aws.route53.Zone(
-      `payment-api-zone-${environmentSuffix}`,
+    // ========================================
+    // Application Load Balancer Infrastructure
+    // ========================================
+
+    // Security group for Primary ALB
+    const primaryAlbSg = new aws.ec2.SecurityGroup(
+      `payment-alb-sg-primary-${environmentSuffix}`,
       {
-        name: hostedZoneDomain,
-        comment: `Hosted zone for payment API failover - ${environmentSuffix}`,
+        vpcId: primaryVpc.id,
+        description: 'Security group for payment ALB - Primary',
+        ingress: [
+          {
+            fromPort: 80,
+            toPort: 80,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP from internet',
+          },
+          {
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTPS from internet',
+          },
+        ],
+        egress: [
+          {
+            fromPort: 0,
+            toPort: 0,
+            protocol: '-1',
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
         tags: {
-          Name: `payment-api-zone-${environmentSuffix}`,
+          Name: `payment-alb-sg-primary-${environmentSuffix}`,
           Environment: environmentSuffix,
         },
       },
-      { parent: this }
+      { provider: primaryProvider, parent: this }
     );
 
-    // Primary failover DNS record
-    new aws.route53.Record(
-      `payment-api-primary-record-${environmentSuffix}`,
+    // Security group for Secondary ALB
+    const secondaryAlbSg = new aws.ec2.SecurityGroup(
+      `payment-alb-sg-secondary-${environmentSuffix}`,
       {
-        zoneId: hostedZone.zoneId,
-        name: hostedZoneDomain,
-        type: 'CNAME',
-        ttl: 60,
-        setIdentifier: 'primary',
-        failoverRoutingPolicies: [
+        vpcId: secondaryVpc.id,
+        description: 'Security group for payment ALB - Secondary',
+        ingress: [
           {
-            type: 'PRIMARY',
+            fromPort: 80,
+            toPort: 80,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP from internet',
+          },
+          {
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTPS from internet',
           },
         ],
-        healthCheckId: primaryHealthCheck.id,
-        records: [
-          pulumi.interpolate`${primaryApi.id}.execute-api.${primaryRegion}.amazonaws.com`,
+        egress: [
+          {
+            fromPort: 0,
+            toPort: 0,
+            protocol: '-1',
+            cidrBlocks: ['0.0.0.0/0'],
+          },
         ],
+        tags: {
+          Name: `payment-alb-sg-secondary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
       },
-      { parent: this }
+      { provider: secondaryProvider, parent: this }
     );
 
-    // Secondary failover DNS record
-    new aws.route53.Record(
-      `payment-api-secondary-record-${environmentSuffix}`,
+    // Primary ALB
+    const primaryAlb = new aws.lb.LoadBalancer(
+      `payment-alb-primary-${environmentSuffix}`,
       {
-        zoneId: hostedZone.zoneId,
-        name: hostedZoneDomain,
-        type: 'CNAME',
-        ttl: 60,
-        setIdentifier: 'secondary',
-        failoverRoutingPolicies: [
+        name: `payment-alb-pri-${environmentSuffix}`,
+        internal: false,
+        loadBalancerType: 'application',
+        securityGroups: [primaryAlbSg.id],
+        subnets: [primaryPublicSubnet1.id, primaryPublicSubnet2.id],
+        enableDeletionProtection: false,
+        tags: {
+          Name: `payment-alb-primary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Primary ALB Target Group
+    const primaryAlbTargetGroup = new aws.lb.TargetGroup(
+      `payment-alb-tg-primary-${environmentSuffix}`,
+      {
+        name: `payment-alb-tg-pri-${environmentSuffix}`,
+        targetType: 'lambda',
+        tags: {
+          Name: `payment-alb-tg-primary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Attach Lambda to Primary Target Group
+    new aws.lb.TargetGroupAttachment(
+      `payment-alb-tg-attach-primary-${environmentSuffix}`,
+      {
+        targetGroupArn: primaryAlbTargetGroup.arn,
+        targetId: primaryPaymentLambda.arn,
+      },
+      { provider: primaryProvider, parent: this, dependsOn: [primaryPaymentLambda] }
+    );
+
+    // Lambda permission for Primary ALB
+    new aws.lambda.Permission(
+      `payment-lambda-alb-permission-primary-${environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: primaryPaymentLambda.name,
+        principal: 'elasticloadbalancing.amazonaws.com',
+        sourceArn: primaryAlbTargetGroup.arn,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Primary ALB Listener
+    new aws.lb.Listener(
+      `payment-alb-listener-primary-${environmentSuffix}`,
+      {
+        loadBalancerArn: primaryAlb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
           {
-            type: 'SECONDARY',
+            type: 'forward',
+            targetGroupArn: primaryAlbTargetGroup.arn,
           },
         ],
-        healthCheckId: secondaryHealthCheck.id,
-        records: [
-          pulumi.interpolate`${secondaryApi.id}.execute-api.${secondaryRegion}.amazonaws.com`,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Secondary ALB
+    const secondaryAlb = new aws.lb.LoadBalancer(
+      `payment-alb-secondary-${environmentSuffix}`,
+      {
+        name: `payment-alb-sec-${environmentSuffix}`,
+        internal: false,
+        loadBalancerType: 'application',
+        securityGroups: [secondaryAlbSg.id],
+        subnets: [secondaryPublicSubnet1.id, secondaryPublicSubnet2.id],
+        enableDeletionProtection: false,
+        tags: {
+          Name: `payment-alb-secondary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    // Secondary ALB Target Group
+    const secondaryAlbTargetGroup = new aws.lb.TargetGroup(
+      `payment-alb-tg-secondary-${environmentSuffix}`,
+      {
+        name: `payment-alb-tg-sec-${environmentSuffix}`,
+        targetType: 'lambda',
+        tags: {
+          Name: `payment-alb-tg-secondary-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    // Attach Lambda to Secondary Target Group
+    new aws.lb.TargetGroupAttachment(
+      `payment-alb-tg-attach-secondary-${environmentSuffix}`,
+      {
+        targetGroupArn: secondaryAlbTargetGroup.arn,
+        targetId: secondaryPaymentLambda.arn,
+      },
+      { provider: secondaryProvider, parent: this, dependsOn: [secondaryPaymentLambda] }
+    );
+
+    // Lambda permission for Secondary ALB
+    new aws.lambda.Permission(
+      `payment-lambda-alb-permission-secondary-${environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: secondaryPaymentLambda.name,
+        principal: 'elasticloadbalancing.amazonaws.com',
+        sourceArn: secondaryAlbTargetGroup.arn,
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    // Secondary ALB Listener
+    new aws.lb.Listener(
+      `payment-alb-listener-secondary-${environmentSuffix}`,
+      {
+        loadBalancerArn: secondaryAlb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: secondaryAlbTargetGroup.arn,
+          },
         ],
       },
-      { parent: this }
+      { provider: secondaryProvider, parent: this }
     );
 
     // ========================================
@@ -1722,9 +2052,8 @@ exports.handler = async (event) => {
     // Set output properties
     this.primaryApiUrl = pulumi.interpolate`https://${primaryApi.id}.execute-api.${primaryRegion}.amazonaws.com/prod`;
     this.secondaryApiUrl = pulumi.interpolate`https://${secondaryApi.id}.execute-api.${secondaryRegion}.amazonaws.com/prod`;
-    this.failoverDomain = hostedZoneDomain;
-    this.hostedZoneId = hostedZone.zoneId;
-    this.hostedZoneNameServers = hostedZone.nameServers;
+    this.primaryAlbDnsName = primaryAlb.dnsName;
+    this.secondaryAlbDnsName = secondaryAlb.dnsName;
     this.transactionTableName = transactionTable.name;
     this.primaryAuditBucketName = primaryAuditBucket.bucket;
     this.secondaryAuditBucketName = secondaryAuditBucket.bucket;
@@ -1737,9 +2066,8 @@ exports.handler = async (event) => {
     this.registerOutputs({
       primaryApiUrl: this.primaryApiUrl,
       secondaryApiUrl: this.secondaryApiUrl,
-      failoverDomain: this.failoverDomain,
-      hostedZoneId: this.hostedZoneId,
-      hostedZoneNameServers: this.hostedZoneNameServers,
+      primaryAlbDnsName: this.primaryAlbDnsName,
+      secondaryAlbDnsName: this.secondaryAlbDnsName,
       transactionTableName: this.transactionTableName,
       primaryAuditBucketName: this.primaryAuditBucketName,
       secondaryAuditBucketName: this.secondaryAuditBucketName,
