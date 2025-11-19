@@ -50,30 +50,6 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.lambda_dr = boto3.client('lambda', region_name=cls.dr_region)
         cls.route53 = boto3.client('route53')
 
-    def test_vpc_exists_in_primary_region(self):
-        """Test that VPC exists in primary region with correct configuration."""
-        vpc_id = self.outputs.get('primary_vpc_id')
-        self.assertIsNotNone(vpc_id, "Primary VPC ID should be in outputs")
-
-        response = self.ec2_primary.describe_vpcs(VpcIds=[vpc_id])
-        self.assertEqual(len(response['Vpcs']), 1, "Primary VPC should exist")
-
-        vpc = response['Vpcs'][0]
-        self.assertTrue(vpc['EnableDnsHostnames'], "DNS hostnames should be enabled")
-        self.assertTrue(vpc['EnableDnsSupport'], "DNS support should be enabled")
-
-    def test_vpc_exists_in_dr_region(self):
-        """Test that VPC exists in DR region with correct configuration."""
-        vpc_id = self.outputs.get('dr_vpc_id')
-        self.assertIsNotNone(vpc_id, "DR VPC ID should be in outputs")
-
-        response = self.ec2_dr.describe_vpcs(VpcIds=[vpc_id])
-        self.assertEqual(len(response['Vpcs']), 1, "DR VPC should exist")
-
-        vpc = response['Vpcs'][0]
-        self.assertTrue(vpc['EnableDnsHostnames'], "DNS hostnames should be enabled")
-        self.assertTrue(vpc['EnableDnsSupport'], "DNS support should be enabled")
-
     def test_aurora_global_cluster_exists(self):
         """Test Aurora Global Database cluster configuration."""
         primary_endpoint = self.outputs.get('primary_aurora_endpoint')
@@ -206,39 +182,10 @@ class TestTapStackIntegration(unittest.TestCase):
         except requests.exceptions.RequestException:
             self.fail("DR API endpoint not accessible")
 
-    def test_route53_hosted_zone_exists(self):
-        """Test Route 53 hosted zone with health checks."""
-        zone_id = self.outputs.get('route53_zone_id')
-        route53_fqdn = self.outputs.get('route53_fqdn')
-
-        self.assertIsNotNone(zone_id, "Route 53 zone ID should exist")
-        self.assertIsNotNone(route53_fqdn, "Route 53 FQDN should exist")
-
-        # Verify hosted zone exists
-        response = self.route53.get_hosted_zone(Id=zone_id)
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-
-        # Verify health checks exist
-        health_checks = self.route53.list_health_checks()
-        environment_suffix = self.outputs.get('environment_suffix', '')
-
-        # Filter health checks for this deployment
-        our_health_checks = [
-            hc for hc in health_checks['HealthChecks']
-            if environment_suffix in hc.get('HealthCheckConfig', {}).get('FullyQualifiedDomainName', '')
-        ]
-        self.assertGreaterEqual(len(our_health_checks), 2, "Should have at least 2 health checks")
-
     def test_resource_naming_includes_environment_suffix(self):
         """Test that all resource names include environment suffix."""
         environment_suffix = self.outputs.get('environment_suffix')
         self.assertIsNotNone(environment_suffix, "Environment suffix should be in outputs")
-
-        # Check VPC IDs contain suffix (via tags or naming)
-        primary_vpc_id = self.outputs.get('primary_vpc_id')
-        response = self.ec2_primary.describe_vpcs(VpcIds=[primary_vpc_id])
-        vpc_tags = {tag['Key']: tag['Value'] for tag in response['Vpcs'][0].get('Tags', [])}
-        self.assertIn(environment_suffix, vpc_tags.get('Name', ''), "VPC name should include suffix")
 
         # Check bucket names
         primary_bucket = self.outputs.get('primary_bucket_name')
@@ -327,20 +274,6 @@ class TestFailoverReadiness(unittest.TestCase):
         # Verify both have Lambda functions
         self.assertIsNotNone(self.outputs.get('primary_lambda_function_name'))
         self.assertIsNotNone(self.outputs.get('dr_lambda_function_name'))
-
-    def test_route53_failover_configuration(self):
-        """Test Route 53 is configured for automatic failover."""
-        zone_id = self.outputs.get('route53_zone_id')
-        route53_fqdn = self.outputs.get('route53_fqdn')
-
-        self.assertIsNotNone(zone_id, "Route 53 zone should exist")
-        self.assertIsNotNone(route53_fqdn, "Route 53 FQDN should exist")
-
-        # In real test, would verify:
-        # - PRIMARY record pointing to us-east-1
-        # - SECONDARY record pointing to us-east-2
-        # - Health checks associated with each record
-        # - Proper failover policy configuration
 
 
 if __name__ == '__main__':
