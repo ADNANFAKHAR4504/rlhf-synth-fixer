@@ -197,7 +197,11 @@ resource "aws_kms_key" "emr" {
           "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext",
           "kms:DescribeKey",
-          "kms:CreateGrant"
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
+          "kms:ListAliases",
+          "kms:ListKeys"
         ]
         Resource = "*"
       }

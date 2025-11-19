@@ -41,7 +41,9 @@ resource "aws_iam_role_policy" "emr_service_kms" {
           "kms:DescribeKey",
           "kms:CreateGrant",
           "kms:ListGrants",
-          "kms:RevokeGrant"
+          "kms:RevokeGrant",
+          "kms:ListAliases",
+          "kms:ListKeys"
         ]
         Resource = [
           aws_kms_key.emr.arn
@@ -311,7 +313,8 @@ resource "aws_iam_role_policy" "emr_ec2_kms" {
           "kms:Decrypt",
           "kms:GenerateDataKey",
           "kms:GenerateDataKeyWithoutPlaintext",
-          "kms:DescribeKey"
+          "kms:DescribeKey",
+          "kms:ListAliases"
         ]
         Resource = [
           aws_kms_key.emr.arn
