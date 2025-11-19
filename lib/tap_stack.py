@@ -666,9 +666,12 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_notification_rule(self) -> aws.codestarnotifications.NotificationRule:
         """Create notification rule to send pipeline failures to SNS."""
+        notification_rule_name = self.random_suffix.result.apply(
+            lambda suffix: f'pipeline-failures-{self.env_suffix}-{suffix}'
+        )
         rule = aws.codestarnotifications.NotificationRule(
             f'pipeline-notification-rule-{self.env_suffix}',
-            name=f'pipeline-failures-{self.env_suffix}',
+            name=notification_rule_name,
             detail_type='FULL',
             resource=self.pipeline.arn,
             event_type_ids=[
