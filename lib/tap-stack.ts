@@ -699,8 +699,9 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
       `flow-logs-bucket-policy-${environmentSuffix}`,
       {
         bucket: flowLogsBucket.id,
-        policy: pulumi.all([flowLogsBucket.arn]).apply(([bucketArn]: [string]) =>
-          JSON.stringify({
+        policy: pulumi.all([flowLogsBucket.arn]).apply((args: string[]) => {
+          const bucketArn = args[0];
+          return JSON.stringify({
             Version: '2012-10-17',
             Statement: [
               {
@@ -727,8 +728,8 @@ echo "iptables-restore < /etc/iptables.rules" >> /etc/rc.local
                 Resource: bucketArn,
               },
             ],
-          })
-        ),
+          });
+        }),
       },
       { parent: this }
     );
