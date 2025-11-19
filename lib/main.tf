@@ -535,17 +535,16 @@ resource "aws_emr_cluster" "main" {
     aws_iam_role_policy.emr_service_ec2_permissions,
     aws_iam_role_policy.emr_service_s3_permissions,
     aws_iam_role_policy_attachment.emr_service_role,
-    aws_emr_security_configuration.main,
-    null_resource.disable_termination_protection
+    aws_emr_security_configuration.main
   ]
 }
 
 # Disable termination protection before destroying the cluster
-# The cluster depends on this resource, so during destroy this will be
-# destroyed first, running the provisioner to disable termination protection
+# This resource's triggers reference the cluster, so it will be created after the cluster
+# During destroy, Terraform destroys in reverse creation order, so this will be destroyed first
 resource "null_resource" "disable_termination_protection" {
   # Store cluster ID in triggers so it can be accessed via self.triggers in destroy provisioner
-  # Note: This creates the resource after cluster is created (cluster ID is available)
+  # The trigger creates an implicit dependency: cluster is created first, then this resource
   triggers = {
     cluster_id = aws_emr_cluster.main.id
   }
