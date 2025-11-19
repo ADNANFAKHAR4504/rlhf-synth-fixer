@@ -349,25 +349,29 @@ class TestCloudWatchLogsAnalyzer:
                 'log_group_name': '/aws/lambda/test-function',
                 'retention_days': 30,
                 'monthly_cost': 0.03,
-                'issues': [{'type': 'test_issue'}]
+                'issues': [{'type': 'test_issue', 'description': 'Test issue description'}],
+                'optimization': {'estimated_savings': 0.01}
             },
             {
                 'log_group_name': '/aws/ecs/my-service',
                 'retention_days': 60,
                 'monthly_cost': 0.05,
-                'issues': []
+                'issues': [],
+                'optimization': {'estimated_savings': 0.00}
             },
             {
                 'log_group_name': '/aws/eks/my-cluster',
                 'retention_days': 90,
                 'monthly_cost': 0.08,
-                'issues': []
+                'issues': [],
+                'optimization': {'estimated_savings': 0.00}
             },
             {
                 'log_group_name': 'vpc-flow-logs/my-vpc',
                 'retention_days': None,
                 'monthly_cost': 0.10,
-                'issues': []
+                'issues': [],
+                'optimization': {'estimated_savings': 0.00}
             }
         ]
 

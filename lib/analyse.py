@@ -848,40 +848,59 @@ class CloudWatchLogsAnalyzer:
                 )
             )
 
-        # Issues summary table
+        # Issues summary table - now showing specific log groups with issues
         print("\n🔍 ISSUES SUMMARY:")
         issue_counts = defaultdict(int)
         severity_counts = defaultdict(int)
         total_potential_savings = 0
+        issue_details = defaultdict(list)  # Track which log groups have each issue
 
         for lg in sorted_logs:
             for issue in lg["issues"]:
                 issue_counts[issue["type"]] += 1
                 severity_counts[issue.get("severity", "Unknown")] += 1
                 total_potential_savings += issue.get("potential_savings", 0)
+                # Store log group info for this issue type
+                issue_details[issue["type"]].append({
+                    "log_group": lg["log_group_name"],
+                    "severity": issue.get("severity", "Unknown"),
+                    "savings": issue.get("potential_savings", 0),
+                    "description": issue.get("description", "")
+                })
 
         if issue_counts:
-            issues_table = []
+            # Show detailed breakdown by issue type with affected log groups
             for issue_type, count in sorted(
                 issue_counts.items(), key=lambda x: x[1], reverse=True
             ):
-                issues_table.append(
-                    [
-                        issue_type.replace("_", " ").title(),
-                        count,
-                        f"{count/len(sorted_logs)*100:.1f}%",
-                    ]
+                print(f"\n📌 {issue_type.replace('_', ' ').title()} ({count} log groups affected):")
+                issue_table = []
+                for detail in issue_details[issue_type][:10]:  # Show top 10
+                    log_group_short = (
+                        detail["log_group"][:60] + "..."
+                        if len(detail["log_group"]) > 60
+                        else detail["log_group"]
+                    )
+                    savings_str = f"${detail['savings']:,.2f}" if detail['savings'] > 0 else "-"
+                    issue_table.append([
+                        log_group_short,
+                        detail["severity"],
+                        savings_str,
+                        (detail["description"][:80] + "..." if len(detail["description"]) > 80 else detail["description"])
+                    ])
+
+                print(
+                    tabulate(
+                        issue_table,
+                        headers=["Log Group Name", "Severity", "Potential Savings", "Description"],
+                        tablefmt="grid",
+                    )
                 )
+                if len(issue_details[issue_type]) > 10:
+                    print(f"   ... and {len(issue_details[issue_type]) - 10} more log groups")
 
             print(
-                tabulate(
-                    issues_table,
-                    headers=["Issue Type", "Count", "Percentage"],
-                    tablefmt="grid",
-                )
-            )
-            print(
-                f"\n💡 Total Potential Savings from Issues: ${total_potential_savings:,.2f}"
+                f"\n💡 Total Potential Savings from All Issues: ${total_potential_savings:,.2f}"
             )
 
         # Monitoring gaps table
@@ -982,7 +1001,7 @@ Top 5 Cost Contributors:
         logger.info("Chart summary saved to log_retention_analysis.txt")
 
     def _generate_csv_report(self):
-        """Generate CSV monitoring coverage report"""
+        """Generate CSV monitoring coverage report with detailed issue information"""
         # Combine log groups and monitoring gaps
         rows = []
 
@@ -991,6 +1010,7 @@ Top 5 Cost Contributors:
             # Extract resource info from log group name
             resource_type = "Unknown"
             resource_id = lg["log_group_name"]
+            resource_arn = f"arn:aws:logs:us-east-1:*:log-group:{lg['log_group_name']}"
 
             if "/aws/lambda/" in lg["log_group_name"]:
                 resource_type = "Lambda"
@@ -1008,35 +1028,44 @@ Top 5 Cost Contributors:
                 resource_type = "VPC"
                 resource_id = lg["log_group_name"]
 
+            # Collect all issues for this log group
+            all_issues = "; ".join([issue["type"] for issue in lg["issues"]]) if lg["issues"] else "None"
+            issue_descriptions = "; ".join([issue.get("description", "") for issue in lg["issues"]]) if lg["issues"] else ""
+
             rows.append(
                 {
                     "resource_type": resource_type,
                     "resource_id": resource_id,
                     "log_group_name": lg["log_group_name"],
+                    "log_group_arn": resource_arn,
                     "status": "Active",
                     "retention_days": (
                         lg["retention_days"] if lg["retention_days"] else "Never Expire"
                     ),
                     "monthly_cost": f"${lg['monthly_cost']:.2f}",
                     "issues_count": len(lg["issues"]),
-                    "primary_issue": (
-                        lg["issues"][0]["type"] if lg["issues"] else "None"
-                    ),
+                    "all_issues": all_issues,
+                    "issue_descriptions": issue_descriptions,
+                    "potential_savings": f"${lg['optimization']['estimated_savings']:.2f}",
                 }
             )
 
         # Add monitoring gaps
         for gap in self.monitoring_gaps:
+            expected_arn = f"arn:aws:logs:us-east-1:*:log-group:{gap['expected_log_group']}"
             rows.append(
                 {
                     "resource_type": gap["resource_type"],
                     "resource_id": gap["resource_id"],
                     "log_group_name": gap["expected_log_group"],
+                    "log_group_arn": expected_arn,
                     "status": gap["status"],
                     "retention_days": "N/A",
                     "monthly_cost": "$0.00",
                     "issues_count": 1,
-                    "primary_issue": "missing_logs",
+                    "all_issues": "missing_logs",
+                    "issue_descriptions": gap.get("issue", ""),
+                    "potential_savings": "$0.00",
                 }
             )
 
@@ -1046,11 +1075,14 @@ Top 5 Cost Contributors:
                 "resource_type",
                 "resource_id",
                 "log_group_name",
+                "log_group_arn",
                 "status",
                 "retention_days",
                 "monthly_cost",
                 "issues_count",
-                "primary_issue",
+                "all_issues",
+                "issue_descriptions",
+                "potential_savings",
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
