@@ -12,7 +12,7 @@ You are required to set up a foundational AWS cloud environment using Terraform.
 Your tasks include:
 
 1. Amazon RDS MySQL Database: 
-   - Create an Amazon RDS MySQL database in the 'us-west-2' region.
+   - Create an Amazon RDS MySQL database in any region.
    - Automated backups must be enabled.
    - Secure storage of database credentials is required.
 
@@ -26,19 +26,19 @@ Your tasks include:
    - Use Terraform variables to manage sensitive information such as database credentials and EC2 instance type.
 
 4. State Management: 
-   - Store the Terraform state file remotely in an S3 bucket in 'us-west-2'.
+   - Store the Terraform state file remotely in an S3 bucket in any region.
    - S3 bucket must have versioning enabled for state management.
 
 5. General Best Practices: 
    - All resources must follow AWS best practices for security and scalability.
-   - All resources must be provisioned in the 'us-west-2' region.
+   - All resources must be provisioned in any region.
    - Resource names must include a string suffix variable for uniqueness and environment separation.
 
 ---
 
 ### Constraints
 
-- Resources must be created in the 'us-west-2' region.
+- Resources must be created in any region.
 - Use Terraform 1.0 syntax for all resources.
 - Provision an Amazon RDS MySQL database with automated backups enabled.
 - Create an EC2 instance with the latest Amazon Linux 2 AMI.
