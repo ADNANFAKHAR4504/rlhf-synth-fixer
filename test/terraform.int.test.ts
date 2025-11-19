@@ -13,12 +13,12 @@ import {
   DescribeTasksCommand,
 } from "@aws-sdk/client-ecs";
 import {
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeTargetHealthCommand,
   DescribeListenersCommand,
-} from "@aws-sdk/client-elbv2";
+} from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
   EC2Client,
   DescribeVpcsCommand,
@@ -140,7 +140,7 @@ const region = process.env.AWS_REGION || "us-east-1";
 
 // AWS clients
 const ecsClient = new ECSClient({ region });
-const elbv2Client = new ELBv2Client({ region });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 const ec2Client = new EC2Client({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 
