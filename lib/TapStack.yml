@@ -776,30 +776,45 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "PaymentProcessing-${EnvironmentSuffix}", "TransactionSuccess", { "stat": "Sum" } ],
-                  [ ".", "TransactionFailure", { "stat": "Sum" } ]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "TransactionSuccess",
+                    { "stat": "Sum", "id": "m1" }
+                  ],
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "TransactionFailure",
+                    { "stat": "Sum", "id": "m2" }
+                  ]
                 ],
-                "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Transaction Volume",
-                "yAxis": { "left": { "min": 0 } }
+                "yAxis": {
+                  "left": { "min": 0 }
+                }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "PaymentProcessing-${EnvironmentSuffix}", "AverageLatency", { "stat": "Average" } ]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "AverageLatency",
+                    { "stat": "Average", "id": "lat" }
+                  ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Average Payment Latency (ms)",
-                "yAxis": { "left": { "min": 0 } },
+                "yAxis": {
+                  "left": { "min": 0 }
+                },
                 "annotations": {
                   "horizontal": [
                     {
                       "label": "High Latency Threshold",
-                      "value": "${HighLatencyThreshold}"
+                      "value": ${HighLatencyThreshold}
                     }
                   ]
                 }
@@ -809,17 +824,23 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "PaymentProcessing-${EnvironmentSuffix}", "ErrorRate", { "stat": "Average" } ]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "ErrorRate",
+                    { "stat": "Average", "id": "err" }
+                  ]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Error Rate (%)",
-                "yAxis": { "left": { "min": 0, "max": 100 } },
+                "yAxis": {
+                  "left": { "min": 0, "max": 100 }
+                },
                 "annotations": {
                   "horizontal": [
                     {
                       "label": "Error Rate Threshold",
-                      "value": "${ErrorRateThreshold}"
+                      "value": ${ErrorRateThreshold}
                     }
                   ]
                 }
@@ -829,22 +850,38 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "PaymentProcessing-${EnvironmentSuffix}", "FraudDetected", { "stat": "Sum" } ]
+                  [
+                    "PaymentProcessing-${EnvironmentSuffix}",
+                    "FraudDetected",
+                    { "stat": "Sum", "id": "fraud" }
+                  ]
                 ],
-                "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Fraud Detections",
-                "yAxis": { "left": { "min": 0 } }
+                "yAxis": {
+                  "left": { "min": 0 }
+                }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "AWS/Lambda", "Invocations", "FunctionName", "payment-metrics-processor-${EnvironmentSuffix}", { "stat": "Sum" } ],
-                  [ ".", "Errors", ".", ".", { "stat": "Sum" } ]
+                  [
+                    "AWS/Lambda",
+                    "Invocations",
+                    "FunctionName",
+                    "payment-metrics-processor-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "lm1" }
+                  ],
+                  [
+                    "AWS/Lambda",
+                    "Errors",
+                    "FunctionName",
+                    "payment-metrics-processor-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "lm2" }
+                  ]
                 ],
-                "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Lambda Metrics Processor Health"
               }
@@ -853,23 +890,42 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "AWS/Kinesis", "IncomingRecords", "StreamName", "payment-logs-stream-${EnvironmentSuffix}", { "stat": "Sum" } ],
-                  [ ".", "IncomingBytes", ".", ".", { "stat": "Sum" } ]
+                  [
+                    "AWS/Kinesis",
+                    "IncomingRecords",
+                    "StreamName",
+                    "payment-logs-stream-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "kin1" }
+                  ],
+                  [
+                    "AWS/Kinesis",
+                    "IncomingBytes",
+                    "StreamName",
+                    "payment-logs-stream-${EnvironmentSuffix}",
+                    { "stat": "Sum", "id": "kin2" }
+                  ]
                 ],
-                "period": 300,
                 "region": "${AWS::Region}",
                 "title": "Kinesis Stream Throughput",
-                "yAxis": { "right": { "min": 0 } }
+                "yAxis": {
+                  "right": { "min": 0 }
+                }
               }
             },
             {
               "type": "metric",
               "properties": {
                 "metrics": [
-                  [ "AWS/AOSS", "5xx", "CollectionName", "payment-logs-${EnvironmentSuffix}", { "stat": "Maximum" } ]
+                  [
+                    "AWS/AOSS",
+                    "5xx",
+                    "CollectionName",
+                    "payment-logs-${EnvironmentSuffix}",
+                    { "stat": "Maximum", "id": "oss1" }
+                  ]
                 ],
-                "period": 60,
                 "region": "${AWS::Region}",
+                "period": 60,
                 "title": "OpenSearch Serverless Errors"
               }
             },
