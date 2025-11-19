@@ -49,7 +49,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
     S3BucketServerSideEncryptionConfigurationRuleA,
     S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioning, S3BucketVersioningVersioningConfiguration)
+    S3BucketVersioningA, S3BucketVersioningVersioningConfigurationA)
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
     SecretsmanagerSecretVersion
@@ -129,11 +129,11 @@ class TapStack(TerraformStack):
         )
 
         # S3 Bucket Versioning
-        self.bucket_versioning = S3BucketVersioning(
+        self.bucket_versioning = S3BucketVersioningA(
             self,
             f"artifacts_bucket_versioning_{environment_suffix}",
             bucket=self.bucket.id,
-            versioning_configuration=S3BucketVersioningVersioningConfiguration(
+            versioning_configuration=S3BucketVersioningVersioningConfigurationA(
                 status="Enabled"
             )
         )
