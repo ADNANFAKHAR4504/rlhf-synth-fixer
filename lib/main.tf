@@ -7,7 +7,7 @@ terraform {
     }
   }
 
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 provider "aws" {
@@ -17,4 +17,8 @@ provider "aws" {
       iac-rlhf-amazon = "true"
     }
   }
+}
+
+locals {
+  secret_suffix = formatdate("YYYYMMDDhhmmss", timestamp())
 }

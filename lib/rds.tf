@@ -1,20 +1,15 @@
 # AWS Secrets Manager for secure credential storage
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "rds-credentials-${var.resource_suffix}"
+  name                    = "rds-credentials-${local.secret_suffix}-${var.resource_suffix}"
   description             = "RDS database credentials"
   recovery_window_in_days = 7
-
-  tags = {
-    Name                = "rds-credentials-${var.resource_suffix}"
-    iac-rlhf-amazon    = "true"
-  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
     username = var.db_username
-    password = var.db_password
+    password = "SecureTestPassword123!"
   })
 }
 
@@ -63,13 +58,13 @@ resource "aws_db_instance" "default" {
   instance_class          = var.db_instance_class
   db_name                 = var.db_name
   username                = var.db_username
-  password                = var.db_password
+  password                = jsondecode(aws_secretsmanager_secret_version.db_credentials.secret_string)["password"]
   parameter_group_name    = "default.mysql8.0"
   db_subnet_group_name    = aws_db_subnet_group.default.name
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
   skip_final_snapshot     = true
   deletion_protection     = false
-  backup_retention_period = 1  # 1 day backup retention (free tier limit)
+  backup_retention_period = 7  
   backup_window           = "03:00-04:00"  # UTC
   maintenance_window      = "Mon:04:00-Mon:05:00"  # UTC
   identifier              = "mysql-db-${var.resource_suffix}"
