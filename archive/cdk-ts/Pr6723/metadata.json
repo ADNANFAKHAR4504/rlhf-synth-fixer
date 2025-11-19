@@ -25,5 +25,11 @@
   "description": "Multi-service containerized application on ECS with ALB, CloudMap service discovery, auto-scaling, Container Insights, and X-Ray tracing",
   "training_quality": 10,
   "deployment_status": "skipped",
-  "deployment_skipped_reason": "user_requested_pr_only"
+  "deployment_skipped_reason": "user_requested_pr_only",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
