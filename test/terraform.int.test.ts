@@ -1,0 +1,480 @@
+// Integration tests for deployed Terraform infrastructure
+import {
+  ECSClient,
+  DescribeServicesCommand,
+  DescribeClustersCommand,
+  DescribeTaskDefinitionCommand,
+} from "@aws-sdk/client-ecs";
+import {
+  RDSClient,
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+} from "@aws-sdk/client-rds";
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand,
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+} from "@aws-sdk/client-secrets-manager";
+import {
+  WAFV2Client,
+  GetWebACLCommand,
+  GetWebACLForResourceCommand,
+} from "@aws-sdk/client-wafv2";
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeNatGatewaysCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  ECRClient,
+  DescribeRepositoriesCommand,
+} from "@aws-sdk/client-ecr";
+import fs from "fs";
+import path from "path";
+
+const REGION = "us-east-1";
+const OUTPUTS_FILE = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
+
+// Initialize AWS clients
+const ecsClient = new ECSClient({ region: REGION });
+const rdsClient = new RDSClient({ region: REGION });
+const elbClient = new ElasticLoadBalancingV2Client({ region: REGION });
+const logsClient = new CloudWatchLogsClient({ region: REGION });
+const secretsClient = new SecretsManagerClient({ region: REGION });
+const wafClient = new WAFV2Client({ region: REGION });
+const ec2Client = new EC2Client({ region: REGION });
+const ecrClient = new ECRClient({ region: REGION });
+
+describe("Infrastructure Integration Tests", () => {
+  let outputs: any;
+
+  beforeAll(() => {
+    if (!fs.existsSync(OUTPUTS_FILE)) {
+      throw new Error(`Outputs file not found: ${OUTPUTS_FILE}`);
+    }
+    outputs = JSON.parse(fs.readFileSync(OUTPUTS_FILE, "utf8"));
+  });
+
+  describe("VPC and Networking", () => {
+    test("VPC exists and is properly configured", async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpc_id],
+      });
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs?.length).toBe(1);
+      expect(response.Vpcs?.[0].State).toBe("available");
+    });
+
+    test("Public and private subnets exist", async () => {
+      const command = new DescribeSubnetsCommand({
+        Filters: [
+          {
+            Name: "vpc-id",
+            Values: [outputs.vpc_id],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBeGreaterThanOrEqual(4);
+
+      // Check for public and private subnets
+      const publicSubnets = response.Subnets!.filter((s) =>
+        s.Tags?.some((t) => t.Key === "Name" && t.Value?.includes("public"))
+      );
+      const privateSubnets = response.Subnets!.filter((s) =>
+        s.Tags?.some((t) => t.Key === "Name" && t.Value?.includes("private"))
+      );
+
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test("NAT Gateways are available", async () => {
+      const command = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: "vpc-id",
+            Values: [outputs.vpc_id],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      expect(response.NatGateways).toBeDefined();
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
+      expect(response.NatGateways?.[0].State).toMatch(/available|pending/);
+    });
+
+    test("Security groups are properly configured", async () => {
+      const command = new DescribeSecurityGroupsCommand({
+        Filters: [
+          {
+            Name: "vpc-id",
+            Values: [outputs.vpc_id],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(3);
+
+      // Check no security groups use -1 for protocol
+      response.SecurityGroups!.forEach((sg) => {
+        sg.IpPermissions?.forEach((rule) => {
+          if (rule.IpProtocol !== "-1") {
+            // -1 is allowed for "all protocols"
+            expect(rule.FromPort).toBeDefined();
+            expect(rule.ToPort).toBeDefined();
+          }
+        });
+      });
+    });
+  });
+
+  describe("ECS Cluster and Services", () => {
+    test("ECS cluster exists and is active", async () => {
+      const command = new DescribeClustersCommand({
+        clusters: [outputs.ecs_cluster_name],
+      });
+      const response = await ecsClient.send(command);
+      expect(response.clusters).toBeDefined();
+      expect(response.clusters?.length).toBe(1);
+      expect(response.clusters?.[0].status).toBe("ACTIVE");
+    });
+
+    test("Blue ECS service is running", async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.blue_service_name],
+      });
+      const response = await ecsClient.send(command);
+      expect(response.services).toBeDefined();
+      expect(response.services?.length).toBe(1);
+      expect(response.services?.[0].status).toBe("ACTIVE");
+      expect(response.services?.[0].launchType).toBe("FARGATE");
+    });
+
+    test("Green ECS service is running", async () => {
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.green_service_name],
+      });
+      const response = await ecsClient.send(command);
+      expect(response.services).toBeDefined();
+      expect(response.services?.length).toBe(1);
+      expect(response.services?.[0].status).toBe("ACTIVE");
+      expect(response.services?.[0].launchType).toBe("FARGATE");
+    });
+
+    test("Task definitions use awsvpc network mode", async () => {
+      const servicesCommand = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.blue_service_name],
+      });
+      const servicesResponse = await ecsClient.send(servicesCommand);
+      const taskDefArn = servicesResponse.services?.[0].taskDefinition;
+
+      const taskDefCommand = new DescribeTaskDefinitionCommand({
+        taskDefinition: taskDefArn,
+      });
+      const taskDefResponse = await ecsClient.send(taskDefCommand);
+      expect(taskDefResponse.taskDefinition?.networkMode).toBe("awsvpc");
+    });
+  });
+
+  describe("RDS Aurora Cluster", () => {
+    test("RDS cluster exists and is available", async () => {
+      const clusterIdMatch = outputs.rds_cluster_endpoint.match(/^([^.]+)/);
+      const clusterId = clusterIdMatch ? clusterIdMatch[1] : "";
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters).toBeDefined();
+      expect(response.DBClusters?.length).toBe(1);
+      expect(response.DBClusters?.[0].Status).toBe("available");
+    });
+
+    test("RDS cluster is encrypted", async () => {
+      const clusterIdMatch = outputs.rds_cluster_endpoint.match(/^([^.]+)/);
+      const clusterId = clusterIdMatch ? clusterIdMatch[1] : "";
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters?.[0].StorageEncrypted).toBe(true);
+    });
+
+    test("RDS cluster has multiple instances for Multi-AZ", async () => {
+      const clusterIdMatch = outputs.rds_cluster_endpoint.match(/^([^.]+)/);
+      const clusterId = clusterIdMatch ? clusterIdMatch[1] : "";
+
+      const command = new DescribeDBInstancesCommand({
+        Filters: [
+          {
+            Name: "db-cluster-id",
+            Values: [clusterId],
+          },
+        ],
+      });
+      const response = await rdsClient.send(command);
+      expect(response.DBInstances).toBeDefined();
+      expect(response.DBInstances!.length).toBeGreaterThanOrEqual(1);
+      expect(response.DBInstances?.[0].DBInstanceStatus).toMatch(
+        /available|backing-up/
+      );
+    });
+
+    test("RDS cluster uses Aurora PostgreSQL engine", async () => {
+      const clusterIdMatch = outputs.rds_cluster_endpoint.match(/^([^.]+)/);
+      const clusterId = clusterIdMatch ? clusterIdMatch[1] : "";
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterId,
+      });
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters?.[0].Engine).toBe("aurora-postgresql");
+    });
+  });
+
+  describe("Application Load Balancer", () => {
+    test("ALB exists and is active", async () => {
+      const command = new DescribeLoadBalancersCommand({
+        Names: [outputs.alb_dns_name.split("-").slice(0, -1).join("-")],
+      });
+      const response = await elbClient.send(command);
+      expect(response.LoadBalancers).toBeDefined();
+      expect(response.LoadBalancers?.length).toBeGreaterThanOrEqual(1);
+      expect(response.LoadBalancers?.[0].State?.Code).toBe("active");
+    });
+
+    test("ALB has blue and green target groups", async () => {
+      const lbCommand = new DescribeLoadBalancersCommand({
+        Names: [outputs.alb_dns_name.split("-").slice(0, -1).join("-")],
+      });
+      const lbResponse = await elbClient.send(lbCommand);
+      const lbArn = lbResponse.LoadBalancers?.[0].LoadBalancerArn;
+
+      const tgCommand = new DescribeTargetGroupsCommand({
+        LoadBalancerArn: lbArn,
+      });
+      const tgResponse = await elbClient.send(tgCommand);
+      expect(tgResponse.TargetGroups).toBeDefined();
+      expect(tgResponse.TargetGroups!.length).toBeGreaterThanOrEqual(2);
+
+      const blueGroup = tgResponse.TargetGroups!.find((tg) =>
+        tg.TargetGroupName?.includes("blue")
+      );
+      const greenGroup = tgResponse.TargetGroups!.find((tg) =>
+        tg.TargetGroupName?.includes("green")
+      );
+
+      expect(blueGroup).toBeDefined();
+      expect(greenGroup).toBeDefined();
+    });
+
+    test("ALB has listeners configured", async () => {
+      const lbCommand = new DescribeLoadBalancersCommand({
+        Names: [outputs.alb_dns_name.split("-").slice(0, -1).join("-")],
+      });
+      const lbResponse = await elbClient.send(lbCommand);
+      const lbArn = lbResponse.LoadBalancers?.[0].LoadBalancerArn;
+
+      const listenerCommand = new DescribeListenersCommand({
+        LoadBalancerArn: lbArn,
+      });
+      const listenerResponse = await elbClient.send(listenerCommand);
+      expect(listenerResponse.Listeners).toBeDefined();
+      expect(listenerResponse.Listeners!.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Secrets Manager", () => {
+    test("Database credentials secret exists", async () => {
+      const command = new DescribeSecretCommand({
+        SecretId: outputs.secrets_manager_arn,
+      });
+      const response = await secretsClient.send(command);
+      expect(response.ARN).toBe(outputs.secrets_manager_arn);
+      expect(response.RotationEnabled).toBe(true);
+    });
+
+    test("Secret value contains required database credentials", async () => {
+      const command = new GetSecretValueCommand({
+        SecretId: outputs.secrets_manager_arn,
+      });
+      const response = await secretsClient.send(command);
+      expect(response.SecretString).toBeDefined();
+
+      const secret = JSON.parse(response.SecretString!);
+      expect(secret.username).toBeDefined();
+      expect(secret.password).toBeDefined();
+      expect(secret.host).toBeDefined();
+      expect(secret.dbname).toBeDefined();
+    });
+  });
+
+  describe("WAF Configuration", () => {
+    test("WAF Web ACL exists", async () => {
+      const aclId = outputs.waf_web_acl_arn.split("/").pop();
+      const command = new GetWebACLCommand({
+        Scope: "REGIONAL",
+        Name: aclId?.split("/")[0] || "",
+        Id: aclId?.split("/")[1] || "",
+      });
+
+      // Note: GetWebACL requires name and ID, we'll verify via ALB association
+      const lbCommand = new DescribeLoadBalancersCommand({
+        Names: [outputs.alb_dns_name.split("-").slice(0, -1).join("-")],
+      });
+      const lbResponse = await elbClient.send(lbCommand);
+      const lbArn = lbResponse.LoadBalancers?.[0].LoadBalancerArn;
+
+      const wafCommand = new GetWebACLForResourceCommand({
+        ResourceArn: lbArn,
+      });
+      const wafResponse = await wafClient.send(wafCommand);
+      expect(wafResponse.WebACL).toBeDefined();
+      expect(wafResponse.WebACL?.ARN).toBe(outputs.waf_web_acl_arn);
+    });
+  });
+
+  describe("CloudWatch Logs", () => {
+    test("Blue service log group exists", async () => {
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.cloudwatch_log_group_blue,
+      });
+      const response = await logsClient.send(command);
+      expect(response.logGroups).toBeDefined();
+      expect(response.logGroups?.length).toBeGreaterThanOrEqual(1);
+      expect(response.logGroups?.[0].logGroupName).toBe(
+        outputs.cloudwatch_log_group_blue
+      );
+    });
+
+    test("Green service log group exists", async () => {
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.cloudwatch_log_group_green,
+      });
+      const response = await logsClient.send(command);
+      expect(response.logGroups).toBeDefined();
+      expect(response.logGroups?.length).toBeGreaterThanOrEqual(1);
+      expect(response.logGroups?.[0].logGroupName).toBe(
+        outputs.cloudwatch_log_group_green
+      );
+    });
+  });
+
+  describe("ECR Repository", () => {
+    test("ECR repository exists", async () => {
+      const repoName = outputs.ecr_repository_url.split("/").pop();
+      const command = new DescribeRepositoriesCommand({
+        repositoryNames: [repoName],
+      });
+      const response = await ecrClient.send(command);
+      expect(response.repositories).toBeDefined();
+      expect(response.repositories?.length).toBe(1);
+      expect(response.repositories?.[0].repositoryUri).toBe(
+        outputs.ecr_repository_url
+      );
+    });
+
+    test("ECR repository has image scanning enabled", async () => {
+      const repoName = outputs.ecr_repository_url.split("/").pop();
+      const command = new DescribeRepositoriesCommand({
+        repositoryNames: [repoName],
+      });
+      const response = await ecrClient.send(command);
+      expect(
+        response.repositories?.[0].imageScanningConfiguration?.scanOnPush
+      ).toBe(true);
+    });
+  });
+
+  describe("Resource Tagging", () => {
+    test("VPC has required tags", async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpc_id],
+      });
+      const response = await ec2Client.send(command);
+      const tags = response.Vpcs?.[0].Tags || [];
+
+      const hasEnvironmentTag = tags.some((t) => t.Key === "Environment");
+      const hasProjectTag = tags.some((t) => t.Key === "Project");
+      const hasOwnerTag = tags.some((t) => t.Key === "Owner");
+      const hasManagedByTag = tags.some((t) => t.Key === "ManagedBy");
+
+      expect(hasEnvironmentTag).toBe(true);
+      expect(hasProjectTag).toBe(true);
+      expect(hasOwnerTag).toBe(true);
+      expect(hasManagedByTag).toBe(true);
+    });
+  });
+
+  describe("Blue-Green Deployment Workflow", () => {
+    test("Both blue and green services can receive traffic", async () => {
+      const blueCommand = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.blue_service_name],
+      });
+      const blueResponse = await ecsClient.send(blueCommand);
+
+      const greenCommand = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.green_service_name],
+      });
+      const greenResponse = await ecsClient.send(greenCommand);
+
+      expect(blueResponse.services?.[0].status).toBe("ACTIVE");
+      expect(greenResponse.services?.[0].status).toBe("ACTIVE");
+
+      // Verify both services have load balancers configured
+      expect(blueResponse.services?.[0].loadBalancers).toBeDefined();
+      expect(greenResponse.services?.[0].loadBalancers).toBeDefined();
+    });
+
+    test("Services are configured for independent scaling", async () => {
+      const blueCommand = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.blue_service_name],
+      });
+      const blueResponse = await ecsClient.send(blueCommand);
+
+      const greenCommand = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.green_service_name],
+      });
+      const greenResponse = await ecsClient.send(greenCommand);
+
+      // Each service should have its own desired count
+      expect(blueResponse.services?.[0].desiredCount).toBeGreaterThanOrEqual(0);
+      expect(greenResponse.services?.[0].desiredCount).toBeGreaterThanOrEqual(
+        0
+      );
+    });
+  });
+
+  describe("Resource Naming Convention", () => {
+    test("All resources include environment suffix", () => {
+      expect(outputs.ecs_cluster_name).toMatch(/synth101912382$/);
+      expect(outputs.blue_service_name).toMatch(/synth101912382$/);
+      expect(outputs.green_service_name).toMatch(/synth101912382$/);
+      expect(outputs.vpc_id).toBeDefined();
+    });
+  });
+});

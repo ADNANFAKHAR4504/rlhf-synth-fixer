@@ -1,0 +1,77 @@
+{
+  "alb_dns_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "alb-synth101912382-1167386365.us-east-1.elb.amazonaws.com"
+  },
+  "alb_zone_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "Z35SXDOTRQ7X7K"
+  },
+  "blue_service_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "trading-dashboard-blue-synth101912382"
+  },
+  "cloudwatch_log_group_blue": {
+    "sensitive": false,
+    "type": "string",
+    "value": "/ecs/trading-dashboard-blue-synth101912382"
+  },
+  "cloudwatch_log_group_green": {
+    "sensitive": false,
+    "type": "string",
+    "value": "/ecs/trading-dashboard-green-synth101912382"
+  },
+  "ecr_repository_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "342597974367.dkr.ecr.us-east-1.amazonaws.com/trading-dashboard-synth101912382"
+  },
+  "ecs_cluster_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:ecs:us-east-1:342597974367:cluster/ecs-cluster-synth101912382"
+  },
+  "ecs_cluster_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "ecs-cluster-synth101912382"
+  },
+  "green_service_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "trading-dashboard-green-synth101912382"
+  },
+  "rds_cluster_endpoint": {
+    "sensitive": true,
+    "type": "string",
+    "value": "trading-db-synth101912382.cluster-covy6ema0nuv.us-east-1.rds.amazonaws.com"
+  },
+  "rds_reader_endpoint": {
+    "sensitive": true,
+    "type": "string",
+    "value": "trading-db-synth101912382.cluster-ro-covy6ema0nuv.us-east-1.rds.amazonaws.com"
+  },
+  "secrets_manager_arn": {
+    "sensitive": true,
+    "type": "string",
+    "value": "arn:aws:secretsmanager:us-east-1:342597974367:secret:db-credentials-synth101912382-20251119132407564400000002-RpdIR5"
+  },
+  "sns_topic_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:sns:us-east-1:342597974367:trading-dashboard-alerts-synth101912382"
+  },
+  "vpc_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpc-0399b6cf3033489bb"
+  },
+  "waf_web_acl_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:wafv2:us-east-1:342597974367:regional/webacl/waf-acl-synth101912382/07628b16-abfc-438f-a156-c287f8ab4b8a"
+  }
+}
