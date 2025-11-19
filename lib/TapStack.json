@@ -2,6 +2,8 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
     "Metadata": {
+        "Author": "iamarpit-turing",
+        "Reviewer": "adnan-turing",
         "AWS::CloudFormation::Interface": {
             "ParameterGroups": [
                 {
