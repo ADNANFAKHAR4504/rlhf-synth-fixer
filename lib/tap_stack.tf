@@ -32,6 +32,12 @@ variable "enable_guardduty" {
   default     = false
 }
 
+variable "enable_config" {
+  description = "Enable AWS Config (requires account-level permissions)"
+  type        = bool
+  default     = false
+}
+
 variable "cloudtrail_retention_days" {
   description = "CloudTrail log retention"
   type        = number
@@ -76,6 +82,56 @@ resource "aws_subnet" "private" {
   tags = {
     Name = "zero-trust-private-subnet-${count.index + 1}-${var.environment_suffix}"
     Type = "Private"
+  }
+}
+
+# Network ACL for additional subnet-level protection
+resource "aws_network_acl" "private" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.private[*].id
+
+  # Allow inbound HTTPS from VPC
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Allow inbound return traffic
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  # Allow outbound HTTPS
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  # Allow outbound return traffic
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "zero-trust-nacl-${var.environment_suffix}"
   }
 }
 
@@ -161,6 +217,18 @@ resource "aws_kms_key" "main" {
           "kms:GenerateDataKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow Config to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -227,6 +295,39 @@ resource "aws_kms_alias" "cloudwatch" {
 }
 
 # S3 Buckets
+
+# S3 Access Logs Bucket
+resource "aws_s3_bucket" "access_logs" {
+  bucket        = "zero-trust-access-logs-${var.environment_suffix}"
+  force_destroy = true
+
+  tags = {
+    Name = "zero-trust-access-logs-${var.environment_suffix}"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.arn
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Sensitive Data Bucket
 resource "aws_s3_bucket" "sensitive_data" {
   bucket        = "zero-trust-sensitive-data-${var.environment_suffix}"
   force_destroy = true
@@ -235,6 +336,13 @@ resource "aws_s3_bucket" "sensitive_data" {
     Name        = "zero-trust-sensitive-data-${var.environment_suffix}"
     Sensitivity = "High"
   }
+}
+
+resource "aws_s3_bucket_logging" "sensitive_data" {
+  bucket = aws_s3_bucket.sensitive_data.id
+
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "sensitive-data-logs/"
 }
 
 resource "aws_s3_bucket_versioning" "sensitive_data" {
@@ -361,7 +469,7 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
 }
 
 resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/application-${var.environment_suffix}"
+  name              = "/aws/application/${var.environment_suffix}"
   retention_in_days = var.cloudwatch_log_retention_days
   kms_key_id        = aws_kms_key.cloudwatch.arn
 
@@ -458,7 +566,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   namespace           = "CloudTrailMetrics"
   period              = "300"
   statistic           = "Sum"
-  threshold           = "1"
+  threshold           = "5"
   alarm_description   = "Monitors for unauthorized API calls"
   treat_missing_data  = "notBreaching"
 
@@ -495,6 +603,146 @@ resource "aws_guardduty_detector" "main" {
   }
 }
 
+# AWS Config Resources (optional - requires account-level permissions)
+# NOTE: AWS Config is an account-level service that may require additional permissions.
+# These resources are conditionally created based on the enable_config variable.
+# Set enable_config = true only if your AWS account has the necessary Config permissions.
+
+resource "aws_s3_bucket" "config" {
+  count         = var.enable_config ? 1 : 0
+  bucket        = "zero-trust-config-${var.environment_suffix}"
+  force_destroy = true
+
+  tags = {
+    Name = "zero-trust-config-${var.environment_suffix}"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "config" {
+  count  = var.enable_config ? 1 : 0
+  bucket = aws_s3_bucket.config[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_iam_role" "config" {
+  count = var.enable_config ? 1 : 0
+  name  = "zero-trust-config-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "zero-trust-config-role-${var.environment_suffix}"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "config" {
+  count      = var.enable_config ? 1 : 0
+  role       = aws_iam_role.config[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+}
+
+resource "aws_iam_role_policy" "config_s3" {
+  count = var.enable_config ? 1 : 0
+  name  = "zero-trust-config-s3-policy"
+  role  = aws_iam_role.config[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketVersioning",
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = [
+          aws_s3_bucket.config[0].arn,
+          "${aws_s3_bucket.config[0].arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config ? 1 : 0
+  name     = "zero-trust-config-recorder-${var.environment_suffix}"
+  role_arn = aws_iam_role.config[0].arn
+
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = true
+  }
+}
+
+resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config ? 1 : 0
+  name           = "zero-trust-config-delivery-${var.environment_suffix}"
+  s3_bucket_name = aws_s3_bucket.config[0].bucket
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_configuration_recorder_status" "main" {
+  count      = var.enable_config ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
+  is_enabled = true
+
+  depends_on = [aws_config_delivery_channel.main]
+}
+
+resource "aws_config_config_rule" "encrypted_volumes" {
+  count = var.enable_config ? 1 : 0
+  name  = "zero-trust-encrypted-volumes-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
+  count = var.enable_config ? 1 : 0
+  name  = "zero-trust-s3-public-read-prohibited-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_config_config_rule" "iam_password_policy" {
+  count = var.enable_config ? 1 : 0
+  name  = "zero-trust-iam-password-policy-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "IAM_PASSWORD_POLICY"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
 # Outputs
 output "vpc_id" {
   description = "ID of the VPC"
@@ -504,6 +752,11 @@ output "vpc_id" {
 output "private_subnet_ids" {
   description = "IDs of private subnets"
   value       = aws_subnet.private[*].id
+}
+
+output "network_acl_id" {
+  description = "ID of the Network ACL"
+  value       = aws_network_acl.private.id
 }
 
 output "security_group_id" {
@@ -519,6 +772,11 @@ output "kms_key_id" {
 output "kms_key_arn" {
   description = "ARN of the main KMS key"
   value       = aws_kms_key.main.arn
+}
+
+output "access_logs_bucket_name" {
+  description = "Name of the S3 access logs bucket"
+  value       = aws_s3_bucket.access_logs.id
 }
 
 output "sensitive_data_bucket_name" {
@@ -554,4 +812,14 @@ output "application_log_group" {
 output "guardduty_detector_id" {
   description = "ID of GuardDuty detector"
   value       = var.enable_guardduty ? aws_guardduty_detector.main[0].id : null
+}
+
+output "config_recorder_id" {
+  description = "ID of AWS Config recorder"
+  value       = var.enable_config ? aws_config_configuration_recorder.main[0].id : null
+}
+
+output "config_bucket_name" {
+  description = "Name of AWS Config S3 bucket"
+  value       = var.enable_config ? aws_s3_bucket.config[0].id : null
 }

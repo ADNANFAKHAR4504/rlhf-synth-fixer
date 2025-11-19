@@ -7,6 +7,7 @@ This is a production-ready, fully tested zero-trust security architecture implem
 ## Architecture Summary
 
 The implementation provides:
+
 - **Network Isolation**: Private VPC with isolated subnets, no internet gateway
 - **Encryption**: KMS keys with rotation for all data at rest and in transit
 - **Access Control**: Least-privilege IAM roles and policies
@@ -110,6 +111,7 @@ AWS Config resources commented out with documentation explaining account-level l
 ```
 
 This approach:
+
 - Avoids deployment failures in shared accounts
 - Documents the limitation clearly
 - Maintains compatibility with existing Config infrastructure
@@ -137,6 +139,7 @@ lib/
 ## Deployment
 
 ### Prerequisites
+
 - Terraform >= 1.0
 - AWS credentials configured
 - Unique `environment_suffix` value
@@ -161,6 +164,7 @@ terraform output -json > cfn-outputs/flat-outputs.json
 ```
 
 ### Destroy
+
 ```bash
 terraform destroy
 ```
@@ -206,6 +210,7 @@ All tests passed, validating complete zero-trust implementation.
 ## Security Features
 
 ### Network Isolation
+
 - Private VPC with no internet gateway
 - Private subnets across multiple availability zones
 - Security groups with explicit HTTPS-only rules
@@ -213,6 +218,7 @@ All tests passed, validating complete zero-trust implementation.
 - VPC endpoints for S3 and KMS (no internet transit)
 
 ### Encryption
+
 - KMS keys with automatic rotation enabled
 - Separate keys for main encryption and CloudWatch logs
 - S3 bucket encryption enforced with KMS
@@ -220,6 +226,7 @@ All tests passed, validating complete zero-trust implementation.
 - CloudWatch log encryption with KMS
 
 ### Access Control
+
 - IAM roles with least-privilege policies
 - No hardcoded credentials
 - Service-to-service authentication via IAM roles
@@ -227,6 +234,7 @@ All tests passed, validating complete zero-trust implementation.
 - S3 public access completely blocked
 
 ### Monitoring & Compliance
+
 - CloudTrail logging all API activity
 - VPC Flow Logs capturing all network traffic
 - CloudWatch alarms for security events:
@@ -237,9 +245,45 @@ All tests passed, validating complete zero-trust implementation.
 - GuardDuty threat detection (optional)
 - AWS Config compliance (existing account recorder)
 
+### Network Security
+
+- Private VPC with no internet gateway
+- Private subnets across multiple AZs
+- Network ACLs for subnet-level protection (NEW)
+- Security Groups with least-privilege rules
+- VPC Endpoints for S3 and KMS
+
+### Encryption & Key Management
+
+- KMS customer-managed keys with rotation
+- Separate keys for data and logs
+- Comprehensive key policies for CloudTrail, S3, Config, and CloudWatch
+
+### Data Protection
+
+- S3 with versioning and encryption
+- S3 access logging for audit trail (NEW)
+- Lifecycle policies for cost optimization
+- Public access blocking
+
+### Monitoring & Compliance
+
+- CloudTrail with log validation
+- VPC Flow Logs
+- CloudWatch alarms for security events
+- AWS Config for compliance (optional, conditional) (UPDATED)
+- GuardDuty support (optional)
+
+### Access Control
+
+- IAM roles with least privilege
+- Service-specific permissions
+- Proper assume role policies
+
 ## Resource Naming
 
 All resources include `var.environment_suffix` for uniqueness:
+
 - VPC: `zero-trust-vpc-${var.environment_suffix}`
 - KMS: `zero-trust-kms-${var.environment_suffix}`
 - S3: `zero-trust-sensitive-data-${var.environment_suffix}`
@@ -248,6 +292,7 @@ All resources include `var.environment_suffix` for uniqueness:
 ## Outputs
 
 Stack provides comprehensive outputs for integration testing:
+
 - `vpc_id`: VPC identifier
 - `private_subnet_ids`: List of private subnet IDs
 - `security_group_id`: Data processing security group
@@ -284,6 +329,7 @@ Stack provides comprehensive outputs for integration testing:
 ## Production Readiness
 
 This implementation is production-ready with:
+
 - Successful deployment to AWS
 - Comprehensive integration test coverage
 - All security controls validated
