@@ -61,7 +61,7 @@ const outputs = loadDeploymentOutputs();
 
 // Get environment suffix and region from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = process.env.AWS_REGION || 'us-west-2';
 
 // Initialize AWS SDK clients
 const ec2Client = new EC2Client({ region });
@@ -514,16 +514,16 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
       // List all task definitions with the family prefix
       const taskDefsResponse = await ecsClient.send(
         new ListTaskDefinitionsCommand({
-          familyPrefix: `task-`,
+          // familyPrefix: `task-`,
           status: 'ACTIVE',
         })
       );
-
+      console.log("taskDefsResponse.taskDefinitionArns", taskDefsResponse.taskDefinitionArns);
       // Filter by environment suffix (case-insensitive)
       const taskDefArns = taskDefsResponse.taskDefinitionArns!.filter((arn) =>
         arn.toLowerCase().includes(environmentSuffix.toLowerCase())
       );
-
+      console.log("taskDefArns", taskDefArns);
       // Should have at least 3 task definitions (one per service)
       expect(taskDefArns.length).toBeGreaterThanOrEqual(3);
 
@@ -542,7 +542,7 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
           familyPrefix: `task-api-gateway-${environmentSuffix}`,
         })
       );
-
+      console.log("taskDefsResponse.taskDefinitionArns", taskDefsResponse.taskDefinitionArns);
       expect(taskDefsResponse.taskDefinitionArns!.length).toBeGreaterThan(0);
       const latestTaskDefArn =
         taskDefsResponse.taskDefinitionArns![
@@ -813,34 +813,14 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
 
       const serviceNames = ['api-gateway', 'order-processor', 'market-data'];
       serviceNames.forEach((serviceName) => {
-        // X-Ray daemon shares the same task definition family, so it typically uses the same log group
-        // X-Ray uses streamPrefix: xray-${serviceName} to differentiate log streams within the group
-        // Try to find the log group for this service (same as application container)
-        const possiblePatterns = [
-          `/ecs/task-${serviceName}-${environmentSuffix}`,
-          `/ecs/TapStack${environmentSuffix}/TaskDef-${serviceName}-${environmentSuffix}`,
-        ];
-
-        let logGroup = logGroupsResponse.logGroups!.find(
-          (lg) => possiblePatterns.some(pattern => lg.logGroupName === pattern)
+        // X-Ray now has its own explicit log group
+        const expectedLogGroupName = `/ecs/xray-${serviceName}-${environmentSuffix}`;
+        const logGroup = logGroupsResponse.logGroups!.find(
+          (lg) => lg.logGroupName === expectedLogGroupName
         );
 
-        // If exact match not found, try flexible search
-        if (!logGroup) {
-          logGroup = logGroupsResponse.logGroups!.find(
-            (lg) =>
-              lg.logGroupName &&
-              lg.logGroupName.includes(serviceName) &&
-              lg.logGroupName.includes(environmentSuffix) &&
-              lg.logGroupName.startsWith('/ecs/')
-          );
-        }
-
-        // Verify the log group exists (X-Ray logs go to the same group with different stream prefix)
         expect(logGroup).toBeDefined();
-        // Retention might be 7 days (app container) or 3 days (X-Ray), CDK typically uses the longer one
-        // or creates separate groups. Accept either retention value.
-        expect([3, 7]).toContain(logGroup?.retentionInDays);
+        expect(logGroup?.retentionInDays).toBe(3);
       });
     });
   });

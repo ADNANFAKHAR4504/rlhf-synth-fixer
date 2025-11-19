@@ -312,6 +312,28 @@ export class TapStack extends cdk.Stack {
     taskExecutionRole: iam.Role,
     taskRole: iam.Role
   ): ecs.FargateTaskDefinition {
+    // Create log group for application container with explicit name
+    const appLogGroup = new logs.LogGroup(
+      this,
+      `AppLogGroup-${serviceName}-${environmentSuffix}`,
+      {
+        logGroupName: `/ecs/task-${serviceName}-${environmentSuffix}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Optional: for easier cleanup
+      }
+    );
+
+    // Create log group for X-Ray daemon with explicit name
+    const xrayLogGroup = new logs.LogGroup(
+      this,
+      `XRayLogGroup-${serviceName}-${environmentSuffix}`,
+      {
+        logGroupName: `/ecs/xray-${serviceName}-${environmentSuffix}`,
+        retention: logs.RetentionDays.THREE_DAYS,
+        removalPolicy: cdk.RemovalPolicy.DESTROY, // Optional: for easier cleanup
+      }
+    );
+
     const taskDef = new ecs.FargateTaskDefinition(
       this,
       `TaskDef-${serviceName}-${environmentSuffix}`,
@@ -331,8 +353,8 @@ export class TapStack extends cdk.Stack {
         'public.ecr.aws/nginx/nginx:1.25-alpine'
       ),
       logging: ecs.LogDrivers.awsLogs({
+        logGroup: appLogGroup, // Use explicit log group
         streamPrefix: serviceName,
-        logRetention: logs.RetentionDays.ONE_WEEK,
       }),
       environment: {
         SERVICE_NAME: serviceName,
@@ -349,18 +371,11 @@ export class TapStack extends cdk.Stack {
         },
       ],
       healthCheck: {
-        // FIXED: Use a health check that works with nginx alpine
-        // Option 1: Check if nginx process is running (most reliable)
         command: ['CMD-SHELL', 'pgrep nginx > /dev/null || exit 1'],
-        // Option 2: Alternative - use sh to test if port is listening
-        // command: [
-        //   'CMD-SHELL',
-        //   'sh -c "exec 3<>/dev/tcp/localhost/8080 && echo -e \"GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && cat <&3 | grep -q \"200 OK\" || exit 1" || exit 1',
-        // ],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         retries: 3,
-        startPeriod: cdk.Duration.seconds(90), // Increased from 60 to 90
+        startPeriod: cdk.Duration.seconds(90),
       },
     });
 
@@ -371,8 +386,8 @@ export class TapStack extends cdk.Stack {
       cpu: 32,
       memoryLimitMiB: 128,
       logging: ecs.LogDrivers.awsLogs({
+        logGroup: xrayLogGroup, // Use explicit log group
         streamPrefix: `xray-${serviceName}`,
-        logRetention: logs.RetentionDays.THREE_DAYS,
       }),
       portMappings: [
         {
