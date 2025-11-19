@@ -1,0 +1,24 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and customize
+
+environment_suffix = "dev-001"
+aws_region         = "us-east-1"
+
+# VPC Configuration
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# GuardDuty - set to true only if no detector exists in the account
+enable_guardduty = false
+
+# Log Retention
+cloudtrail_retention_days     = 90
+cloudwatch_log_retention_days = 30
+
+# Tags
+tags = {
+  Project     = "ZeroTrustArchitecture"
+  ManagedBy   = "Terraform"
+  Environment = "Development"
+  CostCenter  = "Security"
+}
