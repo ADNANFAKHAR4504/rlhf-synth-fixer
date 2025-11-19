@@ -1,7 +1,0 @@
-DBMasterPassword=TestPassword123!
-SourceNFSServerHostname=10.0.0.100
-SourceDatabaseEndpoint=source-db.example.com
-SourceDatabaseName=documents_src
-SourceDatabaseUsername=miguser
-SourceDatabasePassword=SourcePass123!
-AlertEmailAddress=test@example.com
