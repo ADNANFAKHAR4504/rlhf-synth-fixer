@@ -23,9 +23,6 @@ const team = process.env.TEAM || 'unknown';
 const createdAt = new Date().toISOString();
 
 // Define a set of default tags to apply to all resources.
-// While not explicitly used in the TapStack instantiation here,
-// this is the standard place to define them. They would typically be passed
-// into the TapStack or configured on the AWS provider.
 const defaultTags = {
   Environment: environmentSuffix,
   Repository: repository,
@@ -45,14 +42,28 @@ const provider = new aws.Provider('aws', {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack(
+const stack = new TapStack(
   'pulumi-infra',
   {
+    environmentSuffix: environmentSuffix,
     tags: defaultTags,
+    region: process.env.AWS_REGION || 'us-east-1',
   },
   { provider }
 );
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs
+export const vpcId = stack.vpcId;
+export const vpcCidr = stack.vpcCidr;
+export const internetGatewayId = stack.internetGatewayId;
+export const publicSubnetIds = stack.publicSubnetIds;
+export const privateSubnetIds = stack.privateSubnetIds;
+export const databaseSubnetIds = stack.databaseSubnetIds;
+export const natInstanceIds = stack.natInstanceIds;
+export const natInstancePrivateIps = stack.natInstancePrivateIps;
+export const webSecurityGroupId = stack.webSecurityGroupId;
+export const appSecurityGroupId = stack.appSecurityGroupId;
+export const databaseSecurityGroupId = stack.databaseSecurityGroupId;
+export const flowLogsBucketName = stack.flowLogsBucketName;
+export const flowLogsLogGroupName = stack.flowLogsLogGroupName;
+export const s3EndpointId = stack.s3EndpointId;
