@@ -2,6 +2,12 @@
 """
 AWS API Gateway Security and Performance Audit Script
 Performs comprehensive security and performance analysis of API Gateway resources
+
+SECURITY NOTICE:
+- Ensure AWS credentials have read-only permissions (no write access needed)
+- Treat output JSON files as sensitive - they contain infrastructure details
+- Do not commit api_gateway_audit.json or api_gateway_resources.json to version control
+- Add these files to .gitignore
 """
 
 import json
@@ -242,7 +248,8 @@ class APIGatewayAuditor:
 
                     cors_config['enabled'] = True
                     cors_config['allow_origin'] = allow_origin.strip("'\"")
-            except:
+            except Exception as e:
+                logger.debug(f"OPTIONS method not found for resource {resource_id}: {str(e)}")
                 pass
 
         except Exception as e:
@@ -302,7 +309,7 @@ class APIGatewayAuditor:
                 Namespace='AWS/ApiGateway',
                 MetricName='Count',
                 Dimensions=[
-                    {'Name': 'ApiName', 'Value': api_id},
+                    {'Name': 'ApiId', 'Value': api_id},
                     {'Name': 'Stage', 'Value': stage_name}
                 ],
                 StartTime=start_time,
@@ -319,7 +326,7 @@ class APIGatewayAuditor:
                 Namespace='AWS/ApiGateway',
                 MetricName='4XXError',
                 Dimensions=[
-                    {'Name': 'ApiName', 'Value': api_id},
+                    {'Name': 'ApiId', 'Value': api_id},
                     {'Name': 'Stage', 'Value': stage_name}
                 ],
                 StartTime=start_time,
@@ -339,6 +346,8 @@ class APIGatewayAuditor:
     def estimate_cost_savings(self, api_type: str, request_count: float) -> Dict[str, float]:
         """Estimate potential cost savings for migration"""
         # Simplified cost calculation (actual costs may vary by region and usage)
+        # Pricing based on us-east-1 as of November 2025
+        # Reference: https://aws.amazon.com/api-gateway/pricing/
         rest_api_cost_per_million = 3.50  # USD per million requests
         http_api_cost_per_million = 1.00  # USD per million requests
 
@@ -383,7 +392,8 @@ class APIGatewayAuditor:
                 resourceId=resource_id,
                 httpMethod=method
             )
-        except:
+        except Exception as e:
+            logger.debug(f"Method {method} not found for resource {resource_path}: {str(e)}")
             return
 
         # Initialize resource inventory entry
