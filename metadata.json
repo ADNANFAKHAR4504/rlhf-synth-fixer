@@ -1,0 +1,40 @@
+{
+  "po_id": "w3k3x9",
+  "team": "synth-2",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "startedAt": "2025-11-19T12:22:02.858721",
+  "turn_type": "multi",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Configure S3 cross-region replication with RTC (Replication Time Control)",
+    "Use AWS Global Accelerator for automatic traffic routing between regions",
+    "Use EventBridge Global Endpoints for event routing across regions",
+    "Configure AWS Systems Manager Parameter Store replication for configuration data",
+    "Implement AWS Backup for automated cross-region backup of RDS Aurora",
+    "Deploy Lambda functions in both regions with identical configurations",
+    "Use Route 53 health checks with failover routing policies",
+    "Deploy API Gateway with custom domain names in each region",
+    "Implement DynamoDB Global Tables for multi-region data replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 (NLB)",
+    "Global Accelerator",
+    "API Gateway",
+    "Lambda",
+    "Route 53",
+    "ACM",
+    "Systems Manager Parameter Store",
+    "S3",
+    "DynamoDB",
+    "RDS Aurora",
+    "EventBridge",
+    "AWS Backup",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 9
+}
