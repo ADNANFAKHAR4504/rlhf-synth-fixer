@@ -399,7 +399,7 @@ class TapStack(Stack):
                 mesh=mesh,
                 virtual_router_name=f'{service_name}-vr-{environment_suffix}',
                 listeners=[
-                    appmesh.VirtualRouterListener.http(port=8080)
+                    appmesh.VirtualRouterListener.http(port=80)
                 ]
             )
             virtual_routers[service_name] = virtual_router
