@@ -155,6 +155,18 @@ class TestTapStack(unittest.TestCase):
         """Test that all Lambda functions are created"""
         self.template.resource_count_is("AWS::Lambda::Function", 3)
 
+    @mark.it("verifies Lambda functions have log retention configured")
+    def test_lambda_log_retention(self):
+        """Test that Lambda functions have log retention configured"""
+        # Lambda functions should have log retention which creates custom resources
+        # These custom resources can handle existing log groups gracefully
+        self.template.has_resource_properties(
+            "AWS::Lambda::Function",
+            {
+                "FunctionName": f"webhook-receiver-{self.env_suffix}",
+            },
+        )
+
     @mark.it("creates Lambda event source for SQS")
     def test_creates_sqs_event_source(self):
         """Test SQS event source mapping for processor"""

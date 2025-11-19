@@ -12,6 +12,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_lambda_event_sources as lambda_event_sources
+from aws_cdk import aws_logs as logs
 from aws_cdk import aws_sns as sns
 from aws_cdk import aws_sqs as sqs
 from aws_cdk import aws_wafv2 as wafv2
@@ -107,9 +108,14 @@ class TapStack(Stack):
         )
 
         # Create Webhook Receiver Lambda with reduced concurrency
+        # Note: log_retention uses a custom resource that can handle existing log groups
         webhook_receiver = lambda_.Function(
             self, "WebhookReceiver",
             function_name=f"webhook-receiver-{environment_suffix}",
+            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_retention_retry_options=lambda_.LogRetentionRetryOptions(
+                max_retries=10,  # Retry if log group creation fails
+            ),
             runtime=lambda_.Runtime.PYTHON_3_11,
             architecture=lambda_.Architecture.ARM_64,
             handler="receiver.handler",
@@ -129,9 +135,14 @@ class TapStack(Stack):
         kms_key.grant_encrypt_decrypt(webhook_receiver)
 
         # Create Payment Processor Lambda with DLQ
+        # Note: log_retention uses a custom resource that can handle existing log groups
         payment_processor = lambda_.Function(
             self, "PaymentProcessor",
             function_name=f"payment-processor-{environment_suffix}",
+            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_retention_retry_options=lambda_.LogRetentionRetryOptions(
+                max_retries=10,
+            ),
             runtime=lambda_.Runtime.PYTHON_3_11,
             architecture=lambda_.Architecture.ARM_64,
             handler="processor.handler",
@@ -158,9 +169,14 @@ class TapStack(Stack):
         kms_key.grant_encrypt_decrypt(payment_processor)
 
         # Create Audit Logger Lambda with X-Ray tracing
+        # Note: log_retention uses a custom resource that can handle existing log groups
         audit_logger = lambda_.Function(
             self, "AuditLogger",
             function_name=f"audit-logger-{environment_suffix}",
+            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_retention_retry_options=lambda_.LogRetentionRetryOptions(
+                max_retries=10,
+            ),
             runtime=lambda_.Runtime.PYTHON_3_11,
             architecture=lambda_.Architecture.ARM_64,
             handler="audit.handler",
