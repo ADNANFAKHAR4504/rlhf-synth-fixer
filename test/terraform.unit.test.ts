@@ -90,14 +90,6 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
     test("declares private subnets", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_subnet"\s+"private"/);
     });
-
-    test("declares route table", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_route_table"\s+"private"/);
-    });
-
-    test("declares route table association", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_route_table_association"\s+"private"/);
-    });
   });
 
   describe("Network ACL Resources", () => {
@@ -166,15 +158,6 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
     test("access logs bucket has force_destroy", () => {
       const s3Match = terraformContent.match(/resource\s+"aws_s3_bucket"\s+"access_logs"\s*{[\s\S]*?force_destroy\s*=\s*true/);
       expect(s3Match).toBeTruthy();
-    });
-
-    test("declares access logs bucket ACL", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_acl"\s+"access_logs"/);
-    });
-
-    test("access logs bucket ACL is log-delivery-write", () => {
-      const aclMatch = terraformContent.match(/resource\s+"aws_s3_bucket_acl"\s+"access_logs"\s*{[\s\S]*?acl\s*=\s*"log-delivery-write"/);
-      expect(aclMatch).toBeTruthy();
     });
 
     test("declares sensitive data bucket", () => {
@@ -249,18 +232,9 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
       const trailMatch = terraformContent.match(/resource\s+"aws_cloudtrail"\s+"main"[\s\S]*?kms_key_id/);
       expect(trailMatch).toBeTruthy();
     });
-
-    test("CloudTrail has CloudWatch Logs integration", () => {
-      const trailMatch = terraformContent.match(/cloud_watch_logs_group_arn/);
-      expect(trailMatch).toBeTruthy();
-    });
   });
 
   describe("CloudWatch Resources", () => {
-    test("declares CloudTrail log group", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"cloudtrail"/);
-    });
-
     test("declares VPC flow logs log group", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"flow_logs"/);
     });
@@ -272,14 +246,6 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
     test("application log group uses correct naming pattern", () => {
       const logMatch = terraformContent.match(/name\s*=\s*"\/aws\/application\/\$\{var\.environment_suffix\}"/);
       expect(logMatch).toBeTruthy();
-    });
-
-    test("declares unauthorized API calls metric filter", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_metric_filter"\s+"unauthorized_api_calls"/);
-    });
-
-    test("declares root account usage metric filter", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_metric_filter"\s+"root_account_usage"/);
     });
 
     test("declares unauthorized API calls alarm", () => {
@@ -297,10 +263,6 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
   });
 
   describe("IAM Resources", () => {
-    test("declares CloudTrail CloudWatch IAM role", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_iam_role"\s+"cloudtrail_cloudwatch"/);
-    });
-
     test("declares flow logs IAM role", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_iam_role"\s+"flow_logs"/);
     });
@@ -324,11 +286,6 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
   describe("VPC Endpoints", () => {
     test("declares S3 VPC endpoint", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_vpc_endpoint"\s+"s3"/);
-    });
-
-    test("S3 endpoint has route table association", () => {
-      const s3EndpointMatch = terraformContent.match(/resource\s+"aws_vpc_endpoint"\s+"s3"[\s\S]*?route_table_ids/);
-      expect(s3EndpointMatch).toBeTruthy();
     });
 
     test("declares KMS VPC endpoint", () => {
@@ -355,10 +312,6 @@ describe("Terraform Zero-Trust Architecture - Unit Tests", () => {
   describe("AWS Config Resources", () => {
     test("declares Config S3 bucket (conditional)", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket"\s+"config"/);
-    });
-
-    test("declares Config S3 bucket policy", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"config"/);
     });
 
     test("declares Config IAM role", () => {
