@@ -537,6 +537,28 @@ def handler(event, context):
         Create API Gateway REST API with request validation and throttling.
         Configured with 10,000 requests per second throttling limit.
         """
+        # Create IAM role for API Gateway CloudWatch logging
+        # This is required when disableCloudWatchRole feature flag is enabled
+        cloudwatch_role = iam.Role(
+            self,
+            f"ApiGatewayCloudWatchRole-{self.environment_suffix}",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            description=f"Role for API Gateway to write logs to CloudWatch - {self.environment_suffix}",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ),
+            ],
+        )
+
+        # Set the CloudWatch role for API Gateway account-level settings
+        # This is a singleton resource per region
+        apigw.CfnAccount(
+            self,
+            f"ApiGatewayAccount-{self.environment_suffix}",
+            cloud_watch_role_arn=cloudwatch_role.role_arn,
+        )
+
         api = apigw.RestApi(
             self,
             f"PaymentAPI-{self.environment_suffix}",
@@ -550,7 +572,7 @@ def handler(event, context):
                 data_trace_enabled=True,
                 metrics_enabled=True,
             ),
-            cloud_watch_role=True,
+            cloud_watch_role=False,  # Changed from True - we're managing the role manually
         )
 
         # Request validator
