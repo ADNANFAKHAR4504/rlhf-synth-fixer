@@ -28,10 +28,10 @@ class StateBackendModule(Construct):
         self.state_bucket = S3Bucket(
             self,
             "state_bucket",
-            bucket=naming.generate_simple_name("tfstate"),
+            bucket=naming.generate_unique_name("tfstate"),
             force_destroy=True,
             tags={
-                "Name": naming.generate_simple_name("tfstate"),
+                "Name": naming.generate_unique_name("tfstate"),
                 "Environment": naming.environment,
                 "Purpose": "Terraform State"
             }
@@ -76,7 +76,7 @@ class StateBackendModule(Construct):
         self.lock_table = DynamodbTable(
             self,
             "lock_table",
-            name=naming.generate_simple_name("tflock"),
+            name=naming.generate_unique_name("tflock"),
             billing_mode="PAY_PER_REQUEST",
             hash_key="LockID",
             attribute=[
@@ -87,7 +87,7 @@ class StateBackendModule(Construct):
             ],
             deletion_protection_enabled=False,
             tags={
-                "Name": naming.generate_simple_name("tflock"),
+                "Name": naming.generate_unique_name("tflock"),
                 "Environment": naming.environment,
                 "Purpose": "Terraform State Locking"
             }

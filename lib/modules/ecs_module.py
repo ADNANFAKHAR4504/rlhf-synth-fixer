@@ -61,7 +61,7 @@ class EcsModule(Construct):
         task_exec_role = IamRole(
             self,
             "task_exec_role",
-            name=naming.generate_simple_name("ecs-task-exec-role"),
+            name=naming.generate_unique_name("ecs-task-exec-role"),
             assume_role_policy=Fn.jsonencode({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -71,7 +71,7 @@ class EcsModule(Construct):
                 }]
             }),
             tags={
-                "Name": naming.generate_simple_name("ecs-task-exec-role"),
+                "Name": naming.generate_unique_name("ecs-task-exec-role"),
                 "Environment": naming.environment
             }
         )
@@ -87,7 +87,7 @@ class EcsModule(Construct):
         task_role = IamRole(
             self,
             "task_role",
-            name=naming.generate_simple_name("ecs-task-role"),
+            name=naming.generate_unique_name("ecs-task-role"),
             assume_role_policy=Fn.jsonencode({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -97,7 +97,7 @@ class EcsModule(Construct):
                 }]
             }),
             tags={
-                "Name": naming.generate_simple_name("ecs-task-role"),
+                "Name": naming.generate_unique_name("ecs-task-role"),
                 "Environment": naming.environment
             }
         )
@@ -206,14 +206,14 @@ class EcsModule(Construct):
         self.alb = Lb(
             self,
             "alb",
-            name=naming.generate_simple_name("alb"),
+            name=naming.generate_unique_name("alb"),
             internal=False,
             load_balancer_type="application",
             security_groups=[alb_sg.id],
             subnets=public_subnet_ids,
             enable_deletion_protection=False,
             tags={
-                "Name": naming.generate_simple_name("alb"),
+                "Name": naming.generate_unique_name("alb"),
                 "Environment": naming.environment
             }
         )
@@ -222,7 +222,7 @@ class EcsModule(Construct):
         target_group = LbTargetGroup(
             self,
             "tg",
-            name=naming.generate_simple_name("tg"),
+            name=naming.generate_unique_name("tg"),
             port=80,
             protocol="HTTP",
             vpc_id=vpc_id,
@@ -239,7 +239,7 @@ class EcsModule(Construct):
                 "interval": 30
             },
             tags={
-                "Name": naming.generate_simple_name("tg"),
+                "Name": naming.generate_unique_name("tg"),
                 "Environment": naming.environment
             }
         )

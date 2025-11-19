@@ -25,6 +25,7 @@ class SsmOutputsModule(Construct):
                 name=naming.generate_unique_ssm_path(key),
                 type="String",
                 value=value,
+                overwrite=True,  # Allow overwriting existing parameters for idempotency
                 description=f"{key} for {naming.environment} environment",
                 tags={
                     "Name": f"{naming.environment}-{key}",
