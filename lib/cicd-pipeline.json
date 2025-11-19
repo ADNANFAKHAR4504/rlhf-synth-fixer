@@ -1,0 +1,962 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Multi-stage CI/CD pipeline for containerized applications with Blue/Green deployments",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Suffix for resource names to ensure uniqueness across environments",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "GitHubToken": {
+            "Type": "String",
+            "Description": "GitHub OAuth token for source integration",
+            "NoEcho": true
+        },
+        "GitHubOwner": {
+            "Type": "String",
+            "Description": "GitHub repository owner"
+        },
+        "RepositoryName": {
+            "Type": "String",
+            "Description": "GitHub repository name"
+        },
+        "BranchName": {
+            "Type": "String",
+            "Description": "Git branch to track",
+            "Default": "main"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for pipeline notifications"
+        },
+        "ECSClusterNameStaging": {
+            "Type": "String",
+            "Description": "ECS cluster name for staging environment"
+        },
+        "ECSServiceNameStaging": {
+            "Type": "String",
+            "Description": "ECS service name for staging environment"
+        },
+        "ECSClusterNameProduction": {
+            "Type": "String",
+            "Description": "ECS cluster name for production environment"
+        },
+        "ECSServiceNameProduction": {
+            "Type": "String",
+            "Description": "ECS service name for production environment"
+        }
+    },
+    "Resources": {
+        "ArtifactEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for pipeline artifacts - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CodePipeline to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "codepipeline.amazonaws.com",
+                                    "codebuild.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "PendingWindowInDays": 7
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ArtifactEncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/pipeline-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "ArtifactEncryptionKey"
+                }
+            }
+        },
+        "PipelineArtifactBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "ArtifactEncryptionKey",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PipelineNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "pipeline-notifications-${EnvironmentSuffix}"
+                },
+                "DisplayName": "CI/CD Pipeline Notifications",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ]
+            }
+        },
+        "BuildProjectLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/build-project-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "TestProjectLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/test-project-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "CodeBuildServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "codebuild-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodeBuildBasePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BuildProjectLogGroup",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestProjectLogGroup",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${BuildProjectLogGroup.Arn}:*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${TestProjectLogGroup.Arn}:*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${PipelineArtifactBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PipelineArtifactBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactEncryptionKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:GetAuthorizationToken",
+                                        "ecr:BatchCheckLayerAvailability",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecr:BatchGetImage",
+                                        "ecr:PutImage",
+                                        "ecr:InitiateLayerUpload",
+                                        "ecr:UploadLayerPart",
+                                        "ecr:CompleteLayerUpload"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "BuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "build-project-${EnvironmentSuffix}"
+                },
+                "Description": "Build stage for CI/CD pipeline",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:4.0",
+                    "PrivilegedMode": true
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Logging in to Amazon ECR...\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com\n  build:\n    commands:\n      - echo Build started on `date`\n      - echo Building the Docker image...\n      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG\n  post_build:\n    commands:\n      - echo Build completed on `date`\n      - echo Pushing the Docker image...\n      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG\nartifacts:\n  files:\n    - '**/*'\n"
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "Status": "ENABLED",
+                        "GroupName": {
+                            "Ref": "BuildProjectLogGroup"
+                        }
+                    }
+                },
+                "EncryptionKey": {
+                    "Fn::GetAtt": [
+                        "ArtifactEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TestProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "test-project-${EnvironmentSuffix}"
+                },
+                "Description": "Test stage for CI/CD pipeline",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  install:\n    commands:\n      - echo Installing test dependencies...\n  pre_build:\n    commands:\n      - echo Test phase starting...\n  build:\n    commands:\n      - echo Running unit tests...\n      - echo Running integration tests...\n  post_build:\n    commands:\n      - echo Tests completed on `date`\nartifacts:\n  files:\n    - '**/*'\n"
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "Status": "ENABLED",
+                        "GroupName": {
+                            "Ref": "TestProjectLogGroup"
+                        }
+                    }
+                },
+                "EncryptionKey": {
+                    "Fn::GetAtt": [
+                        "ArtifactEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "CodeDeployServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "codedeploy-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codedeploy.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
+                ]
+            }
+        },
+        "CodeDeployApplication": {
+            "Type": "AWS::CodeDeploy::Application",
+            "Properties": {
+                "ApplicationName": {
+                    "Fn::Sub": "ecs-app-${EnvironmentSuffix}"
+                },
+                "ComputePlatform": "ECS"
+            }
+        },
+        "DeploymentGroupStaging": {
+            "Type": "AWS::CodeDeploy::DeploymentGroup",
+            "Properties": {
+                "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                },
+                "DeploymentGroupName": {
+                    "Fn::Sub": "staging-deployment-${EnvironmentSuffix}"
+                },
+                "ServiceRoleArn": {
+                    "Fn::GetAtt": [
+                        "CodeDeployServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DeploymentConfigName": "CodeDeployDefault.ECSAllAtOnce",
+                "DeploymentStyle": {
+                    "DeploymentType": "BLUE_GREEN",
+                    "DeploymentOption": "WITH_TRAFFIC_CONTROL"
+                },
+                "BlueGreenDeploymentConfiguration": {
+                    "TerminateBlueInstancesOnDeploymentSuccess": {
+                        "Action": "TERMINATE",
+                        "TerminationWaitTimeInMinutes": 5
+                    },
+                    "DeploymentReadyOption": {
+                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT"
+                    }
+                },
+                "ECSServices": [
+                    {
+                        "ClusterName": {
+                            "Ref": "ECSClusterNameStaging"
+                        },
+                        "ServiceName": {
+                            "Ref": "ECSServiceNameStaging"
+                        }
+                    }
+                ]
+            }
+        },
+        "DeploymentGroupProduction": {
+            "Type": "AWS::CodeDeploy::DeploymentGroup",
+            "Properties": {
+                "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                },
+                "DeploymentGroupName": {
+                    "Fn::Sub": "production-deployment-${EnvironmentSuffix}"
+                },
+                "ServiceRoleArn": {
+                    "Fn::GetAtt": [
+                        "CodeDeployServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DeploymentConfigName": "CodeDeployDefault.ECSAllAtOnce",
+                "DeploymentStyle": {
+                    "DeploymentType": "BLUE_GREEN",
+                    "DeploymentOption": "WITH_TRAFFIC_CONTROL"
+                },
+                "BlueGreenDeploymentConfiguration": {
+                    "TerminateBlueInstancesOnDeploymentSuccess": {
+                        "Action": "TERMINATE",
+                        "TerminationWaitTimeInMinutes": 5
+                    },
+                    "DeploymentReadyOption": {
+                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT"
+                    }
+                },
+                "ECSServices": [
+                    {
+                        "ClusterName": {
+                            "Ref": "ECSClusterNameProduction"
+                        },
+                        "ServiceName": {
+                            "Ref": "ECSServiceNameProduction"
+                        }
+                    }
+                ]
+            }
+        },
+        "CodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "codepipeline-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodePipelineBasePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:GetBucketLocation",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PipelineArtifactBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${PipelineArtifactBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactEncryptionKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BuildProject",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestProject",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codedeploy:CreateDeployment",
+                                        "codedeploy:GetApplication",
+                                        "codedeploy:GetApplicationRevision",
+                                        "codedeploy:GetDeployment",
+                                        "codedeploy:GetDeploymentConfig",
+                                        "codedeploy:RegisterApplicationRevision"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${CodeDeployApplication}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${CodeDeployApplication}/${DeploymentGroupStaging}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${CodeDeployApplication}/${DeploymentGroupProduction}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "PipelineNotificationTopic"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecs:DescribeServices",
+                                        "ecs:DescribeTaskDefinition",
+                                        "ecs:DescribeTasks",
+                                        "ecs:ListTasks",
+                                        "ecs:RegisterTaskDefinition",
+                                        "ecs:UpdateService"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "CICDPipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-pipeline-${EnvironmentSuffix}"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineServiceRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "PipelineArtifactBucket"
+                    },
+                    "EncryptionKey": {
+                        "Id": {
+                            "Fn::GetAtt": [
+                                "ArtifactEncryptionKey",
+                                "Arn"
+                            ]
+                        },
+                        "Type": "KMS"
+                    }
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "ThirdParty",
+                                    "Provider": "GitHub",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "Owner": {
+                                        "Ref": "GitHubOwner"
+                                    },
+                                    "Repo": {
+                                        "Ref": "RepositoryName"
+                                    },
+                                    "Branch": {
+                                        "Ref": "BranchName"
+                                    },
+                                    "OAuthToken": {
+                                        "Ref": "GitHubToken"
+                                    }
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "BuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Test",
+                        "Actions": [
+                            {
+                                "Name": "TestAction",
+                                "ActionTypeId": {
+                                    "Category": "Test",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "TestProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Deploy-Staging",
+                        "Actions": [
+                            {
+                                "Name": "DeployToStaging",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeDeployToECS",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ApplicationName": {
+                                        "Ref": "CodeDeployApplication"
+                                    },
+                                    "DeploymentGroupName": {
+                                        "Ref": "DeploymentGroupStaging"
+                                    },
+                                    "TaskDefinitionTemplateArtifact": "TestOutput",
+                                    "AppSpecTemplateArtifact": "TestOutput"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Deploy-Production",
+                        "Actions": [
+                            {
+                                "Name": "ApprovalAction",
+                                "ActionTypeId": {
+                                    "Category": "Approval",
+                                    "Owner": "AWS",
+                                    "Provider": "Manual",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "NotificationArn": {
+                                        "Ref": "PipelineNotificationTopic"
+                                    },
+                                    "CustomData": "Please review staging deployment and approve production deployment"
+                                }
+                            },
+                            {
+                                "Name": "DeployToProduction",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeDeployToECS",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ApplicationName": {
+                                        "Ref": "CodeDeployApplication"
+                                    },
+                                    "DeploymentGroupName": {
+                                        "Ref": "DeploymentGroupProduction"
+                                    },
+                                    "TaskDefinitionTemplateArtifact": "TestOutput",
+                                    "AppSpecTemplateArtifact": "TestOutput"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ],
+                                "RunOrder": 2
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "PipelineStateChangeRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "pipeline-state-change-${EnvironmentSuffix}"
+                },
+                "Description": "Trigger notifications on pipeline state changes",
+                "EventPattern": {
+                    "source": [
+                        "aws.codepipeline"
+                    ],
+                    "detail-type": [
+                        "CodePipeline Pipeline Execution State Change"
+                    ],
+                    "detail": {
+                        "state": [
+                            "STARTED",
+                            "SUCCEEDED",
+                            "FAILED"
+                        ],
+                        "pipeline": [
+                            {
+                                "Ref": "CICDPipeline"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "PipelineNotificationTopic"
+                        },
+                        "Id": "PipelineNotificationTarget",
+                        "InputTransformer": {
+                            "InputPathsMap": {
+                                "pipeline": "$.detail.pipeline",
+                                "state": "$.detail.state",
+                                "execution": "$.detail.execution-id"
+                            },
+                            "InputTemplate": "\"Pipeline <pipeline> execution <execution> has <state>.\"\n"
+                        }
+                    }
+                ]
+            }
+        },
+        "PipelineNotificationTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "PipelineNotificationTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "PipelineNotificationTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "PipelineArn": {
+            "Description": "ARN of the CodePipeline",
+            "Value": {
+                "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CICDPipeline}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineArn"
+                }
+            }
+        },
+        "ArtifactBucketName": {
+            "Description": "Name of the S3 bucket for pipeline artifacts",
+            "Value": {
+                "Ref": "PipelineArtifactBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactBucket"
+                }
+            }
+        },
+        "NotificationTopicArn": {
+            "Description": "ARN of the SNS topic for pipeline notifications",
+            "Value": {
+                "Ref": "PipelineNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotificationTopic"
+                }
+            }
+        },
+        "BuildProjectName": {
+            "Description": "Name of the CodeBuild project for build stage",
+            "Value": {
+                "Ref": "BuildProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BuildProject"
+                }
+            }
+        },
+        "TestProjectName": {
+            "Description": "Name of the CodeBuild project for test stage",
+            "Value": {
+                "Ref": "TestProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestProject"
+                }
+            }
+        },
+        "CodeDeployApplicationName": {
+            "Description": "Name of the CodeDeploy application",
+            "Value": {
+                "Ref": "CodeDeployApplication"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeDeployApp"
+                }
+            }
+        }
+    }
+}
