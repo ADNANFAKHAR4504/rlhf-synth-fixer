@@ -96,7 +96,7 @@ describe('Transaction Processing System Integration Tests', () => {
 
       expect(config).toBeDefined();
       expect(config?.Runtime).toBe('provided.al2023');
-      expect(config?.ReservedConcurrentExecutions).toBe(100);
+      expect(config?.ReservedConcurrentExecutions).toBe(10);
       expect(config?.Environment?.Variables?.TABLE_NAME).toBeDefined();
       expect(config?.KMSKeyArn).toBeDefined();
     });
@@ -116,7 +116,7 @@ describe('Transaction Processing System Integration Tests', () => {
 
       expect(config).toBeDefined();
       expect(config?.Runtime).toBe('provided.al2023');
-      expect(config?.ReservedConcurrentExecutions).toBe(100);
+      expect(config?.ReservedConcurrentExecutions).toBe(10);
       expect(config?.DeadLetterConfig?.TargetArn).toBeDefined();
     });
 
@@ -135,7 +135,7 @@ describe('Transaction Processing System Integration Tests', () => {
 
       expect(config).toBeDefined();
       expect(config?.Runtime).toBe('provided.al2023');
-      expect(config?.ReservedConcurrentExecutions).toBe(100);
+      expect(config?.ReservedConcurrentExecutions).toBe(10);
       expect(config?.DeadLetterConfig?.TargetArn).toBeDefined();
       expect(config?.Environment?.Variables?.TOPIC_ARN).toBeDefined();
     });

@@ -490,7 +490,7 @@ require (
           },
         },
         kmsKeyArn: kmsKey.arn,
-        reservedConcurrentExecutions: 100,
+        reservedConcurrentExecutions: 10,
         timeout: 30,
         tags: tags,
       },
@@ -606,7 +606,7 @@ require (
           },
         },
         kmsKeyArn: kmsKey.arn,
-        reservedConcurrentExecutions: 100,
+        reservedConcurrentExecutions: 10,
         deadLetterConfig: {
           targetArn: fraudDLQ.arn,
         },
@@ -697,7 +697,7 @@ require (
           },
         },
         kmsKeyArn: kmsKey.arn,
-        reservedConcurrentExecutions: 100,
+        reservedConcurrentExecutions: 10,
         deadLetterConfig: {
           targetArn: notificationDLQ.arn,
         },
