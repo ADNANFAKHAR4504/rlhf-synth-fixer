@@ -921,7 +921,7 @@ Resources:
                         "dimensions": [
                           {
                             "name": "FunctionName",
-                            "value": "${MetricsProcessorFunction}"
+                            "value": "payment-metrics-processor-${EnvironmentSuffix}"
                           }
                         ]
                       },
@@ -939,7 +939,7 @@ Resources:
                         "dimensions": [
                           {
                             "name": "FunctionName",
-                            "value": "${MetricsProcessorFunction}"
+                            "value": "payment-metrics-processor-${EnvironmentSuffix}"
                           }
                         ]
                       },
@@ -967,7 +967,7 @@ Resources:
                         "dimensions": [
                           {
                             "name": "StreamName",
-                            "value": "${LogStream}"
+                            "value": "payment-logs-stream-${EnvironmentSuffix}"
                           }
                         ]
                       },
@@ -985,7 +985,7 @@ Resources:
                         "dimensions": [
                           {
                             "name": "StreamName",
-                            "value": "${LogStream}"
+                            "value": "payment-logs-stream-${EnvironmentSuffix}"
                           }
                         ]
                       },
@@ -1018,7 +1018,7 @@ Resources:
                         "dimensions": [
                           {
                             "name": "CollectionName",
-                            "value": "${OpenSearchDomain}"
+                            "value": "payment-logs-${EnvironmentSuffix}"
                           }
                         ]
                       },
@@ -1037,7 +1037,7 @@ Resources:
             {
               "type": "log",
               "properties": {
-                "query": "SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\n| fields @timestamp, @message\n| sort @timestamp desc\n| limit 20",
+                "query": "SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\\n| fields @timestamp, @message\\n| sort @timestamp desc\\n| limit 20",
                 "region": "${AWS::Region}",
                 "title": "Recent Payment Transaction Logs",
                 "stacked": false
@@ -1178,7 +1178,7 @@ Outputs:
   # Dashboard
   DashboardUrl:
     Description: 'CloudWatch Dashboard URL'
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PaymentProcessingDashboard}'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=payment-processing-${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-DashboardUrl'
 
