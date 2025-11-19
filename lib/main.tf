@@ -436,7 +436,7 @@ resource "aws_emr_cluster" "main" {
   release_label = var.emr_release_label
   applications  = ["Spark", "Hadoop", "Hive"]
 
-  termination_protection            = true
+  termination_protection            = false
   keep_job_flow_alive_when_no_steps = true
   step_concurrency_level            = var.step_concurrency_level
   visible_to_all_users              = true
