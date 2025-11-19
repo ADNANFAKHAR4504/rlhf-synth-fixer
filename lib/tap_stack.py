@@ -45,6 +45,7 @@ class TapStack(pulumi.ComponentResource):
             f"transaction-key-{self.environment_suffix}",
             description="KMS key for transaction processing encryption",
             deletion_window_in_days=7,
+            enable_key_rotation=True,  # Enable automatic key rotation
             opts=ResourceOptions(parent=self)
         )
 
@@ -1056,12 +1057,20 @@ class TapStack(pulumi.ComponentResource):
             dashboard.dashboard_name
         ))
         pulumi.export("api_key_id", api_key.id)
+        # Add alternative names for compatibility
         pulumi.export("merchant_table_name", merchant_table.name)
+        pulumi.export("merchant_configs_table", merchant_table.name)  # Alternative name
         pulumi.export("transaction_table_name", transaction_table.name)
+        pulumi.export("transactions_table", transaction_table.name)  # Alternative name
         pulumi.export("transaction_queue_url", transaction_queue.url)
+        pulumi.export("queue_url", transaction_queue.url)  # Alternative name
         pulumi.export("fraud_topic_arn", fraud_topic.arn)
+        pulumi.export("topic_arn", fraud_topic.arn)  # Alternative name
         pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
+        pulumi.export("waf_arn", waf_web_acl.arn)  # Alternative name
         pulumi.export("vpc_id", vpc.id)
         pulumi.export("kms_key_id", kms_key.id)
+        # Export environment suffix for test compatibility
+        pulumi.export("environment_suffix", self.environment_suffix)
 
         self.register_outputs({})
