@@ -533,10 +533,10 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 # Load NVM
 [ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"
 
-# Install Node.js v18 LTS (compatible with Amazon Linux 2 GLIBC 2.26)
-# Node.js v20+ requires GLIBC 2.27+, Amazon Linux 2 has GLIBC 2.26
-nvm install 18
-nvm use 18
+# Install Node.js v16 LTS (last version compatible with Amazon Linux 2 GLIBC 2.17)
+# Node.js v18+ requires GLIBC 2.27/2.28, Amazon Linux 2 has GLIBC 2.26
+nvm install 16
+nvm use 16
 
 # Verify installation
 echo "Node version: $(node --version)"
