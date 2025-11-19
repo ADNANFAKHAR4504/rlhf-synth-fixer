@@ -51,6 +51,10 @@ import {
   EventBridgeClient,
   DescribeEventBusCommand,
 } from '@aws-sdk/client-eventbridge';
+import {
+  STSClient,
+  GetCallerIdentityCommand,
+} from '@aws-sdk/client-sts';
 
 // Configuration - These come from cfn-outputs after cdk deploy
 const flatOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
@@ -64,6 +68,26 @@ if (fs.existsSync(flatOutputsPath)) {
 // Get environment suffix and region from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
+
+// Get account ID from environment or derive it
+let accountId = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID;
+
+// Helper function to get AWS account ID
+async function getAccountId(): Promise<string> {
+  if (accountId) {
+    return accountId;
+  }
+
+  try {
+    const stsClient = new STSClient({ region });
+    const response = await stsClient.send(new GetCallerIdentityCommand({}));
+    accountId = response.Account || '';
+    return accountId;
+  } catch (error) {
+    console.error('Failed to get account ID from STS:', error);
+    return '';
+  }
+}
 
 describe('High Availability Architecture Integration Tests', () => {
   // Skip tests if no deployment outputs are available
@@ -125,7 +149,8 @@ describe('High Availability Architecture Integration Tests', () => {
     test('S3 bucket is configured with versioning and encryption', async () => {
       if (!hasDeploymentOutputs) return;
 
-      const bucketName = `app-bucket-${environmentSuffix}-${outputs.accountId || '*'}`;
+      const currentAccountId = await getAccountId();
+      const bucketName = `app-bucket-${environmentSuffix}-${currentAccountId}`;
 
       // Check versioning
       const versioningCommand = new GetBucketVersioningCommand({ Bucket: bucketName });
@@ -286,9 +311,9 @@ describe('High Availability Architecture Integration Tests', () => {
     test('Step Functions state machine is created', async () => {
       if (!hasDeploymentOutputs) return;
 
+      const currentAccountId = await getAccountId();
       const stateMachineName = `operational-sm-${environmentSuffix}`;
-      const accountId = outputs.accountId || process.env.CDK_DEFAULT_ACCOUNT;
-      const stateMachineArn = `arn:aws:states:${region}:${accountId}:stateMachine:${stateMachineName}`;
+      const stateMachineArn = `arn:aws:states:${region}:${currentAccountId}:stateMachine:${stateMachineName}`;
 
       const command = new DescribeStateMachineCommand({
         stateMachineArn: stateMachineArn,
