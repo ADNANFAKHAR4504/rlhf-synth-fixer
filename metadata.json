@@ -8,12 +8,7 @@
   "startedAt": "2025-11-19T00:00:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "web-application",
-    "ecs",
-    "rds",
-    "alb"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "ECS",
@@ -26,5 +21,7 @@
     "CloudWatch",
     "Auto Scaling"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
