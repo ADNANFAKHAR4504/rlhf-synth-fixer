@@ -35,6 +35,30 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# IAM policy for KMS operations
+resource "aws_iam_role_policy" "ec2_kms" {
+  name = "ec2-kms-policy-${var.pr_number}"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = aws_kms_key.main.arn
+      }
+    ]
+  })
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "ec2" {
   name = "ec2-profile-${var.pr_number}"
@@ -66,6 +90,7 @@ resource "aws_instance" "app" {
     volume_type           = "gp3"
     volume_size           = var.environment == "prod" ? 50 : 20
     encrypted             = true
+    kms_key_id            = aws_kms_key.main.arn
     delete_on_termination = true
   }
 

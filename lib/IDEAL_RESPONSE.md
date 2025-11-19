@@ -641,6 +641,30 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# IAM policy for KMS operations
+resource "aws_iam_role_policy" "ec2_kms" {
+  name = "ec2-kms-policy-${var.pr_number}"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = aws_kms_key.main.arn
+      }
+    ]
+  })
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "ec2" {
   name = "ec2-profile-${var.pr_number}"
@@ -672,6 +696,7 @@ resource "aws_instance" "app" {
     volume_type           = "gp3"
     volume_size           = var.environment == "prod" ? 50 : 20
     encrypted             = true
+    kms_key_id            = aws_kms_key.main.arn
     delete_on_termination = true
   }
 
@@ -738,6 +763,7 @@ resource "aws_db_instance" "main" {
   allocated_storage = var.environment == "prod" ? 100 : 20
   storage_type      = var.environment == "prod" ? "gp3" : "gp2"
   storage_encrypted = true
+  kms_key_id        = aws_kms_key.main.arn
 
   db_name  = "paymentdb"
   username = var.db_username
@@ -758,9 +784,11 @@ resource "aws_db_instance" "main" {
   multi_az                   = var.environment == "prod" ? true : false
   auto_minor_version_upgrade = var.environment != "prod"
 
-  performance_insights_enabled = var.environment == "prod" ? true : false
-  monitoring_interval          = var.environment == "prod" ? 60 : 0
-  monitoring_role_arn          = var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
+  performance_insights_enabled          = var.environment == "prod" ? true : false
+  performance_insights_kms_key_id       = var.environment == "prod" ? aws_kms_key.main.arn : null
+  performance_insights_retention_period = var.environment == "prod" ? 7 : null
+  monitoring_interval                   = var.environment == "prod" ? 60 : 0
+  monitoring_role_arn                   = var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
 
   enabled_cloudwatch_logs_exports = var.environment != "dev" ? ["postgresql"] : []
 
@@ -1168,6 +1196,107 @@ resource "aws_ssm_parameter" "private_key" {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
+}
+```
+
+
+## modules/payment-app/kms.tf
+```hcl
+# KMS key for EBS and RDS encryption
+resource "aws_kms_key" "main" {
+  description             = "KMS key for payment-app-${var.pr_number} EBS and RDS encryption"
+  deletion_window_in_days = var.environment == "prod" ? 30 : 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name        = "payment-app-${var.pr_number}-key"
+    Environment = var.environment
+    Project     = "payment-processing"
+    ManagedBy   = "Terraform"
+  }
+}
+
+# KMS key alias
+resource "aws_kms_alias" "main" {
+  name          = "alias/payment-app-${var.pr_number}"
+  target_key_id = aws_kms_key.main.key_id
+}
+
+# KMS key policy
+resource "aws_kms_key_policy" "main" {
+  key_id = aws_kms_key.main.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.ec2.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "ec2.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      },
+      {
+        Sid    = "Allow RDS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 service to create grants"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      }
+    ]
+  })
 }
 ```
 

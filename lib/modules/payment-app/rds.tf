@@ -24,6 +24,7 @@ resource "aws_db_instance" "main" {
   allocated_storage = var.environment == "prod" ? 100 : 20
   storage_type      = var.environment == "prod" ? "gp3" : "gp2"
   storage_encrypted = true
+  kms_key_id        = aws_kms_key.main.arn
 
   db_name  = "paymentdb"
   username = var.db_username
@@ -44,9 +45,11 @@ resource "aws_db_instance" "main" {
   multi_az                   = var.environment == "prod" ? true : false
   auto_minor_version_upgrade = var.environment != "prod"
 
-  performance_insights_enabled = var.environment == "prod" ? true : false
-  monitoring_interval          = var.environment == "prod" ? 60 : 0
-  monitoring_role_arn          = var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
+  performance_insights_enabled          = var.environment == "prod" ? true : false
+  performance_insights_kms_key_id       = var.environment == "prod" ? aws_kms_key.main.arn : null
+  performance_insights_retention_period = var.environment == "prod" ? 7 : null
+  monitoring_interval                   = var.environment == "prod" ? 60 : 0
+  monitoring_role_arn                   = var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
 
   enabled_cloudwatch_logs_exports = var.environment != "dev" ? ["postgresql"] : []
 
