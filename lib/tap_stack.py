@@ -1,5 +1,6 @@
 """TAP Stack module for CDKTF Python multi-region disaster recovery infrastructure."""
 
+import os
 from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -425,6 +426,9 @@ class PrimaryRegionStack(TerraformStack):
         )
 
         # 7. Lambda Function
+        # Get absolute path to Lambda ZIP file
+        lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "lambda", "transaction_processor.zip"))
+        
         primary_lambda = LambdaFunction(
             self,
             "primary_lambda",
@@ -434,7 +438,7 @@ class PrimaryRegionStack(TerraformStack):
             runtime="python3.12",
             timeout=60,
             memory_size=512,
-            filename="lib/lambda/transaction_processor.zip",
+            filename=lambda_zip_path,
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
@@ -1136,6 +1140,9 @@ class DrRegionStack(TerraformStack):
         )
 
         # 7. Lambda Function
+        # Get absolute path to Lambda ZIP file
+        lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "lambda", "transaction_processor.zip"))
+        
         dr_lambda = LambdaFunction(
             self,
             "dr_lambda",
@@ -1145,7 +1152,7 @@ class DrRegionStack(TerraformStack):
             runtime="python3.12",
             timeout=60,
             memory_size=512,
-            filename="lib/lambda/transaction_processor.zip",
+            filename=lambda_zip_path,
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
