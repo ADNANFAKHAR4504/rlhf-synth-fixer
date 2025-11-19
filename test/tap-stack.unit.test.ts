@@ -6,7 +6,7 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Set environment variables before importing infrastructure
 process.env.ENVIRONMENT_SUFFIX = 'test';
-process.env.AWS_REGION = 'us-east-1';
+process.env.AWS_REGION = 'eu-central-1';
 process.env.REPOSITORY = 'test-repo';
 process.env.COMMIT_AUTHOR = 'test-author';
 process.env.PR_NUMBER = 'test-pr';
@@ -33,7 +33,7 @@ pulumi.runtime.setMocks({
 });
 
 // Set required config values - needs to match project name from Pulumi.yaml
-pulumi.runtime.setConfig('aws:region', 'us-east-1');
+pulumi.runtime.setConfig('aws:region', 'eu-central-1');
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
 
 // Import infrastructure code after mocks are set
@@ -347,7 +347,7 @@ describe('VPC Infrastructure Unit Tests', () => {
       const { TapStack } = require('../lib/tap-stack');
       const stackWithEmptyEnv = new TapStack('test-empty-env', {
         environmentSuffix: '',
-        region: 'us-east-1',
+        region: 'eu-central-1',
       });
 
       // Empty string is falsy, so it should use default 'dev'
