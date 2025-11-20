@@ -1,3 +1,6 @@
+author: iamarpit-turing
+reviewer: adnan-turing
+
 # Multi-Region Disaster Recovery Solution - Ideal Implementation
 
 This document contains the complete corrected CloudFormation implementation for the multi-region disaster recovery solution with the circular dependency issue resolved.
@@ -1001,6 +1004,19 @@ The solution provides:
   }
 }
 ```
+
+## Integration Validation
+
+Automated coverage for this stack now lives in `test/tap-stack.int.test.ts`. The suite reads `lib/TapStack.json` once and performs the following checks:
+
+- **Parameters** – confirms default values and constraints for `EnvironmentSuffix`, regional selectors, health-check thresholds, and alert email.
+- **Network & Security** – verifies subnets/route tables reference `PrimaryVPC`, internet gateway attachment ordering, and HTTPS-only security groups.
+- **Data & DR** – asserts the DynamoDB global table replicas span both regions with PITR enabled, and S3 logging buckets are encrypted, versioned, and blocked from public access.
+- **Processing Pipeline** – ensures the Lambda role contains DynamoDB/S3/SQS permissions, the function runs inside the private subnets, and API Gateway is wired through proxy integration with invoke permissions.
+- **Monitoring & Messaging** – validates Route53 health check → CloudWatch alarm → SNS topic flow plus the Lambda/DynamoDB/APIGW alarms, and confirms the SQS queue uses AWS-managed KMS encryption.
+- **Outputs** – checks exported values for VPC ID, DynamoDB table, log bucket, queue URL, and API endpoint use consistent `Fn::Sub` patterns for cross-stack consumption.
+
+Running `./scripts/integration-tests.sh` (or `npx jest --runInBand test/tap-stack.int.test.ts`) executes these assertions to guarantee the published template stays consistent with the ideal response.
 
 ## Deployment Instructions
 
