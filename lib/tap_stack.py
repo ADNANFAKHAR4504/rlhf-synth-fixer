@@ -45,6 +45,8 @@ from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.backup_vault import BackupVault
 from cdktf_cdktf_provider_aws.backup_plan import BackupPlan, BackupPlanRule, BackupPlanRuleLifecycle
 from cdktf_cdktf_provider_aws.backup_selection import BackupSelection, BackupSelectionSelectionTag
+from cdktf_cdktf_provider_random.provider import RandomProvider
+from cdktf_cdktf_provider_random.password import Password
 
 
 class PrimaryRegionStack(TerraformStack):
@@ -75,6 +77,12 @@ class PrimaryRegionStack(TerraformStack):
             default_tags=[default_tags],
         )
 
+        # Configure Random Provider
+        RandomProvider(
+            self,
+            "random"
+        )
+
         # Configure S3 Backend with native state locking
         S3Backend(
             self,
@@ -86,6 +94,15 @@ class PrimaryRegionStack(TerraformStack):
 
         # Add S3 state locking using escape hatch
         self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # Generate random password for Aurora clusters
+        db_password = Password(
+            self,
+            "aurora_master_password",
+            length=16,
+            special=True,
+            override_special="!#$%&*()-_=+[]{}<>:?"
+        )
 
         # 1. VPC and Networking - Primary Region (10.0.0.0/16)
         primary_vpc = Vpc(
@@ -290,7 +307,7 @@ class PrimaryRegionStack(TerraformStack):
             engine_version="14.6",
             database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
             master_username="dbadmin",
-            master_password="ChangeMe123!",  # In production, use AWS Secrets Manager
+            master_password=db_password.result,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[aurora_sg.id],
             skip_final_snapshot=True,
@@ -797,6 +814,12 @@ class DrRegionStack(TerraformStack):
             alias="dr"
         )
 
+        # Configure Random Provider
+        RandomProvider(
+            self,
+            "random"
+        )
+
         # Configure S3 Backend with native state locking
         S3Backend(
             self,
@@ -808,6 +831,15 @@ class DrRegionStack(TerraformStack):
 
         # Add S3 state locking using escape hatch
         self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # Generate random password for Aurora clusters
+        db_password = Password(
+            self,
+            "aurora_master_password",
+            length=16,
+            special=True,
+            override_special="!#$%&*()-_=+[]{}<>:?"
+        )
 
         # 1. VPC and Networking - DR Region (10.1.0.0/16)
         dr_vpc = Vpc(
@@ -1024,6 +1056,9 @@ class DrRegionStack(TerraformStack):
             cluster_identifier=f"dr-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
+            database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
+            master_username="dbadmin",
+            master_password=db_password.result,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[aurora_sg.id],
             skip_final_snapshot=True,
@@ -1844,6 +1879,12 @@ class TapStack(TerraformStack):
             alias="dr"
         )
 
+        # Configure Random Provider
+        RandomProvider(
+            self,
+            "random"
+        )
+
         # Configure S3 Backend with native state locking
         S3Backend(
             self,
@@ -1855,6 +1896,15 @@ class TapStack(TerraformStack):
 
         # Add S3 state locking using escape hatch
         self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # Generate random password for Aurora clusters
+        db_password = Password(
+            self,
+            "aurora_master_password",
+            length=16,
+            special=True,
+            override_special="!#$%&*()-_=+[]{}<>:?"
+        )
 
         # 1. Create Global Resources (Aurora Global Cluster and DynamoDB Global Table)
         # Aurora Global Cluster
@@ -2122,7 +2172,7 @@ class TapStack(TerraformStack):
             engine_version="14.6",
             database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
             master_username="dbadmin",
-            master_password="ChangeMe123!",
+            master_password=db_password.result,
             db_subnet_group_name=primary_db_subnet_group.name,
             vpc_security_group_ids=[primary_aurora_sg.id],
             skip_final_snapshot=True,
@@ -2753,6 +2803,9 @@ class TapStack(TerraformStack):
             cluster_identifier=f"dr-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
+            database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
+            master_username="dbadmin",
+            master_password=db_password.result,
             db_subnet_group_name=dr_db_subnet_group.name,
             vpc_security_group_ids=[dr_aurora_sg.id],
             skip_final_snapshot=True,
