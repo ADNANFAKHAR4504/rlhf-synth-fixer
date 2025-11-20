@@ -42,11 +42,10 @@ resource "aws_route53_health_check" "primary_endpoint" {
 
 # Calculated health check for primary database
 resource "aws_route53_health_check" "primary" {
-  provider                        = aws.primary
-  type                            = "CALCULATED"
-  child_health_threshold          = 1
-  child_healthchecks              = [aws_route53_health_check.primary_endpoint.id]
-  insufficient_data_health_status = "Unhealthy"
+  provider               = aws.primary
+  type                   = "CALCULATED"
+  child_health_threshold = 1
+  child_healthchecks     = [aws_route53_health_check.primary_endpoint.id]
 
   tags = {
     Name              = "health-check-primary-${var.environment_suffix}"
@@ -75,11 +74,10 @@ resource "aws_route53_health_check" "dr_endpoint" {
 
 # Calculated health check for DR database
 resource "aws_route53_health_check" "dr" {
-  provider                        = aws.primary
-  type                            = "CALCULATED"
-  child_health_threshold          = 1
-  child_healthchecks              = [aws_route53_health_check.dr_endpoint.id]
-  insufficient_data_health_status = "Unhealthy"
+  provider               = aws.primary
+  type                   = "CALCULATED"
+  child_health_threshold = 1
+  child_healthchecks     = [aws_route53_health_check.dr_endpoint.id]
 
   tags = {
     Name              = "health-check-dr-${var.environment_suffix}"
