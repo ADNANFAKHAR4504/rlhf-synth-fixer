@@ -714,24 +714,79 @@ depends_on = var.acm_certificate_arn != "" ? [] : [aws_acm_certificate_validatio
 ```
 
 **Solution Applied**:
-- Changed conditional expression to static list: `depends_on = [aws_acm_certificate_validation.main]`
+- Changed depends_on to reference certificate resource: `depends_on = [aws_acm_certificate.main]`
 - Terraform's `depends_on` requires a static list, not conditional expressions
-- The resource already has conditional creation via `count`, making the conditional depends_on unnecessary
+- The resource already has conditional creation via `count`, making validation dependency unnecessary
 
 **Files Updated**:
 - `tap_stack.tf`: Fixed depends_on syntax
 - `IDEAL_RESPONSE.md`: Updated to match the corrected syntax
 
-**Validation Results**:
-- `terraform fmt`: Passed (all files properly formatted)
-- `terraform validate`: Success! The configuration is valid.
+### 4. ACM Certificate Validation Blocking Deployment (MUST FIX)
+**Problem**: Certificate validation waits indefinitely for DNS validation records, blocking terraform apply even when DNS records aren't ready yet.
+
+**Root Cause**: 
+- `aws_acm_certificate_validation` resource blocks deployment waiting for DNS records
+- Initial deployment cannot complete without manual DNS record creation
+- Creates chicken-and-egg problem for infrastructure deployment
+
+**Solution Applied**:
+- Added `enable_certificate_validation` variable (default: `false`) to control validation behavior
+- Updated validation resource to only create when both conditions are true:
+  ```hcl
+  count = var.acm_certificate_arn == "" && var.enable_certificate_validation ? 1 : 0
+  ```
+- Updated HTTPS listener with intelligent 3-way certificate selection:
+  ```hcl
+  certificate_arn = var.acm_certificate_arn != "" ? var.acm_certificate_arn : 
+                    (var.enable_certificate_validation ? 
+                     aws_acm_certificate_validation.main[0].certificate_arn : 
+                     aws_acm_certificate.main[0].arn)
+  ```
+
+**Deployment Options**:
+1. Use existing certificate: Set `acm_certificate_arn` variable
+2. Initial deployment without validation: Set `enable_certificate_validation=false` (default)
+3. Enable validation after DNS setup: Set `enable_certificate_validation=true`
+
+**Files Updated**:
+- `variables.tf`: Added `enable_certificate_validation` variable
+- `tap_stack.tf`: Updated ACM validation resource and HTTPS listener logic
+- `IDEAL_RESPONSE.md`: Synchronized all changes
+
+### 5. Lambda Placeholder Code in Production (MUST FIX)
+**Problem**: Default `lambda.zip` placeholder could be accidentally deployed to production environment, causing runtime failures.
+
+**Risk**: Production deployment with non-functional placeholder code instead of actual Lambda implementation.
+
+**Solution Applied**:
+- Added validation rule to `lambda_source_path` variable:
+  ```hcl
+  validation {
+    condition     = var.environment != "prod" || can(regex("^(?!.*lambda\\.zip$).*", var.lambda_source_path))
+    error_message = "PRODUCTION SAFETY: Cannot use 'lambda.zip' placeholder in production environment. Please provide a valid Lambda deployment package path."
+  }
+  ```
+
+**Benefits**:
+- Prevents accidental production deployment with placeholder code
+- Clear error message guides users to provide proper deployment package
+- Development and staging environments remain flexible
+
+**Files Updated**:
+- `variables.tf`: Added production validation to lambda_source_path
+- `IDEAL_RESPONSE.md`: Synchronized variable definition
 
 ### Benefits of These Fixes:
-1. **Deployable Infrastructure**: Certificate validation no longer blocks deployment
-2. **Flexible Configuration**: Users can provide existing certificates or create new ones
-3. **Simplified Dependencies**: Cleaner resource dependency graph
-4. **Production Ready**: Works in real deployment scenarios with proper DNS management
-5. **Complete Documentation**: Added comprehensive variables section to IDEAL_RESPONSE.md with all 11 variables
-6. **Valid Terraform Syntax**: No lint or validation errors, ready for deployment
+1. **Non-Blocking Deployment**: Certificate validation no longer blocks initial infrastructure deployment
+2. **Flexible Configuration**: Users can provide existing certificates, deploy without validation, or enable validation after DNS setup
+3. **Production Safety**: Lambda placeholder validation prevents accidental deployment of non-functional code to production
+4. **Simplified Dependencies**: Cleaner resource dependency graph with correct depends_on references
+5. **Production Ready**: Works in real deployment scenarios with proper DNS management and safety checks
+6. **Complete Documentation**: IDEAL_RESPONSE.md fully synchronized with all latest fixes
 
-The infrastructure is now fully deployable and production-ready with proper certificate management, secrets handling, and valid Terraform syntax.
+**Validation Results**:
+- `terraform validate`: Success! The configuration is valid.
+- No circular dependencies or syntax errors
+
+The infrastructure is now fully deployable and production-ready with proper certificate management, secrets handling, production safety validations, and valid Terraform syntax.

@@ -31,6 +31,11 @@ variable "lambda_source_path" {
   description = "Path to Lambda deployment package"
   type        = string
   default     = "lambda.zip"
+
+  validation {
+    condition     = var.environment != "prod" || can(regex("^(?!.*lambda\\.zip$).*", var.lambda_source_path))
+    error_message = "PRODUCTION SAFETY: Cannot use 'lambda.zip' placeholder in production environment. Please provide a valid Lambda deployment package path."
+  }
 }
 
 variable "repository" {
@@ -67,4 +72,10 @@ variable "domain_name" {
   description = "Domain name for SSL certificate"
   type        = string
   default     = "payment-api.example.com"
+}
+
+variable "enable_certificate_validation" {
+  description = "Enable ACM certificate validation (requires DNS records to be created). Set to false to skip validation and avoid deployment blocking."
+  type        = bool
+  default     = false
 }

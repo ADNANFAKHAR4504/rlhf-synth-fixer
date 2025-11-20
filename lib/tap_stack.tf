@@ -695,14 +695,14 @@ resource "aws_lb_listener" "https" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : aws_acm_certificate_validation.main[0].certificate_arn
+  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : (var.enable_certificate_validation ? aws_acm_certificate_validation.main[0].certificate_arn : aws_acm_certificate.main[0].arn)
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
 
-  depends_on = [aws_acm_certificate_validation.main]
+  depends_on = [aws_acm_certificate.main]
 }
 
 # ACM Certificate (only create if not provided)
@@ -720,13 +720,14 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# ACM Certificate Validation (only validate if we created the certificate)
+# ACM Certificate Validation (only validate if we created the certificate AND validation is enabled)
 # IMPORTANT: This requires DNS validation records to be created in your DNS zone
 # To use this, you must either:
 # 1. Set acm_certificate_arn variable to an existing certificate ARN, OR
-# 2. Create DNS validation records manually after certificate creation
+# 2. Set enable_certificate_validation=false to skip validation (recommended for initial deployment), OR
+# 3. Create DNS validation records manually after certificate creation, then set enable_certificate_validation=true
 resource "aws_acm_certificate_validation" "main" {
-  count           = var.acm_certificate_arn == "" ? 1 : 0
+  count           = var.acm_certificate_arn == "" && var.enable_certificate_validation ? 1 : 0
   certificate_arn = aws_acm_certificate.main[0].arn
 
   timeouts {
@@ -736,9 +737,7 @@ resource "aws_acm_certificate_validation" "main" {
   lifecycle {
     create_before_destroy = true
   }
-}
-
-# ==================== ECS FARGATE ====================
+} # ==================== ECS FARGATE ====================
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
