@@ -1,0 +1,24 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-20T00:00:00+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "po_id": "n8z4j1",
+  "aws_services": [
+    "Config",
+    "Lambda",
+    "S3",
+    "SNS",
+    "SQS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}
