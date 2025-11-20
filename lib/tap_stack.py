@@ -736,6 +736,34 @@ class PrimaryRegionStack(TerraformStack):
             description="Primary VPC ID"
         )
 
+        TerraformOutput(
+            self,
+            "primary_lambda_arn_output",
+            value=primary_lambda.arn,
+            description="Primary Lambda function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_sqs_queue_url_output",
+            value=primary_queue.url,
+            description="Primary SQS queue URL"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_s3_logs_bucket_output",
+            value=primary_logs_bucket.id,
+            description="Primary S3 logs bucket name"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_s3_docs_bucket_output",
+            value=primary_docs_bucket.id,
+            description="Primary S3 docs bucket name"
+        )
+
 
 class DrRegionStack(TerraformStack):
     """DR region (us-east-2) infrastructure stack."""
@@ -1497,6 +1525,34 @@ class DrRegionStack(TerraformStack):
             "dr_vpc_id_output",
             value=dr_vpc.id,
             description="DR VPC ID"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_lambda_arn_output",
+            value=dr_lambda.arn,
+            description="DR Lambda function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_sqs_queue_url_output",
+            value=dr_queue.url,
+            description="DR SQS queue URL"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_s3_logs_bucket_output",
+            value=dr_logs_bucket.id,
+            description="DR S3 logs bucket name"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_s3_docs_bucket_output",
+            value=dr_docs_bucket.id,
+            description="DR S3 docs bucket name"
         )
 
 
