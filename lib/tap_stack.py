@@ -304,7 +304,7 @@ class TapStack(Stack):
             f"AuroraGlobalDB-v1-{self.environment_suffix}",
             global_cluster_identifier=f"trading-global-v1-{self.environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="14.6",
+            engine_version="14",
             deletion_protection=False,
             storage_encrypted=True,
         )
