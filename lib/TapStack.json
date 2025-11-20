@@ -31,11 +31,6 @@
       "Type": "Number",
       "Default": 80,
       "Description": "Port exposed by container"
-    },
-    "DesiredCount": {
-      "Type": "Number",
-      "Default": 2,
-      "Description": "Number of ECS tasks to run"
     }
   },
   "Conditions": {
@@ -45,22 +40,6 @@
           "Ref": "EnvironmentName"
         },
         "prod"
-      ]
-    },
-    "IsStaging": {
-      "Fn::Equals": [
-        {
-          "Ref": "EnvironmentName"
-        },
-        "staging"
-      ]
-    },
-    "IsDev": {
-      "Fn::Equals": [
-        {
-          "Ref": "EnvironmentName"
-        },
-        "dev"
       ]
     }
   },
@@ -1132,7 +1111,7 @@
         "Name": {
           "Fn::Sub": "/${ApplicationName}/${EnvironmentName}/api-key"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Fn::Sub": "key-${EnvironmentSuffix}-placeholder"
         },

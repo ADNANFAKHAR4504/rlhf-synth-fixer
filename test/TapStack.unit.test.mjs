@@ -7,7 +7,7 @@ describe('CloudFormation Template Unit Tests', () => {
   const ENVIRONMENT_SUFFIX = 'synth101912542';
 
   beforeAll(() => {
-    const templatePath = join(process.cwd(), 'lib', 'infrastructure-template.json');
+    const templatePath = join(process.cwd(), 'lib', 'TapStack.json');
     const templateContent = readFileSync(templatePath, 'utf-8');
     template = JSON.parse(templateContent);
   });
