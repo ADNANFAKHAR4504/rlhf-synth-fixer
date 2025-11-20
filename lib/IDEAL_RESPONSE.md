@@ -3,26 +3,194 @@ reviewer: adnan-turing
 
 # Multi-Region Disaster Recovery Solution - Ideal Implementation
 
-This document contains the complete corrected CloudFormation implementation for the multi-region disaster recovery solution with the circular dependency issue resolved
+This document consolidates every source file under `lib/` alongside the corrected multi-region disaster recovery implementation and supporting templates.
 
 ## Key Fix: Circular Dependency Resolution
 
-The primary issue in the original model response was a circular dependency between `TransactionLogBucket` and `S3ReplicationRole`. This has been resolved by:
-
-1. Using `Fn::Sub` instead of `Fn::GetAtt` for S3 bucket ARNs in IAM policies
-2. Adding explicit `DependsOn: S3ReplicationRole` to TransactionLogBucket
-3. Ensuring proper resource creation order
+The original model response had a circular dependency between `TransactionLogBucket` and `S3ReplicationRole`. The fix uses `Fn::Sub` for bucket ARNs, introduces an explicit `DependsOn`, and guarantees resources create in a stable order.
 
 ## Architecture Overview
 
-The solution provides:
 - **Multi-Region Setup**: Primary (us-east-1) and Secondary (us-west-2) regions
 - **DynamoDB Global Tables**: Automatic cross-region replication
 - **S3 Cross-Region Replication**: Transaction logs replicated between regions
-- **Lambda Functions**: Transaction processing in both regions
-- **API Gateway**: REST API endpoints in both regions
-- **Route53 Health Checks**: Automated failover capability
-- **CloudWatch Monitoring**: Comprehensive alerting and monitoring
+- **Lambda + API Gateway**: Transaction processing endpoints with proxy integration
+- **Route53 Health Checks**: Failover monitoring with SNS notifications
+- **CloudWatch Monitoring**: Alarms for API, Lambda, DynamoDB, and health checks
+
+## Integration Validation
+
+Automated coverage for this stack lives in `test/tap-stack.int.test.ts`, which loads `lib/TapStack.json` and validates parameter defaults, network and security wiring, DR data paths, Lambda/IAM permissions, API integration, monitoring chains, queue encryption, and exported outputs. Run `./scripts/integration-tests.sh` (or `npx jest --runInBand test/tap-stack.int.test.ts`) to keep the implementation aligned with this document.
+
+
+## File: lib/.cfnlintignore
+
+```
+metadata.json
+```
+
+
+## File: lib/.terraform.lock.hcl
+
+```
+# This file is maintained automatically by "terraform init".
+# Manual edits may be lost in future updates.
+
+provider "registry.terraform.io/hashicorp/aws" {
+  version     = "5.100.0"
+  constraints = "~> 5.0"
+  hashes = [
+    "h1:edXOJWE4ORX8Fm+dpVpICzMZJat4AX0VRCAy/xkcOc0=",
+    "zh:054b8dd49f0549c9a7cc27d159e45327b7b65cf404da5e5a20da154b90b8a644",
+    "zh:0b97bf8d5e03d15d83cc40b0530a1f84b459354939ba6f135a0086c20ebbe6b2",
+    "zh:1589a2266af699cbd5d80737a0fe02e54ec9cf2ca54e7e00ac51c7359056f274",
+    "zh:6330766f1d85f01ae6ea90d1b214b8b74cc8c1badc4696b165b36ddd4cc15f7b",
+    "zh:7c8c2e30d8e55291b86fcb64bdf6c25489d538688545eb48fd74ad622e5d3862",
+    "zh:99b1003bd9bd32ee323544da897148f46a527f622dc3971af63ea3e251596342",
+    "zh:9b12af85486a96aedd8d7984b0ff811a4b42e3d88dad1a3fb4c0b580d04fa425",
+    "zh:9f8b909d3ec50ade83c8062290378b1ec553edef6a447c56dadc01a99f4eaa93",
+    "zh:aaef921ff9aabaf8b1869a86d692ebd24fbd4e12c21205034bb679b9caf883a2",
+    "zh:ac882313207aba00dd5a76dbd572a0ddc818bb9cbf5c9d61b28fe30efaec951e",
+    "zh:bb64e8aff37becab373a1a0cc1080990785304141af42ed6aa3dd4913b000421",
+    "zh:dfe495f6621df5540d9c92ad40b8067376350b005c637ea6efac5dc15028add4",
+    "zh:f0ddf0eaf052766cfe09dea8200a946519f653c384ab4336e2a4a64fdd6310e9",
+    "zh:f1b7e684f4c7ae1eed272b6de7d2049bb87a0275cb04dbb7cda6636f600699c9",
+    "zh:ff461571e3f233699bf690db319dfe46aec75e58726636a0d97dd9ac6e32fb70",
+  ]
+}
+
+provider "registry.terraform.io/hashicorp/random" {
+  version     = "3.7.2"
+  constraints = "~> 3.1"
+  hashes = [
+    "h1:356j/3XnXEKr9nyicLUufzoF4Yr6hRy481KIxRVpK0c=",
+    "zh:14829603a32e4bc4d05062f059e545a91e27ff033756b48afbae6b3c835f508f",
+    "zh:1527fb07d9fea400d70e9e6eb4a2b918d5060d604749b6f1c361518e7da546dc",
+    "zh:1e86bcd7ebec85ba336b423ba1db046aeaa3c0e5f921039b3f1a6fc2f978feab",
+    "zh:24536dec8bde66753f4b4030b8f3ef43c196d69cccbea1c382d01b222478c7a3",
+    "zh:29f1786486759fad9b0ce4fdfbbfece9343ad47cd50119045075e05afe49d212",
+    "zh:4d701e978c2dd8604ba1ce962b047607701e65c078cb22e97171513e9e57491f",
+    "zh:78d5eefdd9e494defcb3c68d282b8f96630502cac21d1ea161f53cfe9bb483b3",
+    "zh:7b8434212eef0f8c83f5a90c6d76feaf850f6502b61b53c329e85b3b281cba34",
+    "zh:ac8a23c212258b7976e1621275e3af7099e7e4a3d4478cf8d5d2a27f3bc3e967",
+    "zh:b516ca74431f3df4c6cf90ddcdb4042c626e026317a33c53f0b445a3d93b720d",
+    "zh:dc76e4326aec2490c1600d6871a95e78f9050f9ce427c71707ea412a2f2f1a62",
+    "zh:eac7b63e86c749c7d48f527671c7aee5b4e26c10be6ad7232d6860167f99dbb0",
+  ]
+}
+
+```
+
+
+## File: lib/MODEL_FAILURES.md
+
+```markdown
+# Model Response Failures Analysis
+
+This document analyzes the failures and issues in the original CloudFormation templates generated by the model, documenting the fixes required to achieve deployment success.
+
+## Critical Failures
+
+### 1. Circular Dependency in Resource References
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: The original template created a circular dependency between `TransactionLogBucket` and `S3ReplicationRole`. The bucket referenced the role's ARN in its ReplicationConfiguration, while the role's inline policy used `Fn::GetAtt` to reference the bucket's ARN.
+
+```json
+// In TransactionLogBucket:
+"ReplicationConfiguration": {
+  "Role": {
+    "Fn::GetAtt": ["S3ReplicationRole", "Arn"]
+  }
+}
+
+// In S3ReplicationRole policy:
+"Resource": {
+  "Fn::GetAtt": ["TransactionLogBucket", "Arn"]
+}
+```
+
+This caused AWS CloudFormation validation to fail with:
+```
+Circular dependency between resources: [TransactionLogBucket, S3ReplicationRole, ...]
+```
+
+**IDEAL_RESPONSE Fix**:
+1. Replaced `Fn::GetAtt` references to bucket ARN with `Fn::Sub` using the bucket name pattern
+2. Added explicit `DependsOn: S3ReplicationRole` to TransactionLogBucket
+
+```json
+// Fixed S3ReplicationRole policy:
+"Resource": {
+  "Fn::Sub": "arn:aws:s3:::transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}"
+}
+
+// Fixed TransactionLogBucket:
+"TransactionLogBucket": {
+  "Type": "AWS::S3::Bucket",
+  "DependsOn": "S3ReplicationRole",
+  "Properties": { ... }
+}
+```
+
+**Root Cause**: The model attempted to use `Fn::GetAtt` for circular references without understanding that CloudFormation requires acyclic dependency graphs. The model should have used constructed ARNs via `Fn::Sub` for S3 bucket ARNs in IAM policies.
+
+**AWS Documentation Reference**: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dependson.html
+
+**Cost/Security/Performance Impact**:
+- Cost: Blocked deployment entirely, preventing all resources from being created
+- Time: Would have required multiple redeploy attempts to identify and fix
+- Training Value: High - demonstrates critical understanding gap in CloudFormation dependency management
+
+---
+
+## Summary
+
+- Total failures: 1 Critical
+- Primary knowledge gaps: CloudFormation circular dependency resolution, proper use of Fn::GetAtt vs Fn::Sub for ARN construction
+- Training value: Score 8/10 - This is an expert-level multi-region DR implementation with a single but critical flaw that demonstrates an important learning opportunity about CloudFormation's dependency resolution system
+
+### Positive Aspects of MODEL_RESPONSE
+
+The model correctly implemented:
+1. Multi-region architecture with DynamoDB Global Tables
+2. S3 cross-region replication configuration
+3. Route53 health checks for failover
+4. Comprehensive monitoring with CloudWatch alarms
+5. Security best practices (encryption at rest, in transit, least privilege IAM)
+6. Proper use of EnvironmentSuffix throughout
+7. No DeletionPolicy: Retain (ensuring destroyability)
+8. Multi-AZ deployments in both regions
+9. Complete VPC infrastructure with public/private subnets
+10. Lambda functions with proper IAM roles and environment variables
+11. API Gateway integration with Lambda
+12. SQS queues for message processing
+13. SNS topics for alarm notifications
+
+The failure was isolated to a single architectural decision about resource referencing that violated CloudFormation's dependency graph requirements. This is a valuable training example that shows near-perfect execution with one critical flaw.
+
+```
+
+
+## File: lib/MODEL_RESPONSE.md
+
+```markdown
+# CloudFormation Multi-Region Disaster Recovery Solution
+
+This implementation provides a comprehensive multi-region disaster recovery solution for a transaction processing system using CloudFormation JSON templates.
+
+## Architecture Overview
+
+The solution consists of:
+- Primary region (us-east-1) with full infrastructure
+- Secondary DR region (us-west-2) with replica infrastructure
+- Route53 health checks and automated DNS failover
+- DynamoDB Global Tables for cross-region replication
+- S3 cross-region replication for transaction logs
+- Lambda functions in both regions for transaction processing
+- API Gateway in both regions for API endpoints
+- CloudWatch monitoring and SNS alerting
 
 ## File: lib/tap-stack.json
 
@@ -36,8 +204,7 @@ The solution provides:
       "Description": "Environment suffix for resource naming to ensure uniqueness",
       "MinLength": 1,
       "MaxLength": 20,
-      "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"]
+      "Default": "dev"
     },
     "PrimaryRegion": {
       "Type": "String",
@@ -361,71 +528,8 @@ The solution provides:
         }
       }
     },
-    "S3ReplicationRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {
-          "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
-        },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "S3ReplicationPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetReplicationConfiguration",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObjectVersionForReplication",
-                    "s3:GetObjectVersionAcl",
-                    "s3:GetObjectVersionTagging"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:ReplicateObject",
-                    "s3:ReplicateDelete",
-                    "s3:ReplicateTags"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
     "TransactionLogBucket": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": "S3ReplicationRole",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -496,6 +600,71 @@ The solution provides:
         ]
       }
     },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TransactionLogBucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TransactionLogBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
     "TransactionProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -546,7 +715,7 @@ The solution provides:
                     "s3:GetObject"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::transaction-logs-primary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                    "Fn::Sub": "${TransactionLogBucket.Arn}/*"
                   }
                 },
                 {
@@ -1005,50 +1174,651 @@ The solution provides:
 }
 ```
 
-## Integration Validation
+## File: lib/secondary-stack.json
 
-Automated coverage for this stack now lives in `test/tap-stack.int.test.ts`. The suite reads `lib/TapStack.json` once and performs the following checks:
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Secondary Region (DR) Stack for Multi-Region Disaster Recovery Solution",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness",
+      "MinLength": 1,
+      "MaxLength": 20,
+      "Default": "dev"
+    },
+    "PrimaryRegion": {
+      "Type": "String",
+      "Description": "Primary region",
+      "Default": "us-east-1"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarms",
+      "Default": "alerts@example.com"
+    }
+  },
+  "Resources": {
+    "SecondaryVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.1.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": "Secondary"
+          }
+        ]
+      }
+    },
+    "SecondaryPublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "SecondaryVPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondaryPublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondarySecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for secondary region resources",
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "transaction-processor-role-secondary-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecondaryTransactionProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/transactions-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${SecondaryTransactionLogBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecondaryTransactionQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecondaryTransactionProcessorRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Fn::Sub": "transactions-${EnvironmentSuffix}"
+            },
+            "BUCKET_NAME": {
+              "Ref": "SecondaryTransactionLogBucket"
+            },
+            "QUEUE_URL": {
+              "Ref": "SecondaryTransactionQueue"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\nsqs = boto3.client('sqs')\n\ntable_name = os.environ['TABLE_NAME']\nbucket_name = os.environ['BUCKET_NAME']\nqueue_url = os.environ['QUEUE_URL']\n\ndef handler(event, context):\n    try:\n        table = dynamodb.Table(table_name)\n        \n        # Parse transaction from event\n        body = json.loads(event.get('body', '{}'))\n        transaction_id = body.get('transactionId', str(time.time()))\n        amount = Decimal(str(body.get('amount', 0)))\n        \n        # Store in DynamoDB (Global Table replica)\n        timestamp = int(time.time() * 1000)\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': amount,\n                'status': 'processed',\n                'region': 'secondary'\n            }\n        )\n        \n        # Log to S3 (replica bucket)\n        log_key = f'transactions/{transaction_id}.json'\n        s3.put_object(\n            Bucket=bucket_name,\n            Key=log_key,\n            Body=json.dumps(body),\n            ServerSideEncryption='AES256'\n        )\n        \n        # Send to queue for further processing\n        sqs.send_message(\n            QueueUrl=queue_url,\n            MessageBody=json.dumps({\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'region': 'secondary'\n            })\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully in secondary region',\n                'transactionId': transaction_id,\n                'region': 'secondary'\n            }),\n            'headers': {\n                'Content-Type': 'application/json'\n            }\n        }\n    except Exception as e:\n        print(f'Error processing transaction: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)}),\n            'headers': {\n                'Content-Type': 'application/json'\n            }\n        }\n"
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "SecondarySecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SecondaryPrivateSubnet1"
+            },
+            {
+              "Ref": "SecondaryPrivateSubnet2"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "transaction-queue-secondary-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 300,
+        "MessageRetentionPeriod": 1209600,
+        "KmsMasterKeyId": "alias/aws/sqs",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-queue-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "transaction-api-secondary-${EnvironmentSuffix}"
+        },
+        "Description": "API Gateway for transaction processing in secondary region",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "SecondaryTransactionApiResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "SecondaryTransactionApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "transactions"
+      }
+    },
+    "SecondaryTransactionApiMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "ResourceId": {
+          "Ref": "SecondaryTransactionApiResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SecondaryTransactionProcessorFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "SecondaryTransactionApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "SecondaryTransactionApiMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "StageName": "prod"
+      }
+    },
+    "SecondaryLambdaApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecondaryTransactionProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SecondaryTransactionApi}/*/*/*"
+        }
+      }
+    },
+    "SecondaryHealthCheckAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "health-check-alarms-secondary-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Secondary Region Health Check Alarms",
+        "Subscription": [
+          {
+            "Protocol": "email",
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function has errors in secondary region",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecondaryTransactionProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondaryHealthCheckAlarmTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SecondaryVPCId": {
+      "Description": "Secondary VPC ID",
+      "Value": {
+        "Ref": "SecondaryVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryVPC-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryTransactionLogBucketName": {
+      "Description": "S3 Bucket for Transaction Logs (Secondary)",
+      "Value": {
+        "Ref": "SecondaryTransactionLogBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryTransactionLogBucket-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryTransactionProcessorFunctionArn": {
+      "Description": "Lambda Function ARN (Secondary)",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryTransactionProcessorFunction",
+          "Arn"
+        ]
+      }
+    },
+    "SecondaryTransactionQueueUrl": {
+      "Description": "SQS Queue URL (Secondary)",
+      "Value": {
+        "Ref": "SecondaryTransactionQueue"
+      }
+    },
+    "SecondaryApiEndpoint": {
+      "Description": "API Gateway Endpoint (Secondary)",
+      "Value": {
+        "Fn::Sub": "https://${SecondaryTransactionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/transactions"
+      }
+    }
+  }
+}
+```
 
-- **Parameters** – confirms default values and constraints for `EnvironmentSuffix`, regional selectors, health-check thresholds, and alert email.
-- **Network & Security** – verifies subnets/route tables reference `PrimaryVPC`, internet gateway attachment ordering, and HTTPS-only security groups.
-- **Data & DR** – asserts the DynamoDB global table replicas span both regions with PITR enabled, and S3 logging buckets are encrypted, versioned, and blocked from public access.
-- **Processing Pipeline** – ensures the Lambda role contains DynamoDB/S3/SQS permissions, the function runs inside the private subnets, and API Gateway is wired through proxy integration with invoke permissions.
-- **Monitoring & Messaging** – validates Route53 health check → CloudWatch alarm → SNS topic flow plus the Lambda/DynamoDB/APIGW alarms, and confirms the SQS queue uses AWS-managed KMS encryption.
-- **Outputs** – checks exported values for VPC ID, DynamoDB table, log bucket, queue URL, and API endpoint use consistent `Fn::Sub` patterns for cross-stack consumption.
+## File: lib/README.md
 
-Running `./scripts/integration-tests.sh` (or `npx jest --runInBand test/tap-stack.int.test.ts`) executes these assertions to guarantee the published template stays consistent with the ideal response.
+```markdown
+# Multi-Region Disaster Recovery Solution
 
-## Deployment Instructions
+This CloudFormation solution implements a comprehensive multi-region disaster recovery system for a transaction processing application.
+
+## Architecture
+
+The solution consists of two stacks:
+
+1. **Primary Stack (tap-stack.json)** - Deploys to us-east-1
+2. **Secondary Stack (secondary-stack.json)** - Deploys to us-west-2
+
+### Components
+
+- **DynamoDB Global Tables**: Automatic cross-region replication for transaction data
+- **S3 Cross-Region Replication**: Transaction logs replicated from primary to secondary
+- **Lambda Functions**: Transaction processing in both regions
+- **API Gateway**: REST API endpoints in both regions
+- **SQS Queues**: Message queuing for transaction processing
+- **Route53 Health Checks**: Monitors primary region and triggers failover
+- **CloudWatch Alarms**: Monitoring and alerting for system health
+- **VPC with Multi-AZ**: High availability within each region
+
+## Deployment
 
 ### Prerequisites
 
-1. AWS CLI configured with appropriate credentials
-2. Sufficient IAM permissions to create all resources
-3. Email address for CloudWatch alarm notifications
+- AWS CLI configured with appropriate credentials
+- jq installed for JSON parsing
+- Email address for CloudWatch alarms
 
-### Deployment Order (Critical)
-
-**IMPORTANT**: The secondary S3 bucket must exist before the primary bucket can configure replication.
-
-1. **First, deploy the secondary region stack** (creates replication target bucket):
-
-```bash
-aws cloudformation create-stack \
-  --stack-name transaction-dr-secondary-dev \
-  --template-body file://lib/secondary-stack.json \
-  --parameters \
-    ParameterKey=EnvironmentSuffix,ParameterValue=dev \
-    ParameterKey=AlertEmail,ParameterValue=your-email@example.com \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-2
-
-# Wait for completion
-aws cloudformation wait stack-create-complete \
-  --stack-name transaction-dr-secondary-dev \
-  --region us-west-2
-```
-
-2. **Then, deploy the primary region stack**:
+### Deploy Primary Stack
 
 ```bash
 aws cloudformation create-stack \
@@ -1058,156 +1828,124 @@ aws cloudformation create-stack \
     ParameterKey=EnvironmentSuffix,ParameterValue=dev \
     ParameterKey=PrimaryRegion,ParameterValue=us-east-1 \
     ParameterKey=SecondaryRegion,ParameterValue=us-west-2 \
+    ParameterKey=HealthCheckFailureThreshold,ParameterValue=3 \
     ParameterKey=AlertEmail,ParameterValue=your-email@example.com \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
 
-# Wait for completion
+# Wait for stack creation
 aws cloudformation wait stack-create-complete \
   --stack-name transaction-dr-primary-dev \
   --region us-east-1
 ```
 
-### Testing the Deployment
-
-1. **Test the API endpoint**:
+### Deploy Secondary Stack
 
 ```bash
-# Get the API endpoint
-API_URL=$(aws cloudformation describe-stacks \
-  --stack-name transaction-dr-primary-dev \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
-  --output text \
-  --region us-east-1)
+# Note: Must deploy secondary bucket BEFORE primary stack due to replication dependency
+aws cloudformation create-stack \
+  --stack-name transaction-dr-secondary-dev \
+  --template-body file://lib/secondary-stack.json \
+  --parameters \
+    ParameterKey=EnvironmentSuffix,ParameterValue=dev \
+    ParameterKey=PrimaryRegion,ParameterValue=us-east-1 \
+    ParameterKey=AlertEmail,ParameterValue=your-email@example.com \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-west-2
 
-# Send a test transaction
-curl -X POST "$API_URL" \
-  -H "Content-Type: application/json" \
-  -d '{"transactionId":"test-001","amount":100.50}'
-```
-
-2. **Verify DynamoDB Global Table**:
-
-```bash
-# Check table in primary region
-aws dynamodb describe-table \
-  --table-name transactions-dev \
-  --region us-east-1 \
-  --query 'Table.Replicas'
-
-# Query data in secondary region
-aws dynamodb scan \
-  --table-name transactions-dev \
+# Wait for stack creation
+aws cloudformation wait stack-create-complete \
+  --stack-name transaction-dr-secondary-dev \
   --region us-west-2
 ```
 
-3. **Verify S3 replication**:
+## Testing
+
+### Test Transaction Processing
 
 ```bash
-# Check replication configuration
+# Get API endpoint from stack outputs
+PRIMARY_API=$(aws cloudformation describe-stacks \
+  --stack-name transaction-dr-primary-dev \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
+  --output text)
+
+# Send test transaction
+curl -X POST $PRIMARY_API \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transactionId": "test-123",
+    "amount": 100.50,
+    "currency": "USD"
+  }'
+```
+
+### Verify Cross-Region Replication
+
+```bash
+# Check DynamoDB Global Table replication
+aws dynamodb describe-table \
+  --table-name transactions-dev \
+  --region us-east-1 | jq '.Table.Replicas'
+
+# Check S3 replication status
 aws s3api get-bucket-replication \
-  --bucket transaction-logs-primary-dev-$(aws sts get-caller-identity --query Account --output text) \
+  --bucket transaction-logs-primary-dev-<account-id> \
   --region us-east-1
 ```
 
-## Disaster Recovery Capabilities
+### Test Health Checks
 
-### RTO and RPO
+```bash
+# Get health check ID
+HEALTH_CHECK_ID=$(aws cloudformation describe-stacks \
+  --stack-name transaction-dr-primary-dev \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs[?OutputKey==`HealthCheckId`].OutputValue' \
+  --output text)
 
-- **Recovery Time Objective (RTO)**: < 5 minutes
-  - Route53 health checks detect failures within 30-90 seconds
-  - DNS failover occurs within 60 seconds
-  - Total failover time typically under 5 minutes
+# Check health check status
+aws route53 get-health-check-status \
+  --health-check-id $HEALTH_CHECK_ID
+```
 
-- **Recovery Point Objective (RPO)**:
-  - DynamoDB: Near-zero (Global Tables provide sub-second replication)
-  - S3: < 15 minutes (configured replication time)
+## Failover Procedures
 
-### Failover Process
+### Automatic Failover
 
-1. **Automatic Failover**:
-   - Route53 health checks continuously monitor the primary API endpoint
-   - Upon failure detection (3 consecutive failures), alarms are triggered
-   - DNS automatically routes traffic to secondary region
-   - No manual intervention required
+Route53 health checks automatically detect primary region failures and update DNS records to route traffic to the secondary region.
 
-2. **Manual Failover** (if needed):
-   ```bash
-   # Update Route53 record to point to secondary
-   aws route53 change-resource-record-sets \
-     --hosted-zone-id <ZONE_ID> \
-     --change-batch file://failover-changes.json
-   ```
+### Manual Failover
 
-3. **Failback Process**:
-   - Verify primary region is fully operational
-   - Check DynamoDB Global Table sync status
-   - Verify S3 replication has caught up
-   - Update Route53 to restore primary routing
+1. Verify secondary region is operational
+2. Update Route53 record sets to point to secondary API endpoint
+3. Monitor CloudWatch alarms in secondary region
 
-## Monitoring and Alerts
+### Failback
+
+1. Verify primary region is restored and healthy
+2. Allow DynamoDB Global Tables to sync
+3. Verify S3 replication has caught up
+4. Update Route53 to restore primary routing
+
+## Monitoring
 
 ### CloudWatch Alarms
 
-The solution includes comprehensive monitoring:
+- Lambda function errors
+- DynamoDB throttling
+- API Gateway 4xx/5xx errors
+- Route53 health check failures
 
-1. **Lambda Function Monitoring**:
-   - Error rate threshold: 5 errors in 5 minutes
-   - Automatic notification via SNS
+### Key Metrics
 
-2. **DynamoDB Monitoring**:
-   - Throttle detection: 10+ throttles in 5 minutes
-   - Capacity monitoring for provisioned mode
-
-3. **API Gateway Monitoring**:
-   - 4xx errors: 20+ in 5 minutes
-   - 5xx errors: 10+ in 5 minutes
-
-4. **Route53 Health Checks**:
-   - HTTPS endpoint monitoring
-   - Failure threshold: 3 consecutive failures
-
-### SNS Notifications
-
-All alarms send notifications to the configured email address for:
-- Service failures
-- Performance degradation
-- Failover events
-- Recovery confirmation
-
-## Security Best Practices
-
-1. **Encryption**:
-   - DynamoDB: KMS encryption enabled
-   - S3: AES256 server-side encryption
-   - SQS: KMS encryption
-   - All data encrypted in transit (HTTPS/TLS)
-
-2. **IAM Policies**:
-   - Least privilege principle
-   - Separate roles for each service
-   - No hardcoded credentials
-
-3. **Network Security**:
-   - VPC isolation with public/private subnets
-   - Security groups with minimal ingress rules
-   - S3 bucket public access blocked
-
-4. **Compliance**:
-   - Point-in-time recovery enabled for DynamoDB
-   - S3 versioning enabled
-   - CloudWatch logs retention configured
-
-## Cost Optimization
-
-1. **DynamoDB**: On-demand billing for variable workloads
-2. **Lambda**: 512MB memory allocation (optimized for performance/cost)
-3. **S3**: Standard storage class with lifecycle policies
-4. **API Gateway**: Regional endpoints (lower cost than edge-optimized)
+- Transaction processing latency
+- DynamoDB replication lag
+- S3 replication lag
+- API Gateway request count
 
 ## Clean Up
-
-To remove all resources:
 
 ```bash
 # Delete primary stack
@@ -1220,20 +1958,2561 @@ aws cloudformation delete-stack \
   --stack-name transaction-dr-secondary-dev \
   --region us-west-2
 
-# Empty S3 buckets if needed
-aws s3 rm s3://transaction-logs-primary-dev-$(aws sts get-caller-identity --query Account --output text) \
-  --recursive --region us-east-1
-
-aws s3 rm s3://transaction-logs-secondary-dev-$(aws sts get-caller-identity --query Account --output text) \
-  --recursive --region us-west-2
+# Empty S3 buckets before deletion (if needed)
+aws s3 rm s3://transaction-logs-primary-dev-<account-id> --recursive --region us-east-1
+aws s3 rm s3://transaction-logs-secondary-dev-<account-id> --recursive --region us-west-2
 ```
 
-## Summary
+## RTO and RPO
 
-This ideal implementation demonstrates:
-1. **Proper dependency management** in CloudFormation using `Fn::Sub` and `DependsOn`
-2. **Multi-region disaster recovery** with automated failover
-3. **Best practices** for security, monitoring, and cost optimization
-4. **Production-ready** architecture with comprehensive error handling
+- **RPO (Recovery Point Objective)**: < 1 minute (DynamoDB Global Tables near real-time replication)
+- **RTO (Recovery Time Objective)**: < 5 minutes (Route53 health check interval + TTL)
 
-The critical fix resolves the circular dependency issue that would have prevented deployment, showcasing the importance of understanding CloudFormation's resource dependency graph and proper ARN construction methods.
+## Security
+
+- All data encrypted at rest (DynamoDB KMS, S3 AES256, SQS)
+- All data encrypted in transit (HTTPS, TLS)
+- IAM roles follow least privilege principle
+- VPC with public/private subnet separation
+- Security groups restrict access to HTTPS only
+```
+
+## Deployment Notes
+
+1. **CRITICAL**: Deploy the secondary-stack.json FIRST to us-west-2 to create the destination S3 bucket for cross-region replication
+2. After secondary stack completes, deploy tap-stack.json to us-east-1
+3. Verify DynamoDB Global Table has replicas in both regions
+4. Confirm S3 replication is active
+5. Test health checks and failover behavior
+6. Subscribe to SNS topics for alarm notifications
+
+## Known Limitations
+
+- Route53 health checks require a publicly accessible endpoint
+- DynamoDB Global Tables have near real-time (not instant) replication
+- S3 replication typically completes within 15 minutes
+- Manual failback may be required for certain failure scenarios
+
+```
+
+
+## File: lib/PROMPT.md
+
+```markdown
+# Multi-Region Disaster Recovery Solution for Transaction Processing
+
+Hey team,
+
+We need to build a production-grade disaster recovery solution for our transaction processing system. The business has been pushing for this since we had that extended outage last quarter, and they want real multi-region DR capabilities with automated failover. I've been asked to create this infrastructure using **CloudFormation with JSON**.
+
+The key business driver here is ensuring we can survive a complete regional failure without losing transactions or having extended downtime. Management wants clear RTO and RPO targets, with Route53 health checks automatically failing over to our secondary region. They also want everything monitored so we know immediately if something breaks.
+
+This is an expert-level implementation that needs to follow AWS Well-Architected principles, especially around reliability and security. The infrastructure needs to handle transaction processing at scale while maintaining data consistency across regions.
+
+## What we need to build
+
+Create a comprehensive multi-region disaster recovery system using **CloudFormation with JSON** for a transaction processing application.
+
+### Core Requirements
+
+1. **Multi-Region Architecture**
+   - Primary region infrastructure in us-east-1
+   - Secondary disaster recovery region in us-west-2
+   - Cross-region replication for all critical data
+   - Ensure source and target regions are DIFFERENT
+   - Complete infrastructure parity between regions
+
+2. **Transaction Processing Components**
+   - Database with cross-region replication (RDS with read replicas OR DynamoDB Global Tables)
+   - Application tier deployed in both regions (Lambda, ECS Fargate, or EC2 with Auto Scaling)
+   - Message queue or streaming service for transaction processing (SQS, SNS, or Kinesis)
+   - API Gateway or Application Load Balancer for traffic routing in each region
+
+3. **Data Replication Strategy**
+   - Database cross-region replication (RDS read replicas OR DynamoDB Global Tables)
+   - S3 cross-region replication for transaction data and logs
+   - Backup and restore mechanisms in both regions
+   - Design for minimal RPO (Recovery Point Objective) and RTO (Recovery Time Objective)
+
+4. **Automated Failover Capabilities**
+   - Route53 health checks monitoring primary region endpoints
+   - DNS failover to secondary region when primary health checks fail
+   - Health check failure threshold configuration
+   - Both automated and documented manual failover procedures
+
+5. **High Availability Design**
+   - Multi-AZ deployment in EACH region
+   - Auto-scaling groups or serverless architecture for elasticity
+   - Load balancing within each region
+   - Redundancy for all critical components
+
+6. **Comprehensive Monitoring and Alerting**
+   - CloudWatch alarms for system health in both regions
+   - Cross-region monitoring dashboard
+   - SNS notifications for failover events and health issues
+   - Metrics tracking RTO and RPO compliance
+
+7. **Security Requirements**
+   - Data at rest encryption for RDS, DynamoDB, and S3 using KMS
+   - Data in transit encryption with TLS/SSL
+   - KMS encryption keys managed properly
+   - IAM roles and policies following least privilege principle
+   - Cross-region IAM role assumptions where needed
+   - VPC with public and private subnets in both regions
+   - Security groups with minimal required access
+   - Network ACLs for defense in depth
+
+### Technical Requirements
+
+- All infrastructure defined using **CloudFormation with JSON**
+- Use Route53 for health checks and DNS failover
+- Use RDS with cross-region read replicas OR DynamoDB Global Tables
+- Use S3 with cross-region replication enabled
+- Use Application Load Balancer OR API Gateway
+- Use Lambda OR ECS Fargate for application tier
+- Use SQS, SNS, or Kinesis for message processing
+- Use CloudWatch for logs, metrics, and alarms
+- Use IAM for roles and policies
+- Use KMS for encryption key management
+- Deploy to us-east-1 (primary) and us-west-2 (secondary)
+
+### Deployment Requirements (CRITICAL)
+
+- ALL resources MUST include EnvironmentSuffix parameter for uniqueness
+- Resource naming convention: Use `!Sub 'resource-name-${EnvironmentSuffix}'` format
+- NO DeletionPolicy: Retain on ANY resources
+- NO DeletionProtection: true on databases
+- All resources must be cleanly deletable for testing
+- Use nested stacks or comprehensive single template approach
+- Clear parameter-driven separation of primary and secondary region resources
+
+### AWS Service-Specific Guidance
+
+- DO NOT create GuardDuty detectors (account-level resource, causes conflicts)
+- DO NOT use AWS CodeCommit (deprecated service)
+- For AWS Config: Use correct IAM policy `service-role/AWS_ConfigRole`
+- Avoid high reserved concurrency for Lambda functions
+- Prefer Aurora Serverless v2 over traditional Multi-AZ RDS for faster provisioning
+- Prefer VPC Endpoints over NAT Gateways for cost optimization
+- Set backup_retention_period = 1 (minimum) for faster RDS creation
+- Set skip_final_snapshot = true for RDS destroyability
+
+### Constraints
+
+- Follow AWS Well-Architected Framework principles (Reliability, Security, Operational Excellence)
+- Ensure infrastructure supports parallel testing with environment suffix
+- Design for production-grade reliability and security
+- Include proper error handling and logging throughout
+- Document RTO and RPO considerations in comments
+- All infrastructure must be destroyable without manual intervention
+
+## Success Criteria
+
+- **Functionality**: Template deploys successfully in both regions with working cross-region replication
+- **Failover**: Route53 health checks detect failures and automatically failover to secondary region
+- **Performance**: Transaction processing system handles expected load in both regions
+- **Reliability**: Multi-AZ deployment ensures high availability within each region
+- **Security**: Data encrypted at rest and in transit, IAM follows least privilege
+- **Monitoring**: CloudWatch alarms configured for all critical metrics in both regions
+- **Resource Naming**: All resources include EnvironmentSuffix for uniqueness
+- **Destroyability**: Infrastructure tears down cleanly without manual steps
+- **Code Quality**: JSON CloudFormation templates, well-tested, documented
+- **Test Coverage**: 90%+ unit test coverage, comprehensive integration tests
+- **Training Quality**: Score 8+ (expert-level DR implementation)
+
+## What to deliver
+
+- Complete **CloudFormation with JSON** implementation
+- Main template: lib/tap-stack.json (or nested stacks in lib/)
+- Route53 health checks and failover configuration
+- Database with cross-region replication (RDS or DynamoDB)
+- S3 buckets with cross-region replication
+- VPC, subnets, security groups, NACLs in both regions
+- Application Load Balancer or API Gateway in both regions
+- Lambda or ECS Fargate application tier in both regions
+- Message processing service (SQS, SNS, or Kinesis)
+- CloudWatch alarms and monitoring
+- IAM roles and policies
+- KMS encryption keys
+- Unit tests for template validation (90%+ coverage)
+- Integration tests for deployment and failover
+- Documentation with deployment instructions and failover procedures
+
+```
+
+
+## File: lib/README.md
+
+```markdown
+# Multi-Region Disaster Recovery Solution
+
+This CloudFormation solution implements a comprehensive multi-region disaster recovery system for a transaction processing application.
+
+## Architecture
+
+The solution consists of two stacks:
+
+1. **Primary Stack (tap-stack.json)** - Deploys to us-east-1
+2. **Secondary Stack (secondary-stack.json)** - Deploys to us-west-2
+
+### Components
+
+- **DynamoDB Global Tables**: Automatic cross-region replication for transaction data
+- **S3 Cross-Region Replication**: Transaction logs replicated from primary to secondary
+- **Lambda Functions**: Transaction processing in both regions
+- **API Gateway**: REST API endpoints in both regions
+- **SQS Queues**: Message queuing for transaction processing
+- **Route53 Health Checks**: Monitors primary region and triggers failover
+- **CloudWatch Alarms**: Monitoring and alerting for system health
+- **VPC with Multi-AZ**: High availability within each region
+
+## Deployment
+
+### Prerequisites
+
+- AWS CLI configured with appropriate credentials
+- jq installed for JSON parsing
+- Email address for CloudWatch alarms
+
+### Deploy Primary Stack
+
+```
+
+
+## File: lib/TapStack.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Self-contained CloudFormation template for multi-environment infrastructure",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for environment resources",
+      "Default": "dev"
+    },
+    "Environment": {
+      "Type": "String",
+      "Description": "Environment name",
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "Default": "dev"
+    },
+    "Owner": {
+      "Type": "String",
+      "Description": "Owner of the resources for cost allocation",
+      "Default": "DevOps"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for cost allocation",
+      "Default": "Infrastructure"
+    }
+  },
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "prod"
+      ]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-igw-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-public-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-public-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-private-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-private-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-public-rt-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "NATGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-nat-eip-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "Condition": "IsProduction",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-nat-eip-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-nat-gateway-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Condition": "IsProduction",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-nat-gateway-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-private-rt-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway1"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Condition": "IsProduction",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-private-rt-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Condition": "IsProduction",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway2"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Fn::If": [
+            "IsProduction",
+            {
+              "Ref": "PrivateRouteTable2"
+            },
+            {
+              "Ref": "PrivateRouteTable1"
+            }
+          ]
+        }
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for RDS database",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "ApplicationSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-db-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "ApplicationSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for application",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-app-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS database",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-db-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-db-password-${EnvironmentSuffix}"
+        },
+        "Description": "Database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "15.8",
+        "MasterUsername": "dbadmin",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
+        },
+        "DatabaseName": "appdb",
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
+        "StorageEncrypted": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-aurora-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBInstanceClass": "db.t3.medium",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "Engine": "aurora-postgresql",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-aurora-instance-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "DynamoDBTable": {
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${Environment}-transactions-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "Replicas": [
+          {
+            "Region": "us-east-1",
+            "GlobalSecondaryIndexes": [],
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "SSESpecification": {
+              "KMSMasterKeyId": {
+                "Ref": "PrimaryKMSKey"
+              }
+            },
+            "TableClass": "STANDARD",
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "${Environment}-dynamodb-primary-${EnvironmentSuffix}"
+                }
+              },
+              {
+                "Key": "Environment",
+                "Value": {
+                  "Ref": "Environment"
+                }
+              },
+              {
+                "Key": "Owner",
+                "Value": {
+                  "Ref": "Owner"
+                }
+              },
+              {
+                "Key": "Project",
+                "Value": {
+                  "Ref": "Project"
+                }
+              },
+              {
+                "Key": "Region",
+                "Value": "Primary"
+              }
+            ]
+          },
+          {
+            "Region": "us-west-2",
+            "GlobalSecondaryIndexes": [],
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "SSESpecification": {
+              "KMSMasterKeyId": "alias/aws/dynamodb"
+            },
+            "TableClass": "STANDARD",
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "${Environment}-dynamodb-secondary-${EnvironmentSuffix}"
+                }
+              },
+              {
+                "Key": "Environment",
+                "Value": {
+                  "Ref": "Environment"
+                }
+              },
+              {
+                "Key": "Owner",
+                "Value": {
+                  "Ref": "Owner"
+                }
+              },
+              {
+                "Key": "Project",
+                "Value": {
+                  "Ref": "Project"
+                }
+              },
+              {
+                "Key": "Region",
+                "Value": "Secondary"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-s3-replication-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 90
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "ReplicationConfiguration": {
+          "Role": {
+            "Fn::GetAtt": [
+              "S3ReplicationRole",
+              "Arn"
+            ]
+          },
+          "Rules": [
+            {
+              "Id": "ReplicateToSecondary",
+              "Status": "Enabled",
+              "Priority": 1,
+              "DeleteMarkerReplication": {
+                "Status": "Enabled"
+              },
+              "Filter": {
+                "Prefix": ""
+              },
+              "Destination": {
+                "Bucket": {
+                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "ReplicationTime": {
+                  "Status": "Enabled",
+                  "Time": {
+                    "Minutes": 15
+                  }
+                },
+                "Metrics": {
+                  "Status": "Enabled",
+                  "EventThreshold": {
+                    "Minutes": 15
+                  }
+                },
+                "StorageClass": "STANDARD_IA"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-s3-bucket-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": {
+          "Fn::Sub": "${Environment}-ecs-cluster-${EnvironmentSuffix}"
+        },
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ecs-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "ECSTaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ecs-execution-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "ECSTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "TaskPolicy",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${S3Bucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DynamoDBTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-ecs-task-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${Environment}-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": {
+          "Fn::Sub": "${Environment} Environment Alerts"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-sns-topic-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "SNSSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "SNSTopic"
+        },
+        "Endpoint": "devops@example.com"
+      }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/ecs/${Environment}-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "TransitGateway": {
+      "Type": "AWS::EC2::TransitGateway",
+      "Condition": "IsProduction",
+      "Properties": {
+        "AmazonSideAsn": 64512,
+        "Description": {
+          "Fn::Sub": "${Environment} Transit Gateway for ${EnvironmentSuffix}"
+        },
+        "DefaultRouteTableAssociation": "enable",
+        "DefaultRouteTablePropagation": "enable",
+        "DnsSupport": "enable",
+        "VpnEcmpSupport": "enable",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-tgw-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "TransitGatewayAttachment": {
+      "Type": "AWS::EC2::TransitGatewayAttachment",
+      "Condition": "IsProduction",
+      "Properties": {
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-tgw-attachment-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "Type": "HTTPS",
+        "ResourcePath": "/health",
+        "FullyQualifiedDomainName": {
+          "Fn::Sub": "${Environment}-primary-${EnvironmentSuffix}.example.com"
+        },
+        "Port": 443,
+        "RequestInterval": 30,
+        "FailureThreshold": 3,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-primary-health-check-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "Route53HostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-dr-${EnvironmentSuffix}.example.com"
+        },
+        "HostedZoneConfig": {
+          "Comment": {
+            "Fn::Sub": "Hosted zone for ${Environment} DR solution with suffix ${EnvironmentSuffix}"
+          }
+        },
+        "HostedZoneTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-hosted-zone-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryFailoverRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.example.com"
+        },
+        "Type": "A",
+        "SetIdentifier": "Primary",
+        "Failover": "PRIMARY",
+        "HealthCheckId": {
+          "Ref": "PrimaryHealthCheck"
+        },
+        "TTL": 60,
+        "ResourceRecords": [
+          "1.2.3.4"
+        ]
+      }
+    },
+    "SecondaryFailoverRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.example.com"
+        },
+        "Type": "A",
+        "SetIdentifier": "Secondary",
+        "Failover": "SECONDARY",
+        "TTL": 60,
+        "ResourceRecords": [
+          "5.6.7.8"
+        ]
+      }
+    },
+    "PrimaryKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for ${Environment} primary region encryption - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow S3 Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-primary-kms-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/${Environment}-primary-key-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "PrimaryKMSKey"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-vpc-id"
+        }
+      }
+    },
+    "PublicSubnetIds": {
+      "Description": "Public subnet IDs",
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Ref": "PublicSubnet1"
+            },
+            {
+              "Ref": "PublicSubnet2"
+            }
+          ]
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-public-subnet-ids"
+        }
+      }
+    },
+    "PrivateSubnetIds": {
+      "Description": "Private subnet IDs",
+      "Value": {
+        "Fn::Join": [
+          ",",
+          [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
+          ]
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-private-subnet-ids"
+        }
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-aurora-endpoint"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "DynamoDB table name",
+      "Value": {
+        "Ref": "DynamoDBTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-dynamodb-table"
+        }
+      }
+    },
+    "DynamoDBStreamArn": {
+      "Description": "DynamoDB stream ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "DynamoDBTable",
+          "StreamArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-dynamodb-stream-arn"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 bucket name",
+      "Value": {
+        "Ref": "S3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-s3-bucket"
+        }
+      }
+    },
+    "ECSClusterName": {
+      "Description": "ECS cluster name",
+      "Value": {
+        "Ref": "ECSCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-ecs-cluster"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS topic ARN",
+      "Value": {
+        "Ref": "SNSTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-sns-topic"
+        }
+      }
+    },
+    "Route53HostedZoneId": {
+      "Description": "Route53 Hosted Zone ID for DNS failover",
+      "Value": {
+        "Ref": "Route53HostedZone"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-hosted-zone-id"
+        }
+      }
+    },
+    "PrimaryHealthCheckId": {
+      "Description": "Route53 Health Check ID for primary region",
+      "Value": {
+        "Ref": "PrimaryHealthCheck"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-health-check"
+        }
+      }
+    },
+    "PrimaryKMSKeyId": {
+      "Description": "KMS Key ID for primary region encryption",
+      "Value": {
+        "Ref": "PrimaryKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-kms-key"
+        }
+      }
+    },
+    "PrimaryKMSKeyArn": {
+      "Description": "KMS Key ARN for primary region encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-kms-key-arn"
+        }
+      }
+    },
+    "S3ReplicationRoleArn": {
+      "Description": "S3 Cross-Region Replication Role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "S3ReplicationRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-s3-replication-role-arn"
+        }
+      }
+    }
+  }
+}
+```
+
+
+## File: lib/secondary-stack.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Secondary Region (DR) Stack for Multi-Region Disaster Recovery Solution",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness",
+      "MinLength": 1,
+      "MaxLength": 20,
+      "Default": "dev"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarms",
+      "Default": "alerts@example.com"
+    }
+  },
+  "Resources": {
+    "SecondaryVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.1.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": "Secondary"
+          }
+        ]
+      }
+    },
+    "SecondaryPublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "SecondaryVPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondaryPublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondarySecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for secondary region resources",
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionLogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "SecondaryTransactionLogBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowReplicationFromPrimary",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role-${EnvironmentSuffix}"
+                }
+              },
+              "Action": [
+                "s3:ReplicateObject",
+                "s3:ReplicateDelete",
+                "s3:ReplicateTags",
+                "s3:GetObjectVersionTagging",
+                "s3:ObjectOwnerOverrideToBucketOwner"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+              }
+            },
+            {
+              "Sid": "AllowReplicationRoleToListBucket",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role-${EnvironmentSuffix}"
+                }
+              },
+              "Action": [
+                "s3:List*",
+                "s3:GetBucketVersioning",
+                "s3:PutBucketVersioning"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SecondaryTransactionProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "transaction-processor-role-secondary-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecondaryTransactionProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/transactions-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${SecondaryTransactionLogBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecondaryTransactionQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecondaryTransactionProcessorRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Fn::Sub": "transactions-${EnvironmentSuffix}"
+            },
+            "BUCKET_NAME": {
+              "Ref": "SecondaryTransactionLogBucket"
+            },
+            "QUEUE_URL": {
+              "Ref": "SecondaryTransactionQueue"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\nsqs = boto3.client('sqs')\n\ntable_name = os.environ['TABLE_NAME']\nbucket_name = os.environ['BUCKET_NAME']\nqueue_url = os.environ['QUEUE_URL']\n\ndef handler(event, context):\n    try:\n        table = dynamodb.Table(table_name)\n        \n        # Parse transaction from event\n        body = json.loads(event.get('body', '{}'))\n        transaction_id = body.get('transactionId', str(time.time()))\n        amount = Decimal(str(body.get('amount', 0)))\n        \n        # Store in DynamoDB (Global Table replica)\n        timestamp = int(time.time() * 1000)\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': amount,\n                'status': 'processed',\n                'region': 'secondary'\n            }\n        )\n        \n        # Log to S3 (replica bucket)\n        log_key = f'transactions/{transaction_id}.json'\n        s3.put_object(\n            Bucket=bucket_name,\n            Key=log_key,\n            Body=json.dumps(body),\n            ServerSideEncryption='AES256'\n        )\n        \n        # Send to queue for further processing\n        sqs.send_message(\n            QueueUrl=queue_url,\n            MessageBody=json.dumps({\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'region': 'secondary'\n            })\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully in secondary region',\n                'transactionId': transaction_id,\n                'region': 'secondary'\n            }),\n            'headers': {\n                'Content-Type': 'application/json'\n            }\n        }\n    except Exception as e:\n        print(f'Error processing transaction: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)}),\n            'headers': {\n                'Content-Type': 'application/json'\n            }\n        }\n"
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "SecondarySecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SecondaryPrivateSubnet1"
+            },
+            {
+              "Ref": "SecondaryPrivateSubnet2"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "transaction-queue-secondary-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 300,
+        "MessageRetentionPeriod": 1209600,
+        "KmsMasterKeyId": "alias/aws/sqs",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-queue-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "transaction-api-secondary-${EnvironmentSuffix}"
+        },
+        "Description": "API Gateway for transaction processing in secondary region",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "SecondaryTransactionApiResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "SecondaryTransactionApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "transactions"
+      }
+    },
+    "SecondaryTransactionApiMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "ResourceId": {
+          "Ref": "SecondaryTransactionApiResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SecondaryTransactionProcessorFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "SecondaryTransactionApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "SecondaryTransactionApiMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "StageName": "prod"
+      }
+    },
+    "SecondaryLambdaApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecondaryTransactionProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SecondaryTransactionApi}/*/*/*"
+        }
+      }
+    },
+    "SecondaryHealthCheckAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "health-check-alarms-secondary-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Secondary Region Health Check Alarms",
+        "Subscription": [
+          {
+            "Protocol": "email",
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function has errors in secondary region",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecondaryTransactionProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondaryHealthCheckAlarmTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SecondaryVPCId": {
+      "Description": "Secondary VPC ID",
+      "Value": {
+        "Ref": "SecondaryVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryVPC-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryTransactionLogBucketName": {
+      "Description": "S3 Bucket for Transaction Logs (Secondary)",
+      "Value": {
+        "Ref": "SecondaryTransactionLogBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryTransactionLogBucket-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryTransactionProcessorFunctionArn": {
+      "Description": "Lambda Function ARN (Secondary)",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryTransactionProcessorFunction",
+          "Arn"
+        ]
+      }
+    },
+    "SecondaryTransactionQueueUrl": {
+      "Description": "SQS Queue URL (Secondary)",
+      "Value": {
+        "Ref": "SecondaryTransactionQueue"
+      }
+    },
+    "SecondaryApiEndpoint": {
+      "Description": "API Gateway Endpoint (Secondary)",
+      "Value": {
+        "Fn::Sub": "https://${SecondaryTransactionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/transactions"
+      }
+    }
+  }
+}
+
+```
