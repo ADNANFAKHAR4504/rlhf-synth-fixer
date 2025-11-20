@@ -1,6 +1,6 @@
 # Ideal Response - Terraform Payment Processing Infrastructure
 
-This document contains the ideal response for implementing a multi-environment payment processing infrastructure using Terraform. The solution provides a comprehensive, production-ready infrastructure that can be deployed across dev, staging, and prod environments with a single configuration file.
+This document contains the ideal response for implementing a multi-environment payment processing infrastructure using Terraform. The solution provides a comprehensive, production-ready infrastructure that can be deployed across dev, staging, and prod environments using a modular file structure with separate files for better organization and maintainability.
 
 ## Complete Terraform Configuration (main.tf)
 
@@ -538,10 +538,28 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     username = "paymentadmin"
     password = random_password.db_password.result
     engine   = "postgres"
+    port     = 5432
+    dbname   = "paymentdb"
+  })
+  
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# Separate secret version that includes the host after RDS is created
+resource "aws_secretsmanager_secret_version" "db_credentials_with_host" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = "paymentadmin"
+    password = random_password.db_password.result
+    engine   = "postgres"
     host     = aws_db_instance.main.address
     port     = 5432
     dbname   = "paymentdb"
   })
+  
+  depends_on = [aws_db_instance.main, aws_secretsmanager_secret_version.db_credentials]
 }
 
 # API Keys Secret
@@ -702,20 +720,6 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# ALB Listener (HTTPS - using self-signed cert for demo)
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-}
-
 # Self-signed certificate for demo (replace with real cert in production)
 resource "aws_acm_certificate" "main" {
   domain_name       = "${var.environment}.payment.example.com"
@@ -728,6 +732,37 @@ resource "aws_acm_certificate" "main" {
   tags = merge(local.common_tags, {
     Name = "${var.environment}-payment-cert"
   })
+}
+
+# ACM Certificate Validation
+# Note: This requires DNS validation records to be created in your DNS zone
+# For production deployment, ensure the DNS zone exists and is accessible
+resource "aws_acm_certificate_validation" "main" {
+  certificate_arn = aws_acm_certificate.main.arn
+  
+  timeouts {
+    create = "10m"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# ALB Listener (HTTPS - using validated certificate)
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+
+  depends_on = [aws_acm_certificate_validation.main]
 }
 
 # ==================== ECS FARGATE ====================
@@ -864,16 +899,16 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 # Lambda function for payment validation
 resource "aws_lambda_function" "payment_validation" {
-  filename         = var.lambda_source_path # PLACEHOLDER: Replace with actual Lambda code path
+  filename         = var.lambda_source_path # PLACEHOLDER: Replace with actual Lambda zip file path
   function_name    = "${var.environment}-payment-validation"
   role             = aws_iam_role.lambda_execution.arn
-  handler          = "index.handler"
+  handler          = "lambda.handler" # PLACEHOLDER: Update handler as needed
   source_code_hash = filebase64sha256(var.lambda_source_path)
-  runtime          = "python3.11" # Consistent runtime across environments
+  runtime          = "python3.11"
   timeout          = 30
   memory_size      = var.environment == "prod" ? 512 : 256
 
-  reserved_concurrent_executions = local.lambda_concurrency_map[var.environment]
+  reserved_concurrency = local.lambda_concurrency_map[var.environment]
 
   environment {
     variables = {
@@ -1256,7 +1291,7 @@ output "cloudwatch_dashboard_url" {
 ## Key Features of the Ideal Response
 
 ### 1. **Multi-Environment Architecture**
-- Single Terraform file supporting dev, staging, and prod environments
+- Modular Terraform structure with separate files for provider, variables, and main infrastructure supporting dev, staging, and prod environments
 - Environment-specific resource sizing and configurations
 - Region mapping: dev (eu-west-1), staging (us-west-2), prod (us-east-1)
 

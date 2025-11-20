@@ -378,7 +378,7 @@ describe("Terraform Payment Processing Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_lambda_function"\s+"payment_validation"/);
       expect(stackContent).toMatch(/function_name\s*=\s*"\$\{var\.environment\}-payment-validation"/);
       expect(stackContent).toMatch(/runtime\s*=\s*"python3\.11"/);
-      expect(stackContent).toMatch(/handler\s*=\s*"index\.handler"/);
+      expect(stackContent).toMatch(/handler\s*=\s*"lambda\.handler"/);
     });
 
     test("Lambda reserved concurrency uses environment mapping", () => {

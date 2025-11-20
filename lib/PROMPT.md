@@ -2,7 +2,7 @@
 
 We've got a financial services client who needs to set up identical payment processing infrastructure across three environments. They want everything to be secure and consistent between dev, staging, and prod.
 
-The main requirement is to build this using Terraform in a single main.tf file that can be deployed to any environment just by changing one variable. Pretty straightforward approach.
+The main requirement is to build this using Terraform in a well-organized, modular structure that can be deployed to any environment just by changing one variable. We'll use separate files for better maintainability and team collaboration.
 
 Here's how the environments map to regions:
 
@@ -12,13 +12,23 @@ prod -> us-east-1 (EnvironmentCode = 3)
 
 Here's what the client wants:
 
-The Terraform file needs to include:
+The Terraform solution needs to include:
 
 Basic terraform config
 
 Start with the usual Terraform version and AWS provider blocks. Include an environment variable that only accepts dev, staging, or prod. Also drop region_map and env_code_map directly in the file.
 
 The provider region will automatically pick from the region_map depending on whatever environment the user passes in when they run terraform apply -var="environment=prod".
+
+File organization
+
+Use a modular file structure for better maintainability:
+- provider.tf: Terraform version requirements, AWS provider configuration, region mapping, and backend configuration
+- variables.tf: All variable definitions with proper validation and default values
+- tap_stack.tf: Main infrastructure resources including VPC, ECS, RDS, Lambda, S3, monitoring, etc.
+- Environment-specific .tfvars files: dev.tfvars, staging.tfvars, prod.tfvars with environment-specific values
+
+This approach improves team collaboration, makes the code easier to navigate, and follows infrastructure-as-code best practices.
 
 Environment mappings
 
@@ -127,7 +137,7 @@ These are the things that absolutely have to be done this way:
 - VPC CIDR blocks follow exactly 10.{EnvironmentCode}.0.0/16
 - CloudWatch log groups retention set to 30 days
 - Secrets Manager rotation every 30 days
-- Everything in a single main.tf file - no modules, no multiple files, no external references
+- Organized across multiple files for maintainability: provider.tf (Terraform config), variables.tf (variable definitions), and tap_stack.tf (main infrastructure) - no external modules or references
 
 Details on how to build it
 
@@ -139,18 +149,18 @@ Use good Terraform stuff - locals, maps, dynamic blocks, for_each where it makes
 
 What we're looking for
 
-One complete main.tf file that covers everything we talked about. It has to:
+A complete Terraform solution organized across multiple files that covers everything we talked about. It has to:
 
 - Be ready to run after filling in just two placeholders: container image variable and Lambda code artifact path variable
 - Include variable blocks for environment, costcenter, dataclassification, container_image, lambda_source_path, and whatever else is needed
 - Include locals that define all the mappings: env to region, env to code, instance maps, task count map, CloudWatch thresholds, reserved concurrency map, and subnet numbering logic
 - Use data "aws_availability_zones" to pick 3 AZs
 - Use lookup() on maps to select values  
-- No external modules - everything in the single file
+- No external modules - everything organized across provider.tf, variables.tf, and tap_stack.tf files
 - Include outputs section with all the requested ARNs and endpoints
 - Add inline comments explaining production differences like Multi-AZ setup
 - At the end, include a commented terraform.tfvars example showing how to set values for environment, costcenter, etc.
 
-Just give us the complete Terraform file
+Just give us the complete Terraform solution
 
-Build the single main.tf file that covers everything we talked about. Valid Terraform HCL code with good comments explaining the security stuff. Don't summarize or break it into sections - just give us the full working Terraform file.
+Build the complete Terraform solution with proper file organization that covers everything we talked about. Valid Terraform HCL code with good comments explaining the security stuff. Organize into provider.tf (Terraform configuration), variables.tf (variable definitions), and tap_stack.tf (main infrastructure resources) for better maintainability.

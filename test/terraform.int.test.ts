@@ -302,7 +302,7 @@ describe('Terraform Payment Processing Infrastructure Integration Tests', () => 
     test('payment validation Lambda is configured', () => {
       expect(stackContent).toMatch(/resource\s+"aws_lambda_function"\s+"payment_validation"/);
       expect(stackContent).toMatch(/runtime\s*=\s*"python3\.11"/);
-      expect(stackContent).toMatch(/handler\s*=\s*"index\.handler"/);
+      expect(stackContent).toMatch(/handler\s*=\s*"lambda\.handler"/);
     });
 
     test('Lambda VPC configuration', () => {
