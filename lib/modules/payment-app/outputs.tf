@@ -78,3 +78,8 @@ output "dashboard_url" {
   description = "URL to CloudWatch Dashboard"
   value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
 }
+
+output "webacl_arn" {
+  description = "ARN of the WAF WebACL"
+  value       = aws_wafv2_web_acl.main.arn
+}

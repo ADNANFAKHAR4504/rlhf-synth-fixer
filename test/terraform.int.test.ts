@@ -384,13 +384,15 @@ describe('Application Health & Connectivity', () => {
 
   beforeAll(() => {
     outputs = getTerraformOutputs();
-    if (outputs.alb_dns_name) {
-      albUrl = `http://${outputs.alb_dns_name}`;
-    }
+    const albDns = outputs.alb_dns_name;
+    expect(albDns).toBeDefined();
+    expect(albDns).toBeTruthy();
+    albUrl = `http://${albDns}`;
   });
 
   test('Application Root returns 200 OK', async () => {
-    if (!albUrl) return;
+    expect(albUrl).toBeDefined();
+    expect(albUrl).toBeTruthy();
     console.log(`Testing URL: ${albUrl}`);
 
     // Simple retry logic for startup timing
@@ -410,7 +412,8 @@ describe('Application Health & Connectivity', () => {
   }, TEST_TIMEOUT);
 
   test('Health endpoint returns "healthy"', async () => {
-    if (!albUrl) return;
+    expect(albUrl).toBeDefined();
+    expect(albUrl).toBeTruthy();
     const response = await axios.get(`${albUrl}/health`);
     expect(response.status).toBe(200);
     expect(response.data).toMatch(/healthy/i);
@@ -505,14 +508,13 @@ describe('EC2 to RDS Connectivity', () => {
       expect(output).toMatch(/test_result|1/);
 
       console.log('✓ EC2 instance successfully connected to RDS and executed SELECT 1');
-      console.log(`  Output: ${output.substring(0, 200)}...`);
-    } catch (error: any) {
-      // If SSM is not available or instance doesn't have SSM agent, skip test
-      if (error.name === 'InvalidInstanceId' || error.message?.includes('SSM Agent')) {
-        console.warn('SSM not available on instance, skipping EC2->RDS connectivity test');
-        return;
+      if (output.length > 200) {
+        console.log(`  Output: ${output.substring(0, 200)}...`);
+      } else {
+        console.log(`  Output: ${output}`);
       }
-      throw error;
+    } catch (error: any) {
+      throw new Error(`EC2->RDS connectivity test failed: ${error.message}`);
     }
   }, TEST_TIMEOUT * 2);
 });
@@ -527,18 +529,15 @@ describe('WAF Rules Validation', () => {
 
   beforeAll(() => {
     outputs = getTerraformOutputs();
-    if (outputs.alb_dns_name) {
-      albUrl = `http://${outputs.alb_dns_name}`;
-    }
+    const albDns = outputs.alb_dns_name;
+    expect(albDns).toBeDefined();
+    expect(albDns).toBeTruthy();
+    albUrl = `http://${albDns}`;
   });
 
   test('WAF WebACL exists and has security rules configured', async () => {
     const webaclArn = outputs.webacl_arn || outputs.WebACLArn;
-    if (!webaclArn) {
-      console.warn('WAF WebACL ARN not found in outputs, skipping WAF tests');
-      return;
-    }
-
+    expect(webaclArn).toBeDefined();
     expect(webaclArn).toBeTruthy();
 
     // Parse WebACL ARN: arn:aws:wafv2:region:account:regional/webacl/name/id
@@ -573,10 +572,8 @@ describe('WAF Rules Validation', () => {
   }, TEST_TIMEOUT);
 
   test('WAF blocks SQL injection attempts in URI path', async () => {
-    if (!albUrl) {
-      console.warn('ALB URL not available, skipping WAF SQL injection test');
-      return;
-    }
+    expect(albUrl).toBeDefined();
+    expect(albUrl).toBeTruthy();
 
     const sqlInjectionPaths = [
       "/health?id=' OR '1'='1",
@@ -626,10 +623,8 @@ describe('WAF Rules Validation', () => {
   }, 60000);
 
   test('WAF blocks XSS (Cross-Site Scripting) attempts in URI', async () => {
-    if (!albUrl) {
-      console.warn('ALB URL not available, skipping WAF XSS test');
-      return;
-    }
+    expect(albUrl).toBeDefined();
+    expect(albUrl).toBeTruthy();
 
     const xssPaths = [
       '/health?input=<script>alert("XSS")</script>',

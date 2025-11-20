@@ -53,3 +53,8 @@ output "db_credentials_secret_arn" {
   description = "ARN of the Secrets Manager secret containing database credentials"
   value       = module.payment_app.db_credentials_secret_arn
 }
+
+output "webacl_arn" {
+  description = "ARN of the WAF WebACL"
+  value       = module.payment_app.webacl_arn
+}
