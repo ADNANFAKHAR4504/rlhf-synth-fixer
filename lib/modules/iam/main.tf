@@ -282,7 +282,7 @@ resource "aws_iam_role_policy" "eventbridge_policy" {
 # Security Group for VPC Endpoint (conditional based on VPC existence)
 resource "aws_security_group" "vpc_endpoint" {
   count = var.vpc_id != null ? 1 : 0
-  
+
   name_prefix = "${var.name_prefix}-vpc-endpoint-"
   vpc_id      = var.vpc_id
   description = "Security group for SQS VPC endpoint"

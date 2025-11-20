@@ -279,10 +279,4 @@ resource "aws_cloudwatch_dashboard" "payment_processing" {
       }
     ]
   })
-
-  tags = merge(var.common_tags, {
-    Name    = "${var.name_prefix}-dashboard"
-    Purpose = "CloudWatch dashboard for payment processing monitoring"
-    Service = "CloudWatch"
-  })
 }

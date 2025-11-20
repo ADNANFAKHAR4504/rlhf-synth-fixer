@@ -6,13 +6,13 @@
 
 # Transaction Validation Queue (FIFO)
 resource "aws_sqs_queue" "transaction_validation" {
-  name                       = var.transaction_validation_queue_name
-  fifo_queue                = true
+  name                        = var.transaction_validation_queue_name
+  fifo_queue                  = true
   content_based_deduplication = true
-  message_retention_seconds  = var.message_retention_seconds
-  visibility_timeout_seconds = var.visibility_timeout_seconds
-  max_message_size          = var.max_message_size
-  
+  message_retention_seconds   = var.message_retention_seconds
+  visibility_timeout_seconds  = var.visibility_timeout_seconds
+  max_message_size            = var.max_message_size
+
   # Server-side encryption with AWS managed keys
   sqs_managed_sse_enabled = true
 
@@ -23,39 +23,39 @@ resource "aws_sqs_queue" "transaction_validation" {
   })
 
   tags = merge(var.common_tags, {
-    Name        = var.transaction_validation_queue_name
-    Purpose     = "FIFO queue for transaction validation processing"
-    QueueType   = "Primary"
+    Name            = var.transaction_validation_queue_name
+    Purpose         = "FIFO queue for transaction validation processing"
+    QueueType       = "Primary"
     ProcessingStage = "Validation"
   })
 }
 
 # Transaction Validation Dead Letter Queue
 resource "aws_sqs_queue" "transaction_validation_dlq" {
-  name                       = var.transaction_validation_dlq_name
-  fifo_queue                = true
+  name                        = var.transaction_validation_dlq_name
+  fifo_queue                  = true
   content_based_deduplication = true
-  message_retention_seconds  = var.dlq_message_retention_seconds
-  
+  message_retention_seconds   = var.dlq_message_retention_seconds
+
   sqs_managed_sse_enabled = true
 
   tags = merge(var.common_tags, {
-    Name        = var.transaction_validation_dlq_name
-    Purpose     = "Dead letter queue for failed transaction validations"
-    QueueType   = "DLQ"
+    Name            = var.transaction_validation_dlq_name
+    Purpose         = "Dead letter queue for failed transaction validations"
+    QueueType       = "DLQ"
     ProcessingStage = "Validation"
   })
 }
 
 # Fraud Detection Queue (FIFO)
 resource "aws_sqs_queue" "fraud_detection" {
-  name                       = var.fraud_detection_queue_name
-  fifo_queue                = true
+  name                        = var.fraud_detection_queue_name
+  fifo_queue                  = true
   content_based_deduplication = true
-  message_retention_seconds  = var.message_retention_seconds
-  visibility_timeout_seconds = var.visibility_timeout_seconds
-  max_message_size          = var.max_message_size
-  
+  message_retention_seconds   = var.message_retention_seconds
+  visibility_timeout_seconds  = var.visibility_timeout_seconds
+  max_message_size            = var.max_message_size
+
   sqs_managed_sse_enabled = true
 
   redrive_policy = jsonencode({
@@ -64,39 +64,39 @@ resource "aws_sqs_queue" "fraud_detection" {
   })
 
   tags = merge(var.common_tags, {
-    Name        = var.fraud_detection_queue_name
-    Purpose     = "FIFO queue for fraud detection processing"
-    QueueType   = "Primary"
+    Name            = var.fraud_detection_queue_name
+    Purpose         = "FIFO queue for fraud detection processing"
+    QueueType       = "Primary"
     ProcessingStage = "FraudDetection"
   })
 }
 
 # Fraud Detection Dead Letter Queue
 resource "aws_sqs_queue" "fraud_detection_dlq" {
-  name                       = var.fraud_detection_dlq_name
-  fifo_queue                = true
+  name                        = var.fraud_detection_dlq_name
+  fifo_queue                  = true
   content_based_deduplication = true
-  message_retention_seconds  = var.dlq_message_retention_seconds
-  
+  message_retention_seconds   = var.dlq_message_retention_seconds
+
   sqs_managed_sse_enabled = true
 
   tags = merge(var.common_tags, {
-    Name        = var.fraud_detection_dlq_name
-    Purpose     = "Dead letter queue for failed fraud detection"
-    QueueType   = "DLQ"
+    Name            = var.fraud_detection_dlq_name
+    Purpose         = "Dead letter queue for failed fraud detection"
+    QueueType       = "DLQ"
     ProcessingStage = "FraudDetection"
   })
 }
 
 # Payment Notification Queue (FIFO)
 resource "aws_sqs_queue" "payment_notification" {
-  name                       = var.payment_notification_queue_name
-  fifo_queue                = true
+  name                        = var.payment_notification_queue_name
+  fifo_queue                  = true
   content_based_deduplication = true
-  message_retention_seconds  = var.message_retention_seconds
-  visibility_timeout_seconds = var.visibility_timeout_seconds
-  max_message_size          = var.max_message_size
-  
+  message_retention_seconds   = var.message_retention_seconds
+  visibility_timeout_seconds  = var.visibility_timeout_seconds
+  max_message_size            = var.max_message_size
+
   sqs_managed_sse_enabled = true
 
   redrive_policy = jsonencode({
@@ -105,26 +105,26 @@ resource "aws_sqs_queue" "payment_notification" {
   })
 
   tags = merge(var.common_tags, {
-    Name        = var.payment_notification_queue_name
-    Purpose     = "FIFO queue for payment notification processing"
-    QueueType   = "Primary"
+    Name            = var.payment_notification_queue_name
+    Purpose         = "FIFO queue for payment notification processing"
+    QueueType       = "Primary"
     ProcessingStage = "Notification"
   })
 }
 
 # Payment Notification Dead Letter Queue
 resource "aws_sqs_queue" "payment_notification_dlq" {
-  name                       = var.payment_notification_dlq_name
-  fifo_queue                = true
+  name                        = var.payment_notification_dlq_name
+  fifo_queue                  = true
   content_based_deduplication = true
-  message_retention_seconds  = var.dlq_message_retention_seconds
-  
+  message_retention_seconds   = var.dlq_message_retention_seconds
+
   sqs_managed_sse_enabled = true
 
   tags = merge(var.common_tags, {
-    Name        = var.payment_notification_dlq_name
-    Purpose     = "Dead letter queue for failed payment notifications"
-    QueueType   = "DLQ"
+    Name            = var.payment_notification_dlq_name
+    Purpose         = "Dead letter queue for failed payment notifications"
+    QueueType       = "DLQ"
     ProcessingStage = "Notification"
   })
 }
@@ -249,10 +249,10 @@ resource "aws_sqs_queue_policy" "payment_notification" {
 # ================================
 
 resource "aws_dynamodb_table" "transaction_state" {
-  name           = var.transaction_state_table_name
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "transaction_id"
-  range_key      = "merchant_id"
+  name         = var.transaction_state_table_name
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "transaction_id"
+  range_key    = "merchant_id"
 
   attribute {
     name = "transaction_id"
@@ -275,9 +275,10 @@ resource "aws_dynamodb_table" "transaction_state" {
   }
 
   global_secondary_index {
-    name     = "ProcessingStageIndex"
-    hash_key = "processing_stage"
-    range_key = "created_timestamp"
+    name            = "ProcessingStageIndex"
+    hash_key        = "processing_stage"
+    range_key       = "created_timestamp"
+    projection_type = "ALL"
   }
 
   # Enable point-in-time recovery

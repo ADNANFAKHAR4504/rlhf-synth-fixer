@@ -33,25 +33,25 @@ variable "payment_notification_dlq_name" {
 variable "message_retention_seconds" {
   description = "Message retention period in seconds"
   type        = number
-  default     = 604800  # 7 days
+  default     = 604800 # 7 days
 }
 
 variable "dlq_message_retention_seconds" {
   description = "Dead letter queue message retention period in seconds"
   type        = number
-  default     = 1209600  # 14 days
+  default     = 1209600 # 14 days
 }
 
 variable "visibility_timeout_seconds" {
   description = "Visibility timeout for SQS messages in seconds"
   type        = number
-  default     = 300  # 5 minutes
+  default     = 300 # 5 minutes
 }
 
 variable "max_message_size" {
   description = "Maximum message size in bytes"
   type        = number
-  default     = 262144  # 256KB
+  default     = 262144 # 256KB
 }
 
 variable "max_receive_count" {
