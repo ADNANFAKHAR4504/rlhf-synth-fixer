@@ -44,6 +44,9 @@ resource "aws_security_group" "eks_cluster" {
 
   lifecycle {
     create_before_destroy = true
+    # Allow security group to be replaced even if it has dependencies
+    # Dependencies (EKS cluster, node groups) will be destroyed first
+    ignore_changes = []
   }
 }
 
@@ -83,6 +86,9 @@ resource "aws_security_group" "eks_nodes" {
 
   lifecycle {
     create_before_destroy = true
+    # Allow security group to be replaced even if it has dependencies
+    # Dependencies (node groups, launch templates) will be destroyed first
+    ignore_changes = []
   }
 }
 
@@ -96,6 +102,10 @@ resource "aws_security_group_rule" "cluster_ingress_from_nodes" {
   to_port                  = each.value.to_port
   protocol                 = each.value.protocol
   source_security_group_id = aws_security_group.eks_nodes.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group_rule" "cluster_egress_to_nodes" {
@@ -108,6 +118,10 @@ resource "aws_security_group_rule" "cluster_egress_to_nodes" {
   to_port                  = each.value.to_port
   protocol                 = each.value.protocol
   source_security_group_id = aws_security_group.eks_nodes.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group_rule" "nodes_ingress_from_cluster" {
@@ -120,6 +134,10 @@ resource "aws_security_group_rule" "nodes_ingress_from_cluster" {
   to_port                  = each.value.to_port
   protocol                 = each.value.protocol
   source_security_group_id = aws_security_group.eks_cluster.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group_rule" "nodes_internal" {
@@ -132,6 +150,10 @@ resource "aws_security_group_rule" "nodes_internal" {
   to_port           = each.value.to_port
   protocol          = each.value.protocol
   self              = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group_rule" "nodes_dns_tcp" {
@@ -142,6 +164,10 @@ resource "aws_security_group_rule" "nodes_dns_tcp" {
   to_port           = 53
   protocol          = "tcp"
   self              = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group_rule" "nodes_dns_udp" {
@@ -152,5 +178,9 @@ resource "aws_security_group_rule" "nodes_dns_udp" {
   to_port           = 53
   protocol          = "udp"
   self              = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
