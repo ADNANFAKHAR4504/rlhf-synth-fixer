@@ -81,7 +81,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
     }
 
     expiration {
-      days = var.environment == "prod" ? 365 : 90
+      days = var.environment == "prod" ? 365 : 180
     }
 
     noncurrent_version_transition {
@@ -121,6 +121,22 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
       }
     ]
   })

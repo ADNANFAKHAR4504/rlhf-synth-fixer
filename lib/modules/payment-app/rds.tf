@@ -37,8 +37,8 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
   name = "db-subnet-group-${var.pr_number}"
-  # Use local fallback list so module still plans if private tag filtering returns empty
-  # (falls back to public subnets as a last resort)
+  # Use local fallback list so module still plans if private tag filtering
+  # returns empty (falls back to public subnets as a last resort)
   subnet_ids = local.private_subnet_ids
 
   tags = {
@@ -46,6 +46,10 @@ resource "aws_db_subnet_group" "main" {
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
