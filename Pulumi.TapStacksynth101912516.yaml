@@ -1,0 +1,5 @@
+encryptionsalt: v1:xKAkw729nxI=:v1:WYqKL1gR3QyKcRdV:k6J5wsSRBrHb9PQeVvN2LUkmQuH9lA==
+config:
+  aws:defaultTags: '{"tags":{"Environment":"synth101912516","Repository":"synth-101912516","Author":"Arpit Patidar","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-11-20T09:48:53Z","ManagedBy":"pulumi"}}'
+  TapStack:environmentSuffix: synth101912516
+  aws:region: us-west-2
