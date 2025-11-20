@@ -94,6 +94,7 @@ resource "aws_iam_role_policy" "ec2_s3_access" {
         Action = [
           "s3:PutObject",
           "s3:GetObject",
+          "s3:DeleteObject",
           "s3:ListBucket"
         ]
         Resource = [

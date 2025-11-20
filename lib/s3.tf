@@ -15,6 +15,8 @@ resource "aws_s3_bucket_versioning" "terraform_state_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
+
+  depends_on = [aws_s3_bucket.terraform_state]
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state_encryption" {
@@ -25,6 +27,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state_e
       sse_algorithm = "AES256"
     }
   }
+
+  depends_on = [aws_s3_bucket.terraform_state]
 }
 
 resource "aws_s3_bucket_public_access_block" "terraform_state_public_access" {
@@ -33,4 +37,6 @@ resource "aws_s3_bucket_public_access_block" "terraform_state_public_access" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+
+  depends_on = [aws_s3_bucket.terraform_state]
 }

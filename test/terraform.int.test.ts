@@ -51,7 +51,6 @@ interface DeploymentOutputs {
   resource_suffix?: string;
 }
 
-const outputsPath = "terraform-outputs.json";
 const alternateOutputPaths = [
   "flat-outputs.json",
   "cfn-outputs/flat-outputs.json",
@@ -934,6 +933,10 @@ echo "Complete EC2 → RDS workflow test completed successfully"
 #!/bin/bash
 
 echo "=== Testing EC2 → S3 Workflow with IAM Role ==="
+
+# Wait a moment for IAM policies to fully propagate
+echo "Waiting for IAM policies to propagate..."
+sleep 10
 
 # Create test data file
 TEST_FILE="/tmp/integration-test-$(date +%s).txt"
