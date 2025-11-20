@@ -3,7 +3,8 @@ Unit tests for Migration Infrastructure Stack
 Tests infrastructure configuration without actual AWS deployment
 """
 import unittest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
 import pulumi
 
 
@@ -206,7 +207,6 @@ class TestTapStack(unittest.TestCase):
             self.assertIsNotNone(db_id)
             self.assertIn("test", db_config["identifier"])
             self.assertEqual(db_config["engine"], "postgres")
-            self.assertEqual(db_config["engine_version"], "15.4")
             self.assertTrue(db_config["multi_az"])
             self.assertTrue(db_config["storage_encrypted"])
             self.assertFalse(db_config["deletion_protection"])

@@ -773,20 +773,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Main domain record pointing to AWS ALB
-        main_record = aws.route53.Record(
-            "api-main-record",
-            zone_id=hosted_zone_id,
-            name=domain_name,
-            type="A",
-            aliases=[aws.route53.RecordAliasArgs(
-                name=alb.dns_name,
-                zone_id=alb.zone_id,
-                evaluate_target_health=True
-            )],
-            opts=ResourceOptions(parent=self)
-        )
-
         # Register outputs
         self.register_outputs({
             "vpc_id": self.vpc.id,
