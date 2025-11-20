@@ -16,6 +16,26 @@
                 "prod"
             ],
             "Default": "dev"
+        },
+        "Owner": {
+            "Type": "String",
+            "Description": "Owner of the resources for cost allocation",
+            "Default": "DevOps"
+        },
+        "Project": {
+            "Type": "String",
+            "Description": "Project name for cost allocation",
+            "Default": "Infrastructure"
+        }
+    },
+    "Conditions": {
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
         }
     },
     "Resources": {
@@ -37,6 +57,18 @@
                         "Value": {
                             "Ref": "Environment"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -49,6 +81,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -87,6 +131,18 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-public-subnet-1-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -113,6 +169,18 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-public-subnet-2-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -137,6 +205,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -163,6 +243,18 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-private-subnet-2-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -178,6 +270,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -218,6 +322,242 @@
                 }
             }
         },
+        "NATGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat-eip-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "IsProduction",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat-eip-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat-gateway-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "IsProduction",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-nat-gateway-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-rt-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway1"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsProduction",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-rt-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "IsProduction",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway2"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Fn::If": [
+                        "IsProduction",
+                        {
+                            "Ref": "PrivateRouteTable2"
+                        },
+                        {
+                            "Ref": "PrivateRouteTable1"
+                        }
+                    ]
+                }
+            }
+        },
         "DatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -228,8 +568,8 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
+                        "FromPort": 5432,
+                        "ToPort": 5432,
                         "SourceSecurityGroupId": {
                             "Ref": "ApplicationSecurityGroup"
                         }
@@ -240,6 +580,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-db-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -272,6 +624,18 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-app-sg-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -294,15 +658,28 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-db-subnet-group-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
         },
         "AuroraCluster": {
             "Type": "AWS::RDS::DBCluster",
+            "DeletionPolicy": "Delete",
             "Properties": {
-                "Engine": "aurora-mysql",
-                "EngineVersion": "8.0.mysql_aurora.3.04.0",
+                "Engine": "aurora-postgresql",
+                "EngineVersion": "15.4",
                 "MasterUsername": "admin",
                 "MasterUserPassword": {
                     "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
@@ -320,9 +697,7 @@
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
                 "EnableCloudwatchLogsExports": [
-                    "error",
-                    "general",
-                    "slowquery"
+                    "postgresql"
                 ],
                 "StorageEncrypted": true,
                 "Tags": [
@@ -331,24 +706,49 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-aurora-cluster-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
         },
         "AuroraInstance1": {
             "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "DBInstanceClass": "db.t3.medium",
                 "DBClusterIdentifier": {
                     "Ref": "AuroraCluster"
                 },
-                "Engine": "aurora-mysql",
+                "Engine": "aurora-postgresql",
                 "PubliclyAccessible": false,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-aurora-instance-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -417,6 +817,18 @@
                         "Value": {
                             "Ref": "Environment"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -460,6 +872,18 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-s3-bucket-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -481,6 +905,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-ecs-cluster-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -508,6 +944,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-ecs-execution-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -569,6 +1017,18 @@
                         "Value": {
                             "Fn::Sub": "${Environment}-ecs-task-role-${EnvironmentSuffix}"
                         }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
                     }
                 ]
             }
@@ -587,6 +1047,18 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-sns-topic-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
                         }
                     }
                 ]
@@ -609,6 +1081,146 @@
                     "Fn::Sub": "/aws/ecs/${Environment}-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30
+            }
+        },
+        "TransitGateway": {
+            "Type": "AWS::EC2::TransitGateway",
+            "Condition": "IsProduction",
+            "Properties": {
+                "AmazonSideAsn": 64512,
+                "Description": {
+                    "Fn::Sub": "${Environment} Transit Gateway for ${EnvironmentSuffix}"
+                },
+                "DefaultRouteTableAssociation": "enable",
+                "DefaultRouteTablePropagation": "enable",
+                "DnsSupport": "enable",
+                "VpnEcmpSupport": "enable",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-tgw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransitGatewayAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "Condition": "IsProduction",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransitGatewayRouteTable": {
+            "Type": "AWS::EC2::TransitGatewayRouteTable",
+            "Condition": "IsProduction",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-tgw-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransitGatewayRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Condition": "IsProduction",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "TransitGatewayAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "TransitGatewayRouteTable"
+                }
+            }
+        },
+        "TransitGatewayRouteTablePropagation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Condition": "IsProduction",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "TransitGatewayAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "TransitGatewayRouteTable"
+                }
+            }
+        },
+        "TransitGatewayRoute": {
+            "Type": "AWS::EC2::TransitGatewayRoute",
+            "Condition": "IsProduction",
+            "Properties": {
+                "TransitGatewayRouteTableId": {
+                    "Ref": "TransitGatewayRouteTable"
+                },
+                "DestinationCidrBlock": "10.0.0.0/16",
+                "TransitGatewayAttachmentId": {
+                    "Ref": "TransitGatewayAttachment"
+                }
             }
         }
     },
@@ -705,6 +1317,20 @@
                 }
             }
         },
+        "DynamoDBStreamArn": {
+            "Description": "DynamoDB stream ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DynamoDBTable",
+                    "StreamArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-dynamodb-stream-arn"
+                }
+            }
+        },
         "S3BucketName": {
             "Description": "S3 bucket name",
             "Value": {
@@ -757,6 +1383,30 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${EnvironmentSuffix}-app-sg-id"
+                }
+            }
+        },
+        "TransitGatewayId": {
+            "Description": "Transit Gateway ID",
+            "Condition": "IsProduction",
+            "Value": {
+                "Ref": "TransitGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-tgw-id"
+                }
+            }
+        },
+        "TransitGatewayRouteTableId": {
+            "Description": "Transit Gateway Route Table ID",
+            "Condition": "IsProduction",
+            "Value": {
+                "Ref": "TransitGatewayRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-tgw-rt-id"
                 }
             }
         }
