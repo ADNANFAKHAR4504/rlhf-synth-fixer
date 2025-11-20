@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-20T02:04:46+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "g6s0n1",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "Fargate",
+    "ECR",
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "ALB",
+    "Secrets Manager"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
