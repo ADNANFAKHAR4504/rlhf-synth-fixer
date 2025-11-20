@@ -14,7 +14,7 @@
     "VPC",
     "EC2",
     "ECS",
-    "RDS", 
+    "RDS",
     "ALB",
     "Lambda",
     "S3",
@@ -33,5 +33,11 @@
     "deploy_env": "dev.tfvars"
   },
   "training_quality": 9,
-  "background": "Financial services payment processing infrastructure requiring identical, secure deployments across dev, staging, and production environments with comprehensive monitoring, secrets management, and multi-AZ high availability."
+  "background": "Financial services payment processing infrastructure requiring identical, secure deployments across dev, staging, and production environments with comprehensive monitoring, secrets management, and multi-AZ high availability.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
