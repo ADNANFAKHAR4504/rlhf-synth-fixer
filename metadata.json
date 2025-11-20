@@ -20,5 +20,5 @@
     "CloudWatch Logs"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 10
 }
