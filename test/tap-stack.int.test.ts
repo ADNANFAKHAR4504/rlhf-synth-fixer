@@ -1,25 +1,29 @@
 // Aurora Global Database Integration Tests
-import fs from 'fs';
-import {
-  RDSClient,
-  DescribeGlobalClustersCommand,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  SNSClient,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  DescribeGlobalClustersCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import {
   GetTopicAttributesCommand,
+  SNSClient,
 } from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 // Configuration - Read from CFN outputs after deployment
 let outputs: any = {};
@@ -38,6 +42,7 @@ const rdsClient = new RDSClient({ region: primaryRegion });
 const ec2Client = new EC2Client({ region: primaryRegion });
 const cloudwatchClient = new CloudWatchClient({ region: primaryRegion });
 const snsClient = new SNSClient({ region: primaryRegion });
+const secretsManagerClient = new SecretsManagerClient({ region: primaryRegion });
 
 describe('Aurora Global Database - Integration Tests', () => {
   const skipIfNoOutputs = outputs && Object.keys(outputs).length > 0 ? describe : describe.skip;
@@ -408,6 +413,41 @@ describe('Aurora Global Database - Integration Tests', () => {
 
       expect(response.Attributes).toBeDefined();
       expect(response.Attributes!.TopicArn).toBe(outputs.AlarmTopicArn);
+    }, 30000);
+  });
+
+  skipIfNoOutputs('Secrets Manager Configuration', () => {
+    test('should have DatabaseSecret in Secrets Manager', async () => {
+      const secretName = `aurora-db-password-${environmentSuffix}`;
+
+      const command = new DescribeSecretCommand({
+        SecretId: secretName,
+      });
+
+      const response = await secretsManagerClient.send(command);
+
+      expect(response.Name).toBe(secretName);
+      expect(response.ARN).toBeDefined();
+      expect(response.Description).toContain('Aurora database master password');
+    }, 30000);
+
+    test('DatabaseSecret should have correct tags', async () => {
+      const secretName = `aurora-db-password-${environmentSuffix}`;
+
+      const command = new DescribeSecretCommand({
+        SecretId: secretName,
+      });
+
+      const response = await secretsManagerClient.send(command);
+
+      expect(response.Tags).toBeDefined();
+      const nameTag = response.Tags?.find(tag => tag.Key === 'Name');
+      const envTag = response.Tags?.find(tag => tag.Key === 'Environment');
+
+      expect(nameTag).toBeDefined();
+      expect(nameTag?.Value).toBe(secretName);
+      expect(envTag).toBeDefined();
+      expect(envTag?.Value).toBe(environmentSuffix);
     }, 30000);
   });
 

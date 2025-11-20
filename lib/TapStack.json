@@ -25,21 +25,6 @@
       "MaxLength": "16",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     },
-    "MasterUserPassword": {
-      "Type": "String",
-      "Description": "Master password for the database (min 8 characters)",
-      "NoEcho": true,
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]*$",
-      "ConstraintDescription": "Must contain only alphanumeric and special characters"
-    },
-    "SecondaryRegion": {
-      "Type": "String",
-      "Default": "us-west-2",
-      "Description": "Secondary region for disaster recovery",
-      "AllowedValues": ["us-west-2", "us-west-1", "eu-west-1", "eu-central-1", "ap-southeast-1", "ap-northeast-1"]
-    },
     "DBInstanceClass": {
       "Type": "String",
       "Default": "db.r6g.large",
@@ -75,40 +60,80 @@
     "EnableEnhancedMonitoring": {
       "Type": "String",
       "Default": "true",
-      "AllowedValues": ["true", "false"],
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
       "Description": "Enable enhanced monitoring for the database instances"
     },
     "MonitoringInterval": {
       "Type": "Number",
       "Default": 60,
-      "AllowedValues": [0, 1, 5, 10, 15, 30, 60],
+      "AllowedValues": [
+        0,
+        1,
+        5,
+        10,
+        15,
+        30,
+        60
+      ],
       "Description": "Interval in seconds for enhanced monitoring (0 to disable)"
     },
     "EnablePerformanceInsights": {
       "Type": "String",
       "Default": "true",
-      "AllowedValues": ["true", "false"],
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
       "Description": "Enable Performance Insights for the database instances"
     },
     "PerformanceInsightsRetention": {
       "Type": "Number",
       "Default": 7,
-      "AllowedValues": [7, 731],
+      "AllowedValues": [
+        7,
+        731
+      ],
       "Description": "Number of days to retain Performance Insights data (7 or 731)"
     },
     "AlarmEmail": {
       "Type": "String",
-      "Description": "Email address for CloudWatch alarm notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
+      "Default": "",
+      "Description": "Email address for CloudWatch alarm notifications (optional)",
+      "AllowedPattern": "^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be empty or a valid email address"
     }
   },
   "Conditions": {
     "EnableEnhancedMonitoringCondition": {
-      "Fn::Equals": [{"Ref": "EnableEnhancedMonitoring"}, "true"]
+      "Fn::Equals": [
+        {
+          "Ref": "EnableEnhancedMonitoring"
+        },
+        "true"
+      ]
     },
     "EnablePerformanceInsightsCondition": {
-      "Fn::Equals": [{"Ref": "EnablePerformanceInsights"}, "true"]
+      "Fn::Equals": [
+        {
+          "Ref": "EnablePerformanceInsights"
+        },
+        "true"
+      ]
+    },
+    "HasAlarmEmail": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AlarmEmail"
+            },
+            ""
+          ]
+        }
+      ]
     }
   },
   "Resources": {
@@ -121,11 +146,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-vpc-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-vpc-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           },
           {
             "Key": "Purpose",
@@ -137,18 +166,31 @@
     "PrimarySubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "PrimaryVPC"},
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-subnet-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -156,18 +198,31 @@
     "PrimarySubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "PrimaryVPC"},
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-subnet-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -175,18 +230,31 @@
     "PrimarySubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "PrimaryVPC"},
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-subnet-3-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -194,21 +262,33 @@
     "PrimaryDBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "aurora-global-primary-subnet-group-${EnvironmentSuffix}"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-global-primary-subnet-group-${EnvironmentSuffix}"
+        },
         "DBSubnetGroupDescription": "Subnet group for Aurora Global Database primary cluster",
         "SubnetIds": [
-          {"Ref": "PrimarySubnet1"},
-          {"Ref": "PrimarySubnet2"},
-          {"Ref": "PrimarySubnet3"}
+          {
+            "Ref": "PrimarySubnet1"
+          },
+          {
+            "Ref": "PrimarySubnet2"
+          },
+          {
+            "Ref": "PrimarySubnet3"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-subnet-group-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-subnet-group-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -216,9 +296,13 @@
     "PrimarySecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "aurora-global-primary-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "aurora-global-primary-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for Aurora Global Database primary cluster",
-        "VpcId": {"Ref": "PrimaryVPC"},
+        "VpcId": {
+          "Ref": "PrimaryVPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -238,11 +322,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-sg-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -251,7 +339,9 @@
       "Type": "AWS::IAM::Role",
       "Condition": "EnableEnhancedMonitoringCondition",
       "Properties": {
-        "RoleName": {"Fn::Sub": "aurora-global-enhanced-monitoring-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "aurora-global-enhanced-monitoring-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -270,11 +360,46 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-enhanced-monitoring-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-enhanced-monitoring-role-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-db-password-${EnvironmentSuffix}"
+        },
+        "Description": "Aurora database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${MasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-db-password-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -282,7 +407,9 @@
     "GlobalCluster": {
       "Type": "AWS::RDS::GlobalCluster",
       "Properties": {
-        "GlobalClusterIdentifier": {"Fn::Sub": "aurora-global-cluster-${EnvironmentSuffix}"},
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "aurora-global-cluster-${EnvironmentSuffix}"
+        },
         "Engine": "aurora-postgresql",
         "EngineVersion": "14.6",
         "DeletionProtection": false,
@@ -292,7 +419,9 @@
     "PrimaryDBClusterParameterGroup": {
       "Type": "AWS::RDS::DBClusterParameterGroup",
       "Properties": {
-        "DBClusterParameterGroupName": {"Fn::Sub": "aurora-global-primary-cluster-params-${EnvironmentSuffix}"},
+        "DBClusterParameterGroupName": {
+          "Fn::Sub": "aurora-global-primary-cluster-params-${EnvironmentSuffix}"
+        },
         "Description": "Parameter group for Aurora Global Database primary cluster",
         "Family": "aurora-postgresql14",
         "Parameters": {
@@ -304,11 +433,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-cluster-params-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-cluster-params-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -316,7 +449,9 @@
     "PrimaryDBParameterGroup": {
       "Type": "AWS::RDS::DBParameterGroup",
       "Properties": {
-        "DBParameterGroupName": {"Fn::Sub": "aurora-global-primary-instance-params-${EnvironmentSuffix}"},
+        "DBParameterGroupName": {
+          "Fn::Sub": "aurora-global-primary-instance-params-${EnvironmentSuffix}"
+        },
         "Description": "Parameter group for Aurora Global Database primary instances",
         "Family": "aurora-postgresql14",
         "Parameters": {
@@ -326,44 +461,80 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-instance-params-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-instance-params-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
     "PrimaryDBCluster": {
       "Type": "AWS::RDS::DBCluster",
-      "DependsOn": "GlobalCluster",
+      "DependsOn": [
+        "DatabaseSecret"
+      ],
       "Properties": {
-        "DBClusterIdentifier": {"Fn::Sub": "aurora-global-primary-cluster-${EnvironmentSuffix}"},
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-global-primary-cluster-${EnvironmentSuffix}"
+        },
         "Engine": "aurora-postgresql",
         "EngineVersion": "14.6",
-        "GlobalClusterIdentifier": {"Ref": "GlobalCluster"},
-        "MasterUsername": {"Ref": "MasterUsername"},
-        "MasterUserPassword": {"Ref": "MasterUserPassword"},
-        "DatabaseName": {"Ref": "DatabaseName"},
-        "DBSubnetGroupName": {"Ref": "PrimaryDBSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "PrimarySecurityGroup"}],
-        "DBClusterParameterGroupName": {"Ref": "PrimaryDBClusterParameterGroup"},
-        "BackupRetentionPeriod": {"Ref": "BackupRetentionPeriod"},
-        "PreferredBackupWindow": {"Ref": "PreferredBackupWindow"},
-        "PreferredMaintenanceWindow": {"Ref": "PreferredMaintenanceWindow"},
+        "GlobalClusterIdentifier": {
+          "Ref": "GlobalCluster"
+        },
+        "MasterUsername": {
+          "Ref": "MasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:aurora-db-password-${EnvironmentSuffix}:SecretString:password}}"
+        },
+        "DatabaseName": {
+          "Ref": "DatabaseName"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "PrimaryDBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "PrimarySecurityGroup"
+          }
+        ],
+        "DBClusterParameterGroupName": {
+          "Ref": "PrimaryDBClusterParameterGroup"
+        },
+        "BackupRetentionPeriod": {
+          "Ref": "BackupRetentionPeriod"
+        },
+        "PreferredBackupWindow": {
+          "Ref": "PreferredBackupWindow"
+        },
+        "PreferredMaintenanceWindow": {
+          "Ref": "PreferredMaintenanceWindow"
+        },
         "StorageEncrypted": true,
-        "EnableCloudwatchLogsExports": ["postgresql"],
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
         "DeletionProtection": false,
         "EnableIAMDatabaseAuthentication": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-cluster-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-cluster-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           },
           {
             "Key": "Role",
@@ -375,37 +546,64 @@
     "PrimaryDBInstance1": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "aurora-global-primary-instance-1-${EnvironmentSuffix}"},
-        "DBClusterIdentifier": {"Ref": "PrimaryDBCluster"},
-        "DBInstanceClass": {"Ref": "DBInstanceClass"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-global-primary-instance-1-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "PrimaryDBCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
         "Engine": "aurora-postgresql",
-        "DBParameterGroupName": {"Ref": "PrimaryDBParameterGroup"},
+        "DBParameterGroupName": {
+          "Ref": "PrimaryDBParameterGroup"
+        },
         "PubliclyAccessible": false,
-        "EnablePerformanceInsights": {"Ref": "EnablePerformanceInsights"},
+        "EnablePerformanceInsights": {
+          "Ref": "EnablePerformanceInsights"
+        },
         "PerformanceInsightsRetentionPeriod": {
           "Fn::If": [
             "EnablePerformanceInsightsCondition",
-            {"Ref": "PerformanceInsightsRetention"},
-            {"Ref": "AWS::NoValue"}
+            {
+              "Ref": "PerformanceInsightsRetention"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
           ]
         },
-        "MonitoringInterval": {"Ref": "MonitoringInterval"},
+        "MonitoringInterval": {
+          "Ref": "MonitoringInterval"
+        },
         "MonitoringRoleArn": {
           "Fn::If": [
             "EnableEnhancedMonitoringCondition",
-            {"Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"]},
-            {"Ref": "AWS::NoValue"}
+            {
+              "Fn::GetAtt": [
+                "EnhancedMonitoringRole",
+                "Arn"
+              ]
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
           ]
         },
         "PromotionTier": 1,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-instance-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-instance-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           },
           {
             "Key": "Role",
@@ -417,37 +615,64 @@
     "PrimaryDBInstance2": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "aurora-global-primary-instance-2-${EnvironmentSuffix}"},
-        "DBClusterIdentifier": {"Ref": "PrimaryDBCluster"},
-        "DBInstanceClass": {"Ref": "DBInstanceClass"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-global-primary-instance-2-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "PrimaryDBCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
         "Engine": "aurora-postgresql",
-        "DBParameterGroupName": {"Ref": "PrimaryDBParameterGroup"},
+        "DBParameterGroupName": {
+          "Ref": "PrimaryDBParameterGroup"
+        },
         "PubliclyAccessible": false,
-        "EnablePerformanceInsights": {"Ref": "EnablePerformanceInsights"},
+        "EnablePerformanceInsights": {
+          "Ref": "EnablePerformanceInsights"
+        },
         "PerformanceInsightsRetentionPeriod": {
           "Fn::If": [
             "EnablePerformanceInsightsCondition",
-            {"Ref": "PerformanceInsightsRetention"},
-            {"Ref": "AWS::NoValue"}
+            {
+              "Ref": "PerformanceInsightsRetention"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
           ]
         },
-        "MonitoringInterval": {"Ref": "MonitoringInterval"},
+        "MonitoringInterval": {
+          "Ref": "MonitoringInterval"
+        },
         "MonitoringRoleArn": {
           "Fn::If": [
             "EnableEnhancedMonitoringCondition",
-            {"Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"]},
-            {"Ref": "AWS::NoValue"}
+            {
+              "Fn::GetAtt": [
+                "EnhancedMonitoringRole",
+                "Arn"
+              ]
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
           ]
         },
         "PromotionTier": 2,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-primary-instance-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-primary-instance-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           },
           {
             "Key": "Role",
@@ -459,22 +684,38 @@
     "AlarmTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "aurora-global-alarms-${EnvironmentSuffix}"},
+        "TopicName": {
+          "Fn::Sub": "aurora-global-alarms-${EnvironmentSuffix}"
+        },
         "DisplayName": "Aurora Global Database Alarms",
-        "Subscription": [
-          {
-            "Endpoint": {"Ref": "AlarmEmail"},
-            "Protocol": "email"
-          }
-        ],
+        "Subscription": {
+          "Fn::If": [
+            "HasAlarmEmail",
+            [
+              {
+                "Endpoint": {
+                  "Ref": "AlarmEmail"
+                },
+                "Protocol": "email"
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-global-alarms-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-global-alarms-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentSuffix"}
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
@@ -482,7 +723,9 @@
     "PrimaryCPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "aurora-global-primary-cpu-high-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "aurora-global-primary-cpu-high-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when primary cluster CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",
@@ -494,17 +737,25 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "PrimaryDBCluster"}
+            "Value": {
+              "Ref": "PrimaryDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "AlarmTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     },
     "PrimaryConnectionsAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "aurora-global-primary-connections-high-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "aurora-global-primary-connections-high-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when primary cluster connections exceed 80% of max",
         "MetricName": "DatabaseConnections",
         "Namespace": "AWS/RDS",
@@ -516,17 +767,25 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "PrimaryDBCluster"}
+            "Value": {
+              "Ref": "PrimaryDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "AlarmTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     },
     "PrimaryReplicationLagAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "aurora-global-replication-lag-high-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "aurora-global-replication-lag-high-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when replication lag exceeds 1000ms",
         "MetricName": "AuroraGlobalDBReplicationLag",
         "Namespace": "AWS/RDS",
@@ -538,17 +797,25 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "PrimaryDBCluster"}
+            "Value": {
+              "Ref": "PrimaryDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "AlarmTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     },
     "PrimaryStorageAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "aurora-global-primary-storage-low-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "aurora-global-primary-storage-low-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when free storage space is below 20%",
         "MetricName": "FreeLocalStorage",
         "Namespace": "AWS/RDS",
@@ -560,10 +827,16 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "PrimaryDBCluster"}
+            "Value": {
+              "Ref": "PrimaryDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "AlarmTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "AlarmTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     }
@@ -571,66 +844,114 @@
   "Outputs": {
     "GlobalClusterIdentifier": {
       "Description": "Identifier of the Aurora Global Database cluster",
-      "Value": {"Ref": "GlobalCluster"},
+      "Value": {
+        "Ref": "GlobalCluster"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-cluster-id-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-cluster-id-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryClusterIdentifier": {
       "Description": "Identifier of the primary Aurora cluster",
-      "Value": {"Ref": "PrimaryDBCluster"},
+      "Value": {
+        "Ref": "PrimaryDBCluster"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-primary-cluster-id-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-primary-cluster-id-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryClusterEndpoint": {
       "Description": "Writer endpoint for the primary Aurora cluster",
-      "Value": {"Fn::GetAtt": ["PrimaryDBCluster", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryDBCluster",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-primary-endpoint-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-primary-endpoint-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryClusterReaderEndpoint": {
       "Description": "Reader endpoint for the primary Aurora cluster",
-      "Value": {"Fn::GetAtt": ["PrimaryDBCluster", "ReadEndpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryDBCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-primary-reader-endpoint-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-primary-reader-endpoint-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryClusterPort": {
       "Description": "Port number for the primary Aurora cluster",
-      "Value": {"Fn::GetAtt": ["PrimaryDBCluster", "Endpoint.Port"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryDBCluster",
+          "Endpoint.Port"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-primary-port-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-primary-port-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryVPCId": {
       "Description": "VPC ID for the primary region",
-      "Value": {"Ref": "PrimaryVPC"},
+      "Value": {
+        "Ref": "PrimaryVPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-primary-vpc-id-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-primary-vpc-id-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimarySecurityGroupId": {
       "Description": "Security Group ID for the primary Aurora cluster",
-      "Value": {"Ref": "PrimarySecurityGroup"},
+      "Value": {
+        "Ref": "PrimarySecurityGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-primary-sg-id-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-primary-sg-id-${EnvironmentSuffix}"
+        }
       }
     },
     "AlarmTopicArn": {
       "Description": "ARN of the SNS topic for CloudWatch alarms",
-      "Value": {"Ref": "AlarmTopic"},
+      "Value": {
+        "Ref": "AlarmTopic"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-alarm-topic-arn-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-alarm-topic-arn-${EnvironmentSuffix}"
+        }
       }
     },
     "EnhancedMonitoringRoleArn": {
       "Description": "ARN of the enhanced monitoring IAM role",
       "Condition": "EnableEnhancedMonitoringCondition",
-      "Value": {"Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "EnhancedMonitoringRole",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "aurora-global-monitoring-role-arn-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "aurora-global-monitoring-role-arn-${EnvironmentSuffix}"
+        }
       }
     }
   }
