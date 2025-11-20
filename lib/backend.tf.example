@@ -1,9 +1,0 @@
-# Copy this file to backend.tf and update the bucket name with your resource_suffix
-terraform {
-  backend "s3" {
-    bucket         = "terraform-state-bucket-REPLACE_WITH_SUFFIX"
-    key            = "terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-  }
-}
