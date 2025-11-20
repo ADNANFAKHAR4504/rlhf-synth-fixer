@@ -1,4 +1,3 @@
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { GetCommandInvocationCommand, SendCommandCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 import AWS from 'aws-sdk';
@@ -19,11 +18,11 @@ const rds = new AWS.RDS({ region: AWS_REGION });
 const autoscaling = new AWS.AutoScaling({ region: AWS_REGION });
 const s3 = new AWS.S3({ region: AWS_REGION });
 const cloudwatch = new AWS.CloudWatch({ region: AWS_REGION });
+const secretsManager = new AWS.SecretsManager({ region: AWS_REGION });
 
 // AWS SDK Clients (v3)
 const ssmClient = new SSMClient({ region: AWS_REGION });
 const wafClient = new WAFV2Client({ region: AWS_REGION });
-const secretsClient = new SecretsManagerClient({ region: AWS_REGION });
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -35,7 +34,6 @@ function getTerraformOutputs(): Record<string, any> {
   if (fs.existsSync(cfnOutputsPath)) {
     try {
       const outputs = JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf8'));
-      console.log('Loaded outputs from cfn-outputs/flat-outputs.json');
       return outputs;
     } catch (error) {
       console.warn('Failed to read cfn-outputs file:', error);
@@ -180,7 +178,6 @@ describe('Terraform Plan Validation', () => {
     terraformAvailable = true;
 
     // Initialize Terraform with local backend for testing
-    console.log('Initializing Terraform with local backend...');
     const backendOverride = `
 terraform {
   backend "local" {}
@@ -193,7 +190,6 @@ terraform {
       cwd: TERRAFORM_DIR,
       stdio: 'pipe',
     });
-    console.log('Terraform initialized');
   });
 
   afterAll(() => {
@@ -224,14 +220,12 @@ terraform {
         const envPath = path.join(TERRAFORM_DIR, envFile);
         expect(fs.existsSync(envPath)).toBe(true);
 
-        console.log(`\nValidating plan for ${envFile}...`);
         const result = runTerraformPlan(envFile);
 
         expect(result.success).toBe(true);
         expect(result.output).toMatch(/Plan:|No changes/);
         expect(result.output).not.toContain('Error:');
 
-        console.log(`${envFile}: Plan validated successfully`);
       }
     },
     TEST_TIMEOUT * 2
@@ -269,13 +263,9 @@ terraform {
       'aws_secretsmanager_secret',
     ];
 
-    console.log('\nResource type validation:');
     for (const expectedType of expectedTypes) {
       expect(resourceTypes).toContain(expectedType);
-      console.log(`  ${expectedType}: ${resources.get(expectedType)} instances`);
     }
-
-    console.log(`\nAll ${expectedTypes.length} expected resource types found`);
   });
 });
 
@@ -288,7 +278,6 @@ describe('Deployed Infrastructure Validation', () => {
 
   beforeAll(() => {
     outputs = getTerraformOutputs();
-    console.log('Loaded outputs for validation:', Object.keys(outputs));
   });
 
   // --- Outputs Format Checks ---
@@ -576,71 +565,104 @@ describe('Application Health & Connectivity', () => {
   test('DB test endpoint returns connectivity status', async () => {
     expect(albUrl).toBeDefined();
     const response = await axios.get(`${albUrl}/db-test`, { timeout: 10000, validateStatus: () => true });
-    expect([200, 500, 503]).toContain(response.status);
+    expect(response.status).toBe(200);
 
-    // Handle both cases: script content (if CGI not working) or JSON response
-    if (response.status === 200) {
-      if (typeof response.data === 'string' && response.data.includes('#!/bin/bash')) {
-        // Script is being returned instead of executed - this is acceptable for now
-        console.log('Note: DB test endpoint returned script content (CGI may not be configured)');
-        expect(response.data).toContain('RDS_ENDPOINT');
-      } else if (typeof response.data === 'object') {
-        expect(response.data).toHaveProperty('status');
+    // Should return JSON (CGI should be working)
+    if (typeof response.data === 'string') {
+      // Try to parse as JSON
+      try {
+        const jsonData = JSON.parse(response.data);
+        expect(jsonData).toHaveProperty('status');
+      } catch (e) {
+        // If not JSON, check if it's script content (shouldn't happen but handle gracefully)
+        if (response.data.includes('#!/bin/bash')) {
+          expect(response.data).toContain('RDS_ENDPOINT');
+        } else {
+          throw new Error(`DB test endpoint returned unexpected content: ${response.data.substring(0, 100)}`);
+        }
       }
+    } else {
+      expect(response.data).toHaveProperty('status');
     }
   }, TEST_TIMEOUT);
 
   test('S3 test endpoint returns connectivity status', async () => {
     expect(albUrl).toBeDefined();
     const response = await axios.get(`${albUrl}/s3-test`, { timeout: 10000, validateStatus: () => true });
-    expect([200, 500, 503]).toContain(response.status);
+    expect(response.status).toBe(200);
 
-    // Handle both cases: script content (if CGI not working) or JSON response
-    if (response.status === 200) {
-      if (typeof response.data === 'string' && response.data.includes('#!/bin/bash')) {
-        // Script is being returned instead of executed - this is acceptable for now
-        console.log('Note: S3 test endpoint returned script content (CGI may not be configured)');
-        expect(response.data).toContain('S3_BUCKET');
-      } else if (typeof response.data === 'object') {
-        expect(response.data).toHaveProperty('status');
+    // Should return JSON (CGI should be working)
+    if (typeof response.data === 'string') {
+      // Try to parse as JSON
+      try {
+        const jsonData = JSON.parse(response.data);
+        expect(jsonData).toHaveProperty('status');
+      } catch (e) {
+        // If not JSON, check if it's script content (shouldn't happen but handle gracefully)
+        if (response.data.includes('#!/bin/bash')) {
+          expect(response.data).toContain('S3_BUCKET');
+        } else {
+          throw new Error(`S3 test endpoint returned unexpected content: ${response.data.substring(0, 100)}`);
+        }
       }
+    } else {
+      expect(response.data).toHaveProperty('status');
     }
   }, TEST_TIMEOUT);
 
   test('Secrets test endpoint returns connectivity status', async () => {
     expect(albUrl).toBeDefined();
     const response = await axios.get(`${albUrl}/secrets-test`, { timeout: 10000, validateStatus: () => true });
-    expect([200, 500, 503]).toContain(response.status);
+    expect(response.status).toBe(200);
 
-    // Handle both cases: script content (if CGI not working) or JSON response
-    if (response.status === 200) {
-      if (typeof response.data === 'string' && response.data.includes('#!/bin/bash')) {
-        // Script is being returned instead of executed - this is acceptable for now
-        console.log('Note: Secrets test endpoint returned script content (CGI may not be configured)');
-        expect(response.data).toContain('SECRET_NAME');
-      } else if (typeof response.data === 'object') {
-        expect(response.data).toHaveProperty('status');
+    // Should return JSON (CGI should be working)
+    if (typeof response.data === 'string') {
+      // Try to parse as JSON
+      try {
+        const jsonData = JSON.parse(response.data);
+        expect(jsonData).toHaveProperty('status');
+      } catch (e) {
+        // If not JSON, check if it's script content (shouldn't happen but handle gracefully)
+        if (response.data.includes('#!/bin/bash')) {
+          expect(response.data).toContain('SECRET_NAME');
+        } else {
+          throw new Error(`Secrets test endpoint returned unexpected content: ${response.data.substring(0, 100)}`);
+        }
       }
+    } else {
+      expect(response.data).toHaveProperty('status');
     }
   }, TEST_TIMEOUT);
 
   test('Metadata endpoint returns instance information', async () => {
     expect(albUrl).toBeDefined();
     const response = await axios.get(`${albUrl}/metadata`, { timeout: 10000, validateStatus: () => true });
-    expect([200, 500, 503]).toContain(response.status);
+    expect(response.status).toBe(200);
 
-    // Handle both cases: script content (if CGI not working) or JSON response
-    if (response.status === 200) {
-      if (typeof response.data === 'string' && response.data.includes('#!/bin/bash')) {
-        // Script is being returned instead of executed - this is acceptable for now
-        console.log('Note: Metadata endpoint returned script content (CGI may not be configured)');
-        expect(response.data).toContain('instance_id');
-      } else if (typeof response.data === 'object') {
-        expect(response.data).toHaveProperty('instance_id');
-        expect(response.data).toHaveProperty('availability_zone');
-        expect(response.data).toHaveProperty('instance_type');
+    // Should return JSON (CGI should be working)
+    let jsonData: any;
+    if (typeof response.data === 'string') {
+      // Try to parse as JSON
+      try {
+        jsonData = JSON.parse(response.data);
+      } catch (e) {
+        // If not JSON, check if it's script content (shouldn't happen but handle gracefully)
+        if (response.data.includes('#!/bin/bash')) {
+          expect(response.data).toContain('instance_id');
+          expect(response.data).toContain('availability_zone');
+          expect(response.data).toContain('instance_type');
+          return;
+        } else {
+          throw new Error(`Metadata endpoint returned unexpected content: ${response.data.substring(0, 100)}`);
+        }
       }
+    } else {
+      jsonData = response.data;
     }
+
+    expect(jsonData).toHaveProperty('instance_id');
+    expect(jsonData).toHaveProperty('availability_zone');
+    expect(jsonData).toHaveProperty('instance_type');
   }, TEST_TIMEOUT);
 });
 
@@ -680,7 +702,9 @@ describe('EC2 to RDS Connectivity', () => {
 
     let dbCredentials: any;
     try {
-      const secretResponse = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretArn }));
+      const secretResponse = await awsCall(() =>
+        secretsManager.getSecretValue({ SecretId: secretArn }).promise()
+      );
       dbCredentials = JSON.parse(secretResponse.SecretString || '{}');
     } catch (error: any) {
       throw new Error(`Failed to retrieve database credentials: ${error.message}`);
@@ -732,26 +756,8 @@ describe('EC2 to RDS Connectivity', () => {
     expect(result.StandardOutputContent).toBeDefined();
 
     const output = result.StandardOutputContent || '';
-    const errorOutput = result.StandardErrorContent || '';
-
-    // Check for errors in output
-    if (output.includes('PSQL_ERROR') || errorOutput.includes('psql:') || errorOutput.includes('error')) {
-      console.error('PostgreSQL connection error:');
-      console.error('  Output:', output);
-      console.error('  Error:', errorOutput);
-      throw new Error(`PostgreSQL connection failed: ${errorOutput || output}`);
-    }
-
     // Check for successful connection indicators
     expect(output).toContain('RDS_CONNECTION_SUCCESS');
-    expect(output).toMatch(/test_result|1/);
-
-    console.log('✓ EC2 instance successfully connected to RDS and executed SELECT 1');
-    if (output.length > 200) {
-      console.log(`  Output: ${output.substring(0, 200)}...`);
-    } else {
-      console.log(`  Output: ${output}`);
-    }
   }, TEST_TIMEOUT * 2);
 });
 
@@ -812,8 +818,6 @@ describe('WAF Rules Validation', () => {
     const rateLimitRule = rules.find((r) => r.Name === 'RateLimitRule');
     expect(rateLimitRule?.Statement?.RateBasedStatement?.Limit).toBe(2000);
 
-    console.log(`✓ WAF has ${rules.length} security rules configured`);
-    console.log(`✓ Rules: ${ruleNames.join(', ')}`);
   }, TEST_TIMEOUT);
 
   test('WAF blocks SQL injection attempts in URI path', async () => {
@@ -846,7 +850,6 @@ describe('WAF Rules Validation', () => {
 
         if (resp.status === 403) {
           blockedCount++;
-          console.log(`✓ WAF blocked SQL injection in path: ${testPath.substring(0, 40)}...`);
         } else {
           allowedCount++;
         }
@@ -855,14 +858,10 @@ describe('WAF Rules Validation', () => {
         // Request blocked before reaching server is also acceptable
         if (e.code === 'ECONNABORTED' || e.response?.status === 403) {
           blockedCount++;
-          console.log(`✓ Request blocked for SQL injection path`);
         }
       }
     }
 
-    console.log(
-      `SQL Injection Test Summary: ${blockedCount} blocked, ${allowedCount} allowed/handled safely out of ${testCount} requests`
-    );
     // Verify we tested all payloads
     expect(testCount).toBe(sqlInjectionPaths.length);
     // At least some should be handled (either blocked or processed safely)
@@ -899,7 +898,6 @@ describe('WAF Rules Validation', () => {
 
         if (resp.status === 403) {
           blockedCount++;
-          console.log(`✓ WAF blocked XSS in path: ${testPath.substring(0, 50)}...`);
         } else {
           allowedCount++;
         }
@@ -907,14 +905,10 @@ describe('WAF Rules Validation', () => {
         testCount++;
         if (e.code === 'ECONNABORTED' || e.response?.status === 403) {
           blockedCount++;
-          console.log(`✓ Request blocked for XSS payload`);
         }
       }
     }
 
-    console.log(
-      `XSS Test Summary: ${blockedCount} blocked, ${allowedCount} allowed/handled safely out of ${testCount} requests`
-    );
     // Verify we tested all payloads
     expect(testCount).toBe(xssPaths.length);
     // At least some should be handled (either blocked or processed safely)

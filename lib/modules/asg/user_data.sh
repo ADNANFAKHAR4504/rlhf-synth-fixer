@@ -1,11 +1,11 @@
 #!/bin/bash
 # User data script for EC2 instances in ${environment}
-# This script sets up Apache and creates test endpoints for integration testing
 
 set -e
 
 # Update system
-# yum update -y
+yum update -y
+amazon-linux-extras enable postgresql14
 yum install -y httpd jq postgresql
 
 # Start Apache
@@ -267,12 +267,18 @@ CONFIG_JSON
 CONFIG_EOF
 chmod +x /var/www/html/config
 
+# Enable CGI execution in Apache
+cat >> /etc/httpd/conf/httpd.conf <<'APACHE_EOF'
+
 # Enable CGI execution
-echo 'AddHandler cgi-script .cgi' >> /etc/httpd/conf/httpd.conf
-echo '<Directory "/var/www/html">' >> /etc/httpd/conf/httpd.conf
-echo '    Options +ExecCGI' >> /etc/httpd/conf/httpd.conf
-echo '    AddHandler cgi-script .sh' >> /etc/httpd/conf/httpd.conf
-echo '</Directory>' >> /etc/httpd/conf/httpd.conf
+LoadModule cgi_module modules/mod_cgi.so
+AddHandler cgi-script .cgi .sh
+<Directory "/var/www/html">
+    Options +ExecCGI +FollowSymLinks
+    AllowOverride None
+    Require all granted
+</Directory>
+APACHE_EOF
 
 # Restart Apache to apply changes
 systemctl restart httpd
