@@ -1,12 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Master CloudFormation template for multi-environment payment processing infrastructure'
+Description: 'Self-contained CloudFormation template for multi-environment infrastructure'
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Description: 'Unique suffix for environment resources (e.g., dev-001, staging-001, pr6766)'
-    AllowedPattern: '^[a-z0-9]+-?[0-9]+$|^[a-z0-9]+$'
-    ConstraintDescription: 'Must be alphanumeric with optional dash and numbers'
+    Description: 'Unique suffix for environment resources'
+    Default: 'dev'
 
   Environment:
     Type: String
@@ -17,240 +16,401 @@ Parameters:
       - prod
     Default: dev
 
-  VpcCidr:
-    Type: String
-    Description: 'CIDR block for VPC'
-    Default: '10.0.0.0/16'
-    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
-
-  ReplicaRegion:
-    Type: String
-    Description: 'Replica AWS region for DR'
-    Default: 'eu-west-1'
-
-  DevOpsEmail:
-    Type: String
-    Description: 'Email address for DevOps team notifications'
-    Default: 'devops@example.com'
-    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-
-  Application:
-    Type: String
-    Description: 'Application name'
-    Default: 'payment-processing'
-
-  CostCenter:
-    Type: String
-    Description: 'Cost center for billing'
-    Default: 'fintech-payments'
-
-  TransitGatewayId:
-    Type: String
-    Description: 'Transit Gateway ID for cross-account connectivity'
-    Default: ''
-
-Conditions:
-  IsDevelopment: !Equals [!Ref Environment, 'dev']
-
 Resources:
-  # Network Stack
-  NetworkStack:
-    Type: AWS::CloudFormation::Stack
+  # VPC Configuration
+  VPC:
+    Type: AWS::EC2::VPC
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/network-stack.yml'
-      Parameters:
-        EnvironmentSuffix: !Ref EnvironmentSuffix
-        Environment: !Ref Environment
-        VpcCidr: !Ref VpcCidr
-        TransitGatewayId: !Ref TransitGatewayId
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
       Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
-        - Key: Application
-          Value: !Ref Application
-        - Key: CostCenter
-          Value: !Ref CostCenter
-        - Key: ManagedBy
-          Value: CloudFormation
 
-  # Security Stack
-  SecurityStack:
-    Type: AWS::CloudFormation::Stack
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/security-stack.yml'
-      Parameters:
-        EnvironmentSuffix: !Ref EnvironmentSuffix
-        Environment: !Ref Environment
-        VpcId: !GetAtt NetworkStack.Outputs.VpcId
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
       Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-igw-${EnvironmentSuffix}'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnet 1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-1-${EnvironmentSuffix}'
+
+  # Public Subnet 2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-2-${EnvironmentSuffix}'
+
+  # Private Subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.10.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-1-${EnvironmentSuffix}'
+
+  # Private Subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-2-${EnvironmentSuffix}'
+
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-rt-${EnvironmentSuffix}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # Security Groups
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-sg-${EnvironmentSuffix}'
+
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for application'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-app-sg-${EnvironmentSuffix}'
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-subnet-group-${EnvironmentSuffix}'
+
+  # RDS Aurora Cluster
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      DatabaseName: appdb
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      StorageEncrypted: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-aurora-cluster-${EnvironmentSuffix}'
+
+  AuroraInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.medium
+      DBClusterIdentifier: !Ref AuroraCluster
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-aurora-instance-1-${EnvironmentSuffix}'
+
+  # Secrets Manager for DB Password
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-db-password-${EnvironmentSuffix}'
+      Description: 'Database master password'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  # DynamoDB Table
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${Environment}-transactions-${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-dynamodb-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
-        - Key: Application
-          Value: !Ref Application
-        - Key: CostCenter
-          Value: !Ref CostCenter
 
-  # Database Stack
-  DatabaseStack:
-    Type: AWS::CloudFormation::Stack
+  # S3 Bucket
+  S3Bucket:
+    Type: AWS::S3::Bucket
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/database-stack.yml'
-      Parameters:
-        EnvironmentSuffix: !Ref EnvironmentSuffix
-        Environment: !Ref Environment
-        VpcId: !GetAtt NetworkStack.Outputs.VpcId
-        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
-        DatabaseSecurityGroupId: !GetAtt SecurityStack.Outputs.DatabaseSecurityGroupId
-        DBInstanceClass: !If
-          - IsDevelopment
-          - 'db.t3.medium'
-          - 'db.r5.large'
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+      BucketName: !Sub '${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Application
-          Value: !Ref Application
-        - Key: CostCenter
-          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub '${Environment}-s3-bucket-${EnvironmentSuffix}'
 
-  # Storage Stack
-  StorageStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: NetworkStack
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/storage-stack.yml'
-      Parameters:
-        EnvironmentSuffix: !Ref EnvironmentSuffix
-        Environment: !Ref Environment
-        ReplicaRegion: !Ref ReplicaRegion
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+      ClusterName: !Sub '${Environment}-ecs-cluster-${EnvironmentSuffix}'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Application
-          Value: !Ref Application
-        - Key: CostCenter
-          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub '${Environment}-ecs-cluster-${EnvironmentSuffix}'
 
-  # Compute Stack
-  ComputeStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - DatabaseStack
+  # ECS Task Execution Role
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/compute-stack.yml'
-      Parameters:
-        EnvironmentSuffix: !Ref EnvironmentSuffix
-        Environment: !Ref Environment
-        VpcId: !GetAtt NetworkStack.Outputs.VpcId
-        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
-        PublicSubnetIds: !GetAtt NetworkStack.Outputs.PublicSubnetIds
-        ECSSecurityGroupId: !GetAtt SecurityStack.Outputs.ECSSecurityGroupId
-        ECSTaskRoleArn: !GetAtt SecurityStack.Outputs.ECSTaskRoleArn
-        ECSExecutionRoleArn: !GetAtt SecurityStack.Outputs.ECSExecutionRoleArn
-        TaskCpu: !If [IsDevelopment, '256', '1024']
-        TaskMemory: !If [IsDevelopment, '512', '2048']
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Application
-          Value: !Ref Application
-        - Key: CostCenter
-          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub '${Environment}-ecs-execution-role-${EnvironmentSuffix}'
 
-  # Monitoring Stack
-  MonitoringStack:
-    Type: AWS::CloudFormation::Stack
+  # ECS Task Role
+  ECSTaskRole:
+    Type: AWS::IAM::Role
     Properties:
-      TemplateURL: !Sub 'https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/monitoring-stack.yml'
-      Parameters:
-        EnvironmentSuffix: !Ref EnvironmentSuffix
-        Environment: !Ref Environment
-        DevOpsEmail: !Ref DevOpsEmail
-        ComplianceLambdaRoleArn: !GetAtt SecurityStack.Outputs.ComplianceLambdaRoleArn
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: TaskPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub '${S3Bucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:DeleteItem'
+                Resource: !GetAtt DynamoDBTable.Arn
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Application
-          Value: !Ref Application
-        - Key: CostCenter
-          Value: !Ref CostCenter
+        - Key: Name
+          Value: !Sub '${Environment}-ecs-task-role-${EnvironmentSuffix}'
 
-  # Parameter Store Setup
-  EnvironmentParameter:
-    Type: AWS::SSM::Parameter
+  # SNS Topic for Notifications
+  SNSTopic:
+    Type: AWS::SNS::Topic
     Properties:
-      Name: !Sub '/${Environment}/config/environment-name'
-      Description: 'Environment name parameter'
-      Type: String
-      Value: !Ref Environment
+      TopicName: !Sub '${Environment}-alerts-${EnvironmentSuffix}'
+      DisplayName: !Sub '${Environment} Environment Alerts'
       Tags:
-        Environment: !Ref Environment
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+        - Key: Name
+          Value: !Sub '${Environment}-sns-topic-${EnvironmentSuffix}'
 
-  ApplicationParameter:
-    Type: AWS::SSM::Parameter
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
     Properties:
-      Name: !Sub '/${Environment}/config/application-name'
-      Description: 'Application name parameter'
-      Type: String
-      Value: !Ref Application
-      Tags:
-        Environment: !Ref Environment
-        Application: !Ref Application
-        CostCenter: !Ref CostCenter
+      Protocol: email
+      TopicArn: !Ref SNSTopic
+      Endpoint: 'devops@example.com'
+
+  # CloudWatch Log Group
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ecs/${Environment}-${EnvironmentSuffix}'
+      RetentionInDays: 30
 
 Outputs:
-  StackName:
-    Description: 'Master stack name'
-    Value: !Ref AWS::StackName
-    Export:
-      Name: !Sub '${EnvironmentSuffix}-master-stack-name'
-
-  VpcId:
+  VPCId:
     Description: 'VPC ID'
-    Value: !GetAtt NetworkStack.Outputs.VpcId
+    Value: !Ref VPC
     Export:
       Name: !Sub '${EnvironmentSuffix}-vpc-id'
 
+  PublicSubnetIds:
+    Description: 'Public subnet IDs'
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-public-subnet-ids'
+
+  PrivateSubnetIds:
+    Description: 'Private subnet IDs'
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-private-subnet-ids'
+
   AuroraClusterEndpoint:
     Description: 'Aurora cluster endpoint'
-    Value: !GetAtt DatabaseStack.Outputs.ClusterEndpoint
+    Value: !GetAtt AuroraCluster.Endpoint.Address
     Export:
       Name: !Sub '${EnvironmentSuffix}-aurora-endpoint'
 
+  AuroraClusterReadEndpoint:
+    Description: 'Aurora cluster read endpoint'
+    Value: !GetAtt AuroraCluster.ReadEndpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-aurora-read-endpoint'
+
   DynamoDBTableName:
     Description: 'DynamoDB table name'
-    Value: !GetAtt StorageStack.Outputs.DynamoDBTableName
+    Value: !Ref DynamoDBTable
     Export:
       Name: !Sub '${EnvironmentSuffix}-dynamodb-table'
 
-  ECSClusterName:
-    Description: 'ECS cluster name'
-    Value: !GetAtt ComputeStack.Outputs.ClusterName
-    Export:
-      Name: !Sub '${EnvironmentSuffix}-ecs-cluster'
-
   S3BucketName:
     Description: 'S3 bucket name'
-    Value: !GetAtt StorageStack.Outputs.S3BucketName
+    Value: !Ref S3Bucket
     Export:
       Name: !Sub '${EnvironmentSuffix}-s3-bucket'
 
+  ECSClusterName:
+    Description: 'ECS cluster name'
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-ecs-cluster'
+
   SNSTopicArn:
-    Description: 'SNS topic ARN for alerts'
-    Value: !GetAtt MonitoringStack.Outputs.SNSTopicArn
+    Description: 'SNS topic ARN'
+    Value: !Ref SNSTopic
     Export:
       Name: !Sub '${EnvironmentSuffix}-sns-topic'
+
+  DatabaseSecurityGroupId:
+    Description: 'Database security group ID'
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-db-sg-id'
+
+  ApplicationSecurityGroupId:
+    Description: 'Application security group ID'
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentSuffix}-app-sg-id'
