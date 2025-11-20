@@ -29,33 +29,31 @@ def handler(event, context):
         print(f"Error fetching scan results: {str(e)}")
         return {"statusCode": 500, "body": f"Error: {str(e)}"}
 
+    # Get single account scan results
+    results = scan_data.get("results", {})
+    account_id = scan_data.get("account_id")
+
     # Generate comprehensive JSON report
+    total_resources = results.get("resources_scanned", 0)
+    total_violations = len(results.get("violations", []))
+
     report = {
         "report_id": context.request_id,
         "report_type": "JSON",
         "generated_at": datetime.utcnow().isoformat(),
         "scan_id": scan_id,
         "scan_time": scan_data.get("scan_time"),
+        "account_id": account_id,
         "summary": {
-            "accounts_scanned": scan_data.get("accounts_scanned", 0),
-            "total_resources": sum(
-                r.get("resources_scanned", 0) for r in scan_data.get("results", [])
-            ),
-            "total_violations": sum(
-                len(r.get("violations", [])) for r in scan_data.get("results", [])
-            ),
-            "compliant_accounts": sum(
-                1 for r in scan_data.get("results", []) if r.get("compliant", False)
-            ),
+            "total_resources": total_resources,
+            "total_violations": total_violations,
+            "compliant": results.get("compliant", False),
         },
-        "detailed_results": scan_data.get("results", []),
+        "detailed_results": results,
         "compliance_score": 0,
     }
 
     # Calculate compliance score
-    total_resources = report["summary"]["total_resources"]
-    total_violations = report["summary"]["total_violations"]
-
     if total_resources > 0:
         report["compliance_score"] = round(
             ((total_resources - total_violations) / total_resources) * 100, 2

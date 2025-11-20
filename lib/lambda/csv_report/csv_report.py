@@ -50,42 +50,43 @@ def handler(event, context):
         ]
     )
 
-    # Write data rows
-    for result in scan_data.get("results", []):
-        account_id = result.get("account_id")
-        scan_time = result.get("scan_time")
-        violations = result.get("violations", [])
+    # Get single account scan results
+    results = scan_data.get("results", {})
+    account_id = scan_data.get("account_id")
+    scan_time = scan_data.get("scan_time")
+    violations = results.get("violations", [])
 
-        if violations:
-            for violation in violations:
-                csv_writer.writerow(
-                    [
-                        context.request_id,
-                        scan_id,
-                        scan_time,
-                        account_id,
-                        violation.get("resource_type"),
-                        violation.get("resource_id"),
-                        violation.get("violation"),
-                        violation.get("severity"),
-                        "NON_COMPLIANT",
-                    ]
-                )
-        else:
-            # Account is compliant
+    # Write data rows
+    if violations:
+        for violation in violations:
             csv_writer.writerow(
                 [
                     context.request_id,
                     scan_id,
                     scan_time,
                     account_id,
-                    "N/A",
-                    "N/A",
-                    "No violations",
-                    "N/A",
-                    "COMPLIANT",
+                    violation.get("resource_type"),
+                    violation.get("resource_id"),
+                    violation.get("violation"),
+                    violation.get("severity"),
+                    "NON_COMPLIANT",
                 ]
             )
+    else:
+        # Account is compliant
+        csv_writer.writerow(
+            [
+                context.request_id,
+                scan_id,
+                scan_time,
+                account_id,
+                "N/A",
+                "N/A",
+                "No violations",
+                "N/A",
+                "COMPLIANT",
+            ]
+        )
 
     # Store CSV report in S3
     report_key = f"reports/csv/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.request_id}.csv"

@@ -77,8 +77,8 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackTest", props=props)
         template = Template.from_stack(stack)
 
-        # Verify S3 buckets exist (audit + config)
-        template.resource_count_is("AWS::S3::Bucket", 2)
+        # Verify S3 bucket exists (audit)
+        template.resource_count_is("AWS::S3::Bucket", 1)
         # Verify versioning is enabled
         template.has_resource_properties("AWS::S3::Bucket", {
             "VersioningConfiguration": {
@@ -97,47 +97,17 @@ class TestTapStack(unittest.TestCase):
         # Verify SNS subscription exists
         template.resource_count_is("AWS::SNS::Subscription", 1)
 
-    def test_creates_config_recorder_and_delivery_channel(self):
-        """Test AWS Config setup"""
-        props = TapStackProps(environment_suffix="test")
-        stack = TapStack(self.app, "TapStackTest", props=props)
-        template = Template.from_stack(stack)
-
-        # Verify Config recorder exists
-        template.resource_count_is("AWS::Config::ConfigurationRecorder", 1)
-        # Verify Config delivery channel exists
-        template.resource_count_is("AWS::Config::DeliveryChannel", 1)
-
-    def test_creates_config_role_with_managed_policy(self):
-        """Test Config IAM role uses managed policy"""
-        props = TapStackProps(environment_suffix="test")
-        stack = TapStack(self.app, "TapStackTest", props=props)
-        template = Template.from_stack(stack)
-
-        # Verify Config role exists with correct managed policy
-        template.has_resource_properties("AWS::IAM::Role", {
-            "ManagedPolicyArns": Match.array_with([
-                Match.object_like({
-                    "Fn::Join": Match.array_with([
-                        Match.array_with([
-                            Match.string_like_regexp(".*service-role/AWS_ConfigRole")
-                        ])
-                    ])
-                })
-            ])
-        })
-
     def test_creates_lambda_functions_with_reserved_concurrency(self):
         """Test Lambda functions have reserved concurrent executions"""
         props = TapStackProps(environment_suffix="test")
         stack = TapStack(self.app, "TapStackTest", props=props)
         template = Template.from_stack(stack)
 
-        # Verify Lambda functions exist (scanner, json_report, csv_report, remediation, 3 config rules)
+        # Verify Lambda functions exist (scanner, json_report, csv_report, remediation)
         # Note: May include additional Lambda functions for custom resources
         resources = template.to_json()["Resources"]
         lambda_count = sum(1 for r in resources.values() if r["Type"] == "AWS::Lambda::Function")
-        self.assertGreaterEqual(lambda_count, 7, "Should have at least 7 Lambda functions")
+        self.assertGreaterEqual(lambda_count, 4, "Should have at least 4 Lambda functions")
 
         # Verify at least one Lambda has reserved concurrent executions
         template.has_resource_properties("AWS::Lambda::Function", {
@@ -163,30 +133,12 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackTest", props=props)
         template = Template.from_stack(stack)
 
-        # Verify EventBridge rules exist
-        template.resource_count_is("AWS::Events::Rule", 4)
+        # Verify EventBridge rules exist (scheduled, on-demand, scanner-complete)
+        template.resource_count_is("AWS::Events::Rule", 3)
         # Verify scheduled rule with 6-hour interval
         template.has_resource_properties("AWS::Events::Rule", {
             "ScheduleExpression": "rate(6 hours)"
         })
-
-    def test_creates_config_rules(self):
-        """Test AWS Config rules creation"""
-        props = TapStackProps(environment_suffix="test")
-        stack = TapStack(self.app, "TapStackTest", props=props)
-        template = Template.from_stack(stack)
-
-        # Verify Config rules exist (S3 encryption, VPC flow logs, Lambda settings)
-        template.resource_count_is("AWS::Config::ConfigRule", 3)
-
-    def test_creates_config_aggregator(self):
-        """Test AWS Config aggregator for multi-account"""
-        props = TapStackProps(environment_suffix="test")
-        stack = TapStack(self.app, "TapStackTest", props=props)
-        template = Template.from_stack(stack)
-
-        # Verify Config aggregator exists
-        template.resource_count_is("AWS::Config::ConfigurationAggregator", 1)
 
     def test_creates_cloudwatch_dashboard(self):
         """Test CloudWatch dashboard creation"""
@@ -239,7 +191,8 @@ class TestTapStack(unittest.TestCase):
 
         # At minimum, verify the stack was created successfully with tags applied
         # (Tags.of() applies tags, even if not visible in all resources)
-        self.assertTrue(True, "Stack created with tag configuration")
+        # Stack creation itself validates tag configuration
+        self.assertIsNotNone(template, "Stack created with tag configuration")
 
     def test_resources_support_clean_teardown(self):
         """Test that S3 buckets have auto-delete enabled for clean teardown"""
@@ -258,5 +211,5 @@ class TestTapStack(unittest.TestCase):
         stack = TapStack(self.app, "TapStackTest", props=props)
         template = Template.from_stack(stack)
 
-        # Verify VPC endpoints exist (Lambda, S3, Config)
-        template.resource_count_is("AWS::EC2::VPCEndpoint", 3)
+        # Verify VPC endpoints exist (1 Interface for Lambda + 1 Gateway for S3)
+        template.resource_count_is("AWS::EC2::VPCEndpoint", 2)

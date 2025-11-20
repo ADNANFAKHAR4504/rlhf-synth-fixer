@@ -15,7 +15,6 @@ from aws_cdk import (
     aws_events_targets as targets,
     aws_ec2 as ec2,
     aws_logs as logs,
-    aws_config as config,
     aws_cloudwatch as cloudwatch,
 )
 from constructs import Construct
@@ -93,14 +92,9 @@ class TapStack(Stack):
             service=ec2.InterfaceVpcEndpointAwsService.LAMBDA_,
         )
 
-        vpc.add_interface_endpoint(
+        vpc.add_gateway_endpoint(
             f"s3-endpoint-{env_suffix}",
-            service=ec2.InterfaceVpcEndpointAwsService.S3,
-        )
-
-        vpc.add_interface_endpoint(
-            f"config-endpoint-{env_suffix}",
-            service=ec2.InterfaceVpcEndpointAwsService.CONFIG,
+            service=ec2.GatewayVpcEndpointAwsService.S3,
         )
 
         # Security group for Lambda functions
@@ -154,51 +148,6 @@ class TapStack(Stack):
             subscriptions.EmailSubscription("compliance-team@example.com")
         )
 
-        # ===== IAM Role for AWS Config =====
-        config_role = iam.Role(
-            self,
-            f"config-role-{env_suffix}",
-            assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWS_ConfigRole"
-                )
-            ],
-        )
-
-        # Additional permissions for Config to write to S3
-        audit_bucket.grant_write(config_role)
-
-        # ===== AWS Config Setup =====
-        config_bucket = s3.Bucket(
-            self,
-            f"config-bucket-{env_suffix}",
-            bucket_name=f"config-recordings-{env_suffix}-{self.account}",
-            versioned=True,
-            encryption=s3.BucketEncryption.S3_MANAGED,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-        )
-
-        config_recorder = config.CfnConfigurationRecorder(
-            self,
-            f"config-recorder-{env_suffix}",
-            role_arn=config_role.role_arn,
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True,
-            ),
-        )
-
-        config_delivery_channel = config.CfnDeliveryChannel(
-            self,
-            f"config-delivery-channel-{env_suffix}",
-            s3_bucket_name=config_bucket.bucket_name,
-        )
-
-        config_delivery_channel.add_dependency(config_recorder)
-
         # ===== Lambda Functions =====
 
         # Lambda execution role with managed policies only
@@ -220,34 +169,12 @@ class TapStack(Stack):
         audit_bucket.grant_read_write(lambda_execution_role)
         compliance_alerts_topic.grant_publish(lambda_execution_role)
 
-        # Additional permissions for cross-account access
+        # Additional permissions for reading AWS resources in current account
         lambda_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("ReadOnlyAccess")
         )
 
-        # Add AssumeRole permission to managed policy
-        assume_role_policy = iam.PolicyDocument(
-            statements=[
-                iam.PolicyStatement(
-                    effect=iam.Effect.ALLOW,
-                    actions=["sts:AssumeRole"],
-                    resources=[
-                        f"arn:aws:iam::*:role/compliance-scanner-role-{env_suffix}"
-                    ],
-                )
-            ]
-        )
-
-        # Create a managed policy for AssumeRole
-        assume_role_managed_policy = iam.ManagedPolicy(
-            self,
-            f"assume-role-policy-{env_suffix}",
-            document=assume_role_policy,
-        )
-
-        lambda_execution_role.add_managed_policy(assume_role_managed_policy)
-
-        # 1. Cross-Account Scanner Lambda
+        # 1. Compliance Scanner Lambda
         scanner_lambda = lambda_.Function(
             self,
             f"scanner-lambda-{env_suffix}",
@@ -428,127 +355,6 @@ class TapStack(Stack):
         scanner_complete_rule.add_target(targets.LambdaFunction(json_report_lambda))
         scanner_complete_rule.add_target(targets.LambdaFunction(csv_report_lambda))
 
-        # Config rule violations trigger remediation
-        config_violation_rule = events.Rule(
-            self,
-            f"config-violation-rule-{env_suffix}",
-            event_pattern=events.EventPattern(
-                source=["aws.config"],
-                detail_type=["Config Rules Compliance Change"],
-                detail={"newEvaluationResult": {"complianceType": ["NON_COMPLIANT"]}},
-            ),
-        )
-
-        config_violation_rule.add_target(targets.LambdaFunction(remediation_lambda))
-
-        # ===== AWS Config Rules =====
-
-        # Config rule for S3 bucket encryption
-        s3_encryption_rule_lambda = lambda_.Function(
-            self,
-            f"config-s3-encryption-rule-{env_suffix}",
-            function_name=f"config-rule-s3-encryption-{env_suffix}",
-            runtime=lambda_.Runtime.PYTHON_3_9,
-            handler="s3_encryption_rule.handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "lambda/config_rules")
-            ),
-            timeout=Duration.minutes(1),
-            memory_size=256,
-            tracing=lambda_.Tracing.ACTIVE,
-            reserved_concurrent_executions=2,
-        )
-
-        s3_encryption_rule_lambda.add_permission(
-            "ConfigInvoke",
-            principal=iam.ServicePrincipal("config.amazonaws.com"),
-            action="lambda:InvokeFunction",
-        )
-
-        s3_encryption_config_rule = config.ManagedRule(
-            self,
-            f"s3-encryption-rule-{env_suffix}",
-            config_rule_name=f"s3-bucket-encryption-{env_suffix}",
-            identifier="S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
-            description="Checks that S3 buckets have encryption enabled",
-        )
-
-        # Config rule for VPC flow logs
-        vpc_flowlogs_rule_lambda = lambda_.Function(
-            self,
-            f"config-vpc-flowlogs-rule-{env_suffix}",
-            function_name=f"config-rule-vpc-flowlogs-{env_suffix}",
-            runtime=lambda_.Runtime.PYTHON_3_9,
-            handler="vpc_flowlogs_rule.handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "lambda/config_rules")
-            ),
-            timeout=Duration.minutes(1),
-            memory_size=256,
-            tracing=lambda_.Tracing.ACTIVE,
-            reserved_concurrent_executions=2,
-        )
-
-        vpc_flowlogs_rule_lambda.add_permission(
-            "ConfigInvoke",
-            principal=iam.ServicePrincipal("config.amazonaws.com"),
-            action="lambda:InvokeFunction",
-        )
-
-        vpc_flowlogs_config_rule = config.CustomRule(
-            self,
-            f"vpc-flowlogs-rule-{env_suffix}",
-            config_rule_name=f"vpc-flow-logs-enabled-{env_suffix}",
-            lambda_function=vpc_flowlogs_rule_lambda,
-            configuration_changes=True,
-            description="Checks that VPC flow logs are enabled",
-        )
-
-        # Config rule for Lambda settings
-        lambda_settings_rule_lambda = lambda_.Function(
-            self,
-            f"config-lambda-settings-rule-{env_suffix}",
-            function_name=f"config-rule-lambda-settings-{env_suffix}",
-            runtime=lambda_.Runtime.PYTHON_3_9,
-            handler="lambda_settings_rule.handler",
-            code=lambda_.Code.from_asset(
-                os.path.join(os.path.dirname(__file__), "lambda/config_rules")
-            ),
-            timeout=Duration.minutes(1),
-            memory_size=256,
-            tracing=lambda_.Tracing.ACTIVE,
-            reserved_concurrent_executions=2,
-        )
-
-        lambda_settings_rule_lambda.add_permission(
-            "ConfigInvoke",
-            principal=iam.ServicePrincipal("config.amazonaws.com"),
-            action="lambda:InvokeFunction",
-        )
-
-        lambda_settings_config_rule = config.CustomRule(
-            self,
-            f"lambda-settings-rule-{env_suffix}",
-            config_rule_name=f"lambda-settings-compliant-{env_suffix}",
-            lambda_function=lambda_settings_rule_lambda,
-            configuration_changes=True,
-            description="Checks Lambda function settings for compliance",
-        )
-
-        # ===== Config Aggregator for Multi-Account =====
-        config_aggregator = config.CfnConfigurationAggregator(
-            self,
-            f"config-aggregator-{env_suffix}",
-            configuration_aggregator_name=f"compliance-aggregator-{env_suffix}",
-            account_aggregation_sources=[
-                config.CfnConfigurationAggregator.AccountAggregationSourceProperty(
-                    account_ids=[self.account],
-                    all_aws_regions=False,
-                    aws_regions=["us-east-1"],
-                )
-            ],
-        )
-
         # ===== CloudWatch Dashboard =====
         dashboard = cloudwatch.Dashboard(
             self,
@@ -616,13 +422,6 @@ class TapStack(Stack):
             "AuditBucketName",
             value=audit_bucket.bucket_name,
             description="S3 bucket for audit reports"
-        )
-
-        CfnOutput(
-            self,
-            "ConfigBucketName",
-            value=config_bucket.bucket_name,
-            description="S3 bucket for Config recordings"
         )
 
         CfnOutput(

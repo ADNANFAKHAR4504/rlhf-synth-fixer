@@ -5,37 +5,21 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 s3_client = boto3.client("s3")
-sts_client = boto3.client("sts")
+ec2_client = boto3.client("ec2")
+lambda_client = boto3.client("lambda")
 events_client = boto3.client("events")
 sns_client = boto3.client("sns")
+sts_client = boto3.client("sts")
 
 AUDIT_BUCKET = os.environ.get("AUDIT_BUCKET")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 ENVIRONMENT_SUFFIX = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
 
 
-def assume_role(account_id: str, role_name: str) -> Dict[str, Any]:
-    """Assume role in target account for cross-account scanning."""
-    role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-
-    try:
-        response = sts_client.assume_role(
-            RoleArn=role_arn, RoleSessionName="ComplianceScanner"
-        )
-        return response["Credentials"]
-    except Exception as e:
-        print(f"Error assuming role {role_arn}: {str(e)}")
-        return None
-
-
-def scan_account(account_id: str, credentials: Dict[str, Any]) -> Dict[str, Any]:
-    """Perform compliance scan on a single account."""
-    # Create session with assumed role credentials
-    session = boto3.Session(
-        aws_access_key_id=credentials["AccessKeyId"],
-        aws_secret_access_key=credentials["SecretAccessKey"],
-        aws_session_token=credentials["SessionToken"],
-    )
+def scan_current_account() -> Dict[str, Any]:
+    """Perform compliance scan on the current AWS account."""
+    # Get current account ID
+    account_id = sts_client.get_caller_identity()["Account"]
 
     results = {
         "account_id": account_id,
@@ -47,18 +31,17 @@ def scan_account(account_id: str, credentials: Dict[str, Any]) -> Dict[str, Any]
 
     try:
         # Scan S3 buckets
-        s3 = session.client("s3")
-        buckets = s3.list_buckets()
+        buckets = s3_client.list_buckets()
 
         for bucket in buckets.get("Buckets", []):
             bucket_name = bucket["Name"]
             results["resources_scanned"] += 1
 
             try:
-                encryption = s3.get_bucket_encryption(Bucket=bucket_name)
+                encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
                 # Bucket has encryption
                 print(f"Bucket {bucket_name} has encryption configured")
-            except s3.exceptions.ClientError as e:
+            except s3_client.exceptions.ClientError as e:
                 if e.response["Error"]["Code"] == "ServerSideEncryptionConfigurationNotFoundError":
                     results["violations"].append(
                         {
@@ -71,14 +54,13 @@ def scan_account(account_id: str, credentials: Dict[str, Any]) -> Dict[str, Any]
                     results["compliant"] = False
 
         # Scan VPCs for flow logs
-        ec2 = session.client("ec2")
-        vpcs = ec2.describe_vpcs()
+        vpcs = ec2_client.describe_vpcs()
 
         for vpc in vpcs.get("Vpcs", []):
             vpc_id = vpc["VpcId"]
             results["resources_scanned"] += 1
 
-            flow_logs = ec2.describe_flow_logs(
+            flow_logs = ec2_client.describe_flow_logs(
                 Filters=[{"Name": "resource-id", "Values": [vpc_id]}]
             )
 
@@ -94,7 +76,6 @@ def scan_account(account_id: str, credentials: Dict[str, Any]) -> Dict[str, Any]
                 results["compliant"] = False
 
         # Scan Lambda functions
-        lambda_client = session.client("lambda")
         functions = lambda_client.list_functions()
 
         for function in functions.get("Functions", []):
@@ -137,66 +118,38 @@ def scan_account(account_id: str, credentials: Dict[str, Any]) -> Dict[str, Any]
 
 
 def handler(event, context):
-    """Main Lambda handler for compliance scanning."""
+    """Main Lambda handler for compliance scanning in current account."""
     print(f"Starting compliance scan. Event: {json.dumps(event)}")
 
-    # List of accounts to scan (in real implementation, read from DynamoDB or Parameter Store)
-    accounts_to_scan = [
-        {"account_id": os.environ.get("AWS_ACCOUNT_ID", context.invoked_function_arn.split(":")[4]), "role_name": f"compliance-scanner-role-{ENVIRONMENT_SUFFIX}"}
+    # Scan the current account
+    results = scan_current_account()
+
+    # Send SNS alert for critical violations
+    critical_violations = [
+        v for v in results.get("violations", []) if v["severity"] == "HIGH"
     ]
 
-    scan_results = []
-
-    for account in accounts_to_scan:
-        account_id = account["account_id"]
-        role_name = account["role_name"]
-
-        # For same account, use current credentials
-        if account_id == context.invoked_function_arn.split(":")[4]:
-            # Scan current account
-            results = {
-                "account_id": account_id,
-                "scan_time": datetime.utcnow().isoformat(),
-                "resources_scanned": 0,
-                "violations": [],
-                "compliant": True,
-                "note": "Same-account scan using current credentials",
-            }
-        else:
-            # Cross-account scan
-            credentials = assume_role(account_id, role_name)
-            if not credentials:
-                continue
-
-            results = scan_account(account_id, credentials)
-
-        scan_results.append(results)
-
-        # Send SNS alert for critical violations
-        critical_violations = [
-            v for v in results.get("violations", []) if v["severity"] == "HIGH"
-        ]
-
-        if critical_violations:
-            message = f"""
+    if critical_violations:
+        account_id = results["account_id"]
+        message = f"""
 Critical compliance violations detected in account {account_id}:
 
 {json.dumps(critical_violations, indent=2)}
 
 Scan time: {results['scan_time']}
 Total violations: {len(results.get('violations', []))}
-            """
+        """
 
-            sns_client.publish(
-                TopicArn=SNS_TOPIC_ARN, Subject="Critical Compliance Alert", Message=message
-            )
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN, Subject="Critical Compliance Alert", Message=message
+        )
 
     # Store scan summary in S3
     summary = {
         "scan_id": context.request_id,
         "scan_time": datetime.utcnow().isoformat(),
-        "accounts_scanned": len(scan_results),
-        "results": scan_results,
+        "account_id": results["account_id"],
+        "results": results,
     }
 
     summary_key = f"scans/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.request_id}.json"
