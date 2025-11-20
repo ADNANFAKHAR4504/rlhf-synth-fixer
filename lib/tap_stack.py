@@ -337,6 +337,15 @@ class TapStack(Stack):
         Tags.of(metrics_lambda_role).add("Environment", "Production")
         Tags.of(metrics_lambda_role).add("CostCenter", "NetworkOps")
 
+        # Create CloudWatch Log Group for metrics Lambda (explicit creation ensures proper cleanup)
+        metrics_lambda_log_group = logs.LogGroup(
+            self,
+            f"nat-metrics-lambda-{environment_suffix}/LogGroup",
+            log_group_name=f"/aws/lambda/nat-metrics-publisher-{environment_suffix}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         metrics_lambda = lambda_.Function(
             self,
             f"nat-metrics-lambda-{environment_suffix}",

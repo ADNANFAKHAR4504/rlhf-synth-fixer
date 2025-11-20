@@ -265,12 +265,80 @@ flow_logs_bucket = s3.Bucket(
 
 ---
 
+### Failure 4: Lambda CloudWatch Log Group Already Exists
+
+**Impact Level**: Critical - Deployment Blocker (Recurring Rollback Issue)
+
+**The Bug**:
+```python
+# WRONG - No explicit log group definition
+metrics_lambda = lambda_.Function(
+    self,
+    f"nat-metrics-lambda-{environment_suffix}",
+    function_name=f"nat-metrics-publisher-{environment_suffix}",
+    runtime=lambda_.Runtime.PYTHON_3_9,
+    handler="index.handler",
+    # Lambda automatically creates log group, but CloudFormation doesn't manage it
+    ...
+)
+```
+
+**Error Message**:
+```
+CREATE_FAILED | AWS::Logs::LogGroup | nat-metrics-lambda-pr6922/LogGroup
+Resource of type 'AWS::Logs::LogGroup' with identifier '{"/properties/LogGroupName":"/aws/lambda/nat-metrics-publisher-pr6922"}' already exists.
+```
+
+**Root Cause**:
+1. Lambda functions automatically create CloudWatch Log Groups `/aws/lambda/<function-name>` when they first execute
+2. If a stack deployment partially succeeds (Lambda executes once), then rolls back, CloudFormation doesn't delete the auto-created log group
+3. The log group becomes an **orphaned resource** not managed by CloudFormation
+4. Subsequent deployments fail because the log group already exists
+
+**The Fix**:
+```python
+# CORRECT - Explicitly create and manage the log group
+metrics_lambda_log_group = logs.LogGroup(
+    self,
+    f"nat-metrics-lambda-{environment_suffix}/LogGroup",
+    log_group_name=f"/aws/lambda/nat-metrics-publisher-{environment_suffix}",
+    retention=logs.RetentionDays.ONE_WEEK,
+    removal_policy=RemovalPolicy.DESTROY,  # ✅ Ensures cleanup on stack deletion
+)
+
+metrics_lambda = lambda_.Function(
+    self,
+    f"nat-metrics-lambda-{environment_suffix}",
+    function_name=f"nat-metrics-publisher-{environment_suffix}",
+    runtime=lambda_.Runtime.PYTHON_3_9,
+    handler="index.handler",
+    log_group=metrics_lambda_log_group,  # ✅ Explicitly link to managed log group
+    ...
+)
+```
+
+**Why This Works**:
+- The log group is now a CloudFormation-managed resource
+- `RemovalPolicy.DESTROY` ensures it's deleted when the stack is destroyed
+- The `log_group` parameter tells Lambda to use the pre-created log group instead of auto-creating one
+- No orphaned log groups are left behind during rollbacks
+
+**Trade-offs**:
+- ✅ **Pro**: Proper lifecycle management and clean rollbacks
+- ✅ **Pro**: Controlled log retention policies
+- ✅ **Pro**: No orphaned resources
+
+**Status**: ✅ Fixed in current implementation
+
+---
+
 ## Summary
 
 ### Code Issues Fixed
 1. ✅ **CfnParameter Token Resolution** - Replaced with `TapStackProps` custom properties
 2. ✅ **Region Token Dictionary Lookup** - Replaced with `MachineImage.latest_amazon_linux2023()`
 3. ✅ **S3 Bucket Policy Conflict** - Removed `auto_delete_objects=True` to avoid VPC Flow Logs policy conflicts
+4. ✅ **Lambda Log Group Orphaning** - Explicitly create log group with `RemovalPolicy.DESTROY`
 
 ### Code Quality
 - ✅ Stack synthesizes successfully

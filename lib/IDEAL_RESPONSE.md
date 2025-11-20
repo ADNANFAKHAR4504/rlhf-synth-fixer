@@ -17,10 +17,12 @@ This implementation creates a production-grade VPC infrastructure with advanced 
 ## Critical Fixes Applied
 
 ### Fix #1: Replaced CfnParameter with TapStackProps
+
 **Issue**: CfnParameter creates CloudFormation tokens that cannot be resolved at synthesis time
 **Solution**: Use custom StackProps class to pass environment_suffix as a direct parameter
 
 ### Fix #2: Used CfnMapping for Region-based AMI Lookup
+
 **Issue**: Cannot use Stack.of(self).region token as dictionary key
 **Solution**: Use CfnMapping construct or MachineImage.latest_amazon_linux2023()
 
@@ -373,6 +375,15 @@ class TapStack(Stack):
         Tags.of(metrics_lambda_role).add("Environment", "Production")
         Tags.of(metrics_lambda_role).add("CostCenter", "NetworkOps")
 
+        # Create CloudWatch Log Group for metrics Lambda (explicit creation ensures proper cleanup)
+        metrics_lambda_log_group = logs.LogGroup(
+            self,
+            f"nat-metrics-lambda-{environment_suffix}/LogGroup",
+            log_group_name=f"/aws/lambda/nat-metrics-publisher-{environment_suffix}",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         metrics_lambda = lambda_.Function(
             self,
             f"nat-metrics-lambda-{environment_suffix}",
@@ -626,6 +637,7 @@ app.synth()
 ## Key Differences from MODEL_RESPONSE
 
 ### 1. TapStackProps Class (NEW)
+
 ```python
 class TapStackProps(StackProps):
     """Properties for TapStack."""
@@ -635,20 +647,21 @@ class TapStackProps(StackProps):
 ```
 
 ### 2. TapStack Constructor (CORRECTED)
+
 ```python
 def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs) -> None:
     # Extract environment_suffix from props if provided
     env_suffix_from_props = props.environment_suffix if props and hasattr(props, 'environment_suffix') else None
-    
+
     # Pass only valid StackProps to parent
     stack_props = {}
     if props:
         if hasattr(props, 'env') and props.env:
             stack_props['env'] = props.env
     stack_props.update(kwargs)
-    
+
     super().__init__(scope, construct_id, **stack_props)
-    
+
     # Use environment suffix from props or default to 'prod'
     environment_suffix = env_suffix_from_props or 'prod'
 ```
@@ -656,12 +669,14 @@ def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStack
 **Replaced**: `environment_suffix = CfnParameter(...)` with direct parameter extraction
 
 ### 3. AMI Mapping (CORRECTED)
+
 ```python
 # Using latest Amazon Linux 2023 for automatic AMI resolution
 machine_image=ec2.MachineImage.latest_amazon_linux2023()
 ```
 
 **Replaced**: Dictionary lookup with CloudFormation token key:
+
 ```python
 # OLD (BROKEN):
 region = Stack.of(self).region
@@ -673,6 +688,7 @@ machine_image=ec2.MachineImage.latest_amazon_linux2023()
 ```
 
 **Alternative Fix** (if specific AMIs required):
+
 ```python
 ami_mapping = cdk.CfnMapping(
     self,
@@ -687,7 +703,9 @@ nat_ami = ami_mapping.find_in_map(Stack.of(self).region, "AMI")
 ```
 
 ### 4. All Resource Names (CORRECTED)
+
 Every resource now uses `environment_suffix` as a string, not a token:
+
 ```python
 # OLD (BROKEN):
 f"vpc-{environment_suffix.value_as_string}"
@@ -697,6 +715,7 @@ f"vpc-{environment_suffix}"
 ```
 
 ### 5. Stack Outputs (MAINTAINED)
+
 All 7 required outputs are correctly defined and will be generated once deployment succeeds:
 
 - VpcId
@@ -729,11 +748,13 @@ aws cloudformation describe-stacks --stack-name TapStackdev --query 'Stacks[0].O
 ## Testing
 
 ### Unit Tests (100% Coverage Achieved)
+
 ```bash
 pipenv run pytest tests/unit/ --cov=lib --cov-report=term-missing -v
 ```
 
 ### Integration Tests (19/19 Passing)
+
 ```bash
 pipenv run pytest tests/integration/ -v
 ```
@@ -756,6 +777,7 @@ pipenv run pytest tests/integration/ -v
 ## Cost Estimate
 
 **Monthly cost estimate (us-east-1)**:
+
 - 3x t3.micro NAT instances: ~$9.12 (3 x $0.0104/hr x 730 hrs)
 - Data transfer: Variable based on usage
 - VPC Flow Logs S3 storage: ~$0.50 (assuming 20GB/month)
@@ -783,6 +805,7 @@ pipenv run pytest tests/integration/ -v
 ## Notes on MODEL_RESPONSE Corrections
 
 The MODEL_RESPONSE had excellent infrastructure design covering all requirements:
+
 - VPC structure
 - Multi-AZ deployment
 - NAT instances
@@ -792,6 +815,7 @@ The MODEL_RESPONSE had excellent infrastructure design covering all requirements
 - Transit Gateway preparation
 
 However, it failed on two critical CDK/CloudFormation concepts:
+
 1. **Token Resolution**: Using CfnParameter values in synthesis-time contexts
 2. **Region Mapping**: Using tokens as dictionary keys
 
@@ -802,6 +826,7 @@ These are common "gotchas" in CDK development that this IDEAL_RESPONSE resolves 
 **Issue**: The `auto_delete_objects=True` parameter on the S3 bucket creates a bucket policy that conflicts with the bucket policy that VPC Flow Logs automatically creates when it starts writing logs. This results in a persistent "The bucket policy already exists" error during deployment.
 
 **Solution Implemented**:
+
 1. **Removed `auto_delete_objects=True`** from the S3 bucket configuration
 2. **Added `-v2` suffix** to bucket name for clean separation from failed deployments
 3. **Manual cleanup** should be handled via pre-deployment cleanup scripts

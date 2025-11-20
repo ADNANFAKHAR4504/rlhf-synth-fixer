@@ -184,10 +184,15 @@ class TestTapStack(unittest.TestCase):
         )
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::Logs::LogGroup", 1)
+        # ASSERT - Now we have 2 log groups: VPC Flow Logs + Lambda metrics
+        template.resource_count_is("AWS::Logs::LogGroup", 2)
+        # Check VPC Flow Logs log group (30-day retention)
         template.has_resource_properties("AWS::Logs::LogGroup", {
             "RetentionInDays": 30,
+        })
+        # Check Lambda metrics log group (7-day retention)
+        template.has_resource_properties("AWS::Logs::LogGroup", {
+            "RetentionInDays": 7,
         })
 
     @mark.it("creates VPC Flow Logs to S3")
