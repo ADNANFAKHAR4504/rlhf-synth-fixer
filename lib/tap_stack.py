@@ -1804,3 +1804,1626 @@ class GlobalResourcesStack(TerraformStack):
         )
 
         self.global_cluster_id = global_cluster.id
+
+
+class TapStack(TerraformStack):
+    """
+    Unified TAP Stack that consolidates GlobalResourcesStack, PrimaryRegionStack, and DrRegionStack.
+    This wrapper provides a single stack interface for easier output collection and management.
+    """
+
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        **kwargs
+    ):
+        """Initialize the unified TAP stack."""
+        super().__init__(scope, construct_id)
+
+        # Extract configuration from kwargs
+        environment_suffix = kwargs.get('environment_suffix', 'dev')
+        state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
+        default_tags = kwargs.get('default_tags', {})
+
+        # Configure AWS Provider for primary region
+        primary_provider = AwsProvider(
+            self,
+            "aws_primary",
+            region="us-east-1",
+            default_tags=[default_tags],
+        )
+
+        # Configure AWS Provider for DR region
+        dr_provider = AwsProvider(
+            self,
+            "aws_dr",
+            region="us-east-2",
+            default_tags=[default_tags],
+            alias="dr"
+        )
+
+        # Configure S3 Backend with native state locking
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/tap-{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+        )
+
+        # Add S3 state locking using escape hatch
+        self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # 1. Create Global Resources (Aurora Global Cluster and DynamoDB Global Table)
+        # Aurora Global Cluster
+        global_cluster = RdsGlobalCluster(
+            self,
+            "global_aurora_cluster",
+            global_cluster_identifier=f"global-aurora-{environment_suffix}",
+            engine="aurora-postgresql",
+            engine_version="14.6",
+            database_name=f"transactions{environment_suffix.replace('-', '')}",
+            storage_encrypted=True,
+            deletion_protection=False,
+            provider=primary_provider
+        )
+
+        # DynamoDB Global Table
+        dynamodb_table = DynamodbTable(
+            self,
+            "global_dynamodb_table",
+            name=f"session-state-{environment_suffix}",
+            billing_mode="PAY_PER_REQUEST",
+            hash_key="session_id",
+            attribute=[
+                DynamodbTableAttribute(
+                    name="session_id",
+                    type="S"
+                )
+            ],
+            replica=[
+                DynamodbTableReplica(
+                    region_name="us-east-2"
+                )
+            ],
+            stream_enabled=True,
+            stream_view_type="NEW_AND_OLD_IMAGES",
+            point_in_time_recovery={
+                "enabled": True
+            },
+            tags={"Name": f"session-state-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Route53 Hosted Zone
+        hosted_zone = Route53Zone(
+            self,
+            "hosted_zone",
+            name=f"transactions-{environment_suffix}.internal",
+            comment=f"Hosted zone for transaction processing {environment_suffix}",
+            tags={"Name": f"transactions-zone-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # 2. Create Primary Region Infrastructure
+        # VPC and Networking - Primary Region (10.0.0.0/16)
+        primary_vpc = Vpc(
+            self,
+            "primary_vpc",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={"Name": f"primary-vpc-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Internet Gateway
+        primary_igw = InternetGateway(
+            self,
+            "primary_igw",
+            vpc_id=primary_vpc.id,
+            tags={"Name": f"primary-igw-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Availability Zones for Primary
+        primary_azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+        # Public Subnets (for ALB) - Primary
+        primary_public_subnets = []
+        for i, az in enumerate(primary_azs):
+            subnet = Subnet(
+                self,
+                f"primary_public_subnet_{i}",
+                vpc_id=primary_vpc.id,
+                cidr_block=f"10.0.{i}.0/24",
+                availability_zone=az,
+                map_public_ip_on_launch=True,
+                tags={"Name": f"primary-public-{az}-{environment_suffix}"},
+                provider=primary_provider
+            )
+            primary_public_subnets.append(subnet)
+
+        # Private Subnets (for Lambda, Aurora) - Primary
+        primary_private_subnets = []
+        for i, az in enumerate(primary_azs):
+            subnet = Subnet(
+                self,
+                f"primary_private_subnet_{i}",
+                vpc_id=primary_vpc.id,
+                cidr_block=f"10.0.{i+10}.0/24",
+                availability_zone=az,
+                tags={"Name": f"primary-private-{az}-{environment_suffix}"},
+                provider=primary_provider
+            )
+            primary_private_subnets.append(subnet)
+
+        # Route table for public subnets - Primary
+        primary_public_rt = RouteTable(
+            self,
+            "primary_public_rt",
+            vpc_id=primary_vpc.id,
+            route=[RouteTableRoute(
+                cidr_block="0.0.0.0/0",
+                gateway_id=primary_igw.id
+            )],
+            tags={"Name": f"primary-public-rt-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Associate public subnets with public route table - Primary
+        for i, subnet in enumerate(primary_public_subnets):
+            RouteTableAssociation(
+                self,
+                f"primary_public_rt_assoc_{i}",
+                subnet_id=subnet.id,
+                route_table_id=primary_public_rt.id,
+                provider=primary_provider
+            )
+
+        # Route table for private subnets - Primary
+        primary_private_rt = RouteTable(
+            self,
+            "primary_private_rt",
+            vpc_id=primary_vpc.id,
+            tags={"Name": f"primary-private-rt-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Associate private subnets with private route table - Primary
+        for i, subnet in enumerate(primary_private_subnets):
+            RouteTableAssociation(
+                self,
+                f"primary_private_rt_assoc_{i}",
+                subnet_id=subnet.id,
+                route_table_id=primary_private_rt.id,
+                provider=primary_provider
+            )
+
+        # KMS Key for Primary Region
+        primary_kms_key = KmsKey(
+            self,
+            "primary_kms_key",
+            description=f"KMS key for primary region {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={"Name": f"primary-kms-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        KmsAlias(
+            self,
+            "primary_kms_alias",
+            name=f"alias/primary-dr-{environment_suffix}",
+            target_key_id=primary_kms_key.id,
+            provider=primary_provider
+        )
+
+        # Security Groups - Primary
+        primary_alb_sg = SecurityGroup(
+            self,
+            "primary_alb_sg",
+            name=f"primary-alb-sg-{environment_suffix}",
+            description="Security group for primary ALB",
+            vpc_id=primary_vpc.id,
+            ingress=[
+                SecurityGroupIngress(
+                    from_port=80,
+                    to_port=80,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow HTTP"
+                ),
+                SecurityGroupIngress(
+                    from_port=443,
+                    to_port=443,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow HTTPS"
+                )
+            ],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={"Name": f"primary-alb-sg-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        primary_lambda_sg = SecurityGroup(
+            self,
+            "primary_lambda_sg",
+            name=f"primary-lambda-sg-{environment_suffix}",
+            description="Security group for primary Lambda functions",
+            vpc_id=primary_vpc.id,
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={"Name": f"primary-lambda-sg-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        primary_aurora_sg = SecurityGroup(
+            self,
+            "primary_aurora_sg",
+            name=f"primary-aurora-sg-{environment_suffix}",
+            description="Security group for primary Aurora cluster",
+            vpc_id=primary_vpc.id,
+            ingress=[
+                SecurityGroupIngress(
+                    from_port=5432,
+                    to_port=5432,
+                    protocol="tcp",
+                    security_groups=[primary_lambda_sg.id],
+                    description="Allow PostgreSQL from Lambda"
+                )
+            ],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={"Name": f"primary-aurora-sg-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Aurora PostgreSQL Primary Cluster
+        primary_db_subnet_group = DbSubnetGroup(
+            self,
+            "primary_db_subnet_group",
+            name=f"primary-db-subnet-{environment_suffix}",
+            subnet_ids=[s.id for s in primary_private_subnets],
+            tags={"Name": f"primary-db-subnet-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        primary_cluster = RdsCluster(
+            self,
+            "primary_aurora_cluster",
+            cluster_identifier=f"primary-aurora-{environment_suffix}",
+            engine="aurora-postgresql",
+            engine_version="14.6",
+            database_name=f"transactions{environment_suffix.replace('-', '')}",
+            master_username="dbadmin",
+            master_password="ChangeMe123!",
+            db_subnet_group_name=primary_db_subnet_group.name,
+            vpc_security_group_ids=[primary_aurora_sg.id],
+            skip_final_snapshot=True,
+            deletion_protection=False,
+            storage_encrypted=True,
+            kms_key_id=primary_kms_key.arn,
+            enabled_cloudwatch_logs_exports=["postgresql"],
+            backup_retention_period=7,
+            preferred_backup_window="03:00-04:00",
+            preferred_maintenance_window="mon:04:00-mon:05:00",
+            global_cluster_identifier=global_cluster.id,
+            serverlessv2_scaling_configuration={
+                "min_capacity": 0.5,
+                "max_capacity": 1.0
+            },
+            depends_on=[primary_db_subnet_group],
+            tags={"Name": f"primary-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"},
+            provider=primary_provider
+        )
+
+        # Aurora Serverless v2 instances - Primary
+        for i in range(2):
+            RdsClusterInstance(
+                self,
+                f"primary_aurora_instance_{i}",
+                identifier=f"primary-aurora-{environment_suffix}-{i}",
+                cluster_identifier=primary_cluster.id,
+                instance_class="db.serverless",
+                engine=primary_cluster.engine,
+                engine_version=primary_cluster.engine_version,
+                publicly_accessible=False,
+                tags={"Name": f"primary-aurora-instance-{i}-{environment_suffix}"},
+                provider=primary_provider
+            )
+
+        # SQS Queue - Primary
+        primary_queue = SqsQueue(
+            self,
+            "primary_sqs_queue",
+            name=f"primary-transactions-{environment_suffix}",
+            visibility_timeout_seconds=300,
+            message_retention_seconds=1209600,
+            kms_master_key_id=primary_kms_key.id,
+            tags={"Name": f"primary-transactions-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Lambda IAM Role - Primary
+        primary_lambda_role = IamRole(
+            self,
+            "primary_lambda_role",
+            name=f"primary-lambda-role-{environment_suffix}",
+            assume_role_policy="""{
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
+                    "Effect": "Allow"
+                }]
+            }""",
+            tags={"Name": f"primary-lambda-role-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            "primary_lambda_basic_execution",
+            role=primary_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            provider=primary_provider
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            "primary_lambda_vpc_execution",
+            role=primary_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+            provider=primary_provider
+        )
+
+        IamRolePolicy(
+            self,
+            "primary_lambda_custom_policy",
+            role=primary_lambda_role.id,
+            name=f"primary-lambda-custom-{environment_suffix}",
+            policy=f"""{{
+                "Version": "2012-10-17",
+                "Statement": [
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:ReceiveMessage",
+                            "sqs:DeleteMessage",
+                            "sqs:GetQueueAttributes"
+                        ],
+                        "Resource": "{primary_queue.arn}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:PutItem",
+                            "dynamodb:GetItem",
+                            "dynamodb:UpdateItem",
+                            "dynamodb:Query"
+                        ],
+                        "Resource": "arn:aws:dynamodb:*:*:table/session-state-{environment_suffix}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "kms:Decrypt",
+                            "kms:GenerateDataKey"
+                        ],
+                        "Resource": "{primary_kms_key.arn}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "rds-data:ExecuteStatement",
+                            "rds-data:BatchExecuteStatement"
+                        ],
+                        "Resource": "{primary_cluster.arn}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject"
+                        ],
+                        "Resource": "arn:aws:s3:::transaction-logs-{environment_suffix}/*"
+                    }}
+                ]
+            }}""",
+            provider=primary_provider
+        )
+
+        # Lambda Function - Primary
+        lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "lambda", "transaction_processor.zip"))
+
+        primary_lambda = LambdaFunction(
+            self,
+            "primary_lambda",
+            function_name=f"primary-transaction-processor-{environment_suffix}",
+            role=primary_lambda_role.arn,
+            handler="transaction_processor.handler",
+            runtime="python3.12",
+            timeout=60,
+            memory_size=512,
+            filename=lambda_zip_path,
+            environment={
+                "variables": {
+                    "ENVIRONMENT_SUFFIX": environment_suffix,
+                    "DB_CLUSTER_ARN": primary_cluster.arn,
+                    "DB_NAME": primary_cluster.database_name,
+                    "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
+                }
+            },
+            vpc_config={
+                "subnet_ids": [s.id for s in primary_private_subnets],
+                "security_group_ids": [primary_lambda_sg.id]
+            },
+            tags={"Name": f"primary-transaction-processor-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        LambdaEventSourceMapping(
+            self,
+            "primary_lambda_sqs_trigger",
+            event_source_arn=primary_queue.arn,
+            function_name=primary_lambda.function_name,
+            batch_size=10,
+            maximum_batching_window_in_seconds=5,
+            provider=primary_provider
+        )
+
+        CloudwatchLogGroup(
+            self,
+            "primary_lambda_log_group",
+            name=f"/aws/lambda/{primary_lambda.function_name}",
+            retention_in_days=7,
+            tags={"Name": f"primary-lambda-logs-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # S3 Buckets - Primary
+        primary_logs_bucket = S3Bucket(
+            self,
+            "primary_logs_bucket",
+            bucket=f"transaction-logs-{environment_suffix}",
+            force_destroy=True,
+            tags={"Name": f"transaction-logs-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        S3BucketVersioning(
+            self,
+            "primary_logs_versioning",
+            bucket=primary_logs_bucket.id,
+            versioning_configuration={
+                "status": "Enabled"
+            },
+            provider=primary_provider
+        )
+
+        S3BucketServerSideEncryptionConfiguration(
+            self,
+            "primary_logs_encryption",
+            bucket=primary_logs_bucket.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    sse_algorithm="aws:kms",
+                    kms_master_key_id=primary_kms_key.arn
+                )
+            )],
+            provider=primary_provider
+        )
+
+        primary_docs_bucket = S3Bucket(
+            self,
+            "primary_docs_bucket",
+            bucket=f"transaction-documents-{environment_suffix}",
+            force_destroy=True,
+            tags={"Name": f"transaction-documents-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        S3BucketVersioning(
+            self,
+            "primary_docs_versioning",
+            bucket=primary_docs_bucket.id,
+            versioning_configuration={
+                "status": "Enabled"
+            },
+            provider=primary_provider
+        )
+
+        S3BucketServerSideEncryptionConfiguration(
+            self,
+            "primary_docs_encryption",
+            bucket=primary_docs_bucket.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    sse_algorithm="aws:kms",
+                    kms_master_key_id=primary_kms_key.arn
+                )
+            )],
+            provider=primary_provider
+        )
+
+        # ALB - Primary
+        primary_alb = Lb(
+            self,
+            "primary_alb",
+            name=f"primary-alb-{environment_suffix}",
+            internal=False,
+            load_balancer_type="application",
+            security_groups=[primary_alb_sg.id],
+            subnets=[s.id for s in primary_public_subnets],
+            enable_deletion_protection=False,
+            tags={"Name": f"primary-alb-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        primary_target_group = LbTargetGroup(
+            self,
+            "primary_target_group",
+            name=f"primary-tg-{environment_suffix}",
+            target_type="lambda",
+            tags={"Name": f"primary-tg-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        LambdaPermission(
+            self,
+            "primary_lambda_alb_permission",
+            statement_id="AllowALBInvoke",
+            action="lambda:InvokeFunction",
+            function_name=primary_lambda.function_name,
+            principal="elasticloadbalancing.amazonaws.com",
+            source_arn=primary_target_group.arn,
+            provider=primary_provider
+        )
+
+        LbTargetGroupAttachment(
+            self,
+            "primary_lambda_attachment",
+            target_group_arn=primary_target_group.arn,
+            target_id=primary_lambda.arn,
+            depends_on=[primary_lambda],
+            provider=primary_provider
+        )
+
+        LbListener(
+            self,
+            "primary_alb_listener",
+            load_balancer_arn=primary_alb.arn,
+            port=80,
+            protocol="HTTP",
+            default_action=[LbListenerDefaultAction(
+                type="forward",
+                target_group_arn=primary_target_group.arn
+            )],
+            tags={"Name": f"primary-alb-listener-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # SNS Topic - Primary
+        primary_sns_topic = SnsTopic(
+            self,
+            "primary_sns_topic",
+            name=f"primary-alarms-{environment_suffix}",
+            kms_master_key_id=primary_kms_key.id,
+            tags={"Name": f"primary-alarms-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # CloudWatch Alarms - Primary
+        CloudwatchMetricAlarm(
+            self,
+            "primary_aurora_lag_alarm",
+            alarm_name=f"primary-aurora-lag-{environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="AuroraGlobalDBReplicationLag",
+            namespace="AWS/RDS",
+            period=60,
+            statistic="Average",
+            threshold=5000,
+            alarm_description="Aurora Global DB replication lag",
+            alarm_actions=[primary_sns_topic.arn],
+            dimensions={
+                "DBClusterIdentifier": primary_cluster.cluster_identifier
+            },
+            tags={"Name": f"primary-aurora-lag-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        CloudwatchMetricAlarm(
+            self,
+            "primary_lambda_error_alarm",
+            alarm_name=f"primary-lambda-errors-{environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="Errors",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=5,
+            alarm_description="Lambda function errors",
+            alarm_actions=[primary_sns_topic.arn],
+            dimensions={
+                "FunctionName": primary_lambda.function_name
+            },
+            tags={"Name": f"primary-lambda-errors-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # AWS Backup - Primary
+        primary_backup_vault = BackupVault(
+            self,
+            "primary_backup_vault",
+            name=f"primary-aurora-vault-{environment_suffix}",
+            kms_key_arn=primary_kms_key.arn,
+            tags={"Name": f"primary-aurora-vault-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        primary_backup_plan = BackupPlan(
+            self,
+            "primary_backup_plan",
+            name=f"primary-aurora-backup-{environment_suffix}",
+            rule=[BackupPlanRule(
+                rule_name="daily-backup",
+                target_vault_name=primary_backup_vault.name,
+                schedule="cron(0 3 * * ? *)",
+                lifecycle=BackupPlanRuleLifecycle(
+                    delete_after=7
+                )
+            )],
+            tags={"Name": f"primary-aurora-backup-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        primary_backup_role = IamRole(
+            self,
+            "primary_backup_role",
+            name=f"primary-backup-role-{environment_suffix}",
+            assume_role_policy="""{
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "backup.amazonaws.com"
+                    },
+                    "Effect": "Allow"
+                }]
+            }""",
+            tags={"Name": f"primary-backup-role-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            "primary_backup_policy",
+            role=primary_backup_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+            provider=primary_provider
+        )
+
+        BackupSelection(
+            self,
+            "primary_backup_selection",
+            name=f"primary-aurora-selection-{environment_suffix}",
+            plan_id=primary_backup_plan.id,
+            iam_role_arn=primary_backup_role.arn,
+            selection_tag=[BackupSelectionSelectionTag(
+                type="STRINGEQUALS",
+                key="BackupPlan",
+                value="aurora-backup"
+            )],
+            provider=primary_provider
+        )
+
+        # 3. Create DR Region Infrastructure
+        # VPC and Networking - DR Region (10.1.0.0/16)
+        dr_vpc = Vpc(
+            self,
+            "dr_vpc",
+            cidr_block="10.1.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={"Name": f"dr-vpc-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_igw = InternetGateway(
+            self,
+            "dr_igw",
+            vpc_id=dr_vpc.id,
+            tags={"Name": f"dr-igw-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_azs = ["us-east-2a", "us-east-2b", "us-east-2c"]
+
+        dr_public_subnets = []
+        for i, az in enumerate(dr_azs):
+            subnet = Subnet(
+                self,
+                f"dr_public_subnet_{i}",
+                vpc_id=dr_vpc.id,
+                cidr_block=f"10.1.{i}.0/24",
+                availability_zone=az,
+                map_public_ip_on_launch=True,
+                tags={"Name": f"dr-public-{az}-{environment_suffix}"},
+                provider=dr_provider
+            )
+            dr_public_subnets.append(subnet)
+
+        dr_private_subnets = []
+        for i, az in enumerate(dr_azs):
+            subnet = Subnet(
+                self,
+                f"dr_private_subnet_{i}",
+                vpc_id=dr_vpc.id,
+                cidr_block=f"10.1.{i+10}.0/24",
+                availability_zone=az,
+                tags={"Name": f"dr-private-{az}-{environment_suffix}"},
+                provider=dr_provider
+            )
+            dr_private_subnets.append(subnet)
+
+        dr_public_rt = RouteTable(
+            self,
+            "dr_public_rt",
+            vpc_id=dr_vpc.id,
+            route=[RouteTableRoute(
+                cidr_block="0.0.0.0/0",
+                gateway_id=dr_igw.id
+            )],
+            tags={"Name": f"dr-public-rt-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        for i, subnet in enumerate(dr_public_subnets):
+            RouteTableAssociation(
+                self,
+                f"dr_public_rt_assoc_{i}",
+                subnet_id=subnet.id,
+                route_table_id=dr_public_rt.id,
+                provider=dr_provider
+            )
+
+        dr_private_rt = RouteTable(
+            self,
+            "dr_private_rt",
+            vpc_id=dr_vpc.id,
+            tags={"Name": f"dr-private-rt-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        for i, subnet in enumerate(dr_private_subnets):
+            RouteTableAssociation(
+                self,
+                f"dr_private_rt_assoc_{i}",
+                subnet_id=subnet.id,
+                route_table_id=dr_private_rt.id,
+                provider=dr_provider
+            )
+
+        # KMS Key for DR Region
+        dr_kms_key = KmsKey(
+            self,
+            "dr_kms_key",
+            description=f"KMS key for DR region {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={"Name": f"dr-kms-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        KmsAlias(
+            self,
+            "dr_kms_alias",
+            name=f"alias/dr-dr-{environment_suffix}",
+            target_key_id=dr_kms_key.id,
+            provider=dr_provider
+        )
+
+        # Security Groups - DR
+        dr_alb_sg = SecurityGroup(
+            self,
+            "dr_alb_sg",
+            name=f"dr-alb-sg-{environment_suffix}",
+            description="Security group for DR ALB",
+            vpc_id=dr_vpc.id,
+            ingress=[
+                SecurityGroupIngress(
+                    from_port=80,
+                    to_port=80,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow HTTP"
+                ),
+                SecurityGroupIngress(
+                    from_port=443,
+                    to_port=443,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow HTTPS"
+                )
+            ],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={"Name": f"dr-alb-sg-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_lambda_sg = SecurityGroup(
+            self,
+            "dr_lambda_sg",
+            name=f"dr-lambda-sg-{environment_suffix}",
+            description="Security group for DR Lambda functions",
+            vpc_id=dr_vpc.id,
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={"Name": f"dr-lambda-sg-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_aurora_sg = SecurityGroup(
+            self,
+            "dr_aurora_sg",
+            name=f"dr-aurora-sg-{environment_suffix}",
+            description="Security group for DR Aurora cluster",
+            vpc_id=dr_vpc.id,
+            ingress=[
+                SecurityGroupIngress(
+                    from_port=5432,
+                    to_port=5432,
+                    protocol="tcp",
+                    security_groups=[dr_lambda_sg.id],
+                    description="Allow PostgreSQL from Lambda"
+                )
+            ],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={"Name": f"dr-aurora-sg-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        # Aurora PostgreSQL Secondary Cluster - DR
+        dr_db_subnet_group = DbSubnetGroup(
+            self,
+            "dr_db_subnet_group",
+            name=f"dr-db-subnet-{environment_suffix}",
+            subnet_ids=[s.id for s in dr_private_subnets],
+            tags={"Name": f"dr-db-subnet-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_cluster = RdsCluster(
+            self,
+            "dr_aurora_cluster",
+            cluster_identifier=f"dr-aurora-{environment_suffix}",
+            engine="aurora-postgresql",
+            engine_version="14.6",
+            db_subnet_group_name=dr_db_subnet_group.name,
+            vpc_security_group_ids=[dr_aurora_sg.id],
+            skip_final_snapshot=True,
+            deletion_protection=False,
+            storage_encrypted=True,
+            kms_key_id=dr_kms_key.arn,
+            enabled_cloudwatch_logs_exports=["postgresql"],
+            backup_retention_period=7,
+            preferred_backup_window="03:00-04:00",
+            preferred_maintenance_window="mon:04:00-mon:05:00",
+            global_cluster_identifier=global_cluster.id,
+            serverlessv2_scaling_configuration={
+                "min_capacity": 0.5,
+                "max_capacity": 1.0
+            },
+            depends_on=[dr_db_subnet_group],
+            tags={"Name": f"dr-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"},
+            provider=dr_provider
+        )
+
+        # Aurora Serverless v2 instances - DR
+        for i in range(2):
+            RdsClusterInstance(
+                self,
+                f"dr_aurora_instance_{i}",
+                identifier=f"dr-aurora-{environment_suffix}-{i}",
+                cluster_identifier=dr_cluster.id,
+                instance_class="db.serverless",
+                engine=dr_cluster.engine,
+                engine_version=dr_cluster.engine_version,
+                publicly_accessible=False,
+                tags={"Name": f"dr-aurora-instance-{i}-{environment_suffix}"},
+                provider=dr_provider
+            )
+
+        # SQS Queue - DR
+        dr_queue = SqsQueue(
+            self,
+            "dr_sqs_queue",
+            name=f"dr-transactions-{environment_suffix}",
+            visibility_timeout_seconds=300,
+            message_retention_seconds=1209600,
+            kms_master_key_id=dr_kms_key.id,
+            tags={"Name": f"dr-transactions-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        # Lambda IAM Role - DR
+        dr_lambda_role = IamRole(
+            self,
+            "dr_lambda_role",
+            name=f"dr-lambda-role-{environment_suffix}",
+            assume_role_policy="""{
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
+                    "Effect": "Allow"
+                }]
+            }""",
+            tags={"Name": f"dr-lambda-role-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            "dr_lambda_basic_execution",
+            role=dr_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+            provider=dr_provider
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            "dr_lambda_vpc_execution",
+            role=dr_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+            provider=dr_provider
+        )
+
+        IamRolePolicy(
+            self,
+            "dr_lambda_custom_policy",
+            role=dr_lambda_role.id,
+            name=f"dr-lambda-custom-{environment_suffix}",
+            policy=f"""{{
+                "Version": "2012-10-17",
+                "Statement": [
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:ReceiveMessage",
+                            "sqs:DeleteMessage",
+                            "sqs:GetQueueAttributes"
+                        ],
+                        "Resource": "{dr_queue.arn}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:PutItem",
+                            "dynamodb:GetItem",
+                            "dynamodb:UpdateItem",
+                            "dynamodb:Query"
+                        ],
+                        "Resource": "arn:aws:dynamodb:*:*:table/session-state-{environment_suffix}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "kms:Decrypt",
+                            "kms:GenerateDataKey"
+                        ],
+                        "Resource": "{dr_kms_key.arn}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "rds-data:ExecuteStatement",
+                            "rds-data:BatchExecuteStatement"
+                        ],
+                        "Resource": "{dr_cluster.arn}"
+                    }},
+                    {{
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject"
+                        ],
+                        "Resource": "arn:aws:s3:::transaction-logs-dr-{environment_suffix}/*"
+                    }}
+                ]
+            }}""",
+            provider=dr_provider
+        )
+
+        # Lambda Function - DR
+        dr_lambda = LambdaFunction(
+            self,
+            "dr_lambda",
+            function_name=f"dr-transaction-processor-{environment_suffix}",
+            role=dr_lambda_role.arn,
+            handler="transaction_processor.handler",
+            runtime="python3.12",
+            timeout=60,
+            memory_size=512,
+            filename=lambda_zip_path,
+            environment={
+                "variables": {
+                    "ENVIRONMENT_SUFFIX": environment_suffix,
+                    "DB_CLUSTER_ARN": dr_cluster.arn,
+                    "DB_NAME": dr_cluster.database_name if hasattr(dr_cluster, 'database_name') else f"transactions{environment_suffix.replace('-', '')}",
+                    "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
+                }
+            },
+            vpc_config={
+                "subnet_ids": [s.id for s in dr_private_subnets],
+                "security_group_ids": [dr_lambda_sg.id]
+            },
+            tags={"Name": f"dr-transaction-processor-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        LambdaEventSourceMapping(
+            self,
+            "dr_lambda_sqs_trigger",
+            event_source_arn=dr_queue.arn,
+            function_name=dr_lambda.function_name,
+            batch_size=10,
+            maximum_batching_window_in_seconds=5,
+            provider=dr_provider
+        )
+
+        CloudwatchLogGroup(
+            self,
+            "dr_lambda_log_group",
+            name=f"/aws/lambda/{dr_lambda.function_name}",
+            retention_in_days=7,
+            tags={"Name": f"dr-lambda-logs-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        # S3 Buckets - DR
+        dr_logs_bucket = S3Bucket(
+            self,
+            "dr_logs_bucket",
+            bucket=f"transaction-logs-dr-{environment_suffix}",
+            force_destroy=True,
+            tags={"Name": f"transaction-logs-dr-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        S3BucketVersioning(
+            self,
+            "dr_logs_versioning",
+            bucket=dr_logs_bucket.id,
+            versioning_configuration={
+                "status": "Enabled"
+            },
+            provider=dr_provider
+        )
+
+        S3BucketServerSideEncryptionConfiguration(
+            self,
+            "dr_logs_encryption",
+            bucket=dr_logs_bucket.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    sse_algorithm="aws:kms",
+                    kms_master_key_id=dr_kms_key.arn
+                )
+            )],
+            provider=dr_provider
+        )
+
+        dr_docs_bucket = S3Bucket(
+            self,
+            "dr_docs_bucket",
+            bucket=f"transaction-documents-dr-{environment_suffix}",
+            force_destroy=True,
+            tags={"Name": f"transaction-documents-dr-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        S3BucketVersioning(
+            self,
+            "dr_docs_versioning",
+            bucket=dr_docs_bucket.id,
+            versioning_configuration={
+                "status": "Enabled"
+            },
+            provider=dr_provider
+        )
+
+        S3BucketServerSideEncryptionConfiguration(
+            self,
+            "dr_docs_encryption",
+            bucket=dr_docs_bucket.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    sse_algorithm="aws:kms",
+                    kms_master_key_id=dr_kms_key.arn
+                )
+            )],
+            provider=dr_provider
+        )
+
+        # ALB - DR
+        dr_alb = Lb(
+            self,
+            "dr_alb",
+            name=f"dr-alb-{environment_suffix}",
+            internal=False,
+            load_balancer_type="application",
+            security_groups=[dr_alb_sg.id],
+            subnets=[s.id for s in dr_public_subnets],
+            enable_deletion_protection=False,
+            tags={"Name": f"dr-alb-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_target_group = LbTargetGroup(
+            self,
+            "dr_target_group",
+            name=f"dr-tg-{environment_suffix}",
+            target_type="lambda",
+            tags={"Name": f"dr-tg-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        LambdaPermission(
+            self,
+            "dr_lambda_alb_permission",
+            statement_id="AllowALBInvoke",
+            action="lambda:InvokeFunction",
+            function_name=dr_lambda.function_name,
+            principal="elasticloadbalancing.amazonaws.com",
+            source_arn=dr_target_group.arn,
+            provider=dr_provider
+        )
+
+        LbTargetGroupAttachment(
+            self,
+            "dr_lambda_attachment",
+            target_group_arn=dr_target_group.arn,
+            target_id=dr_lambda.arn,
+            depends_on=[dr_lambda],
+            provider=dr_provider
+        )
+
+        LbListener(
+            self,
+            "dr_alb_listener",
+            load_balancer_arn=dr_alb.arn,
+            port=80,
+            protocol="HTTP",
+            default_action=[LbListenerDefaultAction(
+                type="forward",
+                target_group_arn=dr_target_group.arn
+            )],
+            tags={"Name": f"dr-alb-listener-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        # SNS Topic - DR
+        dr_sns_topic = SnsTopic(
+            self,
+            "dr_sns_topic",
+            name=f"dr-alarms-{environment_suffix}",
+            kms_master_key_id=dr_kms_key.id,
+            tags={"Name": f"dr-alarms-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        # CloudWatch Alarms - DR
+        CloudwatchMetricAlarm(
+            self,
+            "dr_aurora_lag_alarm",
+            alarm_name=f"dr-aurora-lag-{environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="AuroraGlobalDBReplicationLag",
+            namespace="AWS/RDS",
+            period=60,
+            statistic="Average",
+            threshold=5000,
+            alarm_description="Aurora Global DB replication lag in DR",
+            alarm_actions=[dr_sns_topic.arn],
+            dimensions={
+                "DBClusterIdentifier": dr_cluster.cluster_identifier
+            },
+            tags={"Name": f"dr-aurora-lag-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        CloudwatchMetricAlarm(
+            self,
+            "dr_lambda_error_alarm",
+            alarm_name=f"dr-lambda-errors-{environment_suffix}",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="Errors",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=5,
+            alarm_description="Lambda function errors in DR",
+            alarm_actions=[dr_sns_topic.arn],
+            dimensions={
+                "FunctionName": dr_lambda.function_name
+            },
+            tags={"Name": f"dr-lambda-errors-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        CloudwatchMetricAlarm(
+            self,
+            "dr_s3_replication_alarm",
+            alarm_name=f"dr-s3-replication-{environment_suffix}",
+            comparison_operator="LessThanThreshold",
+            evaluation_periods=2,
+            metric_name="ReplicationLatency",
+            namespace="AWS/S3",
+            period=300,
+            statistic="Average",
+            threshold=1,
+            alarm_description="S3 replication latency",
+            alarm_actions=[dr_sns_topic.arn],
+            dimensions={
+                "SourceBucket": primary_logs_bucket.id,
+                "DestinationBucket": dr_logs_bucket.id,
+                "RuleId": "replication-rule"
+            },
+            tags={"Name": f"dr-s3-replication-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        # AWS Backup - DR
+        dr_backup_vault = BackupVault(
+            self,
+            "dr_backup_vault",
+            name=f"dr-aurora-vault-{environment_suffix}",
+            kms_key_arn=dr_kms_key.arn,
+            tags={"Name": f"dr-aurora-vault-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_backup_plan = BackupPlan(
+            self,
+            "dr_backup_plan",
+            name=f"dr-aurora-backup-{environment_suffix}",
+            rule=[BackupPlanRule(
+                rule_name="daily-backup",
+                target_vault_name=dr_backup_vault.name,
+                schedule="cron(0 3 * * ? *)",
+                lifecycle=BackupPlanRuleLifecycle(
+                    delete_after=7
+                )
+            )],
+            tags={"Name": f"dr-aurora-backup-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        dr_backup_role = IamRole(
+            self,
+            "dr_backup_role",
+            name=f"dr-backup-role-{environment_suffix}",
+            assume_role_policy="""{
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Action": "sts:AssumeRole",
+                    "Principal": {
+                        "Service": "backup.amazonaws.com"
+                    },
+                    "Effect": "Allow"
+                }]
+            }""",
+            tags={"Name": f"dr-backup-role-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            "dr_backup_policy",
+            role=dr_backup_role.name,
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+            provider=dr_provider
+        )
+
+        BackupSelection(
+            self,
+            "dr_backup_selection",
+            name=f"dr-aurora-selection-{environment_suffix}",
+            plan_id=dr_backup_plan.id,
+            iam_role_arn=dr_backup_role.arn,
+            selection_tag=[BackupSelectionSelectionTag(
+                type="STRINGEQUALS",
+                key="BackupPlan",
+                value="aurora-backup"
+            )],
+            provider=dr_provider
+        )
+
+        # 4. VPC Peering Connection
+        peering_connection = VpcPeeringConnection(
+            self,
+            "vpc_peering",
+            vpc_id=primary_vpc.id,
+            peer_vpc_id=dr_vpc.id,
+            peer_region="us-east-2",
+            auto_accept=False,
+            tags={"Name": f"primary-dr-peering-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        VpcPeeringConnectionAccepter(
+            self,
+            "vpc_peering_accepter",
+            vpc_peering_connection_id=peering_connection.id,
+            auto_accept=True,
+            tags={"Name": f"primary-dr-peering-accepter-{environment_suffix}"},
+            provider=dr_provider
+        )
+
+        Route(
+            self,
+            "primary_to_dr_route",
+            route_table_id=primary_private_rt.id,
+            destination_cidr_block="10.1.0.0/16",
+            vpc_peering_connection_id=peering_connection.id,
+            provider=primary_provider
+        )
+
+        Route(
+            self,
+            "dr_to_primary_route",
+            route_table_id=dr_private_rt.id,
+            destination_cidr_block="10.0.0.0/16",
+            vpc_peering_connection_id=peering_connection.id,
+            provider=dr_provider
+        )
+
+        # 5. Route53 Health Checks and Records
+        primary_health_check = Route53HealthCheck(
+            self,
+            "primary_health_check",
+            fqdn=primary_alb.dns_name,
+            port=80,
+            type="HTTP",
+            resource_path="/",
+            failure_threshold=3,
+            request_interval=30,
+            measure_latency=True,
+            tags={"Name": f"primary-health-check-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        dr_health_check = Route53HealthCheck(
+            self,
+            "dr_health_check",
+            fqdn=dr_alb.dns_name,
+            port=80,
+            type="HTTP",
+            resource_path="/",
+            failure_threshold=3,
+            request_interval=30,
+            measure_latency=True,
+            tags={"Name": f"dr-health-check-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Route53 Weighted Routing Records
+        Route53Record(
+            self,
+            "primary_record",
+            zone_id=hosted_zone.zone_id,
+            name=f"app.{hosted_zone.name}",
+            type="CNAME",
+            ttl=60,
+            records=[primary_alb.dns_name],
+            weighted_routing_policy=Route53RecordWeightedRoutingPolicy(
+                weight=100
+            ),
+            set_identifier="primary",
+            health_check_id=primary_health_check.id,
+            provider=primary_provider
+        )
+
+        Route53Record(
+            self,
+            "dr_record",
+            zone_id=hosted_zone.zone_id,
+            name=f"app.{hosted_zone.name}",
+            type="CNAME",
+            ttl=60,
+            records=[dr_alb.dns_name],
+            weighted_routing_policy=Route53RecordWeightedRoutingPolicy(
+                weight=50
+            ),
+            set_identifier="dr",
+            health_check_id=dr_health_check.id,
+            provider=primary_provider
+        )
+
+        # Terraform Outputs - Global Resources
+        TerraformOutput(
+            self,
+            "global_cluster_id_output",
+            value=global_cluster.id,
+            description="Aurora Global Cluster ID"
+        )
+
+        TerraformOutput(
+            self,
+            "dynamodb_table_name_output",
+            value=dynamodb_table.name,
+            description="DynamoDB Global Table name"
+        )
+
+        TerraformOutput(
+            self,
+            "route53_zone_id_output",
+            value=hosted_zone.zone_id,
+            description="Route53 Hosted Zone ID"
+        )
+
+        TerraformOutput(
+            self,
+            "route53_nameservers_output",
+            value=Fn.join(",", hosted_zone.name_servers),
+            description="Route53 Hosted Zone nameservers"
+        )
+
+        # Terraform Outputs - Primary Region
+        TerraformOutput(
+            self,
+            "primary_alb_dns_output",
+            value=primary_alb.dns_name,
+            description="Primary region ALB DNS name"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_aurora_endpoint_output",
+            value=primary_cluster.endpoint,
+            description="Primary Aurora cluster endpoint"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_vpc_id_output",
+            value=primary_vpc.id,
+            description="Primary VPC ID"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_lambda_arn_output",
+            value=primary_lambda.arn,
+            description="Primary Lambda function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_sqs_queue_url_output",
+            value=primary_queue.url,
+            description="Primary SQS queue URL"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_s3_logs_bucket_output",
+            value=primary_logs_bucket.id,
+            description="Primary S3 logs bucket name"
+        )
+
+        TerraformOutput(
+            self,
+            "primary_s3_docs_bucket_output",
+            value=primary_docs_bucket.id,
+            description="Primary S3 docs bucket name"
+        )
+
+        # Terraform Outputs - DR Region
+        TerraformOutput(
+            self,
+            "dr_alb_dns_output",
+            value=dr_alb.dns_name,
+            description="DR region ALB DNS name"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_aurora_endpoint_output",
+            value=dr_cluster.endpoint,
+            description="DR Aurora cluster endpoint"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_vpc_id_output",
+            value=dr_vpc.id,
+            description="DR VPC ID"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_lambda_arn_output",
+            value=dr_lambda.arn,
+            description="DR Lambda function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_sqs_queue_url_output",
+            value=dr_queue.url,
+            description="DR SQS queue URL"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_s3_logs_bucket_output",
+            value=dr_logs_bucket.id,
+            description="DR S3 logs bucket name"
+        )
+
+        TerraformOutput(
+            self,
+            "dr_s3_docs_bucket_output",
+            value=dr_docs_bucket.id,
+            description="DR S3 docs bucket name"
+        )
