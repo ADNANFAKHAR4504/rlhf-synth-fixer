@@ -15,8 +15,16 @@ import boto3
 from botocore.exceptions import ClientError
 from tabulate import tabulate
 import os
-import matplotlib.pyplot as plt
-import pandas as pd
+
+# Optional dependencies for chart generation
+try:
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    CHART_DEPENDENCIES_AVAILABLE = True
+except ImportError:
+    CHART_DEPENDENCIES_AVAILABLE = False
+    plt = None
+    pd = None
 
 # Configure logging
 logging.basicConfig(
@@ -1063,6 +1071,10 @@ class CloudWatchLogsAnalyzer:
         """Generate retention vs cost analysis chart showing retention period vs monthly cost"""
         if not self.log_groups_data:
             logger.info("No log groups to analyze - skipping chart generation")
+            return
+
+        if not CHART_DEPENDENCIES_AVAILABLE:
+            logger.warning("Matplotlib/Pandas not available - skipping chart generation. Install with: pip install matplotlib pandas")
             return
 
         # Prepare data using pandas
