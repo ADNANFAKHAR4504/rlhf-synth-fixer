@@ -1,0 +1,19 @@
+{
+  "po_id": "p5r2e5",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-20T16:56:25+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "aws_services": [
+    "WAFv2",
+    "S3",
+    "CloudWatch"
+  ],
+  "training_quality": 10
+}
