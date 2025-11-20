@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
+
 import aws_cdk as cdk
+
 from lib.tap_stack import TapStack
 
 app = cdk.App()

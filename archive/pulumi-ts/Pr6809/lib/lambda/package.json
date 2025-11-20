@@ -1,0 +1,11 @@
+{
+  "name": "market-analytics-lambda",
+  "version": "1.0.0",
+  "description": "Lambda functions for market analytics pipeline",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-eventbridge": "^3.0.0",
+    "@aws-sdk/client-cloudwatch": "^3.0.0"
+  }
+}
