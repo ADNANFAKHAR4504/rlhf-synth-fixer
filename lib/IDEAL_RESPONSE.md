@@ -3,7 +3,7 @@ reviewer: adnan-turing
 
 # Multi-Region Disaster Recovery Solution - Ideal Implementation
 
-This document contains the complete corrected CloudFormation implementation for the multi-region disaster recovery solution with the circular dependency issue resolved.
+This document contains the complete corrected CloudFormation implementation for the multi-region disaster recovery solution with the circular dependency issue resolved
 
 ## Key Fix: Circular Dependency Resolution
 
