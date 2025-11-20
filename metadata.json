@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T12:54:04+00:00",
+  "po_id": "101912549",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "All database credentials must be stored in AWS Secrets Manager and rotated automatically",
+    "Application logs must be centralized and retained for exactly 30 days for compliance",
+    "Cross-origin resource sharing (CORS) must be explicitly configured for the frontend domain only",
+    "All S3 buckets must have versioning enabled and lifecycle policies for 90-day object expiration",
+    "Auto Scaling Group must use step scaling policies based on ALB request count metrics"
+  ],
+  "aws_services": [
+    "VPC",
+    "NAT Gateway",
+    "Application Load Balancer",
+    "ECS Fargate",
+    "RDS Aurora MySQL",
+    "S3",
+    "CloudFront",
+    "Auto Scaling",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "Security Groups"
+  ],
+  "region": "us-east-2",
+  "training_quality": 9
+}

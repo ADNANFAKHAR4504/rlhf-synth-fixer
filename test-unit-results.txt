@@ -1,0 +1,148 @@
+
+> tap@0.1.0 test:unit
+> jest --coverage --testPathPattern=\.unit\.test\.ts$
+
+ts-jest[ts-jest-transformer] (WARN) Define `ts-jest` config under `globals` is deprecated. Please do
+transform: {
+    <transform_regex>: ['ts-jest', { /* ts-jest config goes here in Jest */ }],
+},
+See more at https://kulshekhar.github.io/ts-jest/docs/getting-started/presets#advanced
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in /var/www/turing/iac-test-automations/worktree/synth-101912549/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+PASS test/tap-stack.unit.test.ts
+  TapStack CloudFormation Template - Loan Processing Infrastructure
+    Template Structure
+      ✓ should have valid CloudFormation format version (1 ms)
+      ✓ should have a description
+      ✓ should have valid JSON structure
+      ✓ should have all required sections (1 ms)
+    Parameters
+      ✓ should have all 8 required parameters (1 ms)
+      ✓ EnvironmentSuffix parameter should have correct properties (1 ms)
+      ✓ VpcCIDR parameter should have correct properties
+      ✓ ContainerImage parameter should have correct properties (1 ms)
+      ✓ ContainerCpu parameter should have correct properties and allowed values (1 ms)
+      ✓ ContainerMemory parameter should have correct properties and allowed values (1 ms)
+      ✓ DBMasterUsername parameter should have correct properties (1 ms)
+      ✓ AlertEmail parameter should have correct properties
+      ✓ FrontendDomain parameter should have correct properties
+    VPC Configuration
+      ✓ VPC should exist with correct properties (1 ms)
+      ✓ VPC should use environmentSuffix in naming
+      ✓ Internet Gateway should exist with correct properties (1 ms)
+      ✓ Internet Gateway should be attached to VPC
+    Subnets Configuration
+      ✓ should have 3 public subnets across 3 AZs (2 ms)
+      ✓ public subnets should have correct CIDR blocks (2 ms)
+      ✓ should have 3 private subnets across 3 AZs (2 ms)
+      ✓ private subnets should have correct CIDR blocks
+      ✓ all subnets should use environmentSuffix in naming (1 ms)
+    NAT Gateways Configuration
+      ✓ should have 3 NAT Gateway EIPs (1 ms)
+      ✓ should have 3 NAT Gateways (one per AZ) (1 ms)
+      ✓ NAT Gateways should use environmentSuffix in naming (1 ms)
+    Route Tables and Routes
+      ✓ should have public route table with internet gateway route (1 ms)
+      ✓ should have 3 public subnet route table associations (1 ms)
+      ✓ should have 3 private route tables with NAT gateway routes (2 ms)
+      ✓ should have 3 private subnet route table associations (1 ms)
+    Security Groups
+      ✓ ALB Security Group should allow HTTP and HTTPS from internet (2 ms)
+      ✓ ECS Security Group should allow port 3000 from ALB only (1 ms)
+      ✓ RDS Security Group should allow MySQL port from ECS only (1 ms)
+      ✓ all security groups should allow all egress traffic (1 ms)
+    RDS Aurora Database
+      ✓ DB Subnet Group should exist with 3 private subnets (1 ms)
+      ✓ DB Secret should be created in Secrets Manager (1 ms)
+      ✓ Aurora cluster should be configured correctly (4 ms)
+      ✓ Aurora cluster should have CloudWatch logs enabled
+      ✓ Aurora cluster should use Secrets Manager for credentials
+      ✓ should have 2 Aurora instances across 2 AZs
+    S3 Static Assets Bucket
+      ✓ S3 bucket should be configured correctly
+      ✓ S3 bucket should have versioning enabled
+      ✓ S3 bucket should have lifecycle policy for 90 days
+      ✓ S3 bucket should have CORS configured
+      ✓ S3 bucket should block all public access
+      ✓ S3 bucket should have encryption enabled (1 ms)
+    CloudFront Distribution
+      ✓ CloudFront OAI should exist
+      ✓ S3 Bucket Policy should grant CloudFront OAI access (1 ms)
+      ✓ CloudFront distribution should be configured correctly
+      ✓ CloudFront should use S3 origin with OAI
+      ✓ CloudFront should redirect to HTTPS
+    ECS Cluster
+      ✓ ECS Cluster should be created with Container Insights (1 ms)
+    ECS IAM Roles
+      ✓ ECS Task Execution Role should exist with correct policies
+      ✓ ECS Task Role should exist with S3 and Secrets Manager access (1 ms)
+    ECS Task Definition
+      ✓ ECS Task Definition should be configured for Fargate
+      ✓ ECS Task Definition should use correct IAM roles (1 ms)
+      ✓ Container definition should be configured correctly
+      ✓ Container should have environment variables configured (1 ms)
+      ✓ Container should have secrets from Secrets Manager
+      ✓ Container should have health check configured (1 ms)
+      ✓ Container should use CloudWatch Logs
+    CloudWatch Logs
+      ✓ ECS Log Group should have 30-day retention
+    Application Load Balancer
+      ✓ ALB should be internet-facing in public subnets
+      ✓ ALB Target Group should be configured for ECS tasks (1 ms)
+      ✓ ALB Target Group should have health checks on /health endpoint
+      ✓ ALB Listener should forward traffic to target group (1 ms)
+    ECS Service
+      ✓ ECS Service should be configured correctly
+      ✓ ECS Service should run in private subnets
+      ✓ ECS Service should be connected to ALB (1 ms)
+    Auto Scaling Configuration
+      ✓ Auto Scaling Target should scale from 2 to 10 tasks
+      ✓ Scale Out Policy should be configured with step scaling
+      ✓ Scale In Policy should be configured with step scaling (1 ms)
+      ✓ CloudWatch Alarms should trigger auto scaling
+    SNS Alerts
+      ✓ SNS Topic should be created for alerts
+      ✓ SNS Topic should have email subscription
+    CloudWatch Alarms
+      ✓ ECS Task Failure Alarm should exist
+      ✓ RDS CPU Alarm should exist
+    CloudWatch Dashboard
+      ✓ CloudWatch Dashboard should be created (1 ms)
+      ✓ CloudWatch Dashboard should have valid JSON body
+    Stack Outputs
+      ✓ should have all 14 required outputs
+      ✓ VPCId output should be correct
+      ✓ ALB outputs should be correct
+      ✓ ECS outputs should be correct
+      ✓ RDS outputs should be correct (1 ms)
+      ✓ S3 and CloudFront outputs should be correct
+      ✓ Monitoring outputs should be correct
+    Security and Compliance
+      ✓ database credentials should use Secrets Manager (1 ms)
+      ✓ CloudWatch logs should have 30-day retention
+      ✓ S3 bucket should have versioning enabled
+      ✓ S3 bucket should have lifecycle policy for 90 days
+      ✓ RDS should have backup retention of 7 days
+      ✓ RDS should have encryption enabled
+      ✓ S3 bucket should have encryption enabled (1 ms)
+      ✓ ECS tasks should run in private subnets
+      ✓ RDS instances should not be publicly accessible
+      ✓ security groups should implement least privilege
+    Resource Naming with EnvironmentSuffix
+      ✓ all named resources should use environmentSuffix (2 ms)
+    Template Resource Count
+      ✓ should have correct number of resources (55+)
+      ✓ should have correct number of parameters (8)
+      ✓ should have correct number of outputs (15)
+
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+----------|---------|----------|---------|---------|-------------------
+All files |       0 |        0 |       0 |       0 |                   
+----------|---------|----------|---------|---------|-------------------
+Test Suites: 1 passed, 1 total
+Tests:       99 passed, 99 total
+Snapshots:   0 total
+Time:        0.644 s, estimated 1 s
+Ran all test suites matching /.unit.test.ts$/i.
