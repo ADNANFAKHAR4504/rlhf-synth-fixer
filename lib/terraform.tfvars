@@ -1,4 +1,4 @@
-environment_suffix = "synth101912554"
+environment_suffix = "synth101912554v1"
 region             = "us-east-1"
 
 # Database credentials (using environment variables TF_VAR_db_username and TF_VAR_db_password)

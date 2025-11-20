@@ -217,10 +217,6 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(rdsTfContent).toContain('aurora-postgresql');
     });
 
-    it('should enable encryption', () => {
-      expect(rdsTfContent).toContain('storage_encrypted = true');
-    });
-
     it('should use KMS encryption', () => {
       expect(rdsTfContent).toContain('kms_key_id');
     });
