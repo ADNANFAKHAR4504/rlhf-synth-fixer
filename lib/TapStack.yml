@@ -53,6 +53,8 @@ Resources:
   ########################################
   KMSKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Description: !Sub 'kms-${EnvironmentSuffix}-master-key'
       KeyPolicy:
@@ -297,9 +299,11 @@ Resources:
     Properties:
       BucketName:
         Fn::Sub:
-          - 'ct-${Env}-${Account}-${Suffix}'
+          - 'ct-${Env}-${Account}-${Region}-${Stack}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Account: !Ref AWS::AccountId
+            Region: !Ref AWS::Region
+            Stack: !Ref AWS::StackName
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -319,6 +323,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 's3-${EnvironmentSuffix}-cloudtrail'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -351,9 +357,11 @@ Resources:
     Properties:
       BucketName:
         Fn::Sub:
-          - 'app-${Env}-${Account}-${Suffix}'
+          - 'app-${Env}-${Account}-${Region}-${Stack}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Account: !Ref AWS::AccountId
+            Region: !Ref AWS::Region
+            Stack: !Ref AWS::StackName
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -367,9 +375,16 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: AppBucketNoncurrentExpiration
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 180
       Tags:
         - Key: Name
           Value: !Sub 's3-${EnvironmentSuffix}-app'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -408,10 +423,11 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'keypair-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ########################################
   # IAM ROLES (ADMIN MFA, EC2, CLOUDTRAIL)
-  # FIXED: Removed explicit RoleName properties
   ########################################
   EC2Role:
     Type: AWS::IAM::Role
@@ -442,6 +458,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'role-${EnvironmentSuffix}-ec2'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -467,6 +485,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'role-${EnvironmentSuffix}-admin'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ########################################
   # CLOUDTRAIL LOGS + ROLE + TRAIL
@@ -474,13 +494,13 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName:
-        Fn::Sub:
-          - '/aws/cloudtrail/${Env}-${Suffix}'
-          - Env: !Ref EnvironmentSuffix
-            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       RetentionInDays: 30
       KmsKeyId: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'loggroup-${EnvironmentSuffix}-cloudtrail'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   CloudTrailLogStream:
     Type: AWS::Logs::LogStream
@@ -514,10 +534,17 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: !GetAtt CloudTrailLogGroup.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'role-${EnvironmentSuffix}-cloudtrail'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
+    DependsOn:
+      - CloudTrailBucketPolicy
+      #- CloudTrailLogGroup
     Properties:
       TrailName:
         Fn::Sub:
@@ -542,6 +569,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'cloudtrail-${EnvironmentSuffix}-main'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ########################################
   # CLOUDWATCH ALERTING FOR UNAUTHORIZED API CALLS
@@ -559,6 +588,11 @@ Resources:
       Subscription:
         - Endpoint: !Ref NotificationEmail
           Protocol: email
+      Tags:
+        - Key: Name
+          Value: !Sub 'sns-${EnvironmentSuffix}-alerts'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   UnauthorizedAPICallsMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -585,10 +619,14 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref SNSTopic
+      Tags:
+        - Key: Name
+          Value: !Sub 'alarm-${EnvironmentSuffix}-unauthorized-api'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ########################################
   # RDS: PRIVATE, ENCRYPTED, PASSWORD IN SECRETS MANAGER
-  # FIXED: Removed DBSubnetGroupName and added unique suffix to Secret
   ########################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -600,20 +638,22 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'dbsubnet-${EnvironmentSuffix}-main'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   DBMasterPasswordSecret:
     Type: AWS::SecretsManager::Secret
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Name: 
+      Name:
         Fn::Sub:
           - 'rds-${Env}-password-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       Description: !Sub 'RDS master password for environment ${EnvironmentSuffix}'
       GenerateSecretString:
-        SecretStringTemplate: 
+        SecretStringTemplate:
           Fn::Sub: '{"username":"${DBMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 20
@@ -623,12 +663,14 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'secret-${EnvironmentSuffix}-rds-password'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier:
-        Fn::Sub: 
+        Fn::Sub:
           - 'rds-${Env}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
@@ -653,6 +695,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'rds-${EnvironmentSuffix}-mysql'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ########################################
   # EC2 + LAUNCH TEMPLATE (ONLY t2/t3.micro)
@@ -701,6 +745,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'ec2-${EnvironmentSuffix}-web-1'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ########################################
   # ALB + TARGET GROUP + LISTENER
@@ -719,6 +765,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'alb-${EnvironmentSuffix}-main'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -736,6 +784,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'tg-${EnvironmentSuffix}-web'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -802,11 +852,12 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName:
-          Fn::Sub: 'waf-${EnvironmentSuffix}-webacl'
+        MetricName: !Sub 'waf-${EnvironmentSuffix}-webacl'
       Tags:
         - Key: Name
           Value: !Sub 'waf-${EnvironmentSuffix}-webacl'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -907,7 +958,7 @@ Outputs:
     Value: !Ref ApplicationBucket
     Export:
       Name: !Sub '${AWS::StackName}-application-bucket-name'
-    
+
   DBMasterPasswordSecretArn:
     Description: 'ARN of the RDS Master Password Secret'
     Value: !Ref DBMasterPasswordSecret
