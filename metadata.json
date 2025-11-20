@@ -1,6 +1,6 @@
 {
-  "platform": "Pulumi",
-  "language": "Python",
+  "platform": "pulumi",
+  "language": "python",
   "complexity": "expert",
   "team": "synth",
   "turn_type": "single",
@@ -28,7 +28,7 @@
     "Auto Scaling",
     "NAT Gateway"
   ],
-  "deployment_status": "success",
-  "deployed_at": "2025-11-20T06:43:35.939Z",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 9
 }
