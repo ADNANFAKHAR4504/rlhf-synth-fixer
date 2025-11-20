@@ -1,12 +1,11 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Master CloudFormation template for multi-environment payment processing infrastructure",
+    "Description": "Self-contained CloudFormation template for multi-environment infrastructure",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
-            "Description": "Unique suffix for environment resources (e.g., dev-001, staging-001, prod-001)",
-            "AllowedPattern": "^[a-z]+-[0-9]{3}$",
-            "ConstraintDescription": "Must be in format: environment-###"
+            "Description": "Unique suffix for environment resources",
+            "Default": "dev"
         },
         "Environment": {
             "Type": "String",
@@ -17,478 +16,607 @@
                 "prod"
             ],
             "Default": "dev"
-        },
-        "VpcCidr": {
-            "Type": "String",
-            "Description": "CIDR block for VPC",
-            "Default": "10.0.0.0/16",
-            "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
-        },
-        "ReplicaRegion": {
-            "Type": "String",
-            "Description": "Replica AWS region for DR",
-            "Default": "eu-west-1"
-        },
-        "DevOpsEmail": {
-            "Type": "String",
-            "Description": "Email address for DevOps team notifications",
-            "Default": "devops@example.com",
-            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-        },
-        "Application": {
-            "Type": "String",
-            "Description": "Application name",
-            "Default": "payment-processing"
-        },
-        "CostCenter": {
-            "Type": "String",
-            "Description": "Cost center for billing",
-            "Default": "fintech-payments"
-        },
-        "TransitGatewayId": {
-            "Type": "String",
-            "Description": "Transit Gateway ID for cross-account connectivity",
-            "Default": ""
-        }
-    },
-    "Conditions": {
-        "IsDevelopment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "dev"
-            ]
         }
     },
     "Resources": {
-        "NetworkStack": {
-            "Type": "AWS::CloudFormation::Stack",
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
             "Properties": {
-                "TemplateURL": {
-                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/network-stack.yml"
-                },
-                "Parameters": {
-                    "EnvironmentSuffix": {
-                        "Ref": "EnvironmentSuffix"
-                    },
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "VpcCidr": {
-                        "Ref": "VpcCidr"
-                    },
-                    "TransitGatewayId": {
-                        "Ref": "TransitGatewayId"
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
-                },
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
                 "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-vpc-${EnvironmentSuffix}"
+                        }
+                    },
                     {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "Environment"
                         }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": {
-                            "Ref": "Application"
-                        }
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": {
-                            "Ref": "CostCenter"
-                        }
-                    },
-                    {
-                        "Key": "ManagedBy",
-                        "Value": "CloudFormation"
                     }
                 ]
             }
         },
-        "SecurityStack": {
-            "Type": "AWS::CloudFormation::Stack",
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
             "Properties": {
-                "TemplateURL": {
-                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/security-stack.yml"
-                },
-                "Parameters": {
-                    "EnvironmentSuffix": {
-                        "Ref": "EnvironmentSuffix"
-                    },
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "VpcId": {
-                        "Fn::GetAtt": [
-                            "NetworkStack",
-                            "Outputs.VpcId"
-                        ]
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
-                },
                 "Tags": [
                     {
-                        "Key": "Environment",
+                        "Key": "Name",
                         "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": {
-                            "Ref": "Application"
-                        }
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": {
-                            "Ref": "CostCenter"
+                            "Fn::Sub": "${Environment}-igw-${EnvironmentSuffix}"
                         }
                     }
                 ]
             }
         },
-        "DatabaseStack": {
-            "Type": "AWS::CloudFormation::Stack",
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
-                "TemplateURL": {
-                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/database-stack.yml"
+                "VpcId": {
+                    "Ref": "VPC"
                 },
-                "Parameters": {
-                    "EnvironmentSuffix": {
-                        "Ref": "EnvironmentSuffix"
-                    },
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "VpcId": {
-                        "Fn::GetAtt": [
-                            "NetworkStack",
-                            "Outputs.VpcId"
-                        ]
-                    },
-                    "PrivateSubnetIds": {
-                        "Fn::GetAtt": [
-                            "NetworkStack",
-                            "Outputs.PrivateSubnetIds"
-                        ]
-                    },
-                    "DatabaseSecurityGroupId": {
-                        "Fn::GetAtt": [
-                            "SecurityStack",
-                            "Outputs.DatabaseSecurityGroupId"
-                        ]
-                    },
-                    "DBInstanceClass": {
-                        "Fn::If": [
-                            "IsDevelopment",
-                            "db.t3.medium",
-                            "db.r5.large"
-                        ]
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": {
-                            "Ref": "Application"
-                        }
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": {
-                            "Ref": "CostCenter"
-                        }
-                    }
-                ]
-            }
-        },
-        "StorageStack": {
-            "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": "NetworkStack",
-            "Properties": {
-                "TemplateURL": {
-                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/storage-stack.yml"
-                },
-                "Parameters": {
-                    "EnvironmentSuffix": {
-                        "Ref": "EnvironmentSuffix"
-                    },
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "ReplicaRegion": {
-                        "Ref": "ReplicaRegion"
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": {
-                            "Ref": "Application"
-                        }
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": {
-                            "Ref": "CostCenter"
-                        }
-                    }
-                ]
-            }
-        },
-        "ComputeStack": {
-            "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": [
-                "DatabaseStack"
-            ],
-            "Properties": {
-                "TemplateURL": {
-                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/compute-stack.yml"
-                },
-                "Parameters": {
-                    "EnvironmentSuffix": {
-                        "Ref": "EnvironmentSuffix"
-                    },
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "VpcId": {
-                        "Fn::GetAtt": [
-                            "NetworkStack",
-                            "Outputs.VpcId"
-                        ]
-                    },
-                    "PrivateSubnetIds": {
-                        "Fn::GetAtt": [
-                            "NetworkStack",
-                            "Outputs.PrivateSubnetIds"
-                        ]
-                    },
-                    "PublicSubnetIds": {
-                        "Fn::GetAtt": [
-                            "NetworkStack",
-                            "Outputs.PublicSubnetIds"
-                        ]
-                    },
-                    "ECSSecurityGroupId": {
-                        "Fn::GetAtt": [
-                            "SecurityStack",
-                            "Outputs.ECSSecurityGroupId"
-                        ]
-                    },
-                    "ECSTaskRoleArn": {
-                        "Fn::GetAtt": [
-                            "SecurityStack",
-                            "Outputs.ECSTaskRoleArn"
-                        ]
-                    },
-                    "ECSExecutionRoleArn": {
-                        "Fn::GetAtt": [
-                            "SecurityStack",
-                            "Outputs.ECSExecutionRoleArn"
-                        ]
-                    },
-                    "TaskCpu": {
-                        "Fn::If": [
-                            "IsDevelopment",
-                            "256",
-                            "1024"
-                        ]
-                    },
-                    "TaskMemory": {
-                        "Fn::If": [
-                            "IsDevelopment",
-                            "512",
-                            "2048"
-                        ]
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": {
-                            "Ref": "Application"
-                        }
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": {
-                            "Ref": "CostCenter"
-                        }
-                    }
-                ]
-            }
-        },
-        "MonitoringStack": {
-            "Type": "AWS::CloudFormation::Stack",
-            "Properties": {
-                "TemplateURL": {
-                    "Fn::Sub": "https://s3.amazonaws.com/cfn-templates-${AWS::AccountId}-${AWS::Region}/monitoring-stack.yml"
-                },
-                "Parameters": {
-                    "EnvironmentSuffix": {
-                        "Ref": "EnvironmentSuffix"
-                    },
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "DevOpsEmail": {
-                        "Ref": "DevOpsEmail"
-                    },
-                    "ComplianceLambdaRoleArn": {
-                        "Fn::GetAtt": [
-                            "SecurityStack",
-                            "Outputs.ComplianceLambdaRoleArn"
-                        ]
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    },
-                    {
-                        "Key": "Application",
-                        "Value": {
-                            "Ref": "Application"
-                        }
-                    },
-                    {
-                        "Key": "CostCenter",
-                        "Value": {
-                            "Ref": "CostCenter"
-                        }
-                    }
-                ]
-            }
-        },
-        "EnvironmentParameter": {
-            "Type": "AWS::SSM::Parameter",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "/${Environment}/config/environment-name"
-                },
-                "Description": "Environment name parameter",
-                "Type": "String",
-                "Value": {
-                    "Ref": "Environment"
-                },
-                "Tags": {
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
                 }
             }
         },
-        "ApplicationParameter": {
-            "Type": "AWS::SSM::Parameter",
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.10.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": "10.0.11.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-public-rt-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ApplicationSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-db-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for application",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-app-sg-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-db-subnet-group-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "Properties": {
+                "Engine": "aurora-mysql",
+                "EngineVersion": "8.0.mysql_aurora.3.04.0",
+                "MasterUsername": "admin",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
+                },
+                "DatabaseName": "appdb",
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "DatabaseSecurityGroup"
+                    }
+                ],
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "StorageEncrypted": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-aurora-cluster-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AuroraInstance1": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceClass": "db.t3.medium",
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraCluster"
+                },
+                "Engine": "aurora-mysql",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-aurora-instance-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "/${Environment}/config/application-name"
+                    "Fn::Sub": "${Environment}-db-password-${EnvironmentSuffix}"
                 },
-                "Description": "Application name parameter",
-                "Type": "String",
-                "Value": {
-                    "Ref": "Application"
-                },
-                "Tags": {
-                    "Environment": {
-                        "Ref": "Environment"
-                    },
-                    "Application": {
-                        "Ref": "Application"
-                    },
-                    "CostCenter": {
-                        "Ref": "CostCenter"
-                    }
+                "Description": "Database master password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
                 }
+            }
+        },
+        "DynamoDBTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${Environment}-transactions-${EnvironmentSuffix}"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_AND_OLD_IMAGES"
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-dynamodb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 90
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-s3-bucket-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "${Environment}-ecs-cluster-${EnvironmentSuffix}"
+                },
+                "ClusterSettings": [
+                    {
+                        "Name": "containerInsights",
+                        "Value": "enabled"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ecs-cluster-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ecs-execution-role-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "TaskPolicy",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${S3Bucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DynamoDBTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ecs-task-role-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "SNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${Environment}-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${Environment} Environment Alerts"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-sns-topic-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "SNSSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "SNSTopic"
+                },
+                "Endpoint": "devops@example.com"
+            }
+        },
+        "LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ecs/${Environment}-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
             }
         }
     },
     "Outputs": {
-        "StackName": {
-            "Description": "Master stack name",
-            "Value": {
-                "Ref": "AWS::StackName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-master-stack-name"
-                }
-            }
-        },
-        "VpcId": {
+        "VPCId": {
             "Description": "VPC ID",
             "Value": {
-                "Fn::GetAtt": [
-                    "NetworkStack",
-                    "Outputs.VpcId"
-                ]
+                "Ref": "VPC"
             },
             "Export": {
                 "Name": {
@@ -496,12 +624,54 @@
                 }
             }
         },
+        "PublicSubnetIds": {
+            "Description": "Public subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "PublicSubnet2"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-public-subnet-ids"
+                }
+            }
+        },
+        "PrivateSubnetIds": {
+            "Description": "Private subnet IDs",
+            "Value": {
+                "Fn::Join": [
+                    ",",
+                    [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-private-subnet-ids"
+                }
+            }
+        },
         "AuroraClusterEndpoint": {
             "Description": "Aurora cluster endpoint",
             "Value": {
                 "Fn::GetAtt": [
-                    "DatabaseStack",
-                    "Outputs.ClusterEndpoint"
+                    "AuroraCluster",
+                    "Endpoint.Address"
                 ]
             },
             "Export": {
@@ -510,13 +680,24 @@
                 }
             }
         },
+        "AuroraClusterReadEndpoint": {
+            "Description": "Aurora cluster read endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraCluster",
+                    "ReadEndpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-aurora-read-endpoint"
+                }
+            }
+        },
         "DynamoDBTableName": {
             "Description": "DynamoDB table name",
             "Value": {
-                "Fn::GetAtt": [
-                    "StorageStack",
-                    "Outputs.DynamoDBTableName"
-                ]
+                "Ref": "DynamoDBTable"
             },
             "Export": {
                 "Name": {
@@ -524,27 +705,10 @@
                 }
             }
         },
-        "ECSClusterName": {
-            "Description": "ECS cluster name",
-            "Value": {
-                "Fn::GetAtt": [
-                    "ComputeStack",
-                    "Outputs.ClusterName"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentSuffix}-ecs-cluster"
-                }
-            }
-        },
         "S3BucketName": {
             "Description": "S3 bucket name",
             "Value": {
-                "Fn::GetAtt": [
-                    "StorageStack",
-                    "Outputs.S3BucketName"
-                ]
+                "Ref": "S3Bucket"
             },
             "Export": {
                 "Name": {
@@ -552,17 +716,47 @@
                 }
             }
         },
-        "SNSTopicArn": {
-            "Description": "SNS topic ARN for alerts",
+        "ECSClusterName": {
+            "Description": "ECS cluster name",
             "Value": {
-                "Fn::GetAtt": [
-                    "MonitoringStack",
-                    "Outputs.SNSTopicArn"
-                ]
+                "Ref": "ECSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-ecs-cluster"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS topic ARN",
+            "Value": {
+                "Ref": "SNSTopic"
             },
             "Export": {
                 "Name": {
                     "Fn::Sub": "${EnvironmentSuffix}-sns-topic"
+                }
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Description": "Database security group ID",
+            "Value": {
+                "Ref": "DatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-db-sg-id"
+                }
+            }
+        },
+        "ApplicationSecurityGroupId": {
+            "Description": "Application security group ID",
+            "Value": {
+                "Ref": "ApplicationSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentSuffix}-app-sg-id"
                 }
             }
         }
