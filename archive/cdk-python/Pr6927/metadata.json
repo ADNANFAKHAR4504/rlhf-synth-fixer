@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "python",
+  "language": "py",
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
