@@ -5,7 +5,7 @@
 set -e
 
 # Update system
-yum update -y
+# yum update -y
 yum install -y httpd jq postgresql
 
 # Start Apache

@@ -24,6 +24,11 @@ output "alb_arn" {
   description = "ARN of the Application Load Balancer"
 }
 
+output "target_group_arn" {
+  value       = module.alb.target_group_arn
+  description = "ARN of the target group"
+}
+
 output "rds_endpoint" {
   value       = module.rds.endpoint
   description = "RDS instance endpoint"
@@ -53,6 +58,12 @@ output "db_secret_arn" {
 output "db_secret_name" {
   value       = aws_secretsmanager_secret.db_password.name
   description = "Name of the database password secret in AWS Secrets Manager (includes PR number)"
+}
+
+output "db_username" {
+  value       = var.db_username
+  description = "Database master username"
+  sensitive   = true
 }
 
 output "waf_web_acl_id" {
