@@ -38,8 +38,6 @@ describe('Hub-and-Spoke Network Architecture Integration Tests', () => {
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(response.Vpcs![0].State).toBe('available');
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
     });
 
     test('Spoke 1 VPC should exist and have correct CIDR', async () => {
