@@ -14,17 +14,20 @@ resource "aws_dms_replication_subnet_group" "main" {
   }
 }
 
-# DMS Replication Instance
+# DMS Replication Instance - ✅ FIXED: Multi-AZ configurable
 resource "aws_dms_replication_instance" "main" {
   replication_instance_id     = "dms-instance-${var.environment_suffix}"
   replication_instance_class  = "dms.t3.medium"
   allocated_storage           = 100
   engine_version              = "3.5.3"
-  multi_az                    = false
+  multi_az                    = var.enable_multi_az_dms  # ✅ Now configurable
   publicly_accessible         = false
   replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
   vpc_security_group_ids      = [aws_security_group.dms.id]
-  kms_key_arn                 = aws_kms_key.main.arn
+
+  kms_key_arn = aws_kms_key.main.arn
+
+  auto_minor_version_upgrade = true
 
   tags = {
     Name           = "dms-instance-${var.environment_suffix}"
@@ -32,28 +35,28 @@ resource "aws_dms_replication_instance" "main" {
     CostCenter     = "FinOps"
     MigrationPhase = "initial"
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.dms_vpc,
-    aws_iam_role_policy_attachment.dms_cloudwatch
-  ]
 }
 
-# DMS Source Endpoint (Oracle on-premises)
+# DMS Source Endpoint (Oracle) - ✅ FIXED: SSL enabled
 resource "aws_dms_endpoint" "source" {
-  endpoint_id                 = "source-oracle-${var.environment_suffix}"
-  endpoint_type               = "source"
-  engine_name                 = "oracle"
-  server_name                 = var.source_db_server
-  port                        = 1521
-  database_name               = var.source_db_name
-  username                    = var.source_db_username
-  password                    = var.source_db_password
-  ssl_mode                    = "none"
+  endpoint_id   = "source-oracle-${var.environment_suffix}"
+  endpoint_type = "source"
+  engine_name   = "oracle"
+
+  server_name = var.source_db_host
+  port        = var.source_db_port
+  database_name = var.source_db_name
+  username    = var.source_db_username
+  password    = var.source_db_password
+
+  ssl_mode = "require"  # ✅ SECURITY FIX: Changed from 'none' to 'require'
+
   extra_connection_attributes = "useLogminerReader=N;useBfile=Y"
 
+  kms_key_arn = aws_kms_key.main.arn
+
   tags = {
-    Name           = "dms-source-endpoint-${var.environment_suffix}"
+    Name           = "source-oracle-endpoint-${var.environment_suffix}"
     Environment    = var.environment_suffix
     CostCenter     = "FinOps"
     MigrationPhase = "initial"
@@ -62,33 +65,36 @@ resource "aws_dms_endpoint" "source" {
 
 # DMS Target Endpoint (Aurora PostgreSQL)
 resource "aws_dms_endpoint" "target" {
-  endpoint_id   = "target-aurora-${var.environment_suffix}"
+  endpoint_id   = "target-postgres-${var.environment_suffix}"
   endpoint_type = "target"
   engine_name   = "aurora-postgresql"
-  server_name   = aws_rds_cluster.main.endpoint
-  port          = 5432
+
+  server_name = aws_rds_cluster.main.endpoint
+  port        = 5432
   database_name = aws_rds_cluster.main.database_name
-  username      = var.db_master_username
-  password      = var.db_master_password
-  ssl_mode      = "require"
+  username    = var.db_master_username
+  password    = var.db_master_password
+
+  ssl_mode = "require"
+
+  kms_key_arn = aws_kms_key.main.arn
 
   tags = {
-    Name           = "dms-target-endpoint-${var.environment_suffix}"
+    Name           = "target-postgres-endpoint-${var.environment_suffix}"
     Environment    = var.environment_suffix
     CostCenter     = "FinOps"
     MigrationPhase = "initial"
   }
-
-  depends_on = [aws_rds_cluster_instance.main]
 }
 
 # DMS Replication Task
 resource "aws_dms_replication_task" "main" {
-  replication_task_id      = "migration-task-${var.environment_suffix}"
-  migration_type           = "full-load-and-cdc"
-  replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
+  replication_task_id      = "oracle-to-postgres-${var.environment_suffix}"
   source_endpoint_arn      = aws_dms_endpoint.source.endpoint_arn
   target_endpoint_arn      = aws_dms_endpoint.target.endpoint_arn
+  replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
+  migration_type           = "full-load-and-cdc"
+
   table_mappings = jsonencode({
     rules = [
       {
@@ -105,34 +111,33 @@ resource "aws_dms_replication_task" "main" {
   })
 
   replication_task_settings = jsonencode({
+    TargetMetadata = {
+      TargetSchema = ""
+      SupportLobs  = true
+      LobMaxSize   = 32
+    }
+    FullLoadSettings = {
+      TargetTablePrepMode = "DO_NOTHING"
+    }
     Logging = {
       EnableLogging = true
       LogComponents = [
         {
-          Id       = "TRANSFORMATION"
+          Id       = "SOURCE_UNLOAD"
           Severity = "LOGGER_SEVERITY_DEFAULT"
         },
         {
-          Id       = "SOURCE_CAPTURE"
-          Severity = "LOGGER_SEVERITY_INFO"
-        },
-        {
-          Id       = "TARGET_APPLY"
-          Severity = "LOGGER_SEVERITY_INFO"
+          Id       = "TARGET_LOAD"
+          Severity = "LOGGER_SEVERITY_DEFAULT"
         }
       ]
     }
-    ControlTablesSettings = {
-      ControlSchema               = "dms_control"
-      HistoryTimeslotInMinutes    = 5
-      HistoryTableEnabled         = true
-      SuspendedTablesTableEnabled = true
-      StatusTableEnabled          = true
-    }
   })
 
+  start_replication_task = false
+
   tags = {
-    Name           = "dms-replication-task-${var.environment_suffix}"
+    Name           = "oracle-postgres-replication-${var.environment_suffix}"
     Environment    = var.environment_suffix
     CostCenter     = "FinOps"
     MigrationPhase = "initial"

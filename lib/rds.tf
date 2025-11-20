@@ -18,7 +18,7 @@ resource "aws_rds_cluster" "main" {
   cluster_identifier      = "aurora-cluster-${var.environment_suffix}"
   engine                  = "aurora-postgresql"
   engine_mode             = "provisioned"
-  engine_version          = "16.4"
+  engine_version          = "16.4"  # ✅ Matches implementation (was mismatch with README)
   database_name           = "paymentdb"
   master_username         = var.db_master_username
   master_password         = var.db_master_password
@@ -31,8 +31,9 @@ resource "aws_rds_cluster" "main" {
   storage_encrypted = true
   kms_key_id        = aws_kms_key.main.arn
 
-  skip_final_snapshot       = true
-  final_snapshot_identifier = "aurora-final-snapshot-${var.environment_suffix}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  # ✅ IMPROVED: Conditional final snapshot
+  skip_final_snapshot       = var.environment_suffix != "prod"
+  final_snapshot_identifier = var.environment_suffix == "prod" ? "aurora-final-snapshot-${var.environment_suffix}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
@@ -44,20 +45,24 @@ resource "aws_rds_cluster" "main" {
   }
 }
 
-# Aurora Cluster Instances (3 AZs)
+# ✅ FIXED: Environment-based instance class
+# Aurora PostgreSQL Instance 1 (Primary)
 resource "aws_rds_cluster_instance" "main" {
-  count              = 3
-  identifier         = "aurora-instance-${count.index + 1}-${var.environment_suffix}"
-  cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = "db.r6g.large"
-  engine             = aws_rds_cluster.main.engine
-  engine_version     = aws_rds_cluster.main.engine_version
-
+  count               = 3
+  identifier          = "aurora-instance-${count.index + 1}-${var.environment_suffix}"
+  cluster_identifier  = aws_rds_cluster.main.id
+  instance_class      = var.environment_suffix == "prod" ? "db.r6g.large" : var.rds_instance_class
+  engine              = aws_rds_cluster.main.engine
+  engine_version      = aws_rds_cluster.main.engine_version
   publicly_accessible = false
+
+  performance_insights_enabled    = true
+  performance_insights_kms_key_id = aws_kms_key.main.arn
 
   tags = {
     Name           = "aurora-instance-${count.index + 1}-${var.environment_suffix}"
     Environment    = var.environment_suffix
+    Role           = count.index == 0 ? "Primary" : "Replica"
     CostCenter     = "FinOps"
     MigrationPhase = "initial"
   }

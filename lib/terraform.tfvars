@@ -1,10 +1,21 @@
 aws_region         = "us-east-1"
-environment_suffix = "synth101912523v2"
-repository         = "synth-101912523v2"
-commit_author      = "Arpit Patidar"
-team               = "synth"
-pr_number          = "101912523"
-container_image    = "nginx:latest"
-active_environment = "blue"
-source_db_server   = "oracle.example.com"
-source_db_name     = "ORCL"
+environment_suffix = "dev4"
+repository         = "payment-processing-migration"
+team               = "FinOps"
+
+# Database credentials - USE ENVIRONMENT VARIABLES OR SECRETS MANAGER
+# export TF_VAR_db_master_password="your-secure-password"
+# export TF_VAR_source_db_password="your-secure-password"
+
+# ✅ NEW: Resource configuration
+rds_instance_class  = "db.t4g.medium"  # Smaller for dev
+ecs_task_cpu        = 512
+ecs_task_memory     = 1024
+enable_multi_az_dms = false  # Set to true for production
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# Container configuration
+container_image     = "nginx:latest"
+active_environment  = "blue"
