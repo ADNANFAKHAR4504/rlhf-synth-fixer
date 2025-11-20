@@ -236,8 +236,8 @@ describe("Terraform lib/ .tf unit tests", () => {
       expect(ec2Tf).toMatch(/"s3:PutObject"/);
       expect(ec2Tf).toMatch(/"s3:GetObject"/);
       expect(ec2Tf).toMatch(/"s3:ListBucket"/);
-      contains(ec2Tf, "\"arn:aws:s3:::terraform-state-${var.resource_suffix}\"");
-      contains(ec2Tf, "\"arn:aws:s3:::terraform-state-${var.resource_suffix}/*\"");
+      contains(ec2Tf, "aws_s3_bucket.terraform_state.arn");
+      contains(ec2Tf, "${aws_s3_bucket.terraform_state.arn}/*");
     });
 
     test("should create inline IAM policy for Secrets Manager access", () => {

@@ -98,8 +98,8 @@ resource "aws_iam_role_policy" "ec2_s3_access" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::terraform-state-${var.resource_suffix}",
-          "arn:aws:s3:::terraform-state-${var.resource_suffix}/*"
+          aws_s3_bucket.terraform_state.arn,
+          "${aws_s3_bucket.terraform_state.arn}/*"
         ]
       }
     ]
