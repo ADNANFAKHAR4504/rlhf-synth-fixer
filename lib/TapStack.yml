@@ -633,7 +633,7 @@ Resources:
         SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 20
-        ExcludeCharacters: '"`'
+        ExcludeCharacters: '"` /@ '
         RequireEachIncludedType: true
       KmsKeyId: !Ref KMSKey
       Tags:
