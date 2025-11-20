@@ -133,7 +133,7 @@ echo ""
 
 ## Agent Workflow
 
-### Phase 0: Pre-Execution Validation (MANDATORY)
+### PHASE 0: Pre-Execution Validation (MANDATORY)
 
 **⚠️ CRITICAL**: Before selecting any PR, complete these validation steps.
 
@@ -195,7 +195,7 @@ echo "🔍 Verifying required scripts..."
 REQUIRED_SCRIPTS=(
   ".claude/scripts/pr-manager.sh"
   ".claude/scripts/pr-status.sh"
-  "scripts/pre-validate-iac.sh"
+  ".claude/scripts/pre-validate-iac.sh"
 )
 
 MISSING_SCRIPTS=()
@@ -243,7 +243,7 @@ else
 fi
 
 # Test pre-validate-iac.sh (if in worktree context)
-if [ -f "scripts/pre-validate-iac.sh" ]; then
+if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
   echo "✅ pre-validate-iac.sh found (will test in worktree)"
 else
   echo "⚠️ WARNING: pre-validate-iac.sh not found (may not be needed for all PRs)"
@@ -273,7 +273,7 @@ echo "✅ Script validation complete"
 
 ---
 
-### Phase 1: Load & Check PR Availability
+### PHASE 1: Load & Check PR Availability
 
 #### 1.1 Check PR Status File
 
@@ -318,13 +318,13 @@ fi
 echo "Found $PENDING_COUNT pending PRs available for fixing"
 ```
 
-### Phase 1.5: Atomic PR Selection (CRITICAL FOR PARALLEL EXECUTION)
+### PHASE 1.1: Atomic PR Selection (CRITICAL FOR PARALLEL EXECUTION)
 
 **MANDATORY**: Use the atomic `select-and-update` command to prevent race conditions.
 
 ```bash
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 1.5: ATOMIC PR SELECTION"
+echo "PHASE 1.1: ATOMIC PR SELECTION"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Set agent ID for tracking
@@ -410,7 +410,7 @@ Sort PRs by failure type for efficient processing:
 **BLOCKED**: NO
 ```
 
-### Phase 2: PR Processing Loop
+### PHASE 2: PR Processing Loop
 
 **CRITICAL**: Process ONE PR at a time. Do not start next PR until current PR is fully fixed (all GitHub pipeline stages pass).
 
@@ -418,13 +418,13 @@ For each failed PR, execute this complete workflow:
 
 ---
 
-### Phase 2.0: Pre-Fix Analysis and Planning (NEW - MANDATORY)
+### PHASE 2.1: Pre-Fix Analysis and Planning (NEW - MANDATORY)
 
 **BEFORE applying any fixes**, analyze and document:
 
 ```bash
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.0: PRE-FIX ANALYSIS - PR #${PR_NUMBER}"
+echo "PHASE 2.1: PRE-FIX ANALYSIS - PR #${PR_NUMBER}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Update progress
@@ -687,9 +687,9 @@ echo ""
 
 **Report Status**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.0 - ANALYSIS COMPLETE - PR #<number>
+**SYNTH TRAINER STATUS**: PHASE 2.1 - ANALYSIS COMPLETE - PR #<number>
 **PR**: #<number>
-**PROGRESS**: 2.0/2.12 phases completed
+**PROGRESS**: 2.1/2.11 phases completed
 **NEXT ACTION**: Create isolated worktree for PR branch
 **ISSUES**: NONE
 **BLOCKED**: NO
@@ -1046,7 +1046,7 @@ echo "Proceeding to apply targeted fixes..."
 
 **Report Status**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.4.5 - PRE-FIX BUILD VALIDATION - PR #<number>
+**SYNTH TRAINER STATUS**: PHASE 2.3 - PRE-FIX BUILD VALIDATION - PR #<number>
 **PR**: #<number>
 **PROGRESS**: 2.4.5/2.12 phases completed
 **NEXT ACTION**: Apply targeted fixes for failed stages
@@ -1061,7 +1061,7 @@ echo "Proceeding to apply targeted fixes..."
 
 **Process each failed stage in order**: Detect Project Files → Lint → Build → Deploy → Unit Testing → Integration Testing
 
-**Note**: Baseline validation (Phase 2.4.5) has established current state. Fixes will address identified issues.
+**Note**: Baseline validation (PHASE 2.3) has established current state. Fixes will address identified issues.
 
 **NEW**: Use enhanced error analysis and prioritized fixes for smarter fixing.
 
@@ -1399,7 +1399,7 @@ fi
 
 ---
 
-### Phase 2.5: Pre-Deployment Validation (CRITICAL COST OPTIMIZATION)
+### PHASE 2.4: Pre-Deployment Validation (CRITICAL COST OPTIMIZATION)
 
 **⚠️ MANDATORY**: Run pre-deployment validation BEFORE attempting any deployment.
 
@@ -1414,7 +1414,7 @@ fi
 bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Pre-deployment validation"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.5: PRE-DEPLOYMENT VALIDATION"
+echo "PHASE 2.4: PRE-DEPLOYMENT VALIDATION"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Verify we're in worktree
@@ -1433,11 +1433,11 @@ VALIDATION_FIXES_NEEDED=false
 
 # Step 1: Run pre-deployment validation script
 echo "🔍 Step 1: Running pre-deployment validation script..."
-if [ -f "scripts/pre-validate-iac.sh" ]; then
-  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
+  bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
   PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
 else
-  echo "⚠️ WARNING: scripts/pre-validate-iac.sh not found"
+  echo "⚠️ WARNING: .claude/scripts/pre-validate-iac.sh not found"
   echo "Skipping script validation (will rely on code analysis)"
   PRE_VALIDATE_STATUS=0
 fi
@@ -1587,8 +1587,8 @@ if [ $PRE_VALIDATE_STATUS -ne 0 ] || [ "$VALIDATION_FIXES_NEEDED" = true ]; then
   # Re-run validation after fixes
   echo ""
   echo "🔄 Re-running validation after fixes..."
-  if [ -f "scripts/pre-validate-iac.sh" ]; then
-    bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
+  if [ -f ".claude/scripts/pre-validate-iac.sh" ]; then
+    bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
     PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
   fi
   
@@ -1620,7 +1620,7 @@ fi
 
 **Report Status**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.5 - PRE-DEPLOYMENT VALIDATION - PR #<number>
+**SYNTH TRAINER STATUS**: PHASE 2.4 - PRE-DEPLOYMENT VALIDATION - PR #<number>
 **VALIDATION RESULT**: <PASSED/FAILED>
 **ISSUES FOUND**: <list or NONE>
 **FIXES APPLIED**: <list or NONE>
@@ -1634,7 +1634,7 @@ fi
 
 **CRITICAL**: Deploy failures are complex and require careful analysis.
 
-**Note**: Pre-deployment validation (Phase 2.5) and code analysis (Phase 2.5.1) should have already fixed common issues. This section handles deployment-specific failures that weren't caught earlier.
+**Note**: Pre-deployment validation (PHASE 2.4) and code analysis should have already fixed common issues. This section handles deployment-specific failures that weren't caught earlier.
 
 ```bash
 if echo "$FAILED_STAGES" | grep -qi "deploy"; then
@@ -1643,11 +1643,11 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
   # Reference lessons learned
   echo "📖 Checking .claude/lessons_learnt.md for known deployment issues..."
 
-  # Pre-deployment validation should have already run (Phase 2.5)
+  # Pre-deployment validation should have already run (PHASE 2.4)
   # If not, run it now as fallback
   if [ ! -f "/tmp/pre-validate-output.txt" ]; then
     echo "⚠️ Pre-validation not run, running now..."
-    bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+    bash .claude/scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
     PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
   fi
 
@@ -1686,7 +1686,7 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
     fi
 
     # Re-run pre-validation
-    bash scripts/pre-validate-iac.sh
+    bash .claude/scripts/pre-validate-iac.sh
   fi
 
   # Setup environment
@@ -2591,7 +2591,7 @@ fi
 
 ---
 
-### Phase 3: Final Summary Report
+### PHASE 3: Final Summary Report
 
 After ALL PRs processed:
 
@@ -2813,7 +2813,7 @@ Status: STOPPED - awaiting fixes
 ❌ BLOCKED: GitHub CLI not authenticated
 Action: gh auth login
 Status: BLOCKED
-Recovery: Run 'gh auth login', retry Phase 1
+Recovery: Run 'gh auth login', retry PHASE 1
 ```
 
 #### AWS Credential Issues
@@ -2948,13 +2948,37 @@ Action: Fix dependency order → Retry deployment
 Result: ✅ Fixed on retry 3 → Continue
 ```
 
-**Example 3: Blocking - Max Retries Reached**
+**Example 3: Blocking - Max Retries Reached (ENHANCED)**
 ```
 Error: Deployment failed - Same error after 5 attempts
 Type: Blocking
-Can Fix: NO (max retries reached)
-Action: Mark PR as failed → Add comment → Continue to next PR
-Result: ❌ PR marked as failed → Next PR
+Can Fix: YES (try alternative strategy)
+
+**Alternative Fix Strategies** (before marking failed):
+1. **Code Restructuring**: 
+   - Break down complex resources into smaller units
+   - Split stack into multiple stacks
+   - Simplify resource dependencies
+   
+2. **Different Approach**:
+   - Try different AWS service configuration
+   - Use alternative resource types
+   - Change deployment order
+   
+3. **Workaround**:
+   - Use CloudFormation custom resources
+   - Implement Lambda-based provisioning
+   - Use Terraform null resources for complex logic
+
+**Action Flow**:
+1. Max retries (5) reached with same error
+2. Analyze error pattern using detect-alternative-strategy.sh
+3. Determine if alternative strategy exists
+4. If YES: Attempt alternative fix (1 additional attempt)
+5. If alternative succeeds: Mark FIXED
+6. If alternative fails: Mark FAILED with both error types documented
+
+Result: ✅ Try alternative → If succeeds: FIXED | If fails: FAILED
 ```
 
 **Example 4: Blocking - User Intervention Required**
@@ -2979,11 +3003,11 @@ Result: ✅ Coverage improved to 100% → Continue
 
 | Error Type | Blocking? | Auto-Fix? | Action | Reference |
 |------------|-----------|-----------|--------|-----------|
-| Missing environmentSuffix | Yes | Yes | Add suffix | Phase 2.5 |
-| Retain policies | Yes | Yes | Change to DESTROY | Phase 2.5 |
+| Missing environmentSuffix | Yes | Yes | Add suffix | PHASE 2.4 |
+| Retain policies | Yes | Yes | Change to DESTROY | PHASE 2.4 |
 | Deployment quota limit | Yes | No | Escalate to user | [Error Recovery Guide](.claude/docs/guides/error-recovery-guide.md#1-quotalimit-errors) |
-| Test coverage < 100% | Yes | Yes | Add tests | Phase 2.6 |
-| Lint warnings | No | Yes | Auto-fix | Phase 2.5 |
+| Test coverage < 100% | Yes | Yes | Add tests | PHASE 2.6 |
+| Lint warnings | No | Yes | Auto-fix | PHASE 2.4 |
 | Pipeline timeout | Yes | No | Mark needs-verification | Error Recovery section |
 | Max iterations | Yes | No | Mark failed | Iteration Policy |
 
@@ -3032,13 +3056,13 @@ EOF
 }
 
 # Usage examples:
-# report_status "PHASE 2.0" "ANALYSIS COMPLETE" "Root cause documented" "$PR_NUMBER" "2.0/2.12" "Create worktree" "NONE" "NO"
-# report_status "PHASE 2.5" "VALIDATION" "Pre-deployment check" "$PR_NUMBER" "2.5/2.12" "Apply fixes" "Missing environmentSuffix" "NO"
+# report_status "PHASE 2.1" "ANALYSIS COMPLETE" "Root cause documented" "$PR_NUMBER" "2.1/2.11" "Create worktree" "NONE" "NO"
+# report_status "PHASE 2.4" "VALIDATION" "Pre-deployment check" "$PR_NUMBER" "2.4/2.11" "Apply fixes" "Missing environmentSuffix" "NO"
 ```
 
 ### Status Report Examples by Phase
 
-**Phase 0 - Pre-Execution Validation**:
+**PHASE 0 - Pre-Execution Validation**:
 ```markdown
 **SYNTH TRAINER STATUS**: PHASE 0 - PRE-EXECUTION VALIDATION
 **PR**: N/A (not yet selected)
@@ -3049,55 +3073,55 @@ EOF
 **VALIDATION**: ✅ Documentation reviewed | ✅ Scripts verified | ✅ Ready to proceed
 ```
 
-**Phase 1.5 - PR Selection**:
+**PHASE 1.1 - PR Selection**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 1.5 - PR SELECTED
+**SYNTH TRAINER STATUS**: PHASE 1.1 - PR SELECTED
 **PR**: #6323
-**PROGRESS**: 1.5/2.12 phases completed
+**PROGRESS**: 1.1/2.11 phases completed
 **NEXT ACTION**: Begin root cause analysis
 **ISSUES**: NONE
 **BLOCKED**: NO
 **FAILURE REASON**: Deploy
 ```
 
-**Phase 2.0 - Root Cause Analysis**:
+**PHASE 2.1 - Root Cause Analysis**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.0 - ANALYSIS COMPLETE
+**SYNTH TRAINER STATUS**: PHASE 2.1 - ANALYSIS COMPLETE
 **PR**: #6323
-**PROGRESS**: 2.0/2.12 phases completed
+**PROGRESS**: 2.1/2.11 phases completed
 **NEXT ACTION**: Create isolated worktree for PR branch
 **ISSUES**: NONE
 **BLOCKED**: NO
 **ANALYSIS**: ✅ Root cause documented | ✅ Fix plan created | ✅ Solution approach defined
 ```
 
-**Phase 2.5 - Pre-Deployment Validation**:
+**PHASE 2.4 - Pre-Deployment Validation**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.5 - PRE-DEPLOYMENT VALIDATION
+**SYNTH TRAINER STATUS**: PHASE 2.4 - PRE-DEPLOYMENT VALIDATION
 **PR**: #6323
-**PROGRESS**: 2.5/2.12 phases completed
+**PROGRESS**: 2.4/2.11 phases completed
 **NEXT ACTION**: Proceed to deployment
 **ISSUES**: Missing environmentSuffix (fixed), Retain policies (fixed)
 **BLOCKED**: NO
 **VALIDATION RESULT**: PASSED after fixes
 ```
 
-**Phase 2.6.5 - Quality Gates**:
+**PHASE 2.7 - Quality Gates**:
 ```markdown
-**SYNTH TRAINER STATUS**: QUALITY GATES - PR #6323
+**SYNTH TRAINER STATUS**: PHASE 2.7 - QUALITY GATES - PR #6323
 **PR**: #6323
-**PROGRESS**: 2.6.5/2.12 phases completed
+**PROGRESS**: 2.7/2.11 phases completed
 **NEXT ACTION**: Commit and push changes
 **ISSUES**: NONE
 **BLOCKED**: NO
 **GATE RESULTS**: ✅ Pre-Fix Analysis | ✅ Pre-Deployment | ✅ File Location | ✅ Pre-Submission | ✅ Local Validations
 ```
 
-**Phase 2.12 - PR Completion**:
+**PHASE 2.11 - PR Completion**:
 ```markdown
-**SYNTH TRAINER STATUS**: PR #6323 COMPLETE - FIXED
+**SYNTH TRAINER STATUS**: PHASE 2.11 - PR #6323 COMPLETE - FIXED
 **PR**: #6323
-**PROGRESS**: 2.12/2.12 phases completed
+**PROGRESS**: 2.11/2.11 phases completed
 **RESULT**: FIXED
 **ITERATIONS**: 1
 **GITHUB PIPELINE**: ALL_PASSED
@@ -3124,19 +3148,19 @@ EOF
 ### Required Reporting Points
 
 Report status at:
-1. **Start of execution** (Phase 0)
-2. **After PR selection** (Phase 1.5)
-3. **After root cause analysis** (Phase 2.0)
-4. **After fix plan creation** (Phase 2.0)
-5. **Each fix stage completion** (Phase 2.5+)
-6. **After pre-deployment validation** (Phase 2.5)
-7. **After quality gates** (Phase 2.6.5)
-8. **After commit and push** (Phase 2.7)
-9. **During pipeline monitoring** (Phase 2.8)
+1. **Start of execution** (PHASE 0)
+2. **After PR selection** (PHASE 1.1)
+3. **After root cause analysis** (PHASE 2.1)
+4. **After fix plan creation** (PHASE 2.1)
+5. **Each fix stage completion** (PHASE 2.4+)
+6. **After pre-deployment validation** (PHASE 2.4)
+7. **After quality gates** (PHASE 2.7)
+8. **After commit and push** (PHASE 2.8)
+9. **During pipeline monitoring** (PHASE 2.9)
 10. **Error encounters** (any phase)
 11. **Blocking situations** (any phase)
 12. **Phase completion** (all phases)
-13. **PR completion** (Phase 2.12)
+13. **PR completion** (PHASE 2.11)
 
 ### BLOCKED Status Handling
 

@@ -164,7 +164,7 @@ fi
 cat metadata.json
 ls lib/
 npm run test
-bash scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 jq -r '.platform' metadata.json
 
 # ❌ WRONG (absolute paths from main repo)
@@ -424,11 +424,11 @@ git worktree add worktree/synth-{task_id} -b synth-{task_id}
 **Fix**:
 ```bash
 # ❌ WRONG
-scripts/pre-validate-iac.sh
+.claude/scripts/pre-validate-iac.sh
 
 # ✅ CORRECT (include ./ or full path)
-./scripts/pre-validate-iac.sh
-bash scripts/pre-validate-iac.sh
+./.claude/scripts/pre-validate-iac.sh
+bash .claude/scripts/pre-validate-iac.sh
 ```
 
 ---

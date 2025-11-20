@@ -1,0 +1,35 @@
+{
+  "task_id": "101912490",
+  "po_id": "101912490",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T08:02:00Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "ci/cd-pipeline-integration"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "KMS",
+    "EventBridge",
+    "IAM",
+    "SNS",
+    "CloudFormation",
+    "CodeCommit"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

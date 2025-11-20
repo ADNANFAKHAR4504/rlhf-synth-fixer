@@ -13,7 +13,7 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 Inside worktree at `worktree/synth-{task_id}/` (verify with automated script)
 
-**After review completion, hand off to task-coordinator for Phase 5 (PR creation).**
+**After review completion, hand off to task-coordinator for PHASE 5 (PR creation).**
 
 ## Review Process
 
@@ -47,14 +47,14 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **Reference**: `.claude/docs/references/pre-submission-checklist.md`
 
-### Phase 1: Prerequisites Check
+### PHASE 1: Prerequisites Check
 
 - Verify latest PROMPT file (lib/PROMPT.md, lib/PROMPT2.md, or lib/PROMPT3.md) exists
 - Verify lib/IDEAL_RESPONSE.md exists
 - Confirm integration tests in test/ folder
 - Return "PR is not ready" if missing
 
-### Phase 1.5: Metadata Enhancement & Deep Compliance Validation
+### PHASE 1.1: Metadata Enhancement & Deep Compliance Validation
 
 **⚠️ CRITICAL**: This phase MUST update `metadata.json` with `training_quality` field. The CI/CD pipeline uses this as the primary source for quality scoring. Failure to update metadata.json will cause the quality gate to fail even if your review is positive.
 
@@ -207,16 +207,62 @@ Training quality measures **learning value for model improvement**, NOT code qua
 
 **Step-by-step Process**:
 
-**Step 1: Check Critical Blockers (Automatic Fail)**
+**Step 1: Check Critical Blockers (Evaluate Fixability)**
 
-| Blocker | Set Score To | Action |
-|---------|--------------|--------|
-| Platform/language mismatch (e.g., task needs Pulumi+Go, got CDK+TypeScript) | 3 | STOP, BLOCK PR |
-| Wrong AWS region (if specified in task) | 5 | STOP, BLOCK PR |
-| Wrong AWS account | 3 | STOP, BLOCK PR |
-| Missing ≥50% of required AWS services | 4 | STOP, BLOCK PR |
+| Blocker | Set Score To | Fixable? | Action |
+|---------|--------------|----------|--------|
+| Platform/language mismatch (e.g., task needs Pulumi+Go, got CDK+TypeScript) | 3 | YES (regenerate) | Attempt regeneration → If fails, ERROR |
+| Wrong AWS region (if specified in task) | 5 | YES (redeploy) | Attempt region fix → If fails, ERROR |
+| Wrong AWS account | 3 | NO (manual) | ERROR immediately |
+| Missing ≥50% of required AWS services | 4 | YES (add services) | Attempt service addition → If fails, ERROR |
 
-**If ANY blocker present**: Set score to blocker value, skip to Step 6 (reporting).
+**Fix Attempt Logic**:
+1. **Wrong Region (Score 5)**:
+   - Check if region specified in task description
+   - If fixable: Update code to use correct region
+   - Regenerate/redeploy with correct region
+   - Recalculate score after fix
+   - If still < 8: Mark ERROR
+
+2. **Missing Services (Score 4)**:
+   - Identify missing services from task description
+   - If fixable: Add missing services to PROMPT.md
+   - Regenerate code with complete service list
+   - Recalculate score after fix
+   - If still < 8: Mark ERROR
+
+3. **Platform/Language Mismatch (Score 3)**:
+   - Verify mismatch is real (not false positive)
+   - If fixable: Regenerate with correct platform/language
+   - Recalculate score after fix
+   - If still < 8: Mark ERROR
+
+**Step 1.5: Fix Attempt Decision Tree**
+
+```
+START: Critical blocker detected
+  ↓
+Is blocker fixable?
+  ├─ NO (wrong AWS account, manual intervention) → ❌ ERROR immediately
+  └─ YES → Continue
+    ↓
+Attempt fix (regenerate/redeploy/add services)
+  ↓
+Fix successful?
+  ├─ NO → ❌ ERROR ("Fix attempt failed: {reason}")
+  └─ YES → Recalculate training_quality score
+    ↓
+New score ≥ 8?
+  ├─ YES → ✅ Continue to Step 2 (approve)
+  └─ NO → Check if iteration allowed
+    ↓
+Score 4-5 and iteration criteria met?
+  ├─ YES → ⚠️ ITERATE (see iteration-policy.md)
+  └─ NO → ❌ ERROR ("Score {score}/10 after fix attempt")
+```
+
+**If fix attempt succeeds and score ≥ 8**: Continue to Step 2 (approve)
+**If fix attempt fails or score still < 8**: Mark ERROR with reason
 
 **Step 2: Start with Base Score = 8**
 
@@ -294,9 +340,16 @@ Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 |-------|---------|--------|
 | **9-10** | Excellent training value | ✅ APPROVE - Continue review |
 | **8** | Good training value (threshold) | ✅ APPROVE - Continue review |
-| **6-7** | Below threshold | ❌ BLOCK - List improvements needed |
-| **4-5** | Poor training value | ❌ BLOCK - Consider skip |
+| **6-7** | Below threshold | ⚠️ Evaluate iteration |
+| **4-5** | Below threshold | ⚠️ Evaluate iteration if fixable |
 | **0-3** | Insufficient/Critical issues | ❌ BLOCK - Mark as error |
+
+**Score 4-5 Evaluation**:
+1. Check MODEL_FAILURES.md for fix categories
+2. If Category A/B fixes exist: Evaluate iteration (see iteration-policy.md)
+3. If only Category C/D fixes: Mark ERROR ("Model competent")
+4. If iteration criteria met: Proceed with iteration
+5. If iteration criteria not met: Mark ERROR with reason
 
 **CRITICAL THRESHOLD: ≥8 required for PR creation**
 
@@ -425,7 +478,7 @@ FINAL CHECKLIST:
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
-- Hand off to task-coordinator Phase 5
+- Hand off to task-coordinator PHASE 5
 
 If ANY unchecked:
 - Report: "❌ NOT READY"
@@ -525,7 +578,7 @@ Before posting your comment, verify:
 2. Your comment ends with `SCORE:X` line where X is 0-10
 ```
 
-### Phase 2: Compliance Analysis
+### PHASE 2: Compliance Analysis
 
 **Cost Optimization**: Focus on meaningful differences only.
 
@@ -541,7 +594,7 @@ Before posting your comment, verify:
   - Avoid listing trivial formatting/comment differences
   - Document significant fixes for MODEL_FAILURES analysis and training quality bonus
 
-### Phase 3: Test Coverage
+### PHASE 3: Test Coverage
 
 **CRITICAL REQUIREMENT: 100% Coverage**
 
@@ -572,7 +625,7 @@ fi
 - BLOCK PR creation
 - Report specific coverage gaps
 - Training quality penalty: -3 points
-- Cannot proceed to Phase 4
+- Cannot proceed to PHASE 4
 
 **Integration Test Coverage**:
 - Analyze integration test coverage (must use cfn-outputs, no mocks)
@@ -583,7 +636,7 @@ fi
 
 **Reference**: `.claude/docs/references/pre-submission-checklist.md` Section 5
 
-### Phase 4: Final Training Quality Gate
+### PHASE 4: Final Training Quality Gate
 
 **CRITICAL**: Validate before reporting "Ready"
 
@@ -608,7 +661,7 @@ If training_quality < 8:
     - Do NOT iterate
   ```
 
-- Do NOT proceed to Phase 5 until training_quality ≥ 8 after any iteration
+- Do NOT proceed to PHASE 5 until training_quality ≥ 8 after any iteration
 
 **Report "Ready" only when**:
 - All phases passed
