@@ -33,8 +33,9 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 // Load stack outputs
 let outputs: any;
 try {
-  const outputsPath = path.join(__dirname, 'cfn-outputs', 'flat-outputs.json');
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+  const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+  outputs = JSON.parse(outputsContent);
 } catch (error) {
   console.error(
     'Failed to load CloudFormation outputs. Ensure stack is deployed and outputs are available.'
@@ -42,7 +43,7 @@ try {
   throw error;
 }
 
-// Initialize AWS clients for live integration testing (mix of SDK v2/v3 based on available packages)
+// Initialize AWS clients for live integration testing
 const s3Client = new S3Client({ region });
 const emrClient = new EMR({ region }); // SDK v2
 const stepFunctionsClient = new SFNClient({ region });
