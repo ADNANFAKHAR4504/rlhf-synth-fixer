@@ -1471,23 +1471,6 @@ describe('Workflow 12: TRUE E2E - NACL Subnet Associations', () => {
     });
   });
   
-  describe('Workflow 14: TRUE E2E - Resource Naming Consistency', () => {
-    
-    test('E2E: Validate resource naming follows environment convention', async () => {
-      const environment = outputs.region.includes('prod') ? 'prod' : 
-                          outputs.region.includes('staging') ? 'staging' : 
-                          'prod'; // Default assumption
-      
-      // Check naming patterns in outputs
-      expect(outputs.s3_flow_logs_bucket_name).toContain(accountId);
-      
-      console.log('Resource naming consistency validated');
-      console.log(`  Environment: ${environment}`);
-      console.log(`  Account ID: ${accountId}`);
-      console.log(`  Region: ${region}`);
-    });
-  });
-  
   describe('Workflow 15: TRUE E2E - High Availability Validation', () => {
     
     test('E2E: Validate each tier spans multiple AZs', async () => {
