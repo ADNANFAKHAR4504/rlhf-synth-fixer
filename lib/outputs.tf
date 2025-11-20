@@ -48,3 +48,8 @@ output "cloudwatch_alarm_arns" {
   description = "ARNs of CloudWatch alarms"
   value       = module.payment_app.cloudwatch_alarm_arns
 }
+
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing database credentials"
+  value       = module.payment_app.db_credentials_secret_arn
+}
