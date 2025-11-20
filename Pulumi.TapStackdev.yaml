@@ -1,0 +1,3 @@
+config:
+  aws:defaultTags: '{"tags":{"Environment":"dev","Repository":"iac-test-automations","Author":"chriscrsov","PRNumber":"unknown","Team":"unknown","CreatedAt":"2025-11-20T10:20:35Z","ManagedBy":"pulumi"}}'
+encryptionsalt: v1:sPyvq2A7bDA=:v1:BF9NLV6QKRTDH/Ba:C9ISS5rZTNsU72P2u0ZF8qqBLzSPGQ==

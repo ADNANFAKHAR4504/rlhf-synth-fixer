@@ -247,13 +247,94 @@ https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html
 
 ---
 
+### 6. Integration Test Static Outputs Dependency
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+Integration tests relied on static output files that may not exist:
+```python
+outputs_file = 'cfn-outputs/flat-outputs.json'
+if not os.path.exists(outputs_file):
+    raise FileNotFoundError(f"Stack outputs not found at {outputs_file}")
+```
+
+**Problem**:
+- Tests fail if outputs file doesn't exist
+- No fallback mechanism to discover resources
+- Hardcoded file paths reduce flexibility
+- Cannot adapt to different deployment scenarios
+
+**IDEAL_RESPONSE Fix**:
+```python
+# Get stack outputs dynamically
+cls.outputs = cls._get_stack_outputs()
+
+# If no outputs available, try to discover resources from AWS
+if not cls.outputs:
+    print("No stack outputs found, attempting to discover resources from AWS...")
+    cls.outputs = cls._discover_resources_from_aws()
+```
+
+**Root Cause**:
+The model created brittle integration tests that depend on specific file locations and formats. Real-world integration tests should be resilient and able to discover resources dynamically from multiple sources (Pulumi stack outputs, AWS API, environment variables).
+
+**Impact**:
+- **Testing**: Tests fail in environments where outputs file doesn't exist
+- **Flexibility**: Cannot run tests in different deployment scenarios
+- **Maintenance**: Hardcoded paths require updates when deployment process changes
+
+**Training Value**: MEDIUM - Understanding dynamic resource discovery patterns improves test reliability and portability.
+
+---
+
+### 7. Integration Test Stack Name Discovery
+
+**Impact Level**: Low-Medium
+
+**MODEL_RESPONSE Issue**:
+Integration tests did not dynamically discover the stack name:
+```python
+# No stack name discovery - assumes specific naming convention
+```
+
+**Problem**:
+- Tests fail if stack naming doesn't match expectations
+- Cannot adapt to different environment configurations
+- Hardcoded assumptions reduce test portability
+
+**IDEAL_RESPONSE Fix**:
+```python
+@classmethod
+def _discover_stack_name(cls) -> str:
+    """Dynamically discover the active Pulumi stack name."""
+    # Check PULUMI_STACK environment variable
+    # Check ENVIRONMENT_SUFFIX to construct stack name
+    # Try to get currently selected stack
+    # Fallback to stack files in project directory
+```
+
+**Root Cause**:
+The model created tests with hardcoded assumptions about stack naming rather than implementing robust discovery mechanisms that work across different deployment scenarios.
+
+**Impact**:
+- **Testing**: Tests may fail in CI/CD environments with different naming conventions
+- **Portability**: Tests cannot easily run in different environments
+- **Maintenance**: Requires manual updates when stack naming changes
+
+**Training Value**: MEDIUM - Dynamic discovery patterns make tests more robust and reusable.
+
+---
+
 ## Summary
 
-- **Total failures**: 2 Critical, 3 High/Medium
+- **Total failures**: 2 Critical, 3 High/Medium, 2 Low-Medium
 - **Primary knowledge gaps**:
   1. **Python-specific AWS SDK requirements** (Decimal for DynamoDB)
   2. **Data type lifecycle management** (float → Decimal → float conversions)
   3. **Platform API differences** (Pulumi vs CDK syntax)
+  4. **AWS service limits** (Lambda retry attempts, concurrency quotas)
+  5. **Integration test patterns** (dynamic resource discovery, stack name resolution)
 
 - **Training value**: **HIGH** - The two critical failures (Decimal handling and JSON serialization) represent fundamental gaps in understanding Python-AWS integration patterns that would impact many DynamoDB-based applications. These are not edge cases but core requirements for working with AWS services in Python.
 
@@ -264,11 +345,13 @@ https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html
 3. **Strengthen platform-specific API knowledge** (Pulumi vs CDK vs CloudFormation vs Terraform)
 4. **Teach recognition of AWS service limits** and how to handle requirement conflicts
 5. **Emphasize testing patterns** that would have caught these issues (unit tests with DynamoDB interactions)
+6. **Include integration test best practices** (dynamic discovery, multiple fallback mechanisms)
 
 ## Testing That Caught These Issues
 
 - **Unit Tests**: Would catch Lambda code packaging syntax error
 - **Integration Tests**: Caught both Decimal-related issues through live AWS invocations
 - **Deployment**: Caught retry attempts and concurrency quota issues
+- **Dynamic Discovery**: Improved test reliability and portability
 
-This demonstrates the value of comprehensive testing pipelines that include both unit and live integration tests against real AWS resources.
+This demonstrates the value of comprehensive testing pipelines that include both unit and live integration tests against real AWS resources, with robust discovery mechanisms that adapt to different deployment scenarios.

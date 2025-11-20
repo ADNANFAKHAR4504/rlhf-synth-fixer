@@ -23,5 +23,7 @@
     "IAM",
     "Systems Manager Parameter Store"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }
