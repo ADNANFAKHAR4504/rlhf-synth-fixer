@@ -22,6 +22,8 @@ resource "aws_lb" "main" {
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
   }
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 }
 
 # S3 bucket for ALB logs
