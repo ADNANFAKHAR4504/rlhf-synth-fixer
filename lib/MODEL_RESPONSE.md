@@ -125,8 +125,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create Aurora global cluster
         self.global_cluster = aws.rds.GlobalCluster(
-            f"aurora-global-{self.environment_suffix}",
-            global_cluster_identifier=f"aurora-global-{self.environment_suffix}",
+            f"aurora-global-v2-{self.environment_suffix}",
+            global_cluster_identifier=f"aurora-global-v2-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="appdb",
@@ -137,8 +137,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create primary Aurora cluster in us-east-1
         self.primary_cluster = aws.rds.Cluster(
-            f"aurora-primary-{self.environment_suffix}",
-            cluster_identifier=f"aurora-primary-{self.environment_suffix}",
+            f"aurora-primary-v2-{self.environment_suffix}",
+            cluster_identifier=f"aurora-primary-v2-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="appdb",
@@ -161,8 +161,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create primary cluster instances
         self.primary_instance = aws.rds.ClusterInstance(
-            f"aurora-primary-instance-{self.environment_suffix}",
-            identifier=f"aurora-primary-instance-{self.environment_suffix}",
+            f"aurora-primary-instance-v2-{self.environment_suffix}",
+            identifier=f"aurora-primary-instance-v2-{self.environment_suffix}",
             cluster_identifier=self.primary_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
@@ -177,8 +177,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create secondary Aurora cluster in us-west-2
         self.secondary_cluster = aws.rds.Cluster(
-            f"aurora-secondary-{self.environment_suffix}",
-            cluster_identifier=f"aurora-secondary-{self.environment_suffix}",
+            f"aurora-secondary-v2-{self.environment_suffix}",
+            cluster_identifier=f"aurora-secondary-v2-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             db_subnet_group_name=self.secondary_subnet_group.name,
@@ -197,8 +197,8 @@ class TapStack(pulumi.ComponentResource):
 
         # Create secondary cluster instance
         self.secondary_instance = aws.rds.ClusterInstance(
-            f"aurora-secondary-instance-{self.environment_suffix}",
-            identifier=f"aurora-secondary-instance-{self.environment_suffix}",
+            f"aurora-secondary-instance-v2-{self.environment_suffix}",
+            identifier=f"aurora-secondary-instance-v2-{self.environment_suffix}",
             cluster_identifier=self.secondary_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
@@ -212,11 +212,24 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create Route53 health check for primary database
+        # First create TCP health check for the endpoint
+        primary_endpoint_check = aws.route53.HealthCheck(
+            f"db-endpoint-check-{self.environment_suffix}",
+            type="TCP",
+            port=3306,
+            resource_path=None,
+            fqdn=self.primary_cluster.endpoint,
+            request_interval=30,
+            failure_threshold=3,
+            opts=ResourceOptions(parent=self, provider=self.primary_provider)
+        )
+
+        # Create calculated health check that references the TCP check
         self.primary_health_check = aws.route53.HealthCheck(
             f"db-health-check-{self.environment_suffix}",
             type="CALCULATED",
             child_health_threshold=1,
-            child_healthchecks=[],
+            child_healthchecks=[primary_endpoint_check.id],
             opts=ResourceOptions(parent=self)
         )
 
@@ -478,7 +491,7 @@ class TapStack(pulumi.ComponentResource):
         )
 ```
 
-## File: lib/__init__.py
+## File: lib/**init**.py
 
 ```python
 """
@@ -584,6 +597,7 @@ pulumi.export('global_cluster_id', stack.global_cluster.id)
 ### Configuration
 
 Set these via Pulumi config or environment variables:
+
 - `ENVIRONMENT_SUFFIX`: Environment identifier (e.g., 'dev', 'prod')
 - `AWS_REGION`: Primary region (default: us-east-1)
 - `secret_arn`: ARN of existing Secrets Manager secret for DB password
@@ -608,11 +622,13 @@ pulumi up
 ### Testing
 
 Run unit tests to validate resource configuration:
+
 ```bash
 pytest tests/unit/test_tap_stack.py -v
 ```
 
 Run integration tests to validate failover behavior:
+
 ```bash
 pytest tests/integration/test_tap_stack.py -v
 ```
@@ -620,6 +636,7 @@ pytest tests/integration/test_tap_stack.py -v
 ### Cleanup
 
 All resources are fully destroyable:
+
 ```bash
 pulumi destroy
 ```

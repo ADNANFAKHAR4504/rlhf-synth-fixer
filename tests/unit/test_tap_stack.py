@@ -385,8 +385,8 @@ class TestTapStack(unittest.TestCase):
                 # Verify cluster instances were created
                 self.assertEqual(mock_cluster_instance.call_count, 2)
 
-                # Verify health check was created
-                mock_health_check.assert_called_once()
+                # Verify health checks were created (TCP + calculated)
+                self.assertEqual(mock_health_check.call_count, 2)
 
                 # Verify CloudWatch alarms were created
                 mock_create_alarms.assert_called_once()

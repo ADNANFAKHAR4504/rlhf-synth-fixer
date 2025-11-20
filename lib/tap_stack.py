@@ -197,11 +197,24 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create Route53 health check for primary database
+        # First create TCP health check for the endpoint
+        primary_endpoint_check = aws.route53.HealthCheck(
+            f"db-endpoint-check-{self.environment_suffix}",
+            type="TCP",
+            port=3306,
+            resource_path=None,
+            fqdn=self.primary_cluster.endpoint,
+            request_interval=30,
+            failure_threshold=3,
+            opts=ResourceOptions(parent=self, provider=self.primary_provider)
+        )
+
+        # Create calculated health check that references the TCP check
         self.primary_health_check = aws.route53.HealthCheck(
             f"db-health-check-{self.environment_suffix}",
             type="CALCULATED",
             child_health_threshold=1,
-            child_healthchecks=[],
+            child_healthchecks=[primary_endpoint_check.id],
             opts=ResourceOptions(parent=self)
         )
 
