@@ -283,7 +283,15 @@ resource "aws_security_group" "ec2_sg" {
   description = "Security group for EC2 instance"
   vpc_id      = aws_vpc.main.id
 
-  # No SSH ingress here; SSH rule is added conditionally below
+  # SSH access as per requirements
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.ssh_cidr_blocks
+    description = "SSH access from configurable IP addresses"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -293,64 +301,84 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = {
-    Name = "ec2-sg-${var.resource_suffix}"
+    Name            = "ec2-sg-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
 }
 
-# Conditional SSH rule: created only if use_ssm is false
-resource "aws_security_group_rule" "ssh" {
-  count        = var.use_ssm ? 0 : 1
-  type         = "ingress"
-  from_port    = 22
-  to_port      = 22
-  protocol     = "tcp"
-  security_group_id = aws_security_group.ec2_sg.id
-  cidr_blocks  = var.ssh_cidr_blocks
-  description  = "SSH access (only when use_ssm = false)"
-}
-
-# Key pair created only if use_ssm is false
+# SSH Key Pair for EC2 access
 resource "aws_key_pair" "deployer" {
-  count      = var.use_ssm ? 0 : 1
+  count      = var.ssh_public_key != "" ? 1 : 0
   key_name   = "deployer-key-${var.resource_suffix}"
   public_key = var.ssh_public_key
+
+  tags = {
+    Name            = "deployer-key-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
+  }
 }
 
-# IAM role / instance profile for SSM (created always; attachment harmless)
-resource "aws_iam_role" "ssm" {
-  count = var.manage_ssm_instance_profile ? 1 : 0
-  name  = "ssm-role-${var.resource_suffix}"
+# IAM role for SSM access (kept for additional security option)
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "ec2-ssm-role-${var.resource_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
       }
-    }]
+    ]
   })
+
+  tags = {
+    Name            = "ec2-ssm-role-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "ssm_attach" {
-  count      = var.manage_ssm_instance_profile ? 1 : 0
-  role       = aws_iam_role.ssm[count.index].name
+resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
+  role       = aws_iam_role.ec2_ssm_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_instance_profile" "ssm_profile" {
-  count = var.manage_ssm_instance_profile ? 1 : 0
-  # Include a short random suffix to avoid name collisions when an instance
-  # profile with the same name already exists (common in iterative dev runs).
-  name = "ssm-profile-${var.resource_suffix}-${random_id.ssm_suffix.hex}"
-  role = aws_iam_role.ssm[0].name
+# Inline policy granting S3 access to the instance role for the terraform state bucket
+resource "aws_iam_role_policy" "ec2_s3_access" {
+  name = "ec2-ssm-s3-access-${var.resource_suffix}"
+  role = aws_iam_role.ec2_ssm_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::terraform-state-${var.resource_suffix}",
+          "arn:aws:s3:::terraform-state-${var.resource_suffix}/*"
+        ]
+      }
+    ]
+  })
 }
 
-resource "random_id" "ssm_suffix" {
-  # Increase suffix entropy to reduce collision risk in high-frequency CI/CD deployments.
-  # 8 bytes provides 64 bits of randomness which is effectively collision resistant for our use case.
-  byte_length = 8
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2-profile-${var.resource_suffix}"
+  role = aws_iam_role.ec2_ssm_role.name
+
+  tags = {
+    Name            = "ec2-profile-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
+  }
 }
 
 resource "aws_instance" "web" {
@@ -358,16 +386,35 @@ resource "aws_instance" "web" {
   instance_type          = var.ec2_instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-
-  # if using SSH, key will be created; if using SSM, key_name is null
-  key_name = var.use_ssm ? null : try(aws_key_pair.deployer[0].key_name, null)
-
-  # attach instance profile for SSM when we manage it; otherwise leave null
-  iam_instance_profile = var.manage_ssm_instance_profile ? try(aws_iam_instance_profile.ssm_profile[0].name, null) : null
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  key_name               = var.ssh_public_key != "" ? aws_key_pair.deployer[0].key_name : null
 
   tags = {
-    Name = "web-instance-${var.resource_suffix}"
+    Name            = "web-instance-${var.resource_suffix}"
+    iac-rlhf-amazon = "true"
   }
+}
+
+# Inline policy granting Secrets Manager read access for the instance to fetch RDS credentials
+resource "aws_iam_role_policy" "ec2_secrets_access" {
+  name = "ec2-ssm-secrets-access-${var.resource_suffix}"
+  role = aws_iam_role.ec2_ssm_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_secretsmanager_secret.rds_password.arn
+        ]
+      }
+    ]
+  })
 }
 ```
 
@@ -781,7 +828,7 @@ The following updates were applied to support live integration testing and impro
 - `main.tf`: Added configurable region via var.region, added random provider, and included data sources for caller identity and region.
 - `variables.tf`: Expanded with validations, new vars for SSM, public access, region, CI principals, and manage_ssm_instance_profile.
 - `networking.tf` (vpc.tf): Simplified AZ handling, direct specification without data source.
-- `ec2.tf`: Conditional SSH/SM, added random_id for profiles, IAM roles created based on manage_ssm_instance_profile.
+- `ec2.tf`: Always creates IAM role with SSM policy, inline policies for S3 access to app_bucket and Secrets Manager access to rds_password secret.
 - `rds.tf`: Dynamic password generation, random secret suffixes, added public access option, backup retention to 7 days.
 - `s3.tf`: Changed to app_bucket with random naming locals.
 - `outputs.tf`: Updated resource references, added numerous new outputs for account/region, Lambda, and optional resources with try().

@@ -98,8 +98,8 @@ resource "aws_iam_role_policy" "ec2_s3_access" {
           "s3:ListBucket"
         ]
         Resource = [
-          aws_s3_bucket.terraform_state.arn,
-          "${aws_s3_bucket.terraform_state.arn}/*"
+          "arn:aws:s3:::terraform-state-${var.resource_suffix}",
+          "arn:aws:s3:::terraform-state-${var.resource_suffix}/*"
         ]
       }
     ]
@@ -145,7 +145,7 @@ resource "aws_iam_role_policy" "ec2_secrets_access" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          "${aws_secretsmanager_secret.db_credentials.arn}*"
+          aws_secretsmanager_secret.rds_password.arn
         ]
       }
     ]

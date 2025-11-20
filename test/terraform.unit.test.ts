@@ -236,8 +236,8 @@ describe("Terraform lib/ .tf unit tests", () => {
       expect(ec2Tf).toMatch(/"s3:PutObject"/);
       expect(ec2Tf).toMatch(/"s3:GetObject"/);
       expect(ec2Tf).toMatch(/"s3:ListBucket"/);
-      contains(ec2Tf, "aws_s3_bucket.terraform_state.arn");
-      contains(ec2Tf, "${aws_s3_bucket.terraform_state.arn}/*");
+      contains(ec2Tf, "\"arn:aws:s3:::terraform-state-${var.resource_suffix}\"");
+      contains(ec2Tf, "\"arn:aws:s3:::terraform-state-${var.resource_suffix}/*\"");
     });
 
     test("should create inline IAM policy for Secrets Manager access", () => {
@@ -249,7 +249,7 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should have Secrets Manager policy with correct permissions", () => {
       expect(ec2Tf).toMatch(/"secretsmanager:GetSecretValue"/);
       expect(ec2Tf).toMatch(/"secretsmanager:DescribeSecret"/);
-      expect(ec2Tf).toMatch(/aws_secretsmanager_secret\.db_credentials\.arn/);
+      expect(ec2Tf).toMatch(/aws_secretsmanager_secret\.rds_password\.arn/);
     });
 
     test("should create IAM instance profile", () => {
