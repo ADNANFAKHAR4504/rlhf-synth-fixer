@@ -1043,7 +1043,6 @@ describe('TapStack - Production Web Application Infrastructure Unit Tests', () =
       expect(templateYaml).not.toContain('Action: "*"');
       expect(templateYaml).not.toContain('Action:\n              - "*"');
 
-      // Specific resource targeting for S3
       expect(templateYaml).toContain('Resource: !Sub "${LogsBucket.Arn}/*"');
       expect(templateYaml).toContain('Resource: !GetAtt LogsBucket.Arn');
 
