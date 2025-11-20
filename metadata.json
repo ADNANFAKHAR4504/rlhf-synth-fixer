@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T00:00:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Use AWS Lambda functions with environment-specific configurations in both regions",
+    "Implement cross-region replication for S3 buckets storing transaction logs",
+    "Configure Route 53 health checks with automatic DNS failover",
+    "Set up DynamoDB global tables with point-in-time recovery enabled",
+    "Use with automatic cross-region replication",
+    "Implement CloudWatch alarms with SNS notifications for failover events",
+    "Ensure all Lambda functions use Python 3.11 runtime",
+    "Configure Lambda reserved concurrent executions to prevent throttling",
+    "Use stack exports for cross-stack references within each region"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "Route53",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "po_id": "m8i4x9",
+  "training_quality": 10
+}
