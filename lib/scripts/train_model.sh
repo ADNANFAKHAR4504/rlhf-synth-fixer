@@ -2,7 +2,7 @@
 set -euo pipefail
 
 DATE_FORMAT="$(date '+%Y%m%d%H%M%S')"
-SHORT_SHA="${GITHUB_SHA:-local}"  # fallback for local runs
+SHORT_SHA="${GITHUB_SHA:-local}"
 SHORT_SHA="${SHORT_SHA:0:7}"
 VERSION="v${DATE_FORMAT}_${SHORT_SHA}"
 VERSION_DIR="artifacts/models/${VERSION}"

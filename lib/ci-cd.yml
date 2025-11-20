@@ -27,8 +27,6 @@ env:
   TF_WORKING_DIR: infra
   PYTHON_VERSION: "3.11"
   IMAGE_NAME: "ml-app"
-  REGISTRY_HOST: "${{ vars.GCP_REGION }}-docker.pkg.dev"
-  REGISTRY_REPO: "${{ env.GCP_PROJECT_ID }}/ml-platform"
 
 jobs:
   validation:
@@ -82,7 +80,8 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m).tar.gz -o gitleaks.tar.gz
+          GITLEAKS_VERSION="8.18.2"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_$(uname -s)_$(uname -m).tar.gz" -o gitleaks.tar.gz
           tar -xzf gitleaks.tar.gz gitleaks
           sudo mv gitleaks /usr/local/bin/gitleaks
 
@@ -118,8 +117,7 @@ jobs:
 
       - name: Install Poetry
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip poetry
 
       - name: Configure Poetry
         run: poetry config virtualenvs.in-project true
@@ -145,6 +143,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     env:
       IMAGE_TAG: ${{ github.sha }}
+      REGISTRY_HOST: ${{ env.GCP_REGION }}-docker.pkg.dev
+      REGISTRY_REPO: ${{ env.GCP_PROJECT_ID }}/ml-platform
 
     steps:
       - name: Checkout
@@ -168,10 +168,8 @@ jobs:
       - name: Build Docker image
         env:
           IMAGE_NAME_FULL: "${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_REPO }}/${{ env.IMAGE_NAME }}"
-        run: >
-          docker build -t
-          "${IMAGE_NAME_FULL}:${{ env.IMAGE_TAG }}"
-          .
+        run: |
+          docker build -t "${IMAGE_NAME_FULL}:${{ env.IMAGE_TAG }}" .
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@v0.24.0
@@ -209,8 +207,7 @@ jobs:
 
       - name: Install Poetry
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip poetry
 
       - name: Configure Poetry
         run: poetry config virtualenvs.in-project true
@@ -239,12 +236,12 @@ jobs:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Make train script executable
-        run: chmod +x lib/scripts/train_model.sh
+        run: chmod +x scripts/train_model.sh
 
       - name: Train & upload model
         env:
           GCS_MODEL_BUCKET: ${{ env.GCS_MODEL_BUCKET }}
-        run: lib/scripts/train_model.sh
+        run: scripts/train_model.sh
 
       - name: Upload model version artifact
         uses: actions/upload-artifact@v4
@@ -325,14 +322,14 @@ jobs:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
       - name: Make deploy script executable
-        run: chmod +x lib/scripts/deploy_vertex_model.sh
+        run: chmod +x scripts/deploy_vertex_model.sh
 
       - name: Deploy model to Vertex AI
         env:
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           GCS_MODEL_BUCKET: ${{ env.GCS_MODEL_BUCKET }}
-        run: lib/scripts/deploy_vertex_model.sh
+        run: scripts/deploy_vertex_model.sh
 
   cleanup-on-failure:
     name: Rollback on Failure
@@ -343,4 +340,4 @@ jobs:
     steps:
       - name: Rollback placeholder
         run: |
-          echo "[Sub_T05] model-deploy failed; implement rollback here (e.g., revert Vertex AI deployment or previous image)."
+          echo "[Sub_T05] model-deploy failed; implement rollback here (e.g., revert Vertex AI endpoint to previous model)."

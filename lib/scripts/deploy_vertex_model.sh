@@ -9,7 +9,7 @@ if [ ! -f ".model_version" ]; then
   exit 1
 fi
 
-VERSION="$(cat .model_version | tr -d '[:space:]')"
+VERSION="$(tr -d '[:space:]' < .model_version)"
 
 if [ -z "${VERSION}" ]; then
   echo "[Sub_T05] ERROR: Empty model version in .model_version file."
