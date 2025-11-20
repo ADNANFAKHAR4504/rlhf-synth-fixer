@@ -48,6 +48,7 @@ export class AuroraCluster extends pulumi.ComponentResource {
       {
         name: `aurora-password-${args.environmentSuffix}`,
         description: 'Aurora database password',
+        recoveryWindowInDays: 0, // Allow immediate deletion to prevent naming conflicts
         tags: {
           Name: `db-secret-${args.environmentSuffix}`,
           Environment: args.environment,
