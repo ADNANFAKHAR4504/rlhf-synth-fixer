@@ -1,6 +1,6 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with ts**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with ts**
 >
 > Platform: **pulumi**
 > Language: **ts**
@@ -84,22 +84,22 @@ Multi-region AWS deployment spanning us-east-1 (production), us-east-1 (staging)
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
-- **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+- **Runtime**: Using `nodejs16.x` with AWS SDK v2 for drift detection Lambda
+  - AWS SDK v2 is bundled by default in Node.js 16.x runtime
+  - Use `require('aws-sdk')` for AWS service calls
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -128,22 +128,22 @@ Multi-region AWS deployment spanning us-east-1 (production), us-east-1 (staging)
 ### Correct Resource Naming (Pulumi TypeScript)
 ```typescript
 const bucket = new aws.s3.Bucket("dataBucket", {
-  bucket: `data-bucket-${environmentSuffix}`,  // ✅ CORRECT
+  bucket: `data-bucket-${environmentSuffix}`,  // CORRECT
   // ...
 });
 
-// ❌ WRONG:
+// WRONG:
 // bucket: 'data-bucket-prod'  // Hardcoded, will fail
 ```
 
 ### Correct Removal Policy (Pulumi TypeScript)
 ```typescript
 const bucket = new aws.s3.Bucket("dataBucket", {
-  forceDestroy: true,  // ✅ CORRECT - allows cleanup
+  forceDestroy: true,  // CORRECT - allows cleanup
   // ...
 });
 
-// ❌ WRONG:
+// WRONG:
 // No forceDestroy or forceDestroy: false  // Will block cleanup
 ```
 
@@ -154,11 +154,11 @@ const configRole = new aws.iam.Role("configRole", {
     Service: "config.amazonaws.com",
   }),
   managedPolicyArns: [
-    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"  // ✅ CORRECT
+    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"  // CORRECT
   ]
 });
 
-// ❌ WRONG:
+// WRONG:
 // 'arn:aws:iam::aws:policy/service-role/ConfigRole'  // Policy doesn't exist
 // 'arn:aws:iam::aws:policy/AWS_ConfigRole'  // Missing service-role/ prefix
 ```

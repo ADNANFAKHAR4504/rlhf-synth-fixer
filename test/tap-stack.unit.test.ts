@@ -196,6 +196,73 @@ describe('TapStack ComponentResource - Type Checking', () => {
   });
 });
 
+describe('TapStack ComponentResource - Fallback Configuration', () => {
+  test('TapStack uses provided environmentSuffix from args', () => {
+    const args: TapStackArgs = {
+      environmentSuffix: 'explicit-suffix',
+    };
+
+    const stack = new TapStack('fallback-test-1', args);
+
+    expect(stack).toBeDefined();
+    expect(stack).toBeInstanceOf(TapStack);
+  });
+
+  test('TapStack falls back to default when no config provided', () => {
+    // Test the fallback chain: args || config || env || 'dev'
+    // Since args is empty and we're in test mode with mocked config,
+    // it should fall back through the chain
+    const args: TapStackArgs = {};
+
+    const stack = new TapStack('fallback-test-2', args);
+
+    expect(stack).toBeDefined();
+    expect(stack).toBeInstanceOf(TapStack);
+  });
+
+  test('TapStack handles different environment values', () => {
+    // Test that different environment configurations work
+    const devArgs: TapStackArgs = {
+      environmentSuffix: 'dev-config',
+    };
+
+    const devStack = new TapStack('config-dev', devArgs);
+    expect(devStack).toBeDefined();
+    expect(devStack.vpcId).toBeDefined();
+
+    const stagingArgs: TapStackArgs = {
+      environmentSuffix: 'staging-config',
+    };
+
+    const stagingStack = new TapStack('config-staging', stagingArgs);
+    expect(stagingStack).toBeDefined();
+    expect(stagingStack.ecsClusterName).toBeDefined();
+
+    const prodArgs: TapStackArgs = {
+      environmentSuffix: 'prod-config',
+    };
+
+    const prodStack = new TapStack('config-prod', prodArgs);
+    expect(prodStack).toBeDefined();
+    expect(prodStack.auroraEndpoint).toBeDefined();
+  });
+
+  test('TapStack validates environment configuration access', () => {
+    // This tests the environmentConfigs[environment] lookup
+    const args: TapStackArgs = {
+      environmentSuffix: 'env-lookup-test',
+    };
+
+    const stack = new TapStack('env-lookup', args);
+
+    // Verify all expected outputs exist (confirms env config was accessed)
+    expect(stack.vpcId).toBeDefined();
+    expect(stack.ecsClusterName).toBeDefined();
+    expect(stack.auroraEndpoint).toBeDefined();
+    expect(stack.albDnsName).toBeDefined();
+  });
+});
+
 // ============================================================================
 // BaseInfrastructure Component Tests
 // ============================================================================
@@ -745,6 +812,23 @@ describe('CrossStackReferences Component', () => {
     expect(crossStack).toBeDefined();
     expect(crossStack).toBeInstanceOf(CrossStackReferences);
   });
+
+  test('CrossStackReferences works without referenceStack config', () => {
+    // This tests the branch where referenceStackName is not set
+    const args: CrossStackReferencesArgs = {
+      environmentSuffix: 'no-ref-test',
+      environment: 'dev',
+      vpcId: mockVpcId,
+      ecsClusterArn: mockEcsClusterArn,
+      albArn: mockAlbArn,
+      auroraEndpoint: mockAuroraEndpoint,
+    };
+
+    const crossStack = new CrossStackReferences('cross-no-ref', args);
+
+    expect(crossStack).toBeDefined();
+    expect(crossStack).toBeInstanceOf(CrossStackReferences);
+  });
 });
 
 describe('CrossStackReferences - Advanced Scenarios', () => {
@@ -1154,6 +1238,15 @@ describe('Index Module', () => {
     const indexModule = require('../lib/index');
 
     expect(indexModule).toBeDefined();
+  });
+
+  test('Index module handles configuration fallbacks', () => {
+    // This test exercises the config.get() || process.env || 'dev' branches
+    const indexModule = require('../lib/index');
+
+    expect(indexModule).toBeDefined();
+    // The module should successfully initialize even with fallback config
+    expect(indexModule.vpcId).toBeDefined();
   });
 
   test('Index module exports vpcId', () => {

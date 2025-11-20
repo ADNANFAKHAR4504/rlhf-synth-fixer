@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface DriftDetectionArgs {
   environmentSuffix: string;
@@ -126,7 +126,7 @@ export class DriftDetection extends pulumi.ComponentResource {
       `drift-lambda-${args.environmentSuffix}`,
       {
         name: `drift-detection-${args.environmentSuffix}`,
-        runtime: 'nodejs18.x',
+        runtime: 'nodejs16.x',
         handler: 'index.handler',
         role: driftDetectionRole.arn,
         timeout: 60,
