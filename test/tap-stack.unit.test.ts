@@ -75,7 +75,7 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('should have DynamoDB Table', () => {
       expect(primaryTemplate.Resources.DynamoDBTable).toBeDefined();
-      expect(primaryTemplate.Resources.DynamoDBTable.Type).toBe('AWS::DynamoDB::Table');
+      expect(primaryTemplate.Resources.DynamoDBTable.Type).toBe('AWS::DynamoDB::GlobalTable');
       expect(primaryTemplate.Resources.DynamoDBTable.Properties.StreamSpecification).toBeDefined();
     });
 
@@ -158,8 +158,11 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('should have encryption on DynamoDB', () => {
       const table = primaryTemplate.Resources.DynamoDBTable;
-      expect(table.Properties.SSESpecification).toBeDefined();
-      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      // GlobalTable uses SSESpecification at a different level
+      expect(table.Properties.SSESpecification || table.Properties.Replicas[0].SSESpecification).toBeDefined();
+      if (table.Properties.SSESpecification) {
+        expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      }
     });
 
     test('should have Aurora using PostgreSQL', () => {

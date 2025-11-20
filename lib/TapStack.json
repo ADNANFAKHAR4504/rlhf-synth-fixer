@@ -789,6 +789,16 @@
             "AttributeType": "N"
           }
         ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
         "Replicas": [
           {
             "Region": "us-east-1",
@@ -1316,15 +1326,17 @@
     "PrimaryHealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
       "Properties": {
-        "Type": "HTTPS",
-        "ResourcePath": "/health",
-        "FullyQualifiedDomainName": {
-          "Fn::Sub": "${Environment}-primary-${EnvironmentSuffix}.example.com"
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "${Environment}-primary-${EnvironmentSuffix}.example.com"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
         },
-        "Port": 443,
-        "RequestInterval": 30,
-        "FailureThreshold": 3,
-        "Tags": [
+        "HealthCheckTags": [
           {
             "Key": "Name",
             "Value": {

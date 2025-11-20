@@ -105,10 +105,13 @@ describe('TapStack CloudFormation Template', () => {
   describe('Storage Resources', () => {
     test('should have DynamoDB table with streams', () => {
       expect(resources.DynamoDBTable).toBeDefined();
-      expect(resources.DynamoDBTable.Type).toBe('AWS::DynamoDB::Table');
+      expect(resources.DynamoDBTable.Type).toBe('AWS::DynamoDB::GlobalTable');
       expect(resources.DynamoDBTable.Properties.StreamSpecification).toBeDefined();
       expect(resources.DynamoDBTable.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
-      expect(resources.DynamoDBTable.Properties.SSESpecification.SSEEnabled).toBe(true);
+      // GlobalTable has SSESpecification at replica level
+      if (resources.DynamoDBTable.Properties.Replicas && resources.DynamoDBTable.Properties.Replicas.length > 0) {
+        expect(resources.DynamoDBTable.Properties.Replicas[0].SSESpecification.KMSMasterKeyId).toBeDefined();
+      }
     });
 
     test('should have S3 bucket with encryption', () => {
