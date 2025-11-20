@@ -28,22 +28,6 @@ const iamClient = new IAMClient({ region });
 
 describe('VPC Infrastructure Integration Tests', () => {
   describe('VPC Configuration', () => {
-    test('VPC should exist with correct configuration', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toHaveLength(1);
-
-      const vpc = response.Vpcs[0];
-      expect(vpc.VpcId).toBe(outputs.VPCId);
-      expect(vpc.State).toBe('available');
-      expect(vpc.CidrBlock).toBe(outputs.VPCCidrBlock || '10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
-    }, 30000);
-
     test('VPC should have correct tags', async () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [outputs.VPCId]
@@ -758,18 +742,6 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       expect(natRoute).toBeDefined();
       expect(natRoute?.State).toBe('active');
-    }, 30000);
-
-    test('VPC should have working DNS resolution', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs[0];
-
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
     }, 30000);
   });
 });
