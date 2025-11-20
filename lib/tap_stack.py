@@ -162,7 +162,7 @@ class TapStack(Stack):
         )
         sg.add_ingress_rule(
             self.alb_sg,
-            ec2.Port.tcp(8080),
+            ec2.Port.tcp(80),
             "Allow traffic from ALB",
         )
         return sg
@@ -230,7 +230,7 @@ class TapStack(Stack):
         )
 
         container.add_port_mappings(
-            ecs.PortMapping(container_port=8080, protocol=ecs.Protocol.TCP)
+            ecs.PortMapping(container_port=80, protocol=ecs.Protocol.TCP)
         )
 
         return task_definition
@@ -269,11 +269,11 @@ class TapStack(Stack):
             self,
             f"TradingTargetGroup-v1-{self.environment_suffix}",
             vpc=self.vpc,
-            port=8080,
+            port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/health",
+                path="/",
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(5),
                 healthy_threshold_count=2,
@@ -643,12 +643,13 @@ class TapStack(Stack):
         """Create Route 53 weighted routing records with health checks"""
         # Create health check for primary ALB
         # FIXED: Changed from HTTPS:443 to HTTP:80 to match ALB listener
+        # FIXED: Changed path from /health to / to match amazon-ecs-sample container
         primary_health_check = route53.CfnHealthCheck(
             self,
             f"PrimaryHealthCheck-v1-{self.environment_suffix}",
             health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
                 type="HTTP",
-                resource_path="/health",
+                resource_path="/",
                 fully_qualified_domain_name=self.alb.load_balancer_dns_name,
                 port=80,
                 request_interval=30,
@@ -678,12 +679,13 @@ class TapStack(Stack):
     def _create_route53_secondary_records(self) -> None:
         """Create Route 53 records for secondary region"""
         # FIXED: Create health check for secondary ALB
+        # FIXED: Changed path from /health to / to match amazon-ecs-sample container
         secondary_health_check = route53.CfnHealthCheck(
             self,
             f"SecondaryHealthCheck-v1-{self.environment_suffix}",
             health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
                 type="HTTP",
-                resource_path="/health",
+                resource_path="/",
                 fully_qualified_domain_name=self.alb.load_balancer_dns_name,
                 port=80,
                 request_interval=30,
