@@ -8,12 +8,13 @@
   "startedAt": "2025-11-20T16:56:25+05:30",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security, Compliance, and Governance"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "WAFv2",
     "S3",
     "CloudWatch"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "rajendrasingh-turing"
 }
