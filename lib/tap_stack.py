@@ -2,10 +2,12 @@
 This module defines the TapStack class for the financial transaction processing web application.
 """
 
+import os
 from typing import Optional
 import aws_cdk as cdk
 from aws_cdk import (
     Stack,
+    Tags,
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_rds as rds,
@@ -52,6 +54,12 @@ class TapStack(Stack):
             props.environment_suffix if props else None
         ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
+        # Add resource tags for compliance
+        Tags.of(self).add("Environment", environment_suffix)
+        Tags.of(self).add("Team", "platform-engineering")
+        Tags.of(self).add("CostCenter", "engineering")
+        Tags.of(self).add("Application", "transaction-processing")
+
         # Create VPC with 3 AZs
         vpc = ec2.Vpc(
             self, f"WebAppVpc{environment_suffix}",
@@ -75,14 +83,15 @@ class TapStack(Stack):
         rds_kms_key = kms.Key(
             self, f"RdsKmsKey{environment_suffix}",
             description=f"KMS key for RDS encryption - {environment_suffix}",
-            enable_key_rotation=True
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # Create Aurora PostgreSQL cluster
         db_cluster = rds.DatabaseCluster(
             self, f"AuroraCluster{environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_15_2
+                version=rds.AuroraPostgresEngineVersion.VER_15_8
             ),
             writer=rds.ClusterInstance.provisioned("writer",
                 instance_type=ec2.InstanceType.of(
@@ -104,7 +113,8 @@ class TapStack(Stack):
             storage_encryption_key=rds_kms_key,
             backup=rds.BackupProps(
                 retention=cdk.Duration.days(7)
-            )
+            ),
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # Create DynamoDB table for session storage
@@ -125,6 +135,8 @@ class TapStack(Stack):
             versioned=True,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     noncurrent_version_expiration=cdk.Duration.days(30)
@@ -160,8 +172,8 @@ class TapStack(Stack):
         # Create task definition
         task_definition = ecs.FargateTaskDefinition(
             self, f"TaskDef{environment_suffix}",
-            memory_limit_mib=512,
-            cpu=256
+            memory_limit_mib=1024,
+            cpu=512
         )
 
         # Add container to task definition
@@ -204,13 +216,15 @@ class TapStack(Stack):
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/health",
+                path="/",
                 interval=cdk.Duration.seconds(30),
-                timeout=cdk.Duration.seconds(5)
+                timeout=cdk.Duration.seconds(5),
+                healthy_threshold_count=2,
+                unhealthy_threshold_count=3
             )
         )
 
-        # Add listener (HTTP only for now - missing HTTPS)
+        # Add HTTP listener (forward traffic to target group)
         listener = alb.add_listener(
             "Listener",
             port=80,
@@ -223,6 +237,7 @@ class TapStack(Stack):
             cluster=cluster,
             task_definition=task_definition,
             desired_count=2,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             capacity_provider_strategies=[
                 ecs.CapacityProviderStrategy(
                     capacity_provider="FARGATE",
@@ -233,11 +248,24 @@ class TapStack(Stack):
                     capacity_provider="FARGATE_SPOT",
                     weight=1
                 )
-            ]
+            ],
+            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
+            health_check_grace_period=cdk.Duration.seconds(60)
         )
 
         # Attach service to target group
         fargate_service.attach_to_application_target_group(target_group)
+
+        # Configure security groups
+        # Allow HTTP and HTTPS traffic to ALB
+        alb.connections.allow_from_any_ipv4(ec2.Port.tcp(80), "Allow HTTP from internet")
+        alb.connections.allow_from_any_ipv4(ec2.Port.tcp(443), "Allow HTTPS from internet")
+
+        # Allow ALB to reach ECS tasks
+        fargate_service.connections.allow_from(alb, ec2.Port.tcp(80), "Allow ALB to ECS tasks")
+
+        # Allow ECS tasks to reach RDS
+        db_cluster.connections.allow_default_port_from(fargate_service, "Allow ECS tasks to database")
 
         # Configure auto-scaling
         scaling = fargate_service.auto_scale_task_count(
@@ -253,12 +281,6 @@ class TapStack(Stack):
         scaling.scale_on_memory_utilization(
             "MemoryScaling",
             target_utilization_percent=70
-        )
-
-        # Allow ALB to reach ECS tasks
-        fargate_service.connections.allow_from(
-            alb,
-            ec2.Port.tcp(80)
         )
 
         # Create Lambda function for transaction validation
@@ -296,9 +318,10 @@ def handler(event, context):
             display_name=f"Critical Alerts - {environment_suffix}"
         )
 
-        # Add email subscription
+        # Add email subscription (from environment variable)
+        alert_email = os.environ.get('ALERT_EMAIL', 'ops-team@example.com')
         alerts_topic.add_subscription(
-            sns_subs.EmailSubscription("ops-team@example.com")
+            sns_subs.EmailSubscription(alert_email)
         )
 
         # Create CloudWatch dashboard
