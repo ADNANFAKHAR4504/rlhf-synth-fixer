@@ -121,8 +121,6 @@ class TapStack(pulumi.ComponentResource):
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="appdb",
-            master_username="admin",
-            master_password="TempPassword123!",  # In production, use AWS Secrets Manager
             opts=ResourceOptions(parent=self, provider=self.primary_provider)
         )
 
