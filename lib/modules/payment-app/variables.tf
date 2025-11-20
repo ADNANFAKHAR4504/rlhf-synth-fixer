@@ -56,8 +56,9 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database password"
+  description = "Database password (leave empty to auto-generate a secure random password)"
   type        = string
+  default     = ""
   sensitive   = true
 }
 

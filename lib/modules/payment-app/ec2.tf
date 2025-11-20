@@ -59,6 +59,26 @@ resource "aws_iam_role_policy" "ec2_kms" {
   })
 }
 
+# IAM policy for Secrets Manager access
+resource "aws_iam_role_policy" "ec2_secrets" {
+  name = "ec2-secrets-policy-${var.pr_number}"
+  role = aws_iam_role.ec2.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = aws_secretsmanager_secret.db_password.arn
+      }
+    ]
+  })
+}
+
 # Instance profile
 resource "aws_iam_instance_profile" "ec2" {
   name = "ec2-profile-${var.pr_number}"
@@ -98,6 +118,8 @@ resource "aws_instance" "app" {
     db_endpoint = aws_db_instance.main.endpoint
     db_name     = aws_db_instance.main.db_name
     environment = var.environment
+    secret_name = aws_secretsmanager_secret.db_password.name
+    aws_region  = var.aws_region
   }))
 
   tags = {

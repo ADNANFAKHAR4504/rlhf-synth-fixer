@@ -76,10 +76,26 @@ systemctl enable nginx
 systemctl restart nginx
 
 # 7. Store DB info
+mkdir -p /etc/payment-app
 cat > /etc/payment-app/db.conf << EOF
 DB_ENDPOINT=${db_endpoint}
 DB_NAME=${db_name}
 ENVIRONMENT=${environment}
+DB_SECRET_NAME=${secret_name}
+AWS_REGION=${aws_region}
 EOF
+
+# Create helper script to retrieve DB credentials
+cat > /usr/local/bin/get-db-credentials << 'EOF'
+#!/bin/bash
+# Helper script to retrieve database credentials from Secrets Manager
+aws secretsmanager get-secret-value \
+  --secret-id ${secret_name} \
+  --region ${aws_region} \
+  --query SecretString \
+  --output text
+EOF
+
+chmod +x /usr/local/bin/get-db-credentials
 
 echo "User Data Script Completed Successfully"

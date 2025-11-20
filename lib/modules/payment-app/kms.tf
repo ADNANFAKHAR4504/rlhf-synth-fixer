@@ -1,6 +1,6 @@
 # KMS key for EBS and RDS encryption
 resource "aws_kms_key" "main" {
-  description             = "KMS key for payment-app-${var.pr_number} EBS and RDS encryption"
+  description             = "KMS key for payment-app-${var.pr_number} EBS, RDS, and S3 encryption"
   deletion_window_in_days = var.environment == "prod" ? 30 : 7
   enable_key_rotation     = true
 
@@ -88,6 +88,28 @@ resource "aws_kms_key_policy" "main" {
         Condition = {
           Bool = {
             "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "Allow S3 to use the key for encryption"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "s3.${var.aws_region}.amazonaws.com"
+            ]
           }
         }
       }

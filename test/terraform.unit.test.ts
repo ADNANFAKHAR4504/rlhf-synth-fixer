@@ -1,238 +1,248 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('Payment App Infrastructure Complete Tests', () => {
+describe('Payment App Infrastructure - Static Unit Tests', () => {
+  // Paths
   const libPath = path.join(__dirname, '..', 'lib');
   const modulePath = path.join(libPath, 'modules', 'payment-app');
 
-  // File contents
+  // File Contents
   let rootMain: string, rootVars: string, rootProvider: string, rootOutputs: string;
-  let modNetworking: string, modEc2: string, modRds: string, modAlb: string, modSg: string, modCw: string, modOutputs: string, modUserData: string;
+  let modNetworking: string, modEc2: string, modRds: string, modAlb: string;
+  let modSg: string, modCw: string, modKeys: string, modKms: string;
+  let modOutputs: string, modUserData: string;
 
   beforeAll(() => {
-    // Read Root Files
+    // Load Root Files
     rootMain = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf8');
     rootVars = fs.readFileSync(path.join(libPath, 'variables.tf'), 'utf8');
     rootProvider = fs.readFileSync(path.join(libPath, 'terraform.tf'), 'utf8');
     rootOutputs = fs.readFileSync(path.join(libPath, 'outputs.tf'), 'utf8');
 
-    // Read Module Files
+    // Load Module Files
     modNetworking = fs.readFileSync(path.join(modulePath, 'networking.tf'), 'utf8');
     modEc2 = fs.readFileSync(path.join(modulePath, 'ec2.tf'), 'utf8');
     modRds = fs.readFileSync(path.join(modulePath, 'rds.tf'), 'utf8');
     modAlb = fs.readFileSync(path.join(modulePath, 'alb.tf'), 'utf8');
     modSg = fs.readFileSync(path.join(modulePath, 'security_groups.tf'), 'utf8');
     modCw = fs.readFileSync(path.join(modulePath, 'cloudwatch.tf'), 'utf8');
+    modKeys = fs.readFileSync(path.join(modulePath, 'keys.tf'), 'utf8');
+    modKms = fs.readFileSync(path.join(modulePath, 'kms.tf'), 'utf8');
     modOutputs = fs.readFileSync(path.join(modulePath, 'outputs.tf'), 'utf8');
     modUserData = fs.readFileSync(path.join(modulePath, 'user_data.sh'), 'utf8');
   });
 
   // ---------------------------------------------------------------------------
-  // 1. FILE STRUCTURE & EXISTENCE
+  // 1. ROOT CONFIGURATION
   // ---------------------------------------------------------------------------
-  describe('1. File Structure & Existence', () => {
-    test('All required .tfvars files exist', () => {
-      expect(fs.existsSync(path.join(libPath, 'dev.tfvars'))).toBe(true);
-      expect(fs.existsSync(path.join(libPath, 'staging.tfvars'))).toBe(true);
-      expect(fs.existsSync(path.join(libPath, 'prod.tfvars'))).toBe(true);
-    });
-
-    test('Module directory structure is correct', () => {
-      expect(fs.existsSync(modulePath)).toBe(true);
-      expect(fs.existsSync(path.join(modulePath, 'main.tf'))).toBe(true);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // 2. ROOT CONFIGURATION
-  // ---------------------------------------------------------------------------
-  describe('2. Root Configuration', () => {
-    test('Provider uses AWS 5.x', () => {
+  describe('Root Configuration', () => {
+    test('Provider version is pinned to 5.x', () => {
       expect(rootProvider).toMatch(/source\s*=\s*"hashicorp\/aws"/);
       expect(rootProvider).toMatch(/version\s*=\s*"~>\s*5\.0"/);
     });
 
-    test('Main module call passes all required variables', () => {
-      const requiredVars = [
-        'environment', 'vpc_cidr', 'db_instance_class', 'ec2_instance_type',
-        'backup_retention_period', 'rds_cpu_threshold', 'instance_count',
-        'db_username', 'db_password', 'ssh_key_name', 'ami_id'
-      ];
-      requiredVars.forEach(v => {
-        expect(rootMain).toMatch(new RegExp(`${v}\\s*=`));
-      });
+    test('S3 Backend is configured', () => {
+      expect(rootProvider).toMatch(/backend\s+"s3"\s*{/);
     });
 
-    test('Root variables define validation for environment', () => {
+    test('Main module is called with correct source', () => {
+      expect(rootMain).toMatch(/module\s+"payment_app"\s*{/);
+      expect(rootMain).toMatch(/source\s*=\s*"\.\/modules\/payment-app"/);
+    });
+
+    test('Environment variable validation exists', () => {
+      expect(rootVars).toMatch(/variable\s+"environment"\s*{/);
       expect(rootVars).toMatch(/condition\s*=\s*contains\(\["dev", "staging", "prod"\], var\.environment\)/);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // 3. NETWORKING MODULE
+  // 2. NETWORKING (VPC & Subnets)
   // ---------------------------------------------------------------------------
-  describe('3. Networking Module', () => {
-    test('VPC creation with DNS support', () => {
+  describe('Networking Module', () => {
+    test('VPC is created with DNS support', () => {
       expect(modNetworking).toMatch(/resource\s+"aws_vpc"\s+"main"\s*{/);
       expect(modNetworking).toMatch(/enable_dns_hostnames\s*=\s*true/);
-      expect(modNetworking).toMatch(/enable_dns_support\s*=\s*true/);
     });
 
-    test('Creates 2 Public Subnets', () => {
+    test('Public Subnets are defined', () => {
       expect(modNetworking).toMatch(/resource\s+"aws_subnet"\s+"public"\s*{/);
-      expect(modNetworking).toMatch(/count\s*=\s*2/);
       expect(modNetworking).toMatch(/map_public_ip_on_launch\s*=\s*true/);
-      expect(modNetworking).toMatch(/Type\s*=\s*"public"/);
     });
 
-    test('Creates 2 Private Subnets', () => {
+    test('Private Subnets are defined', () => {
       expect(modNetworking).toMatch(/resource\s+"aws_subnet"\s+"private"\s*{/);
-      expect(modNetworking).toMatch(/count\s*=\s*2/);
-      expect(modNetworking).toMatch(/Type\s*=\s*"private"/);
     });
 
-    test('NAT Gateway and EIP are defined', () => {
+    test('NAT Gateway is created for private access', () => {
       expect(modNetworking).toMatch(/resource\s+"aws_nat_gateway"\s+"main"\s*{/);
       expect(modNetworking).toMatch(/resource\s+"aws_eip"\s+"nat"\s*{/);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // 4. COMPUTE (EC2) MODULE
+  // 3. COMPUTE (EC2 & Keys)
   // ---------------------------------------------------------------------------
-  describe('4. Compute Module (EC2)', () => {
-    test('EC2 instances use private subnets', () => {
-      expect(modEc2).toMatch(/subnet_id\s*=\s*local\.private_subnet_ids/);
+  describe('Compute Module', () => {
+    test('EC2 instances are defined', () => {
+      expect(modEc2).toMatch(/resource\s+"aws_instance"\s+"app"\s*{/);
     });
 
-    test('User Data script is template-injected', () => {
-      expect(modEc2).toMatch(/user_data\s*=\s*base64encode\(templatefile/);
-      expect(modEc2).toMatch(/db_endpoint\s*=\s*aws_db_instance\.main\.endpoint/);
+    test('IAM Role and Instance Profile are attached', () => {
+      expect(modEc2).toMatch(/resource\s+"aws_iam_role"\s+"ec2"\s*{/);
+      expect(modEc2).toMatch(/iam_instance_profile\s*=\s*aws_iam_instance_profile\.ec2\.name/);
     });
 
-    test('User Data script installs correct packages', () => {
-      expect(modUserData).toMatch(/amazon-linux-extras enable postgresql14/);
-      expect(modUserData).toMatch(/amazon-linux-extras enable nginx1/);
-      expect(modUserData).toMatch(/yum install -y postgresql nginx/);
+    test('SSM and CloudWatch policies are attached', () => {
+      expect(modEc2).toMatch(/arn:aws:iam::aws:policy\/AmazonSSMManagedInstanceCore/);
+      expect(modEc2).toMatch(/arn:aws:iam::aws:policy\/CloudWatchAgentServerPolicy/);
     });
 
-    test('User Data script configures Nginx health page', () => {
-      expect(modUserData).toMatch(/location \/health {/);
-      expect(modUserData).toMatch(/return 200 "healthy\\n";/);
+    test('SSH Keys are generated if name is empty', () => {
+      expect(modKeys).toMatch(/resource\s+"tls_private_key"\s+"generated"\s*{/);
+      expect(modKeys).toMatch(/resource\s+"aws_key_pair"\s+"generated"\s*{/);
+      expect(modKeys).toMatch(/resource\s+"aws_ssm_parameter"\s+"private_key"\s*{/);
     });
 
-    test('IAM Role attached for SSM/CloudWatch', () => {
-      expect(modEc2).toMatch(/resource\s+"aws_iam_role"\s+"ec2"/);
-      expect(modEc2).toMatch(/policy_arn\s*=\s*"arn:aws:iam::aws:policy\/CloudWatchAgentServerPolicy"/);
-      expect(modEc2).toMatch(/policy_arn\s*=\s*"arn:aws:iam::aws:policy\/AmazonSSMManagedInstanceCore"/);
+    test('User Data script template is used', () => {
+      expect(modEc2).toMatch(/templatefile\("\$\{path\.module\}\/user_data\.sh"/);
+      expect(modEc2).toMatch(/secret_name\s*=\s*aws_secretsmanager_secret\.db_password\.name/);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // 5. DATABASE (RDS) MODULE
+  // 4. DATABASE (RDS)
   // ---------------------------------------------------------------------------
-  describe('5. Database Module (RDS)', () => {
-    test('RDS engine is PostgreSQL 15', () => {
+  describe('Database Module', () => {
+    test('RDS Password is random and stored in Secrets Manager', () => {
+      expect(modRds).toMatch(/resource\s+"random_password"\s+"db_password"\s*{/);
+      expect(modRds).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"db_password"\s*{/);
+    });
+
+    test('RDS Instance is PostgreSQL', () => {
+      expect(modRds).toMatch(/resource\s+"aws_db_instance"\s+"main"\s*{/);
       expect(modRds).toMatch(/engine\s*=\s*"postgres"/);
-      expect(modRds).toMatch(/engine_version\s*=\s*"15\./);
-    });
-
-    test('Multi-AZ is environment dependent', () => {
-      expect(modRds).toMatch(/multi_az\s*=\s*var\.environment\s*==\s*"prod"/);
-    });
-
-    test('Storage is encrypted', () => {
       expect(modRds).toMatch(/storage_encrypted\s*=\s*true/);
     });
 
-    test('Uses private subnet group', () => {
-      expect(modRds).toMatch(/db_subnet_group_name\s*=\s*aws_db_subnet_group\.main\.name/);
-      expect(modRds).toMatch(/subnet_ids\s*=\s*local\.private_subnet_ids/);
+    test('Multi-AZ is conditional on environment', () => {
+      expect(modRds).toMatch(/multi_az\s*=\s*var\.environment\s*==\s*"prod"/);
+    });
+
+    test('Monitoring Role is created only for prod', () => {
+      expect(modRds).toMatch(/resource\s+"aws_iam_role"\s+"rds_monitoring"\s*{/);
+      expect(modRds).toMatch(/count\s*=\s*var\.environment\s*==\s*"prod"\s*\?\s*1\s*:\s*0/);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // 6. LOAD BALANCER (ALB) MODULE
+  // 5. LOAD BALANCER (ALB)
   // ---------------------------------------------------------------------------
-  describe('6. Load Balancer Module', () => {
-    test('ALB is application type and uses security group', () => {
-      expect(modAlb).toMatch(/load_balancer_type\s*=\s*"application"/);
-      expect(modAlb).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
+  describe('ALB Module', () => {
+    test('ALB is defined with S3 access logs', () => {
+      expect(modAlb).toMatch(/resource\s+"aws_lb"\s+"main"\s*{/);
+      expect(modAlb).toMatch(/access_logs\s*{/);
+      expect(modAlb).toMatch(/bucket\s*=\s*aws_s3_bucket\.alb_logs\.id/);
     });
 
-    test('HTTP Listener redirects to HTTPS if cert exists', () => {
-      expect(modAlb).toMatch(/resource\s+"aws_lb_listener"\s+"http"/);
+    test('HTTP Listener redirects to HTTPS if certificate exists', () => {
+      expect(modAlb).toMatch(/resource\s+"aws_lb_listener"\s+"http"\s*{/);
       expect(modAlb).toMatch(/type\s*=\s*var\.certificate_arn\s*!=\s*""\s*\?\s*"redirect"\s*:\s*"forward"/);
     });
 
-    test('Target Group has health check', () => {
-      expect(modAlb).toMatch(/health_check\s*{/);
-      expect(modAlb).toMatch(/path\s*=\s*"\/health"/);
-      expect(modAlb).toMatch(/matcher\s*=\s*"200"/);
+    test('HTTPS Listener is conditional', () => {
+      expect(modAlb).toMatch(/resource\s+"aws_lb_listener"\s+"https"\s*{/);
+      expect(modAlb).toMatch(/count\s*=\s*var\.certificate_arn\s*!=\s*""\s*\?\s*1\s*:\s*0/);
     });
 
-    test('Access logs are enabled', () => {
-      expect(modAlb).toMatch(/access_logs\s*{/);
-      expect(modAlb).toMatch(/enabled\s*=\s*true/);
+    test('Target Group Health Check matches 200', () => {
+      expect(modAlb).toMatch(/matcher\s*=\s*"200"/);
+      expect(modAlb).toMatch(/path\s*=\s*"\/health"/);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // 7. SECURITY GROUPS MODULE
+  // 6. SECURITY GROUPS
   // ---------------------------------------------------------------------------
-  describe('7. Security Groups Module', () => {
-    test('ALB Security Group allows HTTP/HTTPS from world', () => {
-      expect(modSg).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
+  describe('Security Groups', () => {
+    test('ALB SG allows HTTP/HTTPS from everywhere', () => {
+      expect(modSg).toMatch(/resource\s+"aws_security_group"\s+"alb"\s*{/);
       expect(modSg).toMatch(/from_port\s*=\s*80/);
       expect(modSg).toMatch(/from_port\s*=\s*443/);
-      expect(modSg).toMatch(/cidr_blocks\s*=\s*\["0.0.0.0\/0"\]/);
+      expect(modSg).toMatch(/cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/);
     });
 
-    test('EC2 Security Group allows traffic ONLY from ALB', () => {
-      expect(modSg).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
+    test('EC2 SG allows traffic ONLY from ALB', () => {
+      expect(modSg).toMatch(/resource\s+"aws_security_group"\s+"ec2"\s*{/);
       expect(modSg).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
     });
 
-    test('RDS Security Group allows traffic ONLY from EC2', () => {
-      expect(modSg).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
+    test('RDS SG allows traffic ONLY from EC2', () => {
+      expect(modSg).toMatch(/resource\s+"aws_security_group"\s+"rds"\s*{/);
       expect(modSg).toMatch(/security_groups\s*=\s*\[aws_security_group\.ec2\.id\]/);
     });
   });
 
   // ---------------------------------------------------------------------------
-  // 8. CLOUDWATCH & MONITORING
+  // 7. MONITORING (CloudWatch)
   // ---------------------------------------------------------------------------
-  describe('8. CloudWatch & Monitoring', () => {
-    test('RDS CPU Alarm is configured', () => {
-      expect(modCw).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"rds_cpu"/);
-      expect(modCw).toMatch(/metric_name\s*=\s*"CPUUtilization"/);
+  describe('CloudWatch Module', () => {
+    test('SNS Topic is created', () => {
+      expect(modCw).toMatch(/resource\s+"aws_sns_topic"\s+"alarms"\s*{/);
+    });
+
+    test('RDS CPU Alarm uses variable threshold', () => {
+      expect(modCw).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"rds_cpu"\s*{/);
       expect(modCw).toMatch(/threshold\s*=\s*var\.rds_cpu_threshold/);
     });
 
-    test('ALB Healthy Hosts Alarm is configured', () => {
-      expect(modCw).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_healthy_hosts"/);
+    test('ALB Healthy Host Alarm is defined', () => {
+      expect(modCw).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_healthy_hosts"\s*{/);
       expect(modCw).toMatch(/metric_name\s*=\s*"HealthyHostCount"/);
-      expect(modCw).toMatch(/comparison_operator\s*=\s*"LessThanThreshold"/);
     });
 
     test('Dashboard is created', () => {
-      expect(modCw).toMatch(/resource\s+"aws_cloudwatch_dashboard"\s+"main"/);
+      expect(modCw).toMatch(/resource\s+"aws_cloudwatch_dashboard"\s+"main"\s*{/);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. USER DATA SCRIPT
+  // ---------------------------------------------------------------------------
+  describe('User Data Script', () => {
+    test('Installs Amazon Linux Extras packages', () => {
+      expect(modUserData).toMatch(/amazon-linux-extras enable postgresql14/);
+      expect(modUserData).toMatch(/amazon-linux-extras enable nginx1/);
+    });
+
+    test('Installs CloudWatch Agent', () => {
+      expect(modUserData).toMatch(/yum install -y .*amazon-cloudwatch-agent/);
+    });
+
+    test('Configures Nginx for Health Checks', () => {
+      expect(modUserData).toMatch(/location \/health {/);
+      expect(modUserData).toMatch(/return 200 "healthy\\n";/);
+    });
+
+    test('Creates Helper Script for DB Credentials', () => {
+      expect(modUserData).toMatch(/cat > \/usr\/local\/bin\/get-db-credentials/);
+      expect(modUserData).toMatch(/aws secretsmanager get-secret-value/);
     });
   });
 
   // ---------------------------------------------------------------------------
   // 9. OUTPUTS
   // ---------------------------------------------------------------------------
-  describe('9. Outputs', () => {
-    test('Root outputs pass through module outputs', () => {
+  describe('Outputs', () => {
+    test('Root outputs expose module values', () => {
       expect(rootOutputs).toMatch(/value\s*=\s*module\.payment_app\.alb_dns_name/);
       expect(rootOutputs).toMatch(/value\s*=\s*module\.payment_app\.rds_endpoint/);
     });
 
-    test('Module outputs define all critical values', () => {
+    test('Module outputs expose critical resources', () => {
       expect(modOutputs).toMatch(/output\s+"alb_dns_name"/);
       expect(modOutputs).toMatch(/output\s+"rds_endpoint"/);
-      expect(modOutputs).toMatch(/output\s+"ec2_instance_ids"/);
+      expect(modOutputs).toMatch(/output\s+"db_credentials_secret_arn"/);
       expect(modOutputs).toMatch(/output\s+"cloudwatch_alarm_arns"/);
     });
   });

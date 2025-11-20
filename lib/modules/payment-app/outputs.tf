@@ -19,6 +19,16 @@ output "rds_port" {
   value       = aws_db_instance.main.port
 }
 
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing database credentials"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "db_credentials_secret_name" {
+  description = "Name of the Secrets Manager secret containing database credentials"
+  value       = aws_secretsmanager_secret.db_password.name
+}
+
 output "ec2_security_group_id" {
   description = "Security group ID for EC2 instances"
   value       = aws_security_group.ec2.id

@@ -1,3 +1,39 @@
+# Generate a random password for RDS
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+  # Avoid characters that might cause issues in connection strings
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+# Store the password in AWS Secrets Manager
+resource "aws_secretsmanager_secret" "db_password" {
+  name                    = "payment-app/${var.environment}/db-password-${var.pr_number}"
+  description             = "Auto-generated RDS password for payment-app-${var.pr_number}"
+  recovery_window_in_days = var.environment == "prod" ? 30 : 7
+
+  tags = {
+    Name        = "payment-app-${var.pr_number}-db-password"
+    Environment = var.environment
+    Project     = "payment-processing"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = aws_secretsmanager_secret.db_password.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password != "" ? var.db_password : random_password.db_password.result
+    engine   = "postgres"
+    host     = aws_db_instance.main.address
+    port     = aws_db_instance.main.port
+    dbname   = aws_db_instance.main.db_name
+  })
+
+  depends_on = [aws_db_instance.main]
+}
+
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
   name = "db-subnet-group-${var.pr_number}"
@@ -28,7 +64,7 @@ resource "aws_db_instance" "main" {
 
   db_name  = "paymentdb"
   username = var.db_username
-  password = var.db_password
+  password = var.db_password != "" ? var.db_password : random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -38,7 +74,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot       = var.environment == "dev" ? true : false
-  final_snapshot_identifier = var.environment != "dev" ? "rds-${var.pr_number}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
+  final_snapshot_identifier = var.environment != "dev" ? "rds-${var.pr_number}-final" : null
 
   deletion_protection = var.environment == "prod" ? true : false
 
@@ -58,6 +94,10 @@ resource "aws_db_instance" "main" {
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
+  }
+
+  lifecycle {
+    ignore_changes = [final_snapshot_identifier]
   }
 }
 
