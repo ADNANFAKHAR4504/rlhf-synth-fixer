@@ -476,28 +476,32 @@ describe('TapStack End-to-End Application Flow Tests', () => {
       60000
     );
 
-    testFn('should validate request/response schemas', async () => {
-      const paymentResult = await applicationTester.processPayment(
-        `schema-test-${Date.now()}`,
-        59.99,
-        {
-          number: '4111111111111111',
-          expiryMonth: 12,
-          expiryYear: 2025,
-          cvv: '123',
-          holderName: 'Schema Test',
-        }
-      );
+    testFn(
+      'should validate request/response schemas',
+      async () => {
+        const paymentResult = await applicationTester.processPayment(
+          `schema-test-${Date.now()}`,
+          59.99,
+          {
+            number: '4111111111111111',
+            expiryMonth: 12,
+            expiryYear: 2025,
+            cvv: '123',
+            holderName: 'Schema Test',
+          }
+        );
 
-      expect(paymentResult).toHaveProperty('paymentId');
-      expect(paymentResult).toHaveProperty('status');
-      expect(paymentResult).toHaveProperty('amount');
-      expect(paymentResult).toHaveProperty('currency');
-      expect(paymentResult).toHaveProperty('orderId');
-      expect(paymentResult).toHaveProperty('customerId');
-      expect(paymentResult).toHaveProperty('timestamp');
-      expect(paymentResult).toHaveProperty('processingTime');
-    }, 30000);
+        expect(paymentResult).toHaveProperty('paymentId');
+        expect(paymentResult).toHaveProperty('status');
+        expect(paymentResult).toHaveProperty('amount');
+        expect(paymentResult).toHaveProperty('currency');
+        expect(paymentResult).toHaveProperty('orderId');
+        expect(paymentResult).toHaveProperty('customerId');
+        expect(paymentResult).toHaveProperty('timestamp');
+        expect(paymentResult).toHaveProperty('processingTime');
+      },
+      30000
+    );
   });
 
   describe('Error Handling and Edge Cases', () => {

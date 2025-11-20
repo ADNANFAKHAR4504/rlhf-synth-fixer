@@ -76,10 +76,53 @@ export class TapStack extends cdk.Stack {
       environmentSuffix = 'dev';
     }
 
-    new EcsMicroservicesStack(this, 'EcsMicroservicesStack', {
-      ...props,
-      stackName: `tap-ecs-microservices-${environmentSuffix}`,
-      isLocalStack,
-    });
+    const microservicesStack = new EcsMicroservicesStack(
+      this,
+      'EcsMicroservicesStack',
+      {
+        ...props,
+        stackName: `tap-ecs-microservices-${environmentSuffix}`,
+        isLocalStack,
+      }
+    );
+
+    // Re-export outputs from the nested stack to make them available at the parent level
+    // Use placeholder values during synthesis to avoid cross-stack reference issues
+    if (isSynthesis) {
+      // During synthesis/testing, use placeholder values
+      new cdk.CfnOutput(this, 'AlbDnsName', {
+        value: 'mock-alb-dns-name',
+        description: 'ALB DNS Name',
+        exportName: 'AlbDnsName',
+      });
+
+      new cdk.CfnOutput(this, 'ClusterName', {
+        value: 'mock-cluster-name',
+        description: 'ECS Cluster Name',
+        exportName: 'ClusterName',
+      });
+    } else {
+      // During deployment, use actual values from nested stack
+      new cdk.CfnOutput(this, 'AlbDnsName', {
+        value: microservicesStack.albDnsName,
+        description: 'ALB DNS Name',
+        exportName: 'AlbDnsName',
+      });
+
+      new cdk.CfnOutput(this, 'ClusterName', {
+        value: microservicesStack.clusterName,
+        description: 'ECS Cluster Name',
+        exportName: 'ClusterName',
+      });
+
+      // Only output mesh name if mesh was created
+      if (microservicesStack.meshName) {
+        new cdk.CfnOutput(this, 'MeshName', {
+          value: microservicesStack.meshName,
+          description: 'App Mesh Name',
+          exportName: 'MeshName',
+        });
+      }
+    }
   }
 }
