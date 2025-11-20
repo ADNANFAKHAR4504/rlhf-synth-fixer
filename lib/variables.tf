@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming uniqueness"
   type        = string
+  default     = "dev"
 }
 
 variable "vpc_cidr" {
