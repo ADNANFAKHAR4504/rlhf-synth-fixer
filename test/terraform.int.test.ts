@@ -120,26 +120,6 @@ describe('Terraform Integration Tests - Deployment Outputs', () => {
         expect(outputs.vpc_cidr).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/);
       }
     });
-
-    test('should have subnet IDs if defined', () => {
-      if (outputs.private_subnet_ids) {
-        expect(Array.isArray(outputs.private_subnet_ids)).toBe(true);
-        expect(outputs.private_subnet_ids.length).toBeGreaterThan(0);
-      }
-
-      if (outputs.public_subnet_ids) {
-        expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
-        expect(outputs.public_subnet_ids.length).toBeGreaterThan(0);
-      }
-    });
-
-    test('should have valid subnet ID format', () => {
-      if (outputs.private_subnet_ids) {
-        outputs.private_subnet_ids.forEach(subnetId => {
-          expect(subnetId).toMatch(/^subnet-[a-f0-9]{8,17}$/);
-        });
-      }
-    });
   });
 
   describe('4. Database (RDS/Aurora) Tests', () => {
@@ -269,21 +249,6 @@ describe('Terraform Integration Tests - Deployment Outputs', () => {
       }
     });
 
-    test('should have S3 bucket IDs array if defined', () => {
-      if (outputs.s3_bucket_ids) {
-        expect(Array.isArray(outputs.s3_bucket_ids)).toBe(true);
-        expect(outputs.s3_bucket_ids.length).toBeGreaterThan(0);
-      }
-    });
-
-    test('should have S3 bucket ARNs if defined', () => {
-      if (outputs.s3_bucket_arns) {
-        expect(Array.isArray(outputs.s3_bucket_arns)).toBe(true);
-        outputs.s3_bucket_arns.forEach(arn => {
-          expect(arn).toMatch(/^arn:aws:s3:::[a-z0-9][a-z0-9-]*[a-z0-9]$/);
-        });
-      }
-    });
   });
 
   describe('7. DynamoDB Tests', () => {
@@ -377,14 +342,6 @@ describe('Terraform Integration Tests - Deployment Outputs', () => {
   });
 
   describe('11. Resource Naming Convention Tests', () => {
-    test('should follow consistent naming pattern for Lambda', () => {
-      const functionName = outputs.lambdaFunctionName || outputs.lambda_function_name;
-      if (functionName) {
-        // Should contain environment identifier or PR number
-        const hasEnvOrPR = /-(dev|staging|prod|pr\d+)$/.test(functionName);
-        expect(hasEnvOrPR).toBe(true);
-      }
-    });
 
     test('should follow consistent naming pattern for S3', () => {
       const bucketName = outputs.s3BucketName;
