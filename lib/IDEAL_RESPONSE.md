@@ -1,138 +1,3 @@
-# 🚀 ENHANCED IDEAL RESPONSE - Production-Ready CDK Application
-
-## 📋 **Implementation Status: COMPLETE & DEPLOYMENT-READY** ✅
-
-### 🎯 **Key Achievements**
-- ✅ **17 Critical Issues Fixed** (from original MODEL_RESPONSE)
-- ✅ **100% Unit Test Coverage** (Statements: 100%, Branches: 95.5%)
-- ✅ **Zero Linting Errors** (ESLint + Prettier compliant)
-- ✅ **Multi-Environment Support** (Local, CI/CD, Production)
-- ✅ **Resource Optimization** (EIP limits, cost efficiency)
-- ✅ **Enterprise Security** (IAM least privilege, conditional permissions)
-- ✅ **Production Deployment Ready** (GitHub Actions, AWS)
-
-### 🔄 **Evolution from MODEL_RESPONSE**
-
-The IDEAL_RESPONSE represents a **significant enhancement** over the original MODEL_RESPONSE, addressing **17 critical issues** discovered during implementation and deployment testing. This document outlines the complete, production-ready solution.
-
----
-
-## 📊 **COMPREHENSIVE IMPROVEMENTS SUMMARY**
-
-### **1. 🚀 Advanced CI/CD Environment Intelligence**
-**Before**: Static configuration, deployment failures in CI/CD
-**After**: Environment-aware resource provisioning with intelligent detection
-```typescript
-// Advanced CI/CD detection across all components
-const isCiCd =
-  process.env.CI === 'true' ||
-  process.env.CI === '1' ||
-  process.env.GITHUB_ACTIONS === 'true' ||
-  process.env.USE_SIMPLIFIED_MODE === 'true' ||
-  process.env.CDK_DEFAULT_ACCOUNT === '123456789012' ||
-  Boolean(process.env.CDK_DEFAULT_ACCOUNT?.startsWith('123456789012'));
-```
-
-### **2. 💰 Resource Optimization & Cost Efficiency**
-**Before**: Always maximum resources (3 AZs = 3 EIPs), EIP limit failures
-**After**: Environment-aware resource allocation
-```typescript
-// Resource-efficient VPC configuration
-const defaultMaxAzs = this.isCiCd ? '2' : '3';        // CI/CD: 2 EIPs, Prod: 3 EIPs
-const defaultNatGateways = this.isCiCd ? '1' : '3';  // CI/CD: 1 NAT, Prod: 3 NATs
-```
-
-### **3. 🔒 Enterprise Security & IAM Optimization**
-**Before**: Unnecessary permissions in all environments
-**After**: Least-privilege IAM with conditional permissions
-```typescript
-// Only grant App Mesh permissions when actually using App Mesh
-if (!isCiCd) {
-  taskRole.addManagedPolicy(
-    iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppMeshEnvoyAccess')
-  );
-}
-```
-
-### **4. 🧪 Comprehensive Testing Strategy**
-**Before**: 92.65% coverage, CI/CD test failures
-**After**: 100% statement coverage, environment-agnostic testing
-```typescript
-// Comprehensive environment cleanup for consistent testing
-beforeEach(() => {
-  delete process.env.CI;
-  delete process.env.GITHUB_ACTIONS;
-  delete process.env.USE_SIMPLIFIED_MODE;
-  delete process.env.CDK_DEFAULT_ACCOUNT;
-  // ... ensures full production mode coverage
-});
-```
-
-### **5. 🏗️ Architecture Consistency & Reliability**
-**Before**: Inconsistent CI/CD detection across components
-**After**: Unified environment detection logic
-```typescript
-// Consistent logic across all files (microservice.ts, ecs-microservices-stack.ts, etc.)
-const isCiCd = /* identical logic in all components */
-```
-
-### **6. 🐛 Advanced Deployment Fixes**
-**Before**: Proxy container reference errors, deployment timeouts
-**After**: Conditional proxy configuration and container management
-```typescript
-// Conditional App Mesh proxy configuration
-proxyConfiguration: isCiCd
-  ? undefined  // No proxy in CI/CD
-  : new ecs.AppMeshProxyConfiguration({ /* full config */ }),
-
-// Conditional Envoy container creation
-if (!isCiCd) { /* Create Envoy sidecar */ }
-```
-
-### **7. 📋 Enterprise Documentation**
-**Before**: Basic implementation notes
-**After**: Comprehensive failure analysis and fix documentation
-- **17 documented issues** with root causes and solutions
-- **Impact assessment** and severity classification
-- **Complete code examples** for before/after states
-
----
-
-## 🔍 **TECHNICAL SPECIFICATIONS**
-
-### **Environment Support Matrix**
-| Environment | AZs | NAT Gateways | EIPs | App Mesh | Envoy Proxy | Container Image |
-|-------------|-----|--------------|------|----------|-------------|-----------------|
-| **Local Dev** | 3 | 3 | 3 | ✅ | ✅ | ECR |
-| **CI/CD** | 2 | 1 | 2 | ❌ | ❌ | nginx:alpine |
-| **Production** | 3 | 3 | 3 | ✅ | ✅ | ECR |
-
-### **Resource Optimization Metrics**
-- **EIP Reduction**: 33% fewer EIPs in CI/CD (2 vs 3)
-- **Cost Savings**: ~$109/month in CI/CD environments
-- **Deployment Speed**: 40% faster CI/CD deployments
-- **Test Coverage**: 100% statements, 95.5% branches
-
----
-
-## 📈 **DEPLOYMENT SUCCESS METRICS**
-
-### **Before Fixes (MODEL_RESPONSE)**
-- ❌ 17 deployment-blocking issues
-- ❌ 92.65% test coverage
-- ❌ Linting errors present
-- ❌ EIP limit failures
-- ❌ Proxy container errors
-
-### **After Fixes (IDEAL_RESPONSE)**
-- ✅ **Zero deployment issues**
-- ✅ **100% test coverage**
-- ✅ **Zero linting errors**
-- ✅ **EIP limit compliant**
-- ✅ **Proxy container resolved**
-
----
-
 ### Reasoning Trace
 ---
 
@@ -185,8 +50,8 @@ The user wants a comprehensive AWS CDK v2 TypeScript application for a productio
     - 30-second intervals
     - Unhealthy threshold: 3
 
-I'll create a complete CDK application with proper structure, dynamic configuration, and environment variable support.
-### Answer 
+I've created a complete CDK application with proper structure.
+### Answer
 ---
 
 I'll create a comprehensive AWS CDK v2 TypeScript application for your production ECS deployment with App Mesh integration. Here's the complete solution:
@@ -196,9 +61,8 @@ I'll create a comprehensive AWS CDK v2 TypeScript application for your productio
 ```
 ecs-microservices-cdk/
 ├── bin/
-│   └── tap.ts
+│   └── app.ts
 ├── lib/
-│   ├── tap-stack.ts
 │   ├── stacks/
 │   │   └── ecs-microservices-stack.ts
 │   ├── constructs/
@@ -221,7 +85,7 @@ ecs-microservices-cdk/
   "version": "1.0.0",
   "description": "Production ECS Microservices with App Mesh",
   "bin": {
-    "ecs-microservices-cdk": "bin/tap.js"
+    "ecs-microservices-cdk": "bin/app.js"
   },
   "scripts": {
     "build": "tsc",
@@ -277,7 +141,7 @@ ecs-microservices-cdk/
 ### `cdk.json`
 ```json
 {
-  "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
   "watch": {
     "include": ["**"],
     "exclude": [
@@ -306,152 +170,30 @@ ecs-microservices-cdk/
 
 ## 2. Application Entry Point
 
-### `bin/tap.ts`
+### `bin/app.ts`
 ```typescript
 #!/usr/bin/env node
+import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
+import { EcsMicroservicesStack } from '../lib/stacks/ecs-microservices-stack';
 
 const app = new cdk.App();
 
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
-const repositoryName = process.env.REPOSITORY || process.env.GITHUB_REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || process.env.GITHUB_ACTOR || 'unknown';
-const prNumber = process.env.PR_NUMBER || process.env.GITHUB_PR_NUMBER || 'unknown';
-const team = process.env.TEAM || 'unknown';
-const createdAt = new Date().toISOString();
-
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
-Tags.of(app).add('PRNumber', prNumber);
-Tags.of(app).add('Team', team);
-Tags.of(app).add('CreatedAt', createdAt);
-
-new TapStack(app, stackName, {
-  stackName: stackName,
-  environmentSuffix: environmentSuffix,
+new EcsMicroservicesStack(app, 'EcsMicroservicesStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
+    region: 'us-east-1',
   },
+  description: 'Production ECS Microservices with App Mesh',
+  tags: {
+    Environment: 'production',
+    Project: 'microservices',
+    ManagedBy: 'cdk'
+  }
 });
 ```
 
-## 3. Tap Stack
-
-### `lib/tap-stack.ts`
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-
-// Import your stacks here
-import { EcsMicroservicesStack } from './stacks/ecs-microservices-stack';
-
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-}
-
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    // Clean up the id if it contains shell variable syntax
-    let cleanId = id;
-    if (cleanId && cleanId.includes('${') && cleanId.includes(':-')) {
-      cleanId = cleanId.replace(/\$\{[^}]+\}/g, '-dev');
-    }
-
-    // Also clean up the stackName in props if it exists
-    let cleanProps = { ...props };
-
-    // Handle environment configuration
-    // Support multiple environment variable names for GitHub Actions compatibility
-    // GitHub Actions typically provides: AWS_ACCOUNT_ID, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
-    let account =
-      cleanProps.env?.account ||
-      process.env.CDK_DEFAULT_ACCOUNT ||
-      process.env.AWS_ACCOUNT_ID;
-    let region =
-      cleanProps.env?.region ||
-      process.env.CDK_DEFAULT_REGION ||
-      process.env.AWS_REGION ||
-      'us-east-1';
-
-    // Detect LocalStack environment
-    const isLocalStack =
-      process.env.USE_LOCALSTACK === 'true' ||
-      process.env.LOCALSTACK_API_KEY ||
-      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-      process.env.AWS_ENDPOINT_URL?.includes('localstack');
-
-    if (isLocalStack) {
-      // Use LocalStack defaults for local development
-      account = account || '000000000000';
-      region = region || 'us-east-1';
-
-      // Set LocalStack endpoint if not already set
-      if (!process.env.AWS_ENDPOINT_URL) {
-        process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
-      }
-    }
-
-    // For synthesis (not deployment), use fallback account if needed
-    // CDK needs account/region to generate CloudFormation templates
-    // In GitHub Actions, account will be provided, so this is only for local synthesis
-    const isSynthesis = !process.argv.includes('deploy');
-    if (isSynthesis && !account) {
-      account = '123456789012'; // Fallback account for synthesis only
-    }
-
-    region = region || 'us-east-1';
-
-    cleanProps.env = {
-      account,
-      region,
-    };
-
-    if (
-      cleanProps.stackName &&
-      typeof cleanProps.stackName === 'string' &&
-      cleanProps.stackName.includes('${') &&
-      cleanProps.stackName.includes(':-')
-    ) {
-      cleanProps.stackName = cleanProps.stackName.replace(
-        /\$\{[^}]+\}/g,
-        '-dev'
-      );
-    }
-
-    super(scope, cleanId, cleanProps);
-
-    // Get environment suffix from props, context, or use 'dev' as default
-    let environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
-
-    // Handle case where shell variable syntax is passed literally
-    if (
-      environmentSuffix &&
-      environmentSuffix.includes('${') &&
-      environmentSuffix.includes(':-')
-    ) {
-      environmentSuffix = 'dev'; // Default to 'dev' if shell syntax is not resolved
-    }
-
-    // Add your stack instantiations here
-    // Do NOT create resources directly in this stack.
-    // Instead, create separate stacks for each resource type.
-    new EcsMicroservicesStack(this, 'EcsMicroservicesStack', {
-      ...props,
-      stackName: `tap-ecs-microservices-${environmentSuffix}`,
-    });
-  }
-}
-```
-
-## 4. Service Configuration
+## 3. Service Configuration
 
 ### `lib/config/service-config.ts`
 ```typescript
@@ -515,22 +257,24 @@ export const SERVICES: ServiceConfig[] = [
 ];
 ```
 
-## 5. Main Stack
+## 4. Main Stack
 
 ### `lib/stacks/ecs-microservices-stack.ts`
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as appmesh from 'aws-cdk-lib/aws-appmesh';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as appmesh from 'aws-cdk-lib/aws-appmesh';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as autoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import { Construct } from 'constructs';
-import { SERVICES } from '../config/service-config';
-import { AppMeshServiceConstruct } from '../constructs/app-mesh-service';
 import { MicroserviceConstruct } from '../constructs/microservice';
+import { AppMeshServiceConstruct } from '../constructs/app-mesh-service';
+import { SERVICES } from '../config/service-config';
 
 export class EcsMicroservicesStack extends cdk.Stack {
   private vpc: ec2.Vpc;
@@ -538,7 +282,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
   private alb: elbv2.ApplicationLoadBalancer;
   private mesh: appmesh.Mesh;
   private secrets: { [key: string]: secretsmanager.Secret };
-  private httpListener: elbv2.ApplicationListener;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -563,44 +306,21 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createVpc(): void {
-    const vpcName =
-      this.node.tryGetContext('vpcName') ||
-      process.env.VPC_NAME ||
-      `microservices-vpc-${this.stackName}`;
-    const maxAzs = parseInt(
-      this.node.tryGetContext('maxAzs') || process.env.VPC_MAX_AZS || '3',
-      10
-    );
-    const natGateways = parseInt(
-      this.node.tryGetContext('natGateways') ||
-        process.env.VPC_NAT_GATEWAYS ||
-        '3',
-      10
-    );
-    const vpcCidr =
-      this.node.tryGetContext('vpcCidr') ||
-      process.env.VPC_CIDR ||
-      '10.0.0.0/16';
-    const cidrMask = parseInt(
-      this.node.tryGetContext('cidrMask') || process.env.VPC_CIDR_MASK || '24',
-      10
-    );
-
     this.vpc = new ec2.Vpc(this, 'MicroservicesVpc', {
-      vpcName: vpcName,
-      maxAzs: maxAzs,
-      natGateways: natGateways,
-      ipAddresses: ec2.IpAddresses.cidr(vpcCidr),
+      vpcName: 'microservices-vpc',
+      maxAzs: 3,
+      natGateways: 3,
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       subnetConfiguration: [
         {
           name: 'public',
           subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: cidrMask,
+          cidrMask: 24,
         },
         {
           name: 'private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: cidrMask,
+          cidrMask: 24,
         }
       ],
       enableDnsHostnames: true,
@@ -608,16 +328,9 @@ export class EcsMicroservicesStack extends cdk.Stack {
     });
 
     // Add VPC Flow Logs
-    const flowLogRetention = this.node.tryGetContext('flowLogRetention') ||
-      process.env.VPC_FLOW_LOG_RETENTION ||
-      logs.RetentionDays.ONE_MONTH;
-    const retentionDays = typeof flowLogRetention === 'string' 
-      ? logs.RetentionDays[flowLogRetention as keyof typeof logs.RetentionDays] || logs.RetentionDays.ONE_MONTH
-      : flowLogRetention;
-
     new logs.LogGroup(this, 'VpcFlowLogs', {
-      logGroupName: process.env.VPC_FLOW_LOG_GROUP_NAME || '/aws/vpc/flowlogs',
-      retention: retentionDays,
+      logGroupName: '/aws/vpc/flowlogs',
+      retention: logs.RetentionDays.THIRTY_DAYS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -627,18 +340,10 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createEcsCluster(): void {
-    const clusterName =
-      this.node.tryGetContext('clusterName') ||
-      process.env.ECS_CLUSTER_NAME ||
-      `microservices-cluster-${this.stackName}`;
-    const enableContainerInsights =
-      this.node.tryGetContext('enableContainerInsights') !== false &&
-      process.env.ECS_ENABLE_CONTAINER_INSIGHTS !== 'false';
-
     this.cluster = new ecs.Cluster(this, 'MicroservicesCluster', {
-      clusterName: clusterName,
+      clusterName: 'microservices-cluster',
       vpc: this.vpc,
-      containerInsights: enableContainerInsights,
+      containerInsights: true,
       enableFargateCapacityProviders: true,
     });
 
@@ -647,34 +352,26 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createSecrets(): void {
-    const secretPrefix = process.env.SECRET_PREFIX || '/microservices';
-    const dbHost = process.env.DATABASE_HOST || 'database.example.com';
-    const dbPort = parseInt(process.env.DATABASE_PORT || '5432', 10);
-    const dbName = process.env.DATABASE_NAME || 'microservices';
-    const dbEngine = process.env.DATABASE_ENGINE || 'postgres';
-    const apiKeyLength = parseInt(process.env.API_KEY_LENGTH || '32', 10);
-
     this.secrets = {
       databaseUrl: new secretsmanager.Secret(this, 'DatabaseUrl', {
-        secretName:
-          process.env.DATABASE_SECRET_NAME || `${secretPrefix}/database-url`,
+        secretName: '/microservices/database-url',
         description: 'Database connection URL',
         generateSecretString: {
           secretStringTemplate: JSON.stringify({
-            engine: dbEngine,
-            host: dbHost,
-            port: dbPort,
-            database: dbName,
+            engine: 'postgres',
+            host: 'database.example.com',
+            port: 5432,
+            database: 'microservices'
           }),
           generateStringKey: 'password',
           excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
         },
       }),
       apiKey: new secretsmanager.Secret(this, 'ApiKey', {
-        secretName: process.env.API_KEY_SECRET_NAME || `${secretPrefix}/api-key`,
+        secretName: '/microservices/api-key',
         description: 'External API Key',
         generateSecretString: {
-          passwordLength: apiKeyLength,
+          passwordLength: 32,
           excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
         },
       }),
@@ -682,14 +379,9 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createAppMesh(): void {
-    const meshName =
-      this.node.tryGetContext('meshName') ||
-      process.env.APP_MESH_NAME ||
-      `microservices-mesh-${this.stackName}`;
-
     // Create App Mesh
     this.mesh = new appmesh.Mesh(this, 'MicroservicesMesh', {
-      meshName: meshName,
+      meshName: 'microservices-mesh',
       egressFilter: appmesh.MeshFilterType.ALLOW_ALL,
     });
   }
@@ -715,52 +407,31 @@ export class EcsMicroservicesStack extends cdk.Stack {
     );
 
     // Create Application Load Balancer
-    // ALB names have a 32 character limit
-    const albName =
-      this.node.tryGetContext('albName') ||
-      process.env.ALB_NAME ||
-      `ms-alb-${this.stackName.substring(0, 20)}`.substring(0, 32);
-    const enableHttp2 = process.env.ALB_ENABLE_HTTP2 !== 'false';
-    const idleTimeout = parseInt(process.env.ALB_IDLE_TIMEOUT || '60', 10);
-    const enableDeletionProtection =
-      process.env.ALB_DELETION_PROTECTION === 'true';
-
     this.alb = new elbv2.ApplicationLoadBalancer(this, 'MicroservicesAlb', {
-      loadBalancerName: albName,
+      loadBalancerName: 'microservices-alb',
       vpc: this.vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
-      deletionProtection: enableDeletionProtection,
-      http2Enabled: enableHttp2,
-      idleTimeout: cdk.Duration.seconds(idleTimeout),
+      deletionProtection: false,
+      http2Enabled: true,
+      idleTimeout: cdk.Duration.seconds(60),
     });
 
     // Add ALB access logs
-    const logBucketName =
-      process.env.ALB_LOGS_BUCKET_NAME ||
-      `alb-logs-${this.account}-${this.region}-${this.stackName}`;
-    const logRetentionDays = parseInt(
-      process.env.ALB_LOG_RETENTION_DAYS || '90',
-      10
-    );
-    const enableLogBucket = process.env.ALB_ENABLE_ACCESS_LOGS !== 'false';
+    const albLogsBucket = new cdk.aws_s3.Bucket(this, 'AlbLogsBucket', {
+      bucketName: `alb-logs-${this.account}-${this.region}`,
+      encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
+      lifecycleRules: [{
+        expiration: cdk.Duration.days(90),
+      }],
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
 
-    if (enableLogBucket) {
-      const albLogsBucket = new cdk.aws_s3.Bucket(this, 'AlbLogsBucket', {
-        bucketName: logBucketName,
-        encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
-        lifecycleRules: [{
-          expiration: cdk.Duration.days(logRetentionDays),
-        }],
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
-      });
-
-      this.alb.logAccessLogs(albLogsBucket);
-    }
+    this.alb.logAccessLogs(albLogsBucket);
 
     // Create HTTP listener with redirect to HTTPS (for production)
     const httpListener = this.alb.addListener('HttpListener', {
@@ -773,14 +444,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
     });
 
     // Store listener for later use
-    this.httpListener = httpListener;
+    (this as any).httpListener = httpListener;
   }
 
   private deployMicroservices(): void {
     const deployedServices: { [key: string]: MicroserviceConstruct } = {};
 
     // Filter services based on optional flag
-    const servicesToDeploy = SERVICES.filter(service => !service.optional || 
+    const servicesToDeploy = SERVICES.filter(service => !service.optional ||
       (service.optional && this.node.tryGetContext('includeOptional') === 'true'));
 
     // Create security groups for inter-service communication
@@ -796,7 +467,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
 
       // Allow egress to HTTPS (443) for external APIs
       sg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS outbound');
-      
+
       // Allow egress to HTTP (80) for external APIs
       sg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP outbound');
 
@@ -856,14 +527,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
     });
 
     // Deploy each microservice
-    servicesToDeploy.forEach((serviceConfig, _index) => {
+    servicesToDeploy.forEach((serviceConfig, index) => {
       // Create ECR Repository
       const repository = new ecr.Repository(this, `${serviceConfig.name}Repository`, {
         repositoryName: serviceConfig.name,
         imageScanOnPush: true,
         imageTagMutability: ecr.TagMutability.MUTABLE,
         lifecycleRules: [{
-          maxImageCount: parseInt(process.env.ECR_MAX_IMAGE_COUNT || '10', 10),
+          maxImageCount: 10,
           rulePriority: 1,
           description: 'Keep only 10 images',
         }],
@@ -889,7 +560,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
         cpu: serviceConfig.cpu,
         memory: serviceConfig.memory,
         port: serviceConfig.port,
-        desiredCount: parseInt(process.env.ECS_DESIRED_COUNT || '2', 10),
+        desiredCount: 2,
         secrets: this.secrets,
         securityGroup: serviceSecurityGroups[serviceConfig.name],
         virtualNode: appMeshService.virtualNode,
@@ -918,18 +589,20 @@ export class EcsMicroservicesStack extends cdk.Stack {
         deregistrationDelay: cdk.Duration.seconds(30),
       });
 
-      // Register ECS service with target group
-      service.service.attachToApplicationTargetGroup(targetGroup);
+      // Register targets
+      service.service.registerLoadBalancerTargets({
+        containerName: serviceConfig.name,
+        containerPort: serviceConfig.port,
+        newTargetGroupId: `${serviceConfig.name}TargetGroup`,
+        targetGroup: targetGroup,
+      });
 
       // Add path-based routing rule
-      this.httpListener.addTargetGroups(`${serviceConfig.name}Route`, {
+      (this as any).httpListener.addTargetGroups(`${serviceConfig.name}Route`, {
         targetGroups: [targetGroup],
         priority: serviceConfig.priority,
         conditions: [
-          elbv2.ListenerCondition.pathPatterns([
-            `${serviceConfig.path}/*`,
-            serviceConfig.path,
-          ])
+          elbv2.ListenerCondition.pathPatterns([`${serviceConfig.path}/*`, serviceConfig.path])
         ],
       });
     });
@@ -956,18 +629,18 @@ export class EcsMicroservicesStack extends cdk.Stack {
 }
 ```
 
-## 6. Microservice Construct
+## 5. Microservice Construct
 
 ### `lib/constructs/microservice.ts`
 ```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as appmesh from 'aws-cdk-lib/aws-appmesh';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as appmesh from 'aws-cdk-lib/aws-appmesh';
 import { Construct } from 'constructs';
 
 export interface MicroserviceConstructProps {
@@ -991,8 +664,6 @@ export class MicroserviceConstruct extends Construct {
   public readonly service: ecs.FargateService;
   public readonly taskDefinition: ecs.FargateTaskDefinition;
   public readonly logGroup: logs.LogGroup;
-  public readonly cpuAlarm: cdk.aws_cloudwatch.Alarm;
-  public readonly memoryAlarm: cdk.aws_cloudwatch.Alarm;
 
   constructor(scope: Construct, id: string, props: MicroserviceConstructProps) {
     super(scope, id);
@@ -1000,7 +671,7 @@ export class MicroserviceConstruct extends Construct {
     // Create CloudWatch Log Group
     this.logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/ecs/${props.serviceName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
+      retention: logs.RetentionDays.THIRTY_DAYS,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -1117,7 +788,7 @@ export class MicroserviceConstruct extends Construct {
       logging: new ecs.AwsLogDriver({
         logGroup: new logs.LogGroup(this, 'EnvoyLogGroup', {
           logGroupName: `/ecs/${props.serviceName}/envoy`,
-          retention: logs.RetentionDays.ONE_WEEK,
+          retention: logs.RetentionDays.SEVEN_DAYS,
           removalPolicy: cdk.RemovalPolicy.DESTROY,
         }),
         streamPrefix: 'envoy',
@@ -1183,14 +854,14 @@ export class MicroserviceConstruct extends Construct {
     });
 
     // Add CloudWatch Alarms
-    this.cpuAlarm = this.service.metricCpuUtilization().createAlarm(this, 'CpuAlarm', {
+    const cpuAlarm = this.service.metricCpuUtilization().createAlarm(this, 'CpuAlarm', {
       threshold: 80,
       evaluationPeriods: 2,
       treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription: `High CPU utilization for ${props.serviceName}`,
     });
 
-    this.memoryAlarm = this.service.metricMemoryUtilization().createAlarm(this, 'MemoryAlarm', {
+    const memoryAlarm = this.service.metricMemoryUtilization().createAlarm(this, 'MemoryAlarm', {
       threshold: 85,
       evaluationPeriods: 2,
       treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -1200,7 +871,7 @@ export class MicroserviceConstruct extends Construct {
 }
 ```
 
-## 7. App Mesh Service Construct
+## 6. App Mesh Service Construct
 
 ### `lib/constructs/app-mesh-service.ts`
 ```typescript
@@ -1253,7 +924,9 @@ export class AppMeshServiceConstruct extends Construct {
     this.virtualRouter = new appmesh.VirtualRouter(this, 'VirtualRouter', {
       virtualRouterName: `${props.serviceName}-vr`,
       mesh: props.mesh,
-      listeners: [appmesh.VirtualRouterListener.http(props.port)],
+      listeners: [
+        appmesh.VirtualRouterListener.http(props.port),
+      ],
     });
 
     // Create Route
@@ -1270,6 +943,14 @@ export class AppMeshServiceConstruct extends Construct {
           idle: cdk.Duration.seconds(10),
           perRequest: cdk.Duration.seconds(15),
         },
+        retryPolicy: {
+          httpRetryEvents: [
+            appmesh.HttpRetryEvent.SERVER_ERROR,
+            appmesh.HttpRetryEvent.GATEWAY_ERROR,
+          ],
+          maxRetries: 3,
+          perRetryTimeout: cdk.Duration.seconds(5),
+        },
       }),
     });
 
@@ -1284,7 +965,7 @@ export class AppMeshServiceConstruct extends Construct {
 }
 ```
 
-## 8. Deployment Instructions
+## 7. Deployment Instructions
 
 ### Build and Deploy
 
@@ -1334,20 +1015,17 @@ aws secretsmanager update-secret --secret-id /microservices/api-key \
 
 ## Key Features Implemented
 
-✅ **VPC Configuration**: 3 AZs with public/private subnets (dynamic configuration)  
-✅ **ECS Fargate Cluster**: Container insights enabled (configurable)  
-✅ **Microservices**: Payment API, Fraud Detector, Transaction API (optional)  
-✅ **Load Balancing**: Path-based routing with health checks  
-✅ **ECR Repositories**: Image scanning enabled  
-✅ **App Mesh Integration**: Virtual nodes, routers, and services  
-✅ **Auto-scaling**: CPU-based scaling (2-10 tasks, 70% target)  
-✅ **Logging**: CloudWatch logs with configurable retention (ONE_MONTH/ONE_WEEK)  
-✅ **Secrets Management**: Database URLs and API keys  
-✅ **Security Groups**: Restricted inter-service communication  
-✅ **Health Checks**: 30-second intervals, 3 unhealthy threshold  
-✅ **Production Ready**: Spot/On-demand mix, ECS Exec enabled  
-✅ **Dynamic Configuration**: All values configurable via environment variables  
-✅ **GitHub Actions Compatible**: Works seamlessly with CI/CD  
-✅ **LocalStack Support**: Supports local development with LocalStack
+✅ **VPC Configuration**: 3 AZs with public/private subnets
+✅ **ECS Fargate Cluster**: Container insights enabled
+✅ **Microservices**: Payment API, Fraud Detector, Transaction API (optional)
+✅ **Load Balancing**: Path-based routing with health checks
+✅ **ECR Repositories**: Image scanning enabled
+✅ **App Mesh Integration**: Virtual nodes, routers, and services
+✅ **Auto-scaling**: CPU-based scaling (2-10 tasks, 70% target)
+✅ **Logging**: CloudWatch logs with 30-day retention
+✅ **Secrets Management**: Database URLs and API keys
+✅ **Security Groups**: Restricted inter-service communication
+✅ **Health Checks**: 30-second intervals, 3 unhealthy threshold
+✅ **Production Ready**: Spot/On-demand mix, ECS Exec enabled
 
-This CDK application provides a complete, production-ready microservices architecture on AWS ECS with comprehensive monitoring, security, and scalability features, with all configuration values dynamically sourced from environment variables.
+This CDK application provides a complete, production-ready microservices architecture on AWS ECS with comprehensive monitoring, security, and scalability features.

@@ -18,6 +18,9 @@ export interface EcsMicroservicesStackProps extends cdk.StackProps {
 }
 
 export class EcsMicroservicesStack extends cdk.Stack {
+  public readonly albDnsName: string;
+  public readonly clusterName: string;
+  public readonly meshName?: string;
   private vpc: ec2.Vpc;
   private cluster: ecs.Cluster;
   private alb: elbv2.ApplicationLoadBalancer;
@@ -50,6 +53,11 @@ export class EcsMicroservicesStack extends cdk.Stack {
     this.createAppMesh();
     this.createLoadBalancer();
     this.deployMicroservices();
+
+    // Initialize readonly properties with the actual values
+    this.albDnsName = this.alb.loadBalancerDnsName;
+    this.clusterName = this.cluster.clusterName;
+    this.meshName = this.mesh?.meshName;
   }
 
   private createVpc(): void {

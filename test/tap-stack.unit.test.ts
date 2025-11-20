@@ -780,8 +780,8 @@ describe('TapStack Unit Tests', () => {
     test('ECR repositories should have lifecycle policies', () => {
       const maxImageCount = parseInt(
         process.env.TEST_ECR_MAX_IMAGE_COUNT ||
-        process.env.ECR_MAX_IMAGE_COUNT ||
-        '10',
+          process.env.ECR_MAX_IMAGE_COUNT ||
+          '10',
         10
       );
       servicesToTest.forEach(() => {
