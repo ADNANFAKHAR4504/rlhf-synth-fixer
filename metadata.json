@@ -4,18 +4,11 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "i1y3p4",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-19T18:29:01+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "RDS instances must use different instance types per environment (t3.micro for dev, t3.small for staging, t3.medium for prod)",
-    "All resources must be tagged with Environment, ManagedBy, and CostCenter tags",
-    "Lambda functions must have environment-specific memory allocations and timeout values",
-    "All S3 buckets must have versioning enabled and lifecycle policies",
-    "Each environment must have its own VPC with identical CIDR block structure but different ranges",
-    "Must use Pulumi stack references to share outputs between environments",
-    "Environment-specific configurations must be stored in Pulumi config files",
-    "Must implement a custom Pulumi component resource for reusable infrastructure patterns"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
@@ -26,5 +19,6 @@
     "CloudWatch",
     "IAM"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendrasingh-turing"
 }
