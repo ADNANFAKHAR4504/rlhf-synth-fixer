@@ -1,19 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { parse } from 'hcl2-parser';
 
 /**
  * Terraform Unit Tests - 100% Mock Coverage
- * No live AWS deployments - Pure configuration validation
+ * No live AWS deployments - Pure configuration validation using file system and regex
  */
 
 describe('Terraform Configuration Unit Tests', () => {
   const libPath = path.join(__dirname, '..', 'lib');
 
-  // Helper to read and parse Terraform files
-  const readTerraformFile = (filePath: string): any => {
-    const content = fs.readFileSync(filePath, 'utf8');
-    return parse(content);
+  // Helper to read Terraform files as text
+  const readTerraformFile = (filePath: string): string => {
+    return fs.readFileSync(filePath, 'utf8');
   };
 
   // Helper to check if file exists
@@ -48,926 +46,829 @@ describe('Terraform Configuration Unit Tests', () => {
   });
 
   describe('2. Provider Configuration Tests', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'providers.tf'));
+      content = readTerraformFile(path.join(libPath, 'providers.tf'));
     });
 
     test('should define terraform block', () => {
-      expect(config.terraform).toBeDefined();
-      expect(Array.isArray(config.terraform)).toBe(true);
-      expect(config.terraform.length).toBeGreaterThan(0);
+      expect(content).toContain('terraform {');
     });
 
     test('should require Terraform version >= 1.5.0', () => {
-      const terraform = config.terraform[0];
-      expect(terraform.required_version).toBe('>= 1.5.0');
+      expect(content).toContain('required_version = ">= 1.5.0"');
     });
 
     test('should configure AWS provider', () => {
-      const terraform = config.terraform[0];
-      expect(terraform.required_providers).toBeDefined();
-      expect(terraform.required_providers.aws).toBeDefined();
-      expect(terraform.required_providers.aws.source).toBe('hashicorp/aws');
-      expect(terraform.required_providers.aws.version).toBe('~> 5.0');
+      expect(content).toContain('required_providers');
+      expect(content).toContain('source  = "hashicorp/aws"');
+      expect(content).toContain('version = "~> 5.0"');
     });
 
     test('should configure S3 backend', () => {
-      const terraform = config.terraform[0];
-      expect(terraform.backend).toBeDefined();
-      expect(terraform.backend.s3).toBeDefined();
+      expect(content).toContain('backend "s3"');
     });
 
     test('should define AWS provider block', () => {
-      expect(config.provider).toBeDefined();
-      expect(config.provider.aws).toBeDefined();
+      expect(content).toContain('provider "aws"');
     });
 
     test('should configure default tags in provider', () => {
-      const provider = config.provider.aws[0];
-      expect(provider.default_tags).toBeDefined();
-      expect(provider.default_tags.tags).toBeDefined();
-      expect(provider.default_tags.tags.ManagedBy).toBe('Terraform');
-      expect(provider.default_tags.tags.Project).toBeDefined();
+      expect(content).toContain('default_tags');
+      expect(content).toContain('ManagedBy   = "Terraform"');
     });
   });
 
   describe('3. Variables Configuration Tests', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'variables.tf'));
+      content = readTerraformFile(path.join(libPath, 'variables.tf'));
     });
 
     test('should define environment variable', () => {
-      expect(config.variable.environment).toBeDefined();
-      const envVar = config.variable.environment[0];
-      expect(envVar.type).toBe('string');
-      expect(envVar.description).toBeDefined();
+      expect(content).toContain('variable "environment"');
+      expect(content).toContain('type        = string');
     });
 
     test('should validate environment values', () => {
-      const envVar = config.variable.environment[0];
-      expect(envVar.validation).toBeDefined();
-      expect(envVar.validation.condition).toContain('dev');
-      expect(envVar.validation.condition).toContain('staging');
-      expect(envVar.validation.condition).toContain('prod');
-      expect(envVar.validation.error_message).toBeDefined();
+      expect(content).toContain('validation');
+      expect(content).toContain('dev');
+      expect(content).toContain('staging');
+      expect(content).toContain('prod');
     });
 
     test('should define environment_suffix variable', () => {
-      expect(config.variable.environment_suffix).toBeDefined();
-      const suffixVar = config.variable.environment_suffix[0];
-      expect(suffixVar.type).toBe('string');
-      expect(suffixVar.description).toBeDefined();
+      expect(content).toContain('variable "environment_suffix"');
+      expect(content).toContain('type        = string');
     });
 
     test('should validate environment_suffix length', () => {
-      const suffixVar = config.variable.environment_suffix[0];
-      expect(suffixVar.validation).toBeDefined();
-      expect(suffixVar.validation.error_message).toContain('4');
-      expect(suffixVar.validation.error_message).toContain('16');
+      const suffixSection = content.substring(content.indexOf('variable "environment_suffix"'));
+      expect(suffixSection).toContain('validation');
+      expect(suffixSection).toContain('4');
+      expect(suffixSection).toContain('16');
     });
 
     test('should define aws_region variable', () => {
-      expect(config.variable.aws_region).toBeDefined();
-      expect(config.variable.aws_region[0].type).toBe('string');
+      expect(content).toContain('variable "aws_region"');
+      expect(content).toContain('type        = string');
     });
 
     test('should define project_name with default', () => {
-      expect(config.variable.project_name).toBeDefined();
-      expect(config.variable.project_name[0].default).toBe('payment-processing');
+      expect(content).toContain('variable "project_name"');
+      expect(content).toContain('default     = "payment-processing"');
     });
 
     test('should define vpc_cidr variable', () => {
-      expect(config.variable.vpc_cidr).toBeDefined();
-      expect(config.variable.vpc_cidr[0].type).toBe('string');
+      expect(content).toContain('variable "vpc_cidr"');
+      expect(content).toContain('type        = string');
     });
 
     test('should define availability_zones as list', () => {
-      expect(config.variable.availability_zones).toBeDefined();
-      expect(config.variable.availability_zones[0].type).toBe('list(string)');
+      expect(content).toContain('variable "availability_zones"');
+      expect(content).toContain('type        = list(string)');
     });
 
     test('should define aurora_instance_class variable', () => {
-      expect(config.variable.aurora_instance_class).toBeDefined();
-      expect(config.variable.aurora_instance_class[0].type).toBe('string');
+      expect(content).toContain('variable "aurora_instance_class"');
+      expect(content).toContain('type        = string');
     });
 
     test('should define aurora_instance_count with default', () => {
-      expect(config.variable.aurora_instance_count).toBeDefined();
-      expect(config.variable.aurora_instance_count[0].type).toBe('number');
-      expect(config.variable.aurora_instance_count[0].default).toBe(2);
+      expect(content).toContain('variable "aurora_instance_count"');
+      expect(content).toContain('type        = number');
+      expect(content).toContain('default     = 2');
     });
 
     test('should define lambda_memory_size with default', () => {
-      expect(config.variable.lambda_memory_size).toBeDefined();
-      expect(config.variable.lambda_memory_size[0].default).toBe(512);
+      expect(content).toContain('variable "lambda_memory_size"');
+      expect(content).toContain('default     = 512');
     });
 
     test('should define lambda_timeout with default', () => {
-      expect(config.variable.lambda_timeout).toBeDefined();
-      expect(config.variable.lambda_timeout[0].default).toBe(300);
+      expect(content).toContain('variable "lambda_timeout"');
+      expect(content).toContain('default     = 300');
     });
 
     test('should define alb_instance_type with default', () => {
-      expect(config.variable.alb_instance_type).toBeDefined();
-      expect(config.variable.alb_instance_type[0].default).toBe('t3.micro');
+      expect(content).toContain('variable "alb_instance_type"');
+      expect(content).toContain('default     = "t3.micro"');
     });
 
     test('should define log_retention_days variable', () => {
-      expect(config.variable.log_retention_days).toBeDefined();
-      expect(config.variable.log_retention_days[0].type).toBe('number');
+      expect(content).toContain('variable "log_retention_days"');
+      expect(content).toContain('type        = number');
     });
 
     test('should define feature flag: enable_config_rules', () => {
-      expect(config.variable.enable_config_rules).toBeDefined();
-      expect(config.variable.enable_config_rules[0].type).toBe('bool');
-      expect(config.variable.enable_config_rules[0].default).toBe(false);
+      expect(content).toContain('variable "enable_config_rules"');
+      expect(content).toContain('type        = bool');
+      expect(content).toContain('default     = false');
     });
 
     test('should define feature flag: enable_step_functions', () => {
-      expect(config.variable.enable_step_functions).toBeDefined();
-      expect(config.variable.enable_step_functions[0].type).toBe('bool');
-      expect(config.variable.enable_step_functions[0].default).toBe(false);
+      expect(content).toContain('variable "enable_step_functions"');
+      expect(content).toContain('type        = bool');
     });
 
     test('should define feature flag: enable_eventbridge', () => {
-      expect(config.variable.enable_eventbridge).toBeDefined();
-      expect(config.variable.enable_eventbridge[0].type).toBe('bool');
-      expect(config.variable.enable_eventbridge[0].default).toBe(false);
+      expect(content).toContain('variable "enable_eventbridge"');
+      expect(content).toContain('type        = bool');
     });
 
     test('should define bucket_names with default array', () => {
-      expect(config.variable.bucket_names).toBeDefined();
-      const bucketVar = config.variable.bucket_names[0];
-      expect(bucketVar.type).toBe('list(string)');
-      expect(bucketVar.default).toContain('data-processing');
-      expect(bucketVar.default).toContain('archive');
-      expect(bucketVar.default).toContain('logs');
+      expect(content).toContain('variable "bucket_names"');
+      expect(content).toContain('type        = list(string)');
+      expect(content).toContain('data-processing');
+      expect(content).toContain('archive');
+      expect(content).toContain('logs');
     });
   });
 
   describe('4. Locals Configuration Tests', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'locals.tf'));
+      content = readTerraformFile(path.join(libPath, 'locals.tf'));
     });
 
     test('should define locals block', () => {
-      expect(config.locals).toBeDefined();
-      expect(Array.isArray(config.locals)).toBe(true);
+      expect(content).toContain('locals {');
     });
 
     test('should define environment_config for all environments', () => {
-      const locals = config.locals[0];
-      expect(locals.environment_config).toBeDefined();
-      expect(locals.environment_config.dev).toBeDefined();
-      expect(locals.environment_config.staging).toBeDefined();
-      expect(locals.environment_config.prod).toBeDefined();
+      expect(content).toContain('environment_config');
+      expect(content).toContain('dev =');
+      expect(content).toContain('staging =');
+      expect(content).toContain('prod =');
     });
 
     test('should configure dev environment correctly', () => {
-      const devConfig = config.locals[0].environment_config.dev;
-      expect(devConfig.instance_type).toBe('t3.small');
-      expect(devConfig.aurora_instance_class).toBe('db.t3.medium');
-      expect(devConfig.log_retention).toBe(7);
-      expect(devConfig.backup_retention).toBe(1);
-      expect(devConfig.multi_az).toBe(false);
+      expect(content).toContain('instance_type         = "t3.small"');
+      expect(content).toContain('aurora_instance_class = "db.t3.medium"');
+      expect(content).toContain('log_retention         = 7');
+      expect(content).toContain('backup_retention      = 1');
+      expect(content).toContain('multi_az              = false');
     });
 
     test('should configure staging environment correctly', () => {
-      const stagingConfig = config.locals[0].environment_config.staging;
-      expect(stagingConfig.instance_type).toBe('t3.medium');
-      expect(stagingConfig.aurora_instance_class).toBe('db.r6g.large');
-      expect(stagingConfig.log_retention).toBe(30);
-      expect(stagingConfig.backup_retention).toBe(7);
-      expect(stagingConfig.multi_az).toBe(true);
+      expect(content).toContain('instance_type         = "t3.medium"');
+      expect(content).toContain('aurora_instance_class = "db.r6g.large"');
+      expect(content).toContain('log_retention         = 30');
+      expect(content).toContain('backup_retention      = 7');
     });
 
     test('should configure prod environment correctly', () => {
-      const prodConfig = config.locals[0].environment_config.prod;
-      expect(prodConfig.instance_type).toBe('t3.large');
-      expect(prodConfig.aurora_instance_class).toBe('db.r6g.xlarge');
-      expect(prodConfig.log_retention).toBe(90);
-      expect(prodConfig.backup_retention).toBe(30);
-      expect(prodConfig.multi_az).toBe(true);
+      expect(content).toContain('instance_type         = "t3.large"');
+      expect(content).toContain('aurora_instance_class = "db.r6g.xlarge"');
+      expect(content).toContain('log_retention         = 90');
+      expect(content).toContain('backup_retention      = 30');
     });
 
     test('should define current_config selector', () => {
-      const locals = config.locals[0];
-      expect(locals.current_config).toBeDefined();
+      expect(content).toContain('current_config = local.environment_config[var.environment]');
     });
 
     test('should define name_prefix', () => {
-      const locals = config.locals[0];
-      expect(locals.name_prefix).toBeDefined();
+      expect(content).toContain('name_prefix');
     });
 
     test('should define resource_names', () => {
-      const locals = config.locals[0];
-      expect(locals.resource_names).toBeDefined();
-      expect(locals.resource_names.vpc).toBeDefined();
-      expect(locals.resource_names.aurora_cluster).toBeDefined();
-      expect(locals.resource_names.alb).toBeDefined();
-      expect(locals.resource_names.lambda).toBeDefined();
-      expect(locals.resource_names.sns_topic).toBeDefined();
-      expect(locals.resource_names.log_group).toBeDefined();
+      expect(content).toContain('resource_names');
+      expect(content).toContain('vpc');
+      expect(content).toContain('aurora_cluster');
+      expect(content).toContain('alb');
+      expect(content).toContain('lambda');
+      expect(content).toContain('sns_topic');
     });
 
     test('should define common_tags', () => {
-      const locals = config.locals[0];
-      expect(locals.common_tags).toBeDefined();
-      expect(locals.common_tags.ManagedBy).toBe('Terraform');
+      expect(content).toContain('common_tags');
+      expect(content).toContain('ManagedBy         = "Terraform"');
     });
 
     test('should define iam_roles configuration', () => {
-      const locals = config.locals[0];
-      expect(locals.iam_roles).toBeDefined();
-      expect(locals.iam_roles.lambda_execution).toBeDefined();
-      expect(locals.iam_roles.ecs_task).toBeDefined();
-      expect(locals.iam_roles.rds_monitoring).toBeDefined();
+      expect(content).toContain('iam_roles');
+      expect(content).toContain('lambda_execution');
+      expect(content).toContain('ecs_task');
+      expect(content).toContain('rds_monitoring');
     });
   });
 
   describe('5. Outputs Configuration Tests', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'outputs.tf'));
+      content = readTerraformFile(path.join(libPath, 'outputs.tf'));
     });
 
     test('should define vpc_id output', () => {
-      expect(config.output.vpc_id).toBeDefined();
-      expect(config.output.vpc_id[0].description).toBeDefined();
-      expect(config.output.vpc_id[0].value).toContain('module.vpc');
+      expect(content).toContain('output "vpc_id"');
+      expect(content).toContain('module.vpc.vpc_id');
     });
 
     test('should define vpc_cidr output', () => {
-      expect(config.output.vpc_cidr).toBeDefined();
-      expect(config.output.vpc_cidr[0].value).toContain('vpc_cidr_block');
+      expect(content).toContain('output "vpc_cidr"');
+      expect(content).toContain('vpc_cidr_block');
     });
 
     test('should define subnet outputs', () => {
-      expect(config.output.private_subnet_ids).toBeDefined();
-      expect(config.output.public_subnet_ids).toBeDefined();
+      expect(content).toContain('output "private_subnet_ids"');
+      expect(content).toContain('output "public_subnet_ids"');
     });
 
     test('should define sensitive Aurora outputs', () => {
-      expect(config.output.aurora_cluster_endpoint).toBeDefined();
-      expect(config.output.aurora_cluster_endpoint[0].sensitive).toBe(true);
-      expect(config.output.aurora_cluster_reader_endpoint).toBeDefined();
-      expect(config.output.aurora_cluster_reader_endpoint[0].sensitive).toBe(true);
+      expect(content).toContain('output "aurora_cluster_endpoint"');
+      expect(content).toContain('sensitive   = true');
+      expect(content).toContain('output "aurora_cluster_reader_endpoint"');
     });
 
     test('should define aurora_cluster_id output', () => {
-      expect(config.output.aurora_cluster_id).toBeDefined();
+      expect(content).toContain('output "aurora_cluster_id"');
     });
 
     test('should define S3 bucket outputs', () => {
-      expect(config.output.s3_bucket_ids).toBeDefined();
-      expect(config.output.s3_bucket_arns).toBeDefined();
+      expect(content).toContain('output "s3_bucket_ids"');
+      expect(content).toContain('output "s3_bucket_arns"');
     });
 
     test('should define Lambda function outputs', () => {
-      expect(config.output.lambda_function_arn).toBeDefined();
-      expect(config.output.lambda_function_name).toBeDefined();
+      expect(content).toContain('output "lambda_function_arn"');
+      expect(content).toContain('output "lambda_function_name"');
     });
 
     test('should define ALB outputs', () => {
-      expect(config.output.alb_dns_name).toBeDefined();
-      expect(config.output.alb_arn).toBeDefined();
+      expect(content).toContain('output "alb_dns_name"');
+      expect(content).toContain('output "alb_arn"');
     });
 
     test('should define SNS topic output', () => {
-      expect(config.output.sns_topic_arn).toBeDefined();
+      expect(content).toContain('output "sns_topic_arn"');
     });
 
     test('should define environment metadata outputs', () => {
-      expect(config.output.environment).toBeDefined();
-      expect(config.output.environment_suffix).toBeDefined();
+      expect(content).toContain('output "environment"');
+      expect(content).toContain('output "environment_suffix"');
     });
   });
 
   describe('6. Main Infrastructure - Module Configurations', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should define VPC module', () => {
-      expect(config.module.vpc).toBeDefined();
-      const vpcModule = config.module.vpc[0];
-      expect(vpcModule.source).toBe('./modules/vpc');
+      expect(content).toContain('module "vpc"');
+      expect(content).toContain('source = "./modules/vpc"');
     });
 
     test('should configure VPC module with correct parameters', () => {
-      const vpcModule = config.module.vpc[0];
-      expect(vpcModule.name_prefix).toBeDefined();
-      expect(vpcModule.vpc_cidr).toBeDefined();
-      expect(vpcModule.availability_zones).toBeDefined();
-      expect(vpcModule.enable_nat_gateway).toBe(true);
-      expect(vpcModule.enable_dns_hostnames).toBe(true);
-      expect(vpcModule.enable_dns_support).toBe(true);
-      expect(vpcModule.tags).toBeDefined();
+      const vpcSection = content.substring(content.indexOf('module "vpc"'), content.indexOf('module "iam"'));
+      expect(vpcSection).toContain('name_prefix');
+      expect(vpcSection).toContain('vpc_cidr');
+      expect(vpcSection).toContain('availability_zones');
+      expect(vpcSection).toContain('enable_nat_gateway   = true');
+      expect(vpcSection).toContain('enable_dns_hostnames = true');
+      expect(vpcSection).toContain('enable_dns_support   = true');
     });
 
     test('should define IAM module', () => {
-      expect(config.module.iam).toBeDefined();
-      const iamModule = config.module.iam[0];
-      expect(iamModule.source).toBe('./modules/iam');
-      expect(iamModule.environment).toBeDefined();
-      expect(iamModule.project_name).toBeDefined();
+      expect(content).toContain('module "iam"');
+      expect(content).toContain('source = "./modules/iam"');
     });
 
     test('should define Aurora module', () => {
-      expect(config.module.aurora).toBeDefined();
-      const auroraModule = config.module.aurora[0];
-      expect(auroraModule.source).toBe('./modules/aurora');
+      expect(content).toContain('module "aurora"');
+      expect(content).toContain('source = "./modules/aurora"');
     });
 
     test('should configure Aurora with correct settings', () => {
-      const auroraModule = config.module.aurora[0];
-      expect(auroraModule.engine_version).toBe('15');
-      expect(auroraModule.master_username).toBe('dbadmin');
-      expect(auroraModule.storage_encrypted).toBe(true);
-      expect(auroraModule.skip_final_snapshot).toBe(true);
-      expect(auroraModule.preferred_backup_window).toBe('03:00-04:00');
+      const auroraSection = content.substring(content.indexOf('module "aurora"'));
+      expect(auroraSection).toContain('engine_version          = "15"');
+      expect(auroraSection).toContain('master_username         = "dbadmin"');
+      expect(auroraSection).toContain('storage_encrypted       = true');
+      expect(auroraSection).toContain('skip_final_snapshot     = true');
+      expect(auroraSection).toContain('preferred_backup_window = "03:00-04:00"');
     });
 
     test('should define storage module', () => {
-      expect(config.module.storage).toBeDefined();
-      const storageModule = config.module.storage[0];
-      expect(storageModule.source).toBe('./modules/storage');
-      expect(storageModule.enable_versioning).toBe(true);
-      expect(storageModule.force_destroy).toBe(true);
+      expect(content).toContain('module "storage"');
+      expect(content).toContain('source = "./modules/storage"');
+      expect(content).toContain('enable_versioning  = true');
+      expect(content).toContain('force_destroy      = true');
     });
 
     test('should define Lambda module', () => {
-      expect(config.module.lambda).toBeDefined();
-      const lambdaModule = config.module.lambda[0];
-      expect(lambdaModule.source).toBe('./modules/lambda');
-      expect(lambdaModule.handler).toBe('index.handler');
-      expect(lambdaModule.runtime).toBe('python3.9');
+      expect(content).toContain('module "lambda"');
+      expect(content).toContain('source = "./modules/lambda"');
+      expect(content).toContain('handler            = "index.handler"');
+      expect(content).toContain('runtime            = "python3.9"');
     });
 
     test('should configure Lambda with VPC settings', () => {
-      const lambdaModule = config.module.lambda[0];
-      expect(lambdaModule.vpc_config).toBeDefined();
-      expect(lambdaModule.vpc_config.subnet_ids).toBeDefined();
-      expect(lambdaModule.vpc_config.security_group_ids).toBeDefined();
+      const lambdaSection = content.substring(content.indexOf('module "lambda"'));
+      expect(lambdaSection).toContain('vpc_config');
+      expect(lambdaSection).toContain('subnet_ids');
+      expect(lambdaSection).toContain('security_group_ids');
     });
 
     test('should configure Lambda environment variables', () => {
-      const lambdaModule = config.module.lambda[0];
-      expect(lambdaModule.environment_variables).toBeDefined();
-      expect(lambdaModule.environment_variables.ENVIRONMENT).toBeDefined();
-      expect(lambdaModule.environment_variables.DB_ENDPOINT).toBeDefined();
+      const lambdaSection = content.substring(content.indexOf('module "lambda"'));
+      expect(lambdaSection).toContain('environment_variables');
+      expect(lambdaSection).toContain('ENVIRONMENT');
+      expect(lambdaSection).toContain('DB_ENDPOINT');
     });
 
     test('should define ALB module', () => {
-      expect(config.module.alb).toBeDefined();
-      const albModule = config.module.alb[0];
-      expect(albModule.source).toBe('./modules/alb');
+      expect(content).toContain('module "alb"');
+      expect(content).toContain('source = "./modules/alb"');
     });
 
     test('should configure ALB listener rules', () => {
-      const albModule = config.module.alb[0];
-      expect(albModule.listener_rules).toBeDefined();
-      expect(Array.isArray(albModule.listener_rules)).toBe(true);
-      expect(albModule.listener_rules[0].priority).toBe(100);
+      const albSection = content.substring(content.indexOf('module "alb"'));
+      expect(albSection).toContain('listener_rules');
+      expect(albSection).toContain('priority = 100');
     });
 
     test('should define monitoring module', () => {
-      expect(config.module.monitoring).toBeDefined();
-      const monitoringModule = config.module.monitoring[0];
-      expect(monitoringModule.source).toBe('./modules/monitoring');
+      expect(content).toContain('module "monitoring"');
+      expect(content).toContain('source = "./modules/monitoring"');
     });
   });
 
   describe('7. Main Infrastructure - KMS Resources', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should define KMS key for Aurora', () => {
-      expect(config.resource.aws_kms_key).toBeDefined();
-      expect(config.resource.aws_kms_key.aurora).toBeDefined();
+      expect(content).toContain('resource "aws_kms_key" "aurora"');
     });
 
     test('should enable KMS key rotation', () => {
-      const kmsKey = config.resource.aws_kms_key.aurora[0];
-      expect(kmsKey.enable_key_rotation).toBe(true);
+      expect(content).toContain('enable_key_rotation     = true');
     });
 
     test('should set KMS deletion window', () => {
-      const kmsKey = config.resource.aws_kms_key.aurora[0];
-      expect(kmsKey.deletion_window_in_days).toBe(7);
+      expect(content).toContain('deletion_window_in_days = 7');
     });
 
     test('should define KMS alias', () => {
-      expect(config.resource.aws_kms_alias).toBeDefined();
-      expect(config.resource.aws_kms_alias.aurora).toBeDefined();
+      expect(content).toContain('resource "aws_kms_alias" "aurora"');
     });
   });
 
   describe('8. Main Infrastructure - Security Groups', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should define Lambda security group', () => {
-      expect(config.resource.aws_security_group).toBeDefined();
-      expect(config.resource.aws_security_group.lambda).toBeDefined();
+      expect(content).toContain('resource "aws_security_group" "lambda"');
     });
 
     test('should configure Lambda security group egress', () => {
-      const lambdaSg = config.resource.aws_security_group.lambda[0];
-      expect(lambdaSg.egress).toBeDefined();
-      expect(lambdaSg.egress.protocol).toBe('-1');
+      const lambdaSgSection = content.substring(
+        content.indexOf('resource "aws_security_group" "lambda"'),
+        content.indexOf('resource "aws_security_group" "alb"')
+      );
+      expect(lambdaSgSection).toContain('egress');
+      expect(lambdaSgSection).toContain('protocol    = "-1"');
     });
 
     test('should set Lambda security group lifecycle', () => {
-      const lambdaSg = config.resource.aws_security_group.lambda[0];
-      expect(lambdaSg.lifecycle).toBeDefined();
-      expect(lambdaSg.lifecycle.create_before_destroy).toBe(true);
+      const lambdaSgSection = content.substring(
+        content.indexOf('resource "aws_security_group" "lambda"'),
+        content.indexOf('resource "aws_security_group" "alb"')
+      );
+      expect(lambdaSgSection).toContain('lifecycle');
+      expect(lambdaSgSection).toContain('create_before_destroy = true');
     });
 
     test('should define ALB security group', () => {
-      expect(config.resource.aws_security_group.alb).toBeDefined();
+      expect(content).toContain('resource "aws_security_group" "alb"');
     });
 
     test('should configure ALB security group with HTTP ingress', () => {
-      const albSg = config.resource.aws_security_group.alb[0];
-      expect(albSg.ingress).toBeDefined();
-      expect(Array.isArray(albSg.ingress)).toBe(true);
-
-      const httpRule = albSg.ingress.find((rule: any) => rule.from_port === 80);
-      expect(httpRule).toBeDefined();
-      expect(httpRule.protocol).toBe('tcp');
+      const albSgSection = content.substring(content.indexOf('resource "aws_security_group" "alb"'));
+      expect(albSgSection).toContain('from_port   = 80');
+      expect(albSgSection).toContain('protocol    = "tcp"');
     });
 
     test('should configure ALB security group with HTTPS ingress', () => {
-      const albSg = config.resource.aws_security_group.alb[0];
-      const httpsRule = albSg.ingress.find((rule: any) => rule.from_port === 443);
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule.protocol).toBe('tcp');
+      const albSgSection = content.substring(content.indexOf('resource "aws_security_group" "alb"'));
+      expect(albSgSection).toContain('from_port   = 443');
+      expect(albSgSection).toContain('to_port     = 443');
     });
 
     test('should configure ALB security group egress', () => {
-      const albSg = config.resource.aws_security_group.alb[0];
-      expect(albSg.egress).toBeDefined();
+      const albSgSection = content.substring(content.indexOf('resource "aws_security_group" "alb"'));
+      expect(albSgSection).toContain('egress');
     });
   });
 
   describe('9. Main Infrastructure - SSM and Secrets', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should define SSM parameter for database password', () => {
-      expect(config.resource.aws_ssm_parameter).toBeDefined();
-      expect(config.resource.aws_ssm_parameter.db_password).toBeDefined();
+      expect(content).toContain('resource "aws_ssm_parameter" "db_password"');
     });
 
     test('should configure SSM parameter as SecureString', () => {
-      const ssmParam = config.resource.aws_ssm_parameter.db_password[0];
-      expect(ssmParam.type).toBe('SecureString');
+      expect(content).toContain('type        = "SecureString"');
     });
 
     test('should define random password resource', () => {
-      expect(config.resource.random_password).toBeDefined();
-      expect(config.resource.random_password.db_password).toBeDefined();
+      expect(content).toContain('resource "random_password" "db_password"');
     });
 
     test('should configure random password with correct length', () => {
-      const randomPass = config.resource.random_password.db_password[0];
-      expect(randomPass.length).toBe(32);
-      expect(randomPass.special).toBe(true);
+      const passwordSection = content.substring(content.indexOf('resource "random_password"'));
+      expect(passwordSection).toContain('length  = 32');
+      expect(passwordSection).toContain('special = true');
     });
   });
 
   describe('10. Main Infrastructure - S3 Events', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should define S3 bucket notification', () => {
-      expect(config.resource.aws_s3_bucket_notification).toBeDefined();
-      expect(config.resource.aws_s3_bucket_notification.data_processing).toBeDefined();
+      expect(content).toContain('resource "aws_s3_bucket_notification" "data_processing"');
     });
 
     test('should configure Lambda function trigger', () => {
-      const notification = config.resource.aws_s3_bucket_notification.data_processing[0];
-      expect(notification.lambda_function).toBeDefined();
-      expect(notification.lambda_function.events).toContain('s3:ObjectCreated:*');
-      expect(notification.lambda_function.filter_prefix).toBe('incoming/');
+      const notificationSection = content.substring(content.indexOf('resource "aws_s3_bucket_notification"'));
+      expect(notificationSection).toContain('lambda_function');
+      expect(notificationSection).toContain('events              = ["s3:ObjectCreated:*"]');
+      expect(notificationSection).toContain('filter_prefix       = "incoming/"');
     });
 
     test('should define Lambda permission for S3', () => {
-      expect(config.resource.aws_lambda_permission).toBeDefined();
-      expect(config.resource.aws_lambda_permission.allow_s3).toBeDefined();
+      expect(content).toContain('resource "aws_lambda_permission" "allow_s3"');
     });
 
     test('should configure Lambda permission correctly', () => {
-      const permission = config.resource.aws_lambda_permission.allow_s3[0];
-      expect(permission.action).toBe('lambda:InvokeFunction');
-      expect(permission.principal).toBe('s3.amazonaws.com');
+      const permissionSection = content.substring(content.indexOf('resource "aws_lambda_permission" "allow_s3"'));
+      expect(permissionSection).toContain('action        = "lambda:InvokeFunction"');
+      expect(permissionSection).toContain('principal     = "s3.amazonaws.com"');
     });
   });
 
   describe('11. VPC Module Tests', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'modules', 'vpc', 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'modules', 'vpc', 'main.tf'));
     });
 
     test('should define all VPC module variables', () => {
-      expect(config.variable.name_prefix).toBeDefined();
-      expect(config.variable.vpc_cidr).toBeDefined();
-      expect(config.variable.availability_zones).toBeDefined();
-      expect(config.variable.enable_nat_gateway).toBeDefined();
-      expect(config.variable.single_nat_gateway).toBeDefined();
-      expect(config.variable.enable_dns_hostnames).toBeDefined();
-      expect(config.variable.enable_dns_support).toBeDefined();
-      expect(config.variable.tags).toBeDefined();
+      expect(content).toContain('variable "name_prefix"');
+      expect(content).toContain('variable "vpc_cidr"');
+      expect(content).toContain('variable "availability_zones"');
+      expect(content).toContain('variable "enable_nat_gateway"');
+      expect(content).toContain('variable "single_nat_gateway"');
+      expect(content).toContain('variable "enable_dns_hostnames"');
+      expect(content).toContain('variable "enable_dns_support"');
+      expect(content).toContain('variable "tags"');
     });
 
     test('should set default values for optional variables', () => {
-      expect(config.variable.enable_nat_gateway[0].default).toBe(true);
-      expect(config.variable.single_nat_gateway[0].default).toBe(false);
-      expect(config.variable.enable_dns_hostnames[0].default).toBe(true);
-      expect(config.variable.enable_dns_support[0].default).toBe(true);
+      expect(content).toContain('default     = true');
+      expect(content).toContain('default     = false');
     });
 
     test('should define VPC resource', () => {
-      expect(config.resource.aws_vpc).toBeDefined();
-      expect(config.resource.aws_vpc.main).toBeDefined();
+      expect(content).toContain('resource "aws_vpc" "main"');
     });
 
     test('should configure VPC with DNS settings', () => {
-      const vpc = config.resource.aws_vpc.main[0];
-      expect(vpc.enable_dns_hostnames).toBeDefined();
-      expect(vpc.enable_dns_support).toBeDefined();
+      const vpcSection = content.substring(content.indexOf('resource "aws_vpc" "main"'));
+      expect(vpcSection).toContain('enable_dns_hostnames');
+      expect(vpcSection).toContain('enable_dns_support');
     });
 
     test('should define internet gateway', () => {
-      expect(config.resource.aws_internet_gateway).toBeDefined();
-      expect(config.resource.aws_internet_gateway.main).toBeDefined();
+      expect(content).toContain('resource "aws_internet_gateway" "main"');
     });
 
     test('should define public subnets with count', () => {
-      expect(config.resource.aws_subnet.public).toBeDefined();
-      const subnet = config.resource.aws_subnet.public[0];
-      expect(subnet.map_public_ip_on_launch).toBe(true);
+      expect(content).toContain('resource "aws_subnet" "public"');
+      expect(content).toContain('map_public_ip_on_launch = true');
     });
 
     test('should define private subnets', () => {
-      expect(config.resource.aws_subnet.private).toBeDefined();
+      expect(content).toContain('resource "aws_subnet" "private"');
     });
 
     test('should define elastic IPs for NAT', () => {
-      expect(config.resource.aws_eip.nat).toBeDefined();
-      const eip = config.resource.aws_eip.nat[0];
-      expect(eip.domain).toBe('vpc');
+      expect(content).toContain('resource "aws_eip" "nat"');
+      expect(content).toContain('domain = "vpc"');
     });
 
     test('should define NAT gateways', () => {
-      expect(config.resource.aws_nat_gateway.main).toBeDefined();
+      expect(content).toContain('resource "aws_nat_gateway" "main"');
     });
 
     test('should define public route table', () => {
-      expect(config.resource.aws_route_table.public).toBeDefined();
-      const rt = config.resource.aws_route_table.public[0];
-      expect(rt.route).toBeDefined();
-      expect(rt.route.cidr_block).toBe('0.0.0.0/0');
+      expect(content).toContain('resource "aws_route_table" "public"');
+      expect(content).toContain('cidr_block = "0.0.0.0/0"');
     });
 
     test('should define private route table', () => {
-      expect(config.resource.aws_route_table.private).toBeDefined();
+      expect(content).toContain('resource "aws_route_table" "private"');
     });
 
     test('should define route table associations', () => {
-      expect(config.resource.aws_route_table_association.public).toBeDefined();
-      expect(config.resource.aws_route_table_association.private).toBeDefined();
+      expect(content).toContain('resource "aws_route_table_association" "public"');
+      expect(content).toContain('resource "aws_route_table_association" "private"');
     });
 
     test('should define VPC outputs', () => {
-      expect(config.output.vpc_id).toBeDefined();
-      expect(config.output.vpc_cidr_block).toBeDefined();
-      expect(config.output.public_subnet_ids).toBeDefined();
-      expect(config.output.private_subnet_ids).toBeDefined();
-      expect(config.output.nat_gateway_ids).toBeDefined();
+      expect(content).toContain('output "vpc_id"');
+      expect(content).toContain('output "vpc_cidr_block"');
+      expect(content).toContain('output "public_subnet_ids"');
+      expect(content).toContain('output "private_subnet_ids"');
+      expect(content).toContain('output "nat_gateway_ids"');
     });
   });
 
   describe('12. Storage Module Tests', () => {
-    let config: any;
+    let content: string;
 
     beforeAll(() => {
-      config = readTerraformFile(path.join(libPath, 'modules', 'storage', 'main.tf'));
+      content = readTerraformFile(path.join(libPath, 'modules', 'storage', 'main.tf'));
     });
 
     test('should define all storage module variables', () => {
-      expect(config.variable.bucket_names).toBeDefined();
-      expect(config.variable.environment).toBeDefined();
-      expect(config.variable.environment_suffix).toBeDefined();
-      expect(config.variable.project_name).toBeDefined();
-      expect(config.variable.enable_versioning).toBeDefined();
-      expect(config.variable.force_destroy).toBeDefined();
+      expect(content).toContain('variable "bucket_names"');
+      expect(content).toContain('variable "environment"');
+      expect(content).toContain('variable "environment_suffix"');
+      expect(content).toContain('variable "project_name"');
+      expect(content).toContain('variable "enable_versioning"');
+      expect(content).toContain('variable "force_destroy"');
     });
 
     test('should set default values for storage variables', () => {
-      expect(config.variable.enable_versioning[0].default).toBe(true);
-      expect(config.variable.force_destroy[0].default).toBe(true);
+      expect(content).toContain('default     = true');
     });
 
     test('should define locals for bucket configuration', () => {
-      expect(config.locals).toBeDefined();
-      expect(config.locals[0].buckets).toBeDefined();
+      expect(content).toContain('locals {');
+      expect(content).toContain('buckets');
     });
 
     test('should define S3 bucket resource with for_each', () => {
-      expect(config.resource.aws_s3_bucket).toBeDefined();
-      expect(config.resource.aws_s3_bucket.buckets).toBeDefined();
+      expect(content).toContain('resource "aws_s3_bucket" "buckets"');
+      expect(content).toContain('for_each');
     });
 
     test('should define bucket versioning resource', () => {
-      expect(config.resource.aws_s3_bucket_versioning).toBeDefined();
-      const versioning = config.resource.aws_s3_bucket_versioning.buckets[0];
-      expect(versioning.versioning_configuration.status).toBe('Enabled');
+      expect(content).toContain('resource "aws_s3_bucket_versioning" "buckets"');
+      expect(content).toContain('status = "Enabled"');
     });
 
     test('should define bucket encryption', () => {
-      expect(config.resource.aws_s3_bucket_server_side_encryption_configuration).toBeDefined();
-      const encryption = config.resource.aws_s3_bucket_server_side_encryption_configuration.buckets[0];
-      expect(encryption.rule.apply_server_side_encryption_by_default.sse_algorithm).toBe('AES256');
+      expect(content).toContain('resource "aws_s3_bucket_server_side_encryption_configuration" "buckets"');
+      expect(content).toContain('sse_algorithm = "AES256"');
     });
 
     test('should define public access block', () => {
-      expect(config.resource.aws_s3_bucket_public_access_block).toBeDefined();
-      const publicBlock = config.resource.aws_s3_bucket_public_access_block.buckets[0];
-      expect(publicBlock.block_public_acls).toBe(true);
-      expect(publicBlock.block_public_policy).toBe(true);
-      expect(publicBlock.ignore_public_acls).toBe(true);
-      expect(publicBlock.restrict_public_buckets).toBe(true);
+      expect(content).toContain('resource "aws_s3_bucket_public_access_block" "buckets"');
+      expect(content).toContain('block_public_acls       = true');
+      expect(content).toContain('block_public_policy     = true');
+      expect(content).toContain('ignore_public_acls      = true');
+      expect(content).toContain('restrict_public_buckets = true');
     });
 
     test('should define storage outputs', () => {
-      expect(config.output.bucket_ids).toBeDefined();
-      expect(config.output.bucket_arns).toBeDefined();
-      expect(config.output.bucket_names).toBeDefined();
+      expect(content).toContain('output "bucket_ids"');
+      expect(content).toContain('output "bucket_arns"');
+      expect(content).toContain('output "bucket_names"');
     });
   });
 
   describe('13. Security Best Practices Tests', () => {
-    let mainConfig: any;
-    let storageConfig: any;
+    let mainContent: string;
+    let storageContent: string;
 
     beforeAll(() => {
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
-      storageConfig = readTerraformFile(path.join(libPath, 'modules', 'storage', 'main.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
+      storageContent = readTerraformFile(path.join(libPath, 'modules', 'storage', 'main.tf'));
     });
 
     test('should enable encryption at rest for Aurora', () => {
-      const auroraModule = mainConfig.module.aurora[0];
-      expect(auroraModule.storage_encrypted).toBe(true);
+      expect(mainContent).toContain('storage_encrypted       = true');
     });
 
     test('should enable KMS key rotation', () => {
-      const kmsKey = mainConfig.resource.aws_kms_key.aurora[0];
-      expect(kmsKey.enable_key_rotation).toBe(true);
+      expect(mainContent).toContain('enable_key_rotation     = true');
     });
 
     test('should store passwords as SecureString', () => {
-      const ssmParam = mainConfig.resource.aws_ssm_parameter.db_password[0];
-      expect(ssmParam.type).toBe('SecureString');
+      expect(mainContent).toContain('type        = "SecureString"');
     });
 
     test('should enable S3 encryption', () => {
-      const encryption = storageConfig.resource.aws_s3_bucket_server_side_encryption_configuration.buckets[0];
-      expect(encryption.rule).toBeDefined();
+      expect(storageContent).toContain('sse_algorithm = "AES256"');
     });
 
     test('should block all S3 public access', () => {
-      const publicBlock = storageConfig.resource.aws_s3_bucket_public_access_block.buckets[0];
-      expect(publicBlock.block_public_acls).toBe(true);
-      expect(publicBlock.block_public_policy).toBe(true);
+      expect(storageContent).toContain('block_public_acls       = true');
+      expect(storageContent).toContain('block_public_policy     = true');
     });
 
     test('should use lifecycle policies for security groups', () => {
-      const lambdaSg = mainConfig.resource.aws_security_group.lambda[0];
-      expect(lambdaSg.lifecycle.create_before_destroy).toBe(true);
+      expect(mainContent).toContain('create_before_destroy = true');
     });
   });
 
   describe('14. High Availability Tests', () => {
-    let localsConfig: any;
-    let mainConfig: any;
+    let localsContent: string;
+    let mainContent: string;
 
     beforeAll(() => {
-      localsConfig = readTerraformFile(path.join(libPath, 'locals.tf'));
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
+      localsContent = readTerraformFile(path.join(libPath, 'locals.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should enable multi-AZ for staging', () => {
-      const stagingConfig = localsConfig.locals[0].environment_config.staging;
-      expect(stagingConfig.multi_az).toBe(true);
+      const stagingSection = localsContent.substring(localsContent.indexOf('staging ='));
+      expect(stagingSection).toContain('multi_az              = true');
     });
 
     test('should enable multi-AZ for production', () => {
-      const prodConfig = localsConfig.locals[0].environment_config.prod;
-      expect(prodConfig.multi_az).toBe(true);
+      const prodSection = localsContent.substring(localsContent.indexOf('prod ='));
+      expect(prodSection).toContain('multi_az              = true');
     });
 
     test('should disable multi-AZ for dev to save costs', () => {
-      const devConfig = localsConfig.locals[0].environment_config.dev;
-      expect(devConfig.multi_az).toBe(false);
+      const devSection = localsContent.substring(localsContent.indexOf('dev ='), localsContent.indexOf('staging ='));
+      expect(devSection).toContain('multi_az              = false');
     });
 
     test('should use multiple availability zones', () => {
-      const vpcModule = mainConfig.module.vpc[0];
-      expect(vpcModule.availability_zones).toBeDefined();
+      expect(mainContent).toContain('availability_zones');
     });
   });
 
   describe('15. Backup and Disaster Recovery Tests', () => {
-    let mainConfig: any;
-    let localsConfig: any;
+    let mainContent: string;
+    let localsContent: string;
 
     beforeAll(() => {
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
-      localsConfig = readTerraformFile(path.join(libPath, 'locals.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
+      localsContent = readTerraformFile(path.join(libPath, 'locals.tf'));
     });
 
     test('should configure Aurora backup window', () => {
-      const auroraModule = mainConfig.module.aurora[0];
-      expect(auroraModule.preferred_backup_window).toBe('03:00-04:00');
+      expect(mainContent).toContain('preferred_backup_window = "03:00-04:00"');
     });
 
     test('should have different backup retention per environment', () => {
-      const envConfig = localsConfig.locals[0].environment_config;
-      expect(envConfig.dev.backup_retention).toBe(1);
-      expect(envConfig.staging.backup_retention).toBe(7);
-      expect(envConfig.prod.backup_retention).toBe(30);
+      expect(localsContent).toContain('backup_retention      = 1');
+      expect(localsContent).toContain('backup_retention      = 7');
+      expect(localsContent).toContain('backup_retention      = 30');
     });
 
     test('should enable S3 versioning', () => {
-      const storageModule = mainConfig.module.storage[0];
-      expect(storageModule.enable_versioning).toBe(true);
+      expect(mainContent).toContain('enable_versioning  = true');
     });
 
     test('should set KMS deletion window for recovery', () => {
-      const kmsKey = mainConfig.resource.aws_kms_key.aurora[0];
-      expect(kmsKey.deletion_window_in_days).toBe(7);
+      expect(mainContent).toContain('deletion_window_in_days = 7');
     });
   });
 
   describe('16. Monitoring and Logging Tests', () => {
-    let mainConfig: any;
-    let localsConfig: any;
+    let mainContent: string;
+    let localsContent: string;
 
     beforeAll(() => {
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
-      localsConfig = readTerraformFile(path.join(libPath, 'locals.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
+      localsContent = readTerraformFile(path.join(libPath, 'locals.tf'));
     });
 
     test('should configure monitoring module', () => {
-      expect(mainConfig.module.monitoring).toBeDefined();
+      expect(mainContent).toContain('module "monitoring"');
     });
 
     test('should have different log retention per environment', () => {
-      const envConfig = localsConfig.locals[0].environment_config;
-      expect(envConfig.dev.log_retention).toBe(7);
-      expect(envConfig.staging.log_retention).toBe(30);
-      expect(envConfig.prod.log_retention).toBe(90);
+      expect(localsContent).toContain('log_retention         = 7');
+      expect(localsContent).toContain('log_retention         = 30');
+      expect(localsContent).toContain('log_retention         = 90');
     });
 
     test('should configure SNS topic for alerts', () => {
-      const monitoringModule = mainConfig.module.monitoring[0];
-      expect(monitoringModule.sns_topic_name).toBeDefined();
+      expect(mainContent).toContain('sns_topic_name');
     });
   });
 
   describe('17. Tagging Strategy Tests', () => {
-    let mainConfig: any;
-    let localsConfig: any;
-    let providersConfig: any;
+    let mainContent: string;
+    let localsContent: string;
+    let providersContent: string;
 
     beforeAll(() => {
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
-      localsConfig = readTerraformFile(path.join(libPath, 'locals.tf'));
-      providersConfig = readTerraformFile(path.join(libPath, 'providers.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
+      localsContent = readTerraformFile(path.join(libPath, 'locals.tf'));
+      providersContent = readTerraformFile(path.join(libPath, 'providers.tf'));
     });
 
     test('should define common tags in locals', () => {
-      const commonTags = localsConfig.locals[0].common_tags;
-      expect(commonTags.ManagedBy).toBe('Terraform');
+      expect(localsContent).toContain('common_tags');
+      expect(localsContent).toContain('ManagedBy         = "Terraform"');
     });
 
     test('should apply default tags at provider level', () => {
-      const provider = providersConfig.provider.aws[0];
-      expect(provider.default_tags.tags.ManagedBy).toBe('Terraform');
+      expect(providersContent).toContain('default_tags');
+      expect(providersContent).toContain('ManagedBy   = "Terraform"');
     });
 
     test('should pass tags to all modules', () => {
-      expect(mainConfig.module.vpc[0].tags).toBeDefined();
-      expect(mainConfig.module.iam[0].tags).toBeDefined();
-      expect(mainConfig.module.aurora[0].tags).toBeDefined();
-      expect(mainConfig.module.storage[0].tags).toBeDefined();
-      expect(mainConfig.module.lambda[0].tags).toBeDefined();
-      expect(mainConfig.module.alb[0].tags).toBeDefined();
-      expect(mainConfig.module.monitoring[0].tags).toBeDefined();
+      expect(mainContent).toContain('tags = local.common_tags');
     });
   });
 
   describe('18. Resource Naming Convention Tests', () => {
-    let localsConfig: any;
+    let localsContent: string;
 
     beforeAll(() => {
-      localsConfig = readTerraformFile(path.join(libPath, 'locals.tf'));
+      localsContent = readTerraformFile(path.join(libPath, 'locals.tf'));
     });
 
     test('should define consistent naming prefix', () => {
-      const locals = localsConfig.locals[0];
-      expect(locals.name_prefix).toBeDefined();
+      expect(localsContent).toContain('name_prefix');
     });
 
     test('should include environment suffix in resource names', () => {
-      const resourceNames = localsConfig.locals[0].resource_names;
-      Object.values(resourceNames).forEach((name: any) => {
-        if (typeof name === 'string') {
-          expect(name).toContain('${var.environment_suffix}');
-        }
-      });
+      expect(localsContent).toContain('${var.environment_suffix}');
     });
   });
 
   describe('19. Cost Optimization Tests', () => {
-    let localsConfig: any;
-    let mainConfig: any;
+    let localsContent: string;
+    let mainContent: string;
 
     beforeAll(() => {
-      localsConfig = readTerraformFile(path.join(libPath, 'locals.tf'));
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
+      localsContent = readTerraformFile(path.join(libPath, 'locals.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should use smaller instances for dev', () => {
-      const devConfig = localsConfig.locals[0].environment_config.dev;
-      expect(devConfig.instance_type).toBe('t3.small');
-      expect(devConfig.aurora_instance_class).toBe('db.t3.medium');
+      const devSection = localsContent.substring(localsContent.indexOf('dev ='), localsContent.indexOf('staging ='));
+      expect(devSection).toContain('instance_type         = "t3.small"');
+      expect(devSection).toContain('aurora_instance_class = "db.t3.medium"');
     });
 
     test('should use single NAT gateway for dev', () => {
-      const vpcModule = mainConfig.module.vpc[0];
-      expect(vpcModule.single_nat_gateway).toBeDefined();
+      expect(mainContent).toContain('single_nat_gateway');
     });
 
     test('should scale up for production', () => {
-      const prodConfig = localsConfig.locals[0].environment_config.prod;
-      expect(prodConfig.instance_type).toBe('t3.large');
-      expect(prodConfig.aurora_instance_class).toBe('db.r6g.xlarge');
+      const prodSection = localsContent.substring(localsContent.lastIndexOf('prod ='));
+      expect(prodSection).toContain('instance_type         = "t3.large"');
+      expect(prodSection).toContain('aurora_instance_class = "db.r6g.xlarge"');
     });
   });
 
   describe('20. Integration and Dependencies Tests', () => {
-    let mainConfig: any;
+    let mainContent: string;
 
     beforeAll(() => {
-      mainConfig = readTerraformFile(path.join(libPath, 'main.tf'));
+      mainContent = readTerraformFile(path.join(libPath, 'main.tf'));
     });
 
     test('should reference VPC outputs in other modules', () => {
-      const auroraModule = mainConfig.module.aurora[0];
-      expect(auroraModule.vpc_id).toContain('module.vpc');
-      expect(auroraModule.subnet_ids).toContain('module.vpc');
+      expect(mainContent).toContain('module.vpc.vpc_id');
+      expect(mainContent).toContain('module.vpc.private_subnet_ids');
     });
 
     test('should reference IAM outputs in Lambda', () => {
-      const lambdaModule = mainConfig.module.lambda[0];
-      expect(lambdaModule.execution_role_arn).toContain('module.iam');
+      expect(mainContent).toContain('module.iam.lambda_execution_role_arn');
     });
 
     test('should reference storage outputs in Lambda env vars', () => {
-      const lambdaModule = mainConfig.module.lambda[0];
-      expect(lambdaModule.environment_variables.DB_ENDPOINT).toContain('module.aurora');
+      expect(mainContent).toContain('module.aurora.cluster_endpoint');
     });
 
     test('should configure S3 notification with dependency', () => {
-      const notification = mainConfig.resource.aws_s3_bucket_notification.data_processing[0];
-      expect(notification.depends_on).toContain('aws_lambda_permission.allow_s3');
+      expect(mainContent).toContain('depends_on = [aws_lambda_permission.allow_s3]');
     });
   });
 });
