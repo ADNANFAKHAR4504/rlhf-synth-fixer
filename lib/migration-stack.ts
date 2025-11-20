@@ -2,8 +2,9 @@
  * Migration Stack - AWS DMS and Lambda validation function
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+import * as path from 'path';
 
 export interface MigrationStackArgs {
   environmentSuffix: string;
@@ -356,7 +357,7 @@ export class MigrationStack extends pulumi.ComponentResource {
           securityGroupIds: [lambdaSecurityGroup.id],
         },
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('./lib/lambda/validation'),
+          '.': new pulumi.asset.FileArchive(path.join(__dirname, 'lambda', 'validation')),
         }),
         tags: {
           ...args.tags,
