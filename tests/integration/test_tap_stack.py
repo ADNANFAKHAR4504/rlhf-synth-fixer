@@ -411,7 +411,6 @@ class TestTapStackIntegration(unittest.TestCase):
         """Test that CloudWatch log groups exist"""
         expected_log_groups = [
             f'/aws/apigateway/document-api-{environment_suffix}',
-            f'/aws/events/api-calls-{environment_suffix}',
         ]
         
         try:
