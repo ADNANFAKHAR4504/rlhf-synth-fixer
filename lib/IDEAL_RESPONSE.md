@@ -442,7 +442,7 @@ data "aws_availability_zones" "available" {
 
 # 3. Create Public Subnets
 resource "aws_subnet" "public" {
-  count = 2
+  count = 3
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
