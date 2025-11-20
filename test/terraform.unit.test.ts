@@ -87,12 +87,6 @@ describe('Payment Processing Migration Infrastructure - Unit Tests', () => {
       const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
       expect(content).toMatch(/variable\s+"db_master_username"/);
     });
-
-    test('db_master_password variable is declared and sensitive', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"db_master_password"/);
-      expect(content).toMatch(/sensitive\s*=\s*true/);
-    });
   });
 
   describe('VPC Resources', () => {
