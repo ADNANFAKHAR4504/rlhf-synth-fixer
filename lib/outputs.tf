@@ -124,6 +124,11 @@ output "kubectl_config" {
   sensitive = true
 }
 
+output "kubernetes_namespace" {
+  description = "Base Kubernetes namespace name (without environment suffix)."
+  value       = var.kubernetes_namespace
+}
+
 output "payments_namespace" {
   description = "Kubernetes namespace that hosts the payments workloads."
   value       = var.manage_kubernetes_resources ? kubernetes_namespace.payments[0].metadata[0].name : null
