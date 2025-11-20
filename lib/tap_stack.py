@@ -76,29 +76,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Import existing RDS resources (add these after provider creation)
-        # Import RDS Instance
-        existing_db = aws.rds.Instance(
-            "existingDb",
-            allocated_storage=20,
-            engine="postgres",
-            instance_class="db.t3.micro",
-            identifier="my-existing-db",  # Existing ID
-            opts=ResourceOptions(parent=self, import_="my-existing-db")
-        )
-
-        # Import RDS Subnet Group
-        existing_subnet_group = aws.rds.SubnetGroup(
-            "existingSubnetGroup",
-            opts=ResourceOptions(parent=self, import_="my-subnet-group-name")
-        )
-
-        # Import DB Cluster
-        existing_cluster = aws.rds.Cluster(
-            "existingCluster",
-            opts=ResourceOptions(parent=self, import_="aurora-cluster-id")
-        )
-
         # Create KMS keys for encryption in both regions
         self.primary_kms_key = self._create_kms_key("primary", self.primary_provider)
         self.secondary_kms_key = self._create_kms_key("secondary", self.secondary_provider)
@@ -140,7 +117,7 @@ class TapStack(pulumi.ComponentResource):
             database_name="appdb",
             storage_encrypted=True,
             deletion_protection=False,
-            opts=ResourceOptions(parent=self, import_=f"aurora-global-v2-{self.environment_suffix}")
+            opts=ResourceOptions(parent=self)
         )
 
         # Create primary Aurora cluster in us-east-1
@@ -163,7 +140,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 parent=self,
                 provider=self.primary_provider,
-                import_=f"aurora-primary-v2-{self.environment_suffix}",
                 depends_on=[self.global_cluster]
             )
         )
@@ -180,7 +156,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 parent=self,
                 provider=self.primary_provider,
-                import_=f"aurora-primary-instance-v2-{self.environment_suffix}",
                 depends_on=[self.primary_cluster]
             )
         )
@@ -201,7 +176,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 parent=self,
                 provider=self.secondary_provider,
-                import_=f"aurora-secondary-v2-{self.environment_suffix}",
                 depends_on=[self.primary_instance]
             )
         )
@@ -218,7 +192,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 parent=self,
                 provider=self.secondary_provider,
-                import_=f"aurora-secondary-instance-v2-{self.environment_suffix}",
                 depends_on=[self.secondary_cluster]
             )
         )
