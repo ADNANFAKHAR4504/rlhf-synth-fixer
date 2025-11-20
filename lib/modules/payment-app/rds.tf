@@ -88,12 +88,6 @@ resource "aws_db_instance" "main" {
   performance_insights_enabled          = var.environment == "prod" ? true : false
   performance_insights_kms_key_id       = var.environment == "prod" ? aws_kms_key.main.arn : null
   performance_insights_retention_period = var.environment == "prod" ? 7 : null
-
-  lifecycle {
-    ignore_changes = [
-      db_subnet_group_name
-    ]
-  }
   monitoring_interval                   = var.environment == "prod" ? 60 : 0
   monitoring_role_arn                   = var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
 
@@ -107,7 +101,10 @@ resource "aws_db_instance" "main" {
   }
 
   lifecycle {
-    ignore_changes = [final_snapshot_identifier]
+    ignore_changes = [
+      db_subnet_group_name,
+      final_snapshot_identifier
+    ]
   }
 }
 
