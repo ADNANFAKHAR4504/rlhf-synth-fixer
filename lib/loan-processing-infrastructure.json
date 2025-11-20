@@ -39,11 +39,9 @@
             "Default": "admin",
             "NoEcho": true
         },
-        "DBMasterPassword": {
+        "DBMasterPasswordSecretArn": {
             "Type": "String",
-            "Description": "Master password for Aurora MySQL (min 8 characters)",
-            "NoEcho": true,
-            "MinLength": 8
+            "Description": "ARN of the Secrets Manager secret that stores the DB master password"
         }
     },
     "Metadata": {
@@ -74,7 +72,7 @@
                     },
                     "Parameters": [
                         "DBMasterUsername",
-                        "DBMasterPassword"
+                        "DBMasterPasswordSecretArn"
                     ]
                 }
             ]
@@ -130,6 +128,12 @@
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "DisasterRecoveryRegion",
+                        "Value": {
+                            "Ref": "DisasterRecoveryRegion"
                         }
                     }
                 ]
@@ -1611,7 +1615,7 @@
                     "Ref": "DBMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}"
                 },
                 "DatabaseName": "loanprocessing",
                 "DBSubnetGroupName": {

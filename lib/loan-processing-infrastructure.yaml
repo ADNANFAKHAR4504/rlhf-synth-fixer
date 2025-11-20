@@ -38,11 +38,9 @@ Parameters:
     Default: 'admin'
     NoEcho: true
 
-  DBMasterPassword:
+  DBMasterPasswordSecretArn:
     Type: String
-    Description: 'Master password for Aurora MySQL (min 8 characters)'
-    NoEcho: true
-    MinLength: 8
+    Description: 'ARN of the Secrets Manager secret that stores the DB master password'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -62,7 +60,7 @@ Metadata:
           default: 'Database Configuration'
         Parameters:
           - DBMasterUsername
-          - DBMasterPassword
+          - DBMasterPasswordSecretArn
 
 Resources:
   # ============================================================
@@ -99,6 +97,8 @@ Resources:
           Value: !Sub 'rds-encryption-key-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+        - Key: DisasterRecoveryRegion
+          Value: !Ref DisasterRecoveryRegion
 
   RDSEncryptionKeyAlias:
     Type: AWS::KMS::Alias
@@ -915,7 +915,7 @@ Resources:
       Engine: aurora-mysql
       EngineVersion: 8.0.mysql_aurora.3.04.0
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}'
       DatabaseName: loanprocessing
       DBSubnetGroupName: !Ref DBSubnetGroup
       DBClusterParameterGroupName: !Ref DBClusterParameterGroup
