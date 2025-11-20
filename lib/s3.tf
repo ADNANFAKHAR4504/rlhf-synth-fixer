@@ -5,6 +5,10 @@ resource "aws_s3_bucket" "config" {
   tags = {
     Name = "aws-config-bucket-${var.environment_suffix}"
   }
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 resource "aws_s3_bucket_versioning" "config" {
@@ -85,6 +89,10 @@ resource "aws_s3_bucket" "terraform_state" {
   tags = {
     Name = "terraform-state-${var.environment_suffix}"
   }
+
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 resource "aws_s3_bucket_versioning" "terraform_state" {
@@ -133,5 +141,9 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
 
   tags = {
     Name = "terraform-state-lock-${var.environment_suffix}"
+  }
+
+  lifecycle {
+    prevent_destroy = false
   }
 }

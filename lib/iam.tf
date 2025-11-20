@@ -118,6 +118,12 @@ resource "aws_iam_role" "config" {
   tags = {
     Name = "aws-config-role-${var.environment_suffix}"
   }
+
+  lifecycle {
+    ignore_changes = [
+      assume_role_policy
+    ]
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "config" {

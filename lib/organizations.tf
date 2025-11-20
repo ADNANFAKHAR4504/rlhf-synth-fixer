@@ -13,6 +13,13 @@ resource "aws_organizations_organization" "main" {
     "guardduty.amazonaws.com",
     "securityhub.amazonaws.com"
   ]
+
+  lifecycle {
+    ignore_changes = [
+      aws_service_access_principals,
+      enabled_policy_types
+    ]
+  }
 }
 
 # Security Organizational Unit
