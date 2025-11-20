@@ -10,12 +10,23 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "training_quality": 9,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "Fargate",
+    "ECR",
+    "Application Load Balancer",
+    "S3",
+    "SNS",
+    "SSM Parameter Store",
+    "IAM",
+    "CloudWatch Logs",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "VPC",
+    "EC2",
+    "CloudFormation"
   ]
 }

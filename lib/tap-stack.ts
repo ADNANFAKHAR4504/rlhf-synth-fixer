@@ -4,8 +4,6 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as codecommit from 'aws-cdk-lib/aws-codecommit';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -207,6 +205,8 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Green target group for blue-green deployments (currently unused but kept for future CodeDeploy integration)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const greenTargetGroup = new elbv2.ApplicationTargetGroup(
       this,
       'GreenTargetGroup',
@@ -226,6 +226,8 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // HTTP listener for ALB (currently unused but kept for future CodeDeploy integration)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const httpListener = alb.addListener('HttpListener', {
       port: 80,
       defaultTargetGroups: [blueTargetGroup],
@@ -236,12 +238,13 @@ export class TapStack extends cdk.Stack {
       serviceName: `microservice-app-${environmentSuffix}`,
       cluster,
       taskDefinition,
-      desiredCount: 2,
+      desiredCount: 0, // Start with 0 to allow stack deployment without image
       assignPublicIp: false,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      deploymentController: {
-        type: ecs.DeploymentControllerType.CODE_DEPLOY,
-      },
+      // Using ECS deployment controller for faster deployment
+      // deploymentController: {
+      //   type: ecs.DeploymentControllerType.CODE_DEPLOY,
+      // },
     });
     service.attachToApplicationTargetGroup(blueTargetGroup);
     Object.entries(commonTags).forEach(([key, value]) => {
@@ -249,38 +252,47 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 CodeDeploy Application and Deployment Group
-    const codeDeployApp = new codedeploy.EcsApplication(this, 'CodeDeployApp', {
-      applicationName: `microservice-ecs-app-${environmentSuffix}`,
+    // Temporarily disabled for faster deployment - can be enabled later for blue-green
+    // const codeDeployApp = new codedeploy.EcsApplication(this, 'CodeDeployApp', {
+    //   applicationName: `microservice-ecs-app-${environmentSuffix}`,
+    // });
+
+    // const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
+    //   assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
+    //   managedPolicies: [
+    //     iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeDeployRoleForECS'),
+    //   ],
+    // });
+
+    // const deploymentGroup = new codedeploy.EcsDeploymentGroup(
+    //   this,
+    //   'DeploymentGroup',
+    //   {
+    //     application: codeDeployApp,
+    //     deploymentGroupName: `microservice-dg-${environmentSuffix}`,
+    //     service,
+    //     blueGreenDeploymentConfig: {
+    //       blueTargetGroup,
+    //       greenTargetGroup,
+    //       listener: httpListener,
+    //       terminationWaitTime: cdk.Duration.minutes(5),
+    //     },
+    //     deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
+    //     role: codeDeployRole,
+    //   }
+    // );
+
+    // 🔹 S3 Source Bucket
+    const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
+      bucketName: `microservice-source-${environmentSuffix}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
-
-    const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
-      assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeDeployRoleForECS'),
-      ],
-    });
-
-    const deploymentGroup = new codedeploy.EcsDeploymentGroup(
-      this,
-      'DeploymentGroup',
-      {
-        application: codeDeployApp,
-        deploymentGroupName: `microservice-dg-${environmentSuffix}`,
-        service,
-        blueGreenDeploymentConfig: {
-          blueTargetGroup,
-          greenTargetGroup,
-          listener: httpListener,
-          terminationWaitTime: cdk.Duration.minutes(5),
-        },
-        deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
-        role: codeDeployRole,
-      }
-    );
-
-    // 🔹 CodeCommit Repository
-    const sourceRepo = new codecommit.Repository(this, 'SourceRepo', {
-      repositoryName: `microservice-source-${environmentSuffix}`,
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(sourceBucket).add(key, value);
     });
 
     // 🔹 SNS Topic for notifications
@@ -566,14 +578,8 @@ export class TapStack extends cdk.Stack {
 
     pipelineRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: [
-          'codecommit:GetBranch',
-          'codecommit:GetCommit',
-          'codecommit:UploadArchive',
-          'codecommit:GetUploadArchiveStatus',
-          'codecommit:CancelUploadArchive',
-        ],
-        resources: [sourceRepo.repositoryArn],
+        actions: ['s3:GetObject', 's3:GetObjectVersion', 's3:ListBucket'],
+        resources: [sourceBucket.bucketArn, `${sourceBucket.bucketArn}/*`],
       })
     );
 
@@ -601,23 +607,24 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    pipelineRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: [
-          'codedeploy:CreateDeployment',
-          'codedeploy:GetApplication',
-          'codedeploy:GetApplicationRevision',
-          'codedeploy:GetDeployment',
-          'codedeploy:GetDeploymentConfig',
-          'codedeploy:RegisterApplicationRevision',
-        ],
-        resources: [
-          codeDeployApp.applicationArn,
-          deploymentGroup.deploymentGroupArn,
-          `arn:aws:codedeploy:${this.region}:${this.account}:deploymentconfig:*`,
-        ],
-      })
-    );
+    // CodeDeploy permissions - disabled for faster deployment
+    // pipelineRole.addToPolicy(
+    //   new iam.PolicyStatement({
+    //     actions: [
+    //       'codedeploy:CreateDeployment',
+    //       'codedeploy:GetApplication',
+    //       'codedeploy:GetApplicationRevision',
+    //       'codedeploy:GetDeployment',
+    //       'codedeploy:GetDeploymentConfig',
+    //       'codedeploy:RegisterApplicationRevision',
+    //     ],
+    //     resources: [
+    //       codeDeployApp.applicationArn,
+    //       deploymentGroup.deploymentGroupArn,
+    //       `arn:aws:codedeploy:${this.region}:${this.account}:deploymentconfig:*`,
+    //     ],
+    //   })
+    // );
 
     pipelineRole.addToPolicy(
       new iam.PolicyStatement({
@@ -625,7 +632,7 @@ export class TapStack extends cdk.Stack {
         resources: [
           taskExecutionRole.roleArn,
           taskRole.roleArn,
-          codeDeployRole.roleArn,
+          // codeDeployRole.roleArn, // Disabled for faster deployment
         ],
       })
     );
@@ -650,10 +657,10 @@ export class TapStack extends cdk.Stack {
     pipeline.addStage({
       stageName: 'Source',
       actions: [
-        new codepipeline_actions.CodeCommitSourceAction({
-          actionName: 'CodeCommit_Source',
-          repository: sourceRepo,
-          branch: 'main',
+        new codepipeline_actions.S3SourceAction({
+          actionName: 'S3_Source',
+          bucket: sourceBucket,
+          bucketKey: 'source.zip',
           output: sourceOutput,
         }),
       ],
@@ -735,12 +742,10 @@ export class TapStack extends cdk.Stack {
     pipeline.addStage({
       stageName: 'DeployToProduction',
       actions: [
-        new codepipeline_actions.CodeDeployEcsDeployAction({
-          actionName: 'BlueGreen_Production_Deploy',
-          deploymentGroup,
-          taskDefinitionTemplateInput: buildOutput,
-          appSpecTemplateInput: buildOutput,
-          containerImageInputs: [{ input: buildOutput }],
+        new codepipeline_actions.EcsDeployAction({
+          actionName: 'Deploy_ECS_Production',
+          service: service,
+          input: buildOutput,
         }),
       ],
     });
