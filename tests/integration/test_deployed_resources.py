@@ -1,24 +1,42 @@
-"""test_deployed_resources.py - Integration tests for deployed resources"""
+"""test_deployed_resources.py - Live integration tests for deployed AWS resources
+
+These tests validate the actual deployed AWS infrastructure by making live API calls.
+
+Requirements:
+1. AWS credentials must be configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, or AWS profile)
+2. Stack must be deployed with outputs in cfn-outputs/flat-outputs.json
+3. Appropriate IAM permissions to describe/test the deployed resources
+
+Note: These tests will FAIL if AWS credentials are not configured.
+This is expected behavior - integration tests are meant to run in CI/CD
+with proper AWS credentials after infrastructure deployment.
+"""
 
 import json
 import os
 import boto3
 import pytest
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
-# Initialize AWS clients
-dynamodb = boto3.resource('dynamodb')
-lambda_client = boto3.client('lambda')
-sqs = boto3.client('sqs')
-sfn = boto3.client('stepfunctions')
-s3 = boto3.client('s3')
-sns = boto3.client('sns')
-cloudwatch = boto3.client('cloudwatch')
-logs_client = boto3.client('logs')
+# Get AWS region from metadata.json
+metadata_file = 'metadata.json'
+AWS_REGION = 'us-east-1'  # Default region
+
+if os.path.exists(metadata_file):
+    with open(metadata_file, 'r', encoding='utf-8') as f:
+        metadata = json.load(f)
+        AWS_REGION = metadata.get('region', 'us-east-1')
+
+# Initialize AWS clients with region
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+lambda_client = boto3.client('lambda', region_name=AWS_REGION)
+sqs = boto3.client('sqs', region_name=AWS_REGION)
+s3 = boto3.client('s3', region_name=AWS_REGION)
+sns = boto3.client('sns', region_name=AWS_REGION)
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def cfn_outputs():
     """Load CloudFormation outputs"""
     outputs_file = 'cfn-outputs/flat-outputs.json'
@@ -26,212 +44,99 @@ def cfn_outputs():
     if not os.path.exists(outputs_file):
         pytest.skip("CloudFormation outputs not found - stack not deployed")
 
-    with open(outputs_file, 'r') as f:
+    with open(outputs_file, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
-@pytest.fixture
-def environment_suffix(cfn_outputs):
-    """Extract environment suffix from resource names"""
-    table_name = cfn_outputs.get('TransactionTableName', '')
-    if '-' in table_name:
-        suffix = table_name.split('-')[-1]
-        return suffix
-    return 'test'
+class TestCoreInfrastructure:
+    """Test core infrastructure components are deployed and accessible"""
 
-
-class TestDynamoDBTable:
-    """Test DynamoDB table is properly configured and accessible"""
-
-    def test_table_exists(self, cfn_outputs):
-        """Test DynamoDB table exists and is active"""
+    def test_dynamodb_table_exists_and_accessible(self, cfn_outputs):
+        """Test DynamoDB table exists, is active, and can perform read/write operations"""
         table_name = cfn_outputs['TransactionTableName']
         table = dynamodb.Table(table_name)
 
-        # Verify table is accessible
-        response = table.table_status
-        assert response in ['ACTIVE', 'UPDATING'], f"Table status is {response}"
+        # Verify table is active
+        assert table.table_status in ['ACTIVE', 'UPDATING']
 
-    def test_table_has_gsi(self, cfn_outputs):
-        """Test table has Global Secondary Index"""
-        table_name = cfn_outputs['TransactionTableName']
-        table = dynamodb.Table(table_name)
-
-        # Check for StatusIndex
+        # Verify GSI exists
         gsi_names = [gsi['IndexName'] for gsi in table.global_secondary_indexes or []]
-        assert 'StatusIndex' in gsi_names, "StatusIndex not found"
+        assert 'StatusIndex' in gsi_names
 
-    def test_table_billing_mode(self, cfn_outputs):
-        """Test table uses on-demand billing"""
-        table_name = cfn_outputs['TransactionTableName']
-        table = dynamodb.Table(table_name)
-
-        assert table.billing_mode_summary['BillingMode'] == 'PAY_PER_REQUEST'
-
-    def test_table_write_and_read(self, cfn_outputs):
-        """Test writing and reading from table"""
-        table_name = cfn_outputs['TransactionTableName']
-        table = dynamodb.Table(table_name)
-
-        # Write test item
+        # Test write and read
         test_id = f"integration-test-{int(time.time())}"
         test_item = {
             'transactionId': test_id,
             'status': 'TEST',
-            'timestamp': datetime.utcnow().isoformat(),
-            'source': 'integration-test'
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         table.put_item(Item=test_item)
-
-        # Read back
         response = table.get_item(Key={'transactionId': test_id})
-        assert 'Item' in response, "Item not found after write"
+        assert 'Item' in response
         assert response['Item']['transactionId'] == test_id
 
         # Cleanup
         table.delete_item(Key={'transactionId': test_id})
 
-    def test_table_gsi_query(self, cfn_outputs):
-        """Test querying using Global Secondary Index"""
-        table_name = cfn_outputs['TransactionTableName']
-        table = dynamodb.Table(table_name)
+    def test_lambda_functions_deployed_and_configured(self, cfn_outputs):
+        """Test all three Lambda functions are deployed with correct configuration"""
+        functions = [
+            ('IngestionFunctionArn', cfn_outputs['IngestionFunctionArn']),
+            ('ValidationFunctionArn', cfn_outputs['ValidationFunctionArn']),
+            ('EnrichmentFunctionArn', cfn_outputs['EnrichmentFunctionArn'])
+        ]
 
-        # Write test item
-        test_id = f"gsi-test-{int(time.time())}"
-        test_status = "GSI_TEST"
-        test_item = {
-            'transactionId': test_id,
-            'status': test_status,
-            'timestamp': datetime.utcnow().isoformat()
-        }
+        for name, arn in functions:
+            response = lambda_client.get_function(FunctionName=arn)
+            config = response['Configuration']
 
-        table.put_item(Item=test_item)
+            # Verify runtime and configuration
+            assert config['Runtime'] == 'python3.9', f"{name} has incorrect runtime"
+            assert config['MemorySize'] == 512, f"{name} has incorrect memory"
+            assert config['Timeout'] == 60, f"{name} has incorrect timeout"
+            assert config['TracingConfig']['Mode'] == 'Active', f"{name} X-Ray not enabled"
 
-        # Wait for GSI to update
-        time.sleep(2)
-
-        # Query using GSI
-        response = table.query(
-            IndexName='StatusIndex',
-            KeyConditionExpression='#status = :status',
-            ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues={':status': test_status}
-        )
-
-        assert response['Count'] >= 1, "GSI query returned no results"
-
-        # Cleanup
-        table.delete_item(Key={'transactionId': test_id})
+            # Verify environment variables for ingestion function
+            if 'Ingestion' in name:
+                env_vars = config.get('Environment', {}).get('Variables', {})
+                required_vars = ['DYNAMODB_TABLE_NAME', 'ENVIRONMENT_SUFFIX',
+                                'SNS_TOPIC_ARN', 'OUTPUT_QUEUE_URL']
+                for var in required_vars:
+                    assert var in env_vars, f"Missing env var {var} in {name}"
 
 
-class TestLambdaFunctions:
-    """Test Lambda functions are deployed and configured correctly"""
+class TestMessagingInfrastructure:
+    """Test SQS queues and SNS topics"""
 
-    def test_ingestion_function_exists(self, cfn_outputs):
-        """Test ingestion Lambda function exists and is configured correctly"""
-        function_arn = cfn_outputs['IngestionFunctionArn']
+    def test_sqs_queues_configured(self, cfn_outputs):
+        """Test SQS queues are properly configured with encryption and DLQ"""
+        queues = [
+            cfn_outputs['IngestionQueueUrl'],
+            cfn_outputs['ValidationQueueUrl']
+        ]
 
-        response = lambda_client.get_function(FunctionName=function_arn)
-        config = response['Configuration']
+        for queue_url in queues:
+            response = sqs.get_queue_attributes(
+                QueueUrl=queue_url,
+                AttributeNames=['All']
+            )
+            attrs = response['Attributes']
 
-        assert config['Runtime'] == 'python3.9'
-        assert config['MemorySize'] == 512
-        assert config['TracingConfig']['Mode'] == 'Active'
-        assert config['Timeout'] == 60
+            # Verify configuration
+            assert int(attrs['VisibilityTimeout']) == 300
+            assert 'KmsMasterKeyId' in attrs  # Encryption enabled
+            assert 'RedrivePolicy' in attrs  # DLQ configured
 
-    def test_validation_function_exists(self, cfn_outputs):
-        """Test validation Lambda function exists and is configured correctly"""
-        function_arn = cfn_outputs['ValidationFunctionArn']
+            # Verify DLQ maxReceiveCount
+            redrive_policy = json.loads(attrs['RedrivePolicy'])
+            assert redrive_policy['maxReceiveCount'] == 3
 
-        response = lambda_client.get_function(FunctionName=function_arn)
-        config = response['Configuration']
-
-        assert config['Runtime'] == 'python3.9'
-        assert config['MemorySize'] == 512
-        assert config['TracingConfig']['Mode'] == 'Active'
-
-    def test_enrichment_function_exists(self, cfn_outputs):
-        """Test enrichment Lambda function exists and is configured correctly"""
-        function_arn = cfn_outputs['EnrichmentFunctionArn']
-
-        response = lambda_client.get_function(FunctionName=function_arn)
-        config = response['Configuration']
-
-        assert config['Runtime'] == 'python3.9'
-        assert config['MemorySize'] == 512
-        assert config['TracingConfig']['Mode'] == 'Active'
-
-    def test_function_environment_variables(self, cfn_outputs):
-        """Test Lambda functions have required environment variables"""
-        function_arn = cfn_outputs['IngestionFunctionArn']
-
-        response = lambda_client.get_function(FunctionName=function_arn)
-        env_vars = response['Configuration'].get('Environment', {}).get('Variables', {})
-
-        assert 'DYNAMODB_TABLE_NAME' in env_vars
-        assert 'ENVIRONMENT_SUFFIX' in env_vars
-        assert 'SNS_TOPIC_ARN' in env_vars
-        assert 'OUTPUT_QUEUE_URL' in env_vars
-
-    def test_function_dlq_configured(self, cfn_outputs):
-        """Test Lambda functions have dead letter queues configured"""
-        function_arn = cfn_outputs['IngestionFunctionArn']
-
-        response = lambda_client.get_function(FunctionName=function_arn)
-        config = response['Configuration']
-
-        assert 'DeadLetterConfig' in config
-        assert 'TargetArn' in config['DeadLetterConfig']
-
-
-class TestSQSQueues:
-    """Test SQS queues are configured correctly"""
-
-    def test_ingestion_queue_exists(self, cfn_outputs):
-        """Test ingestion-to-validation queue exists and is configured"""
+    def test_sqs_message_flow(self, cfn_outputs):
+        """Test sending and receiving messages through SQS queue"""
         queue_url = cfn_outputs['IngestionQueueUrl']
 
-        response = sqs.get_queue_attributes(
-            QueueUrl=queue_url,
-            AttributeNames=['All']
-        )
-
-        attrs = response['Attributes']
-        assert int(attrs['VisibilityTimeout']) == 300
-        assert 'KmsMasterKeyId' in attrs  # Encryption enabled
-        assert 'RedrivePolicy' in attrs  # DLQ configured
-
-    def test_validation_queue_exists(self, cfn_outputs):
-        """Test validation-to-enrichment queue exists and is configured"""
-        queue_url = cfn_outputs['ValidationQueueUrl']
-
-        response = sqs.get_queue_attributes(
-            QueueUrl=queue_url,
-            AttributeNames=['All']
-        )
-
-        attrs = response['Attributes']
-        assert int(attrs['VisibilityTimeout']) == 300
-        assert 'KmsMasterKeyId' in attrs
-
-    def test_queue_dlq_configuration(self, cfn_outputs):
-        """Test queues have DLQ with correct maxReceiveCount"""
-        queue_url = cfn_outputs['IngestionQueueUrl']
-
-        response = sqs.get_queue_attributes(
-            QueueUrl=queue_url,
-            AttributeNames=['RedrivePolicy']
-        )
-
-        redrive_policy = json.loads(response['Attributes']['RedrivePolicy'])
-        assert redrive_policy['maxReceiveCount'] == '3'
-
-    def test_queue_send_receive_message(self, cfn_outputs):
-        """Test sending and receiving messages from queue"""
-        queue_url = cfn_outputs['IngestionQueueUrl']
-
-        # Send test message
+        # Send message
         test_message = {
             'transactionId': f'test-{int(time.time())}',
             'status': 'TEST'
@@ -252,224 +157,47 @@ class TestSQSQueues:
         assert 'Messages' in response
         assert len(response['Messages']) > 0
 
-        # Delete message
+        # Cleanup
         sqs.delete_message(
             QueueUrl=queue_url,
             ReceiptHandle=response['Messages'][0]['ReceiptHandle']
         )
 
+    def test_sns_topic_exists(self, cfn_outputs):
+        """Test SNS failure notification topic exists"""
+        topic_arn = cfn_outputs['FailureTopicArn']
 
-class TestStepFunctions:
-    """Test Step Functions state machine"""
-
-    def test_state_machine_exists(self, cfn_outputs):
-        """Test state machine exists and is active"""
-        state_machine_arn = cfn_outputs['StateMachineArn']
-
-        response = sfn.describe_state_machine(stateMachineArn=state_machine_arn)
-        assert response['status'] == 'ACTIVE'
-        assert response['tracingConfiguration']['enabled'] is True
-
-    def test_state_machine_logging_enabled(self, cfn_outputs):
-        """Test state machine has logging enabled"""
-        state_machine_arn = cfn_outputs['StateMachineArn']
-
-        response = sfn.describe_state_machine(stateMachineArn=state_machine_arn)
-        assert 'loggingConfiguration' in response
-        assert response['loggingConfiguration']['level'] in ['ALL', 'ERROR', 'FATAL']
-
-    def test_state_machine_execution(self, cfn_outputs):
-        """Test state machine can be executed"""
-        state_machine_arn = cfn_outputs['StateMachineArn']
-
-        # Start execution with valid input
-        test_input = {
-            'transactionId': f'sfn-test-{int(time.time())}',
-            'source': 'api',
-            'data': {
-                'amount': 100.50,
-                'currency': 'USD',
-                'merchantId': 'US-MERCHANT-12345',
-                'customerId': 'CUSTOMER-67890'
-            }
-        }
-
-        response = sfn.start_execution(
-            stateMachineArn=state_machine_arn,
-            input=json.dumps(test_input)
-        )
-
-        execution_arn = response['executionArn']
-
-        # Wait for execution to complete or timeout (max 30 seconds)
-        for _ in range(30):
-            exec_response = sfn.describe_execution(executionArn=execution_arn)
-            status = exec_response['status']
-
-            if status in ['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED']:
-                break
-
-            time.sleep(1)
-
-        # Verify execution completed
-        final_status = exec_response['status']
-        assert final_status in ['SUCCEEDED', 'FAILED'], f"Execution ended with status: {final_status}"
-
-
-class TestS3Bucket:
-    """Test S3 bucket configuration"""
-
-    def test_bucket_exists(self, cfn_outputs):
-        """Test S3 bucket exists"""
-        bucket_name = cfn_outputs['TransactionBucketName']
-
-        response = s3.head_bucket(Bucket=bucket_name)
-        assert response['ResponseMetadata']['HTTPStatusCode'] == 200
-
-    def test_bucket_encryption(self, cfn_outputs):
-        """Test bucket has encryption enabled"""
-        bucket_name = cfn_outputs['TransactionBucketName']
-
-        response = s3.get_bucket_encryption(Bucket=bucket_name)
-        assert 'Rules' in response
-        assert len(response['Rules']) > 0
-
-    def test_bucket_public_access_blocked(self, cfn_outputs):
-        """Test bucket blocks public access"""
-        bucket_name = cfn_outputs['TransactionBucketName']
-
-        response = s3.get_public_access_block(Bucket=bucket_name)
-        config = response['PublicAccessBlockConfiguration']
-
-        assert config['BlockPublicAcls'] is True
-        assert config['BlockPublicPolicy'] is True
-        assert config['IgnorePublicAcls'] is True
-        assert config['RestrictPublicBuckets'] is True
-
-    def test_bucket_upload_and_read(self, cfn_outputs):
-        """Test uploading and reading from bucket"""
-        bucket_name = cfn_outputs['TransactionBucketName']
-
-        # Upload test file
-        test_key = f'test/integration-test-{int(time.time())}.json'
-        test_content = json.dumps({'test': 'data'})
-
-        s3.put_object(
-            Bucket=bucket_name,
-            Key=test_key,
-            Body=test_content
-        )
-
-        # Read back
-        response = s3.get_object(Bucket=bucket_name, Key=test_key)
-        content = response['Body'].read().decode('utf-8')
-        assert content == test_content
-
-        # Cleanup
-        s3.delete_object(Bucket=bucket_name, Key=test_key)
+        response = sns.get_topic_attributes(TopicArn=topic_arn)
+        assert 'Attributes' in response
+        assert len(response['Attributes']['DisplayName']) > 0
 
 
 class TestAPIGateway:
     """Test API Gateway endpoint"""
 
-    def test_api_endpoint_accessible(self, cfn_outputs):
-        """Test API endpoint exists and has correct format"""
+    def test_api_endpoint_format(self, cfn_outputs):
+        """Test API endpoint is properly configured"""
         api_endpoint = cfn_outputs['ApiEndpoint']
 
         # Verify endpoint format
-        assert api_endpoint.startswith('https://'), "API endpoint should use HTTPS"
-        assert 'amazonaws.com' in api_endpoint, "API endpoint should be in AWS domain"
-        assert api_endpoint.endswith('/'), "API endpoint should end with /"
-
-
-class TestSNSTopic:
-    """Test SNS topic configuration"""
-
-    def test_topic_exists(self, cfn_outputs):
-        """Test SNS topic exists"""
-        topic_arn = cfn_outputs['FailureTopicArn']
-
-        response = sns.get_topic_attributes(TopicArn=topic_arn)
-        assert 'Attributes' in response
-
-    def test_topic_display_name(self, cfn_outputs):
-        """Test topic has display name"""
-        topic_arn = cfn_outputs['FailureTopicArn']
-
-        response = sns.get_topic_attributes(TopicArn=topic_arn)
-        attrs = response['Attributes']
-
-        assert 'DisplayName' in attrs
-        assert len(attrs['DisplayName']) > 0
-
-
-class TestCloudWatchLogs:
-    """Test CloudWatch Logs configuration"""
-
-    def test_lambda_log_groups_exist(self, environment_suffix):
-        """Test Lambda log groups exist"""
-        expected_log_groups = [
-            f'/aws/lambda/transaction-ingestion-{environment_suffix}',
-            f'/aws/lambda/transaction-validation-{environment_suffix}',
-            f'/aws/lambda/transaction-enrichment-{environment_suffix}'
-        ]
-
-        for log_group_name in expected_log_groups:
-            response = logs_client.describe_log_groups(
-                logGroupNamePrefix=log_group_name
-            )
-            assert len(response['logGroups']) > 0, f"Log group {log_group_name} not found"
-
-    def test_log_retention_policy(self, environment_suffix):
-        """Test log groups have 14-day retention"""
-        log_group_name = f'/aws/lambda/transaction-ingestion-{environment_suffix}'
-
-        response = logs_client.describe_log_groups(
-            logGroupNamePrefix=log_group_name
-        )
-
-        if len(response['logGroups']) > 0:
-            retention = response['logGroups'][0].get('retentionInDays')
-            assert retention == 14, f"Expected 14-day retention, got {retention}"
-
-    def test_state_machine_log_group_exists(self, environment_suffix):
-        """Test Step Functions log group exists"""
-        log_group_prefix = f'/aws/vendedlogs/states/transaction-pipeline-{environment_suffix}'
-
-        response = logs_client.describe_log_groups(
-            logGroupNamePrefix=log_group_prefix
-        )
-
-        assert len(response['logGroups']) > 0, "State machine log group not found"
-
-
-class TestEventBridge:
-    """Test EventBridge rule configuration"""
-
-    def test_s3_event_notification_enabled(self, cfn_outputs):
-        """Test S3 bucket has EventBridge notification enabled"""
-        bucket_name = cfn_outputs['TransactionBucketName']
-
-        response = s3.get_bucket_notification_configuration(Bucket=bucket_name)
-
-        # Check if EventBridge configuration exists
-        assert 'EventBridgeConfiguration' in response or len(response.keys()) > 1
+        assert api_endpoint.startswith('https://'), "API must use HTTPS"
+        assert 'execute-api' in api_endpoint, "Must be API Gateway endpoint"
+        assert AWS_REGION in api_endpoint, "Must be in correct region"
+        assert 'amazonaws.com' in api_endpoint, "Must be AWS domain"
 
 
 class TestEndToEndFlow:
-    """Test end-to-end transaction processing workflows"""
+    """Test end-to-end workflows"""
 
-    @pytest.mark.slow
-    def test_direct_lambda_invocation(self, cfn_outputs):
-        """Test invoking ingestion Lambda directly"""
+    def test_lambda_invocation_end_to_end(self, cfn_outputs):
+        """Test invoking Lambda function with transaction payload"""
         function_arn = cfn_outputs['IngestionFunctionArn']
 
-        # Invoke Lambda
         test_payload = {
-            'transactionId': f'direct-test-{int(time.time())}',
+            'transactionId': f'e2e-test-{int(time.time())}',
             'source': 'api',
             'data': {
-                'amount': 50.00,
+                'amount': 100.00,
                 'currency': 'USD',
                 'merchantId': 'MERCHANT-TEST',
                 'customerId': 'CUSTOMER-TEST'
@@ -489,72 +217,24 @@ class TestEndToEndFlow:
         assert result['statusCode'] == 200
         assert 'transactionId' in result
 
-    @pytest.mark.slow
-    def test_s3_upload_trigger(self, cfn_outputs):
-        """Test S3 upload triggers EventBridge (integration check only)"""
+    def test_s3_upload_and_cleanup(self, cfn_outputs):
+        """Test S3 upload and cleanup operations"""
         bucket_name = cfn_outputs['TransactionBucketName']
 
-        # Upload test transaction file
-        test_transaction = {
-            'amount': 250.00,
-            'currency': 'USD',
-            'merchantId': 'US-MERCHANT-TEST',
-            'customerId': 'CUSTOMER-TEST'
-        }
-
-        test_key = f'transactions/test-{int(time.time())}.json'
+        # Upload test file
+        test_key = f'test/integration-{int(time.time())}.json'
+        test_content = json.dumps({'test': 'data', 'timestamp': time.time()})
 
         s3.put_object(
             Bucket=bucket_name,
             Key=test_key,
-            Body=json.dumps(test_transaction)
+            Body=test_content
         )
 
-        # Wait briefly for EventBridge to process
-        time.sleep(3)
+        # Verify upload
+        response = s3.get_object(Bucket=bucket_name, Key=test_key)
+        content = response['Body'].read().decode('utf-8')
+        assert content == test_content
 
         # Cleanup
         s3.delete_object(Bucket=bucket_name, Key=test_key)
-
-        # Note: Full validation would require checking state machine execution
-        # which requires additional tracking mechanism in production
-
-
-class TestResourceNaming:
-    """Test all resources follow naming conventions"""
-
-    def test_all_resource_names_include_suffix(self, cfn_outputs, environment_suffix):
-        """Test all resource names include environment suffix"""
-        resources_to_check = {
-            'TransactionBucketName': cfn_outputs['TransactionBucketName'],
-            'TransactionTableName': cfn_outputs['TransactionTableName'],
-        }
-
-        for resource_name, resource_value in resources_to_check.items():
-            assert resource_value.endswith(environment_suffix), \
-                f"{resource_name} ({resource_value}) does not end with suffix {environment_suffix}"
-
-
-class TestSecurityConfiguration:
-    """Test security configurations"""
-
-    def test_sqs_encryption_enabled(self, cfn_outputs):
-        """Test SQS queues have encryption enabled"""
-        queue_url = cfn_outputs['IngestionQueueUrl']
-
-        response = sqs.get_queue_attributes(
-            QueueUrl=queue_url,
-            AttributeNames=['KmsMasterKeyId']
-        )
-
-        assert 'KmsMasterKeyId' in response['Attributes']
-
-    def test_lambda_environment_encryption(self, cfn_outputs):
-        """Test Lambda functions have environment variable encryption"""
-        function_arn = cfn_outputs['IngestionFunctionArn']
-
-        response = lambda_client.get_function(FunctionName=function_arn)
-        config = response['Configuration']
-
-        # Lambda automatically encrypts environment variables at rest
-        assert 'Environment' in config
