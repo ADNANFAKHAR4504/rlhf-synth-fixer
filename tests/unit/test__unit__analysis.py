@@ -11,6 +11,11 @@ import pytest
 # Add parent directory to path to import the analysis module
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
+# Mock heavy dependencies before importing analyse module
+sys.modules['pandas'] = MagicMock()
+sys.modules['networkx'] = MagicMock()
+sys.modules['tabulate'] = MagicMock()
+
 from analyse import (
     SecurityGroupAnalyzer,
     Finding,
@@ -381,9 +386,13 @@ class TestSecurityGroupAnalyzer:
         mock_file.assert_called_with('security_posture_dashboard.html', 'w')
 
     @patch('analyse.boto3.Session')
-    @patch('pandas.DataFrame.to_csv')
-    def test_output_csv_creates_file(self, mock_to_csv, mock_session):
+    @patch('analyse.pd.DataFrame')
+    def test_output_csv_creates_file(self, mock_dataframe_class, mock_session):
         """Test that CSV output is created correctly"""
+        # Setup mock DataFrame instance
+        mock_df_instance = MagicMock()
+        mock_dataframe_class.return_value = mock_df_instance
+
         analyzer = SecurityGroupAnalyzer()
         analyzer.findings = [
             Finding(
@@ -400,8 +409,10 @@ class TestSecurityGroupAnalyzer:
 
         analyzer._output_csv()
 
-        # Verify CSV was created
-        mock_to_csv.assert_called_once_with('compliance_violations.csv', index=False)
+        # Verify DataFrame was created with data
+        assert mock_dataframe_class.called
+        # Verify to_csv was called on the DataFrame instance
+        mock_df_instance.to_csv.assert_called_once_with('compliance_violations.csv', index=False)
 
     @patch('analyse.SecurityGroupAnalyzer')
     def test_main_function_success(self, mock_analyzer_class):
@@ -422,6 +433,161 @@ class TestSecurityGroupAnalyzer:
         # Should raise the exception
         with pytest.raises(Exception):
             main()
+
+
+    def test_check_overly_broad_sources(self, analyzer_with_mocks):
+        """Test detection of overly broad CIDR ranges"""
+        analyzer, _, _, _ = analyzer_with_mocks
+
+        analyzer.security_groups = {
+            'sg-123': {
+                'GroupId': 'sg-123',
+                'GroupName': 'broad-cidr',
+                'VpcId': 'vpc-123',
+                'Tags': [],
+                'IpPermissions': [
+                    {
+                        'IpProtocol': 'tcp',
+                        'FromPort': 80,
+                        'ToPort': 80,
+                        'IpRanges': [{'CidrIp': '10.0.0.0/8'}]
+                    }
+                ]
+            }
+        }
+
+        analyzer._check_overly_broad_sources()
+
+        broad_findings = [f for f in analyzer.findings if f.finding_type == 'overly_broad_source']
+        assert len(broad_findings) > 0
+        assert broad_findings[0].severity == 'medium'
+
+    def test_check_ipv6_exposure(self, analyzer_with_mocks):
+        """Test detection of IPv6 exposure"""
+        analyzer, _, _, _ = analyzer_with_mocks
+
+        analyzer.security_groups = {
+            'sg-123': {
+                'GroupId': 'sg-123',
+                'GroupName': 'ipv6-open',
+                'VpcId': 'vpc-123',
+                'Tags': [],
+                'IpPermissions': [
+                    {
+                        'IpProtocol': 'tcp',
+                        'FromPort': 443,
+                        'ToPort': 443,
+                        'IpRanges': [],
+                        'Ipv6Ranges': [{'CidrIpv6': '::/0'}]
+                    }
+                ]
+            }
+        }
+
+        analyzer._check_ipv6_exposure()
+
+        ipv6_findings = [f for f in analyzer.findings if f.finding_type == 'ipv6_exposure']
+        assert len(ipv6_findings) > 0
+        assert ipv6_findings[0].severity in ['high', 'critical']
+
+    def test_check_unrestricted_outbound(self, analyzer_with_mocks):
+        """Test detection of unrestricted outbound from sensitive tiers"""
+        analyzer, _, _, _ = analyzer_with_mocks
+
+        analyzer.security_groups = {
+            'sg-123': {
+                'GroupId': 'sg-123',
+                'GroupName': 'database-sg',
+                'VpcId': 'vpc-123',
+                'Tags': [{'Key': 'Tier', 'Value': 'database'}],
+                'IpPermissions': [],
+                'IpPermissionsEgress': [
+                    {
+                        'IpProtocol': '-1',
+                        'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                    }
+                ]
+            }
+        }
+
+        analyzer._check_unrestricted_outbound()
+
+        outbound_findings = [f for f in analyzer.findings if f.finding_type == 'unrestricted_outbound']
+        assert len(outbound_findings) > 0
+        assert outbound_findings[0].severity == 'high'
+
+    def test_check_management_port_exposure(self, analyzer_with_mocks):
+        """Test detection of management port exposure"""
+        analyzer, mock_ec2_client, _, _ = analyzer_with_mocks
+
+        analyzer.security_groups = {
+            'sg-123': {
+                'GroupId': 'sg-123',
+                'GroupName': 'mgmt-exposed',
+                'VpcId': 'vpc-123',
+                'Tags': [],
+                'IpPermissions': [
+                    {
+                        'IpProtocol': 'tcp',
+                        'FromPort': 22,
+                        'ToPort': 22,
+                        'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                    }
+                ]
+            }
+        }
+
+        mock_ec2_client.describe_instances.return_value = {'Reservations': []}
+
+        analyzer._check_management_port_exposure()
+
+        mgmt_findings = [f for f in analyzer.findings if f.finding_type == 'management_port_exposure']
+        assert len(mgmt_findings) > 0
+        assert mgmt_findings[0].severity == 'critical'
+
+    def test_add_to_rule_graph(self, analyzer_with_mocks):
+        """Test adding security group to networkx graph"""
+        analyzer, _, _, _ = analyzer_with_mocks
+
+        sg = {
+            'GroupId': 'sg-123',
+            'GroupName': 'test-sg',
+            'VpcId': 'vpc-123',
+            'IpPermissions': [
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 80,
+                    'ToPort': 80,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                }
+            ],
+            'IpPermissionsEgress': []
+        }
+
+        # Just verify the method doesn't raise exception
+        # (networkx is mocked so we can't test actual graph operations)
+        analyzer._add_to_rule_graph(sg)
+
+    @patch('analyse.boto3.Session')
+    def test_output_console(self, mock_session):
+        """Test console output generation"""
+        analyzer = SecurityGroupAnalyzer()
+        analyzer.findings = [
+            Finding(
+                finding_type='test',
+                severity='critical',
+                security_group_id='sg-123',
+                security_group_name='test-sg',
+                vpc_id='vpc-123',
+                rule_details={'risk_description': 'Test'},
+                risk_score=10
+            )
+        ]
+        analyzer.security_groups = {'sg-123': {}}
+        analyzer.unused_security_groups = []
+
+        # Should not raise exception
+        analyzer._output_console()
 
 
 class TestFindingDataClass:
@@ -465,3 +631,23 @@ class TestFindingDataClass:
         assert finding.exception_justification == 'Approved'
         assert finding.risk_score == 8
         assert len(finding.attached_resources) == 1
+
+
+class TestConstants:
+    """Test module constants"""
+
+    def test_high_risk_ports_defined(self):
+        """Test that HIGH_RISK_PORTS is properly defined"""
+        assert 22 in HIGH_RISK_PORTS  # SSH
+        assert 3389 in HIGH_RISK_PORTS  # RDP
+        assert 3306 in HIGH_RISK_PORTS  # MySQL
+
+    def test_deprecated_ports_defined(self):
+        """Test that DEPRECATED_PORTS is properly defined"""
+        assert 21 in DEPRECATED_PORTS  # FTP
+        assert 23 in DEPRECATED_PORTS  # Telnet
+
+    def test_management_ports_defined(self):
+        """Test that MANAGEMENT_PORTS is properly defined"""
+        assert 22 in MANAGEMENT_PORTS  # SSH
+        assert 3389 in MANAGEMENT_PORTS  # RDP
