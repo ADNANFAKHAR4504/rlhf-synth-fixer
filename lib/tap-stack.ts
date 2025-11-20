@@ -9,11 +9,11 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { BaseInfrastructure } from './infrastructure/base-infrastructure';
-import { ParameterStoreHierarchy } from './infrastructure/parameter-store';
-import { EcsService } from './infrastructure/ecs-service';
 import { AuroraCluster } from './infrastructure/aurora-cluster';
+import { BaseInfrastructure } from './infrastructure/base-infrastructure';
 import { CrossStackReferences } from './infrastructure/cross-stack-references';
+import { EcsService } from './infrastructure/ecs-service';
+import { ParameterStoreHierarchy } from './infrastructure/parameter-store';
 import { CloudWatchDashboard } from './monitoring/cloudwatch-dashboard';
 import { DriftDetection } from './monitoring/drift-detection';
 
@@ -63,10 +63,10 @@ export class TapStack extends pulumi.ComponentResource {
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    // Get configuration
+    // Get configuration - prioritize args, then Pulumi config, then environment variables
     const config = new pulumi.Config();
-    const environmentSuffix = config.require('environmentSuffix');
-    const environment = config.require('environment'); // dev, staging, prod
+    const environmentSuffix = args.environmentSuffix || config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const environment = config.get('environment') || process.env.DEPLOY_ENV || 'dev'; // dev, staging, prod
 
     // Environment-specific configurations
     interface EnvironmentConfig {

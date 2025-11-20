@@ -1,16 +1,16 @@
 import * as pulumi from '@pulumi/pulumi';
-import { BaseInfrastructure } from './infrastructure/base-infrastructure';
-import { ParameterStoreHierarchy } from './infrastructure/parameter-store';
-import { EcsService } from './infrastructure/ecs-service';
 import { AuroraCluster } from './infrastructure/aurora-cluster';
+import { BaseInfrastructure } from './infrastructure/base-infrastructure';
 import { CrossStackReferences } from './infrastructure/cross-stack-references';
+import { EcsService } from './infrastructure/ecs-service';
+import { ParameterStoreHierarchy } from './infrastructure/parameter-store';
 import { CloudWatchDashboard } from './monitoring/cloudwatch-dashboard';
 import { DriftDetection } from './monitoring/drift-detection';
 
-// Get configuration
+// Get configuration - try Pulumi config first, then fall back to environment variables
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
-const environment = config.require('environment'); // dev, staging, prod
+const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environment = config.get('environment') || process.env.DEPLOY_ENV || 'dev'; // dev, staging, prod
 
 // Environment-specific configurations
 interface EnvironmentConfig {
