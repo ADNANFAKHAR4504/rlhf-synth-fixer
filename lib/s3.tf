@@ -7,12 +7,7 @@ resource "aws_s3_bucket" "config" {
   }
 
   lifecycle {
-    prevent_destroy       = false
-    create_before_destroy = false
-    ignore_changes = [
-      bucket,
-      tags
-    ]
+    prevent_destroy = false
   }
 }
 
@@ -97,12 +92,7 @@ resource "aws_s3_bucket" "terraform_state" {
   }
 
   lifecycle {
-    prevent_destroy       = false
-    create_before_destroy = false
-    ignore_changes = [
-      bucket,
-      tags
-    ]
+    prevent_destroy = false
   }
 }
 
@@ -160,11 +150,6 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
   }
 
   lifecycle {
-    prevent_destroy       = false
-    create_before_destroy = false
-    ignore_changes = [
-      name,
-      tags
-    ]
+    prevent_destroy = false
   }
 }
