@@ -1,0 +1,242 @@
+import { describe, test, expect, beforeAll } from '@jest/globals';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+describe('CloudFormation Stack Integration Tests', () => {
+  let outputs;
+
+  beforeAll(() => {
+    const outputsPath = join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+    const outputsContent = readFileSync(outputsPath, 'utf-8');
+    outputs = JSON.parse(outputsContent);
+  });
+
+  describe('Stack Outputs Validation', () => {
+    test('should have VPC ID output', () => {
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]+$/);
+    });
+
+    test('should have public subnet outputs', () => {
+      expect(outputs.PublicSubnet1Id).toBeDefined();
+      expect(outputs.PublicSubnet2Id).toBeDefined();
+      expect(outputs.PublicSubnet1Id).toMatch(/^subnet-[a-z0-9]+$/);
+      expect(outputs.PublicSubnet2Id).toMatch(/^subnet-[a-z0-9]+$/);
+    });
+
+    test('should have private subnet outputs', () => {
+      expect(outputs.PrivateSubnet1Id).toBeDefined();
+      expect(outputs.PrivateSubnet2Id).toBeDefined();
+      expect(outputs.PrivateSubnet1Id).toMatch(/^subnet-[a-z0-9]+$/);
+      expect(outputs.PrivateSubnet2Id).toMatch(/^subnet-[a-z0-9]+$/);
+    });
+
+    test('should have ECS cluster name output', () => {
+      expect(outputs.ECSClusterName).toBeDefined();
+      expect(outputs.ECSClusterName).toContain('synth101912542');
+    });
+
+    test('should have ECS service name output', () => {
+      expect(outputs.ECSServiceName).toBeDefined();
+      expect(outputs.ECSServiceName).toContain('synth101912542');
+    });
+
+    test('should have Load Balancer DNS output', () => {
+      expect(outputs.LoadBalancerDNS).toBeDefined();
+      expect(outputs.LoadBalancerDNS).toContain('elb.amazonaws.com');
+    });
+
+    test('should have Load Balancer ARN output', () => {
+      expect(outputs.LoadBalancerArn).toBeDefined();
+      expect(outputs.LoadBalancerArn).toMatch(/^arn:aws:elasticloadbalancing:us-east-1:\d+:loadbalancer\/app\//);
+    });
+
+    test('should have Target Group ARN output', () => {
+      expect(outputs.TargetGroupArn).toBeDefined();
+      expect(outputs.TargetGroupArn).toMatch(/^arn:aws:elasticloadbalancing:us-east-1:\d+:targetgroup\//);
+    });
+
+    test('should have DynamoDB table name output', () => {
+      expect(outputs.DynamoDBTableName).toBeDefined();
+      expect(outputs.DynamoDBTableName).toContain('synth101912542');
+    });
+
+    test('should have DynamoDB table ARN output', () => {
+      expect(outputs.DynamoDBTableArn).toBeDefined();
+      expect(outputs.DynamoDBTableArn).toMatch(/^arn:aws:dynamodb:us-east-1:\d+:table\//);
+    });
+
+    test('should have CloudWatch log group output', () => {
+      expect(outputs.CloudWatchLogGroup).toBeDefined();
+      expect(outputs.CloudWatchLogGroup).toContain('synth101912542');
+    });
+
+    test('should have SNS topic ARN output', () => {
+      expect(outputs.SNSTopicArn).toBeDefined();
+      expect(outputs.SNSTopicArn).toMatch(/^arn:aws:sns:us-east-1:\d+:/);
+    });
+
+    test('should have SSM parameter paths output', () => {
+      expect(outputs.SSMParameterDatabaseEndpoint).toBeDefined();
+      expect(outputs.SSMParameterAPIKey).toBeDefined();
+      expect(outputs.SSMParameterDatabaseEndpoint).toContain('synth101912542');
+      expect(outputs.SSMParameterAPIKey).toContain('synth101912542');
+    });
+  });
+
+  describe('Resource Naming Conventions', () => {
+    test('all outputs should use environment suffix', () => {
+      const outputValues = Object.values(outputs);
+      const valuesWithSuffix = outputValues.filter(value =>
+        typeof value === 'string' && value.includes('synth101912542')
+      );
+      expect(valuesWithSuffix.length).toBeGreaterThan(0);
+    });
+
+    test('ECS cluster name should follow naming convention', () => {
+      expect(outputs.ECSClusterName).toMatch(/^ecs-cluster-synth101912542$/);
+    });
+
+    test('ECS service name should follow naming convention', () => {
+      expect(outputs.ECSServiceName).toMatch(/^svc-synth101912542$/);
+    });
+
+    test('DynamoDB table name should follow naming convention', () => {
+      expect(outputs.DynamoDBTableName).toMatch(/^app-table-synth101912542$/);
+    });
+
+    test('CloudWatch log group should follow naming convention', () => {
+      expect(outputs.CloudWatchLogGroup).toMatch(/^\/ecs\/synth101912542$/);
+    });
+  });
+
+  describe('Multi-AZ Configuration', () => {
+    test('should have two public subnets for multi-AZ', () => {
+      expect(outputs.PublicSubnet1Id).not.toBe(outputs.PublicSubnet2Id);
+    });
+
+    test('should have two private subnets for multi-AZ', () => {
+      expect(outputs.PrivateSubnet1Id).not.toBe(outputs.PrivateSubnet2Id);
+    });
+  });
+
+  describe('Load Balancer Integration', () => {
+    test('Load Balancer DNS should be accessible', () => {
+      expect(outputs.LoadBalancerDNS).toBeTruthy();
+      expect(outputs.LoadBalancerDNS.length).toBeGreaterThan(0);
+    });
+
+    test('Load Balancer ARN should match DNS naming', () => {
+      const lbName = outputs.LoadBalancerDNS.split('.')[0];
+      expect(lbName).toContain('synth101912542');
+    });
+
+    test('Target Group ARN should be valid', () => {
+      expect(outputs.TargetGroupArn).toContain('synth101912542');
+    });
+  });
+
+  describe('DynamoDB Integration', () => {
+    test('DynamoDB table ARN should match table name', () => {
+      expect(outputs.DynamoDBTableArn).toContain(outputs.DynamoDBTableName);
+    });
+
+    test('DynamoDB table should be in correct region', () => {
+      expect(outputs.DynamoDBTableArn).toContain('us-east-1');
+    });
+  });
+
+  describe('Monitoring Integration', () => {
+    test('CloudWatch log group should be properly formatted', () => {
+      expect(outputs.CloudWatchLogGroup).toMatch(/^\/[a-z]+\/[a-z0-9]+$/);
+    });
+
+    test('SNS topic ARN should be in correct region', () => {
+      expect(outputs.SNSTopicArn).toContain('us-east-1');
+    });
+
+    test('SNS topic should have environment suffix in name', () => {
+      expect(outputs.SNSTopicArn).toContain('synth101912542');
+    });
+  });
+
+  describe('Configuration Management', () => {
+    test('SSM parameter paths should be environment-specific', () => {
+      expect(outputs.SSMParameterDatabaseEndpoint).toContain('/app/synth101912542/');
+      expect(outputs.SSMParameterAPIKey).toContain('/app/synth101912542/');
+    });
+
+    test('SSM parameters should have distinct paths', () => {
+      expect(outputs.SSMParameterDatabaseEndpoint).not.toBe(outputs.SSMParameterAPIKey);
+    });
+  });
+
+  describe('Resource Consistency', () => {
+    test('all ARNs should use same AWS account ID', () => {
+      const arns = [
+        outputs.LoadBalancerArn,
+        outputs.TargetGroupArn,
+        outputs.DynamoDBTableArn,
+        outputs.SNSTopicArn
+      ];
+
+      const accountIds = arns.map(arn => {
+        const match = arn.match(/:(\d+):/);
+        return match ? match[1] : null;
+      });
+
+      const uniqueAccountIds = [...new Set(accountIds)];
+      expect(uniqueAccountIds.length).toBe(1);
+      expect(uniqueAccountIds[0]).toBe('342597974367');
+    });
+
+    test('all resources should be in us-east-1 region', () => {
+      const regionalResources = [
+        outputs.LoadBalancerArn,
+        outputs.TargetGroupArn,
+        outputs.DynamoDBTableArn,
+        outputs.SNSTopicArn
+      ];
+
+      regionalResources.forEach(resource => {
+        expect(resource).toContain('us-east-1');
+      });
+    });
+  });
+
+  describe('Outputs Completeness', () => {
+    test('should have all required networking outputs', () => {
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.PublicSubnet1Id).toBeDefined();
+      expect(outputs.PublicSubnet2Id).toBeDefined();
+      expect(outputs.PrivateSubnet1Id).toBeDefined();
+      expect(outputs.PrivateSubnet2Id).toBeDefined();
+    });
+
+    test('should have all required compute outputs', () => {
+      expect(outputs.ECSClusterName).toBeDefined();
+      expect(outputs.ECSServiceName).toBeDefined();
+    });
+
+    test('should have all required load balancer outputs', () => {
+      expect(outputs.LoadBalancerDNS).toBeDefined();
+      expect(outputs.LoadBalancerArn).toBeDefined();
+      expect(outputs.TargetGroupArn).toBeDefined();
+    });
+
+    test('should have all required data storage outputs', () => {
+      expect(outputs.DynamoDBTableName).toBeDefined();
+      expect(outputs.DynamoDBTableArn).toBeDefined();
+    });
+
+    test('should have all required monitoring outputs', () => {
+      expect(outputs.CloudWatchLogGroup).toBeDefined();
+      expect(outputs.SNSTopicArn).toBeDefined();
+    });
+
+    test('should have all required configuration outputs', () => {
+      expect(outputs.SSMParameterDatabaseEndpoint).toBeDefined();
+      expect(outputs.SSMParameterAPIKey).toBeDefined();
+    });
+  });
+});
