@@ -430,12 +430,12 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # FIXED: Attach secondary cluster to global cluster with write forwarding
+        # FIXED: Attach secondary cluster to global cluster
         # Remove all credentials at CFN level for cross-region replication
         # Secondary cluster inherits credentials from primary cluster in global database
+        # Note: Write forwarding is not supported in Aurora PostgreSQL 14.6
         cfn_cluster = cluster.node.default_child
         cfn_cluster.global_cluster_identifier = global_cluster_id
-        cfn_cluster.enable_global_write_forwarding = True
         # Must not specify any credentials for cross-region replication
         cfn_cluster.master_username = None
         cfn_cluster.master_user_password = None
