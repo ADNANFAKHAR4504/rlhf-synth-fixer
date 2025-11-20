@@ -119,10 +119,10 @@ class TapStack(Stack):
 
     def _create_alarm_topic(self) -> sns.Topic:
         """Create SNS topic for CloudWatch alarm notifications."""
+        # Let CDK auto-generate topic name to avoid conflicts
         topic = sns.Topic(
             self,
             f"FraudAlarmTopic-{self.env_name}-{self.environment_suffix}",
-            topic_name=f"fraud-detection-alarms-{self.env_name}-{self.environment_suffix}",
             display_name=f"Fraud Detection Alarms - {self.env_name}",
         )
 
@@ -235,11 +235,10 @@ class TapStack(Stack):
 
     def _create_lambda_function(self) -> _lambda.Function:
         """Create Lambda function for processing Kinesis streams."""
-        # Create IAM role for Lambda
+        # Create IAM role for Lambda (let CDK auto-generate role name)
         lambda_role = iam.Role(
             self,
             f"FraudProcessorRole-{self.env_name}-{self.environment_suffix}",
-            role_name=f"fraud-processor-role-{self.env_name}-{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(

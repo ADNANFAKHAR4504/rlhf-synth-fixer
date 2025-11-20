@@ -359,9 +359,75 @@ def _create_ssm_parameters(self) -> None:
 
 ---
 
+## Issue 8: Explicit IAM Role and SNS Topic Names Causing Early Validation Failures
+
+### What Went Wrong
+
+IAM roles and SNS topics were created with explicit `role_name` and `topic_name` parameters, which can cause CloudFormation Early Validation failures due to potential naming conflicts or AWS-managed resource checks.
+
+**Evidence**:
+- Error: `AWS::EarlyValidation::ResourceExistenceCheck` validation failed repeatedly
+- Code used: `role_name=f"fraud-processor-role-{self.env_name}-{self.environment_suffix}"`
+- Code used: `topic_name=f"fraud-detection-alarms-{self.env_name}-{self.environment_suffix}"`
+- Even after destroying stack, deployment still failed
+
+### Root Cause
+
+AWS CloudFormation Early Validation hooks perform additional checks on named resources (IAM roles, SNS topics) to ensure they meet AWS best practices and don't conflict with AWS-managed resources. Explicit names can trigger these validation failures even when resources don't already exist.
+
+### Correct Implementation
+
+Removed explicit `role_name` and `topic_name` parameters, letting CDK auto-generate unique names:
+
+```python
+# IAM Role - BEFORE (caused Early Validation failure)
+lambda_role = iam.Role(
+    self,
+    f"FraudProcessorRole-{self.env_name}-{self.environment_suffix}",
+    role_name=f"fraud-processor-role-{self.env_name}-{self.environment_suffix}",  # REMOVED
+    assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+    # ...
+)
+
+# IAM Role - AFTER (works)
+lambda_role = iam.Role(
+    self,
+    f"FraudProcessorRole-{self.env_name}-{self.environment_suffix}",
+    assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+    # ... CDK will auto-generate a unique role name
+)
+
+# SNS Topic - BEFORE (caused issues)
+topic = sns.Topic(
+    self,
+    f"FraudAlarmTopic-{self.env_name}-{self.environment_suffix}",
+    topic_name=f"fraud-detection-alarms-{self.env_name}-{self.environment_suffix}",  # REMOVED
+    display_name=f"Fraud Detection Alarms - {self.env_name}",
+)
+
+# SNS Topic - AFTER (works)
+topic = sns.Topic(
+    self,
+    f"FraudAlarmTopic-{self.env_name}-{self.environment_suffix}",
+    display_name=f"Fraud Detection Alarms - {self.env_name}",
+    # CDK will auto-generate topic name based on stack and construct ID
+)
+```
+
+### Key Learnings
+
+- Let CDK auto-generate names for IAM roles and SNS topics
+- Explicit names can trigger Early Validation failures
+- CloudFormation hooks check for AWS best practices and naming conflicts
+- Construct IDs provide uniqueness; explicit physical names often unnecessary
+- Keep explicit names only for resources that need predictable names (e.g., DynamoDB tables, Lambda functions, Kinesis streams)
+- Archive reference projects rarely use explicit IAM role names
+
+---
+
 ## Summary
 
-Total issues fixed: 7 (3 Critical, 2 High, 2 Medium)
+Total issues fixed: 8 (3 Critical, 3 High, 2 Medium)
 
 **Primary knowledge gaps addressed**:
 1. CDK entry point configuration and stack instantiation patterns
