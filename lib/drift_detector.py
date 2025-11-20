@@ -7,7 +7,7 @@ import sys
 import json
 import argparse
 from typing import Dict, List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import pulumi
 from pulumi import automation as auto
 
@@ -95,7 +95,7 @@ class DriftDetector:
 
             drift_info = {
                 "stack": self.stack_name,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "has_drift": False,
                 "changes": {
                     "create": 0,
@@ -214,7 +214,7 @@ def check_all_environments(
         environments = ["dev", "staging", "prod"]
     
     report = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "project": project_name,
         "environments": {},
         "summary": {

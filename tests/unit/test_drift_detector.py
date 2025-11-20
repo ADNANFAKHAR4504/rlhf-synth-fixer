@@ -214,6 +214,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         mock_preview_result = Mock()
         mock_preview_result.change_summary = {}
         mock_stack_instance.preview.return_value = mock_preview_result
+        mock_stack_instance.outputs.return_value = {}  # Mock empty outputs
         mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
@@ -223,7 +224,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertFalse(result["has_drift"])
 
     @patch('pulumi.automation.select_stack')
-    def test_detect_drift_with_changes(self, mock_workspace):
+    def test_detect_drift_with_changes(self, mock_select_stack):
         """Test detect_drift with drift detected"""
         from lib.drift_detector import DriftDetector
 
@@ -233,6 +234,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         mock_preview_result = Mock()
         mock_preview_result.change_summary = {"update": 5}
         mock_stack_instance.preview.return_value = mock_preview_result
+        mock_stack_instance.outputs.return_value = {}  # Mock empty outputs
         mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")

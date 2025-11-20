@@ -1,99 +1,82 @@
 """
-Multi-Environment Fraud Detection Infrastructure
-Main Pulumi program that deploys environment-specific infrastructure
+Pulumi wrapper for TapStack deployment
+This file acts as the entry point when lib/ is set as main in Pulumi.yaml
 """
+
+import os
+import sys
+from datetime import datetime, timezone
+
+# Add parent directory to path so we can import the tap module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, Any
-from fraud_detection_component import FraudDetectionStack
+from pulumi import Config, ResourceOptions
 
-# Get configuration
-config = pulumi.Config()
-environment = pulumi.get_stack()
-region = config.require("region")
-environment_suffix = config.require("environmentSuffix")
-az_count = config.get_int("azCount") or 3
-enable_cross_region = config.get_bool("enableCrossRegion") or False
+from tap_stack import TapStack, TapStackArgs
 
-# Owner and cost center tags
-owner = config.get("owner") or "fraud-detection-team"
-cost_center = config.get("costCenter") or "fraud-detection"
+# Initialize Pulumi configuration
+config = Config()
 
-# ECS configuration
-ecs_cpu = config.get_int("ecsCpu") or 256
-ecs_memory = config.get_int("ecsMemory") or 512
-container_image = config.require("containerImage")
-desired_count = config.get_int("desiredCount") or 2
+# Get environment suffix from environment variables, fallback to 'dev'
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+STACK_NAME = f"TapStack{environment_suffix}"
 
-# Aurora configuration
-aurora_instance_class = config.get("auroraInstanceClass") or "db.t4g.medium"
-aurora_instance_count = config.get_int("auroraInstanceCount") or 1
-enable_aurora_replica = config.get_bool("enableAuroraReplica") or False
+repository_name = os.getenv('REPOSITORY', 'unknown')
+commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
+pr_number = os.getenv('PR_NUMBER', 'unknown')
+team = os.getenv('TEAM', 'unknown')
+created_at = datetime.now(timezone.utc).isoformat()
 
-# DynamoDB configuration
-enable_global_table = config.get_bool("enableGlobalTable") or False
-replica_regions = config.get_object("replicaRegions") or []
+# Create a resource options object with default tags
+default_tags = {
+    'Environment': environment_suffix,
+    'Repository': repository_name,
+    'Author': commit_author,
+    'PRNumber': pr_number,
+    'Team': team,
+    "CreatedAt": created_at,
+}
 
-# IAM permissions mode
-iam_mode = config.get("iamMode") or "read-only"  # read-only, limited-write, full-access
-
-# Alert thresholds
-alert_email = config.get("alertEmail") or "devops@example.com"
-cpu_threshold = config.get_int("cpuThreshold") or 80
-error_rate_threshold = config.get_int("errorRateThreshold") or 5
-
-# Production stack reference (for staging and dev)
-# Note: For QA testing, StackReference is disabled since prod stack may not exist
-# In production use, uncomment this to enable cross-stack references
-prod_stack_ref = None
-# if environment in ["staging", "dev"]:
-#     org_name = config.get("orgName") or "turinggpt"
-#     project_name = pulumi.get_project()
-#     prod_stack_name = f"{org_name}/{project_name}/prod"
-#
-#     try:
-#         prod_stack_ref = pulumi.StackReference(prod_stack_name)
-#         pulumi.log.info(f"Successfully referenced production stack: {prod_stack_name}")
-#     except Exception as e:
-#         pulumi.log.warn(f"Could not reference production stack: {e}")
-
-# Create main fraud detection stack
-fraud_detection = FraudDetectionStack(
-    f"fraud-detection-{environment}",
-    environment=environment,
-    region=region,
-    environment_suffix=environment_suffix,
-    az_count=az_count,
-    owner=owner,
-    cost_center=cost_center,
-    ecs_cpu=ecs_cpu,
-    ecs_memory=ecs_memory,
-    container_image=container_image,
-    desired_count=desired_count,
-    aurora_instance_class=aurora_instance_class,
-    aurora_instance_count=aurora_instance_count,
-    enable_aurora_replica=enable_aurora_replica,
-    enable_global_table=enable_global_table,
-    replica_regions=replica_regions,
-    iam_mode=iam_mode,
-    alert_email=alert_email,
-    cpu_threshold=cpu_threshold,
-    error_rate_threshold=error_rate_threshold,
-    prod_stack_ref=prod_stack_ref,
+# Configure AWS provider with default tags
+provider = aws.Provider('aws',
+    region=os.getenv('AWS_REGION', 'us-east-1'),
+    default_tags=aws.ProviderDefaultTagsArgs(
+        tags=default_tags
+    )
 )
 
-# Export critical outputs
-pulumi.export("vpc_id", fraud_detection.vpc_id)
-pulumi.export("ecs_cluster_arn", fraud_detection.ecs_cluster_arn)
-pulumi.export("ecs_cluster_name", fraud_detection.ecs_cluster_name)
-pulumi.export("alb_dns_name", fraud_detection.alb_dns_name)
-pulumi.export("alb_arn", fraud_detection.alb_arn)
-pulumi.export("aurora_endpoint", fraud_detection.aurora_endpoint)
-pulumi.export("aurora_cluster_arn", fraud_detection.aurora_cluster_arn)
-pulumi.export("dynamodb_table_name", fraud_detection.dynamodb_table_name)
-pulumi.export("dynamodb_table_arn", fraud_detection.dynamodb_table_arn)
-pulumi.export("sns_topic_arn", fraud_detection.sns_topic_arn)
-pulumi.export("dashboard_name", fraud_detection.dashboard_name)
-pulumi.export("environment", environment)
-pulumi.export("region", region)
+# Get DB password from environment or use default
+db_password = os.getenv('TF_VAR_db_password', 'TempPassword123!')
+
+# Set secret ARN for DI password
+os.environ['SECRET_ARN'] = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:tap-db-password-XXXXXX'
+
+# Create the stack with the necessary arguments
+stack_args = TapStackArgs(
+    db_password=db_password,
+    secret_arn=os.environ.get('SECRET_ARN', 'arn:aws:secretsmanager:us-east-1:123456789012:secret:tap-db-password-XXXXXX'),
+)
+
+# Instantiate the TapStack
+stack = TapStack(
+    STACK_NAME,
+    args=stack_args,
+    environment_suffix=environment_suffix,
+    opts=ResourceOptions(providers=[provider])
+)
+
+# Export stack outputs matching what the tap.py file would export
+pulumi.export('vpc_id', stack.vpc.id)
+pulumi.export('primary_subnet_ids', [subnet.id for subnet in stack.primary_subnets])
+pulumi.export('secondary_subnet_ids', [subnet.id for subnet in stack.secondary_subnets])
+pulumi.export('primary_cluster_endpoint', stack.primary_cluster.endpoint)
+pulumi.export('primary_cluster_reader_endpoint', stack.primary_cluster.reader_endpoint)
+pulumi.export('secondary_cluster_endpoint', stack.secondary_cluster.endpoint)
+pulumi.export('secondary_cluster_reader_endpoint', stack.secondary_cluster.reader_endpoint)
+pulumi.export('health_check_id', stack.health_check.id)
+pulumi.export('health_check_status', stack.health_check_status)
+pulumi.export('created_at', created_at)
+pulumi.export('environment', environment_suffix)
+pulumi.export('global_cluster_id', stack.global_cluster.id)
