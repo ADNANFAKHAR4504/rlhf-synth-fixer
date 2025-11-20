@@ -762,19 +762,29 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # On-premises endpoint weighted record (90% initial traffic)
+        # On-premises endpoint (separate subdomain to avoid CNAME at apex)
         # Note: Requires on-premises endpoint configuration
         onprem_endpoint = config.get("onpremEndpoint") or "onprem.example.com"
-        onprem_weighted_record = aws.route53.Record(
-            "api-onprem-weighted-record",
+        onprem_record = aws.route53.Record(
+            "api-onprem-record",
             zone_id=hosted_zone_id,
-            name=domain_name,
+            name=f"onprem.{domain_name}",
             type="CNAME",
-            set_identifier=f"OnPrem-{env_suffix}",
             ttl=60,
             records=[onprem_endpoint],
-            weighted_routing_policies=[aws.route53.RecordWeightedRoutingPolicyArgs(
-                weight=90
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Main domain record pointing to AWS ALB
+        main_record = aws.route53.Record(
+            "api-main-record",
+            zone_id=hosted_zone_id,
+            name=domain_name,
+            type="A",
+            aliases=[aws.route53.RecordAliasArgs(
+                name=alb.dns_name,
+                zone_id=alb.zone_id,
+                evaluate_target_health=True
             )],
             opts=ResourceOptions(parent=self)
         )
