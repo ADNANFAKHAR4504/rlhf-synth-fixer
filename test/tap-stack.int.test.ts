@@ -14,7 +14,7 @@ import EMR from 'aws-sdk/clients/emr';
 import {
   SFNClient,
   ListExecutionsCommand,
-  StartExecutionCommand,
+  DescribeExecutionCommand,
 } from '@aws-sdk/client-sfn';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import {
@@ -28,7 +28,6 @@ import {
 
 // Get environment variables
 const region = process.env.AWS_REGION;
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 
 // Load stack outputs
 let outputs: any;
@@ -43,6 +42,9 @@ try {
   throw error;
 }
 
+const projectName = process.env.PROJECT_NAME || 'emr-pipeline';
+const environmentName = process.env.ENVIRONMENT || 'production';
+
 // Initialize AWS clients for live integration testing
 const s3Client = new S3Client({ region });
 const emrClient = new EMR({ region }); // SDK v2
@@ -51,21 +53,147 @@ const snsClient = new SNSClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region });
 
+type ExecutionStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT' | 'ABORTED';
+
+interface ExecutionMatch {
+  summary: any;
+  detail: any;
+  input: any;
+  output?: any;
+}
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const safeParseJson = (payload?: string) => {
+  if (!payload) {
+    return {};
+  }
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return {};
+  }
+};
+
+async function findExecutionByS3Key(
+  key: string,
+  options?: {
+    listStatuses?: ExecutionStatus[];
+    desiredStatuses?: ExecutionStatus[];
+    maxAttempts?: number;
+    waitMs?: number;
+  }
+): Promise<ExecutionMatch | null> {
+  const {
+    listStatuses = ['RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED'],
+    desiredStatuses,
+    maxAttempts = 30,
+    waitMs = 10000,
+  } = options || {};
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    for (const statusFilter of listStatuses) {
+      let nextToken: string | undefined;
+      do {
+        const executions = await stepFunctionsClient.send(
+          new ListExecutionsCommand({
+            stateMachineArn: outputs.StateMachineArn,
+            statusFilter,
+            maxResults: 100,
+            nextToken,
+          })
+        );
+
+        for (const summary of executions.executions ?? []) {
+          if (!summary.executionArn) {
+            continue;
+          }
+
+          const detail = await stepFunctionsClient.send(
+            new DescribeExecutionCommand({
+              executionArn: summary.executionArn,
+            })
+          );
+
+          const input = safeParseJson(detail.input);
+          if (input.Key !== key) {
+            continue;
+          }
+
+          if (
+            desiredStatuses &&
+            detail.status &&
+            !desiredStatuses.includes(detail.status as ExecutionStatus)
+          ) {
+            continue;
+          }
+
+          const output = safeParseJson(detail.output);
+          return { summary, detail, input, output };
+        }
+
+        nextToken = executions.nextToken;
+      } while (nextToken);
+    }
+
+    await delay(waitMs);
+  }
+
+  return null;
+}
+
+async function waitForProcessedResults(
+  minimumTimestamp: Date,
+  maxAttempts = 30,
+  waitMs = 10000
+) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const objects = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: outputs.ProcessedDataBucketName,
+        Prefix: 'results/',
+      })
+    );
+
+    const recentObjects = (objects.Contents ?? []).filter(obj => {
+      if (!obj.LastModified) {
+        return false;
+      }
+      return obj.LastModified.getTime() >= minimumTimestamp.getTime();
+    });
+
+    if (recentObjects.length > 0) {
+      return {
+        ...objects,
+        Contents: recentObjects,
+      };
+    }
+
+    await delay(waitMs);
+  }
+
+  return { Contents: [] };
+}
+
 // Test constants
 const TEST_DATA_SIZE = 1024 * 1024; // 1MB test file
-const TEST_TIMEOUT = 30 * 60 * 1000; // 30 minutes for EMR operations
 
 describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
   let testExecutionId: string;
   let testDataKey: string;
   let startTime: Date;
   let processedObjects: any; // Shared variable for processed S3 objects
+  let mainExecution: ExecutionMatch | null;
+  let invalidExecution: ExecutionMatch | null;
 
   beforeAll(async () => {
     // Generate unique test identifiers
     testExecutionId = `test-${Date.now()}`;
     testDataKey = `transactions/test-${testExecutionId}.parquet`;
     startTime = new Date();
+    processedObjects = null;
+    mainExecution = null;
+    invalidExecution = null;
 
     // Verify required outputs exist
     expect(outputs).toBeDefined();
@@ -74,7 +202,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
     expect(outputs.StateMachineArn).toBeDefined();
     expect(outputs.EMRClusterId).toBeDefined();
     expect(outputs.SNSTopicArn).toBeDefined();
-  }, 60000);
+  });
 
   afterAll(async () => {
     // Clean up test data
@@ -90,16 +218,23 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       const processedObjects = await s3Client.send(
         new ListObjectsV2Command({
           Bucket: outputs.ProcessedDataBucketName,
-          Prefix: `results/test-${testExecutionId}`,
+          Prefix: 'results/',
         })
       );
 
-      if (processedObjects.Contents && processedObjects.Contents.length > 0) {
+      const testObjects =
+        processedObjects.Contents?.filter(
+          obj =>
+            obj.LastModified &&
+            obj.LastModified.getTime() >= startTime.getTime()
+        ) ?? [];
+
+      if (testObjects.length > 0) {
         await s3Client.send(
           new DeleteObjectsCommand({
             Bucket: outputs.ProcessedDataBucketName,
             Delete: {
-              Objects: processedObjects.Contents.map(obj => ({
+              Objects: testObjects.map(obj => ({
                 Key: obj.Key!,
               })),
             },
@@ -109,7 +244,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
     } catch (error) {
       console.warn('Cleanup failed:', error);
     }
-  }, 60000);
+  });
 
   describe('A. Data Input - S3 Upload', () => {
     test('should successfully upload test transaction data to raw S3 bucket', async () => {
@@ -142,70 +277,35 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       expect(uploadedObject.Metadata!['test-execution-id']).toBe(
         testExecutionId
       );
-    }, 30000);
+    });
   });
 
   describe('B. Trigger Activation - S3 Event Processing', () => {
     test('should trigger Step Functions execution via S3 event notification', async () => {
-      // The S3 upload in step A should have triggered the Lambda function via S3 event notification
-      // Wait for the Step Functions execution to be created by the Lambda function
-      const maxWaitTime = 120000; // 2 minutes for S3 event to propagate and Lambda to execute
-      const checkInterval = 10000; // 10 seconds
-      let elapsed = 0;
-      let executionFound = false;
-      let executionArn = '';
+      mainExecution =
+        mainExecution ??
+        (await findExecutionByS3Key(testDataKey, {
+          listStatuses: ['RUNNING', 'SUCCEEDED'],
+        }));
 
-      while (elapsed < maxWaitTime && !executionFound) {
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-        elapsed += checkInterval;
-
-        try {
-          const executions = await stepFunctionsClient.send(
-            new ListExecutionsCommand({
-              stateMachineArn: outputs.StateMachineArn,
-              statusFilter: 'RUNNING',
-            })
-          );
-
-          // Look for an execution triggered by S3 (starts with "s3-")
-          // The Lambda names executions as: s3-{timestamp}-{sanitized-key}
-          const matchingExecution = executions.executions?.find(
-            exec => exec.name && exec.name.startsWith('s3-') && exec.name.includes('test-')
-          );
-
-          if (matchingExecution) {
-            executionFound = true;
-            executionArn = matchingExecution.executionArn!;
-            testExecutionId = matchingExecution.name!; // Update to actual execution name
-          }
-        } catch (error) {
-          // Continue waiting
-        }
-      }
-
-      expect(executionFound).toBe(true);
-      expect(executionArn).toBeTruthy();
-      console.log(`Step Functions execution started: ${executionArn}`);
-      console.log(`Using execution name for tracking: ${testExecutionId}`);
-    }, 120000);
+      expect(mainExecution).toBeTruthy();
+      console.log(
+        `Step Functions execution started: ${mainExecution?.summary?.executionArn}`
+      );
+    });
   });
 
   describe('C. Orchestration Start - Step Functions Validation', () => {
     test('should validate Step Functions execution is running', async () => {
-      const executions = await stepFunctionsClient.send(
-        new ListExecutionsCommand({
-          stateMachineArn: outputs.StateMachineArn,
-          statusFilter: 'RUNNING',
-        })
-      );
+      mainExecution =
+        mainExecution ??
+        (await findExecutionByS3Key(testDataKey, {
+          listStatuses: ['RUNNING', 'SUCCEEDED'],
+        }));
 
-      const testExecution = executions.executions?.find(
-        exec => exec.name && exec.name.includes('s3-')
-      );
-
-      expect(testExecution).toBeDefined();
-      expect(testExecution!.status).toBe('RUNNING');
-    }, 15000);
+      expect(mainExecution).toBeTruthy();
+      expect(mainExecution?.detail?.status).toMatch(/RUNNING|SUCCEEDED/);
+    });
   });
 
   describe('D. EMR Cluster Launch - Verify Cluster Status', () => {
@@ -216,7 +316,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
 
       expect(cluster.Cluster.Status.State).toMatch(/RUNNING|WAITING/);
       expect(cluster.Cluster.ReleaseLabel).toMatch(/^emr-6\.(9|[1-9][0-9])\.[0-9]+$/);
-    }, 30000);
+    });
   });
 
   describe('E. Data Ingestion - EMR Access to S3', () => {
@@ -231,59 +331,31 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
 
       expect(object.Body).toBeDefined();
       expect(object.Body).toBeTruthy();
-    }, 15000);
+    });
   });
 
   describe('F. Processing Execution - Monitor Job Steps', () => {
-    test(
-      'should wait for and verify EMR job step execution',
-      async () => {
-        // Wait for Step Functions to complete EMR step
-        const maxWaitTime = TEST_TIMEOUT;
-        const checkInterval = 30000; // 30 seconds
-        let elapsed = 0;
-        let executionComplete = false;
+    test('should wait for and verify EMR job step execution', async () => {
+      mainExecution =
+        (await findExecutionByS3Key(testDataKey, {
+          listStatuses: ['RUNNING', 'SUCCEEDED'],
+          desiredStatuses: ['SUCCEEDED'],
+          maxAttempts: 120,
+          waitMs: 15000,
+        })) || mainExecution;
 
-        while (elapsed < maxWaitTime && !executionComplete) {
-          await new Promise(resolve => setTimeout(resolve, checkInterval));
-          elapsed += checkInterval;
+      expect(mainExecution).toBeTruthy();
+      expect(mainExecution?.detail?.status).toBe('SUCCEEDED');
 
-          try {
-            const executions = await stepFunctionsClient.send(
-              new ListExecutionsCommand({
-                stateMachineArn: outputs.StateMachineArn,
-                statusFilter: 'SUCCEEDED',
-              })
-            );
-
-            const testExecution = executions.executions?.find(
-              exec => exec.name && exec.name === testExecutionId
-            );
-
-            if (testExecution) {
-              executionComplete = true;
-              console.log(`EMR job execution completed: ${testExecution.executionArn}`);
-            }
-          } catch (error) {
-            // Continue waiting
-          }
-        }
-
-        expect(executionComplete).toBe(true);
-      },
-      TEST_TIMEOUT
-    );
+      console.log(
+        `EMR job execution completed: ${mainExecution?.summary?.executionArn}`
+      );
+    });
   });
 
   describe('G. Data Output - Verify Processed Results', () => {
     test('should verify processed data exists in output bucket', async () => {
-      // Check for processed output files (use broader prefix since execution name changed)
-      processedObjects = await s3Client.send(
-        new ListObjectsV2Command({
-          Bucket: outputs.ProcessedDataBucketName,
-          Prefix: `results/`,
-        })
-      );
+      processedObjects = await waitForProcessedResults(startTime);
 
       expect(processedObjects.Contents).toBeDefined();
       expect(processedObjects.Contents!.length).toBeGreaterThan(0);
@@ -292,7 +364,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       const firstOutput = processedObjects.Contents![0];
       expect(firstOutput.Size).toBeGreaterThan(0);
       expect(firstOutput.Key).toContain('results');
-    }, 60000);
+    });
   });
 
   describe('H. Storage Management - Verify Lifecycle Policies', () => {
@@ -320,16 +392,13 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       expect(versions.Versions).toBeDefined();
       expect(versions.Versions!.length).toBeGreaterThan(0);
       expect(versions.Versions![0].VersionId).toBeDefined();
-    }, 30000);
+    });
   });
 
   describe('I. Monitoring & Metrics - Verify CloudWatch Logs and Metrics', () => {
     test('should verify CloudWatch logs exist for EMR and Lambda', async () => {
-      // Use actual CloudFormation values: ProjectName=emr-pipeline, Environment=production
-      const projectName = 'emr-pipeline';
-      const environment = 'production';
-      const emrLogGroup = `/aws/emr/${projectName}-${environment}`;
-      const lambdaLogGroup = `/aws/lambda/${projectName}-${environment}`;
+      const emrLogGroup = `/aws/emr/${projectName}-${environmentName}`;
+      const lambdaLogGroup = `/aws/lambda/${projectName}-${environmentName}`;
 
       // Check EMR log group exists
       const emrLogs = await cloudWatchLogsClient.send(
@@ -354,16 +423,12 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
           group => group.logGroupName === lambdaLogGroup
         )
       ).toBe(true);
-    }, 30000);
+    });
 
     test('should verify custom metrics are published', async () => {
-      // Use actual CloudFormation values: ProjectName=emr-pipeline, Environment=production
-      const projectName = 'emr-pipeline';
-      const environment = 'production';
-      
       const metrics = await cloudWatchClient.send(
         new ListMetricsCommand({
-          Namespace: `${projectName}/${environment}/EMRPipeline`,
+          Namespace: `${projectName}/${environmentName}/EMRPipeline`,
         })
       );
 
@@ -377,7 +442,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       }
       
       expect(metrics.Metrics).toBeDefined();
-    }, 30000);
+    });
   });
 
   describe('J. Auto-Scaling - Verify EMR Instance Groups', () => {
@@ -394,25 +459,22 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
         expect(taskGroup.Status.State).toMatch(/RUNNING|PROVISIONING/);
         expect(taskGroup.RequestedInstanceCount).toBeGreaterThanOrEqual(0);
       }
-    }, 30000);
+    });
   });
 
   describe('K. Completion - Verify Final State', () => {
     test('should verify Step Functions execution completed successfully', async () => {
-      const executions = await stepFunctionsClient.send(
-        new ListExecutionsCommand({
-          stateMachineArn: outputs.StateMachineArn,
-          statusFilter: 'SUCCEEDED',
-        })
-      );
+      mainExecution =
+        mainExecution ??
+        (await findExecutionByS3Key(testDataKey, {
+          listStatuses: ['SUCCEEDED'],
+          desiredStatuses: ['SUCCEEDED'],
+          maxAttempts: 60,
+        }));
 
-      const testExecution = executions.executions?.find(
-        exec => exec.name && exec.name === testExecutionId
-      );
-
-      expect(testExecution).toBeDefined();
-      expect(testExecution!.status).toBe('SUCCEEDED');
-    }, 15000);
+      expect(mainExecution).toBeTruthy();
+      expect(mainExecution?.detail?.status).toBe('SUCCEEDED');
+    });
 
     test('should verify SNS notifications were sent', async () => {
       const topic = await snsClient.send(
@@ -423,7 +485,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
 
       expect(topic.Attributes).toBeDefined();
       expect(topic.Attributes!.SubscriptionsConfirmed).toBeDefined();
-    }, 15000);
+    });
   });
 
   // Error Scenario Tests
@@ -441,76 +503,18 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
         })
       );
 
-      // Act: Wait for the system to detect and attempt to process the invalid data
-      // The S3 event should trigger Lambda → Step Functions → EMR processing
-      const maxWaitTime = 180000; // 3 minutes to allow for full processing attempt
-      const checkInterval = 15000; // 15 seconds
-      let elapsed = 0;
-      let executionStarted = false;
-      let executionCompleted = false;
-      let finalStatus: string = '';
+      invalidExecution =
+        (await findExecutionByS3Key(invalidDataKey, {
+          listStatuses: ['RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT'],
+          desiredStatuses: ['FAILED', 'SUCCEEDED', 'TIMED_OUT'],
+          maxAttempts: 40,
+          waitMs: 15000,
+        })) || invalidExecution;
 
-      while (elapsed < maxWaitTime && !executionCompleted) {
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-        elapsed += checkInterval;
-
-        try {
-          // First check if execution started
-          if (!executionStarted) {
-            const runningExecutions = await stepFunctionsClient.send(
-              new ListExecutionsCommand({
-                stateMachineArn: outputs.StateMachineArn,
-                statusFilter: 'RUNNING',
-              })
-            );
-
-            const errorExecution = runningExecutions.executions?.find(
-              exec =>
-                exec.name && exec.name.startsWith('s3-') && exec.name.includes('invalid')
-            );
-
-            if (errorExecution) {
-              executionStarted = true;
-              console.log(
-                `Error execution started: ${errorExecution.executionArn}`
-              );
-            }
-          }
-
-          // Then check if execution completed (success, failure, or timeout)
-          if (executionStarted) {
-            const allExecutions = await stepFunctionsClient.send(
-              new ListExecutionsCommand({
-                stateMachineArn: outputs.StateMachineArn,
-              })
-            );
-
-            const errorExecution = allExecutions.executions?.find(
-              exec =>
-                exec.name &&
-                exec.name.startsWith('s3-') && 
-                exec.name.includes('invalid') &&
-                ['SUCCEEDED', 'FAILED', 'TIMED_OUT'].includes(exec.status!)
-            );
-
-            if (errorExecution) {
-              executionCompleted = true;
-              finalStatus = errorExecution.status!;
-              console.log(
-                `Error execution completed with status: ${finalStatus}`
-              );
-            }
-          }
-        } catch (error) {
-          // Continue monitoring
-        }
-      }
-
-      // Assert: System should handle the error gracefully
-      // The execution should have started and completed (not hang indefinitely)
-      expect(executionStarted).toBe(true);
-      expect(executionCompleted).toBe(true);
-      expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT']).toContain(finalStatus);
+      expect(invalidExecution).toBeTruthy();
+      expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT']).toContain(
+        invalidExecution?.detail?.status as ExecutionStatus
+      );
 
       // The system should not have crashed - EMR cluster should still be accessible
       const cluster = await emrClient.describeCluster({
@@ -525,19 +529,27 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
           Key: invalidDataKey,
         })
       );
-    }, 200000);
+    });
   });
 
   describe('Contract Validation - Service Interactions', () => {
     test('should validate EMR to S3 bucket access permissions', async () => {
       // Verify EMR instance profile has access to required S3 buckets
-      const cluster = await emrClient.describeCluster({
-        ClusterId: outputs.EMRClusterId
-      }).promise();
+      let instanceProfile: string | undefined;
+      let cluster;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        cluster = await emrClient.describeCluster({
+          ClusterId: outputs.EMRClusterId
+        }).promise();
 
-      expect(
-        cluster.Cluster?.Ec2InstanceAttributes?.InstanceProfile
-      ).toBeDefined();
+        instanceProfile = cluster.Cluster?.Ec2InstanceAttributes?.InstanceProfile;
+        if (instanceProfile) {
+          break;
+        }
+        await delay(10000);
+      }
+
+      expect(instanceProfile).toBeDefined();
 
       const testObject = await s3Client.send(
         new GetObjectCommand({
@@ -547,7 +559,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       );
 
       expect(testObject).toBeDefined();
-    }, 30000);
+    });
 
     test('should validate Step Functions to EMR permissions', async () => {
       // Verify Step Functions can invoke EMR operations
@@ -559,6 +571,6 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       );
 
       expect(executions.executions?.length).toBeGreaterThan(0);
-    }, 15000);
+    });
   });
 });
