@@ -255,7 +255,8 @@ class TapStack(Stack):
             }
         )
 
-        cloudwatch.Alarm(
+        # After creating the alarms, add them to outputs
+        validation_alarm = cloudwatch.Alarm(
             self, "ValidationErrorAlarm",
             alarm_name=f"etl-validation-errors-{env_suffix}",
             metric=validation_error_rate,
@@ -280,7 +281,7 @@ class TapStack(Stack):
             }
         )
 
-        cloudwatch.Alarm(
+        transformation_alarm = cloudwatch.Alarm(
             self, "TransformationErrorAlarm",
             alarm_name=f"etl-transformation-errors-{env_suffix}",
             metric=transformation_error_rate,
@@ -345,4 +346,19 @@ class TapStack(Stack):
             value=rule.rule_name,
             description="Name of the EventBridge rule for S3 events",
             export_name=f"ETL-EventRule-{env_suffix}"
+        )
+
+        # Add alarm names to outputs
+        CfnOutput(
+            self, "ValidationAlarmName",
+            value=validation_alarm.alarm_name,
+            description="Name of the validation error CloudWatch alarm",
+            export_name=f"ETL-ValidationAlarm-{env_suffix}"
+        )
+
+        CfnOutput(
+            self, "TransformationAlarmName",
+            value=transformation_alarm.alarm_name,
+            description="Name of the transformation error CloudWatch alarm",
+            export_name=f"ETL-TransformationAlarm-{env_suffix}"
         )

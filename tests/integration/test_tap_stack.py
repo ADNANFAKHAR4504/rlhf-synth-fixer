@@ -173,24 +173,34 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("verifies CloudWatch alarms exist for Lambda functions")
     def test_cloudwatch_alarms_exist(self):
         """Test that CloudWatch alarms are configured for monitoring."""
-        # Get the environment suffix from one of the resource names
-        bucket_name = flat_outputs.get('RawBucketName', '')
-        env_suffix = bucket_name.split('-')[-1] if bucket_name else ''
+        validation_alarm_name = flat_outputs.get('ValidationAlarmName')
+        transformation_alarm_name = flat_outputs.get('TransformationAlarmName')
+        
+        if not validation_alarm_name or not transformation_alarm_name:
+            self.skipTest("Alarm names not found in outputs")
 
-        # List all alarms
-        response = self.cloudwatch_client.describe_alarms()
-        all_alarms = response.get('MetricAlarms', [])
+        # Describe specific alarms by name
+        try:
+            validation_response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[validation_alarm_name]
+            )
+            self.assertGreater(
+                len(validation_response.get('MetricAlarms', [])), 0,
+                f"Validation alarm {validation_alarm_name} should exist"
+            )
+        except Exception as e:
+            self.fail(f"Failed to find validation alarm {validation_alarm_name}: {e}")
 
-        # Look for alarms with our prefix in the entire alarm list
-        validation_alarm_name = f"etl-validation-errors-{env_suffix}"
-        transformation_alarm_name = f"etl-transformation-errors-{env_suffix}"
-
-        alarm_names = [alarm['AlarmName'] for alarm in all_alarms]
-
-        self.assertIn(validation_alarm_name, alarm_names,
-                      f"Validation alarm {validation_alarm_name} should exist")
-        self.assertIn(transformation_alarm_name, alarm_names,
-                      f"Transformation alarm {transformation_alarm_name} should exist")
+        try:
+            transformation_response = self.cloudwatch_client.describe_alarms(
+                AlarmNames=[transformation_alarm_name]
+            )
+            self.assertGreater(
+                len(transformation_response.get('MetricAlarms', [])), 0,
+                f"Transformation alarm {transformation_alarm_name} should exist"
+            )
+        except Exception as e:
+            self.fail(f"Failed to find transformation alarm {transformation_alarm_name}: {e}")
 
     @mark.it("verifies Lambda functions have proper IAM permissions")
     def test_lambda_iam_permissions(self):
