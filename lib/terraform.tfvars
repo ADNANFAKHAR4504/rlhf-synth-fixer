@@ -1,5 +1,5 @@
-environment_suffix = "synth101912554v3"
-region             = "us-east-1"
+environment_suffix = "synth101912554v4"
+region             = "ap-southeast-1"
 
 # Database credentials (using environment variables TF_VAR_db_username and TF_VAR_db_password)
 db_name = "financialdb"
@@ -17,7 +17,7 @@ memory             = "512"
 
 # VPC configuration
 vpc_cidr           = "10.0.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b"]
+availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
 
 # Tags
 cost_center = "FinancialServices"

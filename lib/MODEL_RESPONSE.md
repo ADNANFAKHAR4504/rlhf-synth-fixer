@@ -13,7 +13,7 @@ variable "environment_suffix" {
 variable "region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-southeast-1"
 }
 
 variable "vpc_cidr" {
@@ -25,7 +25,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "List of availability zones"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  default     = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
 }
 
 variable "container_image" {
@@ -1482,7 +1482,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           period = 300
           stat   = "Average"
-          region = "us-east-1"
+          region = "ap-southeast-1"
           title  = "CloudFront Metrics"
         }
       },
@@ -1742,14 +1742,14 @@ output "db_password" {
 ```hcl
 # Environment Configuration
 environment_suffix = "prod-001"
-region            = "us-east-1"
+region            = "ap-southeast-1"
 
 # VPC Configuration
 vpc_cidr           = "10.0.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+availability_zones = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
 
 # ECS Configuration
-container_image    = "your-account-id.dkr.ecr.us-east-1.amazonaws.com/financial-portal:latest"
+container_image    = "your-account-id.dkr.ecr.ap-southeast-1.amazonaws.com/financial-portal:latest"
 container_port     = 80
 desired_task_count = 3
 min_task_count     = 3
@@ -1776,7 +1776,7 @@ geo_restriction_locations = ["KP", "IR", "SY", "CU"]
 
 ## File: README.md
 
-```markdown
+````markdown
 # Financial Services Web Portal Infrastructure
 
 This Terraform configuration deploys a production-ready, highly available infrastructure for a financial services web portal on AWS.
@@ -1809,6 +1809,7 @@ The infrastructure includes:
 ```bash
 cd lib
 ```
+````
 
 2. **Initialize Terraform**
 
@@ -1837,14 +1838,14 @@ terraform apply -var-file=terraform.tfvars
 
 ## Required Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `environment_suffix` | Unique suffix for resource naming | `"prod-001"` |
-| `region` | AWS region | `"us-east-1"` |
-| `container_image` | Docker image for ECS | `"nginx:latest"` |
-| `db_username` | Database master username | `"dbadmin"` |
-| `db_password` | Database master password | Auto-generated if not provided |
-| `domain_name` | Domain name for the application | `"example.com"` |
+| Variable             | Description                       | Example                        |
+| -------------------- | --------------------------------- | ------------------------------ |
+| `environment_suffix` | Unique suffix for resource naming | `"prod-001"`                   |
+| `region`             | AWS region                        | `"ap-southeast-1"`             |
+| `container_image`    | Docker image for ECS              | `"nginx:latest"`               |
+| `db_username`        | Database master username          | `"dbadmin"`                    |
+| `db_password`        | Database master password          | Auto-generated if not provided |
+| `domain_name`        | Domain name for the application   | `"example.com"`                |
 
 ## Security Features
 
@@ -1880,6 +1881,7 @@ terraform output cloudwatch_dashboard_name
 ```
 
 Key metrics monitored:
+
 - ECS CPU and memory utilization
 - ALB request count and response times
 - RDS connections and latency
@@ -1957,6 +1959,7 @@ terraform destroy -var-file=terraform.tfvars
 ## Support
 
 For issues or questions:
+
 1. Check CloudWatch logs for application errors
 2. Review VPC flow logs for network issues
 3. Monitor WAF logs for blocked requests
@@ -1965,4 +1968,7 @@ For issues or questions:
 ## License
 
 Copyright (c) 2025. All rights reserved.
+
+```
+
 ```

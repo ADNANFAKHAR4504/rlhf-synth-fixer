@@ -66,7 +66,7 @@ Create infrastructure using **Terraform with HCL** for a production-ready financ
 - Use **CloudWatch** for monitoring and logging
 - Use **Route53** for DNS and health checks
 - Use **KMS** for encryption key management
-- Deploy to **us-east-1** region
+- Deploy to **ap-southeast-1** region
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - All resources must be destroyable (no Retain deletion policies)

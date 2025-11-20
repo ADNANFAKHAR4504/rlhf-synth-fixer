@@ -64,7 +64,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           period = 300
           stat   = "Average"
-          region = "us-east-1"
+          region = "ap-southeast-1"
           title  = "CloudFront Metrics"
         }
       },

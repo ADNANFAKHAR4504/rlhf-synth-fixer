@@ -82,7 +82,7 @@ describe('Terraform Configuration Unit Tests', () => {
 
     it('should define region variable with default', () => {
       expect(variablesTfContent).toContain('variable "region"');
-      expect(variablesTfContent).toContain('us-east-1');
+      expect(variablesTfContent).toContain('ap-southeast-1');
     });
 
     it('should mark sensitive variables as sensitive', () => {

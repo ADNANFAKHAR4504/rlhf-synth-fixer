@@ -24,6 +24,7 @@ terraform {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 terraform {
   required_version = ">= 1.0"
@@ -63,6 +64,7 @@ resource "aws_rds_cluster" "main" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 resource "aws_rds_cluster" "main" {
   engine         = "aurora-postgresql"
@@ -76,11 +78,13 @@ resource "aws_rds_cluster" "main" {
 **AWS Documentation Reference**: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.VersionPolicy.html
 
 **Cost/Security/Performance Impact**:
+
 - Blocks deployment completely
 - Requires manual intervention to identify available versions
 - Delays deployment by 10+ minutes
 
 **Training Value**: The model needs to understand that database engine versions change over time and should use either:
+
 1. Latest stable version patterns (e.g., "15")
 2. Well-documented stable versions
 3. Version validation before deployment
@@ -108,6 +112,7 @@ resource "aws_lb_listener" "https" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 # Removed ACM certificate resource entirely
 # Updated HTTP listener to forward directly instead of redirect
@@ -127,12 +132,14 @@ resource "aws_lb_listener" "http" {
 **Root Cause**: The model included production-ready HTTPS configuration with ACM certificate that requires DNS validation. For test/demo environments without domain ownership, this causes deployment to hang for 5+ minutes then fail.
 
 **Cost/Security/Performance Impact**:
+
 - Deployment timeout after 5 minutes
 - Blocks all dependent resources (ECS service, CloudFront)
 - Requires code changes mid-deployment
 - Wastes ~$0.10-0.20 in deployment costs per failed attempt
 
 **Training Value**: The model should understand:
+
 1. Test environments should use HTTP or self-signed certificates
 2. ACM certificates require actual domain ownership
 3. Alternative configurations should be provided for test scenarios
@@ -164,6 +171,7 @@ resource "aws_cloudfront_distribution" "main" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 resource "aws_cloudfront_distribution" "main" {
   # aliases removed for test environment
@@ -179,6 +187,7 @@ resource "aws_cloudfront_distribution" "main" {
 **Root Cause**: The CloudFront configuration was tightly coupled to ACM certificate, making it unusable in test environments. The origin protocol was also set to `https-only` which failed without valid certificate.
 
 **Cost/Security/Performance Impact**:
+
 - CloudFront distribution cannot be created
 - Adds 10-15 minutes to deployment time
 - Requires infrastructure redesign mid-deployment
@@ -190,6 +199,7 @@ resource "aws_cloudfront_distribution" "main" {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
+
 ```hcl
 resource "aws_ecs_service" "main" {
   depends_on = [
@@ -200,6 +210,7 @@ resource "aws_ecs_service" "main" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 resource "aws_ecs_service" "main" {
   depends_on = [
@@ -212,6 +223,7 @@ resource "aws_ecs_service" "main" {
 **Root Cause**: Hard dependency on HTTPS listener that doesn't exist in test configuration.
 
 **Cost/Security/Performance Impact**:
+
 - ECS service creation fails
 - No containers can be deployed
 - Complete application unavailability
@@ -232,7 +244,7 @@ Created `terraform.tfvars` with sensible defaults:
 
 ```hcl
 environment_suffix = "synth101912554"
-region             = "us-east-1"
+region             = "ap-southeast-1"
 db_name            = "financialdb"
 container_image    = "nginx:latest"
 desired_task_count = 2
@@ -241,7 +253,7 @@ max_task_count     = 4
 cpu                = "256"
 memory             = "512"
 vpc_cidr           = "10.0.0.0/16"
-availability_zones = ["us-east-1a", "us-east-1b"]
+availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
 cost_center        = "FinancialServices"
 environment        = "dev"
 compliance         = "PCI-DSS"
@@ -250,6 +262,7 @@ compliance         = "PCI-DSS"
 **Root Cause**: The model didn't provide default values configuration, assuming users would manually set all variables.
 
 **Cost/Security/Performance Impact**:
+
 - Deployment fails without explicit variable values
 - Adds 5-10 minutes of manual configuration
 - Increases chance of typos and configuration errors
@@ -278,6 +291,7 @@ Added comments explaining test vs production trade-offs:
 **Root Cause**: The model generated production-ready code without considering test environment constraints or providing guidance for simpler alternatives.
 
 **Training Value**: Infrastructure code should include comments explaining:
+
 - Production vs test trade-offs
 - Security implications of test configurations
 - Steps to move from test to production
@@ -292,6 +306,7 @@ Added comments explaining test vs production trade-offs:
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
+
 ```hcl
 variable "environment" {
   default = "production"
@@ -299,6 +314,7 @@ variable "environment" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 variable "environment" {
   default = "dev"  # Changed in terraform.tfvars
@@ -308,6 +324,7 @@ variable "environment" {
 **Root Cause**: Using "production" as default is misleading for test/dev deployments.
 
 **Cost/Security/Performance Impact**:
+
 - Minimal - just a tag value
 - Could cause confusion in cost allocation
 
@@ -336,6 +353,7 @@ No changes needed - verbose names are acceptable and improve clarity.
 **Total Failures**: 3 Critical, 2 High, 2 Medium, 2 Low
 
 **Primary Knowledge Gaps**:
+
 1. **Test vs Production Configurations**: The model needs to understand when to use production-ready features (ACM, HTTPS) vs test-friendly alternatives (HTTP, self-signed certs)
 2. **AWS Service Availability**: Engine versions, regional features, and service limits need real-time validation
 3. **Backend Configuration**: Team/CI workflows require explicit state management setup
@@ -344,6 +362,7 @@ No changes needed - verbose names are acceptable and improve clarity.
 **Training Value**: HIGH
 
 This task provides excellent training data because:
+
 1. It demonstrates real-world deployment blockers that require immediate fixes
 2. It shows the importance of validating AWS service versions/availability
 3. It teaches the model about test vs production trade-offs
@@ -351,15 +370,18 @@ This task provides excellent training data because:
 5. The fixes are clear, well-documented, and follow best practices
 
 **Deployment Time Impact**:
+
 - Original MODEL_RESPONSE: Would fail after 15-20 minutes with ACM timeout
 - Fixed IDEAL_RESPONSE: Successful deployment in ~14 minutes
 
 **Cost Impact**:
+
 - Failed deployments cost ~$0.30-0.50 in wasted resources
 - Multiple retry attempts multiply costs
 - Proper configuration saves 2-3 failed deployment attempts
 
 **Recommended Model Improvements**:
+
 1. Add validation step for AWS service versions before code generation
 2. Include both production and test configuration patterns
 3. Always add backend configuration for Terraform projects

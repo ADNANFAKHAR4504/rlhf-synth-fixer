@@ -1,13 +1,13 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across deployments"
   type        = string
-  default     = "synth101912554v3"
+  default     = "synth101912554v4"
 }
 
 variable "region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-southeast-1"
 }
 
 variable "vpc_cidr" {
@@ -19,7 +19,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "List of availability zones"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  default     = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
 }
 
 variable "container_image" {

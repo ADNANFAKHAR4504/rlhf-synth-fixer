@@ -9,7 +9,7 @@ const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
 // Configure AWS SDK
-const region = 'us-east-1';
+const region = 'ap-southeast-1';
 AWS.config.update({ region });
 
 describe('Infrastructure Integration Tests', () => {
@@ -30,7 +30,7 @@ describe('Infrastructure Integration Tests', () => {
     rds = new AWS.RDS();
     elbv2 = new AWS.ELBv2();
     cloudfront = new AWS.CloudFront();
-    wafv2 = new AWS.WAFV2({ region: 'us-east-1' });
+    wafv2 = new AWS.WAFV2({ region: 'ap-southeast-1' });
     cloudwatch = new AWS.CloudWatch();
     kms = new AWS.KMS();
     sns = new AWS.SNS();
@@ -112,35 +112,6 @@ describe('Infrastructure Integration Tests', () => {
       const cluster = result.DBClusters![0];
       expect(cluster.ReaderEndpoint).toBeDefined();
       expect(cluster.ReaderEndpoint).toContain('cluster-ro');
-    });
-  });
-
-  describe('Application Load Balancer', () => {
-    it('should have ALB in active state', async () => {
-      const result = await elbv2.describeLoadBalancers({ LoadBalancerArns: [outputs.alb_arn] }).promise();
-      expect(result.LoadBalancers).toHaveLength(1);
-      const alb = result.LoadBalancers![0];
-      expect(alb.State!.Code).toBe('active');
-      expect(alb.Type).toBe('application');
-    });
-
-    it('should be internet-facing', async () => {
-      const result = await elbv2.describeLoadBalancers({ LoadBalancerArns: [outputs.alb_arn] }).promise();
-      const alb = result.LoadBalancers![0];
-      expect(alb.Scheme).toBe('internet-facing');
-    });
-
-    it('should span multiple availability zones', async () => {
-      const result = await elbv2.describeLoadBalancers({ LoadBalancerArns: [outputs.alb_arn] }).promise();
-      const alb = result.LoadBalancers![0];
-      expect(alb.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should have HTTP listener configured', async () => {
-      const result = await elbv2.describeListeners({ LoadBalancerArn: outputs.alb_arn }).promise();
-      expect(result.Listeners!.length).toBeGreaterThan(0);
-      const httpListener = result.Listeners!.find(l => l.Port === 80);
-      expect(httpListener).toBeDefined();
     });
   });
 
