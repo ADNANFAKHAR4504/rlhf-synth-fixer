@@ -1,6 +1,6 @@
 aws_region         = "us-east-1"
-environment_suffix = "synth101912523"
-repository         = "synth-101912523"
+environment_suffix = "synth101912523v1"
+repository         = "synth-101912523v1"
 commit_author      = "Arpit Patidar"
 team               = "synth"
 pr_number          = "101912523"
