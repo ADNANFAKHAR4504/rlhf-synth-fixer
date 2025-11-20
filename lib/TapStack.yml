@@ -9,9 +9,28 @@ Parameters:
 
   DBPasswordSecretArn:
     Type: String
-    Description: ARN of the Secrets Manager secret containing the DB master password
+    Description: ARN of the Secrets Manager secret containing the DB master password (optional - will create if not provided)
+    Default: ''
+
+Conditions:
+  CreateDBPasswordSecret: !Equals [!Ref DBPasswordSecretArn, '']
 
 Resources:
+  # Create a DB password secret if one is not provided
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateDBPasswordSecret
+    Properties:
+      Name: !Sub 'tap-db-password-${EnvironmentSuffix}'
+      Description: Database master password for TapStack
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'tap-db-password-${EnvironmentSuffix}'
   # VPC and Networking - Primary Region
   PrimaryVPC:
     Type: AWS::EC2::VPC
@@ -174,7 +193,10 @@ Resources:
       Engine: aurora-mysql
       EngineVersion: 8.0.mysql_aurora.3.04.0
       MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}'
+      MasterUserPassword: !If
+        - CreateDBPasswordSecret
+        - !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+        - !Sub '{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}'
       DatabaseName: appdb
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
@@ -203,13 +225,13 @@ Resources:
   # Route53 Health Check
   HealthCheck:
     Type: AWS::Route53::HealthCheck
-    DependsOn: DBCPUAlarm
     Properties:
-      Type: CLOUDWATCH_METRIC
-      AlarmIdentifier:
-        Name: !GetAtt DBCPUAlarm.AlarmName
-        Region: !Ref 'AWS::Region'
-      InsufficientDataHealthStatus: Healthy
+      HealthCheckConfig:
+        Type: CLOUDWATCH_METRIC
+        AlarmIdentifier:
+          Name: !GetAtt DBCPUAlarm.AlarmName
+          Region: !Ref 'AWS::Region'
+        InsufficientDataHealthStatus: Healthy
       HealthCheckTags:
         - Key: Name
           Value: !Sub 'db-health-check-${EnvironmentSuffix}'
