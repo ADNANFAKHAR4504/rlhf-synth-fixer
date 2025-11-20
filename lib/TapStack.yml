@@ -391,7 +391,7 @@ Resources:
     Properties:
       Engine: aurora-postgresql
       EngineVersion: '15.8'
-      MasterUsername: admin
+      MasterUsername: dbadmin
       MasterUserPassword:
         Fn::Sub: '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       DatabaseName: appdb
@@ -441,7 +441,7 @@ Resources:
         Fn::Sub: ${Environment}-db-password-${EnvironmentSuffix}
       Description: Database master password
       GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
+        SecretStringTemplate: '{"username": "dbadmin"}'
         GenerateStringKey: password
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
