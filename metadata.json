@@ -6,7 +6,7 @@
   "po_id": "101912521",
   "team": "synth",
   "startedAt": "2025-11-20T10:31:01+00:00",
-  "subtask": "Create a Pulumi Python program to build infrastructure for migrating an on-premises application to AWS.",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "migration",
     "monolithic-to-cloud",
