@@ -38,14 +38,27 @@ export class TapStack extends cdk.Stack {
       natGateways: 1,
     });
 
-    // 🔹 CodeCommit
-    const codeRepo = new codecommit.Repository(this, 'PaymentServiceRepo', {
-      repositoryName: `payment-service-${environmentSuffix}`,
-    });
+    // 🔹 CodeCommit (optional - reference existing repository if provided)
+    // If CodeCommit is not enabled in the account, provide repository name via context:
+    // cdk deploy --context codeCommitRepositoryName=your-existing-repo-name
+    const existingRepoName = this.node.tryGetContext(
+      'codeCommitRepositoryName'
+    );
+    let codeRepo: codecommit.IRepository | undefined;
+
+    if (existingRepoName) {
+      // Reference existing repository
+      codeRepo = codecommit.Repository.fromRepositoryName(
+        this,
+        'PaymentServiceRepo',
+        existingRepoName
+      );
+    }
+    // If no existing repo name provided, we'll use S3 source instead
 
     // 🔹 Artifact Bucket
     const artifactBucket = new s3.Bucket(this, 'PipelineArtifacts', {
-      bucketName: `payment-pipeline-artifacts-${this.account}-${this.region}-${environmentSuffix}`,
+      bucketName: `payment-artifacts-${this.account}-${environmentSuffix}`,
       versioned: false,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -72,7 +85,7 @@ export class TapStack extends cdk.Stack {
         },
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteImages: true,
+      emptyOnDelete: true,
     });
 
     // 🔹 SSM Parameters
@@ -80,7 +93,6 @@ export class TapStack extends cdk.Stack {
       parameterName: `/payment-service-${environmentSuffix}/slack-webhook-url`,
       stringValue: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL',
       tier: ssm.ParameterTier.STANDARD,
-      type: ssm.ParameterType.SECURE_STRING,
     });
 
     const stagingEndpointParam = new ssm.StringParameter(
@@ -313,8 +325,17 @@ export class TapStack extends cdk.Stack {
     const cluster = new ecs.Cluster(this, 'PaymentCluster', {
       clusterName: `payment-service-cluster-${environmentSuffix}`,
       vpc: vpc,
-      containerInsights: true,
+      enableFargateCapacityProviders: true,
     });
+
+    // Enable Container Insights via cluster settings
+    const cfnCluster = cluster.node.defaultChild as ecs.CfnCluster;
+    cfnCluster.clusterSettings = [
+      {
+        name: 'containerInsights',
+        value: 'enabled',
+      },
+    ];
 
     const taskRole = new iam.Role(this, 'PaymentTaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -344,8 +365,14 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Use placeholder image initially - pipeline will update with real image
+    // Using nginx as placeholder that will respond on port 80
+    const placeholderImage =
+      this.node.tryGetContext('ecsPlaceholderImage') ||
+      'public.ecr.aws/nginx/nginx:1.21-alpine';
+
     const container = taskDefinition.addContainer('payment-container', {
-      image: ecs.ContainerImage.fromRegistry(`${ecrRepo.repositoryUri}:latest`),
+      image: ecs.ContainerImage.fromRegistry(placeholderImage),
       memoryLimitMiB: 2048,
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'payment-service',
@@ -362,7 +389,7 @@ export class TapStack extends cdk.Stack {
       healthCheck: {
         command: [
           'CMD-SHELL',
-          'curl -f http://localhost:3000/health || exit 1',
+          'wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1',
         ],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
@@ -372,7 +399,7 @@ export class TapStack extends cdk.Stack {
     });
 
     container.addPortMappings({
-      containerPort: 3000,
+      containerPort: 80, // nginx placeholder uses port 80
       protocol: ecs.Protocol.TCP,
     });
 
@@ -392,7 +419,7 @@ export class TapStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetGroupName: `payment-blue-tg-${environmentSuffix}`,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: cdk.Duration.seconds(30),
           timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,
@@ -412,7 +439,7 @@ export class TapStack extends cdk.Stack {
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetGroupName: `payment-green-tg-${environmentSuffix}`,
         healthCheck: {
-          path: '/health',
+          path: '/',
           interval: cdk.Duration.seconds(30),
           timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,
@@ -444,6 +471,8 @@ export class TapStack extends cdk.Stack {
       },
       assignPublicIp: true,
       healthCheckGracePeriod: cdk.Duration.seconds(60),
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
     });
 
     service.attachToApplicationTargetGroup(blueTargetGroup);
@@ -468,7 +497,7 @@ export class TapStack extends cdk.Stack {
       this,
       'TargetResponseTimeAlarm',
       {
-        metric: blueTargetGroup.metricTargetResponseTime(),
+        metric: blueTargetGroup.metrics.targetResponseTime(),
         threshold: 2,
         evaluationPeriods: 2,
         datapointsToAlarm: 2,
@@ -481,7 +510,7 @@ export class TapStack extends cdk.Stack {
       this,
       'UnhealthyHostAlarm',
       {
-        metric: blueTargetGroup.metricUnhealthyHostCount(),
+        metric: blueTargetGroup.metrics.unhealthyHostCount(),
         threshold: 1,
         evaluationPeriods: 2,
         datapointsToAlarm: 2,
@@ -491,7 +520,7 @@ export class TapStack extends cdk.Stack {
     );
 
     const http5xxAlarm = new cloudwatch.Alarm(this, 'Http5xxAlarm', {
-      metric: blueTargetGroup.metricHttpCodeTarget(
+      metric: blueTargetGroup.metrics.httpCodeTarget(
         elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
         { period: cdk.Duration.minutes(1) }
       ),
@@ -515,7 +544,7 @@ export class TapStack extends cdk.Stack {
           testListener: testListener,
           blueTargetGroup: blueTargetGroup,
           greenTargetGroup: greenTargetGroup,
-          deploymentApprovalWaitTime: cdk.Duration.minutes(0),
+          deploymentApprovalWaitTime: cdk.Duration.minutes(1),
           terminationWaitTime: cdk.Duration.minutes(5),
         },
         deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
@@ -547,6 +576,17 @@ export class TapStack extends cdk.Stack {
         }),
       },
     });
+
+    // Create log group for Lambda with removal policy
+    const slackNotifierLogGroup = new logs.LogGroup(
+      this,
+      'SlackNotifierLogGroup',
+      {
+        logGroupName: `/aws/lambda/payment-pipeline-slack-notifier-${environmentSuffix}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     const slackNotifier = new lambda.Function(this, 'SlackNotifier', {
       functionName: `payment-pipeline-slack-notifier-${environmentSuffix}`,
@@ -614,14 +654,88 @@ export class TapStack extends cdk.Stack {
       },
       role: slackNotifierRole,
       timeout: cdk.Duration.seconds(30),
+      logGroup: slackNotifierLogGroup,
     });
 
     // 🔹 Pipeline
     const pipelineRole = new iam.Role(this, 'PipelineRole', {
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodePipelineFullAccess'),
-      ],
+      inlinePolicies: {
+        CodePipelinePolicy: new iam.PolicyDocument({
+          statements: [
+            // S3 permissions for artifacts and source
+            new iam.PolicyStatement({
+              actions: [
+                's3:GetObject',
+                's3:GetObjectVersion',
+                's3:GetObjectVersionAcl',
+                's3:PutObject',
+                's3:PutObjectAcl',
+              ],
+              resources: [
+                artifactBucket.arnForObjects('*'),
+                artifactBucket.bucketArn + '/*',
+              ],
+            }),
+            new iam.PolicyStatement({
+              actions: ['s3:ListBucket'],
+              resources: [artifactBucket.bucketArn],
+            }),
+            // CodeBuild permissions
+            new iam.PolicyStatement({
+              actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
+              resources: [
+                buildProject.projectArn,
+                unitTestProject.projectArn,
+                integrationTestProject.projectArn,
+              ],
+            }),
+            // CodeDeploy permissions
+            new iam.PolicyStatement({
+              actions: [
+                'codedeploy:CreateDeployment',
+                'codedeploy:GetApplication',
+                'codedeploy:GetApplicationRevision',
+                'codedeploy:GetDeployment',
+                'codedeploy:GetDeploymentConfig',
+                'codedeploy:RegisterApplicationRevision',
+              ],
+              resources: ['*'],
+            }),
+            // ECS permissions
+            new iam.PolicyStatement({
+              actions: [
+                'ecs:DescribeServices',
+                'ecs:DescribeTaskDefinition',
+                'ecs:DescribeTasks',
+                'ecs:ListTasks',
+                'ecs:RegisterTaskDefinition',
+                'ecs:UpdateService',
+              ],
+              resources: ['*'],
+            }),
+            // IAM permissions for passing roles
+            new iam.PolicyStatement({
+              actions: ['iam:PassRole'],
+              resources: [
+                codeBuildRole.roleArn,
+                codeDeployRole.roleArn,
+                taskRole.roleArn,
+                executionRole.roleArn,
+              ],
+            }),
+            // CloudWatch Logs
+            new iam.PolicyStatement({
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
 
     const pipeline = new codepipeline.Pipeline(this, 'PaymentPipeline', {
@@ -636,17 +750,44 @@ export class TapStack extends cdk.Stack {
     const buildOutput = new codepipeline.Artifact('BuildOutput');
     const unitTestOutput = new codepipeline.Artifact('UnitTestOutput');
 
-    pipeline.addStage({
-      stageName: 'Source',
-      actions: [
-        new codepipeline_actions.CodeCommitSourceAction({
-          actionName: 'Source',
-          repository: codeRepo,
-          branch: 'main',
-          output: sourceOutput,
-        }),
-      ],
-    });
+    // Source stage - use CodeCommit if available, otherwise use S3
+    if (codeRepo) {
+      pipeline.addStage({
+        stageName: 'Source',
+        actions: [
+          new codepipeline_actions.CodeCommitSourceAction({
+            actionName: 'Source',
+            repository: codeRepo,
+            branch: 'main',
+            output: sourceOutput,
+          }),
+        ],
+      });
+    } else {
+      // Fallback to S3 source
+      const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
+        bucketName: `payment-source-${this.account}-${environmentSuffix}`,
+        versioned: false,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
+      // Grant pipeline role permissions to access source bucket
+      sourceBucket.grantRead(pipelineRole);
+
+      pipeline.addStage({
+        stageName: 'Source',
+        actions: [
+          new codepipeline_actions.S3SourceAction({
+            actionName: 'Source',
+            bucket: sourceBucket,
+            bucketKey: 'source.zip',
+            output: sourceOutput,
+          }),
+        ],
+      });
+    }
 
     pipeline.addStage({
       stageName: 'Build',
