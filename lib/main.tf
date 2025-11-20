@@ -117,68 +117,6 @@ resource "aws_route_table_association" "private" {
 # Encryption and Data Stores #
 ##############################
 
-# KMS key for EMR local disk encryption
-resource "aws_kms_key" "emr" {
-  description             = "KMS key for EMR local disk encryption (${var.project_name})"
-  deletion_window_in_days = var.emr_kms_key_deletion_window_days
-  enable_key_rotation     = true
-  tags                    = local.common_tags
-
-  depends_on = [
-    aws_iam_role.emr_service_role,
-    aws_iam_role.emr_ec2_role
-  ]
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow EMR Service Role"
-        Effect = "Allow"
-        Principal = {
-          AWS = aws_iam_role.emr_service_role.arn
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext",
-          "kms:DescribeKey",
-          "kms:CreateGrant"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow EMR EC2 Role"
-        Effect = "Allow"
-        Principal = {
-          AWS = aws_iam_role.emr_ec2_role.arn
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_kms_alias" "emr" {
-  name          = "alias/${local.bucket_prefix}-emr"
-  target_key_id = aws_kms_key.emr.key_id
-}
-
 resource "aws_s3_bucket" "raw" {
   bucket        = local.raw_bucket_name
   force_destroy = false
@@ -433,10 +371,6 @@ resource "aws_emr_security_configuration" "main" {
         S3EncryptionConfiguration = {
           EncryptionMode = "SSE-S3"
         }
-        LocalDiskEncryptionConfiguration = {
-          EncryptionKeyProviderType = "AwsKms"
-          AwsKmsKey                 = aws_kms_key.emr.arn
-        }
       }
       }, var.enable_in_transit_encryption ? {
       InTransitEncryptionConfiguration = {
@@ -584,10 +518,8 @@ resource "aws_emr_cluster" "main" {
     aws_s3_object.bootstrap_script,
     aws_iam_role_policy.emr_service_ec2_permissions,
     aws_iam_role_policy.emr_service_s3_permissions,
-    aws_iam_role_policy.emr_service_kms,
     aws_iam_role_policy_attachment.emr_service_role,
-    aws_emr_security_configuration.main,
-    aws_kms_key.emr
+    aws_emr_security_configuration.main
   ]
 }
 

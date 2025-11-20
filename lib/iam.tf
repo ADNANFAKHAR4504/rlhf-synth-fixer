@@ -23,34 +23,6 @@ resource "aws_iam_role_policy_attachment" "emr_service_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2"
 }
 
-# KMS permissions for EMR service role to use KMS key for local disk encryption
-resource "aws_iam_role_policy" "emr_service_kms" {
-  name = "${local.bucket_prefix}-emr-service-kms"
-  role = aws_iam_role.emr_service_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext",
-          "kms:DescribeKey",
-          "kms:CreateGrant",
-          "kms:ListGrants",
-          "kms:RevokeGrant"
-        ]
-        Resource = [
-          aws_kms_key.emr.arn
-        ]
-      }
-    ]
-  })
-}
-
 # S3 permissions for EMR service role to access TLS certificate and other security configurations
 resource "aws_iam_role_policy" "emr_service_s3_permissions" {
   name = "${local.bucket_prefix}-emr-service-s3-permissions"
@@ -291,31 +263,6 @@ resource "aws_iam_role_policy" "emr_ec2_tagging" {
         Resource = [
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*"
-        ]
-      }
-    ]
-  })
-}
-
-# KMS permissions for EMR local disk encryption
-resource "aws_iam_role_policy" "emr_ec2_kms" {
-  name = "${local.bucket_prefix}-emr-ec2-kms"
-  role = aws_iam_role.emr_ec2_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext",
-          "kms:DescribeKey",
-          "kms:ListAliases"
-        ]
-        Resource = [
-          aws_kms_key.emr.arn
         ]
       }
     ]
