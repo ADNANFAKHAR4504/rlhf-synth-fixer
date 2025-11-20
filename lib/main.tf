@@ -366,11 +366,7 @@ resource "random_id" "security_config_suffix" {
     bucket_prefix = local.bucket_prefix
     account_id    = data.aws_caller_identity.current.account_id
     region        = data.aws_region.current.name
-    config_hash = sha1(jsonencode({
-      enable_tls        = var.enable_in_transit_encryption
-      enable_at_rest_s3 = true
-      enable_local_disk = false
-    }))
+    enable_tls    = var.enable_in_transit_encryption
   }
 }
 
@@ -378,22 +374,15 @@ resource "aws_emr_security_configuration" "main" {
   name = "${local.bucket_prefix}-security-config-${random_id.security_config_suffix.hex}"
 
   configuration = jsonencode({
-    EncryptionConfiguration = merge({
-      EnableInTransitEncryption = var.enable_in_transit_encryption
-      EnableAtRestEncryption    = true
-      AtRestEncryptionConfiguration = {
-        S3EncryptionConfiguration = {
-          EncryptionMode = "SSE-S3"
-        }
-      }
-      }, var.enable_in_transit_encryption ? {
+    EncryptionConfiguration = var.enable_in_transit_encryption ? {
+      EnableInTransitEncryption = true
       InTransitEncryptionConfiguration = {
         TLSCertificateConfiguration = {
           CertificateProviderType = "PEM"
           S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_zip[0].key}"
         }
       }
-    } : {})
+    } : {}
   })
 }
 
