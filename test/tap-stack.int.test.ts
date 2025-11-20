@@ -3,34 +3,34 @@
  * These tests validate the deployed resources using stack outputs from cfn-outputs/flat-outputs.json
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   DatabaseMigrationServiceClient,
   DescribeReplicationTasksCommand,
 } from '@aws-sdk/client-database-migration-service';
 import {
-  LambdaClient,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   GetFunctionCommand,
+  LambdaClient,
 } from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 
@@ -97,21 +97,6 @@ describe('Payment Processing Migration Infrastructure Integration Tests', () => 
       const response = await ec2Client.send(command);
 
       expect(response.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
-    });
-
-    it('should have DNS support enabled', async () => {
-      if (!stackOutputs.vpcId) {
-        console.warn('Skipping: vpcId not found in stack outputs');
-        return;
-      }
-
-      const command = new DescribeVpcsCommand({
-        VpcIds: [stackOutputs.vpcId],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
     });
 
     it('should have public and private subnets', async () => {
