@@ -1,3 +1,13 @@
+# Generate a unique random suffix for this deployment
+resource "random_id" "deployment_suffix" {
+  byte_length = 4
+  keepers = {
+    project_name = var.project_name
+    environment  = var.environment_suffix
+    region       = var.aws_region
+  }
+}
+
 locals {
   normalized_project = lower(replace(var.project_name, " ", "-"))
   normalized_suffix  = lower(replace(var.environment_suffix, " ", "-"))
@@ -6,7 +16,8 @@ locals {
   bucket_prefix = lower(join("-", compact([
     local.normalized_project,
     local.normalized_suffix,
-    local.normalized_region
+    local.normalized_region,
+    random_id.deployment_suffix.hex
   ])))
 
   raw_bucket_name     = coalesce(var.s3_raw_bucket_name, "${local.bucket_prefix}-raw")

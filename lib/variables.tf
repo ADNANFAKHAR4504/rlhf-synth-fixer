@@ -186,16 +186,6 @@ variable "ec2_key_pair_name" {
   default     = null
 }
 
-variable "emr_kms_key_deletion_window_days" {
-  description = "Number of days before the EMR-specific KMS key is deleted after destroy"
-  type        = number
-  default     = 7
-
-  validation {
-    condition     = var.emr_kms_key_deletion_window_days >= 7 && var.emr_kms_key_deletion_window_days <= 30
-    error_message = "KMS key deletion window must be between 7 and 30 days."
-  }
-}
 
 variable "enable_in_transit_encryption" {
   description = "Enable TLS in-transit encryption for EMR cluster (requires valid TLS certificate)"
