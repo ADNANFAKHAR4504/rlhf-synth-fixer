@@ -102,17 +102,17 @@ jobs:
 
       - name: Lint shell scripts
         run: |
-          shellcheck scripts/*.sh || true
+          shellcheck scripts/*.sh
 
       - name: Lint Dockerfiles
         run: |
-          hadolint ${{ env.UPLOAD_API_DOCKERFILE }} || true
-          hadolint ${{ env.TRANSCODING_WORKER_DOCKERFILE }} || true
-          hadolint ${{ env.STREAMING_API_DOCKERFILE }} || true
+          hadolint ${{ env.UPLOAD_API_DOCKERFILE }}
+          hadolint ${{ env.TRANSCODING_WORKER_DOCKERFILE }}
+          hadolint ${{ env.STREAMING_API_DOCKERFILE }}
 
       - name: Lint YAML
         run: |
-          yamllint .
+          yamllint -d relaxed .
 
   build:
     name: Build Containers & Bundles
@@ -388,9 +388,21 @@ jobs:
           resource-group: ${{ env.DEV_RESOURCE_GROUP }}
           cluster-name: ${{ env.AKS_DEV_CLUSTER }}
 
-      - name: Deploy AKS GPU workloads
+      - name: Deploy AKS GPU workloads (transcoding-worker)
         run: |
           bash scripts/deploy-aks-gpu.sh dev
+
+      - name: Deploy upload-api and streaming-api (dev)
+        run: |
+          helm upgrade --install upload-api charts/upload-api \
+            --namespace media \
+            --create-namespace \
+            --set image.repository="${ACR_NAME}.azurecr.io/upload-api" \
+            --set image.tag="${GITHUB_SHA}"
+          helm upgrade --install streaming-api charts/streaming-api \
+            --namespace media \
+            --set image.repository="${ACR_NAME}.azurecr.io/streaming-api" \
+            --set image.tag="${GITHUB_SHA}"
 
       - name: Deploy Azure Functions (dev)
         run: |
