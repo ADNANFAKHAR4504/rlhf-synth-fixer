@@ -127,7 +127,7 @@ export class MigrationStack extends pulumi.ComponentResource {
         vpcSecurityGroupIds: [dmsSecurityGroup.id],
         replicationSubnetGroupId: dmsSubnetGroup.id,
         publiclyAccessible: false,
-        engineVersion: '3.4.7',
+        engineVersion: '3.5.3',
         multiAz: false,
         tags: {
           ...args.tags,

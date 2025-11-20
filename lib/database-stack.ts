@@ -2,8 +2,8 @@
  * Database Stack - RDS Aurora PostgreSQL Cluster
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface DatabaseStackArgs {
   environmentSuffix: string;
@@ -102,7 +102,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
       {
         clusterIdentifier: `aurora-cluster-${args.environmentSuffix}`,
         engine: 'aurora-postgresql',
-        engineVersion: '13.7',
+        engineVersion: '15.4',
         masterUsername: 'dbadmin',
         masterPassword: pulumi.secret('ChangeMe123!'), // In production, use Secrets Manager
         databaseName: 'paymentdb',
@@ -139,7 +139,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         clusterIdentifier: cluster.id,
         instanceClass: instanceClass,
         engine: 'aurora-postgresql',
-        engineVersion: '13.7',
+        engineVersion: '15.4',
         publiclyAccessible: false,
         identifier: `aurora-instance-writer-${args.environmentSuffix}`,
         tags: {
@@ -159,7 +159,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
           clusterIdentifier: cluster.id,
           instanceClass: instanceClass,
           engine: 'aurora-postgresql',
-          engineVersion: '13.7',
+          engineVersion: '15.4',
           publiclyAccessible: false,
           identifier: `aurora-instance-reader-${i}-${args.environmentSuffix}`,
           tags: {
