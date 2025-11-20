@@ -46,6 +46,7 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   DescribeSecretCommand,
+  GetSecretValueCommand,
   SecretsManagerClient,
 } from "@aws-sdk/client-secrets-manager";
 import {
@@ -987,18 +988,33 @@ describe("TapStack - Live AWS Production Web Application Integration Tests", () 
     });
 
     test("Secrets Manager integration with RDS works correctly", async () => {
-      // Verify secret exists and is linked to RDS
+      // Verify our explicit secret exists and is properly configured
       const secretRes = await secretsManagerClient.send(
         new DescribeSecretCommand({ SecretId: outputs.DBSecretArn })
       );
       expect(secretRes.Name).toBeDefined();
+      expect(secretRes.Description).toBe('RDS master password');
 
-      // Verify RDS instance uses managed secret (may be different from initial secret)
+      // Verify we can retrieve the secret value (validates it's properly formed)
+      const secretValueRes = await secretsManagerClient.send(
+        new GetSecretValueCommand({ SecretId: outputs.DBSecretArn })
+      );
+      expect(secretValueRes.SecretString).toBeDefined();
+
+      // Parse the secret to verify it contains username and password
+      const secretData = JSON.parse(secretValueRes.SecretString as string);
+      expect(secretData.username).toBeDefined();
+      expect(secretData.password).toBeDefined();
+      expect(secretData.password.length).toBeGreaterThanOrEqual(16); // Our configured length
+
+      // Verify RDS instance is running (indicates successful password usage)
       const dbRes = await rdsClient.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.RDSInstanceId })
       );
-      expect(dbRes.DBInstances?.[0]?.MasterUserSecret?.SecretArn).toBeDefined();
-      // RDS may create its own managed secret, so we just verify one exists
+      expect(dbRes.DBInstances?.[0]?.DBInstanceStatus).toBe('available');
+
+      // Note: With explicit MasterUserPassword, RDS doesn't create MasterUserSecret
+      // This is expected behavior when using resolve:secretsmanager approach
 
       console.log(" Secrets Manager: Database credentials properly managed and linked to RDS");
     });

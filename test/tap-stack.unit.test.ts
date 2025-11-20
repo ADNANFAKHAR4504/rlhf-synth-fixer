@@ -478,9 +478,8 @@ describe('TapStack - Production Web Application Infrastructure Unit Tests', () =
       validateResourceExists('RDSInstance', 'AWS::RDS::DBInstance');
       expect(templateYaml).toContain('Engine: mysql');
       expect(templateYaml).toContain('EngineVersion: \'8.0');
-      expect(templateYaml).toContain('ManageMasterUserPassword: true');
-      expect(templateYaml).toContain('MasterUserSecret:');
-      expect(templateYaml).toContain('SecretArn: !Ref DBMasterSecret');
+      expect(templateYaml).toContain('MasterUserPassword: !Sub \'{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}\'');
+      expect(templateYaml).toContain('DBMasterSecret');
     });
 
     test('RDS Instance has proper backup and maintenance configuration', () => {
@@ -894,9 +893,9 @@ describe('TapStack - Production Web Application Infrastructure Unit Tests', () =
     });
 
     test('Secrets Manager integration with RDS', () => {
-      expect(templateYaml).toContain('ManageMasterUserPassword: true');
-      expect(templateYaml).toContain('MasterUserSecret:');
-      expect(templateYaml).toContain('SecretArn: !Ref DBMasterSecret');
+      expect(templateYaml).toContain('MasterUserPassword: !Sub \'{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}\'');
+      expect(templateYaml).toContain('AWS::SecretsManager::Secret');
+      expect(templateYaml).toContain('GenerateSecretString:');
     });
 
     test('CloudWatch monitoring covers all critical components', () => {
@@ -1027,7 +1026,7 @@ describe('TapStack - Production Web Application Infrastructure Unit Tests', () =
 
       // Uses Secrets Manager instead
       expect(templateYaml).toContain('AWS::SecretsManager::Secret');
-      expect(templateYaml).toContain('ManageMasterUserPassword: true');
+      expect(templateYaml).toContain('MasterUserPassword: !Sub \'{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}\'');
     });
 
     test('S3 bucket follows security best practices', () => {
@@ -1105,7 +1104,7 @@ describe('TapStack - Production Web Application Infrastructure Unit Tests', () =
       expect(templateYaml).toContain('MaxSize: 6');
       expect(templateYaml).toContain('DesiredCapacity: 2');
       expect(templateYaml).toContain('HealthCheckType: ELB');
-      expect(templateYaml).toContain('TargetValue: 70'); 
+      expect(templateYaml).toContain('TargetValue: 70');
     });
 
     test('Database backup and maintenance are configured', () => {

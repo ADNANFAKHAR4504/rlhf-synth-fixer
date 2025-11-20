@@ -443,9 +443,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.43'
       MasterUsername: !Ref DBMasterUsername
-      ManageMasterUserPassword: true
-      MasterUserSecret:
-        SecretArn: !Ref DBMasterSecret
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup

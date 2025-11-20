@@ -34,9 +34,7 @@ DBMasterSecret:
       ExcludePunctuation: true
 
 # Referenced as:
-ManageMasterUserPassword: true
-MasterUserSecret:
-  SecretArn: !Ref DBMasterSecret
+MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
 ```
 
 **Impact:**

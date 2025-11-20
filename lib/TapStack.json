@@ -823,11 +823,8 @@
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
-                "ManageMasterUserPassword": true,
-                "MasterUserSecret": {
-                    "SecretArn": {
-                        "Ref": "DBMasterSecret"
-                    }
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
