@@ -379,8 +379,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
         assert len(matching_dashboards) > 0, "CloudWatch dashboard should exist"
 
-    @mark.it("verifies CloudWatch alarm exists")
-    def test_cloudwatch_alarm_exists(self):
+    @mark.it("verifies CloudWatch alarms exist for comprehensive monitoring")
+    def test_cloudwatch_alarms_exist(self):
         alarms = self.cloudwatch_client.describe_alarms()
 
         matching_alarms = [
@@ -388,11 +388,16 @@ class TestTapStackIntegration(unittest.TestCase):
             if environment_suffix in a['AlarmName']
         ]
 
-        assert len(matching_alarms) > 0, "CloudWatch alarm should exist"
-        alarm = matching_alarms[0]
-        assert alarm['Threshold'] == 80.0, "Alarm threshold should be 80"
-        assert alarm['EvaluationPeriods'] == 2, "Evaluation periods should be 2"
-        assert len(alarm['AlarmActions']) > 0, "Alarm should have actions configured"
+        assert len(matching_alarms) >= 9, f"Should have at least 9 CloudWatch alarms, found {len(matching_alarms)}"
+
+        alarm_types = [alarm['AlarmName'] for alarm in matching_alarms]
+        assert any('cpu' in name.lower() for name in alarm_types), "Should have CPU alarm"
+        assert any('memory' in name.lower() for name in alarm_types), "Should have Memory alarm"
+        assert any('latency' in name.lower() or 'response' in name.lower() for name in alarm_types), "Should have Latency alarm"
+        assert any('5xx' in name.lower() or 'error' in name.lower() for name in alarm_types), "Should have 5XX/Error alarm"
+
+        for alarm in matching_alarms:
+            assert len(alarm['AlarmActions']) > 0, f"Alarm {alarm['AlarmName']} should have actions configured"
 
     @mark.it("verifies CloudWatch log group exists")
     def test_cloudwatch_log_group_exists(self):
@@ -433,3 +438,168 @@ class TestTapStackIntegration(unittest.TestCase):
         for output in required_outputs:
             assert output in outputs, f"{output} should be in outputs"
             assert outputs[output], f"{output} should not be empty"
+
+    @mark.it("verifies security groups are configured correctly")
+    def test_security_groups_configured(self):
+        vpcs = self.ec2_client.describe_vpcs(
+            Filters=[{'Name': 'tag:Name', 'Values': [f'*WebAppVpc{environment_suffix}*']}]
+        )
+
+        assert len(vpcs['Vpcs']) > 0, "VPC should exist"
+        vpc_id = vpcs['Vpcs'][0]['VpcId']
+
+        security_groups = self.ec2_client.describe_security_groups(
+            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
+        )
+
+        matching_sgs = [
+            sg for sg in security_groups['SecurityGroups']
+            if environment_suffix in sg.get('GroupName', '') or environment_suffix in str(sg.get('Tags', []))
+        ]
+
+        assert len(matching_sgs) >= 4, f"Should have at least 4 security groups (ALB, ECS, RDS, Lambda), found {len(matching_sgs)}"
+
+        sg_descriptions = [sg['Description'].lower() for sg in matching_sgs]
+        assert any('alb' in desc or 'load balancer' in desc for desc in sg_descriptions), "Should have ALB security group"
+        assert any('ecs' in desc for desc in sg_descriptions), "Should have ECS security group"
+        assert any('rds' in desc or 'database' in desc for desc in sg_descriptions), "Should have RDS security group"
+        assert any('lambda' in desc for desc in sg_descriptions), "Should have Lambda security group"
+
+    @mark.it("verifies ALB security group allows HTTP inbound")
+    def test_alb_security_group_allows_http(self):
+        vpcs = self.ec2_client.describe_vpcs(
+            Filters=[{'Name': 'tag:Name', 'Values': [f'*WebAppVpc{environment_suffix}*']}]
+        )
+
+        assert len(vpcs['Vpcs']) > 0, "VPC should exist"
+        vpc_id = vpcs['Vpcs'][0]['VpcId']
+
+        security_groups = self.ec2_client.describe_security_groups(
+            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
+        )
+
+        alb_sgs = [
+            sg for sg in security_groups['SecurityGroups']
+            if 'alb' in sg['Description'].lower() or 'load balancer' in sg['Description'].lower()
+        ]
+
+        assert len(alb_sgs) > 0, "ALB security group should exist"
+
+        alb_sg = alb_sgs[0]
+        ingress_rules = alb_sg['IpPermissions']
+
+        http_rule = [
+            rule for rule in ingress_rules
+            if rule.get('FromPort') == 80 and rule.get('ToPort') == 80
+        ]
+
+        assert len(http_rule) > 0, "ALB security group should allow HTTP on port 80"
+
+    @mark.it("verifies RDS security group allows PostgreSQL from ECS and Lambda")
+    def test_rds_security_group_configured(self):
+        vpcs = self.ec2_client.describe_vpcs(
+            Filters=[{'Name': 'tag:Name', 'Values': [f'*WebAppVpc{environment_suffix}*']}]
+        )
+
+        assert len(vpcs['Vpcs']) > 0, "VPC should exist"
+        vpc_id = vpcs['Vpcs'][0]['VpcId']
+
+        security_groups = self.ec2_client.describe_security_groups(
+            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
+        )
+
+        rds_sgs = [
+            sg for sg in security_groups['SecurityGroups']
+            if 'rds' in sg['Description'].lower() or 'aurora' in sg['Description'].lower() or 'database' in sg['Description'].lower()
+        ]
+
+        assert len(rds_sgs) > 0, "RDS security group should exist"
+
+        rds_sg = rds_sgs[0]
+        ingress_rules = rds_sg['IpPermissions']
+
+        postgres_rules = [
+            rule for rule in ingress_rules
+            if rule.get('FromPort') == 5432 and rule.get('ToPort') == 5432
+        ]
+
+        assert len(postgres_rules) >= 1, "RDS security group should allow PostgreSQL on port 5432"
+
+    @mark.it("verifies ECS tasks are running in private subnets")
+    def test_ecs_tasks_in_private_subnets(self):
+        clusters = self.ecs_client.list_clusters()
+
+        matching_clusters = [
+            c for c in clusters['clusterArns']
+            if environment_suffix in c
+        ]
+
+        assert len(matching_clusters) > 0, "ECS cluster should exist"
+
+        services = self.ecs_client.list_services(cluster=matching_clusters[0])
+        assert len(services['serviceArns']) > 0, "ECS service should exist"
+
+        service_details = self.ecs_client.describe_services(
+            cluster=matching_clusters[0],
+            services=[services['serviceArns'][0]]
+        )
+
+        service = service_details['services'][0]
+        network_config = service.get('networkConfiguration', {}).get('awsvpcConfiguration', {})
+        subnets = network_config.get('subnets', [])
+
+        assert len(subnets) > 0, "ECS service should have subnets configured"
+
+        subnet_details = self.ec2_client.describe_subnets(SubnetIds=subnets)
+
+        for subnet in subnet_details['Subnets']:
+            subnet_tags = {tag['Key']: tag['Value'] for tag in subnet.get('Tags', [])}
+            subnet_type = subnet_tags.get('aws-cdk:subnet-type', '')
+            assert 'Private' in subnet_type, "ECS tasks should run in private subnets"
+
+    @mark.it("verifies auto-scaling is configured for ECS service")
+    def test_ecs_auto_scaling_configured(self):
+        autoscaling_client = boto3.client('application-autoscaling', region_name=region)
+
+        targets = autoscaling_client.describe_scalable_targets(
+            ServiceNamespace='ecs'
+        )
+
+        matching_targets = [
+            t for t in targets['ScalableTargets']
+            if environment_suffix in t['ResourceId']
+        ]
+
+        assert len(matching_targets) > 0, "ECS auto-scaling target should exist"
+
+        target = matching_targets[0]
+        assert target['MinCapacity'] == 2, "Min capacity should be 2"
+        assert target['MaxCapacity'] == 10, "Max capacity should be 10"
+
+        policies = autoscaling_client.describe_scaling_policies(
+            ServiceNamespace='ecs',
+            ResourceId=target['ResourceId']
+        )
+
+        assert len(policies['ScalingPolicies']) >= 2, "Should have at least 2 scaling policies (CPU and Memory)"
+
+        policy_types = [p['PolicyName'].lower() for p in policies['ScalingPolicies']]
+        assert any('cpu' in ptype for ptype in policy_types), "Should have CPU-based scaling policy"
+        assert any('memory' in ptype for ptype in policy_types), "Should have Memory-based scaling policy"
+
+    @mark.it("verifies Lambda is in VPC and has security group")
+    def test_lambda_vpc_configuration(self):
+        functions = self.lambda_client.list_functions()
+
+        matching_functions = [
+            f for f in functions['Functions']
+            if environment_suffix in f['FunctionName'] and f.get('Runtime') == 'python3.11'
+        ]
+
+        assert len(matching_functions) > 0, "Lambda function should exist"
+        func = matching_functions[0]
+
+        vpc_config = func.get('VpcConfig', {})
+        assert vpc_config.get('VpcId'), "Lambda should be in a VPC"
+        assert len(vpc_config.get('SubnetIds', [])) > 0, "Lambda should have subnets configured"
+        assert len(vpc_config.get('SecurityGroupIds', [])) > 0, "Lambda should have security groups configured"

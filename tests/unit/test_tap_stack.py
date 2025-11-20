@@ -349,19 +349,16 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
 
-    @mark.it("creates CloudWatch alarm for high CPU")
-    def test_creates_cloudwatch_alarm(self):
+    @mark.it("creates CloudWatch alarms for monitoring")
+    def test_creates_cloudwatch_alarms(self):
         # ARRANGE
         stack = TapStack(
             self.app, "TapStackTest", TapStackProps(environment_suffix=self.env_suffix)
         )
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-        template.has_resource_properties(
-            "AWS::CloudWatch::Alarm", {"Threshold": 80, "EvaluationPeriods": 2}
-        )
+        # ASSERT - Should have 9 alarms: ECS CPU, ECS Memory, ALB Latency, ALB 5XX, RDS CPU, RDS Connections, Lambda Errors, Lambda Throttles, DynamoDB Throttles
+        template.resource_count_is("AWS::CloudWatch::Alarm", 9)
 
     @mark.it("creates CloudWatch log group for ECS")
     def test_creates_cloudwatch_log_group(self):

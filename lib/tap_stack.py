@@ -87,6 +87,44 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
+        # Create Security Groups
+        # ALB Security Group
+        alb_sg = ec2.SecurityGroup(
+            self, f"AlbSecurityGroup{environment_suffix}",
+            vpc=vpc,
+            description="Security group for Application Load Balancer",
+            allow_all_outbound=True
+        )
+        alb_sg.add_ingress_rule(
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(80),
+            "Allow HTTP from internet"
+        )
+
+        # ECS Security Group
+        ecs_sg = ec2.SecurityGroup(
+            self, f"EcsSecurityGroup{environment_suffix}",
+            vpc=vpc,
+            description="Security group for ECS tasks",
+            allow_all_outbound=True
+        )
+
+        # RDS Security Group
+        rds_sg = ec2.SecurityGroup(
+            self, f"RdsSecurityGroup{environment_suffix}",
+            vpc=vpc,
+            description="Security group for RDS Aurora cluster",
+            allow_all_outbound=False
+        )
+
+        # Lambda Security Group
+        lambda_sg = ec2.SecurityGroup(
+            self, f"LambdaSecurityGroup{environment_suffix}",
+            vpc=vpc,
+            description="Security group for Lambda functions",
+            allow_all_outbound=True
+        )
+
         # Create Aurora PostgreSQL cluster
         db_cluster = rds.DatabaseCluster(
             self, f"AuroraCluster{environment_suffix}",
@@ -109,12 +147,25 @@ class TapStack(Stack):
             ],
             vpc=vpc,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            security_groups=[rds_sg],
             storage_encrypted=True,
             storage_encryption_key=rds_kms_key,
             backup=rds.BackupProps(
                 retention=cdk.Duration.days(7)
             ),
             removal_policy=RemovalPolicy.DESTROY
+        )
+
+        # Configure security group rules for RDS
+        rds_sg.add_ingress_rule(
+            ecs_sg,
+            ec2.Port.tcp(5432),
+            "Allow ECS tasks to access RDS"
+        )
+        rds_sg.add_ingress_rule(
+            lambda_sg,
+            ec2.Port.tcp(5432),
+            "Allow Lambda to access RDS"
         )
 
         # Create DynamoDB table for session storage
@@ -205,7 +256,8 @@ class TapStack(Stack):
             self, f"WebAppAlb{environment_suffix}",
             vpc=vpc,
             internet_facing=True,
-            load_balancer_name=f"web-app-alb-{environment_suffix}"
+            load_balancer_name=f"web-app-alb-{environment_suffix}",
+            security_group=alb_sg
         )
 
         # Create target group
@@ -238,6 +290,7 @@ class TapStack(Stack):
             task_definition=task_definition,
             desired_count=2,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            security_groups=[ecs_sg],
             capacity_provider_strategies=[
                 ecs.CapacityProviderStrategy(
                     capacity_provider="FARGATE",
@@ -253,19 +306,15 @@ class TapStack(Stack):
             health_check_grace_period=cdk.Duration.seconds(60)
         )
 
+        # Configure security group rules for ECS
+        ecs_sg.add_ingress_rule(
+            alb_sg,
+            ec2.Port.tcp(80),
+            "Allow ALB to reach ECS tasks"
+        )
+
         # Attach service to target group
         fargate_service.attach_to_application_target_group(target_group)
-
-        # Configure security groups
-        # Allow HTTP and HTTPS traffic to ALB
-        alb.connections.allow_from_any_ipv4(ec2.Port.tcp(80), "Allow HTTP from internet")
-        alb.connections.allow_from_any_ipv4(ec2.Port.tcp(443), "Allow HTTPS from internet")
-
-        # Allow ALB to reach ECS tasks
-        fargate_service.connections.allow_from(alb, ec2.Port.tcp(80), "Allow ALB to ECS tasks")
-
-        # Allow ECS tasks to reach RDS
-        db_cluster.connections.allow_default_port_from(fargate_service, "Allow ECS tasks to database")
 
         # Configure auto-scaling
         scaling = fargate_service.auto_scale_task_count(
@@ -281,6 +330,16 @@ class TapStack(Stack):
         scaling.scale_on_memory_utilization(
             "MemoryScaling",
             target_utilization_percent=70
+        )
+
+        # Create IAM role for Lambda with least privilege
+        lambda_role = iam.Role(
+            self, f"LambdaExecutionRole{environment_suffix}",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Execution role for transaction validation Lambda",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole")
+            ]
         )
 
         # Create Lambda function for transaction validation
@@ -304,13 +363,19 @@ def handler(event, context):
     return {'valid': True}
 """),
             environment={
-                "DYNAMODB_TABLE": sessions_table.table_name
+                "DYNAMODB_TABLE": sessions_table.table_name,
+                "DB_HOST": db_cluster.cluster_endpoint.hostname
             },
             reserved_concurrent_executions=10,
-            timeout=cdk.Duration.seconds(30)
+            timeout=cdk.Duration.seconds(30),
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+            security_groups=[lambda_sg],
+            role=lambda_role
         )
 
         sessions_table.grant_read_write_data(validation_lambda)
+        db_cluster.secret.grant_read(validation_lambda)
 
         # Create SNS topic for alerts
         alerts_topic = sns.Topic(
@@ -353,7 +418,8 @@ def handler(event, context):
             )
         )
 
-        # Create alarms
+        # Create comprehensive alarms
+        # ECS CPU Alarm
         cpu_alarm = cloudwatch.Alarm(
             self, f"HighCpuAlarm{environment_suffix}",
             metric=fargate_service.metric_cpu_utilization(),
@@ -361,10 +427,89 @@ def handler(event, context):
             evaluation_periods=2,
             alarm_description="High CPU utilization on ECS tasks"
         )
+        cpu_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
 
-        cpu_alarm.add_alarm_action(
-            cloudwatch_actions.SnsAction(alerts_topic)
+        # ECS Memory Alarm
+        memory_alarm = cloudwatch.Alarm(
+            self, f"HighMemoryAlarm{environment_suffix}",
+            metric=fargate_service.metric_memory_utilization(),
+            threshold=80,
+            evaluation_periods=2,
+            alarm_description="High memory utilization on ECS tasks"
         )
+        memory_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # ALB Target Response Time Alarm
+        alb_latency_alarm = cloudwatch.Alarm(
+            self, f"AlbHighLatencyAlarm{environment_suffix}",
+            metric=alb.metric_target_response_time(),
+            threshold=1.0,
+            evaluation_periods=2,
+            alarm_description="ALB high response time"
+        )
+        alb_latency_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # ALB 5XX Errors Alarm
+        alb_5xx_alarm = cloudwatch.Alarm(
+            self, f"Alb5xxErrorAlarm{environment_suffix}",
+            metric=alb.metric_http_code_target(
+                code=elbv2.HttpCodeTarget.TARGET_5XX_COUNT
+            ),
+            threshold=10,
+            evaluation_periods=1,
+            alarm_description="High 5XX error rate on ALB"
+        )
+        alb_5xx_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # RDS CPU Alarm
+        rds_cpu_alarm = cloudwatch.Alarm(
+            self, f"RdsHighCpuAlarm{environment_suffix}",
+            metric=db_cluster.metric_cpu_utilization(),
+            threshold=80,
+            evaluation_periods=2,
+            alarm_description="High CPU utilization on RDS cluster"
+        )
+        rds_cpu_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # RDS Database Connections Alarm
+        rds_connections_alarm = cloudwatch.Alarm(
+            self, f"RdsHighConnectionsAlarm{environment_suffix}",
+            metric=db_cluster.metric_database_connections(),
+            threshold=80,
+            evaluation_periods=2,
+            alarm_description="High number of database connections"
+        )
+        rds_connections_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # Lambda Errors Alarm
+        lambda_error_alarm = cloudwatch.Alarm(
+            self, f"LambdaErrorAlarm{environment_suffix}",
+            metric=validation_lambda.metric_errors(),
+            threshold=5,
+            evaluation_periods=1,
+            alarm_description="High error rate on Lambda function"
+        )
+        lambda_error_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # Lambda Throttles Alarm
+        lambda_throttle_alarm = cloudwatch.Alarm(
+            self, f"LambdaThrottleAlarm{environment_suffix}",
+            metric=validation_lambda.metric_throttles(),
+            threshold=1,
+            evaluation_periods=1,
+            alarm_description="Lambda function throttling"
+        )
+        lambda_throttle_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
+
+        # DynamoDB Throttles Alarm
+        dynamodb_read_throttle_alarm = cloudwatch.Alarm(
+            self, f"DynamoDbReadThrottleAlarm{environment_suffix}",
+            metric=sessions_table.metric_user_errors(),
+            threshold=5,
+            evaluation_periods=1,
+            alarm_description="DynamoDB read throttling"
+        )
+        dynamodb_read_throttle_alarm.add_alarm_action(cloudwatch_actions.SnsAction(alerts_topic))
 
         # Output important values
         cdk.CfnOutput(
