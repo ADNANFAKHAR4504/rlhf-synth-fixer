@@ -523,11 +523,11 @@ Created simplified single-region implementation (`tap_stack_simplified.py`) that
 
 ### Deployment Success
 The simplified stack:
-✅ Synthesizes successfully
-✅ Single CloudFormation stack (no nesting)
-✅ Estimated deployment time: 8-10 minutes
-✅ All core DR features maintained
-✅ Cost-effective for testing
+ Synthesizes successfully
+ Single CloudFormation stack (no nesting)
+ Estimated deployment time: 8-10 minutes
+ All core DR features maintained
+ Cost-effective for testing
 
 ### Training Value
 **HIGH** - This demonstrates:
