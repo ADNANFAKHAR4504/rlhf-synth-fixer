@@ -1,6 +1,6 @@
 {
   "task_id": "101912381",
-  "status": "in_progress",
+  "turn_type": "single",
   "platform": "cfn",
   "language": "yaml",
   "difficulty": "expert",
@@ -14,7 +14,6 @@
   "team": "synth",
   "startedAt": "2025-11-19",
   "complexity": "expert",
-  "turn_type": "multi",
   "training_quality": 10,
   "author": "iamarpit-turing",
   "reviewer": "adnan-turing",
