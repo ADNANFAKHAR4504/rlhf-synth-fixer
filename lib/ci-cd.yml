@@ -394,15 +394,7 @@ jobs:
 
       - name: Deploy upload-api and streaming-api (dev)
         run: |
-          helm upgrade --install upload-api charts/upload-api \
-            --namespace media \
-            --create-namespace \
-            --set image.repository="${ACR_NAME}.azurecr.io/upload-api" \
-            --set image.tag="${GITHUB_SHA}"
-          helm upgrade --install streaming-api charts/streaming-api \
-            --namespace media \
-            --set image.repository="${ACR_NAME}.azurecr.io/streaming-api" \
-            --set image.tag="${GITHUB_SHA}"
+          bash scripts/deploy-services-helm.sh dev
 
       - name: Deploy Azure Functions (dev)
         run: |
