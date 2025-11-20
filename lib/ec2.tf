@@ -145,7 +145,7 @@ resource "aws_iam_role_policy" "ec2_secrets_access" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          aws_secretsmanager_secret.rds_password.arn
+          aws_secretsmanager_secret.db_credentials.arn
         ]
       }
     ]
