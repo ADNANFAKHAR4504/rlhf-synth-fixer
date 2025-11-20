@@ -1375,3 +1375,23 @@ class TestCloudWatchLogsAnalyzer:
         # Should detect EC2 with missing streams (status is now "No Log Streams" per enhanced implementation)
         ec2_gaps = [g for g in analyzer.monitoring_gaps if g['resource_type'] == 'EC2' and g['status'] == 'No Log Streams']
         assert len(ec2_gaps) >= 1
+
+    @patch('analyse.boto3.client')
+    def test_check_specific_log_stream_exists(self, mock_boto_client):
+        """Test _check_specific_log_stream_exists method"""
+        mock_logs_client = MagicMock()
+        mock_boto_client.return_value = mock_logs_client
+
+        # Test stream exists
+        mock_logs_client.describe_log_streams.return_value = {
+            'logStreams': [{'logStreamName': '2025/01/20/test-stream'}]
+        }
+
+        analyzer = CloudWatchLogsAnalyzer()
+        result = analyzer._check_specific_log_stream_exists('/aws/lambda/test', '2025/01/20')
+        assert result == True
+
+        # Test stream doesn't exist
+        mock_logs_client.describe_log_streams.return_value = {'logStreams': []}
+        result = analyzer._check_specific_log_stream_exists('/aws/lambda/test', '2025/01/20')
+        assert result == False
