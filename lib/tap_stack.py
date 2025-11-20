@@ -1,8 +1,8 @@
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for
 the TAP (Test Automation Platform) project.
-It orchestrates the instantiation of CI/CD pipeline, ECS, secrets, monitoring,
-and cross-account IAM stacks for containerized application deployments.
+It orchestrates the instantiation of CI/CD pipeline, ECS, secrets, and monitoring
+stacks for containerized application deployments with blue/green deployment support.
 """
 
 from typing import Optional
@@ -38,7 +38,8 @@ class TapStack(cdk.Stack):
     Represents the main CDK stack for the multi-stage CI/CD pipeline project.
 
     This stack orchestrates the instantiation of pipeline, ECS, secrets, and monitoring
-    stacks for containerized application deployments in a single AWS account.
+    stacks for containerized application deployments in a single AWS account with
+    blue/green deployment support using AWS CodeDeploy.
 
     Args:
         scope (Construct): The parent construct.
@@ -91,6 +92,11 @@ class TapStack(cdk.Stack):
             pipeline_name=f"cicd-pipeline-{environment_suffix}",
             failure_topic=pipeline_stack.failure_topic,
             pipeline=pipeline_stack.pipeline
+        )
+
+        # Add ECS deployment stages to pipeline after all stacks are created
+        pipeline_stack.add_ecs_deployment_stages(
+            deployment_group=ecs_stack.deployment_group
         )
 
         # Stack outputs
@@ -169,4 +175,18 @@ class TapStack(cdk.Stack):
             "FailureTopicArn",
             value=pipeline_stack.failure_topic.topic_arn,
             description="ARN of the failure notification SNS topic"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "CodeDeployApplicationName",
+            value=ecs_stack.application.application_name,
+            description="Name of the CodeDeploy Application"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "CodeDeployDeploymentGroupName",
+            value=ecs_stack.deployment_group.deployment_group_name,
+            description="Name of the CodeDeploy Deployment Group"
         )

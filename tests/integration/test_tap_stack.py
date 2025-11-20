@@ -32,6 +32,7 @@ cloudwatch = boto3.client('cloudwatch', region_name=AWS_REGION)
 logs = boto3.client('logs', region_name=AWS_REGION)
 events = boto3.client('events', region_name=AWS_REGION)
 iam = boto3.client('iam', region_name=AWS_REGION)
+codedeploy = boto3.client('codedeploy', region_name=AWS_REGION)
 
 
 @mark.describe("TapStack Integration Tests")
@@ -343,3 +344,114 @@ class TestTapStackIntegration(unittest.TestCase):
         role_name = execution_role_arn.split('/')[-1]
         response = iam.get_role(RoleName=role_name)
         assert response['Role']['Arn'] == execution_role_arn
+
+    @mark.it("verifies CodeDeploy Application exists")
+    def test_codedeploy_application_exists(self):
+        """Test that CodeDeploy application for ECS exists"""
+        app_name = outputs.get('CodeDeployApplicationName')
+        assert app_name is not None
+
+        response = codedeploy.get_application(applicationName=app_name)
+        assert response['application']['applicationName'] == app_name
+        assert response['application']['computePlatform'] == 'ECS'
+
+    @mark.it("verifies CodeDeploy Deployment Group exists")
+    def test_codedeploy_deployment_group_exists(self):
+        """Test that CodeDeploy deployment group exists with correct configuration"""
+        app_name = outputs.get('CodeDeployApplicationName')
+        deployment_group_name = outputs.get('CodeDeployDeploymentGroupName')
+        assert deployment_group_name is not None
+
+        response = codedeploy.get_deployment_group(
+            applicationName=app_name,
+            deploymentGroupName=deployment_group_name
+        )
+
+        dg = response['deploymentGroupInfo']
+        assert dg['deploymentGroupName'] == deployment_group_name
+        assert dg['computePlatform'] == 'ECS'
+
+    @mark.it("verifies CodeDeploy Deployment Group has blue/green configuration")
+    def test_codedeploy_bluegreen_config(self):
+        """Test that deployment group has blue/green deployment configuration"""
+        app_name = outputs.get('CodeDeployApplicationName')
+        deployment_group_name = outputs.get('CodeDeployDeploymentGroupName')
+
+        response = codedeploy.get_deployment_group(
+            applicationName=app_name,
+            deploymentGroupName=deployment_group_name
+        )
+
+        dg = response['deploymentGroupInfo']
+        assert 'blueGreenDeploymentConfiguration' in dg
+        assert dg['blueGreenDeploymentConfiguration'] is not None
+
+        # Verify target groups are configured
+        assert 'loadBalancerInfo' in dg
+        assert 'targetGroupPairInfoList' in dg['loadBalancerInfo']
+        assert len(dg['loadBalancerInfo']['targetGroupPairInfoList']) > 0
+
+    @mark.it("verifies CodeDeploy Deployment Group has auto-rollback enabled")
+    def test_codedeploy_auto_rollback(self):
+        """Test that deployment group has auto-rollback configuration"""
+        app_name = outputs.get('CodeDeployApplicationName')
+        deployment_group_name = outputs.get('CodeDeployDeploymentGroupName')
+
+        response = codedeploy.get_deployment_group(
+            applicationName=app_name,
+            deploymentGroupName=deployment_group_name
+        )
+
+        dg = response['deploymentGroupInfo']
+        assert 'autoRollbackConfiguration' in dg
+        assert dg['autoRollbackConfiguration']['enabled'] is True
+
+    @mark.it("verifies Pipeline has deployment stage")
+    def test_pipeline_has_deployment_stage(self):
+        """Test that pipeline includes deployment stage with ECS deploy action"""
+        pipeline_name = outputs.get('PipelineName')
+
+        response = codepipeline.get_pipeline(name=pipeline_name)
+        stages = response['pipeline']['stages']
+
+        stage_names = [stage['name'] for stage in stages]
+        assert 'Deploy' in stage_names
+
+        # Find deploy stage and verify it has CodeDeploy action
+        deploy_stage = next(s for s in stages if s['name'] == 'Deploy')
+        actions = deploy_stage['actions']
+        assert len(actions) > 0
+
+        # Verify action provider is CodeDeploy
+        deploy_action = actions[0]
+        assert deploy_action['actionTypeId']['provider'] == 'CodeDeployToECS'
+
+    @mark.it("verifies CodeBuild role has ec2:TerminateInstances deny policy")
+    def test_codebuild_role_deny_terminate(self):
+        """Test that CodeBuild role has explicit deny for ec2:TerminateInstances"""
+        project_name = f'app-build-{ENVIRONMENT_SUFFIX}'
+
+        response = codebuild.batch_get_projects(names=[project_name])
+        project = response['projects'][0]
+
+        # Get the service role
+        role_arn = project['serviceRole']
+        role_name = role_arn.split('/')[-1]
+
+        # Get role policies
+        policies_response = iam.list_role_policies(RoleName=role_name)
+        inline_policies = policies_response['PolicyNames']
+
+        # Check inline policies for deny statement
+        has_deny = False
+        for policy_name in inline_policies:
+            policy_response = iam.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+            policy_doc = policy_response['PolicyDocument']
+
+            for statement in policy_doc.get('Statement', []):
+                if (statement.get('Effect') == 'Deny' and
+                    'ec2:TerminateInstances' in statement.get('Action', [])):
+                    has_deny = True
+                    break
+
+        assert has_deny, "CodeBuild role should have explicit deny for ec2:TerminateInstances"

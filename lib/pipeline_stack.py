@@ -12,6 +12,7 @@ from aws_cdk import (
     aws_codepipeline as codepipeline,
     aws_codepipeline_actions as codepipeline_actions,
     aws_codebuild as codebuild,
+    aws_codedeploy as codedeploy,
     aws_s3 as s3,
     aws_ecr as ecr,
     aws_iam as iam,
@@ -27,6 +28,15 @@ class PipelineStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs):
         super().__init__(scope, construct_id, **kwargs)
+
+        # Validate required parameters
+        approval_email = self.node.try_get_context('approvalEmail') or \
+            os.environ.get('APPROVAL_EMAIL')
+        if not approval_email:
+            raise ValueError(
+                "Approval email is required. Set via context 'approvalEmail' or "
+                "environment variable 'APPROVAL_EMAIL'"
+            )
 
         # Artifact bucket with versioning, encryption, and lifecycle rules
         artifact_bucket = s3.Bucket(
@@ -66,10 +76,6 @@ class PipelineStack(Stack):
             display_name="Pipeline Approval Notifications"
         )
         approval_topic.apply_removal_policy(RemovalPolicy.DESTROY)
-
-        # Get approval email from context or environment variable
-        approval_email = self.node.try_get_context('approvalEmail') or \
-            os.environ.get('APPROVAL_EMAIL', 'approvals@example.com')
 
         approval_topic.add_subscription(
             subscriptions.EmailSubscription(approval_email)
@@ -146,6 +152,15 @@ class PipelineStack(Stack):
 
         # Grant ECR permissions to build project
         build_image_repo.grant_pull_push(build_project)
+
+        # Add explicit deny for ec2:TerminateInstances to build project role
+        build_project.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.DENY,
+                actions=["ec2:TerminateInstances"],
+                resources=["*"]
+            )
+        )
 
         # CodeBuild project for testing
         test_project = codebuild.PipelineProject(
@@ -272,7 +287,52 @@ class PipelineStack(Stack):
             actions=[prod_approval_action]
         )
 
+        # Validate connection ARN parameter
+        if "example" in connection_arn_param:
+            raise ValueError(
+                "CodeStar connection ARN is required. Set via context 'codeStarConnectionArn' or "
+                "environment variable 'CODESTAR_CONNECTION_ARN'"
+            )
+
         # Store references for other stacks
         self.failure_topic = failure_topic
         self.pipeline = pipeline
         self.artifact_bucket = artifact_bucket
+        self.build_project = build_project
+        self.test_project = test_project
+        self.build_output = build_output
+
+    def add_ecs_deployment_stages(
+        self,
+        deployment_group,
+        task_definition_template_artifact_name="imagedefinitions.json",
+        appspec_template_artifact_name="appspec.yaml"
+    ):
+        """
+        Add ECS deployment stages to the pipeline after manual approval.
+        This method should be called after the ECS stack is created.
+
+        Args:
+            deployment_group: The CodeDeploy ECS deployment group
+            task_definition_template_artifact_name: Name of task definition template file
+            appspec_template_artifact_name: Name of appspec template file
+        """
+        # Deploy stage using CodeDeploy for blue/green deployment
+        deploy_action = codepipeline_actions.CodeDeployEcsDeployAction(
+            action_name="Deploy",
+            deployment_group=deployment_group,
+            app_spec_template_file=codepipeline.ArtifactPath(
+                self.build_output,
+                appspec_template_artifact_name
+            ),
+            task_definition_template_file=codepipeline.ArtifactPath(
+                self.build_output,
+                task_definition_template_artifact_name
+            ),
+            run_order=1
+        )
+
+        self.pipeline.add_stage(
+            stage_name="Deploy",
+            actions=[deploy_action]
+        )

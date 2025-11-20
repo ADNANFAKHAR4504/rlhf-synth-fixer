@@ -13,7 +13,10 @@ class TestTapStack(unittest.TestCase):
 
     def setUp(self):
         """Set up a fresh CDK app for each test"""
-        self.app = cdk.App()
+        self.app = cdk.App(context={
+            "approvalEmail": "test@example.com",
+            "codeStarConnectionArn": "arn:aws:codestar-connections:us-east-1:123456789012:connection/test"
+        })
 
     @mark.it("creates stack with environment suffix from props")
     def test_creates_stack_with_env_suffix_from_props(self):
@@ -332,7 +335,11 @@ class TestTapStack(unittest.TestCase):
     @mark.it("uses environment suffix from context")
     def test_uses_env_suffix_from_context(self):
         """Test that environment suffix can be retrieved from context"""
-        app = cdk.App(context={"environmentSuffix": "ctx-test"})
+        app = cdk.App(context={
+            "environmentSuffix": "ctx-test",
+            "approvalEmail": "test@example.com",
+            "codeStarConnectionArn": "arn:aws:codestar-connections:us-east-1:123456789012:connection/test"
+        })
         stack = TapStack(app, "TapStackTest")
 
         # Verify stack is created with context suffix

@@ -139,3 +139,59 @@ class TestEcsStack(unittest.TestCase):
                 ])
             })
         )
+
+    @mark.it("creates CodeDeploy Application")
+    def test_creates_codedeploy_application(self):
+        """Test that CodeDeploy Application is created"""
+        ecs_stack = EcsStack(
+            self.stack,
+            "EcsStack",
+            environment_suffix="test"
+        )
+        template = Template.from_stack(ecs_stack)
+
+        template.has_resource_properties(
+            "AWS::CodeDeploy::Application",
+            Match.object_like({
+                "ApplicationName": "ecs-app-test",
+                "ComputePlatform": "ECS"
+            })
+        )
+
+    @mark.it("creates CodeDeploy Deployment Group")
+    def test_creates_codedeploy_deployment_group(self):
+        """Test that CodeDeploy Deployment Group is created with blue/green configuration"""
+        ecs_stack = EcsStack(
+            self.stack,
+            "EcsStack",
+            environment_suffix="test"
+        )
+        template = Template.from_stack(ecs_stack)
+
+        template.has_resource_properties(
+            "AWS::CodeDeploy::DeploymentGroup",
+            Match.object_like({
+                "DeploymentGroupName": "ecs-deployment-test",
+                "DeploymentConfigName": "CodeDeployDefault.ECSLinear10PercentEvery1Minutes"
+            })
+        )
+
+    @mark.it("configures auto-rollback for deployment group")
+    def test_configures_auto_rollback(self):
+        """Test that deployment group has auto-rollback configured"""
+        ecs_stack = EcsStack(
+            self.stack,
+            "EcsStack",
+            environment_suffix="test"
+        )
+        template = Template.from_stack(ecs_stack)
+
+        template.has_resource_properties(
+            "AWS::CodeDeploy::DeploymentGroup",
+            Match.object_like({
+                "AutoRollbackConfiguration": Match.object_like({
+                    "Enabled": True,
+                    "Events": Match.array_with(["DEPLOYMENT_FAILURE"])
+                })
+            })
+        )

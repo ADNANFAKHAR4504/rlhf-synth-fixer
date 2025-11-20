@@ -12,6 +12,7 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_ec2 as ec2,
     aws_elasticloadbalancingv2 as elbv2,
+    aws_codedeploy as codedeploy,
     aws_iam as iam,
     aws_logs as logs,
     RemovalPolicy,
@@ -211,6 +212,33 @@ class EcsStack(Stack):
             scale_out_cooldown=Duration.seconds(60)
         )
 
+        # CodeDeploy Application for ECS
+        application = codedeploy.EcsApplication(
+            self,
+            f"EcsApplication{environment_suffix}",
+            application_name=f"ecs-app-{environment_suffix}"
+        )
+
+        # CodeDeploy Deployment Group for blue/green deployment
+        deployment_group = codedeploy.EcsDeploymentGroup(
+            self,
+            f"EcsDeploymentGroup{environment_suffix}",
+            application=application,
+            deployment_group_name=f"ecs-deployment-{environment_suffix}",
+            service=service,
+            blue_green_deployment_config=codedeploy.EcsBlueGreenDeploymentConfig(
+                blue_target_group=blue_target_group,
+                green_target_group=green_target_group,
+                listener=listener,
+                test_listener=test_listener,
+                termination_wait_time=Duration.minutes(5)
+            ),
+            deployment_config=codedeploy.EcsDeploymentConfig.LINEAR_10_PERCENT_EVERY_1_MINUTES,
+            auto_rollback=codedeploy.AutoRollbackConfig(
+                failed_deployment=True
+            )
+        )
+
         # Export values
         self.cluster = cluster
         self.service = service
@@ -219,3 +247,6 @@ class EcsStack(Stack):
         self.alb = alb
         self.listener = listener
         self.test_listener = test_listener
+        self.application = application
+        self.deployment_group = deployment_group
+        self.task_definition = task_definition

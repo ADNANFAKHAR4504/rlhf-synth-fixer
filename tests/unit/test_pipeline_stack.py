@@ -13,7 +13,10 @@ class TestPipelineStack(unittest.TestCase):
 
     def setUp(self):
         """Set up a fresh CDK app and stack for each test"""
-        self.app = cdk.App()
+        self.app = cdk.App(context={
+            "approvalEmail": "test@example.com",
+            "codeStarConnectionArn": "arn:aws:codestar-connections:us-east-1:123456789012:connection/test"
+        })
         self.stack = cdk.Stack(self.app, "TestStack")
 
     @mark.it("creates artifact S3 bucket")
@@ -204,7 +207,7 @@ class TestPipelineStack(unittest.TestCase):
             "AWS::SNS::Subscription",
             Match.object_like({
                 "Protocol": "email",
-                "Endpoint": "approvals@example.com"
+                "Endpoint": "test@example.com"
             })
         )
 
@@ -224,5 +227,30 @@ class TestPipelineStack(unittest.TestCase):
                 "Cache": {
                     "Type": "S3"
                 }
+            })
+        )
+
+    @mark.it("adds ec2:TerminateInstances deny policy to CodeBuild role")
+    def test_codebuild_role_deny_terminate(self):
+        """Test that CodeBuild role has explicit deny for ec2:TerminateInstances"""
+        pipeline_stack = PipelineStack(
+            self.stack,
+            "PipelineStack",
+            environment_suffix="test"
+        )
+        template = Template.from_stack(pipeline_stack)
+
+        # Verify that at least one IAM policy has deny for ec2:TerminateInstances
+        template.has_resource_properties(
+            "AWS::IAM::Policy",
+            Match.object_like({
+                "PolicyDocument": Match.object_like({
+                    "Statement": Match.array_with([
+                        Match.object_like({
+                            "Effect": "Deny",
+                            "Action": "ec2:TerminateInstances"
+                        })
+                    ])
+                })
             })
         )

@@ -1,20 +1,20 @@
 Hey team,
 
-We need to build out a comprehensive multi-stage CI/CD pipeline for our containerized applications that spans across three AWS accounts. The business wants us to automate the entire deployment workflow from source to production with proper controls and visibility at each stage. I've been asked to create this infrastructure using **AWS CDK with Python** and deploy it to us-east-1.
+We need to build out a comprehensive multi-stage CI/CD pipeline for our containerized applications in a single AWS account. The business wants us to automate the entire deployment workflow from source to deployment with proper controls and visibility at each stage. I've been asked to create this infrastructure using **AWS CDK with Python** and deploy it to us-east-1.
 
-The challenge we're facing is that our current deployment process is manual and error-prone. We need to establish a robust pipeline that handles builds, tests, and deployments across development, staging, and production environments. The team also wants proper approval gates before staging and production deployments, plus we need comprehensive monitoring to catch issues early.
+The challenge we're facing is that our current deployment process is manual and error-prone. We need to establish a robust pipeline that handles builds, tests, and deployments with blue/green deployment strategies. The team also wants proper approval gates before staging and production deployments, plus we need comprehensive monitoring to catch issues early.
 
 ## What we need to build
 
-Create a multi-account CI/CD pipeline infrastructure using **AWS CDK with Python** that automates containerized application deployments with proper controls, monitoring, and security practices.
+Create a single-account CI/CD pipeline infrastructure using **AWS CDK with Python** that automates containerized application deployments with proper controls, monitoring, and security practices.
 
 ### Core Requirements
 
 1. **Multi-Stage Pipeline Architecture**
-   - Four distinct stages: source, build, test, and deploy
-   - Cross-account deployment capabilities for dev, staging, and prod environments
+   - Multiple distinct stages: source, build, test, approval gates, and deploy
+   - Blue/green deployment support using AWS CodeDeploy
    - Integration with CodePipeline for orchestration
-   - Support for containerized applications
+   - Support for containerized applications with ECS Fargate
 
 2. **Build Infrastructure**
    - CodeBuild projects configured to use ECR-hosted container images
@@ -35,16 +35,18 @@ Create a multi-account CI/CD pipeline infrastructure using **AWS CDK with Python
    - Lifecycle policies with 90-day retention for old versions
 
 5. **Container Deployment**
-   - ECS Fargate services in each environment
+   - ECS Fargate services with blue/green deployment
+   - CodeDeploy Application and Deployment Group for ECS
    - Blue/green deployment configuration for zero-downtime updates
    - Automatic rollback on deployment failures
    - Health checks and traffic shifting
+   - Deployment actions in pipeline for automated ECS updates
 
-6. **Cross-Account Security**
-   - IAM roles for cross-account access
-   - Least privilege permissions for all services
-   - Explicit deny policy for ec2:TerminateInstances
-   - Secure artifact bucket access across accounts
+6. **Security**
+   - IAM roles with least privilege permissions for all services
+   - Explicit deny policy for ec2:TerminateInstances in deployment roles
+   - Secure artifact bucket access with encryption
+   - No hardcoded credentials or sensitive data
 
 7. **Secrets Management**
    - Secrets Manager entries for Docker registry credentials
@@ -86,30 +88,36 @@ Create a multi-account CI/CD pipeline infrastructure using **AWS CDK with Python
 - Cache expiration set to 7 days maximum
 - Lifecycle policies must delete old artifact versions after 90 days
 - Manual approvals required before staging and production deployments
-- Blue/green deployments required for ECS Fargate services
-- All cross-account roles must explicitly deny ec2:TerminateInstances
+- Blue/green deployments required for ECS Fargate services using CodeDeploy
+- All deployment IAM roles must explicitly deny ec2:TerminateInstances
+- Validate required parameters (email, connection ARN) before deployment
 
 ## Success Criteria
 
-- **Functionality**: Complete pipeline from source to production with approval gates
+- **Functionality**: Complete pipeline from source to deployment with approval gates and CodeDeploy integration
 - **Performance**: Build caching reduces build times by using S3 cache
-- **Reliability**: Blue/green deployments ensure zero-downtime updates
-- **Security**: Cross-account IAM roles with least privilege and explicit denies
+- **Reliability**: Blue/green deployments ensure zero-downtime updates with automatic rollback
+- **Security**: IAM roles with least privilege and explicit ec2:TerminateInstances denies
 - **Monitoring**: CloudWatch dashboards provide visibility into pipeline health
+- **Validation**: Required parameters are validated before stack creation
 - **Resource Naming**: All resources include environmentSuffix for uniqueness
 - **Code Quality**: Python, well-structured, follows CDK best practices
 
 ## What to deliver
 
 - Complete AWS CDK Python implementation
-- CodePipeline with source, build, test, deploy stages
+- CodePipeline with source, build, test, approval, and deploy stages
 - CodeBuild projects with ECR image support and S3 caching
 - ECS Fargate services with blue/green deployment configuration
+- CodeDeploy Application and Deployment Group for ECS blue/green deployments
+- ECS deployment actions in the pipeline for automated container updates
 - S3 artifact buckets with versioning, encryption, and lifecycle policies
-- Cross-account IAM roles with explicit deny policies
+- IAM roles with least privilege and explicit ec2:TerminateInstances deny policies
 - SNS topics for manual approvals and alerts
 - CloudWatch event rules for failure detection
 - CloudWatch dashboards for pipeline metrics
 - Secrets Manager entries for Docker credentials
+- Parameter validation for required configuration values
 - Unit tests for stack validation
+- Integration tests for CodeDeploy and deployment functionality
 - Clear documentation for deployment and usage
