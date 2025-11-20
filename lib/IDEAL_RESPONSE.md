@@ -1,6 +1,6 @@
 I'll create a comprehensive Route53 audit script that addresses all the requirements. This script will analyze configurations, identify risks, and provide actionable insights.
 
-## lib/analyse.lib
+## lib/analyse.py
 
 ```python
 
