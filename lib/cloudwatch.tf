@@ -7,6 +7,8 @@ resource "aws_cloudwatch_log_group" "iam_activity" {
   tags = {
     Name = "iam-activity-logs-${var.environment_suffix}"
   }
+
+  depends_on = [aws_kms_key.primary]
 }
 
 # CloudWatch Log Group for Organizations Activity
@@ -18,6 +20,8 @@ resource "aws_cloudwatch_log_group" "organizations_activity" {
   tags = {
     Name = "organizations-activity-logs-${var.environment_suffix}"
   }
+
+  depends_on = [aws_kms_key.primary]
 }
 
 # CloudWatch Log Group for Config Activity
@@ -29,4 +33,6 @@ resource "aws_cloudwatch_log_group" "config_activity" {
   tags = {
     Name = "config-activity-logs-${var.environment_suffix}"
   }
+
+  depends_on = [aws_kms_key.primary]
 }

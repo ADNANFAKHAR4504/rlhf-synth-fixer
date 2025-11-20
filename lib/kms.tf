@@ -18,12 +18,32 @@ resource "aws_kms_key" "primary" {
         Resource = "*"
       },
       {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      },
+      {
         Sid    = "Allow services to use the key"
         Effect = "Allow"
         Principal = {
           Service = [
             "s3.amazonaws.com",
-            "logs.amazonaws.com",
             "config.amazonaws.com"
           ]
         }
