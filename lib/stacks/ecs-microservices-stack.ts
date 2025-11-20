@@ -477,12 +477,10 @@ export class EcsMicroservicesStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'AlbDnsName', {
       value: this.alb.loadBalancerDnsName,
       description: 'ALB DNS Name',
-      exportName: 'AlbDnsName',
     });
     new cdk.CfnOutput(this, 'ClusterName', {
       value: this.cluster.clusterName,
       description: 'ECS Cluster Name',
-      exportName: 'ClusterName',
     });
 
     // Only output mesh name if mesh was created
@@ -490,7 +488,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
       new cdk.CfnOutput(this, 'MeshName', {
         value: this.mesh.meshName,
         description: 'App Mesh Name',
-        exportName: 'MeshName',
       });
     }
   }
