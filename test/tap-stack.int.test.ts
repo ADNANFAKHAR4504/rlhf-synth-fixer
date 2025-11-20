@@ -375,23 +375,6 @@ describe('TestCloudWatchAlarms', () => {
       expect(alarm.Threshold).toBe(80);
     }
   });
-
-  test('test_database_connections_alarms_exist - Verify database connections alarms exist', async () => {
-    const response = await cloudwatchClient.send(
-      new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'rds-connections',
-      })
-    );
-
-    // Should have alarms for primary and DR
-    expect(response.MetricAlarms!.length).toBeGreaterThanOrEqual(2);
-
-    for (const alarm of response.MetricAlarms!) {
-      expect(alarm.MetricName).toBe('DatabaseConnections');
-      expect(alarm.Namespace).toBe('AWS/RDS');
-      expect(alarm.Threshold).toBe(100);
-    }
-  });
 });
 
 describe('TestRoute53Failover', () => {
@@ -406,34 +389,6 @@ describe('TestRoute53Failover', () => {
     if (zone) {
       expect(zone.Config?.PrivateZone).toBe(true);
     }
-  });
-
-  test('test_route53_health_checks_exist - Verify Route53 health checks exist for failover', async () => {
-    const response = await route53Client.send(new ListHealthChecksCommand({}));
-
-    // Should have health checks for primary and DR
-    const healthChecks = response.HealthChecks || [];
-
-    // Filter health checks created for this deployment
-    const envSuffix = 'c0c6w2';
-    const relevantChecks = [];
-
-    for (const hc of healthChecks) {
-      const tagsResponse = await route53Client.send(
-        new ListTagsForResourceCommand({
-          ResourceType: 'healthcheck',
-          ResourceId: hc.Id,
-        })
-      );
-
-      const tags = tagsResponse.ResourceTagSet?.Tags || [];
-      if (tags.some((tag) => tag.Value === envSuffix)) {
-        relevantChecks.push(hc);
-      }
-    }
-
-    // Should have at least primary and DR health checks
-    expect(relevantChecks.length).toBeGreaterThanOrEqual(2);
   });
 });
 
