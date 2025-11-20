@@ -48,6 +48,10 @@ resource "aws_security_group" "eks_cluster" {
     # Dependencies (EKS cluster, node groups) will be destroyed first
     ignore_changes = []
   }
+
+  timeouts {
+    delete = "30m"
+  }
 }
 
 resource "aws_security_group" "eks_nodes" {
@@ -89,6 +93,10 @@ resource "aws_security_group" "eks_nodes" {
     # Allow security group to be replaced even if it has dependencies
     # Dependencies (node groups, launch templates) will be destroyed first
     ignore_changes = []
+  }
+
+  timeouts {
+    delete = "30m"
   }
 }
 
