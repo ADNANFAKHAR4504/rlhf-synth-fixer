@@ -5,8 +5,9 @@ variable "aws_region" {
 }
 
 variable "environment_suffix" {
-  description = "Environment suffix for resource naming to ensure uniqueness"
+  description = "Environment suffix for resource naming to ensure uniqueness. Can be set via TF_VAR_environment_suffix environment variable or ENVIRONMENT_SUFFIX in CI."
   type        = string
+  default     = "dev"
 
   validation {
     condition     = length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 20
