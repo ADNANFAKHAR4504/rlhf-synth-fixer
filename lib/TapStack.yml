@@ -411,15 +411,11 @@ Resources:
 
   ########################################
   # IAM ROLES (ADMIN MFA, EC2, CLOUDTRAIL)
+  # FIXED: Removed explicit RoleName properties
   ########################################
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName:
-        Fn::Sub:
-          - 'role-${Env}-ec2-${Suffix}'
-          - Env: !Ref EnvironmentSuffix
-            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -450,22 +446,12 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName:
-        Fn::Sub:
-          - 'profile-${Env}-ec2-${Suffix}'
-          - Env: !Ref EnvironmentSuffix
-            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       Roles:
         - !Ref EC2Role
 
   AdminRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName:
-        Fn::Sub:
-          - 'role-${Env}-admin-${Suffix}'
-          - Env: !Ref EnvironmentSuffix
-            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -511,11 +497,6 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName:
-        Fn::Sub:
-          - 'role-${Env}-cloudtrail-${Suffix}'
-          - Env: !Ref EnvironmentSuffix
-            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -607,15 +588,11 @@ Resources:
 
   ########################################
   # RDS: PRIVATE, ENCRYPTED, PASSWORD IN SECRETS MANAGER
+  # FIXED: Removed DBSubnetGroupName and added unique suffix to Secret
   ########################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: 
-        Fn::Sub: 
-          - 'dbsubnet-${Env}-${Suffix}'
-          - Env: !Ref EnvironmentSuffix
-            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       DBSubnetGroupDescription: 'Subnet group for RDS instances'
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -626,8 +603,14 @@ Resources:
 
   DBMasterPasswordSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      Name: !Sub 'rds-${EnvironmentSuffix}-master-password'
+      Name: 
+        Fn::Sub:
+          - 'rds-${Env}-password-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       Description: !Sub 'RDS master password for environment ${EnvironmentSuffix}'
       GenerateSecretString:
         SecretStringTemplate: 
@@ -654,7 +637,7 @@ Resources:
       EngineVersion: '8.0.43'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword:
-        Fn::Sub: '{{resolve:secretsmanager:${DBMasterPasswordSecret}::password}}'  # Referring secret from Secrets Manager
+        Fn::Sub: '{{resolve:secretsmanager:${DBMasterPasswordSecret}::password}}'
       AllocatedStorage: '20'
       StorageType: 'gp3'
       StorageEncrypted: true
@@ -930,3 +913,33 @@ Outputs:
     Value: !Ref DBMasterPasswordSecret
     Export:
       Name: !Sub '${AWS::StackName}-rds-master-password-secret-arn'
+
+  EC2RoleArn:
+    Description: 'EC2 IAM Role ARN'
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ec2-role-arn'
+
+  AdminRoleArn:
+    Description: 'Admin IAM Role ARN'
+    Value: !GetAtt AdminRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-admin-role-arn'
+
+  CloudTrailRoleArn:
+    Description: 'CloudTrail IAM Role ARN'
+    Value: !GetAtt CloudTrailRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-cloudtrail-role-arn'
+
+  EC2InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref EC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-ec2-instance-id'
+
+  SNSTopicArn:
+    Description: 'SNS Topic ARN for Alerts'
+    Value: !Ref SNSTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-sns-topic-arn'
