@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across deployments"
   type        = string
+  default     = "synth101912554v3"
 }
 
 variable "region" {
