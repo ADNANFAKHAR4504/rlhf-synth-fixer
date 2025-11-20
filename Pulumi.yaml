@@ -1,8 +1,6 @@
 name: TapStack
 runtime:
   name: python
-  options:
-    virtualenv: /home/anurag/.local/share/virtualenvs/synth-101912376-VBZbz4Iz
 main: lib/
 description: Multi-environment fraud detection infrastructure with drift detection
 
