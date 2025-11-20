@@ -121,7 +121,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
       },
       {
@@ -129,7 +129,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         Principal = {
           Service = "elasticloadbalancing.amazonaws.com"
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
       },
       {

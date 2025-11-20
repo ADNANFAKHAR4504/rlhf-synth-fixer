@@ -113,6 +113,28 @@ resource "aws_kms_key_policy" "main" {
           }
         }
       }
+      ,
+      {
+        Sid    = "Allow ELB to use the key for S3 access-logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "s3.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      }
     ]
   })
 }
