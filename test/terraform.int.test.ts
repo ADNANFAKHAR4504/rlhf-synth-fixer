@@ -73,13 +73,12 @@ function runTerraformPlan(varFile: string): { success: boolean; output: string; 
 // Helper to get plan JSON
 function getTerraformPlanJson(varFile: string): any {
   try {
-    // Ensure plan file exists
-    const planFile = `tfplan-${varFile.replace('.tfvars', '')}`;
-    if (!fs.existsSync(path.join(TERRAFORM_DIR, planFile))) {
-      runTerraformPlan(varFile);
-    }
+    execSync(`terraform plan -var-file=${varFile} -out=tfplan-test`, {
+      cwd: TERRAFORM_DIR,
+      stdio: 'pipe',
+    });
 
-    const planJson = execSync(`terraform show -json ${planFile}`, {
+    const planJson = execSync('terraform show -json tfplan-test', {
       cwd: TERRAFORM_DIR,
       encoding: 'utf-8',
     });
@@ -95,22 +94,23 @@ function getTerraformPlanJson(varFile: string): any {
 function extractResources(plan: any): Map<string, number> {
   const resourceCounts = new Map<string, number>();
 
-  const scanModule = (module: any) => {
-    if (module.resources) {
-      for (const resource of module.resources) {
-        const type = resource.type;
-        resourceCounts.set(type, (resourceCounts.get(type) || 0) + 1);
-      }
+  if (plan?.planned_values?.root_module?.resources) {
+    for (const resource of plan.planned_values.root_module.resources) {
+      const type = resource.type;
+      resourceCounts.set(type, (resourceCounts.get(type) || 0) + 1);
     }
-    if (module.child_modules) {
-      for (const child of module.child_modules) {
-        scanModule(child);
-      }
-    }
-  };
+  }
 
-  if (plan?.planned_values?.root_module) {
-    scanModule(plan.planned_values.root_module);
+  // Also check child modules
+  if (plan?.planned_values?.root_module?.child_modules) {
+    for (const childModule of plan.planned_values.root_module.child_modules) {
+      if (childModule.resources) {
+        for (const resource of childModule.resources) {
+          const type = resource.type;
+          resourceCounts.set(type, (resourceCounts.get(type) || 0) + 1);
+        }
+      }
+    }
   }
 
   return resourceCounts;
@@ -159,7 +159,7 @@ async function waitForSSMCommand(commandId: string, instanceId: string, timeoutM
 }
 
 // =============================================================================
-// SUITE 1: TERRAFORM PLAN VALIDATION (PRE-DEPLOYMENT CHECKS)
+// SUITE 1: TERRAFORM PLAN VALIDATION (NO DEPLOYMENT REQUIRED)
 // =============================================================================
 
 describe('Terraform Plan Validation', () => {
@@ -167,80 +167,102 @@ describe('Terraform Plan Validation', () => {
   let terraformAvailable = false;
 
   beforeAll(() => {
-    try {
-      execSync('which terraform', { encoding: 'utf-8' });
-      terraformAvailable = true;
+    execSync('which terraform', { encoding: 'utf-8' });
+    terraformAvailable = true;
 
-      // Initialize Terraform if not already done
-      if (!fs.existsSync(path.join(TERRAFORM_DIR, '.terraform'))) {
-        console.log('Initializing Terraform...');
-        execSync('terraform init -reconfigure', { cwd: TERRAFORM_DIR, stdio: 'pipe' });
-      }
-    } catch (e) {
-      console.warn('Terraform binary not found or init failed');
-    }
+    // Initialize Terraform with local backend for testing
+    console.log('Initializing Terraform with local backend...');
+    const backendOverride = `
+terraform {
+  backend "local" {}
+}
+`;
+    const overridePath = path.join(TERRAFORM_DIR, 'backend_override.tf');
+    fs.writeFileSync(overridePath, backendOverride);
+
+    execSync('terraform init -reconfigure', {
+      cwd: TERRAFORM_DIR,
+      stdio: 'pipe',
+    });
+    console.log('Terraform initialized');
   });
 
   afterAll(() => {
-    // Cleanup plan files
+    // Cleanup
     try {
-      const files = ['tfplan-dev', 'tfplan-staging', 'tfplan-prod'];
+      const files = ['backend_override.tf', 'terraform.tfstate', 'tfplan-test', 'tfplan-dev', 'tfplan-staging', 'tfplan-prod'];
       files.forEach((file) => {
         const filePath = path.join(TERRAFORM_DIR, file);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
       });
-    } catch (error) { /* ignore */ }
+    } catch (error) {
+      // Ignore cleanup errors
+    }
   });
 
   test('Terraform is installed and accessible', () => {
     expect(terraformAvailable).toBe(true);
   });
 
-  test('can generate valid plans for all environments', () => {
-    if (!terraformAvailable) return;
+  test(
+    'can generate valid plans for all environments',
+    () => {
+      expect(terraformAvailable).toBe(true);
 
-    for (const envFile of environments) {
-      const envPath = path.join(TERRAFORM_DIR, envFile);
-      expect(fs.existsSync(envPath)).toBe(true);
+      for (const envFile of environments) {
+        const envPath = path.join(TERRAFORM_DIR, envFile);
+        expect(fs.existsSync(envPath)).toBe(true);
 
-      console.log(`Validating plan for ${envFile}...`);
-      const result = runTerraformPlan(envFile);
+        console.log(`\nValidating plan for ${envFile}...`);
+        const result = runTerraformPlan(envFile);
 
-      // Accept success or "No changes" as valid states
-      expect(result.success).toBe(true);
-      expect(result.output).not.toContain('Error:');
-      console.log(`${envFile}: Plan validated`);
-    }
-  }, TEST_TIMEOUT * 3);
+        expect(result.success).toBe(true);
+        expect(result.output).toMatch(/Plan:|No changes/);
+        expect(result.output).not.toContain('Error:');
+
+        console.log(`${envFile}: Plan validated successfully`);
+      }
+    },
+    TEST_TIMEOUT * 2
+  );
 
   test('plans include all expected resource types', () => {
-    if (!terraformAvailable) return;
+    expect(terraformAvailable).toBe(true);
 
-    // Check dev plan specifically
     const plan = getTerraformPlanJson('dev.tfvars');
     expect(plan).toBeTruthy();
 
     const resources = extractResources(plan);
     const resourceTypes = Array.from(resources.keys());
 
+    // Expected core resource types
     const expectedTypes = [
       'aws_vpc',
-      'aws_subnet',               // Networking module
+      'aws_subnet',
+      'aws_internet_gateway',
       'aws_nat_gateway',
-      'aws_instance',             // Compute module
-      'aws_db_instance',          // RDS module
-      'aws_lb',                   // ALB module
+      'aws_route_table',
+      'aws_security_group',
+      'aws_db_instance',
+      'aws_db_subnet_group',
+      'aws_instance',
+      'aws_lb',
       'aws_lb_target_group',
       'aws_lb_listener',
-      'aws_security_group',       // Security Groups module
-      'aws_cloudwatch_metric_alarm' // CloudWatch module
+      'aws_iam_role',
+      'aws_iam_role_policy',
+      'aws_cloudwatch_metric_alarm',
     ];
 
-    console.log('\nResource counts (dev):');
-    for (const type of expectedTypes) {
-      expect(resourceTypes).toContain(type);
-      console.log(`  ${type}: ${resources.get(type)}`);
+    console.log('\nResource type validation:');
+    for (const expectedType of expectedTypes) {
+      expect(resourceTypes).toContain(expectedType);
+      console.log(`  ${expectedType}: ${resources.get(expectedType)} instances`);
     }
+
+    console.log(`\nAll ${expectedTypes.length} expected resource types found`);
   });
 });
 
