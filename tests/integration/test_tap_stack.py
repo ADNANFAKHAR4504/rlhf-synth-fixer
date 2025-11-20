@@ -263,7 +263,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 if e.response['Error']['Code'] == 'ResourceNotFoundException':
                     # Try with stack name prefix
                     try:
-                        full_name = f"{function_name.split('-')[0]}-{function_name.split('-')[1]}-tapstackdev-dev"
+                        full_name = f"{function_name.split('-')[0]}-{function_name.split('-')[1]}-tapstack{environment_suffix}-{environment_suffix}"
                         response = self.lambda_client.get_function(FunctionName=full_name)
                         self.assertIsNotNone(response)
                     except ClientError:
@@ -328,8 +328,8 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_secrets_manager_secrets_exist(self):
         """Test that Secrets Manager secrets exist"""
         expected_secrets = [
-            'api-keys-tapstackdev-dev',
-            'db-credentials-tapstackdev-dev',
+            f'api-keys-tapstack{environment_suffix}-{environment_suffix}',
+            f'db-credentials-tapstack{environment_suffix}-{environment_suffix}',
         ]
         
         for secret_name in expected_secrets:
@@ -340,7 +340,7 @@ class TestTapStackIntegration(unittest.TestCase):
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ResourceNotFoundException':
                     # Try alternative naming
-                    alt_name = secret_name.replace('-tapstackdev-dev', '-dev')
+                    alt_name = secret_name.replace('-tapstack{environment_suffix}-{environment_suffix}', '-{environment_suffix}')
                     try:
                         response = self.secretsmanager_client.describe_secret(SecretId=alt_name)
                         self.assertIsNotNone(response)
@@ -410,8 +410,8 @@ class TestTapStackIntegration(unittest.TestCase):
     def test_cloudwatch_log_groups_exist(self):
         """Test that CloudWatch log groups exist"""
         expected_log_groups = [
-            '/aws/apigateway/document-api-dev',
-            '/aws/events/api-calls-dev',
+            f'/aws/apigateway/document-api-{environment_suffix}',
+            f'/aws/events/api-calls-{environment_suffix}',
         ]
         
         try:
@@ -422,7 +422,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 # Try exact match first
                 if expected_group not in log_group_names:
                     # Try with stack name prefix
-                    alt_name = expected_group.replace('/aws/', f'/aws/tapstackdev-')
+                    alt_name = expected_group.replace('/aws/', f'/aws/tapstack{environment_suffix}-')
                     if alt_name not in log_group_names:
                         # Try partial match
                         found = any(expected_group.split('/')[-1] in name for name in log_group_names)
