@@ -225,11 +225,12 @@ Resources:
   # Route53 Health Check
   HealthCheck:
     Type: AWS::Route53::HealthCheck
+    DependsOn: DBCPUAlarm
     Properties:
       HealthCheckConfig:
         Type: CLOUDWATCH_METRIC
         AlarmIdentifier:
-          Name: !GetAtt DBCPUAlarm.AlarmName
+          Name: !Sub 'db-cpu-alarm-primary-${EnvironmentSuffix}'
           Region: !Ref 'AWS::Region'
         InsufficientDataHealthStatus: Healthy
       HealthCheckTags:
