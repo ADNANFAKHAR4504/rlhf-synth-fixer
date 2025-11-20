@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T12:14:58.063710Z",
+  "subtask": "Create a CloudFormation template to establish the target AWS infrastructure for migrating an on-premises loan processing system.\n\nMANDATORY REQUIREMENTS (Must complete):\n1. Deploy RDS Aurora MySQL cluster with one writer instance (CORE: RDS Aurora)\n2. Create Lambda function for loan validation with 1GB memory (CORE: Lambda)\n3. Configure S3 bucket for loan documents with versioning enabled\n4. Set up VPC with public and private subnets across 2 AZs minimum\n5. Implement Secrets Manager for database credentials with 30-day rotation\n6. Create CloudWatch Log Groups with 90-day retention for all services\n7. Use Parameters for environment type (dev/prod) and instance sizes\n8. Apply Conditions to control multi-AZ deployment based on environment\n\nOPTIONAL ENHANCEMENTS (If time permits):\n� Add Application Load Balancer for future web interface (OPTIONAL: ALB) - prepares for UI migration\n� Implement SQS queue for async loan processing (OPTIONAL: SQS) - improves throughput\n� Add EventBridge for loan status notifications (OPTIONAL: EventBridge) - enables event-driven architecture\n\nExpected output: A single CloudFormation JSON template that creates all infrastructure components ready to receive migrated data and applications from the on-premises system.",
+  "subject_labels": [],
+  "aws_services": [
+    "EC2",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "Logs",
+    "RDS",
+    "S3",
+    "SecretsManager"
+  ],
+  "po_id": "101912522",
+  "training_quality": 9
+}
