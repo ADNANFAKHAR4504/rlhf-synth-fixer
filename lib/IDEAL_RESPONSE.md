@@ -43,21 +43,6 @@ The solution deploys:
       "MaxLength": "16",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     },
-    "MasterUserPassword": {
-      "Type": "String",
-      "Description": "Master password for the database (min 8 characters)",
-      "NoEcho": true,
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+=-]*$",
-      "ConstraintDescription": "Must contain only alphanumeric and special characters"
-    },
-    "SecondaryRegion": {
-      "Type": "String",
-      "Default": "us-west-2",
-      "Description": "Secondary region for disaster recovery",
-      "AllowedValues": ["us-west-2", "us-west-1", "eu-west-1", "eu-central-1", "ap-southeast-1", "ap-northeast-1"]
-    },
     "DBInstanceClass": {
       "Type": "String",
       "Default": "db.r6g.large",
@@ -116,9 +101,10 @@ The solution deploys:
     },
     "AlarmEmail": {
       "Type": "String",
-      "Description": "Email address for CloudWatch alarm notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
+      "Default": "",
+      "Description": "Email address for CloudWatch alarm notifications (optional)",
+      "AllowedPattern": "^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be empty or a valid email address"
     }
   },
   "Conditions": {
@@ -127,6 +113,13 @@ The solution deploys:
     },
     "EnablePerformanceInsightsCondition": {
       "Fn::Equals": [{"Ref": "EnablePerformanceInsights"}, "true"]
+    },
+    "HasAlarmEmail": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [{"Ref": "AlarmEmail"}, ""]
+        }
+      ]
     }
   },
   "Resources": {
@@ -297,6 +290,29 @@ The solution deploys:
         ]
       }
     },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {"Fn::Sub": "aurora-db-password-${EnvironmentSuffix}"},
+        "Description": "Aurora database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {"Fn::Sub": "{\"username\":\"${MasterUsername}\"}"},
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "aurora-db-password-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
     "GlobalCluster": {
       "Type": "AWS::RDS::GlobalCluster",
       "Properties": {
@@ -355,14 +371,16 @@ The solution deploys:
     },
     "PrimaryDBCluster": {
       "Type": "AWS::RDS::DBCluster",
-      "DependsOn": "GlobalCluster",
+      "DependsOn": ["DatabaseSecret"],
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-global-primary-cluster-${EnvironmentSuffix}"},
         "Engine": "aurora-postgresql",
         "EngineVersion": "14.6",
         "GlobalClusterIdentifier": {"Ref": "GlobalCluster"},
         "MasterUsername": {"Ref": "MasterUsername"},
-        "MasterUserPassword": {"Ref": "MasterUserPassword"},
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:aurora-db-password-${EnvironmentSuffix}:SecretString:password}}"
+        },
         "DatabaseName": {"Ref": "DatabaseName"},
         "DBSubnetGroupName": {"Ref": "PrimaryDBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "PrimarySecurityGroup"}],
@@ -479,12 +497,18 @@ The solution deploys:
       "Properties": {
         "TopicName": {"Fn::Sub": "aurora-global-alarms-${EnvironmentSuffix}"},
         "DisplayName": "Aurora Global Database Alarms",
-        "Subscription": [
-          {
-            "Endpoint": {"Ref": "AlarmEmail"},
-            "Protocol": "email"
-          }
-        ],
+        "Subscription": {
+          "Fn::If": [
+            "HasAlarmEmail",
+            [
+              {
+                "Endpoint": {"Ref": "AlarmEmail"},
+                "Protocol": "email"
+              }
+            ],
+            {"Ref": "AWS::NoValue"}
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -660,24 +684,45 @@ The solution deploys:
 ### Expert-Level Features
 
 1. **Comprehensive Parameter Validation**: All parameters include patterns, constraints, and descriptions
-2. **Conditional Resources**: Enhanced monitoring role only created when enabled
+2. **Conditional Resources**: Enhanced monitoring role only created when enabled; SNS email subscription only when email provided
 3. **Multi-AZ High Availability**: 3 subnets across 3 AZs for maximum availability
 4. **Security Hardening**:
    - SSL/TLS enforced via parameter groups
    - IAM database authentication enabled
    - Storage encryption with KMS
    - Restrictive security groups (VPC-only access)
+   - **Automatic password generation via Secrets Manager** - No manual password input required
+   - Passwords auto-generated (32 characters) and stored securely
 
 5. **Advanced Monitoring**:
    - Enhanced monitoring with granular intervals
    - Performance Insights with configurable retention
    - CloudWatch Logs export enabled
    - Multiple CloudWatch alarms for proactive alerting
+   - Optional email notifications (configurable via AlarmEmail parameter)
 
 6. **Production Best Practices**:
    - Consistent resource naming with environmentSuffix
    - Comprehensive tagging strategy
    - Proper IAM roles with least privilege
    - Backup and maintenance windows configured
+   - **Secrets Manager integration** for secure credential management
+
+## Key Implementation Details
+
+### Secrets Management
+- **Automatic Password Generation**: The template uses AWS Secrets Manager's `GenerateSecretString` feature to automatically generate a secure 32-character password
+- **Secret Format**: Password is stored as JSON: `{"username": "...", "password": "..."}`
+- **Dynamic Reference**: The database cluster retrieves the password using CloudFormation's dynamic reference: `{{resolve:secretsmanager:...}}`
+- **No Manual Input Required**: No need to provide passwords during deployment
+
+### Optional Email Notifications
+- **AlarmEmail Parameter**: Optional parameter with default empty string
+- **Conditional Subscription**: SNS email subscription is only created when an email address is provided
+- **Flexible Deployment**: Allows deployment without email notifications for testing/development
+
+### Resource Dependencies
+- `PrimaryDBCluster` depends on `DatabaseSecret` to ensure the secret exists before cluster creation
+- The secret is created with the naming pattern: `aurora-db-password-${EnvironmentSuffix}`
 
 Note: This template deploys only the primary region cluster. For a complete global database setup, a secondary region stack would be deployed separately that references the GlobalCluster resource created here.

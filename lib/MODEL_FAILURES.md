@@ -33,7 +33,55 @@ This is the recommended AWS approach for global database deployment.
 
 ---
 
-### Issue 2: EnvironmentSuffix Pattern Validation
+### Issue 2: MasterUserPassword Parameter Removal
+**Status**: FIXED
+
+**Description**:
+The `MasterUserPassword` parameter was removed and replaced with automatic password generation via AWS Secrets Manager. This improves security and eliminates the need to pass passwords as parameters.
+
+**Fix Applied**:
+- Removed `MasterUserPassword` parameter
+- Added `DatabaseSecret` resource with `GenerateSecretString`
+- Updated `PrimaryDBCluster` to use dynamic reference: `{{resolve:secretsmanager:...}}`
+- Password is now auto-generated (32 characters) and stored securely
+
+**Impact**: Improved security, no manual password input required
+**Severity**: High - Security best practice
+
+---
+
+### Issue 3: AlarmEmail Parameter Made Optional
+**Status**: FIXED
+
+**Description**:
+The `AlarmEmail` parameter is now optional with a default empty string. SNS email subscription is only created when an email is provided, allowing deployments without email notifications.
+
+**Fix Applied**:
+- Added default empty string to `AlarmEmail` parameter
+- Added `HasAlarmEmail` condition
+- Made SNS subscription conditional using `Fn::If`
+
+**Impact**: Allows deployment without email notifications
+**Severity**: Medium - Flexibility improvement
+
+---
+
+### Issue 3a: SecondaryRegion Parameter Removed
+**Status**: FIXED
+
+**Description**:
+The `SecondaryRegion` parameter was removed as it was not being used in the template. This template deploys only the primary region cluster. Secondary region deployment would be handled by a separate stack.
+
+**Fix Applied**:
+- Removed unused `SecondaryRegion` parameter
+- This aligns with the architecture where primary and secondary regions are deployed via separate stacks
+
+**Impact**: Cleaner template, no unused parameters
+**Severity**: Low - Code quality improvement
+
+---
+
+### Issue 4: EnvironmentSuffix Pattern Validation
 **Status**: FIXED
 
 **Description**:
@@ -55,7 +103,7 @@ Initial parameter pattern allowed uppercase characters which could cause issues 
 
 ---
 
-### Issue 3: IAM Role Naming with EnvironmentSuffix
+### Issue 5: IAM Role Naming with EnvironmentSuffix
 **Status**: FIXED
 
 **Description**:
@@ -74,7 +122,7 @@ Using static IAM role names.
 
 ---
 
-### Issue 4: DeletionProtection Setting
+### Issue 6: DeletionProtection Setting
 **Status**: INTENTIONAL - Testing Configuration
 
 **Description**:
@@ -107,7 +155,7 @@ Or make it a parameter:
 
 ---
 
-### Issue 5: Enhanced Monitoring Role Conditionals
+### Issue 7: Enhanced Monitoring Role Conditionals
 **Status**: VERIFIED - Correctly Implemented
 
 **Description**:
@@ -211,14 +259,22 @@ CloudFormation requires two separate stacks (one per region). This is an AWS pla
 **Workaround**: Use CloudFormation StackSets or AWS CDK for multi-region orchestration.
 
 ### 2. Password Management
-Master password passed as parameter is not ideal for production.
+**Status**: IMPLEMENTED
 
-**Recommendation**: Use AWS Secrets Manager:
-```json
-"MasterUserPassword": {
-  "Fn::Sub": "{{resolve:secretsmanager:${SecretArn}:SecretString:password}}"
-}
-```
+**Description**:
+Master password is now automatically generated and stored in AWS Secrets Manager using the `GenerateSecretString` feature. This eliminates the need for manual password input and follows AWS security best practices.
+
+**Implementation**:
+- `DatabaseSecret` resource uses `GenerateSecretString` to auto-generate a 32-character password
+- Password is stored in Secrets Manager with the format: `{"username": "...", "password": "..."}`
+- PrimaryDBCluster uses dynamic reference to retrieve password: `{{resolve:secretsmanager:aurora-db-password-${EnvironmentSuffix}:SecretString:password}}`
+- No `MasterUserPassword` parameter required - password is automatically generated
+
+**Benefits**:
+- No manual password management required
+- Secure password generation (32 characters, excludes problematic characters)
+- Password stored securely in Secrets Manager
+- Automatic rotation support available
 
 ### 3. VPC CIDR Block Conflicts
 The template uses fixed CIDR blocks (10.0.0.0/16 for primary, 10.1.0.0/16 for secondary).
@@ -248,8 +304,9 @@ The generated CloudFormation template is production-ready for Aurora Global Data
 - Performance validation
 
 ### Requires Before Production:
-- Secrets Manager integration for passwords
+- ✅ Secrets Manager integration for passwords (IMPLEMENTED)
 - Consider DeletionProtection=true
 - Validate CIDR blocks for your network
 - Configure backup retention for compliance needs
 - Review alarm thresholds for your workload
+- Optionally configure email notifications via AlarmEmail parameter
