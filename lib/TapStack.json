@@ -883,79 +883,6 @@
         ]
       }
     },
-    "S3ReplicationRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {
-          "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
-        },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "S3ReplicationPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObjectVersionForReplication",
-                    "s3:GetObjectVersionAcl"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:ListBucket"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:ReplicateObject",
-                    "s3:ReplicateDelete"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${Environment}-s3-replication-role-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
-      }
-    },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
@@ -988,45 +915,6 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
-        },
-        "ReplicationConfiguration": {
-          "Role": {
-            "Fn::GetAtt": [
-              "S3ReplicationRole",
-              "Arn"
-            ]
-          },
-          "Rules": [
-            {
-              "Id": "ReplicateToSecondary",
-              "Status": "Enabled",
-              "Priority": 1,
-              "DeleteMarkerReplication": {
-                "Status": "Enabled"
-              },
-              "Filter": {
-                "Prefix": ""
-              },
-              "Destination": {
-                "Bucket": {
-                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
-                "ReplicationTime": {
-                  "Status": "Enabled",
-                  "Time": {
-                    "Minutes": 15
-                  }
-                },
-                "Metrics": {
-                  "Status": "Enabled",
-                  "EventThreshold": {
-                    "Minutes": 15
-                  }
-                },
-                "StorageClass": "STANDARD_IA"
-              }
-            }
-          ]
         },
         "Tags": [
           {
