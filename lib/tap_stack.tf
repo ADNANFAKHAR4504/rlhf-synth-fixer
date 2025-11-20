@@ -702,7 +702,7 @@ resource "aws_lb_listener" "https" {
     target_group_arn = aws_lb_target_group.main.arn
   }
 
-  depends_on = var.acm_certificate_arn != "" ? [] : [aws_acm_certificate_validation.main[0]]
+  depends_on = [aws_acm_certificate_validation.main]
 }
 
 # ACM Certificate (only create if not provided)
