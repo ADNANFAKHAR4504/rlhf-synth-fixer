@@ -34,7 +34,7 @@ class EcrConstruct(Construct):
                 image_scan_on_push=True,
                 encryption=ecr.RepositoryEncryption.AES_256,
                 removal_policy=cdk.RemovalPolicy.DESTROY,
-                auto_delete_images=True,
+                auto_delete_images=True,  # Note: deprecated in favor of empty_on_delete in CDK v2.172+
                 lifecycle_rules=[
                     ecr.LifecycleRule(
                         description="Keep only last 10 images",
