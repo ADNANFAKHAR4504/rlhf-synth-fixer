@@ -19,6 +19,15 @@ from tap_stack import TapStack, TapStackArgs
 # Initialize Pulumi configuration
 config = Config()
 
+# Set default config values if not already set
+# This handles the case where config values aren't set via pulumi config set
+def get_config_or_env(key: str, env_var: str, default: str = None):
+    """Get config value from Pulumi config or environment variable"""
+    try:
+        return config.require(key)
+    except:
+        return os.getenv(env_var, default)
+
 # Get environment suffix from environment variables, fallback to 'dev'
 environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
 STACK_NAME = f"TapStack{environment_suffix}"

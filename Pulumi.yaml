@@ -9,10 +9,12 @@ description: Multi-environment fraud detection infrastructure with drift detecti
 config:
   region:
     description: Region name (used in resource naming)
-  
+    default: us-east-1
+
   environmentSuffix:
     description: Unique suffix for resource names (REQUIRED)
-  
+    default: dev
+
   azCount:
     description: Number of availability zones
     default: 3
@@ -36,6 +38,7 @@ config:
   
   containerImage:
     description: Docker container image for fraud detection service
+    default: nginx:latest
   
   desiredCount:
     description: Desired number of ECS tasks
@@ -90,3 +93,4 @@ config:
   dbPassword:
     description: Master password for Aurora database
     secret: true
+    default: TempPassword123!
