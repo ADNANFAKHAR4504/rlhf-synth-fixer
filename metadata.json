@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-20T15:02:51+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments",
+    "Environment Migration"
+  ],
+  "po_id": "t8d7m0",
+  "aws_services": [
+    "DMS",
+    "CloudEndure",
+    "VPN",
+    "Route53",
+    "DynamoDB",
+    "SNS",
+    "Systems Manager",
+    "Lambda",
+    "CloudWatch",
+    "KMS",
+    "VPC",
+    "EC2"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}
