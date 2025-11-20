@@ -611,8 +611,8 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName:
-        Fn::Sub:
+      DBSubnetGroupName: 
+        Fn::Sub: 
           - 'dbsubnet-${Env}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
@@ -630,7 +630,8 @@ Resources:
       Name: !Sub 'rds-${EnvironmentSuffix}-master-password'
       Description: !Sub 'RDS master password for environment ${EnvironmentSuffix}'
       GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        SecretStringTemplate: 
+          Fn::Sub: '{"username":"${DBMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 20
         ExcludeCharacters: '"` /@ '
@@ -644,7 +645,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier:
-        Fn::Sub:
+        Fn::Sub: 
           - 'rds-${Env}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
@@ -653,7 +654,7 @@ Resources:
       EngineVersion: '8.0.43'
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword:
-        Fn::Sub: '{{resolve:secretsmanager:${DBMasterPasswordSecret}::password}}'
+        Fn::Sub: '{{resolve:secretsmanager:${DBMasterPasswordSecret}::password}}'  # Referring secret from Secrets Manager
       AllocatedStorage: '20'
       StorageType: 'gp3'
       StorageEncrypted: true
@@ -923,3 +924,9 @@ Outputs:
     Value: !Ref ApplicationBucket
     Export:
       Name: !Sub '${AWS::StackName}-application-bucket-name'
+    
+  DBMasterPasswordSecretArn:
+    Description: 'ARN of the RDS Master Password Secret'
+    Value: !Ref DBMasterPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-rds-master-password-secret-arn'
