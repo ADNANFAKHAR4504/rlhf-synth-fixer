@@ -7,8 +7,6 @@ Analyzes security groups in us-east-1 region for security risks and compliance v
 import json
 import csv
 import boto3
-import networkx as nx
-import pandas as pd
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Set, Any, Optional
 from collections import defaultdict
@@ -16,7 +14,87 @@ import re
 import ipaddress
 import logging
 from dataclasses import dataclass, field, asdict
-from tabulate import tabulate
+
+# Optional dependencies with fallbacks
+try:
+    import networkx as nx
+except ImportError:  # pragma: no cover
+    # Stub implementation for networkx
+    class _StubDiGraph:  # pragma: no cover
+        def __init__(self):  # pragma: no cover
+            self._nodes = {}
+            self._edges = []
+
+        def add_node(self, node_id, **attrs):  # pragma: no cover
+            self._nodes[node_id] = attrs
+
+        def add_edge(self, u, v, **attrs):  # pragma: no cover
+            self._edges.append((u, v, attrs))
+
+        def nodes(self, data=False):  # pragma: no cover
+            if data:
+                return self._nodes.items()
+            return self._nodes.keys()
+
+    class _StubNX:  # pragma: no cover
+        DiGraph = _StubDiGraph
+
+    nx = _StubNX()  # pragma: no cover
+
+try:
+    import pandas as pd
+except ImportError:  # pragma: no cover
+    # Stub implementation for pandas
+    class _StubDataFrame:  # pragma: no cover
+        def __init__(self, data):  # pragma: no cover
+            self.data = data if isinstance(data, list) else []
+
+        def to_csv(self, path, index=False):  # pragma: no cover
+            """Minimal CSV writing without pandas"""
+            if not self.data:
+                return
+
+            with open(path, 'w', newline='') as f:
+                if isinstance(self.data[0], dict):
+                    keys = self.data[0].keys()
+                    writer = csv.DictWriter(f, fieldnames=keys)
+                    writer.writeheader()
+                    writer.writerows(self.data)
+                else:
+                    writer = csv.writer(f)
+                    writer.writerows(self.data)
+
+    class _StubPandas:  # pragma: no cover
+        DataFrame = _StubDataFrame
+
+    pd = _StubPandas()  # pragma: no cover
+
+try:
+    from tabulate import tabulate
+except ImportError:  # pragma: no cover
+    def tabulate(data, headers=None, tablefmt=None):  # pragma: no cover
+        """Simple text table fallback without tabulate"""
+        if not data:
+            return ""
+
+        lines = []
+        if headers:
+            # Create header row
+            header_line = ' | '.join(str(h) for h in headers)
+            lines.append(header_line)
+            lines.append('-' * len(header_line))
+
+        # Create data rows
+        for row in data:
+            if isinstance(row, (list, tuple)):
+                lines.append(' | '.join(str(cell) for cell in row))
+            elif isinstance(row, dict):
+                if headers:
+                    lines.append(' | '.join(str(row.get(h, '')) for h in headers))
+                else:
+                    lines.append(' | '.join(f"{k}: {v}" for k, v in row.items()))
+
+        return '\n'.join(lines)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
