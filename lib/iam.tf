@@ -131,6 +131,39 @@ resource "aws_iam_role_policy" "emr_service_ec2_permissions" {
   })
 }
 
+# KMS permissions for EMR service role to use default EBS encryption key
+resource "aws_iam_role_policy" "emr_service_ebs_kms" {
+  name = "${local.bucket_prefix}-emr-service-ebs-kms"
+  role = aws_iam_role.emr_service_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey",
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
+        ]
+        Resource = "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:key/*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "ec2.${data.aws_region.current.id}.amazonaws.com"
+            ]
+          }
+        }
+      }
+    ]
+  })
+}
+
 # EMR EC2 Instance Profile Role
 resource "aws_iam_role" "emr_ec2_role" {
   name = "${local.bucket_prefix}-emr-ec2-role"
@@ -264,6 +297,35 @@ resource "aws_iam_role_policy" "emr_ec2_tagging" {
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
           "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*"
         ]
+      }
+    ]
+  })
+}
+
+# KMS permissions for EMR EC2 role to use default EBS encryption key
+resource "aws_iam_role_policy" "emr_ec2_ebs_kms" {
+  name = "${local.bucket_prefix}-emr-ec2-ebs-kms"
+  role = aws_iam_role.emr_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey"
+        ]
+        Resource = "arn:aws:kms:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:key/*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "ec2.${data.aws_region.current.id}.amazonaws.com"
+            ]
+          }
+        }
       }
     ]
   })
