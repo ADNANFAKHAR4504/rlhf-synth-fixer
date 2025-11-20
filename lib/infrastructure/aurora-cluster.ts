@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 export interface AuroraClusterArgs {
@@ -46,7 +46,7 @@ export class AuroraCluster extends pulumi.ComponentResource {
     const dbSecret = new aws.secretsmanager.Secret(
       `db-secret-${args.environmentSuffix}`,
       {
-        name: `aurora-password-${args.environmentSuffix}`,
+        name: `aurora-password-${args.environmentSuffix}-nm`,
         description: 'Aurora database password',
         recoveryWindowInDays: 0, // Allow immediate deletion to prevent naming conflicts
         tags: {
