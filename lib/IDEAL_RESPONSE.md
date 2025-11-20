@@ -1884,4 +1884,16 @@ Outputs:
   DashboardURL:
     Description: CloudWatch Dashboard URL
     Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${Environment}-emr-dashboard'
+
+  ProjectName:
+    Description: Project name used for resource naming
+    Value: !Ref ProjectName
+    Export:
+      Name: !Sub '${AWS::StackName}-project-name'
+
+  Environment:
+    Description: Environment name (development, staging, production)
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-environment'
 ```

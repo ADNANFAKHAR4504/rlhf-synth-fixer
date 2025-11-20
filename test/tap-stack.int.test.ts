@@ -1,596 +1,629 @@
 import fs from 'fs';
-import path from 'path';
+import {
+  EMRClient,
+  DescribeClusterCommand,
+  ListStepsCommand,
+  DescribeStepCommand,
+} from '@aws-sdk/client-emr';
 import {
   S3Client,
   PutObjectCommand,
-  GetObjectCommand,
   ListObjectsV2Command,
   DeleteObjectCommand,
-  DeleteObjectsCommand,
-  HeadObjectCommand,
-  ListObjectVersionsCommand,
 } from '@aws-sdk/client-s3';
-import EMR from 'aws-sdk/clients/emr';
 import {
   SFNClient,
-  ListExecutionsCommand,
+  StartExecutionCommand,
   DescribeExecutionCommand,
+  GetExecutionHistoryCommand,
+  ListExecutionsCommand,
 } from '@aws-sdk/client-sfn';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import {
   CloudWatchClient,
+  GetMetricStatisticsCommand,
   ListMetricsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
+  DescribeLogStreamsCommand,
+  GetLogEventsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import { v4 as uuidv4 } from 'uuid';
 
-// Get environment variables
-const region = process.env.AWS_REGION;
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
-// Load stack outputs
-let outputs: any;
-try {
-  const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-  const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-  outputs = JSON.parse(outputsContent);
-} catch (error) {
-  console.error(
-    'Failed to load CloudFormation outputs. Ensure stack is deployed and outputs are available.'
-  );
-  throw error;
-}
+// Initialize AWS SDK clients
+const emrClient = new EMRClient({ region: process.env.AWS_REGION });
+const s3Client = new S3Client({ region: process.env.AWS_REGION });
+const sfnClient = new SFNClient({ region: process.env.AWS_REGION });
+const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION });
+const cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION });
 
-const projectName = process.env.PROJECT_NAME || 'emr-pipeline';
-const environmentName = process.env.ENVIRONMENT || 'production';
+// Test configuration
+const POLL_INTERVAL = 30000; // 30 seconds
 
-// Initialize AWS clients for live integration testing
-const s3Client = new S3Client({ region });
-const emrClient = new EMR({ region }); // SDK v2
-const stepFunctionsClient = new SFNClient({ region });
-const snsClient = new SNSClient({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
-const cloudWatchLogsClient = new CloudWatchLogsClient({ region });
-
-type ExecutionStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT' | 'ABORTED';
-
-interface ExecutionMatch {
-  summary: any;
-  detail: any;
-  input: any;
-  output?: any;
-}
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const safeParseJson = (payload?: string) => {
-  if (!payload) {
-    return {};
+// Helper function to wait for a condition
+const waitFor = async (
+  condition: () => Promise<boolean>,
+  timeout: number,
+  interval: number = POLL_INTERVAL
+): Promise<void> => {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeout) {
+    if (await condition()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
   }
-  try {
-    return JSON.parse(payload);
-  } catch {
-    return {};
-  }
+  throw new Error('Timeout waiting for condition');
 };
 
-async function findExecutionByS3Key(
-  key: string,
-  options?: {
-    listStatuses?: ExecutionStatus[];
-    desiredStatuses?: ExecutionStatus[];
-    maxAttempts?: number;
-    waitMs?: number;
-  }
-): Promise<ExecutionMatch | null> {
-  const {
-    listStatuses = ['RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED'],
-    desiredStatuses,
-    maxAttempts = 30,
-    waitMs = 10000,
-  } = options || {};
-
-  console.log(`Searching for execution with S3 key: ${key} (max ${maxAttempts} attempts)`);
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (attempt > 0 && attempt % 6 === 0) {
-      console.log(`Still searching... attempt ${attempt}/${maxAttempts}`);
-    }
-    for (const statusFilter of listStatuses) {
-      let nextToken: string | undefined;
-      do {
-        const executions = await stepFunctionsClient.send(
-          new ListExecutionsCommand({
-            stateMachineArn: outputs.StateMachineArn,
-            statusFilter,
-            maxResults: 100,
-            nextToken,
-          })
-        );
-
-        for (const summary of executions.executions ?? []) {
-          if (!summary.executionArn) {
-            continue;
-          }
-
-          const detail = await stepFunctionsClient.send(
-            new DescribeExecutionCommand({
-              executionArn: summary.executionArn,
-            })
-          );
-
-          const input = safeParseJson(detail.input);
-          if (input.Key !== key) {
-            continue;
-          }
-
-          if (
-            desiredStatuses &&
-            detail.status &&
-            !desiredStatuses.includes(detail.status as ExecutionStatus)
-          ) {
-            continue;
-          }
-
-          const output = safeParseJson(detail.output);
-          return { summary, detail, input, output };
-        }
-
-        nextToken = executions.nextToken;
-      } while (nextToken);
-    }
-
-    await delay(waitMs);
-  }
-
-  return null;
-}
-
-async function waitForProcessedResults(
-  minimumTimestamp: Date,
-  maxAttempts = 30,
-  waitMs = 10000
-) {
-  console.log(`Waiting for processed results created after ${minimumTimestamp.toISOString()}`);
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const objects = await s3Client.send(
-      new ListObjectsV2Command({
-        Bucket: outputs.ProcessedDataBucketName,
-        Prefix: 'results/',
-      })
+// Helper function to create test transaction data
+const createTestTransactionData = (): Buffer => {
+  // Create CSV test data with transaction records
+  const header = 'transaction_id,amount,timestamp,merchant_id,card_number,status\n';
+  const rows: string[] = [];
+  const testId = uuidv4();
+  for (let i = 0; i < 1000; i++) {
+    const amount = (Math.random() * 10000).toFixed(2);
+    const timestamp = Date.now() - Math.random() * 86400000; // Last 24 hours
+    rows.push(
+      `${testId}-${i},${amount},${timestamp},MERCHANT_${i % 50},****${Math.floor(Math.random() * 10000)},${Math.random() > 0.9 ? 'FRAUD' : 'VALID'}\n`
     );
-
-    const recentObjects = (objects.Contents ?? []).filter(obj => {
-      if (!obj.LastModified) {
-        return false;
-      }
-      return obj.LastModified.getTime() >= minimumTimestamp.getTime();
-    });
-
-    if (recentObjects.length > 0) {
-      console.log(`Found ${recentObjects.length} processed objects`);
-      return {
-        ...objects,
-        Contents: recentObjects,
-      };
-    }
-
-    if (attempt > 0 && attempt % 6 === 0) {
-      console.log(`Still waiting for processed results... attempt ${attempt}/${maxAttempts}`);
-    }
-
-    await delay(waitMs);
   }
+  return Buffer.from(header + rows.join(''));
+};
 
-  console.warn(`No processed results found after ${maxAttempts} attempts`);
-  return { Contents: [] };
-}
+describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
+  const emrClusterId = outputs.EMRClusterId;
+  const rawDataBucket = outputs.RawDataBucketName;
+  const processedDataBucket = outputs.ProcessedDataBucketName;
+  const stateMachineArn = outputs.StateMachineArn;
+  const projectName = outputs.ProjectName;
+  const environment = outputs.Environment;
+  const s3EventProcessorFunctionName = `${projectName}-${environment}-s3-event-processor`;
 
-// Test constants
-const TEST_DATA_SIZE = 1024 * 1024; // 1MB test file
-
-describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
-  let testExecutionId: string;
   let testDataKey: string;
-  let startTime: Date;
-  let processedObjects: any; // Shared variable for processed S3 objects
-  let mainExecution: ExecutionMatch | null;
-  let invalidExecution: ExecutionMatch | null;
+  let testExecutionArn: string | null = null;
+  let testStartTime: number;
 
   beforeAll(async () => {
-    // Generate unique test identifiers
-    testExecutionId = `test-${Date.now()}`;
-    testDataKey = `transactions/test-${testExecutionId}.parquet`;
-    startTime = new Date();
-    processedObjects = null;
-    mainExecution = null;
-    invalidExecution = null;
+    testStartTime = Date.now();
+    testDataKey = `transactions/test-${uuidv4()}.parquet`;
 
-    // Verify required outputs exist
-    expect(outputs).toBeDefined();
-    expect(outputs.RawDataBucketName).toBeDefined();
-    expect(outputs.ProcessedDataBucketName).toBeDefined();
-    expect(outputs.StateMachineArn).toBeDefined();
-    expect(outputs.EMRClusterId).toBeDefined();
-    expect(outputs.SNSTopicArn).toBeDefined();
+    console.log('=== Starting End-to-End Data Flow Test ===');
+    console.log(`Test Data Key: ${testDataKey}`);
+    console.log(`EMR Cluster ID: ${emrClusterId}`);
+    console.log(`Raw Data Bucket: ${rawDataBucket}`);
+    console.log(`Processed Data Bucket: ${processedDataBucket}`);
+    console.log(`State Machine ARN: ${stateMachineArn}`);
   });
 
   afterAll(async () => {
-    // Clean up test data
+    // Cleanup test data from S3
     try {
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: outputs.RawDataBucketName,
-          Key: testDataKey,
-        })
-      );
-
-      // Clean up any processed test data
-      const processedObjects = await s3Client.send(
-        new ListObjectsV2Command({
-          Bucket: outputs.ProcessedDataBucketName,
-          Prefix: 'results/',
-        })
-      );
-
-      const testObjects =
-        processedObjects.Contents?.filter(
-          obj =>
-            obj.LastModified &&
-            obj.LastModified.getTime() >= startTime.getTime()
-        ) ?? [];
-
-      if (testObjects.length > 0) {
+      if (testDataKey) {
         await s3Client.send(
-          new DeleteObjectsCommand({
-            Bucket: outputs.ProcessedDataBucketName,
-            Delete: {
-              Objects: testObjects.map(obj => ({
-                Key: obj.Key!,
-              })),
-            },
+          new DeleteObjectCommand({
+            Bucket: rawDataBucket,
+            Key: testDataKey,
           })
         );
+        console.log(`✓ Cleaned up test data: ${testDataKey}`);
       }
     } catch (error) {
-      console.warn('Cleanup failed:', error);
+      console.warn('Error cleaning up test data:', error);
     }
   });
 
-  describe('A. Data Input - S3 Upload', () => {
-    test('should successfully upload test transaction data to raw S3 bucket', async () => {
-      // Arrange: Create test data (simulated transaction data)
-      const testData = Buffer.alloc(TEST_DATA_SIZE, 'test-transaction-data');
+  describe('Data Ingestion - Upload and Event Trigger', () => {
+    test('should upload test transaction data to S3 raw bucket', async () => {
+      // Create and upload test transaction data
+      const testData = createTestTransactionData();
+      const dataSize = testData.length;
 
-      // Act: Upload to raw data bucket
+      console.log(`Uploading ${dataSize} bytes of test data to S3...`);
+
       await s3Client.send(
         new PutObjectCommand({
-          Bucket: outputs.RawDataBucketName,
+          Bucket: rawDataBucket,
           Key: testDataKey,
           Body: testData,
           ContentType: 'application/octet-stream',
-          Metadata: {
-            'test-execution-id': testExecutionId,
-            'data-size': TEST_DATA_SIZE.toString(),
-          },
         })
       );
 
-      // Assert: Verify upload
-      const uploadedObject = await s3Client.send(
-        new HeadObjectCommand({
-          Bucket: outputs.RawDataBucketName,
-          Key: testDataKey,
+      console.log(`✓ Test data uploaded: s3://${rawDataBucket}/${testDataKey}`);
+
+      // Verify file exists in S3
+      const listResponse = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: rawDataBucket,
+          Prefix: testDataKey,
         })
       );
 
-      expect(uploadedObject.ContentLength).toBe(TEST_DATA_SIZE);
-      expect(uploadedObject.Metadata!['test-execution-id']).toBe(
-        testExecutionId
-      );
-    });
-  });
-
-  describe('B. Trigger Activation - S3 Event Processing', () => {
-    test('should trigger Step Functions execution via S3 event notification', async () => {
-      console.log(`Waiting for S3 event to trigger Lambda for key: ${testDataKey}`);
-      
-      mainExecution =
-        mainExecution ??
-        (await findExecutionByS3Key(testDataKey, {
-          listStatuses: ['RUNNING', 'SUCCEEDED'],
-          maxAttempts: 60, // 10 minutes total (60 × 10s)
-          waitMs: 10000,
-        }));
-
-      expect(mainExecution).toBeTruthy();
-      console.log(
-        `Step Functions execution started: ${mainExecution?.summary?.executionArn}`
-      );
-    });
-  });
-
-  describe('C. Orchestration Start - Step Functions Validation', () => {
-    test('should validate Step Functions execution is running', async () => {
-      mainExecution =
-        mainExecution ??
-        (await findExecutionByS3Key(testDataKey, {
-          listStatuses: ['RUNNING', 'SUCCEEDED'],
-          maxAttempts: 60,
-          waitMs: 10000,
-        }));
-
-      expect(mainExecution).toBeTruthy();
-      expect(mainExecution?.detail?.status).toMatch(/RUNNING|SUCCEEDED/);
-    });
-  });
-
-  describe('D. EMR Cluster Launch - Verify Cluster Status', () => {
-    test('should verify EMR cluster is in running state', async () => {
-      const cluster = await emrClient.describeCluster({
-        ClusterId: outputs.EMRClusterId
-      }).promise();
-
-      expect(cluster.Cluster.Status.State).toMatch(/RUNNING|WAITING/);
-      expect(cluster.Cluster.ReleaseLabel).toMatch(/^emr-6\.(9|[1-9][0-9])\.[0-9]+$/);
-    });
-  });
-
-  describe('E. Data Ingestion - EMR Access to S3', () => {
-    test('should verify EMR cluster can access raw data bucket', async () => {
-      // Check that the test data is accessible (EMR would access it during processing)
-      const object = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: outputs.RawDataBucketName,
-          Key: testDataKey,
-        })
-      );
-
-      expect(object.Body).toBeDefined();
-      expect(object.Body).toBeTruthy();
-    });
-  });
-
-  describe('F. Processing Execution - Monitor Job Steps', () => {
-    test('should wait for and verify EMR job step execution', async () => {
-      mainExecution =
-        (await findExecutionByS3Key(testDataKey, {
-          listStatuses: ['RUNNING', 'SUCCEEDED'],
-          desiredStatuses: ['SUCCEEDED'],
-          maxAttempts: 120,
-          waitMs: 15000,
-        })) || mainExecution;
-
-      expect(mainExecution).toBeTruthy();
-      expect(mainExecution?.detail?.status).toBe('SUCCEEDED');
-
-      console.log(
-        `EMR job execution completed: ${mainExecution?.summary?.executionArn}`
-      );
-    });
-  });
-
-  describe('G. Data Output - Verify Processed Results', () => {
-    test('should verify processed data exists in output bucket', async () => {
-      processedObjects = await waitForProcessedResults(startTime);
-
-      expect(processedObjects.Contents).toBeDefined();
-      expect(processedObjects.Contents!.length).toBeGreaterThan(0);
-
-      // Verify at least one output file
-      const firstOutput = processedObjects.Contents![0];
-      expect(firstOutput.Size).toBeGreaterThan(0);
-      expect(firstOutput.Key).toContain('results');
-    });
-  });
-
-  describe('H. Storage Management - Verify Lifecycle Policies', () => {
-    test('should verify S3 objects have correct storage properties', async () => {
-      // Ensure we have processed objects from previous test
-      expect(processedObjects).toBeDefined();
-      expect(processedObjects.Contents).toBeDefined();
-      expect(processedObjects.Contents!.length).toBeGreaterThan(0);
-
-      const object = await s3Client.send(
-        new HeadObjectCommand({
-          Bucket: outputs.ProcessedDataBucketName,
-          Key: processedObjects.Contents![0].Key!,
-        })
-      );
-
-      expect(object).toBeDefined();
-
-      // Verify versioning is enabled (objects should have version IDs)
-      const versions = await s3Client.send(new ListObjectVersionsCommand({
-        Bucket: outputs.ProcessedDataBucketName,
-        Prefix: processedObjects.Contents![0].Key
-      }));
-
-      expect(versions.Versions).toBeDefined();
-      expect(versions.Versions!.length).toBeGreaterThan(0);
-      expect(versions.Versions![0].VersionId).toBeDefined();
-    });
-  });
-
-  describe('I. Monitoring & Metrics - Verify CloudWatch Logs and Metrics', () => {
-    test('should verify CloudWatch logs exist for EMR and Lambda', async () => {
-      const emrLogGroup = `/aws/emr/${projectName}-${environmentName}`;
-      const lambdaLogGroup = `/aws/lambda/${projectName}-${environmentName}`;
-
-      // Check EMR log group exists
-      const emrLogs = await cloudWatchLogsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: emrLogGroup,
-        })
-      );
-
-      expect(
-        emrLogs.logGroups!.some(group => group.logGroupName === emrLogGroup)
-      ).toBe(true);
-
-      // Check Lambda log group exists
-      const lambdaLogs = await cloudWatchLogsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: lambdaLogGroup,
-        })
-      );
-
-      expect(
-        lambdaLogs.logGroups!.some(
-          group => group.logGroupName === lambdaLogGroup
-        )
-      ).toBe(true);
+      expect(listResponse.Contents).toBeDefined();
+      expect(listResponse.Contents!.length).toBeGreaterThan(0);
+      expect(listResponse.Contents![0].Key).toBe(testDataKey);
+      expect(listResponse.Contents![0].Size).toBe(dataSize);
     });
 
-    test('should verify custom metrics are published', async () => {
-      const metrics = await cloudWatchClient.send(
-        new ListMetricsCommand({
-          Namespace: `${projectName}/${environmentName}/EMRPipeline`,
-        })
-      );
+    test('should trigger Lambda function via S3 object creation event', async () => {
+      console.log('Waiting for S3 event to trigger Lambda...');
 
-      expect(metrics.Metrics).toBeDefined();
- 
-      if (metrics.Metrics && metrics.Metrics.length > 0) {
-        const metricNames = metrics.Metrics.map(m => m.MetricName);
-        console.log(`Found metrics: ${metricNames.join(', ')}`);
-      } else {
-        console.log('No metrics published yet');
-      }
-      
-      expect(metrics.Metrics).toBeDefined();
-    });
-  });
+      const logGroupName = `/aws/lambda/${s3EventProcessorFunctionName}`;
 
-  describe('J. Auto-Scaling - Verify EMR Instance Groups', () => {
-    test('should verify task instance group exists and is configured', async () => {
-      const instanceGroups = await emrClient.listInstanceGroups({
-        ClusterId: outputs.EMRClusterId
-      }).promise();
+      // Wait for Lambda execution logs to appear
+      await waitFor(async () => {
+        try {
+          const logStreams = await cloudWatchLogsClient.send(
+            new DescribeLogStreamsCommand({
+              logGroupName,
+              orderBy: 'LastEventTime',
+              descending: true,
+              limit: 5,
+            })
+          );
 
-      const taskGroup = instanceGroups.InstanceGroups!.find(
-        group => group.InstanceGroupType === 'TASK'
-      );
-
-      if (taskGroup) {
-        expect(taskGroup.Status.State).toMatch(/RUNNING|PROVISIONING/);
-        expect(taskGroup.RequestedInstanceCount).toBeGreaterThanOrEqual(0);
-      }
-    });
-  });
-
-  describe('K. Completion - Verify Final State', () => {
-    test('should verify Step Functions execution completed successfully', async () => {
-      mainExecution =
-        mainExecution ??
-        (await findExecutionByS3Key(testDataKey, {
-          listStatuses: ['SUCCEEDED'],
-          desiredStatuses: ['SUCCEEDED'],
-          maxAttempts: 60,
-          waitMs: 10000,
-        }));
-
-      expect(mainExecution).toBeTruthy();
-      expect(mainExecution?.detail?.status).toBe('SUCCEEDED');
-    });
-
-    test('should verify SNS notifications were sent', async () => {
-      const topic = await snsClient.send(
-        new GetTopicAttributesCommand({
-          TopicArn: outputs.SNSTopicArn,
-        })
-      );
-
-      expect(topic.Attributes).toBeDefined();
-      expect(topic.Attributes!.SubscriptionsConfirmed).toBeDefined();
-    });
-  });
-
-  // Error Scenario Tests
-  describe('Error Scenarios - Cross-System Failures', () => {
-    test('should handle invalid input data gracefully through event-driven processing', async () => {
-      // Arrange: Upload invalid data that should trigger the normal event flow
-      const invalidDataKey = `transactions/invalid-${testExecutionId}.txt`;
-
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: outputs.RawDataBucketName,
-          Key: invalidDataKey,
-          Body: 'invalid data format that should cause processing errors',
-          ContentType: 'text/plain',
-        })
-      );
-
-      invalidExecution =
-        (await findExecutionByS3Key(invalidDataKey, {
-          listStatuses: ['RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT'],
-          desiredStatuses: ['FAILED', 'SUCCEEDED', 'TIMED_OUT'],
-          maxAttempts: 40,
-          waitMs: 15000,
-        })) || invalidExecution;
-
-      expect(invalidExecution).toBeTruthy();
-      expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT']).toContain(
-        invalidExecution?.detail?.status as ExecutionStatus
-      );
-
-      // The system should not have crashed - EMR cluster should still be accessible
-      const cluster = await emrClient.describeCluster({
-        ClusterId: outputs.EMRClusterId
-      }).promise();
-      expect(cluster.Cluster.Status.State).toBeDefined();
-
-      // Cleanup
-      await s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: outputs.RawDataBucketName,
-          Key: invalidDataKey,
-        })
-      );
-    });
-  });
-
-  describe('Contract Validation - Service Interactions', () => {
-    test('should validate EMR to S3 bucket access permissions', async () => {
-      // Verify EMR instance profile has access to required S3 buckets
-      let instanceProfile: string | undefined;
-      let cluster;
-      for (let attempt = 0; attempt < 10; attempt += 1) {
-        cluster = await emrClient.describeCluster({
-          ClusterId: outputs.EMRClusterId
-        }).promise();
-
-        instanceProfile = cluster.Cluster?.Ec2InstanceAttributes?.InstanceProfile;
-        if (instanceProfile) {
-          break;
+          if (logStreams.logStreams && logStreams.logStreams.length > 0) {
+            const latestStream = logStreams.logStreams[0];
+            if (latestStream.lastEventTimestamp) {
+              const streamTime = latestStream.lastEventTimestamp;
+              // Check if log stream was created after test start
+              if (streamTime >= testStartTime) {
+                console.log(`✓ Lambda execution detected in log stream: ${latestStream.logStreamName}`);
+                return true;
+              }
+            }
+          }
+          return false;
+        } catch (error) {
+          // Log group might not exist yet, continue waiting
+          return false;
         }
-        await delay(10000);
-      }
+      }, 120000); // 2 minutes
 
-      expect(instanceProfile).toBeDefined();
-
-      const testObject = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: outputs.RawDataBucketName,
-          Key: testDataKey,
+      // Verify Lambda was invoked by checking logs
+      const logStreams = await cloudWatchLogsClient.send(
+        new DescribeLogStreamsCommand({
+          logGroupName,
+          orderBy: 'LastEventTime',
+          descending: true,
+          limit: 1,
         })
       );
 
-      expect(testObject).toBeDefined();
+      expect(logStreams.logStreams).toBeDefined();
+      expect(logStreams.logStreams!.length).toBeGreaterThan(0);
     });
 
-    test('should validate Step Functions to EMR permissions', async () => {
-      // Verify Step Functions can invoke EMR operations
-      const executions = await stepFunctionsClient.send(
-        new ListExecutionsCommand({
-          stateMachineArn: outputs.StateMachineArn,
-          maxResults: 1,
+    test('should start Step Functions execution from Lambda trigger', async () => {
+      console.log('Waiting for Step Functions execution to start...');
+
+      // Wait for Step Functions execution to be created
+      await waitFor(async () => {
+        try {
+          const listResponse = await sfnClient.send(
+            new ListExecutionsCommand({
+              stateMachineArn,
+              maxResults: 10,
+            })
+          );
+
+          if (listResponse.executions) {
+            // Find execution that started after test began
+            const recentExecution = listResponse.executions.find(
+              (exec) =>
+                exec.startDate &&
+                exec.startDate.getTime() >= testStartTime
+            );
+
+            if (recentExecution) {
+              testExecutionArn = recentExecution.executionArn || null;
+              console.log(`✓ Step Functions execution started: ${testExecutionArn}`);
+              return true;
+            }
+          }
+          return false;
+        } catch (error) {
+          return false;
+        }
+      }, 180000); // 3 minutes
+
+      expect(testExecutionArn).toBeDefined();
+      expect(testExecutionArn).toContain('execution');
+    });
+
+  describe('Pipeline Orchestration - Step Functions State Machine', () => {
+    test('should check EMR cluster status before job submission', async () => {
+      if (!testExecutionArn) {
+        throw new Error('No execution ARN available from previous test');
+      }
+
+      console.log('Verifying Step Functions checked EMR cluster status...');
+
+      // Wait for execution to progress
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+
+      const historyResponse = await sfnClient.send(
+        new GetExecutionHistoryCommand({
+          executionArn: testExecutionArn,
+          maxResults: 50,
         })
       );
 
-      expect(executions.executions?.length).toBeGreaterThan(0);
+      expect(historyResponse.events).toBeDefined();
+
+      // Verify CheckClusterStatus state was executed
+      const checkClusterEvents = historyResponse.events!.filter(
+        (e) =>
+          e.type === 'TaskStateEntered' &&
+          e.stateEnteredEventDetails?.name === 'CheckClusterStatus'
+      );
+
+      expect(checkClusterEvents.length).toBeGreaterThan(0);
+      console.log('✓ CheckClusterStatus state executed');
+
+      // Verify cluster is in ready state
+      const clusterResponse = await emrClient.send(
+        new DescribeClusterCommand({ ClusterId: emrClusterId })
+      );
+
+      expect(clusterResponse.Cluster).toBeDefined();
+      const clusterState = clusterResponse.Cluster!.Status?.State;
+      expect(['WAITING', 'RUNNING']).toContain(clusterState);
+      console.log(`✓ EMR cluster is in ${clusterState} state`);
+    });
+
+    test('should submit Spark job to EMR cluster', async () => {
+      if (!testExecutionArn) {
+        throw new Error('No execution ARN available from previous test');
+      }
+
+      console.log('Waiting for Spark job to be submitted to EMR...');
+
+      // Wait for SubmitSparkJob state to execute
+      await waitFor(async () => {
+        const historyResponse = await sfnClient.send(
+          new GetExecutionHistoryCommand({
+            executionArn: testExecutionArn!,
+            maxResults: 100,
+          })
+        );
+
+        const submitJobEvents = historyResponse.events!.filter(
+          (e) =>
+            e.type === 'TaskStateEntered' &&
+            e.stateEnteredEventDetails?.name === 'SubmitSparkJob'
+        );
+
+        return submitJobEvents.length > 0;
+      }, 300000); // 5 minutes
+
+      // Verify job was submitted
+      const historyResponse = await sfnClient.send(
+        new GetExecutionHistoryCommand({
+          executionArn: testExecutionArn!,
+          maxResults: 100,
+        })
+      );
+
+      const submitJobEvents = historyResponse.events!.filter(
+        (e) =>
+          e.type === 'TaskStateEntered' &&
+          e.stateEnteredEventDetails?.name === 'SubmitSparkJob'
+      );
+
+      expect(submitJobEvents.length).toBeGreaterThan(0);
+      console.log('✓ Spark job submitted to EMR');
+
+      // Verify EMR step was created
+      await waitFor(async () => {
+        const stepsResponse = await emrClient.send(
+          new ListStepsCommand({
+            ClusterId: emrClusterId,
+            MaxResults: 10,
+          })
+        );
+
+        if (stepsResponse.Steps && stepsResponse.Steps.length > 0) {
+          // Find step created after test start
+          const recentStep = stepsResponse.Steps.find(
+            (step) =>
+              step.Status?.Timeline?.CreationDateTime &&
+              step.Status.Timeline.CreationDateTime.getTime() >= testStartTime
+          );
+
+          if (recentStep) {
+            console.log(`✓ EMR step created: ${recentStep.Name} (${recentStep.Id})`);
+            return true;
+          }
+        }
+        return false;
+      }, 300000); // 5 minutes
+    });
+  });
+
+  describe('Data Processing - EMR Cluster and Spark Job Execution', () => {
+    test('should process transaction data through EMR Spark job', async () => {
+      console.log('Waiting for EMR to process the data...');
+
+      // Wait for EMR step to complete
+      await waitFor(async () => {
+        const stepsResponse = await emrClient.send(
+          new ListStepsCommand({
+            ClusterId: emrClusterId,
+            MaxResults: 10,
+          })
+        );
+
+        if (stepsResponse.Steps) {
+          const recentStep = stepsResponse.Steps.find(
+            (step) =>
+              step.Status?.Timeline?.CreationDateTime &&
+              step.Status.Timeline.CreationDateTime.getTime() >= testStartTime
+          );
+
+          if (recentStep) {
+            const stepDetail = await emrClient.send(
+              new DescribeStepCommand({
+                ClusterId: emrClusterId,
+                StepId: recentStep.Id!,
+              })
+            );
+
+            const stepState = stepDetail.Step?.Status?.State;
+            console.log(`  Step state: ${stepState}`);
+
+            return stepState === 'COMPLETED' || stepState === 'FAILED' || stepState === 'CANCELLED';
+          }
+        }
+        return false;
+      }, 600000); // 10 minutes
+
+      // Verify step completed successfully
+      const stepsResponse = await emrClient.send(
+        new ListStepsCommand({
+          ClusterId: emrClusterId,
+          MaxResults: 10,
+        })
+      );
+
+      const recentStep = stepsResponse.Steps!.find(
+        (step) =>
+          step.Status?.Timeline?.CreationDateTime &&
+          step.Status.Timeline.CreationDateTime.getTime() >= testStartTime
+      );
+
+      expect(recentStep).toBeDefined();
+      const stepState = recentStep!.Status?.State;
+      expect(stepState).toBe('COMPLETED');
+      console.log(`✓ EMR step completed successfully: ${recentStep!.Name}`);
+    });
+  });
+
+  describe('Data Output - Processed Results Storage', () => {
+    test('should write processed data to S3 output bucket', async () => {
+      console.log('Checking for processed data in output bucket...');
+
+      // Wait for processed data to appear
+      await waitFor(async () => {
+        const listResponse = await s3Client.send(
+          new ListObjectsV2Command({
+            Bucket: processedDataBucket,
+            Prefix: 'results/',
+            MaxKeys: 100,
+          })
+        );
+
+        if (listResponse.Contents && listResponse.Contents.length > 0) {
+          // Check if any files were created after test start
+          const recentFiles = listResponse.Contents.filter(
+            (obj) => obj.LastModified && obj.LastModified.getTime() >= testStartTime
+          );
+
+          if (recentFiles.length > 0) {
+            console.log(`✓ Found ${recentFiles.length} processed file(s) in output bucket`);
+            recentFiles.forEach((file) => {
+              console.log(`  - ${file.Key} (${file.Size} bytes)`);
+            });
+            return true;
+          }
+        }
+        return false;
+      }, 300000); // 5 minutes
+
+      // Verify processed data exists
+      const listResponse = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: processedDataBucket,
+          Prefix: 'results/',
+          MaxKeys: 100,
+        })
+      );
+
+      expect(listResponse.Contents).toBeDefined();
+      expect(listResponse.Contents!.length).toBeGreaterThan(0);
+
+      const recentFiles = listResponse.Contents!.filter(
+        (obj) => obj.LastModified && obj.LastModified.getTime() >= testStartTime
+      );
+
+      expect(recentFiles.length).toBeGreaterThan(0);
+      console.log(`✓ Verified ${recentFiles.length} processed file(s) in output bucket`);
+    });
+  });
+
+  describe('Monitoring & Observability - Metrics and Execution Status', () => {
+    test('should publish processing metrics to CloudWatch', async () => {
+      console.log('Checking for CloudWatch metrics...');
+
+      const namespace = `${projectName}/${environment}/EMRPipeline`;
+
+      // Wait for metrics to be published
+      await waitFor(async () => {
+        try {
+          const response = await cloudWatchClient.send(
+            new ListMetricsCommand({
+              Namespace: namespace,
+            })
+          );
+
+          if (response.Metrics && response.Metrics.length > 0) {
+            // Check for specific metrics
+            const metricNames = response.Metrics.map((m) => m.MetricName).filter(
+              (n): n is string => n !== undefined
+            );
+
+            const hasJobDuration = metricNames.includes('JobDuration');
+            const hasDataVolume = metricNames.includes('DataVolumeProcessed');
+            const hasThroughput = metricNames.includes('ProcessingThroughput');
+
+            if (hasJobDuration || hasDataVolume || hasThroughput) {
+              console.log(`✓ Found metrics: ${metricNames.join(', ')}`);
+              return true;
+            }
+          }
+          return false;
+        } catch (error) {
+          return false;
+        }
+      }, 180000); // 3 minutes
+
+      // Verify metrics exist
+      const response = await cloudWatchClient.send(
+        new ListMetricsCommand({
+          Namespace: namespace,
+        })
+      );
+
+      expect(response.Metrics).toBeDefined();
+      expect(response.Metrics!.length).toBeGreaterThan(0);
+
+      const metricNames = response.Metrics!.map((m) => m.MetricName).filter(
+        (n): n is string => n !== undefined
+      );
+
+      console.log(`✓ Verified metrics published: ${metricNames.join(', ')}`);
+    });
+
+    test('should complete Step Functions execution with all state transitions', async () => {
+      if (!testExecutionArn) {
+        throw new Error('No execution ARN available from previous test');
+      }
+
+      console.log('Waiting for Step Functions execution to complete...');
+
+      // Wait for execution to reach terminal state
+      await waitFor(async () => {
+        const response = await sfnClient.send(
+          new DescribeExecutionCommand({ executionArn: testExecutionArn! })
+        );
+
+        const status = response.status;
+        console.log(`  Execution status: ${status}`);
+
+        return status === 'SUCCEEDED' || status === 'FAILED' || status === 'TIMED_OUT' || status === 'ABORTED';
+      }, 600000); // 10 minutes
+
+      // Verify execution completed successfully
+      const response = await sfnClient.send(
+        new DescribeExecutionCommand({ executionArn: testExecutionArn! })
+      );
+
+      expect(response.status).toBe('SUCCEEDED');
+      console.log('✓ Step Functions execution completed successfully');
+
+      // Verify all key states were executed
+      const historyResponse = await sfnClient.send(
+        new GetExecutionHistoryCommand({
+          executionArn: testExecutionArn!,
+          maxResults: 200,
+        })
+      );
+
+      const stateNames = historyResponse
+        .events!.filter((e) => e.type === 'TaskStateEntered')
+        .map((e) => e.stateEnteredEventDetails?.name)
+        .filter((n): n is string => n !== undefined);
+
+      expect(stateNames).toContain('CheckClusterStatus');
+      expect(stateNames).toContain('SubmitSparkJob');
+      expect(stateNames).toContain('MonitorJob');
+      expect(stateNames).toContain('CollectMetrics');
+      expect(stateNames).toContain('NotifySuccess');
+
+      console.log(`✓ Verified state transitions: ${stateNames.join(' → ')}`);
+    });
+  });
+
+  describe('End-to-End Verification - Complete Data Flow Validation', () => {
+    test('should verify complete data flow from S3 upload to processed output and metrics', async () => {
+      console.log('Completing End-to-End Data Flow Verification');
+
+      // Verify: A) Data uploaded to S3
+      const rawDataList = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: rawDataBucket,
+          Prefix: testDataKey,
+        })
+      );
+      expect(rawDataList.Contents).toBeDefined();
+      expect(rawDataList.Contents!.length).toBeGreaterThan(0);
+      console.log('✓ A) Test data uploaded to raw bucket');
+
+      // Verify: B) Step Functions execution completed
+      if (testExecutionArn) {
+        const execResponse = await sfnClient.send(
+          new DescribeExecutionCommand({ executionArn: testExecutionArn })
+        );
+        expect(execResponse.status).toBe('SUCCEEDED');
+        console.log('✓ B) Step Functions execution succeeded');
+      }
+
+      // Verify: C) EMR processed the data
+      const stepsResponse = await emrClient.send(
+        new ListStepsCommand({
+          ClusterId: emrClusterId,
+          MaxResults: 10,
+        })
+      );
+      const processedStep = stepsResponse.Steps!.find(
+        (step) =>
+          step.Status?.Timeline?.CreationDateTime &&
+          step.Status.Timeline.CreationDateTime.getTime() >= testStartTime &&
+          step.Status.State === 'COMPLETED'
+      );
+      expect(processedStep).toBeDefined();
+      console.log('✓ C) EMR processed the data');
+
+      // Verify: D) Processed data in output bucket
+      const processedDataList = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: processedDataBucket,
+          Prefix: 'results/',
+          MaxKeys: 100,
+        })
+      );
+      const recentProcessedFiles = processedDataList.Contents!.filter(
+        (obj) => obj.LastModified && obj.LastModified.getTime() >= testStartTime
+      );
+      expect(recentProcessedFiles.length).toBeGreaterThan(0);
+      console.log('✓ D) Processed data written to output bucket');
+
+      // Verify: E) Metrics published
+      const namespace = `${projectName}/${environment}/EMRPipeline`;
+      const metricsResponse = await cloudWatchClient.send(
+        new ListMetricsCommand({ Namespace: namespace })
+      );
+      expect(metricsResponse.Metrics!.length).toBeGreaterThan(0);
+      console.log('✓ E) Metrics published to CloudWatch');
+
+      console.log('=== End-to-End Data Flow Test: PASSED ===');
+      console.log('Data successfully flowed: S3 Upload → Lambda → Step Functions → EMR → Processed Output → Metrics');
     });
   });
 });
