@@ -390,6 +390,8 @@ class TapStack(Stack):
         # Import the global cluster identifier from primary region
         global_cluster_id = f"trading-global-v1-{self.environment_suffix}"
 
+        # FIXED: For cross-region replication, we cannot specify credentials or default_database_name
+        # These are inherited from the primary cluster in the global database
         cluster = rds.DatabaseCluster(
             self,
             f"AuroraSecondaryCluster-v1-{self.environment_suffix}",
@@ -416,9 +418,13 @@ class TapStack(Stack):
         )
 
         # FIXED: Attach secondary cluster to global cluster with write forwarding
+        # Remove MasterUsername and DatabaseName at CFN level for cross-region replication
         cfn_cluster = cluster.node.default_child
         cfn_cluster.global_cluster_identifier = global_cluster_id
         cfn_cluster.enable_global_write_forwarding = True
+        # Must not specify master username for cross-region replication
+        cfn_cluster.master_username = None
+        cfn_cluster.database_name = None
 
         return cluster
 

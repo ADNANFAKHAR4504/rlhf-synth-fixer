@@ -8,7 +8,7 @@
   "startedAt": "2025-11-19T19:05:23+05:30",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Failure Recovery and High Availability"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "Route53",
