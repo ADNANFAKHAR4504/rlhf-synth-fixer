@@ -3,11 +3,15 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth-2",
+  "team": "synth",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-11-19T12:00:00-08:00",
-  "subtask": "Application Deployment",
+  "subtask": "Network Infrastructure",
   "subject_labels": [
-    "Web Application Deployment"
+    "VPC Networking",
+    "NAT Instances",
+    "VPC Flow Logs",
+    "CloudWatch Monitoring"
   ],
   "po_id": "n3f5l8",
   "aws_services": [

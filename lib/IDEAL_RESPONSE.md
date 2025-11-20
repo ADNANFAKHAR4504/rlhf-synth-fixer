@@ -572,6 +572,13 @@ def handler(event, context):
 #!/usr/bin/env python3
 """
 CDK application entry point for the TAP (Test Automation Platform) infrastructure.
+
+This module defines the core CDK application and instantiates the TapStack with appropriate
+configuration based on the deployment environment. It handles environment-specific settings,
+tagging, and deployment configuration for AWS resources.
+
+The stack created by this module uses environment suffixes to distinguish between
+different deployment environments (development, staging, production, etc.).
 """
 import os
 from datetime import datetime, timezone
@@ -592,7 +599,7 @@ pr_number = os.getenv('PR_NUMBER', 'unknown')
 team = os.getenv('TEAM', 'unknown')
 created_at = datetime.now(timezone.utc).isoformat()
 
-# Apply tags to all stacks
+# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environment_suffix)
 Tags.of(app).add('Repository', repository_name)
 Tags.of(app).add('Author', commit_author)
@@ -600,7 +607,8 @@ Tags.of(app).add('PRNumber', pr_number)
 Tags.of(app).add('Team', team)
 Tags.of(app).add('CreatedAt', created_at)
 
-# Create TapStackProps with environment_suffix
+# Create a TapStackProps object to pass environment_suffix
+
 props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
