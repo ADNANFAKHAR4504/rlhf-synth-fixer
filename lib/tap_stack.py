@@ -329,7 +329,7 @@ class TapStack(Stack):
             self,
             f"AuroraParameterGroup-v1-{self.environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_14_6
+                version=rds.AuroraPostgresEngineVersion.VER_14
             ),
             description="Parameter group for Aurora Global Database",
         )
@@ -339,7 +339,7 @@ class TapStack(Stack):
             self,
             f"AuroraGlobalCluster-v1-{self.environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_14_6
+                version=rds.AuroraPostgresEngineVersion.VER_14
             ),
             credentials=rds.Credentials.from_generated_secret("postgres"),
             default_database_name="tradingdb",
@@ -408,7 +408,7 @@ class TapStack(Stack):
             self,
             f"AuroraSecondaryCluster-v1-{self.environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_14_6
+                version=rds.AuroraPostgresEngineVersion.VER_14
             ),
             instances=2,
             instance_props=rds.InstanceProps(
