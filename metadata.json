@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "a0t4r7",
+  "team": "synth",
+  "startedAt": "2025-11-20T14:02:43Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "StepFunctions",
+    "S3",
+    "SNS",
+    "EventBridge",
+    "IAM",
+    "CloudWatch"
+  ],
+  "task_id": "a0t4r7",
+  "training_quality": 10
+}
