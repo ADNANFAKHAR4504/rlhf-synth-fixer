@@ -1,0 +1,3 @@
+name: trading-analytics
+runtime: python
+description: Multi-environment trading analytics platform with Pulumi
