@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "z5v0e3",
+  "team": "synth",
+  "startedAt": "2025-11-20T14:50:00-05:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": ["Failure Recovery Automation"],
+  "aws_services": [
+    "RDS PostgreSQL",
+    "Route53",
+    "Lambda",
+    "CloudWatch",
+    "Secrets Manager",
+    "VPC",
+    "EC2",
+    "SNS",
+    "IAM"
+  ]
+}
