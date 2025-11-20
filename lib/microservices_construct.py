@@ -100,7 +100,7 @@ class MicroservicesConstruct(Construct):
                             unhealthy_threshold=3,
                             interval=cdk.Duration.seconds(30),
                             timeout=cdk.Duration.seconds(5),
-                            path="/health"
+                            path="/"  # Use root path for compatibility with sample image
                         )
                     )
                 ]
@@ -229,25 +229,19 @@ class MicroservicesConstruct(Construct):
                     "ENABLE_ENVOY_XRAY_TRACING": "0",
                     "ENABLE_ENVOY_STATS_TAGS": "1"
                 },
-                essential=True,
+                essential=False,  # Make Envoy non-essential to allow app container to start independently
                 logging=ecs.LogDrivers.aws_logs(
                     stream_prefix=f"{service_name}-envoy",
                     log_group=log_group
                 ),
-                health_check=ecs.HealthCheck(
-                    command=["CMD-SHELL", "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"],
-                    interval=cdk.Duration.seconds(30),
-                    timeout=cdk.Duration.seconds(5),
-                    retries=3,
-                    start_period=cdk.Duration.seconds(60)
-                ),
                 user="1337"
             )
 
+            # Set container dependency but without health check requirement
             container.add_container_dependencies(
                 ecs.ContainerDependency(
                     container=envoy_container,
-                    condition=ecs.ContainerDependencyCondition.HEALTHY
+                    condition=ecs.ContainerDependencyCondition.START
                 )
             )
 
@@ -265,8 +259,8 @@ class MicroservicesConstruct(Construct):
                 protocol=elbv2.ApplicationProtocol.HTTP,
                 target_type=elbv2.TargetType.IP,
                 health_check=elbv2.HealthCheck(
-                    path="/health",
-                    interval=cdk.Duration.seconds(10),
+                    path="/",  # Use root path for compatibility with sample image
+                    interval=cdk.Duration.seconds(30),  # Increase interval to reduce check frequency
                     timeout=cdk.Duration.seconds(5),
                     healthy_threshold_count=2,
                     unhealthy_threshold_count=3

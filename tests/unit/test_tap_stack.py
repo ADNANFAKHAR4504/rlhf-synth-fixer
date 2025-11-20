@@ -184,8 +184,8 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 3)
         template.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
-            "HealthCheckPath": "/health",
-            "HealthCheckIntervalSeconds": 10,
+            "HealthCheckPath": "/",
+            "HealthCheckIntervalSeconds": 30,
             "TargetType": "ip"
         })
 

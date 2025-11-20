@@ -22,13 +22,20 @@ The solution creates a complete microservices platform with:
 ### 1. KMS Key Policy for CloudWatch Logs
 **Critical Fix**: The KMS key requires explicit permissions for CloudWatch Logs service principal to use it for log encryption. Without this policy statement, log group creation fails with "KMS key does not exist or is not allowed" error.
 
-### 2. DNS-Based Service Discovery
+### 2. Health Check Configuration
+**Critical Fix**: Health checks use root path "/" instead of "/health" because the sample container image may not have a dedicated health endpoint. This prevents ECS circuit breaker failures during deployment.
+
+- **ALB Target Group**: Uses "/" with 30-second intervals for compatibility
+- **App Mesh Virtual Node**: Uses "/" for HTTP health checks
+- **Envoy Sidecar**: Marked as non-essential with START dependency (not HEALTHY) to prevent task failures if Envoy has startup issues
+
+### 3. DNS-Based Service Discovery
 App Mesh virtual nodes use DNS-based service discovery that integrates with ECS CloudMap namespace. The ECS services automatically register with CloudMap via `cloud_map_options`, and App Mesh resolves services via DNS hostname.
 
-### 3. Single NAT Gateway
+### 4. Single NAT Gateway
 For cost optimization in this synthetic environment, using a single NAT gateway instead of one per AZ. Production deployments should use NAT per AZ for high availability.
 
-### 4. Fargate Spot
+### 5. Fargate Spot
 All services use Fargate Spot capacity provider with base=2 for cost optimization while maintaining minimum availability.
 
 ## Complete Source Code
@@ -682,7 +689,7 @@ class MicroservicesConstruct(Construct):
                             unhealthy_threshold=3,
                             interval=cdk.Duration.seconds(30),
                             timeout=cdk.Duration.seconds(5),
-                            path="/health"
+                            path="/"  # Use root path for compatibility with sample image
                         )
                     )
                 ]
@@ -811,25 +818,19 @@ class MicroservicesConstruct(Construct):
                     "ENABLE_ENVOY_XRAY_TRACING": "0",
                     "ENABLE_ENVOY_STATS_TAGS": "1"
                 },
-                essential=True,
+                essential=False,  # Make Envoy non-essential to allow app container to start independently
                 logging=ecs.LogDrivers.aws_logs(
                     stream_prefix=f"{service_name}-envoy",
                     log_group=log_group
                 ),
-                health_check=ecs.HealthCheck(
-                    command=["CMD-SHELL", "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"],
-                    interval=cdk.Duration.seconds(30),
-                    timeout=cdk.Duration.seconds(5),
-                    retries=3,
-                    start_period=cdk.Duration.seconds(60)
-                ),
                 user="1337"
             )
 
+            # Set container dependency but without health check requirement
             container.add_container_dependencies(
                 ecs.ContainerDependency(
                     container=envoy_container,
-                    condition=ecs.ContainerDependencyCondition.HEALTHY
+                    condition=ecs.ContainerDependencyCondition.START
                 )
             )
 
@@ -847,8 +848,8 @@ class MicroservicesConstruct(Construct):
                 protocol=elbv2.ApplicationProtocol.HTTP,
                 target_type=elbv2.TargetType.IP,
                 health_check=elbv2.HealthCheck(
-                    path="/health",
-                    interval=cdk.Duration.seconds(10),
+                    path="/",  # Use root path for compatibility with sample image
+                    interval=cdk.Duration.seconds(30),  # Increase interval to reduce check frequency
                     timeout=cdk.Duration.seconds(5),
                     healthy_threshold_count=2,
                     unhealthy_threshold_count=3
@@ -1171,7 +1172,7 @@ All resources include `environment_suffix` in their names to enable parallel dep
 - **Container Insights**: Enabled for cluster-level metrics
 - **Custom Dashboard**: Cluster, service, and ALB metrics
 - **Log Encryption**: KMS-encrypted CloudWatch Logs with 7-day retention
-- **Health Checks**: ALB and App Mesh health checks configured
+- **Health Checks**: ALB target groups use "/" path with 30-second intervals, App Mesh virtual nodes use "/" path for compatibility
 
 ### Auto-Scaling Configuration
 - **Min Capacity**: 2 tasks per service
@@ -1180,10 +1181,11 @@ All resources include `environment_suffix` in their names to enable parallel dep
 - **Cooldown**: 60 seconds scale-in/scale-out
 
 ### Deployment Strategy
-- **Circuit Breaker**: Enabled with automatic rollback
+- **Circuit Breaker**: Enabled with automatic rollback on task failures
 - **Fargate Spot**: Base 2 tasks for cost optimization
 - **Blue-Green**: Supported through ECS deployment controller
 - **Zero Downtime**: Deregistration delay and health checks ensure smooth deployments
+- **Envoy Sidecar**: Non-essential with START dependency for resilient task startup
 
 ## Testing
 

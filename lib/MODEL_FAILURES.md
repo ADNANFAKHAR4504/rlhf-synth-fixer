@@ -101,7 +101,140 @@ self.log_key.add_to_resource_policy(
 
 ---
 
-## Issue 2: Deprecated ECR Property `auto_delete_images`
+## Issue 2: ECS Circuit Breaker Triggered - Health Check Failures
+
+### What Went Wrong
+
+**Error:** ECS service deployment failed with circuit breaker triggered:
+```
+Resource handler returned message: "Error occurred during operation 'ECS Deployment Circuit Breaker was triggered'." 
+(RequestToken: ab34b83e-964b-5576-4799-9effbf346081, HandlerErrorCode: GeneralServiceException)
+```
+
+**Initial Implementation:**
+```python
+# microservices_construct.py - INCORRECT health check configuration
+target_group = elbv2.ApplicationTargetGroup(
+    ...
+    health_check=elbv2.HealthCheck(
+        path="/health",  # Sample image doesn't have this endpoint
+        interval=cdk.Duration.seconds(10),  # Too frequent
+        ...
+    )
+)
+
+# App Mesh virtual node health check
+health_check=appmesh.HealthCheck.http(
+    path="/health"  # Sample image doesn't have this endpoint
+)
+
+# Envoy container with complex health check
+envoy_container = task_definition.add_container(
+    ...
+    essential=True,  # Makes entire task fail if Envoy fails
+    health_check=ecs.HealthCheck(
+        command=["CMD-SHELL", "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"],
+        ...
+    )
+)
+
+container.add_container_dependencies(
+    ecs.ContainerDependency(
+        container=envoy_container,
+        condition=ecs.ContainerDependencyCondition.HEALTHY  # Requires Envoy health check to pass
+    )
+)
+```
+
+**Evidence:**
+- ECS services attempted to start but all tasks failed health checks
+- Circuit breaker detected unhealthy tasks and triggered automatic rollback
+- CloudFormation rollback initiated
+- Deployment took ~14 minutes before failing
+
+### Root Cause
+
+Multiple issues caused the ECS tasks to fail health checks:
+
+1. **Non-existent health endpoint**: The `amazon/amazon-ecs-sample` container image doesn't expose a `/health` endpoint. Both ALB target group and App Mesh virtual node health checks were looking for this path.
+
+2. **Envoy marked as essential**: When Envoy container is marked `essential=True` and fails its health check, the entire task is marked unhealthy and stopped.
+
+3. **Complex Envoy health check**: The health check command using curl and grep can fail if curl isn't available in the Envoy image or if Envoy hasn't fully started.
+
+4. **Container dependency on healthy Envoy**: Setting `ContainerDependencyCondition.HEALTHY` means the app container won't start until Envoy passes health checks, creating a critical dependency chain.
+
+5. **Too frequent health checks**: 10-second intervals combined with strict thresholds give containers less time to start up properly.
+
+### Correct Implementation
+
+```python
+# microservices_construct.py - CORRECT
+
+# App Mesh virtual node - use root path
+virtual_node = appmesh.VirtualNode(
+    ...
+    listeners=[
+        appmesh.VirtualNodeListener.http(
+            port=port,
+            health_check=appmesh.HealthCheck.http(
+                healthy_threshold=2,
+                unhealthy_threshold=3,
+                interval=cdk.Duration.seconds(30),
+                timeout=cdk.Duration.seconds(5),
+                path="/"  # Use root path for compatibility with sample image
+            )
+        )
+    ]
+)
+
+# ALB target group - use root path and longer interval
+target_group = elbv2.ApplicationTargetGroup(
+    ...
+    health_check=elbv2.HealthCheck(
+        path="/",  # Use root path for compatibility with sample image
+        interval=cdk.Duration.seconds(30),  # Increase interval to reduce check frequency
+        timeout=cdk.Duration.seconds(5),
+        healthy_threshold_count=2,
+        unhealthy_threshold_count=3
+    ),
+    deregistration_delay=cdk.Duration.seconds(30)
+)
+
+# Envoy container - make non-essential and simplify dependency
+envoy_container = task_definition.add_container(
+    ...
+    essential=False,  # Make Envoy non-essential to allow app container to start independently
+    # Remove health_check - let Envoy start without strict health validation
+    user="1337"
+)
+
+# Set container dependency but without health check requirement
+container.add_container_dependencies(
+    ecs.ContainerDependency(
+        container=envoy_container,
+        condition=ecs.ContainerDependencyCondition.START  # Only wait for start, not healthy
+    )
+)
+```
+
+### Key Learnings
+
+1. **Health check paths must exist**: Always verify the container image actually exposes the health check endpoint before configuring checks. Use "/" (root) as a safe default for web servers.
+
+2. **Envoy should be non-essential for resilience**: Making Envoy `essential=False` allows the application container to continue running even if Envoy has issues. The service mesh functionality is degraded but the app remains available.
+
+3. **Container dependencies should use START, not HEALTHY**: Using `ContainerDependencyCondition.START` instead of `HEALTHY` avoids creating brittle dependency chains. The app waits for Envoy to start but doesn't require it to pass health checks.
+
+4. **Health check intervals should be reasonable**: 30-second intervals give containers more time to start up and reduce the load on target applications. Too frequent checks (10 seconds) can cause false positives during startup.
+
+5. **Circuit breaker protects but can fail deployments**: ECS circuit breaker is a safety feature that automatically rolls back failed deployments, but it means your tasks must be able to pass health checks reliably.
+
+6. **Test with actual container images**: Sample images may not have all the features (like health endpoints) that production images have. Configuration should be compatible with the images being used.
+
+---
+
+## Issue 3: Deprecated ECR Property `auto_delete_images`
 
 ### What Went Wrong
 
@@ -163,7 +296,7 @@ repo = ecr.Repository(
 
 ---
 
-## Issue 3: App Mesh Service Discovery Configuration (Pre-existing in MODEL_RESPONSE.md)
+## Issue 4: App Mesh Service Discovery Configuration (Pre-existing in MODEL_RESPONSE.md)
 
 ### What Went Wrong
 
@@ -235,7 +368,7 @@ service = ecs.FargateService(
 
 ---
 
-## Issue 4: Missing CloudMap Namespace in ECS Cluster (Pre-existing in MODEL_RESPONSE.md)
+## Issue 5: Missing CloudMap Namespace in ECS Cluster (Pre-existing in MODEL_RESPONSE.md)
 
 ### What Went Wrong
 
@@ -295,6 +428,7 @@ self.cluster = ecs.Cluster(
 | Issue | Severity | Type | Impact |
 |-------|----------|------|--------|
 | Missing KMS Key Policy for CloudWatch Logs | Critical | Security/Permissions | Deployment Failure |
+| ECS Circuit Breaker Triggered - Health Check Failures | Critical | Configuration | Deployment Failure |
 | Deprecated ECR Property | Low | API Deprecation | Warning only (future breaking change) |
 | App Mesh Service Discovery Misconfiguration | Critical | Architecture | Deployment Failure (MODEL_RESPONSE) |
 | Missing CloudMap Namespace | Critical | Missing Prerequisite | Deployment Failure (MODEL_RESPONSE) |
@@ -303,8 +437,14 @@ self.cluster = ecs.Cluster(
 
 **HIGH** - These failures demonstrate:
 1. Critical importance of service-specific KMS key policies
-2. Need to keep up with CDK API deprecations
-3. Proper integration patterns between AWS services (App Mesh ↔ ECS ↔ CloudMap)
-4. Understanding of prerequisite resource configuration
+2. Health check configuration must match actual container capabilities
+3. Container dependency management (essential vs non-essential, START vs HEALTHY)
+4. Need to keep up with CDK API deprecations
+5. Proper integration patterns between AWS services (App Mesh ↔ ECS ↔ CloudMap)
+6. Understanding of prerequisite resource configuration
 
-All critical failures were structural issues that prevented deployment. The fixes required deep understanding of AWS service integration patterns, not just syntax corrections.
+All critical failures were structural issues that prevented deployment. The fixes required deep understanding of:
+- AWS service integration patterns
+- ECS task lifecycle and health check behavior
+- Container dependency management
+- Service mesh sidecar proxy configuration

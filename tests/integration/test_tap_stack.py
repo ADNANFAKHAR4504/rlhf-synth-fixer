@@ -197,8 +197,8 @@ class TestTapStackIntegration(unittest.TestCase):
         for tg in tgs[:3]:  # Check first 3
             self.assertEqual(tg['TargetType'], 'ip')
             self.assertEqual(tg['Protocol'], 'HTTP')
-            self.assertEqual(tg['HealthCheckPath'], '/health')
-            self.assertEqual(tg['HealthCheckIntervalSeconds'], 10)
+            self.assertEqual(tg['HealthCheckPath'], '/')
+            self.assertEqual(tg['HealthCheckIntervalSeconds'], 30)
 
     @mark.it("should have App Mesh configured")
     def test_app_mesh(self):
