@@ -1105,7 +1105,7 @@ describe('TapStack - Production Web Application Infrastructure Unit Tests', () =
       expect(templateYaml).toContain('MaxSize: 6');
       expect(templateYaml).toContain('DesiredCapacity: 2');
       expect(templateYaml).toContain('HealthCheckType: ELB');
-      expect(templateYaml).toContain('TargetValue: 70'); // CPU target for scaling
+      expect(templateYaml).toContain('TargetValue: 70'); 
     });
 
     test('Database backup and maintenance are configured', () => {
