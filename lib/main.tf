@@ -366,7 +366,11 @@ resource "random_id" "security_config_suffix" {
     bucket_prefix = local.bucket_prefix
     account_id    = data.aws_caller_identity.current.account_id
     region        = data.aws_region.current.name
-    in_transit    = var.enable_in_transit_encryption
+    config_hash = sha1(jsonencode({
+      enable_tls        = var.enable_in_transit_encryption
+      enable_at_rest_s3 = true
+      enable_local_disk = false
+    }))
   }
 }
 
