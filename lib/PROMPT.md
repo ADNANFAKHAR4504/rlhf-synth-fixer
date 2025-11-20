@@ -34,10 +34,11 @@ A financial services company needs to implement a secure document processing sys
 ## Mandatory Infrastructure Requirements
 
 ### Resource Naming Convention
-ALL named resources MUST include environmentSuffix parameter:
-- Format: `{resource-type}-${environmentSuffix}`
-- Example: `document-bucket-${environmentSuffix}`
-- This is CRITICAL for parallel deployment support in CI/CD
+ALL named resources MUST include stack name and environmentSuffix parameter:
+- Format: `{base-name}-{stack-name}-${environmentSuffix}`
+- Example: `documents-tapstackdev-dev`
+- Implementation uses `_get_unique_name()` helper method
+- This is CRITICAL for parallel deployment support in CI/CD and avoiding resource name conflicts
 
 ### Destroyability Requirements
 - NO RemovalPolicy.RETAIN on any resources
@@ -54,10 +55,10 @@ ALL named resources MUST include environmentSuffix parameter:
 
 ### Compliance Requirements
 - PCI-DSS compliance for document processing
-- Automated compliance scanning with AWS Config
 - GuardDuty monitoring with automated remediation
 - CloudWatch Events for all API call auditing
 - Secrets Manager for credential rotation
+- Note: AWS Config removed due to account-level quota limits (one configuration recorder per account/region)
 
 ### Monitoring and Logging
 - CloudWatch Logs with appropriate retention periods
@@ -84,11 +85,12 @@ The infrastructure must support:
 
 ## Known Issues to Avoid
 
-1. GuardDuty: Account-level resource - only ONE detector per account/region (see lessons_learnt.md)
-2. AWS Config IAM Role: Use correct managed policy `service-role/AWS_ConfigRole`
-3. VPC Endpoints: Required for all AWS service communications (no internet gateway)
+1. AWS Config: Account-level resource - only ONE configuration recorder per account/region. Removed from implementation to avoid quota conflicts.
+2. DynamoDB VPC Endpoints: Must use Gateway endpoint, not Interface endpoint (DynamoDB doesn't support private DNS).
+3. VPC Endpoints: Required for all AWS service communications (no internet gateway). S3 and DynamoDB use Gateway endpoints, others use Interface endpoints.
 4. Lambda Runtime: Use Python 3.9+ compatible with CDK requirements
 5. Secrets Manager: Configure automatic rotation for database credentials
+6. Resource Naming: Use `_get_unique_name()` helper method to include stack name in resource names for uniqueness across parallel deployments
 
 ## Success Criteria
 

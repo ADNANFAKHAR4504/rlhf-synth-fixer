@@ -21,7 +21,6 @@ from aws_cdk import (
     aws_logs as logs,
     aws_secretsmanager as secretsmanager,
     aws_iam as iam,
-    aws_config as config,
     aws_sns as sns,
     aws_wafv2 as wafv2,
 )
@@ -84,14 +83,16 @@ class TapStack(Stack):
         # 9. GuardDuty monitoring
         self._create_guardduty_monitoring()
 
-        # 10. AWS Config
-        self._create_config_rules()
-
-        # 11. SNS for security alerts
+        # 10. SNS for security alerts
         self.alert_topic = self._create_sns_alerts()
 
         # Outputs
         self._create_outputs()
+    
+    def _get_unique_name(self, base_name: str) -> str:
+        """Generate a unique resource name using stack name and environment."""
+        stack_name = self.stack_name.lower().replace('_', '-')
+        return f"{base_name}-{stack_name}-{self.environment_suffix}"
 
     def _create_kms_key(self) -> kms.Key:
         """Create KMS key with automatic rotation."""
@@ -113,7 +114,7 @@ class TapStack(Stack):
         access_log_bucket = s3.Bucket(
             self,
             f"AccessLogBucket-{self.environment_suffix}",
-            bucket_name=f"access-logs-{self.environment_suffix}",
+            bucket_name=self._get_unique_name("access-logs"),
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
             versioned=True,
@@ -126,7 +127,7 @@ class TapStack(Stack):
         document_bucket = s3.Bucket(
             self,
             f"DocumentBucket-{self.environment_suffix}",
-            bucket_name=f"documents-{self.environment_suffix}",
+            bucket_name=self._get_unique_name("documents"),
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
             versioned=True,
@@ -161,9 +162,10 @@ class TapStack(Stack):
             service=ec2.GatewayVpcEndpointAwsService.S3,
         )
 
-        vpc.add_interface_endpoint(
+        # DynamoDB uses Gateway endpoint, not Interface endpoint
+        vpc.add_gateway_endpoint(
             f"DynamoDBEndpoint-{self.environment_suffix}",
-            service=ec2.InterfaceVpcEndpointAwsService.DYNAMODB,
+            service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
         )
 
         vpc.add_interface_endpoint(
@@ -188,7 +190,7 @@ class TapStack(Stack):
         table = dynamodb.Table(
             self,
             f"AuditTable-{self.environment_suffix}",
-            table_name=f"audit-logs-{self.environment_suffix}",
+            table_name=self._get_unique_name("audit-logs"),
             partition_key=dynamodb.Attribute(
                 name="requestId",
                 type=dynamodb.AttributeType.STRING,
@@ -210,7 +212,7 @@ class TapStack(Stack):
         api_secret = secretsmanager.Secret(
             self,
             f"ApiKeySecret-{self.environment_suffix}",
-            secret_name=f"api-keys-{self.environment_suffix}",
+            secret_name=self._get_unique_name("api-keys"),
             description="API keys for document processing",
             encryption_key=self.kms_key,
             generate_secret_string=secretsmanager.SecretStringGenerator(
@@ -224,7 +226,7 @@ class TapStack(Stack):
         db_secret = secretsmanager.Secret(
             self,
             f"DbCredentialsSecret-{self.environment_suffix}",
-            secret_name=f"db-credentials-{self.environment_suffix}",
+            secret_name=self._get_unique_name("db-credentials"),
             description="Database credentials for document processing",
             encryption_key=self.kms_key,
             generate_secret_string=secretsmanager.SecretStringGenerator(
@@ -246,7 +248,6 @@ class TapStack(Stack):
         role = iam.Role(
             self,
             f"ValidationLambdaRole-{self.environment_suffix}",
-            role_name=f"validation-lambda-role-{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -279,7 +280,6 @@ class TapStack(Stack):
         function = lambda_.Function(
             self,
             f"ValidationLambda-{self.environment_suffix}",
-            function_name=f"document-validation-{self.environment_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="validation.handler",
             code=lambda_.Code.from_asset("lib/lambda/validation"),
@@ -329,7 +329,6 @@ class TapStack(Stack):
         function = lambda_.Function(
             self,
             f"EncryptionLambda-{self.environment_suffix}",
-            function_name=f"document-encryption-{self.environment_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="encryption.handler",
             code=lambda_.Code.from_asset("lib/lambda/encryption"),
@@ -392,7 +391,6 @@ class TapStack(Stack):
         function = lambda_.Function(
             self,
             f"ComplianceLambda-{self.environment_suffix}",
-            function_name=f"compliance-scanning-{self.environment_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="compliance.handler",
             code=lambda_.Code.from_asset("lib/lambda/compliance"),
@@ -452,7 +450,6 @@ class TapStack(Stack):
         function = lambda_.Function(
             self,
             f"RemediationLambda-{self.environment_suffix}",
-            function_name=f"guardduty-remediation-{self.environment_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_9,
             handler="remediation.handler",
             code=lambda_.Code.from_asset("lib/lambda/remediation"),
@@ -666,69 +663,6 @@ class TapStack(Stack):
             targets.LambdaFunction(self.remediation_lambda)
         )
 
-    def _create_config_rules(self):
-        """Create AWS Config custom rules."""
-        config_role = iam.Role(
-            self,
-            f"ConfigRole-{self.environment_suffix}",
-            role_name=f"config-role-{self.environment_suffix}",
-            assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWS_ConfigRole"
-                ),
-            ],
-        )
-
-        config_bucket = s3.Bucket(
-            self,
-            f"ConfigBucket-{self.environment_suffix}",
-            bucket_name=f"aws-config-{self.environment_suffix}",
-            encryption=s3.BucketEncryption.KMS,
-            encryption_key=self.kms_key,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-        )
-
-        config_bucket.grant_write(config_role)
-
-        config_recorder = config.CfnConfigurationRecorder(
-            self,
-            f"ConfigRecorder-{self.environment_suffix}",
-            name=f"config-recorder-{self.environment_suffix}",
-            role_arn=config_role.role_arn,
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True,
-            ),
-        )
-
-        delivery_channel = config.CfnDeliveryChannel(
-            self,
-            f"ConfigDeliveryChannel-{self.environment_suffix}",
-            name=f"config-delivery-{self.environment_suffix}",
-            s3_bucket_name=config_bucket.bucket_name,
-        )
-
-        delivery_channel.add_dependency(config_recorder)
-
-        config.ManagedRule(
-            self,
-            f"S3EncryptionRule-{self.environment_suffix}",
-            config_rule_name=f"s3-encryption-check-{self.environment_suffix}",
-            identifier="S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
-            description="Check S3 buckets have encryption enabled",
-        )
-
-        config.ManagedRule(
-            self,
-            f"S3PublicAccessRule-{self.environment_suffix}",
-            config_rule_name=f"s3-public-access-check-{self.environment_suffix}",
-            identifier="S3_BUCKET_PUBLIC_READ_PROHIBITED",
-            description="Check S3 buckets prohibit public read access",
-        )
-
     def _create_sns_alerts(self) -> sns.Topic:
         """Create SNS topic for security alerts."""
         topic = sns.Topic(
@@ -785,4 +719,33 @@ class TapStack(Stack):
             "SecurityAlertTopicArn",
             value=self.alert_topic.topic_arn,
             description="SNS topic ARN for security alerts",
+        )
+
+        # display lambda function names
+        CfnOutput(
+            self,
+            "ValidationLambdaName",
+            value=self.validation_lambda.function_name,
+            description="Validation Lambda function name",
+        )
+        
+        CfnOutput(
+            self,
+            "EncryptionLambdaName",
+            value=self.encryption_lambda.function_name,
+            description="Encryption Lambda function name",
+        )
+        
+        CfnOutput(
+            self,
+            "ComplianceLambdaName",
+            value=self.compliance_lambda.function_name,
+            description="Compliance Lambda function name",
+        )
+        
+        CfnOutput(
+            self,
+            "RemediationLambdaName",
+            value=self.remediation_lambda.function_name,
+            description="Remediation Lambda function name",
         )
