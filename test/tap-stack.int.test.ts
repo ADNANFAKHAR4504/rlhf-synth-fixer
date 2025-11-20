@@ -7,43 +7,46 @@
  * NO MOCKING - All tests validate live AWS resources
  */
 
+import { CloudWatchClient, GetDashboardCommand, ListDashboardsCommand } from '@aws-sdk/client-cloudwatch';
+import { DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeClustersCommand, DescribeServicesCommand, ECSClient } from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeDBClustersCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand } from '@aws-sdk/client-ec2';
-import { ECSClient, DescribeClustersCommand, DescribeServicesCommand } from '@aws-sdk/client-ecs';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import { CloudWatchClient, ListDashboardsCommand, GetDashboardCommand } from '@aws-sdk/client-cloudwatch';
 
 // Parse outputs file
 function loadOutputs(): Record<string, any> {
   const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
   const rawData = fs.readFileSync(outputsPath, 'utf8');
-  const lines = rawData.trim().split('\n');
-  const outputs: Record<string, any> = {};
 
-  lines.forEach(line => {
-    const [key, value] = line.split('=');
-    if (key && value) {
-      // Handle JSON arrays
-      if (value.startsWith('[')) {
-        outputs[key] = JSON.parse(value);
-      } else {
-        outputs[key] = value;
-      }
+  try {
+    // Parse as JSON
+    const outputs = JSON.parse(rawData);
+
+    // Handle array fields that might be JSON-stringified
+    if (outputs.publicSubnetIds && typeof outputs.publicSubnetIds === 'string') {
+      outputs.publicSubnetIds = JSON.parse(outputs.publicSubnetIds);
     }
-  });
+    if (outputs.privateSubnetIds && typeof outputs.privateSubnetIds === 'string') {
+      outputs.privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
+    }
 
-  return outputs;
+    return outputs;
+  } catch (error) {
+    console.error('Failed to parse outputs file:', error);
+    return {};
+  }
 }
 
 const outputs = loadOutputs();
 const region = process.env.AWS_REGION || 'us-east-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6886';
 
 // Initialize AWS SDK clients
 const ec2Client = new EC2Client({ region });
@@ -122,7 +125,7 @@ describe('TapStack Integration Tests - ECS Resources', () => {
 
     expect(clusterName).toBeTruthy();
     expect(clusterArn).toBeTruthy();
-    expect(clusterName).toContain('synthc6o3q8');
+    expect(clusterName).toContain(environmentSuffix);
     expect(clusterArn).toMatch(/^arn:aws:ecs:/);
 
     const response = await ecsClient.send(
@@ -143,7 +146,7 @@ describe('TapStack Integration Tests - ECS Resources', () => {
     const serviceName = outputs.ecsServiceName;
 
     expect(serviceName).toBeTruthy();
-    expect(serviceName).toContain('synthc6o3q8');
+    expect(serviceName).toContain(environmentSuffix);
 
     const response = await ecsClient.send(
       new DescribeServicesCommand({
@@ -170,7 +173,7 @@ describe('TapStack Integration Tests - Load Balancer', () => {
     expect(albArn).toBeTruthy();
     expect(albDnsName).toBeTruthy();
     expect(albArn).toMatch(/^arn:aws:elasticloadbalancing:/);
-    expect(albDnsName).toContain('synthc6o3q8');
+    expect(albDnsName).toContain(environmentSuffix);
 
     const response = await elbClient.send(
       new DescribeLoadBalancersCommand({ LoadBalancerArns: [albArn] })
@@ -215,7 +218,7 @@ describe('TapStack Integration Tests - Aurora Database', () => {
     expect(clusterId).toBeTruthy();
     expect(endpoint).toBeTruthy();
     expect(readerEndpoint).toBeTruthy();
-    expect(clusterId).toContain('synthc6o3q8');
+    expect(clusterId).toContain(environmentSuffix);
     expect(endpoint).toContain(clusterId);
     expect(readerEndpoint).toContain(clusterId);
 
@@ -274,7 +277,7 @@ describe('TapStack Integration Tests - Monitoring', () => {
     expect(topicArn).toBeTruthy();
     expect(topicArn).toMatch(/^arn:aws:sns:/);
     expect(topicArn).toContain('drift-alerts');
-    expect(topicArn).toContain('synthc6o3q8');
+    expect(topicArn).toContain(environmentSuffix);
 
     const response = await snsClient.send(
       new GetTopicAttributesCommand({ TopicArn: topicArn })
@@ -288,7 +291,7 @@ describe('TapStack Integration Tests - Monitoring', () => {
     const dashboardName = outputs.dashboardName;
 
     expect(dashboardName).toBeTruthy();
-    expect(dashboardName).toContain('synthc6o3q8');
+    expect(dashboardName).toContain(environmentSuffix);
 
     const listResponse = await cloudwatchClient.send(
       new ListDashboardsCommand({ DashboardNamePrefix: dashboardName })
@@ -323,7 +326,7 @@ describe('TapStack Integration Tests - Monitoring', () => {
 
 describe('TapStack Integration Tests - Resource Naming', () => {
   test('All resources include environmentSuffix in names', () => {
-    const suffix = 'synthc6o3q8';
+    const suffix = environmentSuffix;
 
     // Verify all outputs contain the environment suffix
     expect(outputs.vpcId).toBeTruthy();
@@ -339,7 +342,7 @@ describe('TapStack Integration Tests - Resource Naming', () => {
   });
 
   test('DNS names and endpoints include environmentSuffix', () => {
-    const suffix = 'synthc6o3q8';
+    const suffix = environmentSuffix;
 
     expect(outputs.albDnsName).toContain(suffix);
     expect(outputs.auroraEndpoint).toContain(suffix);
