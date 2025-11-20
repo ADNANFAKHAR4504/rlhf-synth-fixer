@@ -419,21 +419,19 @@ class TapStack(Stack):
 
     def _create_outputs(self) -> None:
         """Create CloudFormation outputs for deployed resources."""
-        # Kinesis stream outputs
+        # Kinesis stream outputs (no export_name to avoid conflicts)
         CfnOutput(
             self,
             "KinesisStreamName",
             value=self.kinesis_stream.stream_name,
-            description="Name of the Kinesis Data Stream",
-            export_name=f"FraudStreamName-{self.env_name}-{self.environment_suffix}"
+            description="Name of the Kinesis Data Stream"
         )
 
         CfnOutput(
             self,
             "KinesisStreamArn",
             value=self.kinesis_stream.stream_arn,
-            description="ARN of the Kinesis Data Stream",
-            export_name=f"FraudStreamArn-{self.env_name}-{self.environment_suffix}"
+            description="ARN of the Kinesis Data Stream"
         )
 
         # DynamoDB table outputs
@@ -441,16 +439,14 @@ class TapStack(Stack):
             self,
             "DynamoDBTableName",
             value=self.dynamodb_table.table_name,
-            description="Name of the DynamoDB table",
-            export_name=f"FraudTableName-{self.env_name}-{self.environment_suffix}"
+            description="Name of the DynamoDB table"
         )
 
         CfnOutput(
             self,
             "DynamoDBTableArn",
             value=self.dynamodb_table.table_arn,
-            description="ARN of the DynamoDB table",
-            export_name=f"FraudTableArn-{self.env_name}-{self.environment_suffix}"
+            description="ARN of the DynamoDB table"
         )
 
         # S3 bucket outputs
@@ -458,16 +454,14 @@ class TapStack(Stack):
             self,
             "S3BucketName",
             value=self.s3_bucket.bucket_name,
-            description="Name of the S3 bucket",
-            export_name=f"FraudBucketName-{self.env_name}-{self.environment_suffix}"
+            description="Name of the S3 bucket"
         )
 
         CfnOutput(
             self,
             "S3BucketArn",
             value=self.s3_bucket.bucket_arn,
-            description="ARN of the S3 bucket",
-            export_name=f"FraudBucketArn-{self.env_name}-{self.environment_suffix}"
+            description="ARN of the S3 bucket"
         )
 
         # Lambda function outputs
@@ -475,16 +469,14 @@ class TapStack(Stack):
             self,
             "LambdaFunctionName",
             value=self.processor_lambda.function_name,
-            description="Name of the fraud processor Lambda function",
-            export_name=f"FraudLambdaName-{self.env_name}-{self.environment_suffix}"
+            description="Name of the fraud processor Lambda function"
         )
 
         CfnOutput(
             self,
             "LambdaFunctionArn",
             value=self.processor_lambda.function_arn,
-            description="ARN of the fraud processor Lambda function",
-            export_name=f"FraudLambdaArn-{self.env_name}-{self.environment_suffix}"
+            description="ARN of the fraud processor Lambda function"
         )
 
         # SNS topic outputs
@@ -492,8 +484,7 @@ class TapStack(Stack):
             self,
             "SNSTopicArn",
             value=self.alarm_topic.topic_arn,
-            description="ARN of the SNS topic for alarms",
-            export_name=f"FraudSNSTopicArn-{self.env_name}-{self.environment_suffix}"
+            description="ARN of the SNS topic for alarms"
         )
 
         # SSM parameter outputs
@@ -501,16 +492,12 @@ class TapStack(Stack):
             self,
             "SSMApiKeyParameter",
             value=f"/fraud-detection/{self.env_name}/api-key",
-            description="SSM parameter path for API key",
-            export_name=f"FraudAPIKeyParam-{self.env_name}-{self.environment_suffix}"
+            description="SSM parameter path for API key"
         )
 
         CfnOutput(
             self,
             "SSMConnectionStringParameter",
             value=f"/fraud-detection/{self.env_name}/connection-string",
-            description="SSM parameter path for connection string",
-            export_name=(
-                f"FraudConnectionParam-{self.env_name}-{self.environment_suffix}"
-            )
+            description="SSM parameter path for connection string"
         )
