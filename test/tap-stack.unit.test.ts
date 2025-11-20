@@ -22,9 +22,27 @@ pulumi.runtime.setMocks(
       id: string;
       state: any;
     } => {
+      const resourceState: any = { ...args.inputs };
+
+      // Add specific outputs for different resource types
+      if (args.type === 'aws:rds/instance:Instance') {
+        resourceState.endpoint = 'test-db.us-east-1.rds.amazonaws.com:5432';
+        resourceState.address = 'test-db.us-east-1.rds.amazonaws.com';
+      } else if (args.type === 'aws:s3/bucket:Bucket') {
+        resourceState.bucket = args.inputs.bucketPrefix
+          ? `${args.inputs.bucketPrefix}unique-12345`
+          : `${args.name}-bucket`;
+        resourceState.id = resourceState.bucket;
+      } else if (args.type === 'aws:lambda/function:Function') {
+        resourceState.arn = `arn:aws:lambda:us-east-1:123456789012:function:${args.name}`;
+      } else if (args.type === 'aws:apigateway/restApi:RestApi') {
+        resourceState.id = 'test-api-id';
+        resourceState.executionArn = 'arn:aws:execute-api:us-east-1:123456789012:test-api-id';
+      }
+
       return {
         id: `${args.name}_id`,
-        state: args.inputs,
+        state: resourceState,
       };
     },
     call: (args: pulumi.runtime.MockCallArgs) => {

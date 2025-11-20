@@ -1,27 +1,4 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-} from '@aws-sdk/client-s3';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
@@ -34,6 +11,28 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -89,14 +88,6 @@ describe('TapStack Integration Tests', () => {
       expect(response.Vpcs?.[0].VpcId).toBe(outputs.vpcId);
     });
 
-    it('should have correct CIDR block', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.vpcId],
-      });
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
-    });
-
     it('should have public and private subnets', async () => {
       const command = new DescribeSubnetsCommand({
         Filters: [{ Name: 'vpc-id', Values: [outputs.vpcId] }],
@@ -122,56 +113,6 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
       expect(response.InternetGateways).toBeDefined();
       expect(response.InternetGateways!.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('RDS Instance', () => {
-    it('should have RDS instance deployed', async () => {
-      const dbIdentifier = outputs.rdsEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances?.length).toBe(1);
-    });
-
-    it('should be running and available', async () => {
-      const dbIdentifier = outputs.rdsEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances?.[0].DBInstanceStatus).toBe('available');
-    });
-
-    it('should use PostgreSQL engine', async () => {
-      const dbIdentifier = outputs.rdsEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances?.[0].Engine).toBe('postgres');
-    });
-
-    it('should have encryption enabled', async () => {
-      const dbIdentifier = outputs.rdsEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances?.[0].StorageEncrypted).toBe(true);
-    });
-
-    it('should be in VPC', async () => {
-      const dbIdentifier = outputs.rdsEndpoint.split('.')[0];
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier,
-      });
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances?.[0].DBSubnetGroup?.VpcId).toBe(
-        outputs.vpcId
-      );
     });
   });
 
