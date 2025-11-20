@@ -125,13 +125,13 @@ variable "manage_kubernetes_resources" {
 variable "node_group_deployment_suffix" {
   description = "Optional suffix to append to node group names to avoid conflicts with failed node groups from previous deployments. Change this value to force new node groups."
   type        = string
-  default     = "v4"
+  default     = "v5"
 }
 
 variable "resource_deployment_suffix" {
   description = "Optional suffix to append to resource names (IAM roles, CloudWatch log groups) to avoid conflicts with existing resources from previous deployments. Leave empty to use existing resources if they exist."
   type        = string
-  default     = "v4"
+  default     = "v5"
 }
 
 locals {
