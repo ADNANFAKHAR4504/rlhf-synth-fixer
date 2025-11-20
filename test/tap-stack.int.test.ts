@@ -1,10 +1,5 @@
 import fs from 'fs';
-import {
-  EMRClient,
-  DescribeClusterCommand,
-  ListStepsCommand,
-  DescribeStepCommand,
-} from '@aws-sdk/client-emr';
+import AWS from 'aws-sdk';
 import {
   S3Client,
   PutObjectCommand,
@@ -35,7 +30,7 @@ const outputs = JSON.parse(
 );
 
 // Initialize AWS SDK clients
-const emrClient = new EMRClient({ region: process.env.AWS_REGION });
+const emrClient = new AWS.EMR({ region: process.env.AWS_REGION });
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 const sfnClient = new SFNClient({ region: process.env.AWS_REGION });
 const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION });
@@ -269,12 +264,10 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
       console.log('✓ CheckClusterStatus state executed');
 
       // Verify cluster is in ready state
-      const clusterResponse = await emrClient.send(
-        new DescribeClusterCommand({ ClusterId: emrClusterId })
-      );
+      const clusterResponse = await emrClient.describeCluster({ ClusterId: emrClusterId }).promise();
 
       expect(clusterResponse.Cluster).toBeDefined();
-      const clusterState = clusterResponse.Cluster!.Status?.State;
+      const clusterState = clusterResponse.Cluster.Status?.State;
       expect(['WAITING', 'RUNNING']).toContain(clusterState);
       console.log(`✓ EMR cluster is in ${clusterState} state`);
     });
@@ -323,12 +316,10 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
 
       // Verify EMR step was created
       await waitFor(async () => {
-        const stepsResponse = await emrClient.send(
-          new ListStepsCommand({
-            ClusterId: emrClusterId,
-            MaxResults: 10,
-          })
-        );
+        const stepsResponse = await emrClient.listSteps({
+          ClusterId: emrClusterId,
+          MaxResults: 10,
+        }).promise();
 
         if (stepsResponse.Steps && stepsResponse.Steps.length > 0) {
           // Find step created after test start
@@ -354,12 +345,10 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
 
       // Wait for EMR step to complete
       await waitFor(async () => {
-        const stepsResponse = await emrClient.send(
-          new ListStepsCommand({
-            ClusterId: emrClusterId,
-            MaxResults: 10,
-          })
-        );
+        const stepsResponse = await emrClient.listSteps({
+          ClusterId: emrClusterId,
+          MaxResults: 10,
+        }).promise();
 
         if (stepsResponse.Steps) {
           const recentStep = stepsResponse.Steps.find(
@@ -369,12 +358,10 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
           );
 
           if (recentStep) {
-            const stepDetail = await emrClient.send(
-              new DescribeStepCommand({
-                ClusterId: emrClusterId,
-                StepId: recentStep.Id!,
-              })
-            );
+            const stepDetail = await emrClient.describeStep({
+              ClusterId: emrClusterId,
+              StepId: recentStep.Id!,
+            }).promise();
 
             const stepState = stepDetail.Step?.Status?.State;
             console.log(`  Step state: ${stepState}`);
@@ -386,12 +373,10 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
       }, 600000); // 10 minutes
 
       // Verify step completed successfully
-      const stepsResponse = await emrClient.send(
-        new ListStepsCommand({
-          ClusterId: emrClusterId,
-          MaxResults: 10,
-        })
-      );
+      const stepsResponse = await emrClient.listSteps({
+        ClusterId: emrClusterId,
+        MaxResults: 10,
+      }).promise();
 
       const recentStep = stepsResponse.Steps!.find(
         (step) =>
@@ -586,12 +571,10 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
       }
 
       // Verify: C) EMR processed the data
-      const stepsResponse = await emrClient.send(
-        new ListStepsCommand({
-          ClusterId: emrClusterId,
-          MaxResults: 10,
-        })
-      );
+      const stepsResponse = await emrClient.listSteps({
+        ClusterId: emrClusterId,
+        MaxResults: 10,
+      }).promise();
       const processedStep = stepsResponse.Steps!.find(
         (step) =>
           step.Status?.Timeline?.CreationDateTime &&
