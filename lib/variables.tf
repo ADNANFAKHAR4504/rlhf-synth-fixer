@@ -7,6 +7,7 @@ variable "environment_suffix" {
     condition     = length(var.environment_suffix) > 0
     error_message = "Environment suffix must not be empty."
   }
+  default     = "dev"
 }
 
 variable "vpc_cidr" {
