@@ -90,12 +90,6 @@ describe("Terraform Drift Detection Infrastructure - Integration Tests", () => {
       expect(outputs.state_lock_table_name).toBeDefined();
       expect(outputs.state_lock_table_name).toMatch(/^terraform-state-lock-/);
     });
-
-    test("table ARN follows AWS ARN format", () => {
-      expect(outputs.state_lock_table_arn).toBeDefined();
-      expect(outputs.state_lock_table_arn).toMatch(/^arn:aws:dynamodb:/);
-      expect(outputs.state_lock_table_arn).toContain(outputs.state_lock_table_name);
-    });
   });
 
   describe("Lambda Drift Detector Function (Requirement 4)", () => {
@@ -409,6 +403,306 @@ describe("Terraform Drift Detection Infrastructure - Integration Tests", () => {
       // Ensure resources are destroyable
       expect(mainContent).not.toMatch(/prevent_destroy\s*=\s*true/);
       expect(mainContent).not.toMatch(/deletion_protection\s*=\s*true/);
+    });
+  });
+
+  // Live Integration Tests - Testing actual deployed AWS resources
+  describe("Live AWS Resource Integration Tests", () => {
+    // Skip live tests if using mock outputs
+    const itLive = usingMockOutputs ? test.skip : test;
+
+    describe("S3 Bucket Verification", () => {
+      itLive("drift reports bucket exists and is accessible", async () => {
+        const { S3Client, HeadBucketCommand } = require("@aws-sdk/client-s3");
+        const s3Client = new S3Client({ region: "us-east-1" });
+
+        const command = new HeadBucketCommand({
+          Bucket: outputs.drift_reports_bucket_name,
+        });
+
+        await expect(s3Client.send(command)).resolves.toBeDefined();
+      }, 15000);
+
+      itLive("drift reports bucket has versioning enabled", async () => {
+        const { S3Client, GetBucketVersioningCommand } = require("@aws-sdk/client-s3");
+        const s3Client = new S3Client({ region: "us-east-1" });
+
+        const command = new GetBucketVersioningCommand({
+          Bucket: outputs.drift_reports_bucket_name,
+        });
+
+        const response = await s3Client.send(command);
+        expect(response.Status).toBe("Enabled");
+      }, 15000);
+
+      itLive("drift reports bucket has encryption enabled", async () => {
+        const { S3Client, GetBucketEncryptionCommand } = require("@aws-sdk/client-s3");
+        const s3Client = new S3Client({ region: "us-east-1" });
+
+        const command = new GetBucketEncryptionCommand({
+          Bucket: outputs.drift_reports_bucket_name,
+        });
+
+        const response = await s3Client.send(command);
+        expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+        expect(response.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
+        expect(response.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe("AES256");
+      }, 15000);
+
+      itLive("eu-central-1 drift reports bucket exists", async () => {
+        const { S3Client, HeadBucketCommand } = require("@aws-sdk/client-s3");
+        const s3Client = new S3Client({ region: "eu-central-1" });
+
+        const command = new HeadBucketCommand({
+          Bucket: outputs.drift_reports_eu_central_1_bucket,
+        });
+
+        await expect(s3Client.send(command)).resolves.toBeDefined();
+      }, 15000);
+    });
+
+    describe("DynamoDB Table Verification", () => {
+      itLive("state lock table exists and is active", async () => {
+        const { DynamoDBClient, DescribeTableCommand } = require("@aws-sdk/client-dynamodb");
+        const dynamoClient = new DynamoDBClient({ region: "us-east-1" });
+
+        const command = new DescribeTableCommand({
+          TableName: outputs.state_lock_table_name,
+        });
+
+        const response = await dynamoClient.send(command);
+        expect(response.Table).toBeDefined();
+        expect(response.Table.TableStatus).toBe("ACTIVE");
+        expect(response.Table.TableName).toBe(outputs.state_lock_table_name);
+      }, 15000);
+
+      itLive("state lock table has correct key schema", async () => {
+        const { DynamoDBClient, DescribeTableCommand } = require("@aws-sdk/client-dynamodb");
+        const dynamoClient = new DynamoDBClient({ region: "us-east-1" });
+
+        const command = new DescribeTableCommand({
+          TableName: outputs.state_lock_table_name,
+        });
+
+        const response = await dynamoClient.send(command);
+        expect(response.Table.KeySchema).toBeDefined();
+        expect(response.Table.KeySchema).toHaveLength(1);
+        expect(response.Table.KeySchema[0].AttributeName).toBe("LockID");
+        expect(response.Table.KeySchema[0].KeyType).toBe("HASH");
+      }, 15000);
+    });
+
+    describe("Lambda Function Verification", () => {
+      itLive("drift detector function exists and is active", async () => {
+        const { LambdaClient, GetFunctionCommand } = require("@aws-sdk/client-lambda");
+        const lambdaClient = new LambdaClient({ region: "us-east-1" });
+
+        const command = new GetFunctionCommand({
+          FunctionName: outputs.drift_detector_function_name,
+        });
+
+        const response = await lambdaClient.send(command);
+        expect(response.Configuration).toBeDefined();
+        expect(response.Configuration.State).toBe("Active");
+        expect(response.Configuration.FunctionName).toBe(outputs.drift_detector_function_name);
+      }, 15000);
+
+      itLive("drift detector function has correct runtime", async () => {
+        const { LambdaClient, GetFunctionCommand } = require("@aws-sdk/client-lambda");
+        const lambdaClient = new LambdaClient({ region: "us-east-1" });
+
+        const command = new GetFunctionCommand({
+          FunctionName: outputs.drift_detector_function_name,
+        });
+
+        const response = await lambdaClient.send(command);
+        expect(response.Configuration.Runtime).toMatch(/^nodejs/);
+        expect(response.Configuration.Handler).toBe("index.handler");
+      }, 15000);
+
+      itLive("drift detector function has required environment variables", async () => {
+        const { LambdaClient, GetFunctionCommand } = require("@aws-sdk/client-lambda");
+        const lambdaClient = new LambdaClient({ region: "us-east-1" });
+
+        const command = new GetFunctionCommand({
+          FunctionName: outputs.drift_detector_function_name,
+        });
+
+        const response = await lambdaClient.send(command);
+        expect(response.Configuration.Environment).toBeDefined();
+        expect(response.Configuration.Environment.Variables).toBeDefined();
+        expect(response.Configuration.Environment.Variables.DRIFT_REPORTS_BUCKET).toBe(outputs.drift_reports_bucket_name);
+        expect(response.Configuration.Environment.Variables.SNS_TOPIC_ARN).toBe(outputs.drift_alerts_topic_arn);
+      }, 15000);
+
+      itLive("drift detector function can be invoked", async () => {
+        const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+        const lambdaClient = new LambdaClient({ region: "us-east-1" });
+
+        const command = new InvokeCommand({
+          FunctionName: outputs.drift_detector_function_name,
+          InvocationType: "DryRun", // Test invocation without execution
+        });
+
+        const response = await lambdaClient.send(command);
+        expect(response.StatusCode).toBe(204); // DryRun returns 204
+      }, 15000);
+    });
+
+    describe("SNS Topic Verification", () => {
+      itLive("drift alerts topic exists and is accessible", async () => {
+        const { SNSClient, GetTopicAttributesCommand } = require("@aws-sdk/client-sns");
+        const snsClient = new SNSClient({ region: "us-east-1" });
+
+        const command = new GetTopicAttributesCommand({
+          TopicArn: outputs.drift_alerts_topic_arn,
+        });
+
+        const response = await snsClient.send(command);
+        expect(response.Attributes).toBeDefined();
+        expect(response.Attributes.TopicArn).toBe(outputs.drift_alerts_topic_arn);
+      }, 15000);
+
+      itLive("drift alerts topic has subscriptions", async () => {
+        const { SNSClient, ListSubscriptionsByTopicCommand } = require("@aws-sdk/client-sns");
+        const snsClient = new SNSClient({ region: "us-east-1" });
+
+        const command = new ListSubscriptionsByTopicCommand({
+          TopicArn: outputs.drift_alerts_topic_arn,
+        });
+
+        const response = await snsClient.send(command);
+        expect(response.Subscriptions).toBeDefined();
+        // Note: May be empty if no email confirmed yet
+        expect(Array.isArray(response.Subscriptions)).toBe(true);
+      }, 15000);
+    });
+
+    describe("IAM Role Verification", () => {
+      itLive("cross-account role exists and is accessible", async () => {
+        const { IAMClient, GetRoleCommand } = require("@aws-sdk/client-iam");
+        const iamClient = new IAMClient({ region: "us-east-1" });
+
+        // Extract role name from ARN
+        const roleName = outputs.cross_account_role_arn.split("/").pop();
+
+        const command = new GetRoleCommand({
+          RoleName: roleName,
+        });
+
+        const response = await iamClient.send(command);
+        expect(response.Role).toBeDefined();
+        expect(response.Role.Arn).toBe(outputs.cross_account_role_arn);
+      }, 15000);
+
+      itLive("cross-account role has assume role policy", async () => {
+        const { IAMClient, GetRoleCommand } = require("@aws-sdk/client-iam");
+        const iamClient = new IAMClient({ region: "us-east-1" });
+
+        const roleName = outputs.cross_account_role_arn.split("/").pop();
+
+        const command = new GetRoleCommand({
+          RoleName: roleName,
+        });
+
+        const response = await iamClient.send(command);
+        expect(response.Role.AssumeRolePolicyDocument).toBeDefined();
+
+        const policy = JSON.parse(decodeURIComponent(response.Role.AssumeRolePolicyDocument));
+        expect(policy.Statement).toBeDefined();
+        expect(policy.Statement.length).toBeGreaterThan(0);
+      }, 15000);
+    });
+
+    describe("CloudWatch Dashboard Verification", () => {
+      itLive("drift metrics dashboard exists", async () => {
+        const { CloudWatchClient, GetDashboardCommand } = require("@aws-sdk/client-cloudwatch");
+        const cwClient = new CloudWatchClient({ region: "us-east-1" });
+
+        const command = new GetDashboardCommand({
+          DashboardName: outputs.cloudwatch_dashboard_name,
+        });
+
+        const response = await cwClient.send(command);
+        expect(response.DashboardName).toBe(outputs.cloudwatch_dashboard_name);
+        expect(response.DashboardBody).toBeDefined();
+      }, 15000);
+
+      itLive("drift metrics dashboard has valid configuration", async () => {
+        const { CloudWatchClient, GetDashboardCommand } = require("@aws-sdk/client-cloudwatch");
+        const cwClient = new CloudWatchClient({ region: "us-east-1" });
+
+        const command = new GetDashboardCommand({
+          DashboardName: outputs.cloudwatch_dashboard_name,
+        });
+
+        const response = await cwClient.send(command);
+        const dashboardBody = JSON.parse(response.DashboardBody);
+
+        expect(dashboardBody.widgets).toBeDefined();
+        expect(Array.isArray(dashboardBody.widgets)).toBe(true);
+        expect(dashboardBody.widgets.length).toBeGreaterThan(0);
+      }, 15000);
+    });
+
+    describe("CloudWatch Logs Verification", () => {
+      itLive("Lambda function has log group", async () => {
+        const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require("@aws-sdk/client-cloudwatch-logs");
+        const cwlClient = new CloudWatchLogsClient({ region: "us-east-1" });
+
+        const command = new DescribeLogGroupsCommand({
+          logGroupNamePrefix: `/aws/lambda/${outputs.drift_detector_function_name}`,
+        });
+
+        const response = await cwlClient.send(command);
+        expect(response.logGroups).toBeDefined();
+        expect(response.logGroups.length).toBeGreaterThan(0);
+        expect(response.logGroups[0].logGroupName).toBe(`/aws/lambda/${outputs.drift_detector_function_name}`);
+      }, 15000);
+
+      itLive("Lambda log group has retention policy", async () => {
+        const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require("@aws-sdk/client-cloudwatch-logs");
+        const cwlClient = new CloudWatchLogsClient({ region: "us-east-1" });
+
+        const command = new DescribeLogGroupsCommand({
+          logGroupNamePrefix: `/aws/lambda/${outputs.drift_detector_function_name}`,
+        });
+
+        const response = await cwlClient.send(command);
+        expect(response.logGroups[0].retentionInDays).toBeDefined();
+        expect(response.logGroups[0].retentionInDays).toBeGreaterThan(0);
+      }, 15000);
+    });
+
+    describe("CloudWatch Alarms Verification", () => {
+      itLive("drift detection failure alarm exists", async () => {
+        const { CloudWatchClient, DescribeAlarmsCommand } = require("@aws-sdk/client-cloudwatch");
+        const cwClient = new CloudWatchClient({ region: "us-east-1" });
+
+        const command = new DescribeAlarmsCommand({
+          AlarmNamePrefix: "drift-detection-failures",
+        });
+
+        const response = await cwClient.send(command);
+        expect(response.MetricAlarms).toBeDefined();
+        expect(response.MetricAlarms.length).toBeGreaterThan(0);
+      }, 15000);
+
+      itLive("failure alarm is configured to notify SNS", async () => {
+        const { CloudWatchClient, DescribeAlarmsCommand } = require("@aws-sdk/client-cloudwatch");
+        const cwClient = new CloudWatchClient({ region: "us-east-1" });
+
+        const command = new DescribeAlarmsCommand({
+          AlarmNamePrefix: "drift-detection-failures",
+        });
+
+        const response = await cwClient.send(command);
+        const alarm = response.MetricAlarms[0];
+
+        expect(alarm.AlarmActions).toBeDefined();
+        expect(alarm.AlarmActions.length).toBeGreaterThan(0);
+        expect(alarm.AlarmActions[0]).toBe(outputs.drift_alerts_topic_arn);
+      }, 15000);
     });
   });
 

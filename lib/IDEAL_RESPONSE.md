@@ -770,7 +770,7 @@ exports.handler = async (event) => {
 
     if (driftAnalysis.severity === 'critical') {
       const message = `
-🚨 CRITICAL DRIFT DETECTED
+ CRITICAL DRIFT DETECTED
 
 Environment: ${environmentSuffix}
 Region: ${process.env.AWS_REGION || 'us-east-1'}
@@ -791,7 +791,7 @@ Action Required: Review and remediate drift immediately.
 
       await snsClient.send(new PublishCommand({
         TopicArn: snsTopicArn,
-        Subject: `🚨 Critical Infrastructure Drift Detected - ${environmentSuffix}`,
+        Subject: ` Critical Infrastructure Drift Detected - ${environmentSuffix}`,
         Message: message
       }));
 
@@ -813,7 +813,7 @@ Action Required: Review and remediate drift immediately.
 
     await snsClient.send(new PublishCommand({
       TopicArn: snsTopicArn,
-      Subject: `⚠️ Drift Detection Failed - ${environmentSuffix}`,
+      Subject: `️ Drift Detection Failed - ${environmentSuffix}`,
       Message: `Drift detection failed at ${timestamp}\n\nError: ${error.message}\n\nEnvironment: ${environmentSuffix}`
     }));
 
@@ -961,16 +961,16 @@ Check your email for SNS subscription confirmation and click the link.
 
 ## Success Criteria Met
 
-- ✅ Drift detection runs every 6 hours automatically
-- ✅ Reports stored in S3 with versioning
-- ✅ Critical drift triggers SNS email alerts
-- ✅ CloudWatch dashboard displays metrics
-- ✅ AWS Config tracks EC2, RDS, S3 changes
-- ✅ Cross-account access properly configured
-- ✅ All resources include environment_suffix
-- ✅ No Retain policies or deletion_protection
-- ✅ Lambda uses Node.js 18 with AWS SDK v3
-- ✅ 107 passing tests with comprehensive coverage
+-  Drift detection runs every 6 hours automatically
+-  Reports stored in S3 with versioning
+-  Critical drift triggers SNS email alerts
+-  CloudWatch dashboard displays metrics
+-  AWS Config tracks EC2, RDS, S3 changes
+-  Cross-account access properly configured
+-  All resources include environment_suffix
+-  No Retain policies or deletion_protection
+-  Lambda uses Node.js 18 with AWS SDK v3
+-  107 passing tests with comprehensive coverage
 
 ## Testing
 
