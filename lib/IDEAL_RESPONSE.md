@@ -212,7 +212,7 @@ output "cloudwatch_alarm_arns" {
 ### dev.tfvars
 ```hcl
 environment             = "dev"
-pr_number               = "pr6908"
+pr_number               = "pr6908dev"
 aws_region              = "us-east-1"
 vpc_cidr                = "10.0.0.0/16"
 db_instance_class       = "db.t3.micro"
@@ -233,7 +233,7 @@ alb_internal            = false
 
 ```hcl
 environment             = "staging"
-pr_number               = "pr6908"
+pr_number               = "pr6908staging"
 aws_region              = "us-east-1"
 vpc_cidr                = "10.1.0.0/16"
 db_instance_class       = "db.t3.small"
@@ -250,7 +250,7 @@ alb_internal            = false```
 ### prod.tfvars
 ```hcl
 environment             = "prod"
-pr_number               = "pr6908"
+pr_number               = "pr6908prod"
 aws_region              = "us-east-1"
 vpc_cidr                = "10.2.0.0/16"
 db_instance_class       = "db.t3.medium"

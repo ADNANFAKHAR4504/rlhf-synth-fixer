@@ -1,5 +1,5 @@
 environment             = "prod"
-pr_number               = "pr6908"
+pr_number               = "pr6908prod"
 aws_region              = "us-east-1"
 vpc_cidr                = "10.2.0.0/16"
 db_instance_class       = "db.t3.medium"

@@ -1,5 +1,5 @@
 environment             = "dev"
-pr_number               = "pr6908"
+pr_number               = "pr6908dev"
 aws_region              = "us-east-1"
 vpc_cidr                = "10.0.0.0/16"
 db_instance_class       = "db.t3.micro"
