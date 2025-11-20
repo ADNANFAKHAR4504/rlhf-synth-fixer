@@ -237,10 +237,9 @@ describe("Terraform lib/ .tf unit tests", () => {
       expect(ec2Tf).toMatch(/"s3:GetObject"/);
       expect(ec2Tf).toMatch(/"s3:DeleteObject"/);
       expect(ec2Tf).toMatch(/"s3:ListBucket"/);
-      // Check for explicit ARN construction with account ID
-      contains(ec2Tf, "data \"aws_caller_identity\" \"ec2_current\" {}");
-      contains(ec2Tf, "arn:aws:s3:::terraform-state-${data.aws_caller_identity.ec2_current.account_id}-${var.resource_suffix}");
-      contains(ec2Tf, "arn:aws:s3:::terraform-state-${data.aws_caller_identity.ec2_current.account_id}-${var.resource_suffix}/*");
+      // Check for explicit ARN construction with account ID (reuses data source from s3.tf)
+      contains(ec2Tf, "arn:aws:s3:::terraform-state-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}");
+      contains(ec2Tf, "arn:aws:s3:::terraform-state-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}/*");
     });
 
     test("should create inline IAM policy for Secrets Manager access", () => {

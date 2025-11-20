@@ -81,9 +81,6 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# Data source to get current AWS account ID (reuse from s3.tf)
-data "aws_caller_identity" "ec2_current" {}
-
 # Inline policy granting S3 access to the instance role for the terraform state bucket
 resource "aws_iam_role_policy" "ec2_s3_access" {
   name = "ec2-ssm-s3-access-${var.resource_suffix}"
@@ -101,8 +98,8 @@ resource "aws_iam_role_policy" "ec2_s3_access" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::terraform-state-${data.aws_caller_identity.ec2_current.account_id}-${var.resource_suffix}",
-          "arn:aws:s3:::terraform-state-${data.aws_caller_identity.ec2_current.account_id}-${var.resource_suffix}/*"
+          "arn:aws:s3:::terraform-state-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}",
+          "arn:aws:s3:::terraform-state-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}/*"
         ]
       }
     ]

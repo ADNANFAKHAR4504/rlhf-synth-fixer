@@ -7,7 +7,7 @@ variable "resource_suffix" {
 variable "ssh_cidr_blocks" {
   description = "CIDR blocks allowed for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Configure restrictively in production
+  default     = [] # Must be explicitly configured - no default access
 }
 
 variable "ssh_public_key" {
