@@ -7,8 +7,7 @@
   "turn_type": "single",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Multi-Environment Infrastructure",
-    "Nested Stacks"
+    "Web Application Deployment"
   ],
   "startedAt": "2025-11-20T20:31:00-08:00",
   "aws_services": [
