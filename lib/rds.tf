@@ -18,10 +18,10 @@ resource "aws_rds_cluster" "main" {
   cluster_identifier      = "aurora-cluster-${var.environment_suffix}"
   engine                  = "aurora-postgresql"
   engine_mode             = "provisioned"
-  engine_version          = "16.4" # ✅ Matches implementation (was mismatch with README)
+  engine_version          = "16.4"
   database_name           = "paymentdb"
   master_username         = var.db_master_username
-  master_password         = var.db_master_password
+  master_password         = random_password.db_master_password.result # ✅ Use generated password
   backup_retention_period = 7
   preferred_backup_window = "03:00-04:00"
 
@@ -31,7 +31,6 @@ resource "aws_rds_cluster" "main" {
   storage_encrypted = true
   kms_key_id        = aws_kms_key.main.arn
 
-  # ✅ IMPROVED: Conditional final snapshot
   skip_final_snapshot       = var.environment_suffix != "prod"
   final_snapshot_identifier = var.environment_suffix == "prod" ? "aurora-final-snapshot-${var.environment_suffix}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
@@ -45,8 +44,7 @@ resource "aws_rds_cluster" "main" {
   }
 }
 
-# ✅ FIXED: Environment-based instance class
-# Aurora PostgreSQL Instance 1 (Primary)
+# Aurora PostgreSQL Instances
 resource "aws_rds_cluster_instance" "main" {
   count               = 3
   identifier          = "aurora-instance-${count.index + 1}-${var.environment_suffix}"

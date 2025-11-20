@@ -14,13 +14,13 @@ resource "aws_dms_replication_subnet_group" "main" {
   }
 }
 
-# DMS Replication Instance - ✅ FIXED: Multi-AZ configurable
+# DMS Replication Instance
 resource "aws_dms_replication_instance" "main" {
   replication_instance_id     = "dms-instance-${var.environment_suffix}"
   replication_instance_class  = "dms.t3.medium"
   allocated_storage           = 100
   engine_version              = "3.5.3"
-  multi_az                    = var.enable_multi_az_dms # ✅ Now configurable
+  multi_az                    = var.enable_multi_az_dms
   publicly_accessible         = false
   replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
   vpc_security_group_ids      = [aws_security_group.dms.id]
@@ -37,7 +37,7 @@ resource "aws_dms_replication_instance" "main" {
   }
 }
 
-# DMS Source Endpoint (Oracle) - ✅ FIXED: SSL enabled
+# DMS Source Endpoint (Oracle)
 resource "aws_dms_endpoint" "source" {
   endpoint_id   = "source-oracle-${var.environment_suffix}"
   endpoint_type = "source"
@@ -47,9 +47,9 @@ resource "aws_dms_endpoint" "source" {
   port          = var.source_db_port
   database_name = var.source_db_name
   username      = var.source_db_username
-  password      = var.source_db_password
+  password      = random_password.source_db_password.result # ✅ Use generated password
 
-  ssl_mode = "require" # ✅ SECURITY FIX: Changed from 'none' to 'require'
+  ssl_mode = "require"
 
   extra_connection_attributes = "useLogminerReader=N;useBfile=Y"
 
@@ -73,7 +73,7 @@ resource "aws_dms_endpoint" "target" {
   port          = 5432
   database_name = aws_rds_cluster.main.database_name
   username      = var.db_master_username
-  password      = var.db_master_password
+  password      = random_password.db_master_password.result # ✅ Use generated password
 
   ssl_mode = "require"
 

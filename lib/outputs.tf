@@ -69,3 +69,15 @@ output "kms_key_arn" {
   description = "KMS key ARN"
   value       = aws_kms_key.main.arn
 }
+
+# At the end of outputs.tf, add:
+
+output "db_password_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing Aurora password"
+  value       = aws_secretsmanager_secret.db_master_password.arn
+}
+
+output "source_db_password_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing Source DB password"
+  value       = aws_secretsmanager_secret.source_db_password.arn
+}

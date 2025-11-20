@@ -9,7 +9,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming"
   type        = string
-  default     = "dev3"
+  default     = "dev5"
 }
 
 variable "repository" {
@@ -43,13 +43,6 @@ variable "db_master_username" {
   sensitive   = true
 }
 
-variable "db_master_password" {
-  description = "Master password for Aurora PostgreSQL - MUST be provided via environment variable or tfvars"
-  type        = string
-  sensitive   = true
-  # ✅ SECURITY FIX: No default password - force users to provide secure passwords
-}
-
 variable "container_image" {
   description = "Container image for ECS tasks"
   type        = string
@@ -74,13 +67,6 @@ variable "source_db_username" {
   sensitive   = true
 }
 
-variable "source_db_password" {
-  description = "Password for source Oracle database - MUST be provided via environment variable or tfvars"
-  type        = string
-  sensitive   = true
-  # ✅ SECURITY FIX: No default password
-}
-
 variable "source_db_host" {
   description = "Hostname for source Oracle database"
   type        = string
@@ -99,21 +85,18 @@ variable "source_db_name" {
   default     = "ORCL"
 }
 
-# ✅ NEW: RDS instance class variable for cost optimization
 variable "rds_instance_class" {
   description = "RDS instance class - smaller for dev/test, larger for production"
   type        = string
   default     = "db.t4g.medium"
 }
 
-# ✅ NEW: VPC CIDR configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
   default     = "10.0.0.0/16"
 }
 
-# ✅ NEW: ECS task resource configuration
 variable "ecs_task_cpu" {
   description = "CPU units for ECS task (256, 512, 1024, 2048, 4096)"
   type        = number
@@ -126,7 +109,6 @@ variable "ecs_task_memory" {
   default     = 1024
 }
 
-# ✅ NEW: Enable Multi-AZ for production
 variable "enable_multi_az_dms" {
   description = "Enable Multi-AZ for DMS replication instance (recommended for production)"
   type        = bool

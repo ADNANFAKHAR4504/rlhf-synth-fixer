@@ -1,5 +1,5 @@
 aws_region         = "us-east-1"
-environment_suffix = "dev3"
+environment_suffix = "dev5"
 repository         = "payment-processing-migration"
 team               = "FinOps"
 
