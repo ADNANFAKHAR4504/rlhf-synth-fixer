@@ -8,7 +8,7 @@
   "startedAt": "2025-11-20T20:15:57+05:30",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security, Compliance, and Governance"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "Lambda",
@@ -18,5 +18,6 @@
     "CloudWatch",
     "S3"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "rajendrasingh-turing"
 }
