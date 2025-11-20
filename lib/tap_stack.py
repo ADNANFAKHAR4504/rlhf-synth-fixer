@@ -1,24 +1,17 @@
-from typing import Optional
-import aws_cdk as cdk
-from aws_cdk import (
-    Stack,
-    StackProps,
-    CfnParameter,
-    CfnOutput,
-    CfnMapping,
-    Duration,
-    RemovalPolicy,
-    aws_ec2 as ec2,
-    aws_s3 as s3,
-    aws_logs as logs,
-    aws_iam as iam,
-    aws_lambda as lambda_,
-    aws_events as events,
-    aws_events_targets as targets,
-    Tags,
-)
-from constructs import Construct
 import json
+from typing import Optional
+
+import aws_cdk as cdk
+from aws_cdk import (CfnMapping, CfnOutput, CfnParameter, Duration,
+                     RemovalPolicy, Stack, StackProps, Tags)
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_s3 as s3
+from constructs import Construct
 
 
 class TapStackProps(StackProps):
@@ -91,12 +84,12 @@ class TapStack(Stack):
         private_subnets = vpc.isolated_subnets
 
         # Create S3 bucket for VPC Flow Logs
+        # NOTE: auto_delete_objects is disabled to avoid bucket policy conflicts with VPC Flow Logs
         flow_logs_bucket = s3.Bucket(
             self,
             f"flow-logs-bucket-{environment_suffix}",
-            bucket_name=f"vpc-flow-logs-{self.account}-{environment_suffix}",
+            bucket_name=f"vpc-flow-logs-{self.account}-{environment_suffix}-v2",
             removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     enabled=True,

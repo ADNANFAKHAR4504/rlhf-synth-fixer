@@ -120,12 +120,12 @@ class TapStack(Stack):
         private_subnets = vpc.isolated_subnets
 
         # Create S3 bucket for VPC Flow Logs
+        # NOTE: auto_delete_objects is disabled to avoid bucket policy conflicts with VPC Flow Logs
         flow_logs_bucket = s3.Bucket(
             self,
             f"flow-logs-bucket-{environment_suffix}",
-            bucket_name=f"vpc-flow-logs-{self.account}-{environment_suffix}",
+            bucket_name=f"vpc-flow-logs-{self.account}-{environment_suffix}-v2",
             removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     enabled=True,
@@ -796,3 +796,16 @@ However, it failed on two critical CDK/CloudFormation concepts:
 2. **Region Mapping**: Using tokens as dictionary keys
 
 These are common "gotchas" in CDK development that this IDEAL_RESPONSE resolves while maintaining all the correct infrastructure design from MODEL_RESPONSE.
+
+## Critical Fix: S3 Bucket Policy Conflict
+
+**Issue**: The `auto_delete_objects=True` parameter on the S3 bucket creates a bucket policy that conflicts with the bucket policy that VPC Flow Logs automatically creates when it starts writing logs. This results in a persistent "The bucket policy already exists" error during deployment.
+
+**Solution Implemented**:
+1. **Removed `auto_delete_objects=True`** from the S3 bucket configuration
+2. **Added `-v2` suffix** to bucket name for clean separation from failed deployments
+3. **Manual cleanup** should be handled via pre-deployment cleanup scripts
+
+**Why This Happens**: When VPC Flow Logs are enabled with an S3 destination, AWS automatically creates a bucket policy allowing the Flow Logs service to write to the bucket. If CDK also tries to create a bucket policy (via `auto_delete_objects=True`, which creates a Lambda-backed custom resource with its own policy), CloudFormation fails because a policy already exists.
+
+**Trade-off**: Without `auto_delete_objects=True`, the S3 bucket must be manually emptied before stack deletion. This is acceptable for production workloads and can be automated via cleanup scripts in CI/CD pipelines.
