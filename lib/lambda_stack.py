@@ -69,10 +69,13 @@ def handler(event, context):
     }
             """),
             memory_size=1024,  # Optimized from 3008MB (Requirement 1)
-            architecture=_lambda.Architecture.ARM_64,  # Graviton2 (Requirement 3)
-            reserved_concurrent_executions=100,  # Prevent throttling (Requirement 4)
+            # Graviton2 (Requirement 3)
+            architecture=_lambda.Architecture.ARM_64,
+            # Prevent throttling (Requirement 4)
+            reserved_concurrent_executions=5,
             vpc=props.vpc,
-            log_retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
+            # 7-day retention (Requirement 6)
+            log_retention=logs.RetentionDays.ONE_WEEK,
             timeout=cdk.Duration.seconds(30)
         )
 
@@ -90,10 +93,13 @@ def handler(event, context):
     }
             """),
             memory_size=512,  # Optimized from 3008MB (Requirement 1)
-            architecture=_lambda.Architecture.ARM_64,  # Graviton2 (Requirement 3)
-            reserved_concurrent_executions=50,  # Prevent throttling (Requirement 4)
+            # Graviton2 (Requirement 3)
+            architecture=_lambda.Architecture.ARM_64,
+            # Prevent throttling (Requirement 4)
+            reserved_concurrent_executions=3,
             vpc=props.vpc,
-            log_retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
+            # 7-day retention (Requirement 6)
+            log_retention=logs.RetentionDays.ONE_WEEK,
             timeout=cdk.Duration.seconds(15)
         )
 
@@ -111,10 +117,13 @@ def handler(event, context):
     }
             """),
             memory_size=1024,  # Optimized from 3008MB (Requirement 1)
-            architecture=_lambda.Architecture.ARM_64,  # Graviton2 (Requirement 3)
-            reserved_concurrent_executions=75,  # Prevent throttling (Requirement 4)
+            # Graviton2 (Requirement 3)
+            architecture=_lambda.Architecture.ARM_64,
+            # Prevent throttling (Requirement 4)
+            reserved_concurrent_executions=5,
             vpc=props.vpc,
-            log_retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
+            # 7-day retention (Requirement 6)
+            log_retention=logs.RetentionDays.ONE_WEEK,
             timeout=cdk.Duration.seconds(30)
         )
 

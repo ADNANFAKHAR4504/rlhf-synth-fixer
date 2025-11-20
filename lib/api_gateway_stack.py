@@ -61,7 +61,8 @@ class ApiGatewayStack(cdk.Stack):
         log_group = logs.LogGroup(
             self,
             f"{environment}-payment-log-api",
-            retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
+            # 7-day retention (Requirement 6)
+            retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY
         )
 
@@ -87,10 +88,7 @@ class ApiGatewayStack(cdk.Stack):
                     resource_path=True,
                     response_length=True,
                     status=True,
-                    user=True
-                )
-            )
-        )
+                    user=True)))
 
         # Payments resource and methods
         payments = self.api.root.add_resource("payments")

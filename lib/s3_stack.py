@@ -56,7 +56,8 @@ class S3Stack(cdk.Stack):
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=cdk.RemovalPolicy.RETAIN,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="TransitionToGlacier",
@@ -64,7 +65,8 @@ class S3Stack(cdk.Stack):
                     transitions=[
                         s3.Transition(
                             storage_class=s3.StorageClass.GLACIER,
-                            transition_after=cdk.Duration.days(30)  # Requirement 5
+                            transition_after=cdk.Duration.days(
+                                30)  # Requirement 5
                         )
                     ]
                 )
@@ -79,7 +81,8 @@ class S3Stack(cdk.Stack):
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=cdk.RemovalPolicy.RETAIN,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="TransitionToGlacier",
@@ -87,7 +90,8 @@ class S3Stack(cdk.Stack):
                     transitions=[
                         s3.Transition(
                             storage_class=s3.StorageClass.GLACIER,
-                            transition_after=cdk.Duration.days(30)  # Requirement 5
+                            transition_after=cdk.Duration.days(
+                                30)  # Requirement 5
                         )
                     ]
                 )
@@ -102,7 +106,8 @@ class S3Stack(cdk.Stack):
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=cdk.RemovalPolicy.RETAIN,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="TransitionToGlacier",
@@ -110,7 +115,8 @@ class S3Stack(cdk.Stack):
                     transitions=[
                         s3.Transition(
                             storage_class=s3.StorageClass.GLACIER,
-                            transition_after=cdk.Duration.days(30)  # Requirement 5
+                            transition_after=cdk.Duration.days(
+                                30)  # Requirement 5
                         )
                     ]
                 )

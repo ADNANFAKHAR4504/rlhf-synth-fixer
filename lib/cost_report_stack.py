@@ -63,11 +63,13 @@ class CostReportStack(cdk.Stack):
             code=_lambda.Code.from_inline("""
 import json
 import boto3
+import os
 from datetime import datetime, timedelta
 
 def handler(event, context):
-    # Initialize Cost Explorer client
-    ce_client = boto3.client('ce', region_name='us-east-1')
+    # Initialize Cost Explorer client using environment variable
+    region = os.environ.get('AWS_REGION', 'us-east-1')
+    ce_client = boto3.client('ce', region_name=region)
 
     # Calculate date range for current and previous month
     end_date = datetime.now().date()
@@ -138,9 +140,11 @@ def handler(event, context):
         }
             """),
             memory_size=512,
-            architecture=_lambda.Architecture.ARM_64,  # Graviton2 (Requirement 3)
+            # Graviton2 (Requirement 3)
+            architecture=_lambda.Architecture.ARM_64,
             timeout=cdk.Duration.seconds(60),
-            log_retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
+            # 7-day retention (Requirement 6)
+            log_retention=logs.RetentionDays.ONE_WEEK,
         )
 
         # Grant Cost Explorer permissions

@@ -60,8 +60,9 @@ class DynamoDBStack(cdk.Stack):
                 name="timestamp",
                 type=dynamodb.AttributeType.NUMBER
             ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # On-demand (Requirement 2)
-            removal_policy=cdk.RemovalPolicy.RETAIN,
+            # On-demand (Requirement 2)
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
             point_in_time_recovery=True,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
         )
@@ -74,8 +75,9 @@ class DynamoDBStack(cdk.Stack):
                 name="userId",
                 type=dynamodb.AttributeType.STRING
             ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # On-demand (Requirement 2)
-            removal_policy=cdk.RemovalPolicy.RETAIN,
+            # On-demand (Requirement 2)
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
             point_in_time_recovery=True
         )
 
@@ -91,8 +93,9 @@ class DynamoDBStack(cdk.Stack):
                 name="userId",
                 type=dynamodb.AttributeType.STRING
             ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # On-demand (Requirement 2)
-            removal_policy=cdk.RemovalPolicy.RETAIN,
+            # On-demand (Requirement 2)
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=cdk.RemovalPolicy.DESTROY,
             point_in_time_recovery=True
         )
 

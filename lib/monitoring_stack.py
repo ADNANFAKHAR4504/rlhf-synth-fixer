@@ -128,9 +128,7 @@ class MonitoringStack(cdk.Stack):
                 props.transactions_table.metric_consumed_read_capacity_units(),
                 props.transactions_table.metric_consumed_write_capacity_units(),
                 props.users_table.metric_consumed_read_capacity_units(),
-                props.users_table.metric_consumed_write_capacity_units()
-            ]
-        )
+                props.users_table.metric_consumed_write_capacity_units()])
 
         # API Gateway metrics widget
         api_widget = cloudwatch.GraphWidget(

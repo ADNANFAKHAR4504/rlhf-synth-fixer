@@ -66,7 +66,8 @@ class EcsStack(cdk.Stack):
         log_group = logs.LogGroup(
             self,
             f"{environment}-payment-log-ecs",
-            retention=logs.RetentionDays.ONE_WEEK,  # 7-day retention (Requirement 6)
+            # 7-day retention (Requirement 6)
+            retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=cdk.RemovalPolicy.DESTROY
         )
 
