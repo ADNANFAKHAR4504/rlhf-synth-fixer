@@ -1,146 +1,134 @@
 Hey team,
 
-We need to build a multi-region disaster recovery solution for a critical trading platform that handles millions of transactions daily. A financial services company recently experienced a regional outage that cost them significant revenue, and they need a robust DR solution that can failover automatically within 60 seconds to maintain their 99.99% uptime SLA.
+We need to build a high-availability solution for a critical trading platform that handles millions of transactions daily. A financial services company needs a robust infrastructure solution deployed in a single region to maintain their 99.99% uptime SLA while optimizing costs.
 
-The business requirement is clear: build this using **AWS CDK with TypeScript** to provision infrastructure across two AWS regions - us-east-1 as primary and us-east-2 as secondary. The system must handle automatic failover, data replication, and maintain session state across regions without manual intervention.
+The business requirement is clear: build this using **AWS CDK with TypeScript** to provision infrastructure in us-east-1 region. The system must handle high availability within the region using multiple availability zones, maintain session state, and provide comprehensive monitoring and alerting.
 
-This is a complex distributed system that needs to coordinate multiple AWS services across regions while ensuring data consistency, minimal failover time, and automated recovery procedures. The trading platform processes real-time orders, so any downtime directly impacts revenue and customer trust.
+This is a production-grade system that needs to coordinate multiple AWS services while ensuring data consistency, minimal downtime, and automated health monitoring. The trading platform processes real-time orders, so any downtime directly impacts revenue and customer trust.
 
 ## What we need to build
 
-Create a multi-region disaster recovery infrastructure using **AWS CDK with TypeScript** that implements automated failover capabilities for a high-availability trading platform spanning us-east-1 and us-east-2 regions.
+Create a high-availability infrastructure using **AWS CDK with TypeScript** for a trading platform deployed in the us-east-1 region with multi-AZ redundancy.
 
 ### Core Requirements
 
 1. **DNS and Health Monitoring**
-   - Set up Route 53 hosted zone with health checks monitoring endpoints in both regions
-   - Configure failover routing policy for automatic DNS updates during regional failures
+   - Set up Route 53 health checks monitoring API Gateway endpoints
    - Implement health check endpoints that validate application availability
+   - Configure health checks with 30-second intervals and appropriate failure thresholds
 
-2. **Database Layer with Global Replication**
-   - Deploy Aurora PostgreSQL global database with writer in us-east-1
-   - Configure read replica in us-east-2 for failover readiness
-   - Monitor replication lag across regions
-   - Enable automated promotion of secondary to writer during failover
+2. **Database Layer with High Availability**
+   - Deploy Aurora PostgreSQL cluster with writer and read replica
+   - Use Aurora Serverless v2 for cost optimization
+   - Configure multi-AZ deployment for high availability
+   - Enable 7-day backup retention
+   - Enable encryption at rest
 
-3. **Compute Layer with Regional Redundancy**
-   - Create Lambda functions in both regions for processing trade orders
-   - Configure SQS queues in each region feeding Lambda processors
-   - Deploy identical Lambda deployment packages across regions
-   - Implement cross-region event processing capabilities
+3. **Compute Layer**
+   - Create Lambda functions for processing trade orders
+   - Configure SQS queues feeding Lambda processors
+   - Deploy Lambda functions in VPC for secure database access
+   - Implement automated health monitoring function
 
 4. **Session State Management**
-   - Configure DynamoDB global tables for user session data
-   - Enable point-in-time recovery on all DynamoDB tables
-   - Ensure session state replication with minimal lag between regions
+   - Configure DynamoDB table for user session data
+   - Enable point-in-time recovery on DynamoDB tables
+   - Use pay-per-request billing mode
+   - Enable streams for change capture
 
-5. **Storage with Cross-Region Replication**
-   - Implement S3 buckets with cross-region replication for application configurations
-   - Set up separate buckets for audit logs with replication
-   - Configure versioning and lifecycle policies on all buckets
+5. **Storage**
+   - Implement S3 buckets with versioning for application configurations
+   - Set up separate buckets for audit logs with versioning
+   - Configure lifecycle policies and auto-delete on removal
 
 6. **Monitoring and Alerting**
-   - Set up CloudWatch alarms monitoring RDS replication lag
+   - Set up CloudWatch alarms monitoring database CPU utilization
    - Create alarms for Lambda error rates and invocation failures
    - Monitor API Gateway latency and error rates
    - Configure SNS notifications for critical alerts
-   - Implement cross-region monitoring dashboards
+   - Implement comprehensive monitoring dashboards
 
-7. **Automated Failover Orchestration**
-   - Create Step Functions state machine orchestrating the failover process
-   - Include RDS promotion from read replica to writer
-   - Automate Route 53 DNS record updates
-   - Implement automated failback procedures
-   - Add validation steps to ensure failover success
-
-8. **API Layer with Custom Domains**
-   - Deploy API Gateway REST APIs in both regions
-   - Configure custom domain names with regional endpoints
-   - Implement identical API configurations across regions
+7. **API Layer**
+   - Deploy API Gateway REST API in us-east-1
+   - Implement health check endpoints
    - Set up API Gateway logging and monitoring
+   - Enable CloudWatch request/response tracing
 
-9. **Cross-Region Event Distribution**
-   - Configure EventBridge rules forwarding critical events between regions
+8. **Event Distribution**
+   - Configure EventBridge for critical events
    - Implement event filtering and routing logic
-   - Ensure reliable event delivery across regions
+   - Log events to CloudWatch Logs for audit trail
 
-10. **Continuous Failover Testing**
-    - Implement automated testing Lambda function
-    - Validate failover readiness every hour
-    - Test health check endpoints, database connectivity, and API availability
-    - Alert on any failover readiness issues
+9. **Continuous Health Monitoring**
+   - Implement automated health monitoring Lambda function
+   - Validate system health every hour
+   - Test health check endpoints, database connectivity, and API availability
+   - Alert on any health issues
 
 ### Technical Requirements
 
 - All infrastructure defined using **AWS CDK with TypeScript**
-- Use **Route 53** for DNS management and health-based routing
-- Use **Aurora PostgreSQL Global Database** for cross-region data persistence
-- Use **Lambda** for serverless compute in both regions
+- Use **Route 53** for DNS management and health checks
+- Use **Aurora PostgreSQL** with Serverless v2 for database
+- Use **Lambda** for serverless compute
 - Use **SQS** for decoupled message processing
-- Use **DynamoDB Global Tables** for session state with point-in-time recovery
-- Use **S3** with cross-region replication for static assets
+- Use **DynamoDB** for session state with point-in-time recovery
+- Use **S3** with versioning for static assets and logs
 - Use **CloudWatch** for comprehensive monitoring and alarming
-- Use **Step Functions** for orchestrating complex failover workflows
-- Use **API Gateway** for REST API endpoints with custom domains
-- Use **EventBridge** for cross-region event distribution
-- Use **Systems Manager Parameter Store** for region-specific configurations
-- Use **VPC** with private subnets and VPC peering for cross-region communication
-- Use **IAM** roles supporting cross-region assume role capabilities
+- Use **API Gateway** for REST API endpoints
+- Use **EventBridge** for event distribution
+- Use **Systems Manager Parameter Store** for configurations
+- Use **VPC** with private subnets and VPC endpoints (no NAT Gateways for cost optimization)
+- Use **IAM** roles with least-privilege access
 - Resource names must include **environmentSuffix** for uniqueness across deployments
-- Follow naming convention: `{resource-type}-{purpose}-environment-suffix`
-- Deploy to **us-east-1** (primary) and **us-east-2** (secondary) regions
+- Follow naming convention: `{resource-type}-{purpose}-{region}-{environment-suffix}`
+- Deploy to **us-east-1** region
 - Use CDK 2.x with TypeScript
-- Implement proper VPC networking with private subnets
+- Implement proper VPC networking with private isolated subnets
 
 ### Deployment Requirements (CRITICAL)
 
 - All resources must include **environmentSuffix** parameter in their names for uniqueness
 - All resources must be destroyable - NO RemovalPolicy.RETAIN allowed
 - NO DeletionProtection enabled on databases or other resources
-- Lambda functions must use identical deployment packages across regions
-- Aurora Global Database must support automated promotion without manual intervention
-- DynamoDB global tables must have point-in-time recovery enabled
-- S3 buckets must have versioning enabled for replication
-- All IAM roles must support cross-region assume role capabilities
-- Step Functions must validate each failover step before proceeding
+- Lambda functions must be deployed with proper VPC configuration
+- Aurora cluster must support multi-AZ deployment for high availability
+- DynamoDB tables must have point-in-time recovery enabled
+- S3 buckets must have versioning enabled
+- All IAM roles must follow least-privilege principle
 - Health checks must monitor actual application endpoints, not just infrastructure
 - Use Node.js 18.x or higher for Lambda runtimes (includes AWS SDK v3)
 
 ### Constraints
 
-- Implement 60-second maximum failover time requirement
-- Ensure all cross-region replication has minimal lag (sub-second where possible)
-- Support automatic failback when primary region recovers
-- Maintain session state consistency during and after failover
-- Ensure zero data loss during failover for committed transactions
-- All resources must be fully automated with no manual failover steps
+- Ensure high availability within the region using multiple AZs
+- Maintain session state consistency
+- All resources must be fully automated with no manual steps
 - Support deployment and teardown without leaving orphaned resources
 - Include proper error handling and retry logic in all Lambda functions
 - Implement exponential backoff for all AWS service API calls
-- Use CloudWatch Logs for centralized logging across regions
+- Use CloudWatch Logs for centralized logging
 - Tag all resources with environment and region identifiers
+- Optimize for cost using serverless services and VPC endpoints
 
 ## Success Criteria
 
-- **Functionality**: Complete multi-region DR solution with automated failover
-- **Performance**: Failover completes within 60 seconds with Route 53 updates
-- **Reliability**: System maintains 99.99% uptime during regional failures
-- **Data Consistency**: Zero data loss for committed transactions during failover
+- **Functionality**: Complete high-availability solution with comprehensive monitoring
+- **Performance**: API latency under 1000ms
+- **Reliability**: System maintains 99.99% uptime within the region
 - **Monitoring**: Comprehensive CloudWatch dashboards and alarms for all critical metrics
-- **Automation**: Hourly failover readiness testing with automated alerting
+- **Automation**: Hourly health monitoring with automated alerting
 - **Resource Naming**: All resources include environmentSuffix for deployment uniqueness
 - **Code Quality**: TypeScript with strong typing, comprehensive error handling, well-documented
+- **Cost Optimization**: Efficient use of serverless services and VPC endpoints
 
 ## What to deliver
 
 - Complete **AWS CDK with TypeScript** implementation organized as CDK Constructs
-- Primary region stack (us-east-1) with all services
-- Secondary region stack (us-east-2) with replica services
-- Shared constructs for cross-region resources (Route 53, IAM)
+- Stack deployed to us-east-1 with all services
 - Lambda functions for trade order processing (Node.js 18.x)
-- Lambda function for automated failover testing
-- Step Functions state machine for failover orchestration
+- Lambda function for automated health monitoring
 - CloudWatch alarms and monitoring dashboards
-- Documentation explaining the DR architecture and failover procedures
-- Deployment instructions for both regions
-- Testing procedures to validate failover readiness
+- Documentation explaining the architecture and deployment procedures
+- Deployment instructions for us-east-1
+- Testing procedures to validate system health

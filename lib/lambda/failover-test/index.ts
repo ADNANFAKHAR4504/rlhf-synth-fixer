@@ -16,8 +16,7 @@ const docClient = DynamoDBDocumentClient.from(ddbClient);
 const rdsClient = new RDSDataClient({});
 const cloudwatchClient = new CloudWatchClient({});
 
-const PRIMARY_REGION = process.env.PRIMARY_REGION!;
-const SECONDARY_REGION = process.env.SECONDARY_REGION!;
+const REGION = process.env.REGION!;
 const DB_CLUSTER_ARN = process.env.DB_CLUSTER_ARN!;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME!;
 
@@ -29,15 +28,14 @@ interface TestResult {
 }
 
 export const handler = async (_event: unknown, _context: Context) => {
-  console.log('Starting failover readiness test', {
-    primaryRegion: PRIMARY_REGION,
-    secondaryRegion: SECONDARY_REGION,
+  console.log('Starting health monitoring test', {
+    region: REGION,
   });
 
   const results: TestResult[] = [];
   const startTime = Date.now();
 
-  // Test 1: DynamoDB Global Table Replication
+  // Test 1: DynamoDB Table Accessibility
   try {
     const testStart = Date.now();
     const scanResult = await docClient.send(
@@ -47,16 +45,16 @@ export const handler = async (_event: unknown, _context: Context) => {
       })
     );
 
-    const replicationHealthy = scanResult.Items && scanResult.Items.length >= 0;
+    const tableHealthy = scanResult.Items && scanResult.Items.length >= 0;
     results.push({
-      test: 'DynamoDB Replication',
-      status: replicationHealthy ? 'PASS' : 'FAIL',
+      test: 'DynamoDB Table Access',
+      status: tableHealthy ? 'PASS' : 'FAIL',
       details: `Scanned ${scanResult.Count} items`,
       duration: Date.now() - testStart,
     });
   } catch (error) {
     results.push({
-      test: 'DynamoDB Replication',
+      test: 'DynamoDB Table Access',
       status: 'FAIL',
       details: (error as Error).message,
       duration: Date.now() - startTime,
@@ -115,10 +113,10 @@ export const handler = async (_event: unknown, _context: Context) => {
   // Publish metrics to CloudWatch
   await cloudwatchClient.send(
     new PutMetricDataCommand({
-      Namespace: 'TradingPlatform/FailoverReadiness',
+      Namespace: 'TradingPlatform/HealthMonitoring',
       MetricData: [
         {
-          MetricName: 'FailoverReadiness',
+          MetricName: 'HealthStatus',
           Value: overallStatus === 'PASS' ? 1 : 0,
           Unit: 'Count',
           Timestamp: new Date(),
@@ -133,7 +131,7 @@ export const handler = async (_event: unknown, _context: Context) => {
     })
   );
 
-  console.log('Failover test completed', {
+  console.log('Health monitoring test completed', {
     overallStatus,
     results,
     duration: Date.now() - startTime,

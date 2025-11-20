@@ -23,10 +23,12 @@ Tags.of(app).add('Team', team);
 Tags.of(app).add('CreatedAt', createdAt);
 
 new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
-  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  stackName: stackName,
+  environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
 });
+
+app.synth();

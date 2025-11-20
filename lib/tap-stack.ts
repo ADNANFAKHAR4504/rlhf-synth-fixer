@@ -15,7 +15,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Create the multi-region DR solution
+    // Create the high-availability trading platform solution
     new MultiRegionDRStack(this, 'MultiRegionDR', {
       environmentSuffix,
     });

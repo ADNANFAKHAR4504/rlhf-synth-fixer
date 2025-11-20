@@ -1,5 +1,7 @@
 # Multi-Region Disaster Recovery Solution - MODEL_RESPONSE
 
+**NOTE: This document is for HISTORICAL REFERENCE ONLY. The current implementation has been converted to a single-region (us-east-1) high-availability solution. See lib/README.md for current architecture.**
+
 This document contains the initial implementation for a multi-region disaster recovery solution for a trading platform.
 
 ## Architecture Overview
