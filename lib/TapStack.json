@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Self-contained CloudFormation template for multi-environment infrastructure",
+  "Description": "Self-contained CloudFormation template for multi-environment infrastructure - Updated",
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -1561,20 +1561,6 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-primary-kms-key-arn"
-        }
-      }
-    },
-    "S3ReplicationRoleArn": {
-      "Description": "S3 Cross-Region Replication Role ARN",
-      "Value": {
-        "Fn::GetAtt": [
-          "S3ReplicationRole",
-          "Arn"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${EnvironmentSuffix}-s3-replication-role-arn"
         }
       }
     }
