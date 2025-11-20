@@ -18,31 +18,43 @@ def app():
 @pytest.fixture
 def primary_stack(app):
     """Create primary region stack"""
-    return TapStack(
+    # Set environment variable for S3 replication testing
+    os.environ["ENABLE_S3_REPLICATION"] = "true"
+    stack = TapStack(
         app,
         "TestPrimaryStack",
         environment_suffix="test",
         primary_region="us-east-1",
         secondary_region="us-west-2",
         log_retention_days=7,
-        domain_name="test.example.com",
+        domain_name="test.mycompany.com",  # Use non-example.com domain for Route53 tests
         env={"account": "123456789012", "region": "us-east-1"},
     )
+    # Clean up environment variable after stack creation
+    if "ENABLE_S3_REPLICATION" in os.environ:
+        del os.environ["ENABLE_S3_REPLICATION"]
+    return stack
 
 
 @pytest.fixture
 def secondary_stack(app):
     """Create secondary region stack"""
-    return TapStack(
+    # Set hosted zone ID for secondary stack testing
+    os.environ["HOSTED_ZONE_ID"] = "Z1234567890ABC"
+    stack = TapStack(
         app,
         "TestSecondaryStack",
         environment_suffix="test",
         primary_region="us-east-1",
         secondary_region="us-west-2",
         log_retention_days=7,
-        domain_name="test.example.com",
+        domain_name="test.mycompany.com",  # Use non-example.com domain for Route53 tests
         env={"account": "123456789012", "region": "us-west-2"},
     )
+    # Clean up environment variable after stack creation
+    if "HOSTED_ZONE_ID" in os.environ:
+        del os.environ["HOSTED_ZONE_ID"]
+    return stack
 
 
 class TestStackCreation:
@@ -67,18 +79,18 @@ class TestStackCreation:
 
     def test_domain_name_configurable(self, primary_stack):
         """Verify domain name is properly configured"""
-        assert primary_stack.domain_name == "test.example.com"
+        assert primary_stack.domain_name == "test.mycompany.com"
 
     def test_domain_name_from_env(self, app):
         """Test domain name can be read from environment"""
-        os.environ["DOMAIN_NAME"] = "env.example.com"
+        os.environ["DOMAIN_NAME"] = "env.mycompany.com"
         stack = TapStack(
             app,
             "EnvStack",
             environment_suffix="test",
             env={"account": "123456789012", "region": "us-east-1"},
         )
-        assert stack.domain_name == "env.example.com"
+        assert stack.domain_name == "env.mycompany.com"
         del os.environ["DOMAIN_NAME"]
 
 
@@ -277,7 +289,7 @@ class TestRoute53Configuration:
         """Verify hosted zone uses configured domain"""
         template = Assert.Template.from_stack(primary_stack)
         template.has_resource_properties(
-            "AWS::Route53::HostedZone", {"Name": "test.example.com."}
+            "AWS::Route53::HostedZone", {"Name": "test.mycompany.com."}
         )
 
     def test_health_check_uses_http_port_80(self, primary_stack):
