@@ -48,13 +48,13 @@ resource "aws_s3_bucket_versioning" "alb_logs" {
 }
 
 # Enable server-side encryption for the S3 bucket
+# FIX: Switched to AES256 (SSE-S3) to allow ALB Logging service to write without KMS permission errors
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm = "AES256"
     }
     bucket_key_enabled = true
   }
@@ -233,10 +233,11 @@ resource "aws_lb_listener" "http" {
 }
 
 /*
-  HTTPS listener is optional and depends on supplying an existing ACM certificate ARN.
-  Creating ACM certificates and validating them via DNS requires Route53 or external manual steps
-  which block automated apply in many development setups. To keep the module usable without
-  external DNS, the HTTPS listener is created only when `certificate_arn` is provided.
+  HTTPS listener is optional and depends on supplying an existing ACM
+  certificate ARN. Creating ACM certificates and validating them via DNS
+  requires Route53 or external manual steps which block automated apply in many
+  development setups. To keep the module usable without external DNS, the HTTPS
+  listener is created only when `certificate_arn` is provided.
 */
 
 resource "aws_lb_listener" "https" {
