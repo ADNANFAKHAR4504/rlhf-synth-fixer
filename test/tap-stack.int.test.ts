@@ -236,6 +236,7 @@ describe('EMR Data Processing Pipeline - End-to-End Data Flow Tests', () => {
       expect(testExecutionArn).toBeDefined();
       expect(testExecutionArn).toContain('execution');
     });
+  });
 
   describe('Pipeline Orchestration - Step Functions State Machine', () => {
     test('should check EMR cluster status before job submission', async () => {
