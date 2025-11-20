@@ -97,8 +97,10 @@ def handler(event, context):
             body = base64.b64decode(event['body']).decode('utf-8')
 
             # Extract file content from multipart form data
-            # For simplicity, assuming the file content is directly in the body
-            # In production, you'd parse multipart boundaries properly
+            # LIMITATION: This implementation assumes CSV content is sent directly as base64
+            # For production use with multipart/form-data:
+            # 1. Use python-multipart library to parse form boundaries
+            # 2. Or configure API Gateway to accept application/csv with base64 encoding
             file_id = f"upload-{int(datetime.utcnow().timestamp())}"
             csv_content = body
 

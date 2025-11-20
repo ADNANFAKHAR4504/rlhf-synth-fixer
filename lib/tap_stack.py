@@ -651,8 +651,8 @@ class TapStack(TerraformStack):
                             "Next": "HandleError"
                         }
                     ],
-                    "Next": "Processing",
-                    "ResultPath": "$.validationResult"
+                    "OutputPath": "$.Payload",
+                    "Next": "Processing"
                 },
                 "Processing": {
                     "Type": "Task",
@@ -676,8 +676,8 @@ class TapStack(TerraformStack):
                             "Next": "HandleError"
                         }
                     ],
-                    "Next": "Notification",
-                    "ResultPath": "$.processingResult"
+                    "OutputPath": "$.Payload",
+                    "Next": "Notification"
                 },
                 "Notification": {
                     "Type": "Task",
@@ -701,8 +701,8 @@ class TapStack(TerraformStack):
                             "Next": "HandleError"
                         }
                     ],
-                    "End": True,
-                    "ResultPath": "$.notificationResult"
+                    "OutputPath": "$.Payload",
+                    "End": True
                 },
                 "HandleError": {
                     "Type": "Task",

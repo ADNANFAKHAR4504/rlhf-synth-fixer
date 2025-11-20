@@ -154,17 +154,16 @@ class TapStack(TerraformStack):
 
         # Configure S3 Backend conditionally
         # Only configure backend if state bucket is provided (for CI/CD environments)
-        # Commenting out S3 backend due to access issues - using local backend
-        # if state_bucket and state_bucket.strip():
-        #     S3Backend(
-        #         self,
-        #         bucket=state_bucket,
-        #         key=f"{environment_suffix}/{construct_id}.tfstate",
-        #         region=state_bucket_region,
-        #         encrypt=True
-        #     )
-        #     # Use S3's native state locking instead of deprecated dynamodb_table
-        #     self.add_override("terraform.backend.s3.use_lockfile", True)
+        if state_bucket and state_bucket.strip():
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"{environment_suffix}/{construct_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            # Use S3's native state locking instead of deprecated dynamodb_table
+            self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Resource tags
         common_tags = {
@@ -730,8 +729,8 @@ class TapStack(TerraformStack):
                             "Next": "HandleError"
                         }
                     ],
-                    "Next": "Processing",
-                    "ResultPath": "$.validationResult"
+                    "OutputPath": "$.Payload",
+                    "Next": "Processing"
                 },
                 "Processing": {
                     "Type": "Task",
@@ -755,8 +754,8 @@ class TapStack(TerraformStack):
                             "Next": "HandleError"
                         }
                     ],
-                    "Next": "Notification",
-                    "ResultPath": "$.processingResult"
+                    "OutputPath": "$.Payload",
+                    "Next": "Notification"
                 },
                 "Notification": {
                     "Type": "Task",
@@ -780,8 +779,8 @@ class TapStack(TerraformStack):
                             "Next": "HandleError"
                         }
                     ],
-                    "End": True,
-                    "ResultPath": "$.notificationResult"
+                    "OutputPath": "$.Payload",
+                    "End": True
                 },
                 "HandleError": {
                     "Type": "Task",
@@ -1190,8 +1189,10 @@ def handler(event, context):
             body = base64.b64decode(event['body']).decode('utf-8')
 
             # Extract file content from multipart form data
-            # For simplicity, assuming the file content is directly in the body
-            # In production, you'd parse multipart boundaries properly
+            # LIMITATION: This implementation assumes CSV content is sent directly as base64
+            # For production use with multipart/form-data:
+            # 1. Use python-multipart library to parse form boundaries
+            # 2. Or configure API Gateway to accept application/csv with base64 encoding
             file_id = f"upload-{int(datetime.utcnow().timestamp())}"
             csv_content = body
 

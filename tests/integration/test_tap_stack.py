@@ -130,6 +130,11 @@ class TestTransactionProcessingPipelineIntegration:
         assert 'Processing' in definition['States']
         assert 'Notification' in definition['States']
         assert 'HandleError' in definition['States']
+        
+        # Verify OutputPath is set for Lambda tasks to unwrap payload
+        assert definition['States']['Validation'].get('OutputPath') == '$.Payload'
+        assert definition['States']['Processing'].get('OutputPath') == '$.Payload'
+        assert definition['States']['Notification'].get('OutputPath') == '$.Payload'
 
     def test_api_gateway_endpoint_accessible(self):
         """Test API Gateway endpoint is accessible."""
