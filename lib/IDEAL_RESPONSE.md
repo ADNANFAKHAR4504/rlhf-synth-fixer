@@ -25,7 +25,7 @@ substitutions:
   _TEMPLATES_BUCKET: "trading-dataflow-templates"
   _ARTIFACTS_BUCKET: "trading-build-artifacts"
 
-# Secret Manager -> env, consumed as $$NAME
+# Secret Manager -> env, consumed via secretEnv + $VARNAME
 availableSecrets:
   secretManager:
     - versionName: projects/${_GCP_PROJECT_ID}/secrets/snyk-token/versions/latest
@@ -42,7 +42,7 @@ tags:
 
 steps:
   # ---------------------------------------------------------------------------
-  # 1. INITIAL VALIDATION (QUOTAS + IAM) - GCP only, no keys (Workload Identity)
+  # 1. INITIAL VALIDATION (QUOTAS + IAM + SECRET MANAGER)
   # ---------------------------------------------------------------------------
   - id: "quota-iam-validation"
     name: "${_ARTIFACT_REGISTRY}/ci-tools/gcloud:latest"
@@ -52,7 +52,8 @@ steps:
       - >
         gcloud config set project ${_GCP_PROJECT_ID} &&
         gcloud services list --enabled &&
-        gcloud iam service-accounts list
+        gcloud iam service-accounts list &&
+        gcloud secrets versions access latest --secret="snyk-token" --quiet >/dev/null
     waitFor: ["-"]
 
   # ---------------------------------------------------------------------------
@@ -66,8 +67,7 @@ steps:
       - >
         npm install &&
         npx eslint services/** &&
-        npx tslint services/** ||
-        true
+        npx tslint services/**
     waitFor: ["-"]
 
   - id: "go-lint-format"
@@ -197,8 +197,7 @@ steps:
     entrypoint: "bash"
     args:
       - "-c"
-      - >
-        npm run test:integration
+      - "npm run test:integration"
     waitFor:
       - "unit-tests-node"
       - "unit-tests-go"
@@ -212,12 +211,11 @@ steps:
     args:
       - "-c"
       - >
-        trivy image --exit-code 1 --severity HIGH,CRITICAL
-        ${_ARTIFACT_REGISTRY}/trading-platform/order-engine:${SHORT_SHA}
-        ${_ARTIFACT_REGISTRY}/trading-platform/market-data:${SHORT_SHA}
-        ${_ARTIFACT_REGISTRY}/trading-platform/risk-calculator:${SHORT_SHA}
-        ${_ARTIFACT_REGISTRY}/trading-platform/settlement:${SHORT_SHA}
-        ${_ARTIFACT_REGISTRY}/trading-platform/reporting:${SHORT_SHA}
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${_ARTIFACT_REGISTRY}/trading-platform/order-engine:${SHORT_SHA} &&
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${_ARTIFACT_REGISTRY}/trading-platform/market-data:${SHORT_SHA} &&
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${_ARTIFACT_REGISTRY}/trading-platform/risk-calculator:${SHORT_SHA} &&
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${_ARTIFACT_REGISTRY}/trading-platform/settlement:${SHORT_SHA} &&
+        trivy image --exit-code 1 --severity HIGH,CRITICAL ${_ARTIFACT_REGISTRY}/trading-platform/reporting:${SHORT_SHA}
     waitFor:
       - "build-order-engine"
       - "build-market-data"
@@ -244,8 +242,8 @@ steps:
   - id: "snyk-deps"
     name: "${_ARTIFACT_REGISTRY}/ci-tools/snyk:latest"
     entrypoint: "bash"
-    env:
-      - "SNYK_TOKEN=$$SNYK_TOKEN"
+    secretEnv:
+      - "SNYK_TOKEN"
     args:
       - "-c"
       - "snyk test --severity-threshold=high"
@@ -292,11 +290,16 @@ steps:
       - "-c"
       - >
         terraform init -backend-config="bucket=${_STATE_BUCKET}" &&
-        if [[ \"$BRANCH_NAME\" == \"main\" ]] || [[ \"$_ENV\" == \"prod\" ]]; then terraform apply -auto-approve tfplan; else echo \"Skipping apply for non-prod\"; fi
+        if [[ "$BRANCH_NAME" == "main" ]] || [[ "$_ENV" == "prod" ]]; then
+          gsutil cp gs://${_STATE_BUCKET}/plans/${BUILD_ID}/tfplan ./tfplan &&
+          terraform apply -auto-approve tfplan;
+        else
+          echo "Skipping apply for non-prod branch ($_ENV, $BRANCH_NAME)";
+        fi
     waitFor: ["finra-sox-validation"]
 
   # ---------------------------------------------------------------------------
-  # 12. GKE DEPLOY (HELM, ISTIO, RESOURCE QUOTAS, PSP) - EXTERNAL SCRIPT
+  # 12. GKE DEPLOY (HELM, PSP, ISTIO) - EXTERNAL SCRIPT
   # ---------------------------------------------------------------------------
   - id: "deploy-gke"
     name: "${_ARTIFACT_REGISTRY}/ci-tools/kubectl:1.28"
@@ -304,24 +307,13 @@ steps:
     args:
       - "scripts/deploy-gke.sh"
     env:
-      - "ENV=$_ENV"
+      - "ENV=${_ENV}"
       - "GKE_CLUSTER_DEV=${_GKE_CLUSTER_DEV}"
       - "GKE_CLUSTER_STAGING=${_GKE_CLUSTER_STAGING}"
       - "GKE_CLUSTER_PROD=${_GKE_CLUSTER_PROD}"
       - "ARTIFACT_REGISTRY=${_ARTIFACT_REGISTRY}"
       - "SHORT_SHA=${SHORT_SHA}"
     waitFor: ["terraform-apply"]
-
-  - id: "helm-deploy"
-    name: "${_ARTIFACT_REGISTRY}/ci-tools/helm:3.13"
-    entrypoint: "bash"
-    args:
-      - "scripts/deploy-gke.sh"
-    env:
-      - "ENV=$_ENV"
-      - "ARTIFACT_REGISTRY=${_ARTIFACT_REGISTRY}"
-      - "SHORT_SHA=${SHORT_SHA}"
-    waitFor: ["deploy-gke"]
 
   # ---------------------------------------------------------------------------
   # 13. DATAFLOW JOB DEPLOYMENT - EXTERNAL SCRIPT
@@ -344,7 +336,8 @@ steps:
     entrypoint: "bash"
     env:
       - "SPANNER_INSTANCE=${_SPANNER_INSTANCE}"
-      - "SPANNER_MIGRATION_SA=$$SPANNER_MIGRATION_SA"
+    secretEnv:
+      - "SPANNER_MIGRATION_SA"
     args:
       - "scripts/run-migrations.sh"
     waitFor:
@@ -360,11 +353,11 @@ steps:
     args:
       - "scripts/canary-analysis.sh"
     env:
-      - "ENV=$_ENV"
+      - "ENV=${_ENV}"
       - "SLO_P99_MS=100"
     waitFor:
       - "run-migrations"
-      - "helm-deploy"
+      - "deploy-gke"
 
   # ---------------------------------------------------------------------------
   # 16. MONITORING & ALERTING (CLOUD MONITORING/SLO) - EXTERNAL SCRIPT
@@ -375,7 +368,7 @@ steps:
     args:
       - "scripts/configure-monitoring.sh"
     env:
-      - "ENV=$_ENV"
+      - "ENV=${_ENV}"
     waitFor: ["canary-analysis"]
 
   # ---------------------------------------------------------------------------
@@ -384,8 +377,8 @@ steps:
   - id: "smoke-tests"
     name: "${_ARTIFACT_REGISTRY}/ci-tools/postman:latest"
     entrypoint: "bash"
-    env:
-      - "POSTMAN_API_KEY=$$POSTMAN_API_KEY"
+    secretEnv:
+      - "POSTMAN_API_KEY"
     args:
       - "-c"
       - "newman run tests/smoke/trading.postman_collection.json --env-var env=${_ENV}"
@@ -412,7 +405,7 @@ steps:
       - "-c"
       - >
         gcloud monitoring time-series list --filter='metric.type="custom.googleapis.com/trade_latency_ms"' --limit=1 &&
-        echo "Latency SLO checks delegated to scripts/canary-analysis.sh thresholds p50<10ms,p95<50ms,p99<100ms"
+        echo "Latency SLO checks enforced via scripts/canary-analysis.sh: p50<10ms,p95<50ms,p99<100ms"
     waitFor:
       - "performance-tests"
       - "configure-monitoring"
@@ -426,7 +419,7 @@ steps:
     args:
       - "scripts/chaos-tests.sh"
     env:
-      - "ENV=$_ENV"
+      - "ENV=${_ENV}"
     waitFor:
       - "smoke-tests"
       - "performance-tests"
@@ -440,7 +433,7 @@ steps:
     args:
       - "scripts/promote-blue-green.sh"
     env:
-      - "ENV=$_ENV"
+      - "ENV=${_ENV}"
     waitFor:
       - "chaos-tests"
       - "latency-verification"
@@ -468,7 +461,7 @@ steps:
       - "-c"
       - >
         mkdir -p artifacts &&
-        cp -r coverage* test-reports* tfplan* artifacts/ || true &&
+        cp -r coverage* test-reports* tfplan* artifacts/ 2>/dev/null || true &&
         gsutil -m cp -r artifacts gs://${_ARTIFACTS_BUCKET}/builds/${BUILD_ID}/
     waitFor:
       - "unit-tests-node"
@@ -479,15 +472,19 @@ steps:
       - "blue-green-promotion"
 
   # ---------------------------------------------------------------------------
-  # 24. ROLLBACK (ON FAILURE) - EXTERNAL SCRIPT
+  # 24. ROLLBACK (PLACEHOLDER / EXTERNAL USE)
   # ---------------------------------------------------------------------------
   - id: "rollback"
     name: "${_ARTIFACT_REGISTRY}/ci-tools/ci-base:latest"
     entrypoint: "bash"
     args:
-      - "scripts/rollback.sh"
-    waitFor: ["-"]
-    # Only runs when any previous step fails
-    # (configure 'when: FAILURE' in Cloud Build YAML if available in your version)
+      - "-c"
+      - >
+        echo "[rollback] This step is a placeholder. In practice, rollback.sh is
+        intended to be used in a dedicated failure-handling build or triggered
+        manually when a deployment fails."
+    waitFor:
+      - "archive-artifacts"
+      - "audit-logging"
 
 ```
