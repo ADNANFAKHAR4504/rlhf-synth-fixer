@@ -39,43 +39,38 @@ QUERY_SCAN_COST_PER_GB = 0.0050  # $0.0050 per GB scanned
 
 
 class CloudWatchLogsAnalyzer:
+    def _make_boto_client(self, service_name: str):
+        """Create a boto3 client using only the environment-backed params.
+
+        This avoids passing explicit None values (like endpoint_url=None)
+        when environment variables are not set, so unit tests that patch
+        `boto3.client` can assert simpler call signatures.
+        """
+        params = {
+            "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        }
+
+        endpoint = os.environ.get("AWS_ENDPOINT_URL")
+        if endpoint:
+            params["endpoint_url"] = endpoint
+
+        access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+        secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        if access_key and secret_key:
+            params["aws_access_key_id"] = access_key
+            params["aws_secret_access_key"] = secret_key
+
+        return boto3.client(service_name, **params)
+
     def __init__(self):
-        # Use same configuration as test setup
-        self.logs_client = boto3.client(
-            "logs",
-            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
-        )
-        self.lambda_client = boto3.client(
-            "lambda",
-            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
-        )
-        self.ec2_client = boto3.client(
-            "ec2",
-            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
-        )
-        self.s3_client = boto3.client(
-            "s3",
-            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
-        )
-        self.cloudwatch_client = boto3.client(
-            "cloudwatch",
-            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
-            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
-        )
+        # Use same configuration as test setup; create clients without
+        # passing explicit None values so unit tests that patch boto3.client
+        # can assert simpler signatures.
+        self.logs_client = self._make_boto_client("logs")
+        self.lambda_client = self._make_boto_client("lambda")
+        self.ec2_client = self._make_boto_client("ec2")
+        self.s3_client = self._make_boto_client("s3")
+        self.cloudwatch_client = self._make_boto_client("cloudwatch")
 
         self.log_groups_data = []
         self.monitoring_gaps = []
