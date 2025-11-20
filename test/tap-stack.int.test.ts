@@ -10,11 +10,7 @@ import {
   HeadObjectCommand,
   ListObjectVersionsCommand,
 } from '@aws-sdk/client-s3';
-import {
-  EMRClient,
-  DescribeClusterCommand,
-  ListInstanceGroupsCommand,
-} from '@aws-sdk/client-emr';
+import EMR from 'aws-sdk/clients/emr';
 import {
   SFNClient,
   ListExecutionsCommand,
@@ -46,9 +42,9 @@ try {
   throw error;
 }
 
-// Initialize AWS SDK v3 clients for live integration testing
+// Initialize AWS clients for live integration testing (mix of SDK v2/v3 based on available packages)
 const s3Client = new S3Client({ region });
-const emrClient = new EMRClient({ region });
+const emrClient = new EMR({ region }); // SDK v2
 const stepFunctionsClient = new SFNClient({ region });
 const snsClient = new SNSClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
@@ -209,16 +205,12 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
 
   describe('D. EMR Cluster Launch - Verify Cluster Status', () => {
     test('should verify EMR cluster is in running state', async () => {
-      const cluster = await emrClient.send(
-        new DescribeClusterCommand({
-          ClusterId: outputs.EMRClusterId,
-        })
-      );
+      const cluster = await emrClient.describeCluster({
+        ClusterId: outputs.EMRClusterId
+      }).promise();
 
-      expect(cluster.Cluster?.Status?.State).toMatch(/RUNNING|WAITING/);
-      expect(cluster.Cluster?.ReleaseLabel).toMatch(
-        /^emr-6\.(9|[1-9][0-9])\.[0-9]+$/
-      );
+      expect(cluster.Cluster.Status.State).toMatch(/RUNNING|WAITING/);
+      expect(cluster.Cluster.ReleaseLabel).toMatch(/^emr-6\.(9|[1-9][0-9])\.[0-9]+$/);
     }, 30000);
   });
 
@@ -377,18 +369,16 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
 
   describe('J. Auto-Scaling - Verify EMR Instance Groups', () => {
     test('should verify task instance group exists and is configured', async () => {
-      const instanceGroups = await emrClient.send(
-        new ListInstanceGroupsCommand({
-          ClusterId: outputs.EMRClusterId,
-        })
-      );
+      const instanceGroups = await emrClient.listInstanceGroups({
+        ClusterId: outputs.EMRClusterId
+      }).promise();
 
       const taskGroup = instanceGroups.InstanceGroups!.find(
         group => group.InstanceGroupType === 'TASK'
       );
 
       if (taskGroup) {
-        expect(taskGroup.Status?.State).toMatch(/RUNNING|PROVISIONING/);
+        expect(taskGroup.Status.State).toMatch(/RUNNING|PROVISIONING/);
         expect(taskGroup.RequestedInstanceCount).toBeGreaterThanOrEqual(0);
       }
     }, 30000);
@@ -509,12 +499,10 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
       expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT']).toContain(finalStatus);
 
       // The system should not have crashed - EMR cluster should still be accessible
-      const cluster = await emrClient.send(
-        new DescribeClusterCommand({
-          ClusterId: outputs.EMRClusterId,
-        })
-      );
-      expect(cluster.Cluster?.Status?.State).toBeDefined();
+      const cluster = await emrClient.describeCluster({
+        ClusterId: outputs.EMRClusterId
+      }).promise();
+      expect(cluster.Cluster.Status.State).toBeDefined();
 
       // Cleanup
       await s3Client.send(
@@ -529,14 +517,12 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
   describe('Contract Validation - Service Interactions', () => {
     test('should validate EMR to S3 bucket access permissions', async () => {
       // Verify EMR instance profile has access to required S3 buckets
-      const cluster = await emrClient.send(
-        new DescribeClusterCommand({
-          ClusterId: outputs.EMRClusterId,
-        })
-      );
+      const cluster = await emrClient.describeCluster({
+        ClusterId: outputs.EMRClusterId
+      }).promise();
 
       expect(
-        cluster.Cluster?.Ec2InstanceAttributes?.InstanceProfile
+        cluster.Cluster.Ec2InstanceAttributes.InstanceProfile
       ).toBeDefined();
 
       const testObject = await s3Client.send(
