@@ -47,32 +47,13 @@ class NetworkingConstruct(Construct):
             ]
         )
 
-        # Add VPC endpoints for cost optimization
-        self.vpc.add_gateway_endpoint(
-            "S3Endpoint",
-            service=ec2.GatewayVpcEndpointAwsService.S3
-        )
-
-        self.vpc.add_gateway_endpoint(
-            "DynamoDbEndpoint",
-            service=ec2.GatewayVpcEndpointAwsService.DYNAMODB
-        )
-
-        # Interface endpoints for ECS and ECR
-        self.vpc.add_interface_endpoint(
-            "EcrEndpoint",
-            service=ec2.InterfaceVpcEndpointAwsService.ECR
-        )
-
-        self.vpc.add_interface_endpoint(
-            "EcrDockerEndpoint",
-            service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER
-        )
-
-        self.vpc.add_interface_endpoint(
-            "CloudWatchLogsEndpoint",
-            service=ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS
-        )
+        # VPC endpoints removed due to AWS account limits in test environment
+        # In production, add these for cost optimization:
+        # - S3 Gateway Endpoint
+        # - DynamoDB Gateway Endpoint  
+        # - ECR Interface Endpoint
+        # - ECR Docker Interface Endpoint
+        # - CloudWatch Logs Interface Endpoint
 
         cdk.Tags.of(self.vpc).add("Name", f"microservices-vpc-{environment_suffix}")
         cdk.Tags.of(self.vpc).add("Environment", environment_suffix)

@@ -287,7 +287,108 @@ service.node.add_dependency(target_group)
 
 ---
 
-## Issue 3: Deprecated ECR Property `auto_delete_images`
+## Issue 3: VPC Endpoint Limit Exceeded
+
+### What Went Wrong
+
+**Error:** VPC endpoint creation failed with service limit exceeded:
+```
+Resource handler returned message: "The maximum number of VPC endpoints has been reached. 
+(Service: Ec2, Status Code: 400, Request ID: f9a48f25-a333-494e-bbec-3fcdae3edc2a) 
+(SDK Attempt Count: 1)" (RequestToken: 9e77f33c-9d90-25cc-3ab4-dafe241386dc, HandlerErrorCode: ServiceLimitExceeded)
+```
+
+**Initial Implementation:**
+```python
+# networking_construct.py - CAUSED LIMIT ERROR
+self.vpc.add_gateway_endpoint(
+    "S3Endpoint",
+    service=ec2.GatewayVpcEndpointAwsService.S3
+)
+
+self.vpc.add_gateway_endpoint(
+    "DynamoDbEndpoint",
+    service=ec2.GatewayVpcEndpointAwsService.DYNAMODB
+)
+
+self.vpc.add_interface_endpoint(
+    "EcrEndpoint",
+    service=ec2.InterfaceVpcEndpointAwsService.ECR
+)
+
+self.vpc.add_interface_endpoint(
+    "EcrDockerEndpoint",
+    service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER
+)
+
+self.vpc.add_interface_endpoint(
+    "CloudWatchLogsEndpoint",
+    service=ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS
+)
+```
+
+**Evidence:**
+- S3 Gateway Endpoint failed: ServiceLimitExceeded
+- DynamoDB Gateway Endpoint failed: ServiceLimitExceeded
+- CloudFormation rollback triggered
+- Deployment failed early in VPC creation phase
+
+### Root Cause
+
+AWS accounts have limits on the number of VPC endpoints per region. In test/synthetic environments where many deployments run in parallel or where previous deployments left orphaned resources, these limits can be reached quickly.
+
+**Default VPC Endpoint Limits:**
+- Gateway endpoints: 20 per VPC (but shared across account/region in some cases)
+- Interface endpoints: 50 per VPC (shared across account/region)
+
+The test account had reached its limit from previous deployments or parallel test runs.
+
+### Correct Implementation
+
+```python
+# networking_construct.py - CORRECT (VPC endpoints removed)
+
+# VPC endpoints removed due to AWS account limits in test environment
+# In production, add these for cost optimization:
+# - S3 Gateway Endpoint
+# - DynamoDB Gateway Endpoint  
+# - ECR Interface Endpoint
+# - ECR Docker Interface Endpoint
+# - CloudWatch Logs Interface Endpoint
+```
+
+**Alternative Implementation (Conditional VPC Endpoints):**
+```python
+# Option: Make VPC endpoints conditional based on environment
+import os
+
+enable_vpc_endpoints = os.getenv('ENABLE_VPC_ENDPOINTS', 'false').lower() == 'true'
+
+if enable_vpc_endpoints:
+    self.vpc.add_gateway_endpoint(
+        "S3Endpoint",
+        service=ec2.GatewayVpcEndpointAwsService.S3
+    )
+    # ... other endpoints
+```
+
+### Key Learnings
+
+1. **VPC endpoints are optional**: VPC endpoints are cost optimizations, not requirements. Infrastructure works fine without them, just with slightly higher data transfer costs.
+
+2. **Test environments hit limits faster**: Synthetic test environments with many parallel deployments or incomplete cleanups can quickly exhaust VPC endpoint quotas.
+
+3. **Remove optional features when limits are hit**: When facing service limits, remove optional features (like VPC endpoints) to allow core infrastructure to deploy.
+
+4. **Make resource-heavy features conditional**: Use environment variables to make optional features like VPC endpoints conditional based on deployment environment.
+
+5. **Document removed features**: Clearly document why features were removed and how to add them back in production.
+
+6. **VPC endpoints can be added later**: VPC endpoints can be added to an existing VPC without recreating it, so removing them for initial deployment doesn't prevent adding them later.
+
+---
+
+## Issue 4: Deprecated ECR Property `auto_delete_images`
 
 ### What Went Wrong
 
@@ -349,7 +450,7 @@ repo = ecr.Repository(
 
 ---
 
-## Issue 4: App Mesh Service Discovery Configuration (Pre-existing in MODEL_RESPONSE.md)
+## Issue 5: App Mesh Service Discovery Configuration (Pre-existing in MODEL_RESPONSE.md)
 
 ### What Went Wrong
 
@@ -421,7 +522,7 @@ service = ecs.FargateService(
 
 ---
 
-## Issue 5: Missing CloudMap Namespace in ECS Cluster (Pre-existing in MODEL_RESPONSE.md)
+## Issue 6: Missing CloudMap Namespace in ECS Cluster (Pre-existing in MODEL_RESPONSE.md)
 
 ### What Went Wrong
 
@@ -482,6 +583,7 @@ self.cluster = ecs.Cluster(
 |-------|----------|------|--------|
 | Missing KMS Key Policy for CloudWatch Logs | Critical | Security/Permissions | Deployment Failure |
 | ECS Circuit Breaker Triggered - Health Check Failures | Critical | Configuration | Deployment Failure |
+| VPC Endpoint Limit Exceeded | Critical | AWS Service Limits | Deployment Failure |
 | Deprecated ECR Property | Low | API Deprecation | Warning only (future breaking change) |
 | App Mesh Service Discovery Misconfiguration | Critical | Architecture | Deployment Failure (MODEL_RESPONSE) |
 | Missing CloudMap Namespace | Critical | Missing Prerequisite | Deployment Failure (MODEL_RESPONSE) |
