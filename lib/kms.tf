@@ -88,6 +88,8 @@ resource "aws_kms_alias" "secondary" {
 
 # KMS Key for Terraform State
 resource "aws_kms_key" "terraform_state" {
+  provider = aws.secondary
+
   description             = "KMS key for Terraform state encryption ${var.environment_suffix}"
   deletion_window_in_days = var.kms_deletion_window
   enable_key_rotation     = true
@@ -115,6 +117,20 @@ resource "aws_kms_key" "terraform_state" {
           "kms:GenerateDataKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow DynamoDB to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "dynamodb.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -125,6 +141,8 @@ resource "aws_kms_key" "terraform_state" {
 }
 
 resource "aws_kms_alias" "terraform_state" {
+  provider = aws.secondary
+
   name          = "alias/terraform-state-${var.environment_suffix}"
   target_key_id = aws_kms_key.terraform_state.key_id
 }

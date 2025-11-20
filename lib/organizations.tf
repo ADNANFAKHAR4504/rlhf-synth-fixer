@@ -15,9 +15,11 @@ resource "aws_organizations_organization" "main" {
   ]
 
   lifecycle {
+    create_before_destroy = false
     ignore_changes = [
       aws_service_access_principals,
-      enabled_policy_types
+      enabled_policy_types,
+      feature_set
     ]
   }
 }

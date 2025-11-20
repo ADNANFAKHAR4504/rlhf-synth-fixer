@@ -120,8 +120,11 @@ resource "aws_iam_role" "config" {
   }
 
   lifecycle {
+    create_before_destroy = false
     ignore_changes = [
-      assume_role_policy
+      assume_role_policy,
+      name,
+      tags
     ]
   }
 }
