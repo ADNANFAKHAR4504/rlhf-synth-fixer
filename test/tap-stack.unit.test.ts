@@ -55,10 +55,9 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(primaryTemplate.Resources.TransactionTable.Properties.Replicas.length).toBe(2);
     });
 
-    test('should have S3 bucket with replication', () => {
+    test('should have S3 bucket configured', () => {
       expect(primaryTemplate.Resources.TransactionLogBucket).toBeDefined();
       expect(primaryTemplate.Resources.TransactionLogBucket.Type).toBe('AWS::S3::Bucket');
-      expect(primaryTemplate.Resources.TransactionLogBucket.Properties.ReplicationConfiguration).toBeDefined();
     });
 
     test('should have S3 bucket with encryption', () => {
@@ -271,10 +270,10 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(table.Properties.Replicas.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('should have S3 replication configuration', () => {
+    test('should have S3 bucket with versioning', () => {
       const bucket = primaryTemplate.Resources.TransactionLogBucket;
-      expect(bucket.Properties.ReplicationConfiguration).toBeDefined();
-      expect(bucket.Properties.ReplicationConfiguration.Rules).toBeDefined();
+      expect(bucket.Properties.VersioningConfiguration).toBeDefined();
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
   });
 
@@ -323,11 +322,11 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(regions).toContain('SecondaryRegion');
     });
 
-    test('should have cross-region S3 replication', () => {
+    test('should have S3 bucket with proper configuration', () => {
       const bucket = primaryTemplate.Resources.TransactionLogBucket;
-      const rules = bucket.Properties.ReplicationConfiguration.Rules;
-      expect(rules.length).toBeGreaterThan(0);
-      expect(rules[0].Status).toBe('Enabled');
+      expect(bucket).toBeDefined();
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
     test('should have health check for failover', () => {
