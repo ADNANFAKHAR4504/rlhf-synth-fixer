@@ -351,6 +351,106 @@ resource "aws_launch_template" "main" {
 
 ---
 
+### **Issue 8 — AutoScaling Unable to Launch Encrypted EBS Volumes**
+
+**Error:**
+```
+Instance failed to launch
+Cause: One or more of the attached Amazon EBS volumes are encrypted with an inaccessible AWS KMS key.
+
+Resolution:
+- Ensure that the KMS keys are in the enabled state.
+- Ensure that you have the following permissions to decrypt and encrypt volumes:
+  "kms:CreateGrant"
+  "kms:Decrypt"
+  "kms:DescribeKey"
+  "kms:GenerateDataKeyWithoutPlainText"
+  "kms:ReEncrypt"
+- If the instance was launched by another AWS service (like Auto Scaling), ensure 
+  that the KMS key policies grant that service access to the KMS key.
+```
+
+**Root Cause:** When Auto Scaling launches instances with encrypted EBS volumes, it uses the **AWS service-linked role** `AWSServiceRoleForAutoScaling` to create the volumes. The KMS key policy must explicitly grant this role (and the AutoScaling service) the required permissions, especially `kms:CreateGrant`.
+
+**Location:** `lib/kms.tf` - EBS KMS key policy
+
+**Issue Details:**
+- AutoScaling service acts independently from EC2 instance profiles
+- The service-linked role needs `kms:CreateGrant` to create encrypted volumes
+- Without proper KMS key policy, AutoScaling cannot create encrypted EBS volumes
+- This blocks instance launches entirely, causing ASG health checks to fail
+
+**Fix Applied:** Enhanced EBS KMS key policy to grant AutoScaling service and service-linked role the necessary permissions.
+
+**Implementation:**
+```hcl
+# KMS Key Policy for EBS
+resource "aws_kms_key_policy" "ebs" {
+  key_id = aws_kms_key.ebs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = { AWS = "arn:aws:iam::${account_id}:root" }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 to use the key"
+        Effect = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+        Action = [
+          "kms:Decrypt", "kms:DescribeKey", "kms:Encrypt",
+          "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:CreateGrant"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow Auto Scaling to use the key"
+        Effect = "Allow"
+        Principal = { Service = "autoscaling.amazonaws.com" }
+        Action = [
+          "kms:Decrypt", "kms:DescribeKey", "kms:Encrypt",
+          "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:CreateGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ec2.${region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid    = "Allow service-linked role for Auto Scaling"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:Decrypt", "kms:DescribeKey", "kms:Encrypt",
+          "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:CreateGrant"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+```
+
+**Benefits:**
+- ✅ AutoScaling service can create encrypted EBS volumes
+- ✅ Service-linked role has explicit permissions
+- ✅ Condition limits AutoScaling to EC2 service usage only
+- ✅ All required KMS operations granted (CreateGrant, Decrypt, Encrypt, etc.)
+- ✅ Instances can launch successfully with encrypted volumes
+
+**Status:** ✅ FIXED - AutoScaling can now create encrypted EBS volumes
+
+---
+
 - ✅ **Terraform Validation:** Passed with warnings
 - ✅ **Terraform Plan:** Successful (36 resources to add)
 - ⚠️ **PostgreSQL Version:** Will fail during apply (version 15.4 not available)

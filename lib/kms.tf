@@ -126,6 +126,27 @@ resource "aws_kms_key_policy" "ebs" {
           "kms:CreateGrant"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ec2.${var.aws_region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid    = "Allow service-linked role for Auto Scaling"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
       }
     ]
   })
