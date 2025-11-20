@@ -770,7 +770,7 @@
       }
     },
     "DynamoDBTable": {
-      "Type": "AWS::DynamoDB::Table",
+      "Type": "AWS::DynamoDB::GlobalTable",
       "Properties": {
         "TableName": {
           "Fn::Sub": "${Environment}-transactions-${EnvironmentSuffix}"
@@ -789,45 +789,162 @@
             "AttributeType": "N"
           }
         ],
-        "KeySchema": [
+        "Replicas": [
           {
-            "AttributeName": "id",
-            "KeyType": "HASH"
+            "Region": "us-east-1",
+            "GlobalSecondaryIndexes": [],
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "SSESpecification": {
+              "KMSMasterKeyId": {
+                "Ref": "PrimaryKMSKey"
+              }
+            },
+            "TableClass": "STANDARD",
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "${Environment}-dynamodb-primary-${EnvironmentSuffix}"
+                }
+              },
+              {
+                "Key": "Environment",
+                "Value": {
+                  "Ref": "Environment"
+                }
+              },
+              {
+                "Key": "Owner",
+                "Value": {
+                  "Ref": "Owner"
+                }
+              },
+              {
+                "Key": "Project",
+                "Value": {
+                  "Ref": "Project"
+                }
+              },
+              {
+                "Key": "Region",
+                "Value": "Primary"
+              }
+            ]
           },
           {
-            "AttributeName": "timestamp",
-            "KeyType": "RANGE"
+            "Region": "us-west-2",
+            "GlobalSecondaryIndexes": [],
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "SSESpecification": {
+              "KMSMasterKeyId": "alias/aws/dynamodb"
+            },
+            "TableClass": "STANDARD",
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "${Environment}-dynamodb-secondary-${EnvironmentSuffix}"
+                }
+              },
+              {
+                "Key": "Environment",
+                "Value": {
+                  "Ref": "Environment"
+                }
+              },
+              {
+                "Key": "Owner",
+                "Value": {
+                  "Ref": "Owner"
+                }
+              },
+              {
+                "Key": "Project",
+                "Value": {
+                  "Ref": "Project"
+                }
+              },
+              {
+                "Key": "Region",
+                "Value": "Secondary"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                }
+              ]
+            }
           }
         ],
-        "PointInTimeRecoverySpecification": {
-          "PointInTimeRecoveryEnabled": true
-        },
-        "SSESpecification": {
-          "SSEEnabled": true
-        },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${Environment}-dynamodb-${EnvironmentSuffix}"
+              "Fn::Sub": "${Environment}-s3-replication-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
               "Ref": "Environment"
-            }
-          },
-          {
-            "Key": "Owner",
-            "Value": {
-              "Ref": "Owner"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "Project"
             }
           }
         ]
@@ -865,6 +982,45 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
+        },
+        "ReplicationConfiguration": {
+          "Role": {
+            "Fn::GetAtt": [
+              "S3ReplicationRole",
+              "Arn"
+            ]
+          },
+          "Rules": [
+            {
+              "Id": "ReplicateToSecondary",
+              "Status": "Enabled",
+              "Priority": 1,
+              "DeleteMarkerReplication": {
+                "Status": "Enabled"
+              },
+              "Filter": {
+                "Prefix": ""
+              },
+              "Destination": {
+                "Bucket": {
+                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "ReplicationTime": {
+                  "Status": "Enabled",
+                  "Time": {
+                    "Minutes": 15
+                  }
+                },
+                "Metrics": {
+                  "Status": "Enabled",
+                  "EventThreshold": {
+                    "Minutes": 15
+                  }
+                },
+                "StorageClass": "STANDARD_IA"
+              }
+            }
+          ]
         },
         "Tags": [
           {
@@ -1156,6 +1312,177 @@
           }
         ]
       }
+    },
+    "PrimaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "Type": "HTTPS",
+        "ResourcePath": "/health",
+        "FullyQualifiedDomainName": {
+          "Fn::Sub": "${Environment}-primary-${EnvironmentSuffix}.example.com"
+        },
+        "Port": 443,
+        "RequestInterval": 30,
+        "FailureThreshold": 3,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-primary-health-check-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "Route53HostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-dr-${EnvironmentSuffix}.example.com"
+        },
+        "HostedZoneConfig": {
+          "Comment": {
+            "Fn::Sub": "Hosted zone for ${Environment} DR solution with suffix ${EnvironmentSuffix}"
+          }
+        },
+        "HostedZoneTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-hosted-zone-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryFailoverRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.example.com"
+        },
+        "Type": "A",
+        "SetIdentifier": "Primary",
+        "Failover": "PRIMARY",
+        "HealthCheckId": {
+          "Ref": "PrimaryHealthCheck"
+        },
+        "TTL": 60,
+        "ResourceRecords": [
+          "1.2.3.4"
+        ]
+      }
+    },
+    "SecondaryFailoverRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.example.com"
+        },
+        "Type": "A",
+        "SetIdentifier": "Secondary",
+        "Failover": "SECONDARY",
+        "TTL": 60,
+        "ResourceRecords": [
+          "5.6.7.8"
+        ]
+      }
+    },
+    "PrimaryKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for ${Environment} primary region encryption - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow S3 Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB Service",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-primary-kms-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/${Environment}-primary-key-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "PrimaryKMSKey"
+        }
+      }
     }
   },
   "Outputs": {
@@ -1281,6 +1608,67 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-sns-topic"
+        }
+      }
+    },
+    "Route53HostedZoneId": {
+      "Description": "Route53 Hosted Zone ID for DNS failover",
+      "Value": {
+        "Ref": "Route53HostedZone"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-hosted-zone-id"
+        }
+      }
+    },
+    "PrimaryHealthCheckId": {
+      "Description": "Route53 Health Check ID for primary region",
+      "Value": {
+        "Ref": "PrimaryHealthCheck"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-health-check"
+        }
+      }
+    },
+    "PrimaryKMSKeyId": {
+      "Description": "KMS Key ID for primary region encryption",
+      "Value": {
+        "Ref": "PrimaryKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-kms-key"
+        }
+      }
+    },
+    "PrimaryKMSKeyArn": {
+      "Description": "KMS Key ARN for primary region encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-kms-key-arn"
+        }
+      }
+    },
+    "S3ReplicationRoleArn": {
+      "Description": "S3 Cross-Region Replication Role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "S3ReplicationRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-s3-replication-role-arn"
         }
       }
     }
