@@ -23,6 +23,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameters.HealthCheckFailureThreshold.MinValue).toBe(1);
       expect(parameters.HealthCheckFailureThreshold.MaxValue).toBe(10);
       expect(parameters.AlertEmail.Default).toContain('@');
+      expect(parameters.DomainName).toBeDefined();
+      expect(parameters.DomainName.Default).toBe('example.com');
     });
   });
 
@@ -64,6 +66,49 @@ describe('TapStack CloudFormation Template', () => {
         expect(association.Properties.SubnetId.Ref).toBe(`PrimaryPublicSubnet${index + 1}`);
       });
     });
+
+    test('should provision NAT gateways for private subnet internet access', () => {
+      expect(resources.PrimaryNATGatewayEIP1).toBeDefined();
+      expect(resources.PrimaryNATGatewayEIP2).toBeDefined();
+      expect(resources.PrimaryNATGateway1).toBeDefined();
+      expect(resources.PrimaryNATGateway2).toBeDefined();
+
+      expect(resources.PrimaryNATGateway1.Properties.SubnetId.Ref).toBe('PrimaryPublicSubnet1');
+      expect(resources.PrimaryNATGateway2.Properties.SubnetId.Ref).toBe('PrimaryPublicSubnet2');
+    });
+
+    test('should configure private subnet route tables with NAT gateway routes', () => {
+      expect(resources.PrimaryPrivateRouteTable1).toBeDefined();
+      expect(resources.PrimaryPrivateRouteTable2).toBeDefined();
+
+      const privateRoute1 = resources.PrimaryPrivateRoute1;
+      expect(privateRoute1.Properties.RouteTableId.Ref).toBe('PrimaryPrivateRouteTable1');
+      expect(privateRoute1.Properties.NatGatewayId.Ref).toBe('PrimaryNATGateway1');
+      expect(privateRoute1.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+
+      const privateRoute2 = resources.PrimaryPrivateRoute2;
+      expect(privateRoute2.Properties.RouteTableId.Ref).toBe('PrimaryPrivateRouteTable2');
+      expect(privateRoute2.Properties.NatGatewayId.Ref).toBe('PrimaryNATGateway2');
+      expect(privateRoute2.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
+    });
+
+    test('should provision VPC endpoints for AWS service connectivity', () => {
+      const dynamoEndpoint = resources.DynamoDBEndpoint;
+      expect(dynamoEndpoint).toBeDefined();
+      expect(dynamoEndpoint.Properties.ServiceName['Fn::Sub']).toContain('dynamodb');
+      expect(dynamoEndpoint.Properties.RouteTableIds).toContainEqual({ Ref: 'PrimaryPrivateRouteTable1' });
+      expect(dynamoEndpoint.Properties.RouteTableIds).toContainEqual({ Ref: 'PrimaryPrivateRouteTable2' });
+
+      const s3Endpoint = resources.S3Endpoint;
+      expect(s3Endpoint).toBeDefined();
+      expect(s3Endpoint.Properties.ServiceName['Fn::Sub']).toContain('s3');
+
+      const sqsEndpoint = resources.SQSEndpoint;
+      expect(sqsEndpoint).toBeDefined();
+      expect(sqsEndpoint.Properties.VpcEndpointType).toBe('Interface');
+      expect(sqsEndpoint.Properties.ServiceName['Fn::Sub']).toContain('sqs');
+      expect(sqsEndpoint.Properties.PrivateDnsEnabled).toBe(true);
+    });
   });
 
   describe('Security controls', () => {
@@ -90,7 +135,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(table.Replicas[0].Region.Ref).toBe('PrimaryRegion');
       expect(table.Replicas[1].Region.Ref).toBe('SecondaryRegion');
 
-      table.Replicas.forEach(replica => {
+      table.Replicas.forEach((replica: any) => {
         expect(replica.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
         expect(replica.Tags[0].Value.Ref).toBe('EnvironmentSuffix');
       });
@@ -107,6 +152,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(bucket.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
       expect(bucket.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
     });
+
+    test('should configure S3 cross-region replication to secondary bucket', () => {
+      const bucket = resources.TransactionLogBucket.Properties;
+      expect(bucket.ReplicationConfiguration).toBeDefined();
+      expect(bucket.ReplicationConfiguration.Role['Fn::GetAtt'][0]).toBe('S3ReplicationRole');
+
+      const rule = bucket.ReplicationConfiguration.Rules[0];
+      expect(rule.Status).toBe('Enabled');
+      expect(rule.Destination.Bucket['Fn::Sub']).toContain('transaction-logs-secondary');
+      expect(rule.Destination.ReplicationTime.Status).toBe('Enabled');
+      expect(rule.Destination.Metrics.Status).toBe('Enabled');
+      expect(rule.DeleteMarkerReplication.Status).toBe('Enabled');
+    });
   });
 
   describe('Processing pipeline', () => {
@@ -115,9 +173,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(role.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
       expect(role.Policies[0].PolicyDocument.Statement.length).toBeGreaterThanOrEqual(4);
       const policyStatement = role.Policies[0].PolicyDocument.Statement;
-      const hasDynamoAccess = policyStatement.some((stmt: any) => stmt.Resource?.['Fn::GetAtt']?.[0] === 'TransactionTable');
-      const hasS3Access = policyStatement.some((stmt: any) => stmt.Resource?.['Fn::Sub']?.includes('transaction-logs-primary-'));
-      const hasSqsAccess = policyStatement.some((stmt: any) => stmt.Resource?.['Fn::GetAtt']?.[0] === 'TransactionQueue');
+      const hasDynamoAccess = policyStatement.some((stmt: any) =>
+        stmt.Resource?.['Fn::Sub']?.includes('table/transactions-'));
+      const hasS3Access = policyStatement.some((stmt: any) =>
+        stmt.Resource?.['Fn::Sub']?.includes('transaction-logs-primary-'));
+      const hasSqsAccess = policyStatement.some((stmt: any) =>
+        stmt.Resource?.['Fn::GetAtt']?.[0] === 'TransactionQueue');
 
       expect(hasDynamoAccess).toBe(true);
       expect(hasS3Access).toBe(true);
@@ -154,15 +215,17 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Monitoring and alerting', () => {
-    test('should create a Route53 health check that feeds a CloudWatch alarm and SNS topic', () => {
-      const healthCheck = resources.ApiHealthCheck.Properties;
-      expect(healthCheck.HealthCheckConfig.Type).toBe('HTTPS');
-      expect(healthCheck.HealthCheckConfig.FailureThreshold.Ref).toBe('HealthCheckFailureThreshold');
-      expect(healthCheck.HealthCheckConfig.ResourcePath).toBe('/transactions');
+    test('should create Route53 health checks for primary and secondary endpoints', () => {
+      const primaryHealthCheck = resources.PrimaryHealthCheck;
+      expect(primaryHealthCheck).toBeDefined();
+      expect(primaryHealthCheck.Properties.HealthCheckConfig.Type).toBe('HTTPS');
+      expect(primaryHealthCheck.Properties.HealthCheckConfig.ResourcePath).toBe('/prod/transactions');
+      expect(primaryHealthCheck.Properties.HealthCheckConfig.FailureThreshold.Ref).toBe('HealthCheckFailureThreshold');
 
-      const alarm = resources.HealthCheckAlarm.Properties;
-      expect(alarm.Dimensions[0].Value.Ref).toBe('ApiHealthCheck');
-      expect(alarm.AlarmActions[0].Ref).toBe('HealthCheckAlarmTopic');
+      const primaryAlarm = resources.PrimaryHealthCheckAlarm;
+      expect(primaryAlarm).toBeDefined();
+      expect(primaryAlarm.Properties.Dimensions[0].Value.Ref).toBe('PrimaryHealthCheck');
+      expect(primaryAlarm.Properties.AlarmActions[0].Ref).toBe('HealthCheckAlarmTopic');
 
       const topic = resources.HealthCheckAlarmTopic.Properties;
       expect(topic.Subscription[0].Endpoint.Ref).toBe('AlertEmail');
@@ -192,6 +255,22 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('DNS and Failover', () => {
+    test('should configure Route53 hosted zone with DNS failover records', () => {
+      const hostedZone = resources.HostedZone;
+      expect(hostedZone).toBeDefined();
+      expect(hostedZone.Properties.Name.Ref).toBe('DomainName');
+
+      const primaryRecord = resources.PrimaryRecordSet;
+      expect(primaryRecord).toBeDefined();
+      expect(primaryRecord.Properties.Type).toBe('A');
+      expect(primaryRecord.Properties.SetIdentifier).toBe('Primary');
+      expect(primaryRecord.Properties.Failover).toBe('PRIMARY');
+      expect(primaryRecord.Properties.HealthCheckId.Ref).toBe('PrimaryHealthCheck');
+      expect(primaryRecord.Properties.AliasTarget.EvaluateTargetHealth).toBe(true);
+    });
+  });
+
   describe('Outputs', () => {
     test('should expose key resource identifiers for cross-stack use', () => {
       expect(outputs.PrimaryVPCId.Value.Ref).toBe('PrimaryVPC');
@@ -208,6 +287,9 @@ describe('TapStack CloudFormation Template', () => {
 
       expect(outputs.ApiEndpoint.Value['Fn::Sub']).toContain('${TransactionApi}.execute-api');
       expect(outputs.ApiEndpoint.Export.Name['Fn::Sub']).toContain('ApiEndpoint');
+
+      expect(outputs.FailoverDNS).toBeDefined();
+      expect(outputs.FailoverDNS.Value['Fn::Sub']).toContain('api.${DomainName}');
     });
   });
 });

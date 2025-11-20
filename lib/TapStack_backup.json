@@ -30,23 +30,6 @@
       "Type": "String",
       "Description": "Email address for CloudWatch alarms and failover notifications",
       "Default": "alerts@example.com"
-    },
-    "DomainName": {
-      "Type": "String",
-      "Description": "Domain name for Route53 hosted zone",
-      "Default": "example.com"
-    }
-  },
-  "Conditions": {
-    "CreateSecondaryResources": {
-      "Fn::Equals": [
-        {
-          "Ref": "AWS::Region"
-        },
-        {
-          "Ref": "SecondaryRegion"
-        }
-      ]
     }
   },
   "Resources": {
@@ -196,80 +179,6 @@
         }
       }
     },
-    "PrimaryNATGatewayEIP1": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "PrimaryVPCGatewayAttachment",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrimaryNATGatewayEIP2": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "PrimaryVPCGatewayAttachment",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrimaryNATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "PrimaryNATGatewayEIP1",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PrimaryPublicSubnet1"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrimaryNATGateway2": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "PrimaryNATGatewayEIP2",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PrimaryPublicSubnet2"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
     "PrimaryPublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -319,148 +228,6 @@
         "RouteTableId": {
           "Ref": "PrimaryPublicRouteTable"
         }
-      }
-    },
-    "PrimaryPrivateRouteTable1": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "PrimaryVPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "primary-private-rt-1-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrimaryPrivateRoute1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrimaryPrivateRouteTable1"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "PrimaryNATGateway1"
-        }
-      }
-    },
-    "PrimaryPrivateSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrimaryPrivateSubnet1"
-        },
-        "RouteTableId": {
-          "Ref": "PrimaryPrivateRouteTable1"
-        }
-      }
-    },
-    "PrimaryPrivateRouteTable2": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "PrimaryVPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "primary-private-rt-2-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrimaryPrivateRoute2": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrimaryPrivateRouteTable2"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "PrimaryNATGateway2"
-        }
-      }
-    },
-    "PrimaryPrivateSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrimaryPrivateSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "PrimaryPrivateRouteTable2"
-        }
-      }
-    },
-    "DynamoDBEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "VpcId": {
-          "Ref": "PrimaryVPC"
-        },
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
-        },
-        "RouteTableIds": [
-          {
-            "Ref": "PrimaryPrivateRouteTable1"
-          },
-          {
-            "Ref": "PrimaryPrivateRouteTable2"
-          }
-        ]
-      }
-    },
-    "S3Endpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "VpcId": {
-          "Ref": "PrimaryVPC"
-        },
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
-        },
-        "RouteTableIds": [
-          {
-            "Ref": "PrimaryPrivateRouteTable1"
-          },
-          {
-            "Ref": "PrimaryPrivateRouteTable2"
-          }
-        ]
-      }
-    },
-    "SQSEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "VpcEndpointType": "Interface",
-        "VpcId": {
-          "Ref": "PrimaryVPC"
-        },
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.${AWS::Region}.sqs"
-        },
-        "SubnetIds": [
-          {
-            "Ref": "PrimaryPrivateSubnet1"
-          },
-          {
-            "Ref": "PrimaryPrivateSubnet2"
-          }
-        ],
-        "SecurityGroupIds": [
-          {
-            "Ref": "PrimarySecurityGroup"
-          }
-        ],
-        "PrivateDnsEnabled": true
       }
     },
     "PrimarySecurityGroup": {
@@ -564,41 +331,6 @@
         }
       }
     },
-    "SecondaryBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Condition": "CreateSecondaryResources",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
     "TransactionLogBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
@@ -613,43 +345,6 @@
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "ReplicationConfiguration": {
-          "Role": {
-            "Fn::GetAtt": [
-              "S3ReplicationRole",
-              "Arn"
-            ]
-          },
-          "Rules": [
-            {
-              "Id": "ReplicateAllObjects",
-              "Status": "Enabled",
-              "Priority": 1,
-              "DeleteMarkerReplication": {
-                "Status": "Enabled"
-              },
-              "Filter": {},
-              "Destination": {
-                "Bucket": {
-                  "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
-                "ReplicationTime": {
-                  "Status": "Enabled",
-                  "Time": {
-                    "Minutes": 15
-                  }
-                },
-                "Metrics": {
-                  "Status": "Enabled",
-                  "EventThreshold": {
-                    "Minutes": 15
-                  }
-                },
-                "StorageClass": "STANDARD_IA"
               }
             }
           ]
@@ -769,7 +464,10 @@
                     "dynamodb:Scan"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:dynamodb:*:${AWS::AccountId}:table/transactions-${EnvironmentSuffix}"
+                    "Fn::GetAtt": [
+                      "TransactionTable",
+                      "Arn"
+                    ]
                   }
                 },
                 {
@@ -814,11 +512,6 @@
     },
     "TransactionProcessorFunction": {
       "Type": "AWS::Lambda::Function",
-      "DependsOn": [
-        "DynamoDBEndpoint",
-        "S3Endpoint",
-        "SQSEndpoint"
-      ],
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
@@ -965,132 +658,6 @@
         }
       }
     },
-    "HostedZone": {
-      "Type": "AWS::Route53::HostedZone",
-      "Properties": {
-        "Name": {
-          "Ref": "DomainName"
-        },
-        "HostedZoneConfig": {
-          "Comment": {
-            "Fn::Sub": "Hosted zone for ${EnvironmentSuffix} environment"
-          }
-        }
-      }
-    },
-    "PrimaryHealthCheck": {
-      "Type": "AWS::Route53::HealthCheck",
-      "Properties": {
-        "HealthCheckConfig": {
-          "Type": "HTTPS",
-          "ResourcePath": "/prod/transactions",
-          "FullyQualifiedDomainName": {
-            "Fn::Sub": "${TransactionApi}.execute-api.${PrimaryRegion}.amazonaws.com"
-          },
-          "Port": 443,
-          "RequestInterval": 30,
-          "FailureThreshold": {
-            "Ref": "HealthCheckFailureThreshold"
-          }
-        },
-        "HealthCheckTags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "primary-health-check-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Region",
-            "Value": "Primary"
-          }
-        ]
-      }
-    },
-    "SecondaryHealthCheck": {
-      "Type": "AWS::Route53::HealthCheck",
-      "Condition": "CreateSecondaryResources",
-      "Properties": {
-        "HealthCheckConfig": {
-          "Type": "HTTPS",
-          "ResourcePath": "/prod/transactions",
-          "FullyQualifiedDomainName": {
-            "Fn::Sub": "transaction-api-${EnvironmentSuffix}.execute-api.${SecondaryRegion}.amazonaws.com"
-          },
-          "Port": 443,
-          "RequestInterval": 30,
-          "FailureThreshold": {
-            "Ref": "HealthCheckFailureThreshold"
-          }
-        },
-        "HealthCheckTags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "secondary-health-check-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Region",
-            "Value": "Secondary"
-          }
-        ]
-      }
-    },
-    "PrimaryRecordSet": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "HostedZoneId": {
-          "Ref": "HostedZone"
-        },
-        "Name": {
-          "Fn::Sub": "api.${DomainName}"
-        },
-        "Type": "A",
-        "SetIdentifier": "Primary",
-        "Failover": "PRIMARY",
-        "HealthCheckId": {
-          "Ref": "PrimaryHealthCheck"
-        },
-        "AliasTarget": {
-          "HostedZoneId": {
-            "Fn::GetAtt": [
-              "TransactionApi",
-              "CloudFrontHostedZoneId"
-            ]
-          },
-          "DNSName": {
-            "Fn::Sub": "${TransactionApi}.execute-api.${PrimaryRegion}.amazonaws.com"
-          },
-          "EvaluateTargetHealth": true
-        }
-      }
-    },
-    "SecondaryRecordSet": {
-      "Type": "AWS::Route53::RecordSet",
-      "Condition": "CreateSecondaryResources",
-      "Properties": {
-        "HostedZoneId": {
-          "Ref": "HostedZone"
-        },
-        "Name": {
-          "Fn::Sub": "api.${DomainName}"
-        },
-        "Type": "A",
-        "SetIdentifier": "Secondary",
-        "Failover": "SECONDARY",
-        "HealthCheckId": {
-          "Ref": "SecondaryHealthCheck"
-        },
-        "AliasTarget": {
-          "HostedZoneId": "Z2FDTNDATAQYW2",
-          "DNSName": {
-            "Fn::Sub": "transaction-api-${EnvironmentSuffix}.execute-api.${SecondaryRegion}.amazonaws.com"
-          },
-          "EvaluateTargetHealth": true
-        }
-      }
-    },
     "HealthCheckAlarmTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
@@ -1108,43 +675,38 @@
         ]
       }
     },
-    "PrimaryHealthCheckAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
+    "ApiHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
       "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "primary-health-check-failed-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Alert when Primary API health check fails",
-        "MetricName": "HealthCheckStatus",
-        "Namespace": "AWS/Route53",
-        "Statistic": "Minimum",
-        "Period": 60,
-        "EvaluationPeriods": 2,
-        "Threshold": 1,
-        "ComparisonOperator": "LessThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "HealthCheckId",
-            "Value": {
-              "Ref": "PrimaryHealthCheck"
-            }
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/transactions",
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "${TransactionApi}.execute-api.${AWS::Region}.amazonaws.com"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": {
+            "Ref": "HealthCheckFailureThreshold"
           }
-        ],
-        "AlarmActions": [
+        },
+        "HealthCheckTags": [
           {
-            "Ref": "HealthCheckAlarmTopic"
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "api-health-check-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-    "SecondaryHealthCheckAlarm": {
+    "HealthCheckAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
-      "Condition": "CreateSecondaryResources",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "secondary-health-check-failed-${EnvironmentSuffix}"
+          "Fn::Sub": "api-health-check-failed-${EnvironmentSuffix}"
         },
-        "AlarmDescription": "Alert when Secondary API health check fails",
+        "AlarmDescription": "Alert when API health check fails",
         "MetricName": "HealthCheckStatus",
         "Namespace": "AWS/Route53",
         "Statistic": "Minimum",
@@ -1156,7 +718,7 @@
           {
             "Name": "HealthCheckId",
             "Value": {
-              "Ref": "SecondaryHealthCheck"
+              "Ref": "ApiHealthCheck"
             }
           }
         ],
@@ -1310,7 +872,10 @@
     "TransactionTableArn": {
       "Description": "DynamoDB Global Table ARN",
       "Value": {
-        "Fn::Sub": "arn:aws:dynamodb:*:${AWS::AccountId}:table/transactions-${EnvironmentSuffix}"
+        "Fn::GetAtt": [
+          "TransactionTable",
+          "Arn"
+        ]
       }
     },
     "TransactionLogBucketName": {
@@ -1355,29 +920,16 @@
         }
       }
     },
-    "PrimaryHealthCheckId": {
-      "Description": "Primary Route53 Health Check ID",
+    "HealthCheckId": {
+      "Description": "Route53 Health Check ID",
       "Value": {
-        "Ref": "PrimaryHealthCheck"
-      }
-    },
-    "SecondaryHealthCheckId": {
-      "Description": "Secondary Route53 Health Check ID",
-      "Condition": "CreateSecondaryResources",
-      "Value": {
-        "Ref": "SecondaryHealthCheck"
+        "Ref": "ApiHealthCheck"
       }
     },
     "AlarmTopicArn": {
       "Description": "SNS Topic for Alarms",
       "Value": {
         "Ref": "HealthCheckAlarmTopic"
-      }
-    },
-    "FailoverDNS": {
-      "Description": "Failover DNS Name",
-      "Value": {
-        "Fn::Sub": "api.${DomainName}"
       }
     }
   }
