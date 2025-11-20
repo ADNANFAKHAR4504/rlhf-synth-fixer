@@ -30,5 +30,11 @@
     "Security Groups",
     "CloudFormation",
     "EIP (Elastic IP)"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
