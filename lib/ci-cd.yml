@@ -340,4 +340,4 @@ jobs:
     steps:
       - name: Rollback placeholder
         run: |
-          echo "[Sub_T05] model-deploy failed; implement rollback here (e.g., revert Vertex AI endpoint to previous model)."
+          echo "model-deploy failed; implement rollback here (e.g., revert Vertex AI endpoint to previous model)."
