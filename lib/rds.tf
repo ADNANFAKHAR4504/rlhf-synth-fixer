@@ -18,7 +18,7 @@ resource "aws_rds_cluster" "main" {
   cluster_identifier      = "aurora-cluster-${var.environment_suffix}"
   engine                  = "aurora-postgresql"
   engine_mode             = "provisioned"
-  engine_version          = "16.4"  # ✅ Matches implementation (was mismatch with README)
+  engine_version          = "16.4" # ✅ Matches implementation (was mismatch with README)
   database_name           = "paymentdb"
   master_username         = var.db_master_username
   master_password         = var.db_master_password

@@ -20,7 +20,7 @@ resource "aws_dms_replication_instance" "main" {
   replication_instance_class  = "dms.t3.medium"
   allocated_storage           = 100
   engine_version              = "3.5.3"
-  multi_az                    = var.enable_multi_az_dms  # ✅ Now configurable
+  multi_az                    = var.enable_multi_az_dms # ✅ Now configurable
   publicly_accessible         = false
   replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
   vpc_security_group_ids      = [aws_security_group.dms.id]
@@ -43,13 +43,13 @@ resource "aws_dms_endpoint" "source" {
   endpoint_type = "source"
   engine_name   = "oracle"
 
-  server_name = var.source_db_host
-  port        = var.source_db_port
+  server_name   = var.source_db_host
+  port          = var.source_db_port
   database_name = var.source_db_name
-  username    = var.source_db_username
-  password    = var.source_db_password
+  username      = var.source_db_username
+  password      = var.source_db_password
 
-  ssl_mode = "require"  # ✅ SECURITY FIX: Changed from 'none' to 'require'
+  ssl_mode = "require" # ✅ SECURITY FIX: Changed from 'none' to 'require'
 
   extra_connection_attributes = "useLogminerReader=N;useBfile=Y"
 
@@ -69,11 +69,11 @@ resource "aws_dms_endpoint" "target" {
   endpoint_type = "target"
   engine_name   = "aurora-postgresql"
 
-  server_name = aws_rds_cluster.main.endpoint
-  port        = 5432
+  server_name   = aws_rds_cluster.main.endpoint
+  port          = 5432
   database_name = aws_rds_cluster.main.database_name
-  username    = var.db_master_username
-  password    = var.db_master_password
+  username      = var.db_master_username
+  password      = var.db_master_password
 
   ssl_mode = "require"
 
