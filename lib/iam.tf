@@ -69,7 +69,7 @@ data "aws_iam_policy_document" "eks_node_trust" {
 }
 
 resource "aws_iam_role" "frontend_nodes" {
-  name               = "${local.cluster_name}-frontend-role"
+  name               = "${local.cluster_name}-frontend-role${local.resource_suffix}"
   assume_role_policy = data.aws_iam_policy_document.eks_node_trust.json
   description        = "Managed node group role for frontend workloads"
 
@@ -77,7 +77,7 @@ resource "aws_iam_role" "frontend_nodes" {
 }
 
 resource "aws_iam_role" "backend_nodes" {
-  name               = "${local.cluster_name}-backend-role"
+  name               = "${local.cluster_name}-backend-role${local.resource_suffix}"
   assume_role_policy = data.aws_iam_policy_document.eks_node_trust.json
   description        = "Managed node group role for backend workloads"
 
@@ -140,7 +140,7 @@ data "aws_iam_policy_document" "eks_node_ecr_access" {
 }
 
 resource "aws_iam_policy" "eks_node_ecr_access" {
-  name        = "${local.cluster_name}-node-ecr"
+  name        = "${local.cluster_name}-node-ecr${local.resource_suffix}"
   description = "ECR access for EKS managed node groups"
   policy      = data.aws_iam_policy_document.eks_node_ecr_access.json
 
@@ -183,7 +183,7 @@ data "aws_iam_policy_document" "app_irsa_trust" {
 }
 
 resource "aws_iam_role" "app_irsa" {
-  name               = "${local.cluster_name}-app-irsa"
+  name               = "${local.cluster_name}-app-irsa${local.resource_suffix}"
   assume_role_policy = data.aws_iam_policy_document.app_irsa_trust.json
 
   tags = local.common_tags
@@ -202,7 +202,7 @@ data "aws_iam_policy_document" "app_irsa" {
 }
 
 resource "aws_iam_policy" "app_irsa_policy" {
-  name        = "${local.cluster_name}-app-irsa"
+  name        = "${local.cluster_name}-app-irsa${local.resource_suffix}"
   description = "Permissions for application pods accessing shared services"
   policy      = data.aws_iam_policy_document.app_irsa.json
 
@@ -240,7 +240,7 @@ data "aws_iam_policy_document" "cluster_autoscaler_trust" {
 }
 
 resource "aws_iam_role" "cluster_autoscaler" {
-  name               = "${local.cluster_name}-cluster-autoscaler"
+  name               = "${local.cluster_name}-cluster-autoscaler${local.resource_suffix}"
   assume_role_policy = data.aws_iam_policy_document.cluster_autoscaler_trust.json
 
   tags = local.common_tags
@@ -286,7 +286,7 @@ data "aws_iam_policy_document" "cluster_autoscaler" {
 }
 
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name        = "${local.cluster_name}-cluster-autoscaler"
+  name        = "${local.cluster_name}-cluster-autoscaler${local.resource_suffix}"
   description = "Permissions for the Kubernetes cluster-autoscaler"
   policy      = data.aws_iam_policy_document.cluster_autoscaler.json
 

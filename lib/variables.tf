@@ -125,13 +125,13 @@ variable "manage_kubernetes_resources" {
 variable "node_group_deployment_suffix" {
   description = "Optional suffix to append to node group names to avoid conflicts with failed node groups from previous deployments. Change this value to force new node groups."
   type        = string
-  default     = "v3"
+  default     = "v4"
 }
 
 variable "resource_deployment_suffix" {
   description = "Optional suffix to append to resource names (IAM roles, CloudWatch log groups) to avoid conflicts with existing resources from previous deployments. Leave empty to use existing resources if they exist."
   type        = string
-  default     = "v3"
+  default     = "v4"
 }
 
 locals {
@@ -147,7 +147,7 @@ locals {
   eks_cluster_role_name    = "${local.cluster_name}-cluster-role${local.resource_suffix}"
   namespace_name           = "${var.kubernetes_namespace}-${var.environment_suffix}"
   database_secret_name     = "${var.database_secret_name}-${var.environment_suffix}${local.resource_suffix}"
-  sns_topic_name           = "${local.cluster_name}-autoscaler-alerts"
+  sns_topic_name           = "${local.cluster_name}-autoscaler-alerts${local.resource_suffix}"
 
   common_tags = {
     Environment       = "production"
