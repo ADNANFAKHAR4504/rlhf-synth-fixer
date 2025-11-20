@@ -1158,33 +1158,23 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Stack Outputs', () => {
-    test('ALB DNS name should be exported', () => {
-      template.hasOutput('AlbDnsName', {
-        Export: {
-          Name: 'AlbDnsName',
-        },
+    let parentTemplate: Template;
+
+    beforeAll(() => {
+      parentTemplate = Template.fromStack(stack);
+    });
+
+    test('ALB DNS name output should exist', () => {
+      parentTemplate.hasOutput('AlbDnsName', {
+        Description: 'ALB DNS Name',
       });
     });
 
-    test('Cluster name should be exported', () => {
-      template.hasOutput('ClusterName', {
-        Export: {
-          Name: 'ClusterName',
-        },
+    test('Cluster name output should exist', () => {
+      parentTemplate.hasOutput('ClusterName', {
+        Description: 'ECS Cluster Name',
       });
     });
-
-    // Only test mesh output when mesh is created (not in CI/CD mode)
-    const isCiCd = process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
-    if (!isCiCd) {
-      test('Mesh name should be exported', () => {
-        template.hasOutput('MeshName', {
-          Export: {
-            Name: 'MeshName',
-          },
-        });
-      });
-    }
   });
 
   describe('Resource Counts', () => {

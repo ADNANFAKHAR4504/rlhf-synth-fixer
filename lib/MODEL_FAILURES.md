@@ -5,7 +5,14 @@
 - **Fix**: Modified TapStack to expose outputs from the nested EcsMicroservicesStack at the parent level
 - **Impact**: Ensures deployment outputs are properly captured and available for artifact collection
 
-### 2. Stack Cleanup and Deletability
+### 2. Mesh Output Export Conflict (Critical Issue We Missed)
+- **Problem**: Both parent and nested stacks were trying to export outputs with the same names (AlbDnsName, ClusterName, MeshName), causing CloudFormation export name conflicts during deployment
+- **Root Cause**: The nested EcsMicroservicesStack had `exportName` properties on its CfnOutput statements, creating global exports that conflicted with the parent stack's exports
+- **Why We Missed It**: During local development/testing, CDK synthesis doesn't check for CloudFormation export conflicts since exports aren't actually created until deployment. The issue only surfaced during actual AWS deployment.
+- **Impact**: Deployments would fail with "Export with name X is already exported by stack Y" errors, preventing successful infrastructure provisioning
+- **Fix Applied**: Removed `exportName` from nested stack outputs, keeping them as local outputs while only the parent stack creates global exports
+
+### 3. Stack Cleanup and Deletability
 - **Problem**: Some resources had retention policies that prevented clean stack deletion
 - **Fix**: Ensured all resources use `RemovalPolicy.DESTROY` and appropriate cleanup settings
 - **Impact**: Stack can be cleanly deleted without retained resources for test environments

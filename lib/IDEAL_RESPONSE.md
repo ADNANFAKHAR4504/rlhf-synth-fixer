@@ -1027,5 +1027,10 @@ aws secretsmanager update-secret --secret-id /microservices/api-key \
 ✅ **Security Groups**: Restricted inter-service communication
 ✅ **Health Checks**: 30-second intervals, 3 unhealthy threshold
 ✅ **Production Ready**: Spot/On-demand mix, ECS Exec enabled
+✅ **Output Management**: Proper parent-level outputs without export conflicts
+
+## Critical Issue Resolved
+
+**Export Name Conflict Prevention**: The nested EcsMicroservicesStack outputs do NOT have `exportName` properties to prevent CloudFormation export conflicts. Only the parent TapStack creates global exports, ensuring clean deployments without "export name already exists" errors.
 
 This CDK application provides a complete, production-ready microservices architecture on AWS ECS with comprehensive monitoring, security, and scalability features.

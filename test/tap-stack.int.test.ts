@@ -2,6 +2,7 @@
 import axios from 'axios';
 
 // Application flow test utilities
+// Note: Mesh functionality is optional - tests work with or without App Mesh
 class ApplicationFlowTester {
   public axiosInstance: any;
 
@@ -115,6 +116,8 @@ class ApplicationFlowTester {
 // Test configuration
 const albDnsName =
   process.env.ALB_DNS_NAME || 'mock-alb-123456789.us-east-1.elb.amazonaws.com';
+const clusterName = process.env.CLUSTER_NAME || 'mock-cluster-name';
+const meshName = process.env.MESH_NAME || undefined; // Mesh is optional - tests work without it
 const includeOptionalServices = process.env.TEST_INCLUDE_OPTIONAL === 'true';
 const skipNetworkTests = process.env.SKIP_NETWORK_TESTS === 'true';
 
