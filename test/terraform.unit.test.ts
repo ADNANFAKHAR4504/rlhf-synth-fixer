@@ -337,7 +337,7 @@ describe("Terraform Payment Processing Infrastructure Unit Tests", () => {
     test("ACM certificate is configured", () => {
       expect(stackContent).toMatch(/resource\s+"aws_acm_certificate"\s+"main"/);
       expect(stackContent).toMatch(/validation_method\s*=\s*"DNS"/);
-      expect(stackContent).toMatch(/domain_name\s*=\s*"\$\{var\.environment\}\.payment\.example\.com"/);
+      expect(stackContent).toMatch(/domain_name\s*=\s*var\.domain_name/);
     });
   });
 
@@ -978,7 +978,8 @@ describe("Terraform Payment Processing Infrastructure Unit Tests", () => {
     test("load balancer integration", () => {
       expect(stackContent).toMatch(/aws_lb_target_group\.main\.arn/);
       expect(stackContent).toMatch(/aws_lb\.main\.arn/);
-      expect(stackContent).toMatch(/aws_acm_certificate\.main\.arn/);
+      // Certificate can be either conditional (with [0]) or provided via variable
+      expect(stackContent).toMatch(/aws_acm_certificate(\.main\[0\]\.arn|_validation\.main\[0\]\.certificate_arn)|var\.acm_certificate_arn/);
     });
   });
 });

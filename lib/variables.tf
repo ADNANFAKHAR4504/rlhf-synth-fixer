@@ -56,3 +56,15 @@ variable "team" {
   type        = string
   default     = "unknown"
 }
+
+variable "acm_certificate_arn" {
+  description = "Existing ACM certificate ARN (optional). If provided, will use this instead of creating a new certificate."
+  type        = string
+  default     = ""
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificate"
+  type        = string
+  default     = "payment-api.example.com"
+}

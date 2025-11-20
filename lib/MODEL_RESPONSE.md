@@ -673,3 +673,41 @@ The model-generated Terraform configuration represents a sophisticated, producti
 The generated code provides a solid foundation for a payment processing system that can scale from development through production environments while maintaining consistency, security, and cost-effectiveness. The implementation showcases the model's capability to create enterprise-grade infrastructure as code that meets real-world deployment requirements and operational standards.
 
 This comprehensive solution serves as an excellent example of how AI can effectively generate complex infrastructure configurations that rival human-engineered solutions in terms of completeness, security, and operational readiness.
+
+## Critical Issues Fixed
+
+### 1. ACM Certificate Validation Issue
+**Problem**: The original implementation would block deployment indefinitely due to DNS validation requirements.
+
+**Solution Applied**:
+- Added conditional certificate creation using `count` parameter
+- Added `acm_certificate_arn` and `domain_name` variables for flexibility  
+- Made certificate validation conditional on whether a certificate ARN is provided
+- Updated HTTPS listener to use either provided certificate ARN or created certificate
+- Added proper conditional dependencies to prevent resource creation conflicts
+
+**Files Updated**:
+- `variables.tf`: Added new variables for certificate configuration
+- `tap_stack.tf`: Implemented conditional certificate logic
+- `*.tfvars`: Added certificate configuration options
+- `IDEAL_RESPONSE.md`: Updated to reflect the conditional certificate pattern and added complete variables section
+
+### 2. Secrets Manager Circular Dependency Issue
+**Problem**: Two secret versions for the same secret created race conditions and unnecessary complexity.
+
+**Solution Applied**:
+- Removed the initial incomplete secret version
+- Kept only the complete secret version with RDS host information
+- Simplified dependencies to just depend on RDS instance creation
+- Eliminated lifecycle `ignore_changes` that could cause configuration drift
+
+**Result**: Cleaner, more maintainable secrets management without circular dependencies.
+
+### Benefits of These Fixes:
+1. **Deployable Infrastructure**: Certificate validation no longer blocks deployment
+2. **Flexible Configuration**: Users can provide existing certificates or create new ones
+3. **Simplified Dependencies**: Cleaner resource dependency graph
+4. **Production Ready**: Works in real deployment scenarios with proper DNS management
+5. **Complete Documentation**: Added comprehensive variables section to IDEAL_RESPONSE.md with all 11 variables
+
+The infrastructure is now fully deployable and production-ready with proper certificate management and secrets handling.

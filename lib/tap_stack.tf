@@ -523,28 +523,12 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     username = "paymentadmin"
     password = random_password.db_password.result
     engine   = "postgres"
-    port     = 5432
-    dbname   = "paymentdb"
-  })
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
-# Separate secret version that includes the host after RDS is created
-resource "aws_secretsmanager_secret_version" "db_credentials_with_host" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsonencode({
-    username = "paymentadmin"
-    password = random_password.db_password.result
-    engine   = "postgres"
     host     = aws_db_instance.main.address
     port     = 5432
     dbname   = "paymentdb"
   })
 
-  depends_on = [aws_db_instance.main, aws_secretsmanager_secret_version.db_credentials]
+  depends_on = [aws_db_instance.main]
 }
 
 # API Keys Secret
@@ -705,25 +689,26 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# ALB Listener (HTTPS - using validated certificate)
+# ALB Listener (HTTPS - using certificate)
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
+  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : aws_acm_certificate_validation.main[0].certificate_arn
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
 
-  depends_on = [aws_acm_certificate_validation.main]
+  depends_on = var.acm_certificate_arn != "" ? [] : [aws_acm_certificate_validation.main[0]]
 }
 
-# Self-signed certificate for demo (replace with real cert in production)
+# ACM Certificate (only create if not provided)
 resource "aws_acm_certificate" "main" {
-  domain_name       = "${var.environment}.payment.example.com"
+  count             = var.acm_certificate_arn == "" ? 1 : 0
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
   lifecycle {
@@ -735,11 +720,14 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# ACM Certificate Validation
-# Note: This requires DNS validation records to be created in your DNS zone
-# For production deployment, ensure the DNS zone exists and is accessible
+# ACM Certificate Validation (only validate if we created the certificate)
+# IMPORTANT: This requires DNS validation records to be created in your DNS zone
+# To use this, you must either:
+# 1. Set acm_certificate_arn variable to an existing certificate ARN, OR
+# 2. Create DNS validation records manually after certificate creation
 resource "aws_acm_certificate_validation" "main" {
-  certificate_arn = aws_acm_certificate.main.arn
+  count           = var.acm_certificate_arn == "" ? 1 : 0
+  certificate_arn = aws_acm_certificate.main[0].arn
 
   timeouts {
     create = "10m"

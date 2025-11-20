@@ -18,3 +18,8 @@ repository    = "iac-test-automations"
 commit_author = "production-team"
 pr_number     = "prod-release"
 team          = "payment-infrastructure"
+
+# SSL Certificate Configuration
+# PLACEHOLDER: Replace with actual certificate ARN or leave empty to create new
+acm_certificate_arn = ""
+domain_name         = "payment-api.example.com"

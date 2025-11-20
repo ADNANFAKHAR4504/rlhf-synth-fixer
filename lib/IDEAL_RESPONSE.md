@@ -538,28 +538,12 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     username = "paymentadmin"
     password = random_password.db_password.result
     engine   = "postgres"
-    port     = 5432
-    dbname   = "paymentdb"
-  })
-  
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
-# Separate secret version that includes the host after RDS is created
-resource "aws_secretsmanager_secret_version" "db_credentials_with_host" {
-  secret_id = aws_secretsmanager_secret.db_credentials.id
-  secret_string = jsonencode({
-    username = "paymentadmin"
-    password = random_password.db_password.result
-    engine   = "postgres"
     host     = aws_db_instance.main.address
     port     = 5432
     dbname   = "paymentdb"
   })
   
-  depends_on = [aws_db_instance.main, aws_secretsmanager_secret_version.db_credentials]
+  depends_on = [aws_db_instance.main]
 }
 
 # API Keys Secret
@@ -720,9 +704,10 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# Self-signed certificate for demo (replace with real cert in production)
+# ACM Certificate (only create if not provided)
 resource "aws_acm_certificate" "main" {
-  domain_name       = "${var.environment}.payment.example.com"
+  count             = var.acm_certificate_arn == "" ? 1 : 0
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
   lifecycle {
@@ -734,11 +719,14 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# ACM Certificate Validation
-# Note: This requires DNS validation records to be created in your DNS zone
-# For production deployment, ensure the DNS zone exists and is accessible
+# ACM Certificate Validation (only validate if we created the certificate)
+# IMPORTANT: This requires DNS validation records to be created in your DNS zone
+# To use this, you must either:
+# 1. Set acm_certificate_arn variable to an existing certificate ARN, OR
+# 2. Create DNS validation records manually after certificate creation
 resource "aws_acm_certificate_validation" "main" {
-  certificate_arn = aws_acm_certificate.main.arn
+  count           = var.acm_certificate_arn == "" ? 1 : 0
+  certificate_arn = aws_acm_certificate.main[0].arn
   
   timeouts {
     create = "10m"
@@ -749,20 +737,20 @@ resource "aws_acm_certificate_validation" "main" {
   }
 }
 
-# ALB Listener (HTTPS - using validated certificate)
+# ALB Listener (HTTPS - using certificate)
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
+  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : aws_acm_certificate_validation.main[0].certificate_arn
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
 
-  depends_on = [aws_acm_certificate_validation.main]
+  depends_on = var.acm_certificate_arn != "" ? [] : [aws_acm_certificate_validation.main[0]]
 }
 
 # ==================== ECS FARGATE ====================
@@ -1286,6 +1274,81 @@ output "cloudwatch_dashboard_url" {
 # terraform plan -var="environment=dev"
 # terraform apply -var="environment=staging"
 # terraform apply -var="environment=prod"
+```
+
+## Complete Variables Configuration (variables.tf)
+
+```hcl
+# variables.tf
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be dev, staging, or prod."
+  }
+}
+
+variable "cost_center" {
+  description = "Cost center for resource tagging"
+  type        = string
+  default     = "FINTECH-001"
+}
+
+variable "data_classification" {
+  description = "Data classification level"
+  type        = string
+  default     = "confidential"
+}
+
+variable "container_image" {
+  description = "Docker image for ECS tasks"
+  type        = string
+  default     = "nginx:latest"
+}
+
+variable "lambda_source_path" {
+  description = "Path to Lambda deployment package"
+  type        = string
+  default     = "lambda.zip"
+}
+
+variable "repository" {
+  description = "Repository name for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "commit_author" {
+  description = "Commit author for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "pr_number" {
+  description = "PR number for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "team" {
+  description = "Team name for tagging"
+  type        = string
+  default     = "unknown"
+}
+
+variable "acm_certificate_arn" {
+  description = "Existing ACM certificate ARN (optional). If provided, will use this instead of creating a new certificate."
+  type        = string
+  default     = ""
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificate"
+  type        = string
+  default     = "payment-api.example.com"
+}
 ```
 
 ## Key Features of the Ideal Response
