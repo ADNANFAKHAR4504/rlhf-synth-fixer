@@ -49,8 +49,8 @@ variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Project     = "SecurityFramework"
-    ManagedBy   = "Terraform"
-    Compliance  = "PCI-DSS"
+    Project    = "SecurityFramework"
+    ManagedBy  = "Terraform"
+    Compliance = "PCI-DSS"
   }
 }
