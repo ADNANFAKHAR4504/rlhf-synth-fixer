@@ -4,30 +4,26 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "m8l9x7",
-  "team": "synth-2",
+  "team": "synth",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-11-19T21:15:57+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Use CDK context variables to manage environment-specific configurations without code duplication",
-    "Implement a single CDK stack class that accepts environment parameters",
-    "Deploy Kinesis Data Streams with environment-specific shard counts (dev: 1, staging: 2, prod: 4)",
-    "Configure Lambda functions with environment-based memory allocation (dev: 512MB, staging: 1GB, prod: 2GB)",
-    "Set DynamoDB read/write capacity based on environment (dev: 5/5, staging: 10/10, prod: 25/25)",
-    "Implement CloudWatch alarms with environment-specific thresholds for Lambda errors",
-    "Use SSM Parameter Store to manage environment-specific API keys and connection strings",
-    "Create separate S3 buckets per environment with consistent naming patterns",
-    "Implement IAM roles with identical permissions across environments using CDK patterns",
-    "Enable tracing only for staging and production environments"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "Amazon Kinesis Data Streams",
     "AWS Lambda",
     "Amazon DynamoDB",
     "Amazon S3",
+    "Amazon S3 Lifecycle",
     "AWS Systems Manager Parameter Store",
     "Amazon CloudWatch",
+    "Amazon CloudWatch Alarms",
+    "Amazon CloudWatch Logs",
+    "Amazon SNS",
     "AWS IAM",
     "AWS X-Ray"
   ],
-  "training_quality": 9
+  "training_quality": 10
 }

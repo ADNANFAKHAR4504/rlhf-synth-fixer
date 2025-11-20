@@ -38,9 +38,11 @@ class TestLambdaHandler(unittest.TestCase):
         # Clear SSM cache
         lambda_handler._ssm_cache.clear()
 
-    @patch('index.ssm_client')
-    def test_get_ssm_parameter_success(self, mock_ssm: Mock) -> None:
+    @patch('index.get_ssm_client')
+    def test_get_ssm_parameter_success(self, mock_get_ssm: Mock) -> None:
         """Test successful SSM parameter retrieval."""
+        mock_ssm = Mock()
+        mock_get_ssm.return_value = mock_ssm
         mock_ssm.get_parameter.return_value = {
             'Parameter': {'Value': 'test-value'}
         }
@@ -53,9 +55,11 @@ class TestLambdaHandler(unittest.TestCase):
             WithDecryption=True
         )
 
-    @patch('index.ssm_client')
-    def test_get_ssm_parameter_caching(self, mock_ssm: Mock) -> None:
+    @patch('index.get_ssm_client')
+    def test_get_ssm_parameter_caching(self, mock_get_ssm: Mock) -> None:
         """Test that SSM parameters are cached."""
+        mock_ssm = Mock()
+        mock_get_ssm.return_value = mock_ssm
         mock_ssm.get_parameter.return_value = {
             'Parameter': {'Value': 'cached-value'}
         }
@@ -70,9 +74,11 @@ class TestLambdaHandler(unittest.TestCase):
         # Should only be called once due to caching
         mock_ssm.get_parameter.assert_called_once()
 
-    @patch('index.ssm_client')
-    def test_get_ssm_parameter_error(self, mock_ssm: Mock) -> None:
+    @patch('index.get_ssm_client')
+    def test_get_ssm_parameter_error(self, mock_get_ssm: Mock) -> None:
         """Test SSM parameter retrieval error handling."""
+        mock_ssm = Mock()
+        mock_get_ssm.return_value = mock_ssm
         mock_ssm.get_parameter.side_effect = Exception('Parameter not found')
 
         with self.assertRaises(Exception):
@@ -211,10 +217,12 @@ class TestLambdaHandler(unittest.TestCase):
         self.assertIn('fraud_score_category', result)
         self.assertEqual(result['environment'], 'test')
 
-    @patch('index.dynamodb')
-    def test_save_to_dynamodb_success(self, mock_dynamodb: Mock) -> None:
+    @patch('index.get_dynamodb_resource')
+    def test_save_to_dynamodb_success(self, mock_get_dynamodb: Mock) -> None:
         """Test successful DynamoDB save."""
+        mock_dynamodb = Mock()
         mock_table = Mock()
+        mock_get_dynamodb.return_value = mock_dynamodb
         mock_dynamodb.Table.return_value = mock_table
 
         record = {
@@ -227,11 +235,13 @@ class TestLambdaHandler(unittest.TestCase):
 
         mock_table.put_item.assert_called_once()
 
-    @patch('index.dynamodb')
-    def test_save_to_dynamodb_error(self, mock_dynamodb: Mock) -> None:
+    @patch('index.get_dynamodb_resource')
+    def test_save_to_dynamodb_error(self, mock_get_dynamodb: Mock) -> None:
         """Test DynamoDB save error handling."""
+        mock_dynamodb = Mock()
         mock_table = Mock()
         mock_table.put_item.side_effect = Exception('DynamoDB error')
+        mock_get_dynamodb.return_value = mock_dynamodb
         mock_dynamodb.Table.return_value = mock_table
 
         record = {
@@ -242,9 +252,12 @@ class TestLambdaHandler(unittest.TestCase):
         with self.assertRaises(Exception):
             lambda_handler.save_to_dynamodb(record)
 
-    @patch('index.s3_client')
-    def test_archive_to_s3_high_risk(self, mock_s3: Mock) -> None:
+    @patch('index.get_s3_client')
+    def test_archive_to_s3_high_risk(self, mock_get_s3: Mock) -> None:
         """Test S3 archival for high-risk transaction."""
+        mock_s3 = Mock()
+        mock_get_s3.return_value = mock_s3
+
         record = {
             'transaction_id': 'test-123',
             'timestamp': '2024-01-01T00:00:00',
@@ -255,9 +268,12 @@ class TestLambdaHandler(unittest.TestCase):
 
         mock_s3.put_object.assert_called_once()
 
-    @patch('index.s3_client')
-    def test_archive_to_s3_medium_risk(self, mock_s3: Mock) -> None:
+    @patch('index.get_s3_client')
+    def test_archive_to_s3_medium_risk(self, mock_get_s3: Mock) -> None:
         """Test S3 archival for medium-risk transaction."""
+        mock_s3 = Mock()
+        mock_get_s3.return_value = mock_s3
+
         record = {
             'transaction_id': 'test-123',
             'timestamp': '2024-01-01T00:00:00',
@@ -268,9 +284,12 @@ class TestLambdaHandler(unittest.TestCase):
 
         mock_s3.put_object.assert_called_once()
 
-    @patch('index.s3_client')
-    def test_archive_to_s3_low_risk_skipped(self, mock_s3: Mock) -> None:
+    @patch('index.get_s3_client')
+    def test_archive_to_s3_low_risk_skipped(self, mock_get_s3: Mock) -> None:
         """Test that low-risk transactions are not archived."""
+        mock_s3 = Mock()
+        mock_get_s3.return_value = mock_s3
+
         record = {
             'transaction_id': 'test-123',
             'timestamp': '2024-01-01T00:00:00',
@@ -281,9 +300,11 @@ class TestLambdaHandler(unittest.TestCase):
 
         mock_s3.put_object.assert_not_called()
 
-    @patch('index.s3_client')
-    def test_archive_to_s3_error_handled(self, mock_s3: Mock) -> None:
+    @patch('index.get_s3_client')
+    def test_archive_to_s3_error_handled(self, mock_get_s3: Mock) -> None:
         """Test that S3 archival errors don't raise exceptions."""
+        mock_s3 = Mock()
+        mock_get_s3.return_value = mock_s3
         mock_s3.put_object.side_effect = Exception('S3 error')
 
         record = {

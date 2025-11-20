@@ -76,18 +76,19 @@ This solution deploys a real-time fraud detection system with the following comp
 
 ```bash
 cdk deploy --context environment=dev --context environmentSuffix=unique-suffix
-
+```
 
 ### Deploy to Staging Environment
 
 ```bash
 cdk deploy --context environment=staging --context environmentSuffix=unique-suffix
-
+```
 
 ### Deploy to Production Environment
 
 ```bash
 cdk deploy --context environment=prod --context environmentSuffix=unique-suffix
+```
 
 
 ### Deploy All Environments
@@ -112,6 +113,7 @@ aws ssm put-parameter \
   --value "your-actual-connection-string" \
   --type "SecureString" \
   --overwrite
+```
 
 
 ## Testing the Pipeline
@@ -137,6 +139,7 @@ kinesis.put_record(
     Data=json.dumps(test_transaction),
     PartitionKey='test'
 )
+```
 
 
 ## Monitoring
@@ -164,6 +167,7 @@ To destroy the stack and all resources:
 
 ```bash
 cdk destroy --context environment=dev --context environmentSuffix=unique-suffix
+```
 
 
 All resources are configured with `RemovalPolicy.DESTROY` and S3 buckets have `auto_delete_objects=True` to ensure clean destruction.
@@ -200,11 +204,12 @@ pytest tests/unit --cov=lib --cov-report=term-missing
 
 # Run integration tests
 pytest tests/integration -v
+```
 
 
 ### Project Structure
 
-
+```
 .
 ├── app.py                      # CDK app entry point
 ├── cdk.json                    # CDK configuration
@@ -226,8 +231,10 @@ pytest tests/integration -v
 ### Lambda Function Errors
 
 Check CloudWatch Logs:
+
 ```bash
 aws logs tail /aws/lambda/fraud-processor-dev-unique-suffix --follow
+```
 
 
 ### DynamoDB Throttling

@@ -4,28 +4,54 @@ import os
 import base64
 import boto3
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import logging
-
-# Initialize AWS clients
-dynamodb = boto3.resource('dynamodb')
-s3_client = boto3.client('s3')
-ssm_client = boto3.client('ssm')
-
-# Environment variables
-ENVIRONMENT = os.environ['ENVIRONMENT']
-DYNAMODB_TABLE_NAME = os.environ['DYNAMODB_TABLE_NAME']
-S3_BUCKET_NAME = os.environ['S3_BUCKET_NAME']
-SSM_API_KEY_PARAM = os.environ['SSM_API_KEY_PARAM']
-SSM_CONNECTION_STRING_PARAM = os.environ['SSM_CONNECTION_STRING_PARAM']
-REGION = os.environ['REGION']
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# Environment variables
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'test')
+DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME', 'test-table')
+S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'test-bucket')
+SSM_API_KEY_PARAM = os.environ.get('SSM_API_KEY_PARAM', '/test/api-key')
+SSM_CONNECTION_STRING_PARAM = os.environ.get(
+    'SSM_CONNECTION_STRING_PARAM', '/test/connection-string'
+)
+REGION = os.environ.get('REGION', os.environ.get('AWS_REGION', 'us-east-1'))
+
+# Lazy-loaded AWS clients
+_dynamodb: Optional[Any] = None
+_s3_client: Optional[Any] = None
+_ssm_client: Optional[Any] = None
+
 # Cache for SSM parameters
 _ssm_cache = {}
+
+
+def get_dynamodb_resource():
+    """Get or create DynamoDB resource."""
+    global _dynamodb
+    if _dynamodb is None:
+        _dynamodb = boto3.resource('dynamodb', region_name=REGION)
+    return _dynamodb
+
+
+def get_s3_client():
+    """Get or create S3 client."""
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client('s3', region_name=REGION)
+    return _s3_client
+
+
+def get_ssm_client():
+    """Get or create SSM client."""
+    global _ssm_client
+    if _ssm_client is None:
+        _ssm_client = boto3.client('ssm', region_name=REGION)
+    return _ssm_client
 
 
 def get_ssm_parameter(parameter_name: str) -> str:
@@ -42,7 +68,8 @@ def get_ssm_parameter(parameter_name: str) -> str:
         return _ssm_cache[parameter_name]
 
     try:
-        response = ssm_client.get_parameter(
+        ssm = get_ssm_client()
+        response = ssm.get_parameter(
             Name=parameter_name,
             WithDecryption=True
         )
@@ -149,6 +176,7 @@ def save_to_dynamodb(record: Dict[str, Any]) -> None:
     Args:
         record: Processed transaction record
     """
+    dynamodb = get_dynamodb_resource()
     table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 
     try:
@@ -173,10 +201,11 @@ def archive_to_s3(record: Dict[str, Any]) -> None:
     # Only archive medium and high risk transactions
     if record['fraud_score_category'] in ['MEDIUM', 'HIGH']:
         try:
+            s3 = get_s3_client()
             date_prefix = datetime.utcnow().strftime('%Y/%m/%d')
             key = f"fraud-alerts/{date_prefix}/{record['transaction_id']}.json"
 
-            s3_client.put_object(
+            s3.put_object(
                 Bucket=S3_BUCKET_NAME,
                 Key=key,
                 Body=json.dumps(record, indent=2),

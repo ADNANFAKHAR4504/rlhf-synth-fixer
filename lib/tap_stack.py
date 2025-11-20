@@ -3,6 +3,7 @@ from aws_cdk import (
     Stack,
     RemovalPolicy,
     Duration,
+    CfnOutput,
     aws_kinesis as kinesis,
     aws_lambda as _lambda,
     aws_dynamodb as dynamodb,
@@ -78,6 +79,9 @@ class TapStack(Stack):
 
         # Create CloudWatch alarms
         self._create_cloudwatch_alarms()
+
+        # Create CloudFormation outputs for integration tests
+        self._create_outputs()
 
     def _create_ssm_parameters(self) -> None:
         """Create SSM Parameter Store parameters for environment-specific configuration."""
@@ -409,3 +413,101 @@ class TapStack(Stack):
         )
 
         iterator_age_alarm.add_alarm_action(cw_actions.SnsAction(self.alarm_topic))
+
+    def _create_outputs(self) -> None:
+        """Create CloudFormation outputs for deployed resources."""
+        # Kinesis stream outputs
+        CfnOutput(
+            self,
+            "KinesisStreamName",
+            value=self.kinesis_stream.stream_name,
+            description="Name of the Kinesis Data Stream",
+            export_name=f"FraudStreamName-{self.env_name}-{self.environment_suffix}"
+        )
+
+        CfnOutput(
+            self,
+            "KinesisStreamArn",
+            value=self.kinesis_stream.stream_arn,
+            description="ARN of the Kinesis Data Stream",
+            export_name=f"FraudStreamArn-{self.env_name}-{self.environment_suffix}"
+        )
+
+        # DynamoDB table outputs
+        CfnOutput(
+            self,
+            "DynamoDBTableName",
+            value=self.dynamodb_table.table_name,
+            description="Name of the DynamoDB table",
+            export_name=f"FraudTableName-{self.env_name}-{self.environment_suffix}"
+        )
+
+        CfnOutput(
+            self,
+            "DynamoDBTableArn",
+            value=self.dynamodb_table.table_arn,
+            description="ARN of the DynamoDB table",
+            export_name=f"FraudTableArn-{self.env_name}-{self.environment_suffix}"
+        )
+
+        # S3 bucket outputs
+        CfnOutput(
+            self,
+            "S3BucketName",
+            value=self.s3_bucket.bucket_name,
+            description="Name of the S3 bucket",
+            export_name=f"FraudBucketName-{self.env_name}-{self.environment_suffix}"
+        )
+
+        CfnOutput(
+            self,
+            "S3BucketArn",
+            value=self.s3_bucket.bucket_arn,
+            description="ARN of the S3 bucket",
+            export_name=f"FraudBucketArn-{self.env_name}-{self.environment_suffix}"
+        )
+
+        # Lambda function outputs
+        CfnOutput(
+            self,
+            "LambdaFunctionName",
+            value=self.processor_lambda.function_name,
+            description="Name of the fraud processor Lambda function",
+            export_name=f"FraudLambdaName-{self.env_name}-{self.environment_suffix}"
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionArn",
+            value=self.processor_lambda.function_arn,
+            description="ARN of the fraud processor Lambda function",
+            export_name=f"FraudLambdaArn-{self.env_name}-{self.environment_suffix}"
+        )
+
+        # SNS topic outputs
+        CfnOutput(
+            self,
+            "SNSTopicArn",
+            value=self.alarm_topic.topic_arn,
+            description="ARN of the SNS topic for alarms",
+            export_name=f"FraudSNSTopicArn-{self.env_name}-{self.environment_suffix}"
+        )
+
+        # SSM parameter outputs
+        CfnOutput(
+            self,
+            "SSMApiKeyParameter",
+            value=f"/fraud-detection/{self.env_name}/api-key",
+            description="SSM parameter path for API key",
+            export_name=f"FraudAPIKeyParam-{self.env_name}-{self.environment_suffix}"
+        )
+
+        CfnOutput(
+            self,
+            "SSMConnectionStringParameter",
+            value=f"/fraud-detection/{self.env_name}/connection-string",
+            description="SSM parameter path for connection string",
+            export_name=(
+                f"FraudConnectionParam-{self.env_name}-{self.environment_suffix}"
+            )
+        )
