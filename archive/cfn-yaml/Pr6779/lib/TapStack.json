@@ -1,0 +1,1214 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Advanced Observability Stack for Distributed Payment Processing",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Log Configuration"
+                    },
+                    "Parameters": [
+                        "LogRetentionDays",
+                        "KinesisShardCount"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Alert Configuration"
+                    },
+                    "Parameters": [
+                        "AlertEmail",
+                        "HighLatencyThreshold",
+                        "ErrorRateThreshold"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 30,
+            "Description": "CloudWatch Logs retention period in days",
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ]
+        },
+        "KinesisShardCount": {
+            "Type": "Number",
+            "Default": 2,
+            "MinValue": 1,
+            "MaxValue": 10,
+            "Description": "Number of shards for Kinesis Data Stream"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "alerts@example.com",
+            "Description": "Email address for critical alerts",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        },
+        "HighLatencyThreshold": {
+            "Type": "Number",
+            "Default": 1000,
+            "Description": "High latency threshold in milliseconds"
+        },
+        "ErrorRateThreshold": {
+            "Type": "Number",
+            "Default": 5,
+            "Description": "Error rate threshold percentage"
+        }
+    },
+    "Resources": {
+        "CloudWatchLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "CloudWatchLogsRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "logs.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+                ]
+            }
+        },
+        "KinesisFirehoseRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "KinesisFirehoseRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "firehose.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "FirehoseKinesisPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:DescribeStream",
+                                        "kinesis:GetShardIterator",
+                                        "kinesis:GetRecords",
+                                        "kinesis:ListShards"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:AbortMultipartUpload",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetObject",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketMultipartUploads",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "LogBackupBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${LogBackupBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "FirehoseLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "ObservabilityLambdaRole-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "MetricsProcessingPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudwatch:PutMetricData",
+                                        "cloudwatch:GetMetricData",
+                                        "cloudwatch:GetMetricStatistics"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kinesis:GetRecords",
+                                        "kinesis:GetShardIterator",
+                                        "kinesis:DescribeStream",
+                                        "kinesis:ListShards"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "LogStream",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "CriticalAlertTopic"
+                                        },
+                                        {
+                                            "Ref": "WarningAlertTopic"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "LogBackupBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "payment-logs-backup-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        },
+                        {
+                            "Id": "TransitionToIA",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "PaymentTransactionLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/payment/transactions-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "LogEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "PaymentAuthLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/payment/auth-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "LogEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "PaymentSettlementLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/payment/settlement-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "LogEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "PaymentFraudLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/payment/fraud-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "LogEncryptionKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "FirehoseLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/kinesisfirehose/payment-logs-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "FirehoseLogStream": {
+            "Type": "AWS::Logs::LogStream",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "FirehoseLogGroup"
+                },
+                "LogStreamName": "opensearch-delivery"
+            }
+        },
+        "MetricsProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/metrics-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            }
+        },
+        "LogEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for encrypting payment logs - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnLike": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LogEncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/payment-logs-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "LogEncryptionKey"
+                }
+            }
+        },
+        "LogStream": {
+            "Type": "AWS::Kinesis::Stream",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-stream-${EnvironmentSuffix}"
+                },
+                "ShardCount": {
+                    "Ref": "KinesisShardCount"
+                },
+                "RetentionPeriodHours": 24,
+                "StreamEncryption": {
+                    "EncryptionType": "KMS",
+                    "KeyId": {
+                        "Ref": "LogEncryptionKey"
+                    }
+                }
+            }
+        },
+        "OpenSearchEncryptionPolicy": {
+            "Type": "AWS::OpenSearchServerless::SecurityPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-encryption-${EnvironmentSuffix}"
+                },
+                "Type": "encryption",
+                "Description": {
+                    "Fn::Sub": "Encryption policy for payment logs OpenSearch collection - ${EnvironmentSuffix}"
+                },
+                "Policy": {
+                    "Fn::Sub": "{\n  \"Rules\": [\n    {\n      \"ResourceType\": \"collection\",\n      \"Resource\": [\n        \"collection/payment-logs-${EnvironmentSuffix}\"\n      ]\n    }\n  ],\n  \"AWSOwnedKey\": true\n}\n"
+                }
+            }
+        },
+        "OpenSearchNetworkPolicy": {
+            "Type": "AWS::OpenSearchServerless::SecurityPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-network-${EnvironmentSuffix}"
+                },
+                "Type": "network",
+                "Description": {
+                    "Fn::Sub": "Network policy for payment logs OpenSearch collection - ${EnvironmentSuffix}"
+                },
+                "Policy": {
+                    "Fn::Sub": "[\n  {\n    \"Rules\": [\n      {\n        \"ResourceType\": \"collection\",\n        \"Resource\": [\n          \"collection/payment-logs-${EnvironmentSuffix}\"\n        ]\n      },\n      {\n        \"ResourceType\": \"dashboard\",\n        \"Resource\": [\n          \"collection/payment-logs-${EnvironmentSuffix}\"\n        ]\n      }\n    ],\n    \"AllowFromPublic\": true\n  }\n]\n"
+                }
+            }
+        },
+        "OpenSearchAccessPolicy": {
+            "Type": "AWS::OpenSearchServerless::AccessPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-access-${EnvironmentSuffix}"
+                },
+                "Type": "data",
+                "Description": {
+                    "Fn::Sub": "Data access policy for payment logs OpenSearch collection - ${EnvironmentSuffix}"
+                },
+                "Policy": {
+                    "Fn::Sub": "[\n  {\n    \"Rules\": [\n      {\n        \"ResourceType\": \"collection\",\n        \"Resource\": [\n          \"collection/payment-logs-${EnvironmentSuffix}\"\n        ],\n        \"Permission\": [\n          \"aoss:*\"\n        ]\n      },\n      {\n        \"ResourceType\": \"index\",\n        \"Resource\": [\n          \"index/payment-logs-${EnvironmentSuffix}/*\"\n        ],\n        \"Permission\": [\n          \"aoss:*\"\n        ]\n      }\n    ],\n    \"Principal\": [\n      \"arn:aws:iam::${AWS::AccountId}:root\",\n      \"${KinesisFirehoseRole.Arn}\"\n    ]\n  }\n]\n"
+                }
+            }
+        },
+        "OpenSearchDomain": {
+            "Type": "AWS::OpenSearchServerless::Collection",
+            "DeletionPolicy": "Delete",
+            "DependsOn": [
+                "OpenSearchEncryptionPolicy",
+                "OpenSearchNetworkPolicy",
+                "OpenSearchAccessPolicy"
+            ],
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-${EnvironmentSuffix}"
+                },
+                "Type": "SEARCH",
+                "Description": "OpenSearch Serverless collection for payment logs"
+            }
+        },
+        "LogDeliveryStream": {
+            "Type": "AWS::KinesisFirehose::DeliveryStream",
+            "DependsOn": [
+                "FirehoseOpenSearchPolicy"
+            ],
+            "Properties": {
+                "DeliveryStreamName": {
+                    "Fn::Sub": "payment-logs-delivery-${EnvironmentSuffix}"
+                },
+                "DeliveryStreamType": "KinesisStreamAsSource",
+                "KinesisStreamSourceConfiguration": {
+                    "KinesisStreamARN": {
+                        "Fn::GetAtt": [
+                            "LogStream",
+                            "Arn"
+                        ]
+                    },
+                    "RoleARN": {
+                        "Fn::GetAtt": [
+                            "KinesisFirehoseRole",
+                            "Arn"
+                        ]
+                    }
+                },
+                "AmazonOpenSearchServerlessDestinationConfiguration": {
+                    "CollectionEndpoint": {
+                        "Fn::GetAtt": [
+                            "OpenSearchDomain",
+                            "CollectionEndpoint"
+                        ]
+                    },
+                    "IndexName": "payment-logs",
+                    "RoleARN": {
+                        "Fn::GetAtt": [
+                            "KinesisFirehoseRole",
+                            "Arn"
+                        ]
+                    },
+                    "S3BackupMode": "FailedDocumentsOnly",
+                    "S3Configuration": {
+                        "BucketARN": {
+                            "Fn::GetAtt": [
+                                "LogBackupBucket",
+                                "Arn"
+                            ]
+                        },
+                        "RoleARN": {
+                            "Fn::GetAtt": [
+                                "KinesisFirehoseRole",
+                                "Arn"
+                            ]
+                        },
+                        "CompressionFormat": "GZIP",
+                        "Prefix": "failed/"
+                    },
+                    "CloudWatchLoggingOptions": {
+                        "Enabled": true,
+                        "LogGroupName": {
+                            "Ref": "FirehoseLogGroup"
+                        },
+                        "LogStreamName": {
+                            "Ref": "FirehoseLogStream"
+                        }
+                    },
+                    "ProcessingConfiguration": {
+                        "Enabled": false
+                    }
+                }
+            }
+        },
+        "FirehoseOpenSearchPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "FirehoseOpenSearchPolicy-${EnvironmentSuffix}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "KinesisFirehoseRole"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "es:*"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "OpenSearchDomain",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${OpenSearchDomain.Arn}/*"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "MetricsProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "payment-metrics-processor-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "CRITICAL_ALERT_TOPIC": {
+                            "Ref": "CriticalAlertTopic"
+                        },
+                        "WARNING_ALERT_TOPIC": {
+                            "Ref": "WarningAlertTopic"
+                        },
+                        "HIGH_LATENCY_THRESHOLD": {
+                            "Ref": "HighLatencyThreshold"
+                        },
+                        "ERROR_RATE_THRESHOLD": {
+                            "Ref": "ErrorRateThreshold"
+                        }
+                    }
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime, timedelta\nimport base64\n\ncloudwatch = boto3.client('cloudwatch')\nsns = boto3.client('sns')\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Process payment transaction logs from Kinesis and generate custom metrics\n    \"\"\"\n    print(f\"Processing {len(event['Records'])} records\")\n\n    metrics = {\n        'success_count': 0,\n        'failure_count': 0,\n        'total_latency': 0,\n        'transaction_count': 0,\n        'fraud_detected': 0\n    }\n\n    for record in event['Records']:\n        try:\n            # Decode Kinesis data\n            payload = base64.b64decode(record['kinesis']['data']).decode('utf-8')\n            log_data = json.loads(payload)\n\n            # Process payment transaction metrics\n            if 'status' in log_data:\n                if log_data['status'] == 'success':\n                    metrics['success_count'] += 1\n                else:\n                    metrics['failure_count'] += 1\n\n            if 'latency' in log_data:\n                metrics['total_latency'] += float(log_data['latency'])\n\n            if 'fraud_score' in log_data and float(log_data['fraud_score']) > 0.8:\n                metrics['fraud_detected'] += 1\n\n            metrics['transaction_count'] += 1\n\n        except Exception as e:\n            print(f\"Error processing record: {str(e)}\")\n            continue\n\n    # Publish custom metrics to CloudWatch\n    try:\n        namespace = f\"PaymentProcessing-{os.environ['ENVIRONMENT_SUFFIX']}\"\n\n        cloudwatch.put_metric_data(\n            Namespace=namespace,\n            MetricData=[\n                {\n                    'MetricName': 'TransactionSuccess',\n                    'Value': metrics['success_count'],\n                    'Unit': 'Count',\n                    'Timestamp': datetime.utcnow()\n                },\n                {\n                    'MetricName': 'TransactionFailure',\n                    'Value': metrics['failure_count'],\n                    'Unit': 'Count',\n                    'Timestamp': datetime.utcnow()\n                },\n                {\n                    'MetricName': 'FraudDetected',\n                    'Value': metrics['fraud_detected'],\n                    'Unit': 'Count',\n                    'Timestamp': datetime.utcnow()\n                }\n            ]\n        )\n\n        # Calculate and publish average latency\n        if metrics['transaction_count'] > 0:\n            avg_latency = metrics['total_latency'] / metrics['transaction_count']\n            cloudwatch.put_metric_data(\n                Namespace=namespace,\n                MetricData=[\n                    {\n                        'MetricName': 'AverageLatency',\n                        'Value': avg_latency,\n                        'Unit': 'Milliseconds',\n                        'Timestamp': datetime.utcnow()\n                    }\n                ]\n            )\n\n            # Check for high latency alert\n            threshold = float(os.environ['HIGH_LATENCY_THRESHOLD'])\n            if avg_latency > threshold:\n                sns.publish(\n                    TopicArn=os.environ['WARNING_ALERT_TOPIC'],\n                    Subject='High Payment Latency Detected',\n                    Message=f'Average payment latency ({avg_latency:.2f}ms) exceeded threshold ({threshold}ms)'\n                )\n\n        # Calculate error rate\n        if metrics['transaction_count'] > 0:\n            error_rate = (metrics['failure_count'] / metrics['transaction_count']) * 100\n            cloudwatch.put_metric_data(\n                Namespace=namespace,\n                MetricData=[\n                    {\n                        'MetricName': 'ErrorRate',\n                        'Value': error_rate,\n                        'Unit': 'Percent',\n                        'Timestamp': datetime.utcnow()\n                    }\n                ]\n            )\n\n            # Check for high error rate alert\n            error_threshold = float(os.environ['ERROR_RATE_THRESHOLD'])\n            if error_rate > error_threshold:\n                sns.publish(\n                    TopicArn=os.environ['CRITICAL_ALERT_TOPIC'],\n                    Subject='Critical: High Payment Error Rate',\n                    Message=f'Payment error rate ({error_rate:.2f}%) exceeded threshold ({error_threshold}%)'\n                )\n\n        print(f\"Successfully published metrics: {metrics}\")\n\n    except Exception as e:\n        print(f\"Error publishing metrics: {str(e)}\")\n        raise\n\n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'Metrics processed successfully',\n            'metrics': metrics\n        })\n    }\n"
+                }
+            }
+        },
+        "MetricsProcessorEventSourceMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "LogStream",
+                        "Arn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "MetricsProcessorFunction"
+                },
+                "StartingPosition": "LATEST",
+                "BatchSize": 100,
+                "MaximumBatchingWindowInSeconds": 10
+            }
+        },
+        "CriticalAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "payment-critical-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Critical Payment Processing Alerts",
+                "KmsMasterKeyId": {
+                    "Ref": "LogEncryptionKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ]
+            }
+        },
+        "WarningAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "payment-warning-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Warning Payment Processing Alerts",
+                "KmsMasterKeyId": {
+                    "Ref": "LogEncryptionKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "AlertEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ]
+            }
+        },
+        "InfoAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "payment-info-alerts-${EnvironmentSuffix}"
+                },
+                "DisplayName": "Informational Payment Processing Alerts",
+                "KmsMasterKeyId": {
+                    "Ref": "LogEncryptionKey"
+                }
+            }
+        },
+        "HighErrorRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-high-error-rate-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Triggered when payment error rate exceeds threshold",
+                "MetricName": "ErrorRate",
+                "Namespace": {
+                    "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+                },
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Ref": "ErrorRateThreshold"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "CriticalAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "HighLatencyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-high-latency-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Triggered when average payment latency exceeds threshold",
+                "MetricName": "AverageLatency",
+                "Namespace": {
+                    "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+                },
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Ref": "HighLatencyThreshold"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "WarningAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "FraudDetectionAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-fraud-detected-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Triggered when fraud is detected in payment transactions",
+                "MetricName": "FraudDetected",
+                "Namespace": {
+                    "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+                },
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "CriticalAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "metrics-processor-errors-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Triggered when Lambda metrics processor has errors",
+                "MetricName": "Errors",
+                "Namespace": "AWS/Lambda",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "MetricsProcessorFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 5,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "WarningAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "OpenSearchClusterStatusAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "opensearch-cluster-status-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Triggered when OpenSearch cluster status is red",
+                "MetricName": "5xx",
+                "Namespace": "AWS/AOSS",
+                "Dimensions": [
+                    {
+                        "Name": "CollectionName",
+                        "Value": {
+                            "Ref": "OpenSearchDomain"
+                        }
+                    }
+                ],
+                "Statistic": "Maximum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "AlarmActions": [
+                    {
+                        "Ref": "CriticalAlertTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "PaymentProcessingDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "payment-processing-${EnvironmentSuffix}"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"PaymentProcessing-${EnvironmentSuffix}\",\n            \"TransactionSuccess\",\n            { \"stat\": \"Sum\", \"id\": \"m1\" }\n          ],\n          [\n            \"PaymentProcessing-${EnvironmentSuffix}\",\n            \"TransactionFailure\",\n            { \"stat\": \"Sum\", \"id\": \"m2\" }\n          ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Transaction Volume\",\n        \"yAxis\": {\n          \"left\": { \"min\": 0 }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"PaymentProcessing-${EnvironmentSuffix}\",\n            \"AverageLatency\",\n            { \"stat\": \"Average\", \"id\": \"lat\" }\n          ]\n        ],\n        \"period\": 300,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Average Payment Latency (ms)\",\n        \"yAxis\": {\n          \"left\": { \"min\": 0 }\n        },\n        \"annotations\": {\n          \"horizontal\": [\n            {\n              \"label\": \"High Latency Threshold\",\n              \"value\": ${HighLatencyThreshold}\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"PaymentProcessing-${EnvironmentSuffix}\",\n            \"ErrorRate\",\n            { \"stat\": \"Average\", \"id\": \"err\" }\n          ]\n        ],\n        \"period\": 300,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Error Rate (%)\",\n        \"yAxis\": {\n          \"left\": { \"min\": 0, \"max\": 100 }\n        },\n        \"annotations\": {\n          \"horizontal\": [\n            {\n              \"label\": \"Error Rate Threshold\",\n              \"value\": ${ErrorRateThreshold}\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"PaymentProcessing-${EnvironmentSuffix}\",\n            \"FraudDetected\",\n            { \"stat\": \"Sum\", \"id\": \"fraud\" }\n          ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Fraud Detections\",\n        \"yAxis\": {\n          \"left\": { \"min\": 0 }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"AWS/Lambda\",\n            \"Invocations\",\n            \"FunctionName\",\n            \"payment-metrics-processor-${EnvironmentSuffix}\",\n            { \"stat\": \"Sum\", \"id\": \"lm1\" }\n          ],\n          [\n            \"AWS/Lambda\",\n            \"Errors\",\n            \"FunctionName\",\n            \"payment-metrics-processor-${EnvironmentSuffix}\",\n            { \"stat\": \"Sum\", \"id\": \"lm2\" }\n          ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Lambda Metrics Processor Health\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"AWS/Kinesis\",\n            \"IncomingRecords\",\n            \"StreamName\",\n            \"payment-logs-stream-${EnvironmentSuffix}\",\n            { \"stat\": \"Sum\", \"id\": \"kin1\" }\n          ],\n          [\n            \"AWS/Kinesis\",\n            \"IncomingBytes\",\n            \"StreamName\",\n            \"payment-logs-stream-${EnvironmentSuffix}\",\n            { \"stat\": \"Sum\", \"id\": \"kin2\" }\n          ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Kinesis Stream Throughput\",\n        \"yAxis\": {\n          \"right\": { \"min\": 0 }\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\n            \"AWS/AOSS\",\n            \"5xx\",\n            \"CollectionName\",\n            \"payment-logs-${EnvironmentSuffix}\",\n            { \"stat\": \"Maximum\", \"id\": \"oss1\" }\n          ]\n        ],\n        \"region\": \"${AWS::Region}\",\n        \"period\": 60,\n        \"title\": \"OpenSearch Serverless Errors\"\n      }\n    },\n    {\n      \"type\": \"log\",\n      \"properties\": {\n        \"query\": \"SOURCE '/aws/payment/transactions-${EnvironmentSuffix}'\\\\n| fields @timestamp, @message\\\\n| sort @timestamp desc\\\\n| limit 20\",\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"Recent Payment Transaction Logs\",\n        \"stacked\": false\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "XRaySamplingRule": {
+            "Type": "AWS::XRay::SamplingRule",
+            "Properties": {
+                "SamplingRule": {
+                    "RuleName": {
+                        "Fn::Sub": "payment-${EnvironmentSuffix}"
+                    },
+                    "Priority": 1000,
+                    "Version": 1,
+                    "ReservoirSize": 1,
+                    "FixedRate": 0.1,
+                    "ServiceName": {
+                        "Fn::Sub": "payment-service-${EnvironmentSuffix}"
+                    },
+                    "ServiceType": "*",
+                    "Host": "*",
+                    "HTTPMethod": "*",
+                    "URLPath": "*",
+                    "ResourceARN": "*"
+                }
+            }
+        },
+        "TransactionErrorMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "FilterPattern": "[time, request_id, level = ERROR*, ...]",
+                "LogGroupName": {
+                    "Ref": "PaymentTransactionLogGroup"
+                },
+                "MetricTransformations": [
+                    {
+                        "MetricName": "TransactionErrors",
+                        "MetricNamespace": {
+                            "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+                        },
+                        "MetricValue": "1",
+                        "DefaultValue": 0,
+                        "Unit": "Count"
+                    }
+                ]
+            }
+        },
+        "AuthenticationFailureMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "FilterPattern": "[time, request_id, level, event_type = AUTHENTICATION_FAILURE, ...]",
+                "LogGroupName": {
+                    "Ref": "PaymentAuthLogGroup"
+                },
+                "MetricTransformations": [
+                    {
+                        "MetricName": "AuthenticationFailures",
+                        "MetricNamespace": {
+                            "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+                        },
+                        "MetricValue": "1",
+                        "DefaultValue": 0,
+                        "Unit": "Count"
+                    }
+                ]
+            }
+        },
+        "HighValueTransactionMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "FilterPattern": "[time, request_id, level, event_type, amount > 10000, ...]",
+                "LogGroupName": {
+                    "Ref": "PaymentTransactionLogGroup"
+                },
+                "MetricTransformations": [
+                    {
+                        "MetricName": "HighValueTransactions",
+                        "MetricNamespace": {
+                            "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+                        },
+                        "MetricValue": "1",
+                        "DefaultValue": 0,
+                        "Unit": "Count"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "PaymentTransactionLogGroupName": {
+            "Description": "CloudWatch Log Group for payment transactions",
+            "Value": {
+                "Ref": "PaymentTransactionLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TransactionLogGroup"
+                }
+            }
+        },
+        "PaymentAuthLogGroupName": {
+            "Description": "CloudWatch Log Group for payment authentication",
+            "Value": {
+                "Ref": "PaymentAuthLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AuthLogGroup"
+                }
+            }
+        },
+        "PaymentSettlementLogGroupName": {
+            "Description": "CloudWatch Log Group for payment settlement",
+            "Value": {
+                "Ref": "PaymentSettlementLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SettlementLogGroup"
+                }
+            }
+        },
+        "PaymentFraudLogGroupName": {
+            "Description": "CloudWatch Log Group for fraud detection",
+            "Value": {
+                "Ref": "PaymentFraudLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FraudLogGroup"
+                }
+            }
+        },
+        "CriticalAlertTopicArn": {
+            "Description": "ARN of the Critical Alert SNS Topic",
+            "Value": {
+                "Ref": "CriticalAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CriticalAlertTopic"
+                }
+            }
+        },
+        "WarningAlertTopicArn": {
+            "Description": "ARN of the Warning Alert SNS Topic",
+            "Value": {
+                "Ref": "WarningAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WarningAlertTopic"
+                }
+            }
+        },
+        "InfoAlertTopicArn": {
+            "Description": "ARN of the Info Alert SNS Topic",
+            "Value": {
+                "Ref": "InfoAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-InfoAlertTopic"
+                }
+            }
+        },
+        "LogStreamName": {
+            "Description": "Name of the Kinesis Data Stream for logs",
+            "Value": {
+                "Ref": "LogStream"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogStream"
+                }
+            }
+        },
+        "LogStreamArn": {
+            "Description": "ARN of the Kinesis Data Stream",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LogStream",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogStreamArn"
+                }
+            }
+        },
+        "OpenSearchDomainEndpoint": {
+            "Description": "OpenSearch domain endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "OpenSearchDomain",
+                    "CollectionEndpoint"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OpenSearchEndpoint"
+                }
+            }
+        },
+        "OpenSearchDashboardUrl": {
+            "Description": "OpenSearch Dashboards URL",
+            "Value": {
+                "Fn::Sub": "https://${OpenSearchDomain.CollectionEndpoint}/_dashboards"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OpenSearchDashboardUrl"
+                }
+            }
+        },
+        "DashboardUrl": {
+            "Description": "CloudWatch Dashboard URL",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=payment-processing-${EnvironmentSuffix}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DashboardUrl"
+                }
+            }
+        },
+        "XRayServiceName": {
+            "Description": "X-Ray service name for distributed tracing",
+            "Value": {
+                "Fn::Sub": "payment-service-${EnvironmentSuffix}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-XRayServiceName"
+                }
+            }
+        },
+        "MetricsProcessorFunctionArn": {
+            "Description": "ARN of the metrics processor Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MetricsProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MetricsProcessorArn"
+                }
+            }
+        },
+        "LogBackupBucketName": {
+            "Description": "S3 bucket for log backups",
+            "Value": {
+                "Ref": "LogBackupBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogBackupBucket"
+                }
+            }
+        },
+        "LogEncryptionKeyId": {
+            "Description": "KMS Key ID for log encryption",
+            "Value": {
+                "Ref": "LogEncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogEncryptionKey"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        }
+    }
+}

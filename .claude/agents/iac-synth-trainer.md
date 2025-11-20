@@ -2948,13 +2948,37 @@ Action: Fix dependency order → Retry deployment
 Result: ✅ Fixed on retry 3 → Continue
 ```
 
-**Example 3: Blocking - Max Retries Reached**
+**Example 3: Blocking - Max Retries Reached (ENHANCED)**
 ```
 Error: Deployment failed - Same error after 5 attempts
 Type: Blocking
-Can Fix: NO (max retries reached)
-Action: Mark PR as failed → Add comment → Continue to next PR
-Result: ❌ PR marked as failed → Next PR
+Can Fix: YES (try alternative strategy)
+
+**Alternative Fix Strategies** (before marking failed):
+1. **Code Restructuring**: 
+   - Break down complex resources into smaller units
+   - Split stack into multiple stacks
+   - Simplify resource dependencies
+   
+2. **Different Approach**:
+   - Try different AWS service configuration
+   - Use alternative resource types
+   - Change deployment order
+   
+3. **Workaround**:
+   - Use CloudFormation custom resources
+   - Implement Lambda-based provisioning
+   - Use Terraform null resources for complex logic
+
+**Action Flow**:
+1. Max retries (5) reached with same error
+2. Analyze error pattern using detect-alternative-strategy.sh
+3. Determine if alternative strategy exists
+4. If YES: Attempt alternative fix (1 additional attempt)
+5. If alternative succeeds: Mark FIXED
+6. If alternative fails: Mark FAILED with both error types documented
+
+Result: ✅ Try alternative → If succeeds: FIXED | If fails: FAILED
 ```
 
 **Example 4: Blocking - User Intervention Required**

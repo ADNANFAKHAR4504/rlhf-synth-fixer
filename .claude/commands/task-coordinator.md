@@ -521,7 +521,7 @@ echo "us-east-1" > lib/AWS_REGION  # or specified region
 
 If unable to finish task: set task status in CSV as "error" and put error info in trainr_notes column.
 
-### Error Handling for PR Creation Failures
+### Error Handling for PR Creation Failures (ENHANCED)
 
 If PR creation fails:
 
@@ -529,21 +529,53 @@ If PR creation fails:
    ```bash
    ERROR_MESSAGE="<detailed error>"
    ERROR_STEP="<step: commit/push/pr-create/csv-update>"
+   ERROR_TYPE="<auth|network|git|permission|other>"
    ```
 
-2. **Update CSV with error**:
+2. **Classify error type**:
+   ```bash
+   # Transient errors (should retry)
+   TRANSIENT_ERRORS=("network" "timeout" "rate limit" "temporary" "connection")
+   
+   # Permanent errors (should not retry)
+   PERMANENT_ERRORS=("permission denied" "invalid" "not found" "conflict" "already exists")
+   ```
+
+3. **Retry logic for transient errors**:
+   ```bash
+   MAX_RETRIES=3
+   RETRY_DELAY=5  # seconds
+   
+   # Use retry-operation.sh script
+   if echo "$ERROR_MESSAGE" | grep -qiE "$(IFS='|'; echo "${TRANSIENT_ERRORS[*]}")"; then
+     echo "⚠️ Transient error detected, attempting retry..."
+     if bash .claude/scripts/retry-operation.sh \
+       "retry_${ERROR_STEP}_operation" \
+       "$MAX_RETRIES" \
+       "$RETRY_DELAY"; then
+       echo "✅ Retry succeeded!"
+       # Continue with normal flow
+       exit 0
+     fi
+   fi
+   ```
+
+4. **Update CSV with error** (only if all retries failed):
    ```bash
    cd ../../  # Return to main repo if needed
 
    # Thread-safe error marking (uses file locking)
-   ./.claude/scripts/task-manager.sh mark-error "${TASK_ID}" "${ERROR_MESSAGE}" "${ERROR_STEP}"
+   ./.claude/scripts/task-manager.sh mark-error "${TASK_ID}" \
+     "${ERROR_MESSAGE} (after ${MAX_RETRIES} retries)" \
+     "${ERROR_STEP}"
    ```
 
-3. **Report with recovery options**:
+5. **Report with recovery options**:
    ```
    ❌ Task ${TASK_ID} failed at ${ERROR_STEP}
    Error: ${ERROR_MESSAGE}
-
+   Retries attempted: ${attempt}/${MAX_RETRIES}
+   
    Recovery:
    - Auth issues: Run 'gh auth login' and retry PHASE 5
    - Network issues: Check connectivity and retry
