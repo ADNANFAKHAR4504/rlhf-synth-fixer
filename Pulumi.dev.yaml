@@ -1,4 +1,0 @@
-config:
-  aws:region: us-east-1
-  trading-analytics:virtualenv: /home/anurag/.local/share/virtualenvs/synth-101912520-QrAWASqy
-encryptionsalt: v1:YvAO3M2BTMQ=:v1:IshevSnnMoFDmQfL:bZS0fnHoxhg11Z1mnfLVQxdwoGjnkQ==

@@ -8,11 +8,7 @@
   "startedAt": "2025-11-20T09:08:14+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Lambda",
-    "DynamoDB",
-    "S3",
-    "CloudWatch",
-    "IAM"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "Lambda",
@@ -22,5 +18,7 @@
     "IAM",
     "VPC"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }

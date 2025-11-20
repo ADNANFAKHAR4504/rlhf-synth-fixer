@@ -1,24 +1,49 @@
 """Trading Analytics Platform Stack for Pulumi."""
 import json
+from typing import Optional
+
 import pulumi
 import pulumi_aws as aws
+from pulumi import ResourceOptions
 
 
-class TradingAnalyticsStack:
+class TapStackArgs:
+    """
+    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+
+    Args:
+        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+        tags (Optional[dict]): Optional default tags to apply to resources.
+    """
+
+    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.tags = tags
+
+
+class TapStack(pulumi.ComponentResource):
     """
     Reusable stack class for trading analytics platform.
     Accepts environment name and creates appropriate resources.
     """
 
-    def __init__(self, name: str, environment: str):
+    def __init__(
+        self,
+        name: str,
+        args: TapStackArgs,
+        opts: Optional[ResourceOptions] = None
+    ):
         """
         Initialize the trading analytics stack.
 
         Args:
             name: The name of the stack
-            environment: The environment name (dev, staging, production)
+            args: TapStackArgs containing environment_suffix and tags
+            opts: Pulumi ResourceOptions
         """
-        self.environment = environment
+        super().__init__('tap:stack:TapStack', name, None, opts)
+
+        self.environment = args.environment_suffix
         self.region = aws.get_region().name
         self.account_id = aws.get_caller_identity().account_id
 
@@ -26,15 +51,18 @@ class TradingAnalyticsStack:
         self.config = self._get_environment_config()
 
         # Resource name suffix for uniqueness
-        self.suffix = f"{environment}-{self.region}"
+        self.suffix = f"{self.environment}-{self.region}"
 
         # Common tags for all resources
         self.common_tags = {
-            'Environment': environment,
+            'Environment': self.environment,
             'ManagedBy': 'Pulumi',
             'Project': 'TradingAnalytics',
             'Region': self.region
         }
+        # Merge with provided tags if any
+        if args.tags:
+            self.common_tags.update(args.tags)
 
         # Create VPC for compute isolation
         self.vpc = self._create_vpc()
@@ -53,6 +81,9 @@ class TradingAnalyticsStack:
 
         # Create Lambda function for data processing
         self.lambda_function = self._create_lambda_function()
+
+        # Register outputs if needed
+        self.register_outputs({})
 
     def _get_environment_config(self):
         """Get environment-specific configuration values."""
@@ -91,7 +122,8 @@ class TradingAnalyticsStack:
             cidr_block='10.0.0.0/16',
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={**self.common_tags, 'Name': f'vpc-{self.suffix}'}
+            tags={**self.common_tags, 'Name': f'vpc-{self.suffix}'},
+            opts=ResourceOptions(parent=self)
         )
 
         # Create private subnet
@@ -100,7 +132,8 @@ class TradingAnalyticsStack:
             vpc_id=vpc.id,
             cidr_block='10.0.1.0/24',
             availability_zone=f'{self.region}a',
-            tags={**self.common_tags, 'Name': f'private-subnet-{self.suffix}'}
+            tags={**self.common_tags, 'Name': f'private-subnet-{self.suffix}'},
+            opts=ResourceOptions(parent=self)
         )
 
         return vpc
@@ -126,14 +159,16 @@ class TradingAnalyticsStack:
         role = aws.iam.Role(
             f'lambda-role-{self.suffix}',
             assume_role_policy=assume_role_policy.json,
-            tags=self.common_tags
+            tags=self.common_tags,
+            opts=ResourceOptions(parent=self)
         )
 
         # Attach basic Lambda execution policy
         aws.iam.RolePolicyAttachment(
             f'lambda-basic-execution-{self.suffix}',
             role=role.name,
-            policy_arn='arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+            policy_arn='arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+            opts=ResourceOptions(parent=self)
         )
 
         # Create custom policy for DynamoDB and S3 access
@@ -180,14 +215,16 @@ class TradingAnalyticsStack:
                     }
                 ]
             })),
-            tags=self.common_tags
+            tags=self.common_tags,
+            opts=ResourceOptions(parent=self)
         )
 
         # Attach custom policy to role
         aws.iam.RolePolicyAttachment(
             f'lambda-custom-attachment-{self.suffix}',
             role=role.name,
-            policy_arn=custom_policy.arn
+            policy_arn=custom_policy.arn,
+            opts=ResourceOptions(parent=self)
         )
 
         return role
@@ -198,7 +235,8 @@ class TradingAnalyticsStack:
             f'data-archive-{self.suffix}',
             bucket=f'data-archive-{self.suffix}',
             tags=self.common_tags,
-            force_destroy=True  # Allow destruction for all environments
+            force_destroy=True,  # Allow destruction for all environments
+            opts=ResourceOptions(parent=self)
         )
 
         # Enable versioning only for production
@@ -208,7 +246,8 @@ class TradingAnalyticsStack:
                 bucket=bucket.id,
                 versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
                     status='Enabled'
-                )
+                ),
+                opts=ResourceOptions(parent=self)
             )
 
         # Block public access
@@ -218,7 +257,8 @@ class TradingAnalyticsStack:
             block_public_acls=True,
             block_public_policy=True,
             ignore_public_acls=True,
-            restrict_public_buckets=True
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
         )
 
         return bucket
@@ -240,7 +280,8 @@ class TradingAnalyticsStack:
                     type='N'
                 )
             ],
-            'tags': self.common_tags
+            'tags': self.common_tags,
+            'opts': ResourceOptions(parent=self)
         }
 
         # Add read/write capacity for production
@@ -261,7 +302,8 @@ class TradingAnalyticsStack:
             f'lambda-log-group-{self.suffix}',
             name=f'/aws/lambda/data-processor-{self.suffix}',
             retention_in_days=self.config['log_retention_days'],
-            tags=self.common_tags
+            tags=self.common_tags,
+            opts=ResourceOptions(parent=self)
         )
 
         return log_group
@@ -335,7 +377,8 @@ def handler(event, context):
                     'ENVIRONMENT': self.environment
                 }
             ),
-            tags=self.common_tags
+            tags=self.common_tags,
+            opts=ResourceOptions(parent=self)
         )
 
         return lambda_function
