@@ -205,7 +205,10 @@ class TestTransactionProcessingPipelineIntegration:
         )
 
         assert response['Item']['transaction_id']['S'] == 'test-integration-001'
-        assert response['Item']['amount']['N'] == '100.50'
+        # DynamoDB stores numbers without trailing zeros
+        assert float(response['Item']['amount']['N']) == 100.50
+        assert response['Item']['timestamp']['N'] == '1700000000'
+        assert response['Item']['status']['S'] == 'test'
 
         # Cleanup
         self.dynamodb_client.delete_item(
