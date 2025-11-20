@@ -55,8 +55,8 @@ class TestTapStack:
         # Primary VPC
         template.resource_count_is("AWS::EC2::VPC", 2)
 
-        # VPC Peering Connection
-        template.resource_count_is("AWS::EC2::VPCPeeringConnection", 1)
+        # VPC Peering Connection removed (not needed for RDS cross-region read replicas)
+        template.resource_count_is("AWS::EC2::VPCPeeringConnection", 0)
 
         # Gateway VPC Endpoints for S3
         template.resource_count_is("AWS::EC2::VPCEndpoint", 2)

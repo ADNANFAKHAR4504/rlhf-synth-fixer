@@ -1,5 +1,6 @@
 """vpc_stack.py
-VPC infrastructure for primary and replica regions with peering connection.
+VPC infrastructure for primary and replica databases.
+Note: RDS cross-region read replicas do not require VPC peering.
 """
 
 from constructs import Construct
@@ -11,7 +12,10 @@ from aws_cdk import (
 
 class VpcStack(Construct):
     """
-    Creates VPC infrastructure in both us-east-1 and eu-west-1 regions.
+    Creates VPC infrastructure for primary and replica databases.
+
+    Note: Both VPCs are created in the same region (stack's region).
+    RDS cross-region read replicas do not require VPC peering.
 
     Args:
         scope (Construct): The parent construct
@@ -19,9 +23,8 @@ class VpcStack(Construct):
         environment_suffix (str): Environment suffix for resource naming
 
     Attributes:
-        primary_vpc (ec2.Vpc): VPC in us-east-1
-        replica_vpc (ec2.Vpc): VPC in eu-west-1
-        peering_connection (ec2.CfnVPCPeeringConnection): VPC peering connection
+        primary_vpc (ec2.Vpc): VPC for primary database
+        replica_vpc (ec2.Vpc): VPC for replica database
     """
 
     def __init__(
@@ -50,7 +53,9 @@ class VpcStack(Construct):
             ]
         )
 
-        # Replica VPC in eu-west-1 (different CIDR to avoid overlap)
+        # Replica VPC (different CIDR to avoid overlap)
+        # Note: For true multi-region deployment, this would need to be in a separate stack
+        # RDS cross-region read replicas work without VPC peering
         self.replica_vpc = ec2.Vpc(
             self,
             f"ReplicaVpc-{environment_suffix}",
@@ -65,15 +70,6 @@ class VpcStack(Construct):
                     cidr_mask=24
                 )
             ]
-        )
-
-        # VPC Peering Connection between regions
-        self.peering_connection = ec2.CfnVPCPeeringConnection(
-            self,
-            f"VpcPeering-{environment_suffix}",
-            vpc_id=self.primary_vpc.vpc_id,
-            peer_vpc_id=self.replica_vpc.vpc_id,
-            peer_region="eu-west-1"
         )
 
         # VPC Endpoints for S3 (cost optimization - avoid NAT Gateway)
