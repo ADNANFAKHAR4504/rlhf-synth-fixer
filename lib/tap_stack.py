@@ -2,11 +2,13 @@
 AWS Migration Infrastructure Stack
 Implements phased migration of Java API and PostgreSQL database from on-premises to AWS
 """
-import pulumi
-import pulumi_aws as aws
 import json
 from typing import Optional
+
+import pulumi
+import pulumi_aws as aws
 from pulumi import ResourceOptions
+
 
 class TapStackArgs:
     """Configuration arguments for Migration Stack"""
@@ -730,10 +732,16 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Route 53 Weighted Routing for Phased Cutover
-        # Note: Requires a hosted zone. Using placeholder configuration.
-        # In production, replace with actual hosted_zone_id
-        hosted_zone_id = config.get("hostedZoneId") or "Z1234567890ABC"
+        # Create hosted zone for the domain
         domain_name = config.get("domainName") or f"api-{env_suffix}.example.com"
+        hosted_zone = aws.route53.Zone(
+            "api-hosted-zone",
+            name=domain_name,
+            comment=f"Hosted zone for {domain_name}",
+            tags={"Name": f"api-hosted-zone-{env_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+        hosted_zone_id = hosted_zone.zone_id
 
         # AWS endpoint weighted record (10% initial traffic)
         aws_weighted_record = aws.route53.Record(
@@ -786,5 +794,6 @@ class TapStack(pulumi.ComponentResource):
             "sns_topic_arn": alarm_topic.arn,
             "mgn_config_param_name": mgn_config_param.name,
             "mgn_security_group_id": mgn_sg.id,
-            "weighted_dns_name": domain_name
+            "weighted_dns_name": domain_name,
+            "hosted_zone_id": hosted_zone.zone_id
         })
