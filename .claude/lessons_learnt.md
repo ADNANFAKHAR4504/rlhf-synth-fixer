@@ -82,15 +82,33 @@ IF ANY MISSING:
 - Would require 5-8 hours to fix properly
 - Exceeds scope of QA validation (becomes reimplementation)
 
-**Prevention**:
+**Prevention** (UPDATED):
 1. **Task Selection**: Prefer medium/hard complexity over expert for multi-region
 2. **Code Validation Gate**: Add between Phase 2 (generation) and Phase 3 (QA):
    ```bash
    # Verify code compiles/synthesizes
    # Check for empty arrays in critical resources
    # Validate basic AWS resource structure
-   # If fails: Skip QA, mark ERROR immediately
+   # If fails: Attempt automatic fixes using fix-code-health-issues.sh
+   # If fixes fail: Skip QA, mark ERROR
    ```
+
+**Fix Attempt Logic**:
+1. **Empty arrays detected**:
+   - Identify resources with empty arrays
+   - Attempt to populate arrays from context using fix-code-health-issues.sh
+   - If context insufficient: Mark ERROR
+   
+2. **Wrong service architecture**:
+   - Detect architecture mismatch
+   - Attempt to regenerate with correct architecture
+   - If regeneration fails: Mark ERROR
+   
+3. **API syntax errors**:
+   - Parse syntax errors
+   - Attempt automatic syntax fixes using fix-build-errors.sh
+   - If unfixable: Mark ERROR
+
 3. **Model Selection**: Use `sonnet` (not `haiku`) for expert multi-region tasks
 4. **Template Validation**: Ensure generated code matches platform conventions
 
