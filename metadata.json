@@ -11,11 +11,25 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3",
+    "EMR",
+    "Step Functions",
     "Lambda",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "CloudWatch",
+    "CloudWatch Logs",
+    "KMS",
+    "SNS",
+    "Glue"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
