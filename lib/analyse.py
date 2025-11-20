@@ -40,11 +40,42 @@ QUERY_SCAN_COST_PER_GB = 0.0050  # $0.0050 per GB scanned
 
 class CloudWatchLogsAnalyzer:
     def __init__(self):
-        self.logs_client = boto3.client("logs", region_name="us-east-1")
-        self.lambda_client = boto3.client("lambda", region_name="us-east-1")
-        self.ec2_client = boto3.client("ec2", region_name="us-east-1")
-        self.s3_client = boto3.client("s3", region_name="us-east-1")
-        self.cloudwatch_client = boto3.client("cloudwatch", region_name="us-east-1")
+        # Use same configuration as test setup
+        self.logs_client = boto3.client(
+            "logs",
+            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        )
+        self.lambda_client = boto3.client(
+            "lambda",
+            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        )
+        self.ec2_client = boto3.client(
+            "ec2",
+            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        )
+        self.s3_client = boto3.client(
+            "s3",
+            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        )
+        self.cloudwatch_client = boto3.client(
+            "cloudwatch",
+            endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        )
 
         self.log_groups_data = []
         self.monitoring_gaps = []
@@ -1062,10 +1093,10 @@ class CloudWatchLogsAnalyzer:
             }
         }
 
-        with open("cloudwatch_logs_optimization.json", "w") as f:
+        with open("aws_audit_results.json", "w") as f:
             json.dump(output, f, indent=2)
 
-        logger.info("JSON output saved to cloudwatch_logs_optimization.json")
+        logger.info("JSON output saved to aws_audit_results.json")
 
     def _generate_chart(self):
         """Generate retention vs cost analysis chart showing retention period vs monthly cost"""

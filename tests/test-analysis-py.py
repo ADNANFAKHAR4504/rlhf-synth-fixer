@@ -105,25 +105,27 @@ def setup_cloudwatch_logs():
 
 def run_analysis_script():
     """Helper to run the analysis script and return JSON results"""
-    # Path to script and output file
-    script = os.path.join(os.path.dirname(__file__), "..", "lib", "analyse.py")
-    json_output = os.path.join(os.path.dirname(__file__), "..", "aws_audit_results.json")
+    # Import the analyzer and run it directly instead of as subprocess
+    # This ensures it runs in the same process/context as the test
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+
+    from analyse import CloudWatchLogsAnalyzer
 
     # Remove old JSON file if it exists
+    json_output = os.path.join(os.path.dirname(__file__), "..", "aws_audit_results.json")
     if os.path.exists(json_output):
         os.remove(json_output)
 
-    env = {**os.environ}
-    result = subprocess.run([sys.executable, script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    # Run the analyzer
+    analyzer = CloudWatchLogsAnalyzer()
+    analyzer.run()
 
     # Read and parse the JSON output file
     if os.path.exists(json_output):
         with open(json_output, 'r') as f:
             return json.load(f)
     else:
-        # If JSON file wasn't created, return empty dict and print error
-        print(f"STDOUT: {result.stdout}")
-        print(f"STDERR: {result.stderr}")
         return {}
 
 

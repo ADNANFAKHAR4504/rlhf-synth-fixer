@@ -307,7 +307,7 @@ class TestCloudWatchLogsAnalyzer:
         analyzer._generate_json_output()
 
         # Verify file was opened and JSON was dumped
-        mock_file.assert_called_with('cloudwatch_logs_optimization.json', 'w')
+        mock_file.assert_called_with('aws_audit_results.json', 'w')
         assert mock_json_dump.called
 
         # Verify JSON structure
