@@ -157,6 +157,14 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=self.primary_provider)
         )
 
+        # Get database password from Pulumi config (secure)
+        config = pulumi.Config()
+        master_password = config.get_secret("dbPassword")
+        if not master_password:
+            # Fallback for development only - should never be used in production
+            pulumi.log.warn("Using default password - this should NEVER be used in production!")
+            master_password = "ChangeMeInProduction123!"
+
         # Create primary Aurora cluster
         self.primary_cluster = aws.rds.Cluster(
             f"aurora-primary-v2-{self.environment_suffix}",
@@ -164,8 +172,8 @@ class TapStack(pulumi.ComponentResource):
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="appdb",
-            master_username="admin",
-            master_password="TempPassword123!",
+            master_username="dbadmin",
+            master_password=master_password,
             db_subnet_group_name=self.primary_subnet_group.name,
             vpc_security_group_ids=[self.primary_security_group.id],
             global_cluster_identifier=self.global_cluster.id,
