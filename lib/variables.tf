@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource names to enable parallel deployments"
   type        = string
+  default     = "dev"
 }
 
 variable "primary_region" {
