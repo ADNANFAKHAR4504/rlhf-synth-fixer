@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "r7o5p8",
+  "team": "synth",
+  "startedAt": "2025-11-20T19:18:52+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "CloudWatch",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "IAM"
+  ],
+  "training_quality": 10
+}
