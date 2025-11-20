@@ -91,7 +91,12 @@ async function findExecutionByS3Key(
     waitMs = 10000,
   } = options || {};
 
+  console.log(`Searching for execution with S3 key: ${key} (max ${maxAttempts} attempts)`);
+  
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0 && attempt % 6 === 0) {
+      console.log(`Still searching... attempt ${attempt}/${maxAttempts}`);
+    }
     for (const statusFilter of listStatuses) {
       let nextToken: string | undefined;
       do {
@@ -147,6 +152,8 @@ async function waitForProcessedResults(
   maxAttempts = 30,
   waitMs = 10000
 ) {
+  console.log(`Waiting for processed results created after ${minimumTimestamp.toISOString()}`);
+  
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const objects = await s3Client.send(
       new ListObjectsV2Command({
@@ -163,15 +170,21 @@ async function waitForProcessedResults(
     });
 
     if (recentObjects.length > 0) {
+      console.log(`Found ${recentObjects.length} processed objects`);
       return {
         ...objects,
         Contents: recentObjects,
       };
     }
 
+    if (attempt > 0 && attempt % 6 === 0) {
+      console.log(`Still waiting for processed results... attempt ${attempt}/${maxAttempts}`);
+    }
+
     await delay(waitMs);
   }
 
+  console.warn(`No processed results found after ${maxAttempts} attempts`);
   return { Contents: [] };
 }
 
@@ -282,10 +295,14 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
 
   describe('B. Trigger Activation - S3 Event Processing', () => {
     test('should trigger Step Functions execution via S3 event notification', async () => {
+      console.log(`Waiting for S3 event to trigger Lambda for key: ${testDataKey}`);
+      
       mainExecution =
         mainExecution ??
         (await findExecutionByS3Key(testDataKey, {
           listStatuses: ['RUNNING', 'SUCCEEDED'],
+          maxAttempts: 60, // 10 minutes total (60 × 10s)
+          waitMs: 10000,
         }));
 
       expect(mainExecution).toBeTruthy();
@@ -301,6 +318,8 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
         mainExecution ??
         (await findExecutionByS3Key(testDataKey, {
           listStatuses: ['RUNNING', 'SUCCEEDED'],
+          maxAttempts: 60,
+          waitMs: 10000,
         }));
 
       expect(mainExecution).toBeTruthy();
@@ -470,6 +489,7 @@ describe('TapStack Integration Tests - Live End-to-End Workflow', () => {
           listStatuses: ['SUCCEEDED'],
           desiredStatuses: ['SUCCEEDED'],
           maxAttempts: 60,
+          waitMs: 10000,
         }));
 
       expect(mainExecution).toBeTruthy();
