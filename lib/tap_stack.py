@@ -269,7 +269,6 @@ class TapStack(pulumi.ComponentResource):
             "postgres-db",
             identifier=f"migration-postgres-{env_suffix}",
             engine="postgres",
-            engine_version="15.4",
             instance_class="db.t3.medium",
             allocated_storage=100,
             storage_type="gp3",
@@ -358,7 +357,6 @@ class TapStack(pulumi.ComponentResource):
             replication_subnet_group_id=dms_subnet_group.replication_subnet_group_id,
             publicly_accessible=False,
             multi_az=False,
-            engine_version="3.5.2",
             tags={"Name": f"dms-replication-instance-{env_suffix}"},
             opts=ResourceOptions(parent=self, depends_on=[dms_vpc_role, dms_cloudwatch_role])
         )
