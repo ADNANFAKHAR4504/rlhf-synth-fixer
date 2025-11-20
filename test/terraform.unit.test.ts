@@ -172,7 +172,7 @@ describe('Terraform Configuration Unit Tests', () => {
     test('security groups should have proper ingress rules', () => {
       // ALB should allow HTTP/HTTPS (port 80 or 443 mentioned somewhere)
       expect(mainContent).toMatch(/80|443/);
-      
+
       // DB security group should reference app security group
       expect(mainContent).toContain('security_group');
     });
@@ -220,9 +220,9 @@ describe('Terraform Configuration Unit Tests', () => {
 
   describe('Environment-Specific tfvars Files', () => {
     const environments = [
-      { file: 'dev.tfvars', env: 'dev', cidr: '10.1.0.0/16', ec2: 't3.micro', rds: 'db.t3.micro', tenancy: 'default', pr: 'pr6969dev' },
-      { file: 'staging.tfvars', env: 'staging', cidr: '10.2.0.0/16', ec2: 't3.micro', rds: 'db.t3.micro', tenancy: 'default', pr: 'pr6969staging' },
-      { file: 'prod.tfvars', env: 'prod', cidr: '10.3.0.0/16', ec2: 'm5.large', rds: 'db.m5.large', tenancy: 'dedicated', pr: 'pr6969prod' },
+      { file: 'dev.tfvars', env: 'dev', cidr: '10.1.0.0/16', ec2: 't3.micro', rds: 'db.t3.micro', tenancy: 'default', pr: 'pr7015dev' },
+      { file: 'staging.tfvars', env: 'staging', cidr: '10.2.0.0/16', ec2: 't3.micro', rds: 'db.t3.micro', tenancy: 'default', pr: 'pr7015staging' },
+      { file: 'prod.tfvars', env: 'prod', cidr: '10.3.0.0/16', ec2: 'm5.large', rds: 'db.m5.large', tenancy: 'dedicated', pr: 'pr7015prod' },
     ];
 
     environments.forEach(({ file, env, cidr, ec2, rds, tenancy, pr }) => {
@@ -743,7 +743,7 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('should use least privilege IAM policies', () => {
       const iamContent = parseHCLFile(path.join(LIB_DIR, 'iam.tf'));
-      
+
       // Should have specific resource ARNs, not "*"
       expect(iamContent).toMatch(/Resource.*\$\{/);
     });
@@ -794,7 +794,7 @@ describe('Terraform Configuration Unit Tests', () => {
     test('non-prod environments should use default tenancy', () => {
       const devContent = parseHCLFile(path.join(LIB_DIR, 'dev.tfvars'));
       const stagingContent = parseHCLFile(path.join(LIB_DIR, 'staging.tfvars'));
-      
+
       expect(devContent).toContain('ec2_tenancy        = "default"');
       expect(stagingContent).toContain('ec2_tenancy        = "default"');
     });
@@ -814,9 +814,9 @@ describe('Terraform Configuration Unit Tests', () => {
       const stagingContent = parseHCLFile(path.join(LIB_DIR, 'staging.tfvars'));
       const prodContent = parseHCLFile(path.join(LIB_DIR, 'prod.tfvars'));
 
-      expect(devContent).toContain('pr_number   = "pr6969dev"');
-      expect(stagingContent).toContain('pr_number   = "pr6969staging"');
-      expect(prodContent).toContain('pr_number   = "pr6969prod"');
+      expect(devContent).toContain('pr_number   = "pr7015dev"');
+      expect(stagingContent).toContain('pr_number   = "pr7015staging"');
+      expect(prodContent).toContain('pr_number   = "pr7015prod"');
     });
   });
 
