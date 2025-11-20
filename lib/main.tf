@@ -376,6 +376,7 @@ resource "aws_emr_security_configuration" "main" {
   configuration = jsonencode({
     EncryptionConfiguration = merge({
       EnableInTransitEncryption = var.enable_in_transit_encryption
+      EnableAtRestEncryption    = false
       }, var.enable_in_transit_encryption ? {
       InTransitEncryptionConfiguration = {
         TLSCertificateConfiguration = {
