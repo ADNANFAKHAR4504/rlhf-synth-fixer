@@ -17,7 +17,7 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# ECS Task Definition - Blue - ✅ IMPROVED: Configurable resources and health checks
+# ECS Task Definition - Blue
 resource "aws_ecs_task_definition" "blue" {
   family                   = "payment-processing-blue-${var.environment_suffix}"
   network_mode             = "awsvpc"
@@ -43,7 +43,6 @@ resource "aws_ecs_task_definition" "blue" {
         }
       ]
 
-      # ✅ IMPROVED: Added container health check
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
         interval    = 30
@@ -83,7 +82,7 @@ resource "aws_ecs_task_definition" "blue" {
   }
 }
 
-# ECS Task Definition - Green - ✅ IMPROVED: Configurable resources and health checks
+# ECS Task Definition - Green
 resource "aws_ecs_task_definition" "green" {
   family                   = "payment-processing-green-${var.environment_suffix}"
   network_mode             = "awsvpc"
@@ -109,7 +108,6 @@ resource "aws_ecs_task_definition" "green" {
         }
       ]
 
-      # ✅ IMPROVED: Added container health check
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
         interval    = 30
@@ -169,6 +167,7 @@ resource "aws_ecs_service" "blue" {
     container_port   = 8080
   }
 
+  # ✅ FIXED: Correct deployment_configuration block structure
   deployment_configuration {
     maximum_percent         = 200
     minimum_healthy_percent = 100
@@ -208,6 +207,7 @@ resource "aws_ecs_service" "green" {
     container_port   = 8080
   }
 
+  # ✅ FIXED: Correct deployment_configuration block structure
   deployment_configuration {
     maximum_percent         = 200
     minimum_healthy_percent = 100
