@@ -44,6 +44,11 @@ resource "aws_iam_role_policy" "lambda_validation_policy" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:${var.aws_region}:${var.account_id}:log-group:${var.log_group_validation}*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.account_id
+          }
+        }
       },
       {
         Effect = "Allow"
