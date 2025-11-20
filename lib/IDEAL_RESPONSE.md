@@ -67,7 +67,7 @@ environment_suffix = (
 environments = {
     "dev": {
         "account": os.environ.get("CDK_DEFAULT_ACCOUNT"),
-        "region": "eu-west-1",
+        "region": "us-east-1",
         "config": {
             "kinesis_shard_count": 1,
             "lambda_memory_mb": 512,
@@ -258,7 +258,7 @@ All resources deployed in a single CDK stack per environment, with environment-s
 
 | Configuration | Dev | Staging | Prod |
 |--------------|-----|---------|------|
-| Region | eu-west-1 | us-west-2 | us-east-1 |
+| Region | us-east-1 | us-west-2 | us-east-1 |
 | Kinesis Shards | 1 | 2 | 4 |
 | Lambda Memory | 512MB | 1GB | 2GB |
 | DynamoDB RCU/WCU | 5/5 | 10/10 | 25/25 |

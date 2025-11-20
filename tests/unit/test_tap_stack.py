@@ -258,7 +258,7 @@ class TestTapStack(unittest.TestCase):
             env_name="dev",
             env_config=dev_config,
             environment_suffix="test123",
-            env=cdk.Environment(region="eu-west-1")
+            env=cdk.Environment(region="us-east-1")
         )
         template = Template.from_stack(stack)
 
@@ -280,7 +280,7 @@ class TestTapStack(unittest.TestCase):
             env_name="dev",
             env_config=dev_config,
             environment_suffix="test123",
-            env=cdk.Environment(region="eu-west-1")
+            env=cdk.Environment(region="us-east-1")
         )
         template = Template.from_stack(stack)
 
@@ -304,7 +304,7 @@ class TestTapStack(unittest.TestCase):
             env_name="dev",
             env_config=dev_config,
             environment_suffix="test123",
-            env=cdk.Environment(region="eu-west-1")
+            env=cdk.Environment(region="us-east-1")
         )
         template = Template.from_stack(stack)
 

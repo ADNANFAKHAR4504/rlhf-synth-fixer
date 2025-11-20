@@ -17,7 +17,7 @@ This solution deploys a real-time fraud detection system with the following comp
 
 ## Environment Configurations
 
-### Development (eu-west-1)
+### Development (us-east-1)
 - Kinesis: 1 shard
 - Lambda: 512MB memory
 - DynamoDB: 5 RCU / 5 WCU

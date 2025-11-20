@@ -22,7 +22,7 @@ environment_suffix = (
 environments = {
     "dev": {
         "account": os.environ.get("CDK_DEFAULT_ACCOUNT"),
-        "region": "eu-west-1",
+        "region": "us-east-1",
         "config": {
             "kinesis_shard_count": 1,
             "lambda_memory_mb": 512,

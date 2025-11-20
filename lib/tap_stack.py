@@ -54,7 +54,10 @@ class TapStack(Stack):
         self.environment_suffix = environment_suffix
         # Get region from kwargs env or default to us-east-1
         env_obj = kwargs.get("env")
-        self.deploy_region = env_obj.region if env_obj and env_obj.region else "us-east-1"
+        self.deploy_region = (
+            env_obj.region if env_obj and hasattr(env_obj, 'region') and env_obj.region
+            else "us-east-1"
+        )
 
         # Create SSM parameters for configuration
         self._create_ssm_parameters()
