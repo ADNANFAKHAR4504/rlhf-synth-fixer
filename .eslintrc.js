@@ -52,7 +52,6 @@ module.exports = {
           '**/*.config.js',
           '**/*.config.ts',
           '@types/**',
-          '**/lambda/**/*.ts', // Lambda functions can use types from devDependencies
         ],
         optionalDependencies: false,
         peerDependencies: false,
