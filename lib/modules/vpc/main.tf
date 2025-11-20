@@ -45,7 +45,7 @@ resource "aws_subnet" "private" {
 
 resource "aws_eip" "nat" {
   count = length(var.availability_zones)
-  
+
   domain = "vpc"
 
   tags = merge(var.tags, {
@@ -79,7 +79,7 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   count = length(var.availability_zones)
-  
+
   vpc_id = aws_vpc.main.id
 
   route {

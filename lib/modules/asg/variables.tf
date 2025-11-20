@@ -34,6 +34,58 @@ variable "instance_tenancy" {
   default     = "default"
 }
 
+variable "iam_instance_profile" {
+  description = "IAM instance profile name for EC2"
+  type        = string
+}
+
+variable "kms_key_id" {
+  description = "KMS key ID for EBS encryption"
+  type        = string
+}
+
+variable "alb_dns" {
+  description = "ALB DNS name"
+  type        = string
+  default     = ""
+}
+
+variable "s3_bucket" {
+  description = "S3 bucket name"
+  type        = string
+  default     = ""
+}
+
+variable "rds_endpoint" {
+  description = "RDS endpoint"
+  type        = string
+  default     = ""
+}
+
+variable "secret_name" {
+  description = "Secrets Manager secret name"
+  type        = string
+  default     = ""
+}
+
+variable "kms_rds_key_id" {
+  description = "KMS key ID for RDS"
+  type        = string
+  default     = ""
+}
+
+variable "kms_ebs_key_id" {
+  description = "KMS key ID for EBS"
+  type        = string
+  default     = ""
+}
+
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "min_size" {
   description = "Minimum size of Auto Scaling Group"
   type        = number

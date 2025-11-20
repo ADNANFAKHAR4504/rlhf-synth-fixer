@@ -30,6 +30,11 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "kms_key_id" {
+  description = "KMS key ID for RDS encryption"
+  type        = string
+}
+
 variable "enable_deletion_protection" {
   description = "Enable deletion protection"
   type        = bool

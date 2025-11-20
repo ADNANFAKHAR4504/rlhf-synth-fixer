@@ -13,6 +13,12 @@ variable "environment" {
   }
 }
 
+variable "pr_number" {
+  description = "PR number for resource identification"
+  type        = string
+  default     = ""
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -36,11 +42,9 @@ variable "db_username" {
   sensitive   = true
 }
 
-variable "db_password" {
-  description = "Master password for RDS"
-  type        = string
-  sensitive   = true
-}
+# Note: db_password is now retrieved from AWS Secrets Manager
+# Secret name: payment-app/${var.environment}/db-password
+# Secret format: {"password": "your-password-here"}
 
 variable "ec2_instance_type" {
   description = "EC2 instance type"
@@ -77,4 +81,28 @@ variable "enable_deletion_protection" {
   description = "Enable deletion protection for ALB and RDS"
   type        = bool
   default     = false
+}
+
+variable "log_retention_days" {
+  description = "Number of days to retain logs in CloudWatch"
+  type        = number
+  default     = 90
+}
+
+variable "allowed_ip_addresses" {
+  description = "List of IP addresses to whitelist in WAF"
+  type        = list(string)
+  default     = []
+}
+
+variable "blocked_ip_addresses" {
+  description = "List of IP addresses to blacklist in WAF"
+  type        = list(string)
+  default     = []
+}
+
+variable "blocked_countries" {
+  description = "List of country codes to block in WAF"
+  type        = list(string)
+  default     = []
 }

@@ -24,6 +24,12 @@ variable "enable_deletion_protection" {
   default     = false
 }
 
+variable "log_retention_days" {
+  description = "Number of days to retain ALB access logs"
+  type        = number
+  default     = 90
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

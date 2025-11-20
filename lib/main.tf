@@ -4,24 +4,52 @@ locals {
     CostCenter  = var.cost_center
     ManagedBy   = "Terraform"
     Workspace   = terraform.workspace
+    PRNumber    = var.pr_number
   }
-  
+
   is_production = var.environment == "prod"
+
+  # Resource naming prefix with PR number
+  name_prefix = var.pr_number != "" ? "${var.environment}-${var.pr_number}" : var.environment
+}
+
+# AWS Secrets Manager - Create database password secret
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+  # Override characters to avoid issues with PostgreSQL
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
+resource "aws_secretsmanager_secret" "db_password" {
+  name        = "payment-app/${var.environment}/db-password"
+  description = "Database password for ${var.environment} environment"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-password"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = aws_secretsmanager_secret.db_password.id
+  secret_string = jsonencode({
+    password = random_password.db_password.result
+  })
 }
 
 # VPC Module
 module "vpc" {
   source = "./modules/vpc"
-  
-  environment        = var.environment
-  vpc_cidr          = var.vpc_cidr
+
+  environment        = local.name_prefix
+  vpc_cidr           = var.vpc_cidr
   availability_zones = var.availability_zones
-  tags              = local.common_tags
+  tags               = local.common_tags
 }
 
 # Security Groups
 resource "aws_security_group" "alb" {
-  name_prefix = "${var.environment}-alb-sg"
+  name_prefix = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = module.vpc.vpc_id
 
@@ -47,12 +75,12 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-alb-sg"
+    Name = "${local.name_prefix}-alb-sg"
   })
 }
 
 resource "aws_security_group" "app" {
-  name_prefix = "${var.environment}-app-sg"
+  name_prefix = "${local.name_prefix}-app-sg"
   description = "Security group for application instances"
   vpc_id      = module.vpc.vpc_id
 
@@ -71,12 +99,12 @@ resource "aws_security_group" "app" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-app-sg"
+    Name = "${local.name_prefix}-app-sg"
   })
 }
 
 resource "aws_security_group" "rds" {
-  name_prefix = "${var.environment}-rds-sg"
+  name_prefix = "${local.name_prefix}-rds-sg"
   description = "Security group for RDS database"
   vpc_id      = module.vpc.vpc_id
 
@@ -96,58 +124,68 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-rds-sg"
+    Name = "${local.name_prefix}-rds-sg"
   })
 }
 
 # S3 Module
 module "s3" {
   source = "./modules/s3"
-  
-  environment = var.environment
+
+  environment = local.name_prefix
   tags        = local.common_tags
 }
 
 # Application Load Balancer Module
 module "alb" {
   source = "./modules/alb"
-  
-  environment                = var.environment
-  vpc_id                    = module.vpc.vpc_id
-  public_subnet_ids         = module.vpc.public_subnet_ids
-  security_group_id         = aws_security_group.alb.id
+
+  environment                = local.name_prefix
+  vpc_id                     = module.vpc.vpc_id
+  public_subnet_ids          = module.vpc.public_subnet_ids
+  security_group_id          = aws_security_group.alb.id
   enable_deletion_protection = var.enable_deletion_protection
-  tags                      = local.common_tags
+  tags                       = local.common_tags
 }
 
 # Auto Scaling Group Module
 module "asg" {
   source = "./modules/asg"
-  
-  environment          = var.environment
-  vpc_id              = module.vpc.vpc_id
-  private_subnet_ids  = module.vpc.private_subnet_ids
-  security_group_id   = aws_security_group.app.id
-  target_group_arn    = module.alb.target_group_arn
-  instance_type       = var.ec2_instance_type
-  instance_tenancy    = var.ec2_tenancy
-  min_size            = var.asg_min_size
-  max_size            = var.asg_max_size
-  desired_capacity    = var.asg_desired_capacity
-  tags                = local.common_tags
+
+  environment          = local.name_prefix
+  vpc_id               = module.vpc.vpc_id
+  private_subnet_ids   = module.vpc.private_subnet_ids
+  security_group_id    = aws_security_group.app.id
+  target_group_arn     = module.alb.target_group_arn
+  instance_type        = var.ec2_instance_type
+  instance_tenancy     = var.ec2_tenancy
+  iam_instance_profile = aws_iam_instance_profile.ec2_instance.name
+  kms_key_id           = aws_kms_key.ebs.arn
+  min_size             = var.asg_min_size
+  max_size             = var.asg_max_size
+  desired_capacity     = var.asg_desired_capacity
+  alb_dns              = module.alb.alb_dns_name
+  s3_bucket            = module.s3.bucket_name
+  rds_endpoint         = module.rds.endpoint
+  secret_name          = aws_secretsmanager_secret.db_password.name
+  kms_rds_key_id       = aws_kms_key.rds.key_id
+  kms_ebs_key_id       = aws_kms_key.ebs.key_id
+  aws_region           = var.aws_region
+  tags                 = local.common_tags
 }
 
 # RDS Module
 module "rds" {
   source = "./modules/rds"
-  
-  environment                = var.environment
-  private_subnet_ids        = module.vpc.private_subnet_ids
-  security_group_id         = aws_security_group.rds.id
-  instance_class            = var.rds_instance_class
-  db_username               = var.db_username
-  db_password               = var.db_password
+
+  environment                = local.name_prefix
+  private_subnet_ids         = module.vpc.private_subnet_ids
+  security_group_id          = aws_security_group.rds.id
+  instance_class             = var.rds_instance_class
+  db_username                = var.db_username
+  db_password                = random_password.db_password.result
+  kms_key_id                 = aws_kms_key.rds.arn
   enable_deletion_protection = var.enable_deletion_protection
-  multi_az                  = local.is_production
-  tags                      = local.common_tags
+  multi_az                   = local.is_production
+  tags                       = local.common_tags
 }

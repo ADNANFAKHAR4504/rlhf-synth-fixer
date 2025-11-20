@@ -12,7 +12,7 @@ resource "aws_s3_bucket" "main" {
 
 resource "aws_s3_bucket_versioning" "main" {
   bucket = aws_s3_bucket.main.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -44,6 +44,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
     id     = "expire-old-versions"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     noncurrent_version_expiration {
       noncurrent_days = var.environment == "prod" ? 90 : 30
     }
@@ -52,6 +56,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
   rule {
     id     = "transition-to-ia"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     transition {
       days          = var.environment == "prod" ? 60 : 30
