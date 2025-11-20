@@ -733,7 +733,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Route 53 Weighted Routing for Phased Cutover
         # Create hosted zone for the domain
-        domain_name = config.get("domainName") or f"api-{env_suffix}.example.com"
+        domain_name = config.get("domainName") or f"api-{env_suffix}.tapstack.local"
         hosted_zone = aws.route53.Zone(
             "api-hosted-zone",
             name=domain_name,
