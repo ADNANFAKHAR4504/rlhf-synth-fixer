@@ -16,6 +16,8 @@
   "complexity": "expert",
   "turn_type": "multi",
   "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "aws_services": [
     "VPC",
     "EC2",
