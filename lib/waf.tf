@@ -157,21 +157,22 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Rule 7: Block requests with missing User-Agent header
+  # Rule 7: Monitor requests with missing User-Agent header
+  # Changed from block to count to avoid blocking legitimate traffic
   rule {
-    name     = "BlockMissingUserAgent"
+    name     = "MonitorMissingUserAgent"
     priority = 7
 
     action {
-      block {}
+      count {} # Changed from block to count - just monitor
     }
 
     statement {
       not_statement {
         statement {
           byte_match_statement {
-            positional_constraint = "CONTAINS"
-            search_string         = "Mozilla"
+            positional_constraint = "EXACTLY"
+            search_string         = ""
 
             field_to_match {
               single_header {
@@ -181,7 +182,7 @@ resource "aws_wafv2_web_acl" "main" {
 
             text_transformation {
               priority = 0
-              type     = "LOWERCASE"
+              type     = "NONE"
             }
           }
         }

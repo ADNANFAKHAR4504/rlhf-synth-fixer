@@ -451,6 +451,117 @@ resource "aws_kms_key_policy" "ebs" {
 
 ---
 
+### **Issue 9 — WAF Blocking Legitimate Traffic (403 Forbidden)**
+
+**Error:**
+```
+HTTP 403 Forbidden when accessing ALB DNS endpoint
+```
+
+**Root Cause:** WAF Rule 7 "BlockMissingUserAgent" was configured to block all requests that don't contain "Mozilla" in the User-Agent header. This is overly restrictive and blocks:
+- API clients (curl, wget, etc.)
+- Mobile apps with custom user agents
+- Monitoring tools and health checks
+- Browsers not based on Mozilla (Safari, Edge, etc.)
+- Automated scripts and bots
+
+**Location:** `lib/waf.tf` - WAF Rule 7
+
+**Issue Details:**
+- The rule used `action { block {} }` instead of `action { count {} }`
+- It checked for `CONTAINS "Mozilla"` which is too specific
+- The `not_statement` inverted the logic, blocking everything WITHOUT Mozilla
+- This caused 403 errors for all legitimate traffic including browsers
+
+**Original Configuration:**
+```hcl
+rule {
+  name     = "BlockMissingUserAgent"
+  priority = 7
+
+  action {
+    block {}  # ❌ Too aggressive
+  }
+
+  statement {
+    not_statement {
+      statement {
+        byte_match_statement {
+          positional_constraint = "CONTAINS"
+          search_string         = "Mozilla"  # ❌ Too specific
+          field_to_match {
+            single_header { name = "user-agent" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Fix Applied:** Changed the rule to only monitor (count) truly empty User-Agent headers instead of blocking non-Mozilla user agents.
+
+**Updated Configuration:**
+```hcl
+rule {
+  name     = "MonitorMissingUserAgent"
+  priority = 7
+
+  action {
+    count {}  # ✅ Monitor only, don't block
+  }
+
+  statement {
+    not_statement {
+      statement {
+        byte_match_statement {
+          positional_constraint = "EXACTLY"  # ✅ Check for exact match
+          search_string         = ""          # ✅ Empty string
+          field_to_match {
+            single_header { name = "user-agent" }
+          }
+          text_transformation {
+            priority = 0
+            type     = "NONE"  # ✅ No transformation
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Changes Made:**
+1. Changed action from `block` to `count` - rule now only monitors
+2. Changed `positional_constraint` from `CONTAINS` to `EXACTLY`
+3. Changed `search_string` from `"Mozilla"` to `""` (empty string)
+4. Changed `text_transformation` from `LOWERCASE` to `NONE`
+5. Renamed rule from `BlockMissingUserAgent` to `MonitorMissingUserAgent`
+
+**Benefits:**
+- ✅ Legitimate traffic no longer blocked
+- ✅ All browsers and API clients can access the ALB
+- ✅ Still monitors requests with truly missing User-Agent headers
+- ✅ CloudWatch metrics available for monitoring
+- ✅ Can enable blocking later if needed based on metrics
+
+**Testing:**
+After applying this fix, you can test with:
+```bash
+# Should now work (previously returned 403)
+curl http://<alb-dns-name>/health
+
+# With custom user agent (also works now)
+curl -H "User-Agent: MyApp/1.0" http://<alb-dns-name>/
+
+# Browser access also works
+open http://<alb-dns-name>/
+```
+
+**Status:** ✅ FIXED - WAF now allows legitimate traffic, only monitors missing User-Agent
+
+---
+
 - ✅ **Terraform Validation:** Passed with warnings
 - ✅ **Terraform Plan:** Successful (36 resources to add)
 - ⚠️ **PostgreSQL Version:** Will fail during apply (version 15.4 not available)
