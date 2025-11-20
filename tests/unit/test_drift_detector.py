@@ -32,14 +32,14 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertEqual(detector.work_dir, ".")
         self.assertIsNone(detector.stack)
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_initialize_stack_success(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_initialize_stack_success(self, mock_select_stack):
         """Test successful stack initialization"""
         from lib.drift_detector import DriftDetector
 
         # Mock the workspace and stack
         mock_stack_instance = Mock()
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         result = detector.initialize_stack()
@@ -47,13 +47,13 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertTrue(result)
         self.assertIsNotNone(detector.stack)
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_initialize_stack_failure(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_initialize_stack_failure(self, mock_select_stack):
         """Test stack initialization failure"""
         from lib.drift_detector import DriftDetector
 
         # Mock exception during stack selection
-        mock_workspace.select_stack.side_effect = Exception("Stack not found")
+        mock_select_stack.side_effect = Exception("Stack not found")
 
         detector = DriftDetector("test-project", "dev", ".")
         result = detector.initialize_stack()
@@ -70,15 +70,15 @@ class TestDriftDetectorMethods(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_refresh_stack_success(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_refresh_stack_success(self, mock_select_stack):
         """Test successful stack refresh"""
         from lib.drift_detector import DriftDetector
 
         # Mock the workspace and stack
         mock_stack_instance = Mock()
         mock_stack_instance.refresh.return_value = Mock()
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         detector.initialize_stack()
@@ -87,15 +87,15 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertTrue(result)
         mock_stack_instance.refresh.assert_called_once()
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_refresh_stack_failure(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_refresh_stack_failure(self, mock_select_stack):
         """Test stack refresh failure"""
         from lib.drift_detector import DriftDetector
 
         # Mock the workspace and stack
         mock_stack_instance = Mock()
         mock_stack_instance.refresh.side_effect = Exception("Refresh failed")
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         detector.initialize_stack()
@@ -112,8 +112,8 @@ class TestDriftDetectorMethods(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_preview_changes_no_changes(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_preview_changes_no_changes(self, mock_select_stack):
         """Test preview_changes when no changes detected"""
         from lib.drift_detector import DriftDetector
 
@@ -122,7 +122,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         mock_preview_result = Mock()
         mock_preview_result.change_summary = {}
         mock_stack_instance.preview.return_value = mock_preview_result
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         detector.initialize_stack()
@@ -131,8 +131,8 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["total_changes"], 0)
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_preview_changes_with_changes(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_preview_changes_with_changes(self, mock_select_stack):
         """Test preview_changes with detected changes"""
         from lib.drift_detector import DriftDetector
 
@@ -145,7 +145,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
             "delete": 1
         }
         mock_stack_instance.preview.return_value = mock_preview_result
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         detector.initialize_stack()
@@ -157,15 +157,15 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertEqual(result["changes"]["update"], 3)
         self.assertEqual(result["changes"]["delete"], 1)
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_preview_changes_failure(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_preview_changes_failure(self, mock_select_stack):
         """Test preview_changes exception handling"""
         from lib.drift_detector import DriftDetector
 
         # Mock the workspace and stack
         mock_stack_instance = Mock()
         mock_stack_instance.preview.side_effect = Exception("Preview failed")
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         detector.initialize_stack()
@@ -182,8 +182,8 @@ class TestDriftDetectorMethods(unittest.TestCase):
 
         self.assertEqual(result, {})
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_get_stack_outputs_success(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_get_stack_outputs_success(self, mock_select_stack):
         """Test successful get_stack_outputs"""
         from lib.drift_detector import DriftDetector
 
@@ -193,7 +193,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
             "vpc_id": Mock(value="vpc-12345"),
             "cluster_arn": Mock(value="arn:aws:ecs:us-east-1:123456789012:cluster/test")
         }
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         detector.initialize_stack()
@@ -203,8 +203,8 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertIn("vpc_id", result)
         self.assertEqual(result["vpc_id"], "vpc-12345")
 
-    @patch('pulumi.automation.LocalWorkspace')
-    def test_detect_drift_no_changes(self, mock_workspace):
+    @patch('pulumi.automation.select_stack')
+    def test_detect_drift_no_changes(self, mock_select_stack):
         """Test detect_drift with no drift"""
         from lib.drift_detector import DriftDetector
 
@@ -214,7 +214,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         mock_preview_result = Mock()
         mock_preview_result.change_summary = {}
         mock_stack_instance.preview.return_value = mock_preview_result
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         result = detector.detect_drift()
@@ -222,7 +222,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertFalse(result["has_drift"])
 
-    @patch('pulumi.automation.LocalWorkspace')
+    @patch('pulumi.automation.select_stack')
     def test_detect_drift_with_changes(self, mock_workspace):
         """Test detect_drift with drift detected"""
         from lib.drift_detector import DriftDetector
@@ -233,7 +233,7 @@ class TestDriftDetectorMethods(unittest.TestCase):
         mock_preview_result = Mock()
         mock_preview_result.change_summary = {"update": 5}
         mock_stack_instance.preview.return_value = mock_preview_result
-        mock_workspace.select_stack.return_value = mock_stack_instance
+        mock_select_stack.return_value = mock_stack_instance
 
         detector = DriftDetector("test-project", "dev", ".")
         result = detector.detect_drift()
@@ -273,7 +273,8 @@ class TestDriftDetectorMethods(unittest.TestCase):
         )
 
         self.assertIsNotNone(results)
-        self.assertEqual(len(results), 2)
+        self.assertIn("environments", results)
+        self.assertEqual(len(results["environments"]), 2)
 
     @patch('lib.drift_detector.DriftDetector')
     def test_check_all_environments_with_drift(self, mock_detector_class):
@@ -298,21 +299,34 @@ class TestDriftDetectorMethods(unittest.TestCase):
         )
 
         self.assertIsNotNone(results)
-        self.assertEqual(len(results), 2)
+        self.assertIn("environments", results)
+        self.assertEqual(len(results["environments"]), 2)
 
-    @patch('sys.argv', ['drift_detector.py', '--project', 'test', '--stacks', 'dev,staging', '--work-dir', '.'])
+    @patch('sys.argv', ['drift_detector.py', '--project', 'test', '--environments', 'dev', 'staging', '--work-dir', '.'])
     @patch('lib.drift_detector.check_all_environments')
     def test_main_function_with_args(self, mock_check_all):
         """Test main function with command line arguments"""
         from lib.drift_detector import main
 
-        mock_check_all.return_value = [
-            {
-                "environment": "dev",
-                "has_drift": False,
-                "timestamp": "2025-01-01T00:00:00"
+        mock_check_all.return_value = {
+            "timestamp": "2025-01-01T00:00:00",
+            "project": "test",
+            "environments": {
+                "dev": {
+                    "has_drift": False,
+                    "total_changes": 0
+                },
+                "staging": {
+                    "has_drift": False,
+                    "total_changes": 0
+                }
+            },
+            "summary": {
+                "total_environments": 2,
+                "environments_with_drift": 0,
+                "total_changes": 0
             }
-        ]
+        }
 
         # Execute main (it should run without errors)
         try:

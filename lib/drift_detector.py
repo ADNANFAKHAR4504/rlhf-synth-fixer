@@ -34,7 +34,7 @@ class DriftDetector:
     def initialize_stack(self) -> bool:
         """
         Initialize Pulumi stack using Automation API.
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -42,13 +42,13 @@ class DriftDetector:
             # Create or select stack
             self.stack = auto.select_stack(
                 stack_name=self.stack_name,
-                project_name=self.project_name,
                 work_dir=self.work_dir,
+                project_name=self.project_name,
             )
-            
+
             print(f"✓ Initialized stack: {self.stack_name}")
             return True
-            
+
         except Exception as e:
             print(f"✗ Failed to initialize stack: {e}")
             return False
@@ -56,20 +56,24 @@ class DriftDetector:
     def refresh_stack(self) -> bool:
         """
         Refresh stack to get latest state from AWS.
-        
+
         Returns:
             True if successful, False otherwise
         """
+        if self.stack is None:
+            print(f"✗ Failed to refresh stack: Stack not initialized")
+            return False
+
         try:
             print(f"Refreshing stack {self.stack_name}...")
             refresh_result = self.stack.refresh(on_output=print)
-            
+
             if refresh_result.stderr:
                 print(f"Refresh warnings: {refresh_result.stderr}")
-            
+
             print(f"✓ Refreshed stack successfully")
             return True
-            
+
         except Exception as e:
             print(f"✗ Failed to refresh stack: {e}")
             return False
@@ -77,70 +81,85 @@ class DriftDetector:
     def preview_changes(self) -> Dict[str, Any]:
         """
         Preview changes to detect drift.
-        
+
         Returns:
             Dictionary containing drift information
         """
+        if self.stack is None:
+            print(f"✗ Failed to check drift: Stack not initialized")
+            return None
+
         try:
             print(f"Checking for drift in stack {self.stack_name}...")
             preview_result = self.stack.preview(on_output=print)
-            
+
             drift_info = {
                 "stack": self.stack_name,
                 "timestamp": datetime.utcnow().isoformat(),
                 "has_drift": False,
-                "changes": [],
+                "changes": {
+                    "create": 0,
+                    "update": 0,
+                    "delete": 0,
+                },
                 "summary": {
                     "create": 0,
                     "update": 0,
                     "delete": 0,
                     "same": 0,
                 },
+                "total_changes": 0,
             }
-            
+
             # Parse preview output for changes
             if preview_result.change_summary:
                 summary = preview_result.change_summary
-                
+
                 drift_info["summary"]["create"] = summary.get("create", 0)
                 drift_info["summary"]["update"] = summary.get("update", 0)
                 drift_info["summary"]["delete"] = summary.get("delete", 0)
                 drift_info["summary"]["same"] = summary.get("same", 0)
-                
-                # Check if there's any drift
-                has_changes = (
-                    drift_info["summary"]["create"] > 0
-                    or drift_info["summary"]["update"] > 0
-                    or drift_info["summary"]["delete"] > 0
+
+                # Set changes dict
+                drift_info["changes"]["create"] = drift_info["summary"]["create"]
+                drift_info["changes"]["update"] = drift_info["summary"]["update"]
+                drift_info["changes"]["delete"] = drift_info["summary"]["delete"]
+
+                # Calculate total changes
+                drift_info["total_changes"] = (
+                    drift_info["summary"]["create"]
+                    + drift_info["summary"]["update"]
+                    + drift_info["summary"]["delete"]
                 )
-                
-                drift_info["has_drift"] = has_changes
-                
-                if has_changes:
+
+                # Check if there's any drift
+                drift_info["has_drift"] = drift_info["total_changes"] > 0
+
+                if drift_info["has_drift"]:
                     print(f"⚠️  DRIFT DETECTED in stack {self.stack_name}")
                     print(f"   Create: {drift_info['summary']['create']}")
                     print(f"   Update: {drift_info['summary']['update']}")
                     print(f"   Delete: {drift_info['summary']['delete']}")
                 else:
                     print(f"✓ No drift detected in stack {self.stack_name}")
-            
+
             return drift_info
-            
+
         except Exception as e:
             print(f"✗ Failed to check drift: {e}")
-            return {
-                "stack": self.stack_name,
-                "error": str(e),
-                "has_drift": None,
-            }
+            return None
 
     def get_stack_outputs(self) -> Dict[str, Any]:
         """
         Get stack outputs for reporting.
-        
+
         Returns:
             Dictionary of stack outputs
         """
+        if self.stack is None:
+            print(f"Warning: Could not retrieve outputs: Stack not initialized")
+            return {}
+
         try:
             outputs = self.stack.outputs()
             return {k: v.value for k, v in outputs.items()}
@@ -151,24 +170,27 @@ class DriftDetector:
     def detect_drift(self) -> Dict[str, Any]:
         """
         Main method to detect drift.
-        
+
         Returns:
-            Dictionary containing drift report
+            Dictionary containing drift report, or None if initialization fails
         """
         # Initialize stack
         if not self.initialize_stack():
-            return {"error": "Failed to initialize stack"}
-        
+            return None
+
         # Refresh to get latest state
         if not self.refresh_stack():
-            return {"error": "Failed to refresh stack"}
-        
+            return None
+
         # Preview to detect drift
         drift_info = self.preview_changes()
-        
+
+        if drift_info is None:
+            return None
+
         # Add stack outputs to report
         drift_info["outputs"] = self.get_stack_outputs()
-        
+
         return drift_info
 
 

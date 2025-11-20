@@ -1,4 +1,4 @@
-name: fraud-detection-infrastructure
+name: TapStack
 runtime:
   name: python
   options:
