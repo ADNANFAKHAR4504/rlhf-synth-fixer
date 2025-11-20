@@ -141,53 +141,74 @@ export class DriftDetection extends pulumi.ComponentResource {
         },
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
-const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-const { EC2Client, DescribeVpcsCommand } = require('@aws-sdk/client-ec2');
-const { ECSClient, DescribeClustersCommand } = require('@aws-sdk/client-ecs');
-const { RDSClient, DescribeDBClustersCommand } = require('@aws-sdk/client-rds');
-
-const snsClient = new SNSClient({});
-const ec2Client = new EC2Client({});
-const ecsClient = new ECSClient({});
-const rdsClient = new RDSClient({});
+// Using AWS SDK v2 which is available in Lambda runtime by default
+const AWS = require('aws-sdk');
+const sns = new AWS.SNS();
 
 exports.handler = async (event) => {
-  console.log('Event received:', JSON.stringify(event, null, 2));
+  console.log('Drift detection event received:', JSON.stringify(event, null, 2));
 
   const environment = process.env.ENVIRONMENT;
   const snsTopicArn = process.env.SNS_TOPIC_ARN;
+  const vpcId = process.env.VPC_ID;
+  const ecsClusterArn = process.env.ECS_CLUSTER_ARN;
+  const auroraClusterArn = process.env.AURORA_CLUSTER_ARN;
 
   try {
-    // Check for configuration drift
-    const driftMessages = [];
+    // Extract relevant information from the CloudWatch event
+    const eventSource = event.source || 'unknown';
+    const detailType = event['detail-type'] || 'unknown';
+    const eventTime = event.time || new Date().toISOString();
+    const eventDetail = event.detail || {};
 
-    // Example: Check VPC configuration
-    const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
-      VpcIds: [process.env.VPC_ID]
-    }));
+    // Build alert message based on event data
+    const resourceType = eventSource.replace('aws.', '').toUpperCase();
+    let message = \`Infrastructure Change Detected\\n\\n\`;
+    message += \`Environment: \${environment}\\n\`;
+    message += \`Resource Type: \${resourceType}\\n\`;
+    message += \`Event Type: \${detailType}\\n\`;
+    message += \`Time: \${eventTime}\\n\\n\`;
 
-    if (vpcResponse.Vpcs && vpcResponse.Vpcs.length > 0) {
-      const vpc = vpcResponse.Vpcs[0];
-      if (!vpc.EnableDnsHostnames || !vpc.EnableDnsSupport) {
-        driftMessages.push('VPC DNS configuration drift detected');
+    // Add resource-specific information
+    if (eventSource === 'aws.ec2' && vpcId) {
+      message += \`VPC ID: \${vpcId}\\n\`;
+      if (eventDetail.instance-id) {
+        message += \`Instance ID: \${eventDetail['instance-id']}\\n\`;
+      }
+    } else if (eventSource === 'aws.ecs' && ecsClusterArn) {
+      message += \`ECS Cluster: \${ecsClusterArn}\\n\`;
+      if (eventDetail.clusterArn) {
+        message += \`Event Cluster: \${eventDetail.clusterArn}\\n\`;
+      }
+    } else if (eventSource === 'aws.rds' && auroraClusterArn) {
+      message += \`Aurora Cluster: \${auroraClusterArn}\\n\`;
+      if (eventDetail.SourceArn) {
+        message += \`Event Source: \${eventDetail.SourceArn}\\n\`;
       }
     }
 
-    // Send alert if drift detected
-    if (driftMessages.length > 0) {
-      await snsClient.send(new PublishCommand({
-        TopicArn: snsTopicArn,
-        Subject: \`Configuration Drift Detected - \${environment}\`,
-        Message: \`The following drift has been detected:\\n\\n\${driftMessages.join('\\n')}\`
-      }));
-    }
+    message += \`\\nEvent Details:\\n\${JSON.stringify(eventDetail, null, 2)}\`;
+
+    // Publish to SNS
+    const params = {
+      TopicArn: snsTopicArn,
+      Subject: \`[\${environment.toUpperCase()}] Infrastructure Change - \${resourceType}\`,
+      Message: message
+    };
+
+    await sns.publish(params).promise();
+    console.log('Alert published to SNS successfully');
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Drift detection completed', drifts: driftMessages.length })
+      body: JSON.stringify({ 
+        message: 'Drift detection event processed successfully',
+        eventSource: eventSource,
+        detailType: detailType
+      })
     };
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error processing drift detection event:', error);
     throw error;
   }
 };
