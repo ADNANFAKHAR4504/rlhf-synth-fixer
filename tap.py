@@ -78,10 +78,10 @@ if deploy_env not in environments:
 
 env_config = environments[deploy_env]
 
-# Create stack
+# Create stack with standard naming: TapStack{environmentSuffix}
 TapStack(
     app,
-    f"TapStack-{deploy_env}-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     env_name=deploy_env,
     env_config=env_config["config"],
     environment_suffix=environment_suffix,

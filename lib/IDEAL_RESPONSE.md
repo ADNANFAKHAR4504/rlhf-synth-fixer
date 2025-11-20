@@ -8,32 +8,42 @@ This implementation provides a fully functional multi-environment fraud detectio
 
 ## Key Fixes Applied
 
-### 1. Fixed Entry Point Configuration
+### 1. Fixed Entry Point Configuration  
 **Fixed**: Updated cdk.json to use tap.py (template standard) and corrected tap.py implementation
 - Location: `tap.py` (updated) and `cdk.json` (fixed)
 - Impact: Matches template standard and enables CDK synthesis
 
-### 2. Added CloudFormation Outputs
+### 2. Fixed Stack Naming Convention
+**Fixed**: Changed from `TapStack-{env}-{suffix}` to `TapStack{suffix}` to match template standard
+- Location: `tap.py` line 84
+- Impact: Stack discoverable by CI/CD search pattern
+
+### 3. Fixed Region Configuration
+**Fixed**: Changed dev environment from eu-west-1 to us-east-1 (bootstrapped region)
+- Location: `tap.py` environments configuration
+- Impact: Deployment succeeds in bootstrapped region
+
+### 4. Added CloudFormation Outputs
 **Fixed**: Added comprehensive outputs for integration testing
 - Location: `lib/tap_stack.py` - new `_create_outputs()` method
 - Impact: Enables integration tests to validate deployed resources
 
-### 3. Fixed Lambda AWS Client Initialization
+### 5. Fixed Lambda AWS Client Initialization
 **Fixed**: Changed from module-level to lazy-loading pattern with explicit region
 - Location: `lib/lambda/index.py`
 - Impact: Prevents NoRegionError during test execution
 
-### 4. Updated Unit Tests for Refactored Code
+### 6. Updated Unit Tests for Refactored Code
 **Fixed**: Updated mocks to target lazy-loading functions instead of module attributes
 - Location: `tests/unit/test_lambda_handler.py`
 - Impact: All 44 tests pass with 95.49% coverage
 
-### 5. Fixed README.md Syntax
+### 7. Fixed README.md Syntax
 **Fixed**: Closed all code blocks properly
 - Location: `lib/README.md`
 - Impact: Proper markdown rendering
 
-### 6. Completed metadata.json
+### 8. Completed metadata.json
 **Fixed**: Added author field and complete AWS services list
 - Location: `metadata.json`
 - Impact: Meets metadata quality standards for training
@@ -123,10 +133,10 @@ if deploy_env not in environments:
 
 env_config = environments[deploy_env]
 
-# Create stack
+# Create stack with standard naming: TapStack{environmentSuffix}
 TapStack(
     app,
-    f"TapStack-{deploy_env}-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     env_name=deploy_env,
     env_config=env_config["config"],
     environment_suffix=environment_suffix,
@@ -411,12 +421,14 @@ aws kinesis put-record \
 ## Differences from MODEL_RESPONSE
 
 1. **Entry Point**: Fixed cdk.json to use tap.py (matches template standard)
-2. **CloudFormation Outputs**: Added comprehensive outputs for integration testing
-3. **Lambda Clients**: Lazy-loading pattern with explicit region
-4. **Test Mocks**: Updated to target lazy-loading functions
-5. **README**: Fixed markdown syntax with closed code blocks
-6. **Metadata**: Added author field and complete AWS services list
-7. **All Tests**: Pass with 95.49% coverage
+2. **Stack Naming**: Changed to `TapStack{suffix}` format (template standard)
+3. **Region Configuration**: Dev uses us-east-1 (bootstrapped region, not eu-west-1)
+4. **CloudFormation Outputs**: Added 11 comprehensive outputs for integration testing
+5. **Lambda Clients**: Lazy-loading pattern with explicit region
+6. **Test Mocks**: Updated to target lazy-loading functions
+7. **README**: Fixed markdown syntax with closed code blocks
+8. **Metadata**: Added author field and complete AWS services list
+9. **All Tests**: Pass with 95.49% coverage
 
 ## Summary
 
