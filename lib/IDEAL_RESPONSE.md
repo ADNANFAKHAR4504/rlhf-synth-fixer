@@ -48,7 +48,12 @@ This implementation provides a fully functional multi-environment fraud detectio
 - Location: `lib/README.md`
 - Impact: Proper markdown rendering
 
-### 9. Completed metadata.json
+### 9. Fixed SSM Parameter Naming for Uniqueness
+**Fixed**: Added environment_suffix to SSM parameter paths
+- Location: `lib/tap_stack.py` _create_ssm_parameters() method
+- Impact: Prevents resource conflicts across deployments
+
+### 10. Completed metadata.json
 **Fixed**: Added author field and complete AWS services list
 - Location: `metadata.json`
 - Impact: Meets metadata quality standards for training
@@ -256,12 +261,13 @@ class TapStack(Stack):
     def _create_ssm_parameters(self) -> None:
         """Create SSM Parameter Store parameters for environment-specific configuration."""
         # API Key parameter (placeholder - should be set manually after deployment)
+        # Include environment_suffix in path for uniqueness across deployments
         api_key_param = ssm.StringParameter(
             self,
             f"FraudApiKey-{self.env_name}-{self.environment_suffix}",
-            parameter_name=f"/fraud-detection/{self.env_name}/api-key",
+            parameter_name=f"/fraud-detection/{self.env_name}-{self.environment_suffix}/api-key",
             string_value="placeholder-api-key-change-after-deployment",
-            description=f"API key for fraud detection service in {self.env_name} environment",
+            description=f"API key for fraud detection service - {self.env_name}-{self.environment_suffix}",
             tier=ssm.ParameterTier.STANDARD,
         )
 
@@ -269,15 +275,19 @@ class TapStack(Stack):
         connection_string_param = ssm.StringParameter(
             self,
             f"FraudConnectionString-{self.env_name}-{self.environment_suffix}",
-            parameter_name=f"/fraud-detection/{self.env_name}/connection-string",
+            parameter_name=f"/fraud-detection/{self.env_name}-{self.environment_suffix}/connection-string",
             string_value="placeholder-connection-string",
-            description=f"Connection string for fraud detection service in {self.env_name} environment",
+            description=f"Connection string for fraud detection service - {self.env_name}-{self.environment_suffix}",
             tier=ssm.ParameterTier.STANDARD,
         )
 
         # Store parameter ARNs for IAM permissions
         self.api_key_param_arn = api_key_param.parameter_arn
         self.connection_string_param_arn = connection_string_param.parameter_arn
+        
+        # Store parameter names as strings for Lambda environment variables
+        self.api_key_param_name = f"/fraud-detection/{self.env_name}-{self.environment_suffix}/api-key"
+        self.connection_string_param_name = f"/fraud-detection/{self.env_name}-{self.environment_suffix}/connection-string"
 
     def _create_alarm_topic(self) -> sns.Topic:
         """Create SNS topic for CloudWatch alarm notifications."""
@@ -1078,10 +1088,16 @@ cdk deploy --context environment=prod --context environmentSuffix=unique-suffix
 
 ### Post-Deployment Configuration
 ```bash
-# Update SSM parameters with actual values
+# Update SSM parameters with actual values (note: include environment suffix)
 aws ssm put-parameter \
-  --name "/fraud-detection/dev/api-key" \
+  --name "/fraud-detection/dev-pr6921/api-key" \
   --value "your-actual-api-key" \
+  --type "SecureString" \
+  --overwrite
+
+aws ssm put-parameter \
+  --name "/fraud-detection/dev-pr6921/connection-string" \
+  --value "your-actual-connection-string" \
   --type "SecureString" \
   --overwrite
 ```
@@ -1125,12 +1141,13 @@ aws kinesis put-record \
 1. **Entry Point**: Fixed cdk.json to use tap.py (matches template standard)
 2. **Stack Naming**: Changed to `TapStack{suffix}` format (template standard)
 3. **Region Configuration**: Dev uses us-east-1 (bootstrapped region, not eu-west-1)
-4. **CloudFormation Outputs**: Added 11 comprehensive outputs without export_name
-5. **Lambda Clients**: Lazy-loading pattern with explicit region
-6. **Test Mocks**: Updated to target lazy-loading functions
-7. **README**: Fixed markdown syntax with closed code blocks
-8. **Metadata**: Added author field and complete AWS services list
-9. **All Tests**: Pass with 95.49% coverage
+4. **SSM Parameter Paths**: Include environment_suffix for uniqueness (`/fraud-detection/{env}-{suffix}/`)
+5. **CloudFormation Outputs**: Added 11 comprehensive outputs without export_name
+6. **Lambda Clients**: Lazy-loading pattern with explicit region
+7. **Test Mocks**: Updated to target lazy-loading functions
+8. **README**: Fixed markdown syntax with closed code blocks
+9. **Metadata**: Added author field and complete AWS services list
+10. **All Tests**: Pass with 95.53% coverage
 
 ## Summary
 

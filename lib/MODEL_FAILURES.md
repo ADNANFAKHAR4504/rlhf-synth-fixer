@@ -310,9 +310,58 @@ Updated metadata.json:
 
 ---
 
+## Issue 7: SSM Parameter Naming Without Environment Suffix
+
+### What Went Wrong
+
+SSM parameters were created without environment_suffix in their paths, causing conflicts when multiple deployments used the same environment name.
+
+**Evidence**:
+- Error: `AWS::EarlyValidation::ResourceExistenceCheck` validation failed
+- Parameter path: `/fraud-detection/dev/api-key` (missing suffix)
+- Multiple deployments with env_name="dev" would conflict
+- CloudFormation changeset creation failed
+
+### Root Cause
+
+SSM parameter paths only included environment name, not the unique environment_suffix:
+- Path format: `/fraud-detection/{env_name}/api-key`
+- Missing suffix means parameters clash across different PR deployments
+- Early Validation detects the conflict before deployment starts
+
+### Correct Implementation
+
+Updated SSM parameter paths to include environment_suffix:
+
+```python
+def _create_ssm_parameters(self) -> None:
+    # Include environment_suffix in path for uniqueness
+    api_key_param = ssm.StringParameter(
+        self,
+        f"FraudApiKey-{self.env_name}-{self.environment_suffix}",
+        parameter_name=f"/fraud-detection/{self.env_name}-{self.environment_suffix}/api-key",
+        string_value="placeholder-api-key-change-after-deployment",
+        description=f"API key - {self.env_name}-{self.environment_suffix}",
+        tier=ssm.ParameterTier.STANDARD,
+    )
+    
+    # Store as strings for Lambda environment variables
+    self.api_key_param_name = f"/fraud-detection/{self.env_name}-{self.environment_suffix}/api-key"
+```
+
+### Key Learnings
+
+- SSM parameter paths must include environment_suffix for uniqueness
+- Early Validation catches resource name conflicts before deployment
+- All persistent resources need unique names across deployments
+- Use string values (not token references) for Lambda environment variables
+- Integration tests must dynamically extract suffix from deployed resource names
+
+---
+
 ## Summary
 
-Total issues fixed: 6 (2 Critical, 2 High, 2 Medium)
+Total issues fixed: 7 (3 Critical, 2 High, 2 Medium)
 
 **Primary knowledge gaps addressed**:
 1. CDK entry point configuration and stack instantiation patterns

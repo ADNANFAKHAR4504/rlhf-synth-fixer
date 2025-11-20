@@ -165,8 +165,21 @@ class TestTapStackIntegration(unittest.TestCase):
                     env_name = "prod"
                     break
 
-        api_key_param = f"/fraud-detection/{env_name}/api-key"
-        conn_string_param = f"/fraud-detection/{env_name}/connection-string"
+        # Determine environment suffix from outputs
+        env_suffix = None
+        for key, value in self.outputs.items():
+            if isinstance(value, str) and '-' in value:
+                # Extract suffix from resource names like fraud-transactions-dev-pr6921
+                parts = value.split('-')
+                if len(parts) >= 3:
+                    env_suffix = parts[-1]
+                    break
+        
+        if not env_suffix:
+            env_suffix = "default"
+        
+        api_key_param = f"/fraud-detection/{env_name}-{env_suffix}/api-key"
+        conn_string_param = f"/fraud-detection/{env_name}-{env_suffix}/connection-string"
 
         try:
             response = self.ssm.get_parameter(Name=api_key_param)

@@ -238,8 +238,8 @@ class TestTapStack(unittest.TestCase):
             "Environment": {
                 "Variables": Match.object_like({
                     "ENVIRONMENT": "staging",
-                    "SSM_API_KEY_PARAM": "/fraud-detection/staging/api-key",
-                    "SSM_CONNECTION_STRING_PARAM": "/fraud-detection/staging/connection-string",
+                    "SSM_API_KEY_PARAM": "/fraud-detection/staging-test123/api-key",
+                    "SSM_CONNECTION_STRING_PARAM": "/fraud-detection/staging-test123/connection-string",
                     "REGION": "us-west-2"
                 })
             }

@@ -89,12 +89,13 @@ class TapStack(Stack):
     def _create_ssm_parameters(self) -> None:
         """Create SSM Parameter Store parameters for environment-specific configuration."""
         # API Key parameter (placeholder - should be set manually after deployment)
+        # Include environment_suffix in path for uniqueness across deployments
         api_key_param = ssm.StringParameter(
             self,
             f"FraudApiKey-{self.env_name}-{self.environment_suffix}",
-            parameter_name=f"/fraud-detection/{self.env_name}/api-key",
+            parameter_name=f"/fraud-detection/{self.env_name}-{self.environment_suffix}/api-key",
             string_value="placeholder-api-key-change-after-deployment",
-            description=f"API key for fraud detection service in {self.env_name} environment",
+            description=f"API key for fraud detection service - {self.env_name}-{self.environment_suffix}",
             tier=ssm.ParameterTier.STANDARD,
         )
 
@@ -102,15 +103,19 @@ class TapStack(Stack):
         connection_string_param = ssm.StringParameter(
             self,
             f"FraudConnectionString-{self.env_name}-{self.environment_suffix}",
-            parameter_name=f"/fraud-detection/{self.env_name}/connection-string",
+            parameter_name=f"/fraud-detection/{self.env_name}-{self.environment_suffix}/connection-string",
             string_value="placeholder-connection-string",
-            description=f"Connection string for fraud detection service in {self.env_name} environment",
+            description=f"Connection string for fraud detection service - {self.env_name}-{self.environment_suffix}",
             tier=ssm.ParameterTier.STANDARD,
         )
 
         # Store parameter ARNs for IAM permissions
         self.api_key_param_arn = api_key_param.parameter_arn
         self.connection_string_param_arn = connection_string_param.parameter_arn
+        
+        # Store parameter names as strings for Lambda environment variables
+        self.api_key_param_name = f"/fraud-detection/{self.env_name}-{self.environment_suffix}/api-key"
+        self.connection_string_param_name = f"/fraud-detection/{self.env_name}-{self.environment_suffix}/connection-string"
 
     def _create_alarm_topic(self) -> sns.Topic:
         """Create SNS topic for CloudWatch alarm notifications."""
@@ -292,8 +297,8 @@ class TapStack(Stack):
                 "ENVIRONMENT": self.env_name,
                 "DYNAMODB_TABLE_NAME": self.dynamodb_table.table_name,
                 "S3_BUCKET_NAME": self.s3_bucket.bucket_name,
-                "SSM_API_KEY_PARAM": f"/fraud-detection/{self.env_name}/api-key",
-                "SSM_CONNECTION_STRING_PARAM": f"/fraud-detection/{self.env_name}/connection-string",
+                "SSM_API_KEY_PARAM": self.api_key_param_name,
+                "SSM_CONNECTION_STRING_PARAM": self.connection_string_param_name,
                 "REGION": self.deploy_region,
             },
             log_retention=self._get_log_retention(),
@@ -491,13 +496,13 @@ class TapStack(Stack):
         CfnOutput(
             self,
             "SSMApiKeyParameter",
-            value=f"/fraud-detection/{self.env_name}/api-key",
+            value=self.api_key_param_name,
             description="SSM parameter path for API key"
         )
 
         CfnOutput(
             self,
             "SSMConnectionStringParameter",
-            value=f"/fraud-detection/{self.env_name}/connection-string",
+            value=self.connection_string_param_name,
             description="SSM parameter path for connection string"
         )
