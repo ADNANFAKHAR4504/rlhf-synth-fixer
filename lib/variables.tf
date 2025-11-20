@@ -47,6 +47,7 @@ variable "db_master_password" {
   description = "Master password for Aurora PostgreSQL"
   type        = string
   sensitive   = true
+  default     = "postgres12345"
 }
 
 variable "container_image" {
@@ -70,6 +71,7 @@ variable "source_db_server" {
   description = "Source Oracle database server hostname"
   type        = string
   sensitive   = true
+  default     = "oracle.example.com"
 }
 
 variable "source_db_name" {
@@ -82,10 +84,12 @@ variable "source_db_username" {
   description = "Source Oracle database username"
   type        = string
   sensitive   = true
+  default     = "oracle"
 }
 
 variable "source_db_password" {
   description = "Source Oracle database password"
   type        = string
   sensitive   = true
+  default     = "oracle12345"
 }
