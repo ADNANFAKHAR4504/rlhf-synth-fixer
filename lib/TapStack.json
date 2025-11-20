@@ -349,44 +349,6 @@
             }
           ]
         },
-        "ReplicationConfiguration": {
-          "Role": {
-            "Fn::GetAtt": [
-              "S3ReplicationRole",
-              "Arn"
-            ]
-          },
-          "Rules": [
-            {
-              "Id": "ReplicateToSecondary",
-              "Status": "Enabled",
-              "Priority": 1,
-              "Filter": {
-                "Prefix": ""
-              },
-              "Destination": {
-                "Bucket": {
-                  "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
-                "ReplicationTime": {
-                  "Status": "Enabled",
-                  "Time": {
-                    "Minutes": 15
-                  }
-                },
-                "Metrics": {
-                  "Status": "Enabled",
-                  "EventThreshold": {
-                    "Minutes": 15
-                  }
-                }
-              },
-              "DeleteMarkerReplication": {
-                "Status": "Enabled"
-              }
-            }
-          ]
-        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
