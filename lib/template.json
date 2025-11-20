@@ -9,6 +9,13 @@
       "MaxLength": 20,
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "logRetentionDays": {
+      "Type": "Number",
+      "Description": "CloudWatch log retention in days",
+      "Default": 90,
+      "AllowedValues": [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653],
+      "ConstraintDescription": "Must be a valid CloudWatch log retention period"
     }
   },
   "Resources": {
@@ -711,7 +718,9 @@
         "LogGroupName": {
           "Fn::Sub": "/aws/lambda/transaction-processor-${environmentSuffix}"
         },
-        "RetentionInDays": 90,
+        "RetentionInDays": {
+          "Ref": "logRetentionDays"
+        },
         "KmsKeyId": {
           "Fn::GetAtt": [
             "EncryptionKey",
@@ -899,7 +908,9 @@
         "LogGroupName": {
           "Fn::Sub": "/aws/apigateway/transaction-api-${environmentSuffix}"
         },
-        "RetentionInDays": 90,
+        "RetentionInDays": {
+          "Ref": "logRetentionDays"
+        },
         "KmsKeyId": {
           "Fn::GetAtt": [
             "EncryptionKey",
@@ -1292,7 +1303,9 @@
         "LogGroupName": {
           "Fn::Sub": "/aws/lambda/secret-rotation-${environmentSuffix}"
         },
-        "RetentionInDays": 90,
+        "RetentionInDays": {
+          "Ref": "logRetentionDays"
+        },
         "KmsKeyId": {
           "Fn::GetAtt": [
             "EncryptionKey",
