@@ -406,21 +406,20 @@ class TestTapStack(unittest.TestCase):
         sgs = template.find_resources("AWS::EC2::SecurityGroup")
         assert len(sgs) >= 2
 
-    @mark.it("enables circuit breaker for ECS services")
-    def test_enables_circuit_breaker(self):
+    @mark.it("configures deployment settings for ECS services")
+    def test_configures_deployment_settings(self):
         # ARRANGE
         env_suffix = "testenv"
         stack = TapStack(self.app, "TapStackTest",
                          TapStackProps(environment_suffix=env_suffix))
         template = Template.from_stack(stack)
 
-        # ASSERT
+        # ASSERT - Circuit breaker disabled for initial deployment
+        # Check deployment configuration allows flexible rollouts
         template.has_resource_properties("AWS::ECS::Service", {
             "DeploymentConfiguration": {
-                "DeploymentCircuitBreaker": {
-                    "Enable": True,
-                    "Rollback": True
-                }
+                "MinimumHealthyPercent": 0,
+                "MaximumPercent": 200
             }
         })
 

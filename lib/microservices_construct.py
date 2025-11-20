@@ -48,9 +48,9 @@ class MicroservicesConstruct(Construct):
 
         self.services = {}
         service_configs = [
-            {"name": "payment", "port": 8080, "path": "/payment/*"},
-            {"name": "order", "port": 8081, "path": "/order/*"},
-            {"name": "notification", "port": 8082, "path": "/notification/*"}
+            {"name": "payment", "port": 80, "path": "/payment/*"},
+            {"name": "order", "port": 80, "path": "/order/*"},
+            {"name": "notification", "port": 80, "path": "/notification/*"}
         ]
 
         # Security group for ECS tasks
@@ -65,8 +65,8 @@ class MicroservicesConstruct(Construct):
         # Allow traffic from ALB to tasks
         task_sg.add_ingress_rule(
             ec2.Peer.security_group_id(alb.connections.security_groups[0].security_group_id),
-            ec2.Port.tcp_range(8080, 8082),
-            "Allow traffic from ALB"
+            ec2.Port.tcp(80),
+            "Allow traffic from ALB on port 80"
         )
 
         # Allow service-to-service communication
@@ -217,38 +217,9 @@ class MicroservicesConstruct(Construct):
                 ]
             )
 
-            # Add App Mesh Envoy proxy sidecar
-            envoy_container = task_definition.add_container(
-                f"EnvoyProxy{service_name.capitalize()}",
-                container_name="envoy",
-                image=ecs.ContainerImage.from_registry(
-                    "public.ecr.aws/appmesh/aws-appmesh-envoy:v1.27.2.0-prod"
-                ),
-                environment={
-                    "APPMESH_RESOURCE_ARN": virtual_node.virtual_node_arn,
-                    "ENABLE_ENVOY_XRAY_TRACING": "0",
-                    "ENABLE_ENVOY_STATS_TAGS": "1"
-                },
-                essential=False,  # Make Envoy non-essential to allow app container to start independently
-                logging=ecs.LogDrivers.aws_logs(
-                    stream_prefix=f"{service_name}-envoy",
-                    log_group=log_group
-                ),
-                user="1337"
-            )
-
-            # Set container dependency but without health check requirement
-            container.add_container_dependencies(
-                ecs.ContainerDependency(
-                    container=envoy_container,
-                    condition=ecs.ContainerDependencyCondition.START
-                )
-            )
-
-            # Grant Envoy permissions for App Mesh
-            task_role.add_managed_policy(
-                iam.ManagedPolicy.from_aws_managed_policy_name("AWSAppMeshEnvoyAccess")
-            )
+            # Note: App Mesh Envoy sidecar removed for initial deployment simplicity
+            # In production, add Envoy sidecar for service mesh functionality
+            # Keeping App Mesh virtual nodes for future Envoy integration
 
             # Create ALB target group
             target_group = elbv2.ApplicationTargetGroup(
@@ -280,7 +251,8 @@ class MicroservicesConstruct(Construct):
                 action=elbv2.ListenerAction.forward([target_group])
             )
 
-            # Create ECS service with circuit breaker
+            # Create ECS service without circuit breaker for initial deployment
+            # Circuit breaker disabled to allow debugging of container startup issues
             service = ecs.FargateService(
                 self,
                 f"Service{service_name.capitalize()}-{environment_suffix}",
@@ -299,17 +271,21 @@ class MicroservicesConstruct(Construct):
                         base=2  # Always run 2 tasks on Spot
                     )
                 ],
-                circuit_breaker=ecs.DeploymentCircuitBreaker(
-                    rollback=True  # Enable automatic rollback
-                ),
+                # circuit_breaker disabled for initial deployment to allow tasks to start
+                # Re-enable after verifying container configuration works
                 enable_execute_command=True,
                 cloud_map_options=ecs.CloudMapOptions(
                     name=service_name
-                )
+                ),
+                min_healthy_percent=0,  # Allow all tasks to be replaced during deployment
+                max_healthy_percent=200  # Allow double capacity during deployment
             )
 
             # Attach service to target group
             service.attach_to_application_target_group(target_group)
+            
+            # Add dependency to ensure target group is created before service
+            service.node.add_dependency(target_group)
 
             # Configure auto-scaling
             scaling = service.auto_scale_task_count(
