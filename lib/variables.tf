@@ -135,9 +135,9 @@ variable "resource_deployment_suffix" {
 }
 
 locals {
-  cluster_name             = "${var.cluster_name_prefix}-${var.environment_suffix}"
   node_group_suffix        = "-${var.node_group_deployment_suffix}"
   resource_suffix          = "-${var.resource_deployment_suffix}"
+  cluster_name             = "${var.cluster_name_prefix}-${var.environment_suffix}${local.resource_suffix}"
   frontend_node_group_name = "${local.cluster_name}-frontend${local.node_group_suffix}"
   backend_node_group_name  = "${local.cluster_name}-backend${local.node_group_suffix}"
   frontend_launch_template = "${local.cluster_name}-frontend-lt"
