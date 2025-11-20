@@ -34,7 +34,7 @@
     "DomainName": {
       "Type": "String",
       "Description": "Domain name for Route53 hosted zone",
-      "Default": "example.com"
+      "Default": "tap-demo.local"
     }
   },
   "Conditions": {
@@ -1053,12 +1053,7 @@
           "Ref": "PrimaryHealthCheck"
         },
         "AliasTarget": {
-          "HostedZoneId": {
-            "Fn::GetAtt": [
-              "TransactionApi",
-              "CloudFrontHostedZoneId"
-            ]
-          },
+          "HostedZoneId": "Z1UJRXOUMOOFQ8",
           "DNSName": {
             "Fn::Sub": "${TransactionApi}.execute-api.${PrimaryRegion}.amazonaws.com"
           },
