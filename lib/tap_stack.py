@@ -17,6 +17,7 @@ from aws_cdk import (
     aws_events as events,
     aws_events_targets as event_targets,
     aws_logs as logs,
+    aws_kms as kms,
 )
 from constructs import Construct
 
@@ -386,12 +387,23 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
+        # FIXED: Create KMS key for secondary region encryption
+        # KMS keys are region-specific, so secondary cluster needs its own key
+        kms_key = kms.Key(
+            self,
+            f"AuroraSecondaryKMSKey-v1-{self.environment_suffix}",
+            description=f"KMS key for Aurora secondary cluster in {self.region}",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         # FIXED: Create secondary cluster and attach to global cluster
         # Import the global cluster identifier from primary region
         global_cluster_id = f"trading-global-v1-{self.environment_suffix}"
 
         # FIXED: For cross-region replication, we cannot specify credentials or default_database_name
         # These are inherited from the primary cluster in the global database
+        # However, we MUST specify a KMS key for encrypted cross-region replication
         cluster = rds.DatabaseCluster(
             self,
             f"AuroraSecondaryCluster-v1-{self.environment_suffix}",
@@ -413,6 +425,7 @@ class TapStack(Stack):
                 ),
             ),
             subnet_group=db_subnet_group,
+            storage_encryption_key=kms_key,  # Required for encrypted cross-region replica
             deletion_protection=False,
             removal_policy=RemovalPolicy.DESTROY,
         )
