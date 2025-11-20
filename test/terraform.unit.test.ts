@@ -249,7 +249,7 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should have Secrets Manager policy with correct permissions", () => {
       expect(ec2Tf).toMatch(/"secretsmanager:GetSecretValue"/);
       expect(ec2Tf).toMatch(/"secretsmanager:DescribeSecret"/);
-      expect(ec2Tf).toMatch(/aws_secretsmanager_secret\.rds_password\.arn/);
+      expect(ec2Tf).toMatch(/aws_secretsmanager_secret\.db_credentials\.arn/);
     });
 
     test("should create IAM instance profile", () => {
