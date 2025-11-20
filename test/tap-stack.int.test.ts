@@ -1,401 +1,209 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('TapStack CloudFormation Integration Tests', () => {
+describe('TapStack CloudFormation Template', () => {
   let template: any;
+  let resources: any;
+  let parameters: any;
+  let outputs: any;
 
   beforeAll(() => {
-    // Read the CloudFormation template
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
+    resources = template.Resources;
+    parameters = template.Parameters;
+    outputs = template.Outputs;
   });
 
-  describe('Cross-Resource Integration', () => {
-    test('should have VPC referenced by all network resources', () => {
-      // Check subnets reference the VPC
-      expect(template.Resources.PrimarySubnet1.Properties.VpcId.Ref).toBe('PrimaryVPC');
-      expect(template.Resources.PrimarySubnet2.Properties.VpcId.Ref).toBe('PrimaryVPC');
-      expect(template.Resources.PrimarySubnet3.Properties.VpcId.Ref).toBe('PrimaryVPC');
-
-      // Check security group references the VPC
-      expect(template.Resources.DBSecurityGroup.Properties.VpcId.Ref).toBe('PrimaryVPC');
-
-      // Check route table references the VPC
-      expect(template.Resources.PrimaryRouteTable.Properties.VpcId.Ref).toBe('PrimaryVPC');
-    });
-
-    test('should have subnets properly associated with route tables', () => {
-      // Check subnet associations
-      expect(template.Resources.PrimarySubnetRouteTableAssociation1.Properties.SubnetId.Ref).toBe('PrimarySubnet1');
-      expect(template.Resources.PrimarySubnetRouteTableAssociation1.Properties.RouteTableId.Ref).toBe('PrimaryRouteTable');
-
-      expect(template.Resources.PrimarySubnetRouteTableAssociation2.Properties.SubnetId.Ref).toBe('PrimarySubnet2');
-      expect(template.Resources.PrimarySubnetRouteTableAssociation2.Properties.RouteTableId.Ref).toBe('PrimaryRouteTable');
-
-      expect(template.Resources.PrimarySubnetRouteTableAssociation3.Properties.SubnetId.Ref).toBe('PrimarySubnet3');
-      expect(template.Resources.PrimarySubnetRouteTableAssociation3.Properties.RouteTableId.Ref).toBe('PrimaryRouteTable');
-    });
-
-    test('should have DB subnet group using all subnets', () => {
-      const subnetIds = template.Resources.DBSubnetGroup.Properties.SubnetIds;
-      expect(subnetIds).toHaveLength(3);
-      expect(subnetIds[0].Ref).toBe('PrimarySubnet1');
-      expect(subnetIds[1].Ref).toBe('PrimarySubnet2');
-      expect(subnetIds[2].Ref).toBe('PrimarySubnet3');
-    });
-
-    test('should have Aurora cluster properly integrated with network and security', () => {
-      const primaryCluster = template.Resources.PrimaryDBCluster;
-
-      // Check DB subnet group reference
-      expect(primaryCluster.Properties.DBSubnetGroupName.Ref).toBe('DBSubnetGroup');
-
-      // Check security group reference
-      expect(primaryCluster.Properties.VpcSecurityGroupIds[0].Ref).toBe('DBSecurityGroup');
-
-      // Check KMS key reference
-      expect(primaryCluster.Properties.KmsKeyId.Ref).toBe('DBKMSKey');
-
-      // Check global cluster reference
-      expect(primaryCluster.Properties.GlobalClusterIdentifier.Ref).toBe('GlobalCluster');
-    });
-
-    test('should have Aurora instance referencing the primary cluster', () => {
-      const primaryInstance = template.Resources.PrimaryDBInstance;
-      expect(primaryInstance.Properties.DBClusterIdentifier.Ref).toBe('PrimaryDBCluster');
+  describe('Parameter configuration', () => {
+    test('should define regional and operational parameters with safe defaults', () => {
+      expect(parameters.EnvironmentSuffix.Default).toBe('dev');
+      expect(parameters.PrimaryRegion.Default).toBe('us-east-1');
+      expect(parameters.SecondaryRegion.Default).toBe('us-west-2');
+      expect(parameters.HealthCheckFailureThreshold.MinValue).toBe(1);
+      expect(parameters.HealthCheckFailureThreshold.MaxValue).toBe(10);
+      expect(parameters.AlertEmail.Default).toContain('@');
     });
   });
 
-  describe('Conditional Resource Creation', () => {
-    test('should have conditional logic for DB password secret', () => {
-      const dbPasswordSecret = template.Resources.DBPasswordSecret;
-      expect(dbPasswordSecret.Condition).toBe('CreateDBPasswordSecret');
-
-      // Check condition definition
-      expect(template.Conditions.CreateDBPasswordSecret['Fn::Equals']).toEqual([
-        { Ref: 'DBPasswordSecretArn' },
-        ''
-      ]);
-    });
-
-    test('should use conditional password in Aurora cluster', () => {
-      const passwordConfig = template.Resources.PrimaryDBCluster.Properties.MasterUserPassword;
-      expect(passwordConfig['Fn::If']).toBeDefined();
-      expect(passwordConfig['Fn::If'][0]).toBe('CreateDBPasswordSecret');
-
-      // Check both branches of the condition
-      const createNewSecret = passwordConfig['Fn::If'][1]['Fn::Sub'];
-      const useExistingSecret = passwordConfig['Fn::If'][2]['Fn::Sub'];
-
-      expect(createNewSecret).toContain('${DBPasswordSecret}');
-      expect(useExistingSecret).toContain('${DBPasswordSecretArn}');
-    });
-  });
-
-  describe('Monitoring Integration', () => {
-    test('should have CloudWatch alarms monitoring the correct resources', () => {
-      const cpuAlarm = template.Resources.DBCPUAlarm;
-      const connectionsAlarm = template.Resources.DBConnectionsAlarm;
-
-      // Check CPU alarm monitors the primary cluster
-      expect(cpuAlarm.Properties.Dimensions[0].Name).toBe('DBClusterIdentifier');
-      expect(cpuAlarm.Properties.Dimensions[0].Value.Ref).toBe('PrimaryDBCluster');
-
-      // Check connections alarm monitors the primary cluster
-      expect(connectionsAlarm.Properties.Dimensions[0].Name).toBe('DBClusterIdentifier');
-      expect(connectionsAlarm.Properties.Dimensions[0].Value.Ref).toBe('PrimaryDBCluster');
-    });
-
-    test('should have health check integrated with CloudWatch alarm', () => {
-      const healthCheck = template.Resources.HealthCheck;
-
-      // Check health check depends on alarm
-      expect(healthCheck.DependsOn).toBe('DBCPUAlarm');
-
-      // Check alarm identifier configuration
-      const alarmIdentifier = healthCheck.Properties.HealthCheckConfig.AlarmIdentifier;
-      expect(alarmIdentifier.Name['Fn::Sub']).toBe('db-cpu-alarm-primary-${EnvironmentSuffix}');
-      expect(alarmIdentifier.Region.Ref).toBe('AWS::Region');
-    });
-  });
-
-  describe('Security Integration', () => {
-    test('should have KMS key properly configured for encryption', () => {
-      // Check KMS key alias references the key
-      expect(template.Resources.DBKMSKeyAlias.Properties.TargetKeyId.Ref).toBe('DBKMSKey');
-
-      // Check Aurora cluster uses the KMS key
-      expect(template.Resources.PrimaryDBCluster.Properties.KmsKeyId.Ref).toBe('DBKMSKey');
-      expect(template.Resources.PrimaryDBCluster.Properties.StorageEncrypted).toBe(true);
-
-      // Check global cluster has encryption enabled
-      expect(template.Resources.GlobalCluster.Properties.StorageEncrypted).toBe(true);
-    });
-
-    test('should have security group with proper ingress rules', () => {
-      const securityGroup = template.Resources.DBSecurityGroup;
-      const ingressRule = securityGroup.Properties.SecurityGroupIngress[0];
-
-      // Check MySQL port configuration
-      expect(ingressRule.IpProtocol).toBe('tcp');
-      expect(ingressRule.FromPort).toBe(3306);
-      expect(ingressRule.ToPort).toBe(3306);
-      expect(ingressRule.CidrIp).toBe('10.0.0.0/16');
-    });
-  });
-
-  describe('Network Connectivity', () => {
-    test('should have internet gateway properly attached', () => {
-      // Check attachment resource
-      const attachment = template.Resources.AttachPrimaryGateway;
-      expect(attachment.Properties.VpcId.Ref).toBe('PrimaryVPC');
-      expect(attachment.Properties.InternetGatewayId.Ref).toBe('PrimaryInternetGateway');
-
-      // Check route depends on attachment
-      expect(template.Resources.PrimaryRoute.DependsOn).toBe('AttachPrimaryGateway');
-    });
-
-    test('should have public route configured correctly', () => {
-      const route = template.Resources.PrimaryRoute;
-      expect(route.Properties.RouteTableId.Ref).toBe('PrimaryRouteTable');
-      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(route.Properties.GatewayId.Ref).toBe('PrimaryInternetGateway');
-    });
-
-    test('should have subnets in different availability zones', () => {
-      const subnet1 = template.Resources.PrimarySubnet1;
-      const subnet2 = template.Resources.PrimarySubnet2;
-      const subnet3 = template.Resources.PrimarySubnet3;
-
-      // Check different AZ indices
-      expect(subnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
-      expect(subnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
-      expect(subnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
-
-      // Check different CIDR blocks
-      expect(subnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
-      expect(subnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
-      expect(subnet3.Properties.CidrBlock).toBe('10.0.3.0/24');
-    });
-  });
-
-  describe('Output Integration', () => {
-    test('should export values with consistent naming pattern', () => {
-      const outputs = template.Outputs;
-
-      // Check VPC output
-      expect(outputs.VPCId.Value.Ref).toBe('PrimaryVPC');
-      expect(outputs.VPCId.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
-
-      // Check cluster endpoints
-      expect(outputs.PrimaryClusterEndpoint.Value['Fn::GetAtt']).toEqual(['PrimaryDBCluster', 'Endpoint.Address']);
-      expect(outputs.PrimaryClusterReaderEndpoint.Value['Fn::GetAtt']).toEqual(['PrimaryDBCluster', 'ReadEndpoint.Address']);
-
-      // Check other outputs reference correct resources
-      expect(outputs.GlobalClusterIdentifier.Value.Ref).toBe('GlobalCluster');
-      expect(outputs.HealthCheckId.Value.Ref).toBe('HealthCheck');
-      expect(outputs.DBSecurityGroupId.Value.Ref).toBe('DBSecurityGroup');
-    });
-
-    test('should have all outputs exportable for cross-stack references', () => {
-      const outputNames = Object.keys(template.Outputs);
-
-      outputNames.forEach(outputName => {
-        const output = template.Outputs[outputName];
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-        expect(output.Description).toBeDefined();
-      });
-    });
-  });
-
-  describe('Parameter Integration', () => {
-    test('should use EnvironmentSuffix parameter consistently across resources', () => {
-      const resourcesToCheck = [
-        'PrimaryVPC',
-        'PrimarySubnet1',
-        'PrimarySubnet2',
-        'PrimarySubnet3',
-        'DBSecurityGroup',
-        'DBSubnetGroup',
-        'GlobalCluster',
-        'PrimaryDBCluster',
-        'PrimaryDBInstance',
-        'DBCPUAlarm',
-        'DBConnectionsAlarm',
-        'HealthCheck'
+  describe('Network topology', () => {
+    test('should connect public and private subnets to the primary VPC', () => {
+      const subnetNames = [
+        'PrimaryPublicSubnet1',
+        'PrimaryPublicSubnet2',
+        'PrimaryPrivateSubnet1',
+        'PrimaryPrivateSubnet2'
       ];
 
-      resourcesToCheck.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        if (resource) {
-          const resourceJson = JSON.stringify(resource);
-          // Check if resource references EnvironmentSuffix parameter
-          if (resourceJson.includes('${EnvironmentSuffix}')) {
-            expect(resourceJson).toContain('${EnvironmentSuffix}');
-          }
-        }
+      subnetNames.forEach(name => {
+        const subnet = resources[name];
+        expect(subnet).toBeDefined();
+        expect(subnet.Properties.VpcId.Ref).toBe('PrimaryVPC');
+        expect(subnet.Properties.CidrBlock).toMatch(/^10\.0\./);
       });
     });
 
-    test('should have DBPasswordSecretArn parameter with proper default', () => {
-      const param = template.Parameters.DBPasswordSecretArn;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('');
-      expect(param.Description).toContain('optional');
-    });
-  });
+    test('should attach an internet gateway and route default traffic through it', () => {
+      expect(resources.PrimaryInternetGateway).toBeDefined();
+      expect(resources.PrimaryVPCGatewayAttachment.Properties.VpcId.Ref).toBe('PrimaryVPC');
+      expect(resources.PrimaryVPCGatewayAttachment.Properties.InternetGatewayId.Ref).toBe('PrimaryInternetGateway');
 
-  describe('Resource Dependencies', () => {
-    test('should have proper explicit dependencies', () => {
-      // Route depends on gateway attachment
-      expect(template.Resources.PrimaryRoute.DependsOn).toBe('AttachPrimaryGateway');
+      const route = resources.PrimaryPublicRoute;
+      expect(route.DependsOn).toBe('PrimaryVPCGatewayAttachment');
+      expect(route.Properties.RouteTableId.Ref).toBe('PrimaryPublicRouteTable');
+      expect(route.Properties.GatewayId.Ref).toBe('PrimaryInternetGateway');
+      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
 
-      // Health check depends on alarm
-      expect(template.Resources.HealthCheck.DependsOn).toBe('DBCPUAlarm');
-    });
+      const associations = [
+        'PrimaryPublicSubnet1RouteTableAssociation',
+        'PrimaryPublicSubnet2RouteTableAssociation'
+      ].map(name => resources[name]);
 
-    test('should have implicit dependencies through references', () => {
-      // DB Instance depends on Cluster through Ref
-      expect(template.Resources.PrimaryDBInstance.Properties.DBClusterIdentifier.Ref).toBe('PrimaryDBCluster');
-
-      // Primary Cluster depends on Global Cluster through Ref
-      expect(template.Resources.PrimaryDBCluster.Properties.GlobalClusterIdentifier.Ref).toBe('GlobalCluster');
-
-      // Primary Cluster depends on DBSubnetGroup through Ref
-      expect(template.Resources.PrimaryDBCluster.Properties.DBSubnetGroupName.Ref).toBe('DBSubnetGroup');
-
-      // DBSubnetGroup depends on Subnets through Refs
-      const subnetRefs = template.Resources.DBSubnetGroup.Properties.SubnetIds;
-      expect(subnetRefs.some((ref: any) => ref.Ref === 'PrimarySubnet1')).toBe(true);
-    });
-  });
-
-  describe('Global Aurora Configuration', () => {
-    test('should have matching engine configurations between global and primary clusters', () => {
-      const globalCluster = template.Resources.GlobalCluster;
-      const primaryCluster = template.Resources.PrimaryDBCluster;
-
-      // Engine types should match
-      expect(globalCluster.Properties.Engine).toBe(primaryCluster.Properties.Engine);
-      expect(globalCluster.Properties.EngineVersion).toBe(primaryCluster.Properties.EngineVersion);
-
-      // Both should have encryption enabled
-      expect(globalCluster.Properties.StorageEncrypted).toBe(true);
-      expect(primaryCluster.Properties.StorageEncrypted).toBe(true);
-    });
-
-    test('should have Aurora instance matching cluster engine', () => {
-      const primaryCluster = template.Resources.PrimaryDBCluster;
-      const primaryInstance = template.Resources.PrimaryDBInstance;
-
-      expect(primaryInstance.Properties.Engine).toBe(primaryCluster.Properties.Engine);
-    });
-  });
-
-  describe('End-to-End Resource Chain', () => {
-    test('should have complete network path from IGW to database', () => {
-      // Internet Gateway exists
-      expect(template.Resources.PrimaryInternetGateway).toBeDefined();
-
-      // IGW attached to VPC
-      expect(template.Resources.AttachPrimaryGateway.Properties.VpcId.Ref).toBe('PrimaryVPC');
-
-      // Route table has route to IGW
-      expect(template.Resources.PrimaryRoute.Properties.GatewayId.Ref).toBe('PrimaryInternetGateway');
-
-      // Subnets associated with route table
-      expect(template.Resources.PrimarySubnetRouteTableAssociation1).toBeDefined();
-
-      // DB subnet group uses the subnets
-      expect(template.Resources.DBSubnetGroup.Properties.SubnetIds[0].Ref).toBe('PrimarySubnet1');
-
-      // Aurora cluster uses the subnet group
-      expect(template.Resources.PrimaryDBCluster.Properties.DBSubnetGroupName.Ref).toBe('DBSubnetGroup');
-    });
-
-    test('should have complete monitoring chain from database to health check', () => {
-      // Aurora cluster exists
-      expect(template.Resources.PrimaryDBCluster).toBeDefined();
-
-      // CloudWatch alarm monitors the cluster
-      expect(template.Resources.DBCPUAlarm.Properties.Dimensions[0].Value.Ref).toBe('PrimaryDBCluster');
-
-      // Health check monitors the alarm
-      expect(template.Resources.HealthCheck.Properties.HealthCheckConfig.AlarmIdentifier.Name['Fn::Sub']).toContain('db-cpu-alarm');
-
-      // Health check ID is exported for external use
-      expect(template.Outputs.HealthCheckId.Value.Ref).toBe('HealthCheck');
-    });
-  });
-
-  describe('High Availability and Resilience', () => {
-    test('should have resources distributed across multiple AZs', () => {
-      // Check that we have 3 subnets in different AZs
-      expect(template.Resources.PrimarySubnet1).toBeDefined();
-      expect(template.Resources.PrimarySubnet2).toBeDefined();
-      expect(template.Resources.PrimarySubnet3).toBeDefined();
-
-      // Verify they're in different AZs
-      const az1 = template.Resources.PrimarySubnet1.Properties.AvailabilityZone['Fn::Select'][0];
-      const az2 = template.Resources.PrimarySubnet2.Properties.AvailabilityZone['Fn::Select'][0];
-      const az3 = template.Resources.PrimarySubnet3.Properties.AvailabilityZone['Fn::Select'][0];
-
-      expect(az1).not.toBe(az2);
-      expect(az2).not.toBe(az3);
-      expect(az1).not.toBe(az3);
-    });
-
-    test('should have global cluster for multi-region capability', () => {
-      const globalCluster = template.Resources.GlobalCluster;
-      expect(globalCluster).toBeDefined();
-      expect(globalCluster.Properties.GlobalClusterIdentifier).toBeDefined();
-      expect(globalCluster.Properties.StorageEncrypted).toBe(true);
-    });
-
-    test('should have backup retention configured', () => {
-      const primaryCluster = template.Resources.PrimaryDBCluster;
-      expect(primaryCluster.Properties.BackupRetentionPeriod).toBeDefined();
-      expect(primaryCluster.Properties.BackupRetentionPeriod).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('Scalability Configuration', () => {
-    test('should use appropriate Aurora instance class', () => {
-      const instance = template.Resources.PrimaryDBInstance;
-      expect(instance.Properties.DBInstanceClass).toBeDefined();
-      expect(instance.Properties.DBInstanceClass).toMatch(/^db\.(r5|r6g|t3|t4g)\./);
-    });
-
-    test('should have Aurora cluster with serverless or provisioned capacity', () => {
-      const cluster = template.Resources.PrimaryDBCluster;
-      expect(cluster.Properties.Engine).toBe('aurora-mysql');
-      // Cluster is ready for scaling
-      expect(cluster.Properties.DBClusterIdentifier).toBeDefined();
-    });
-  });
-
-  describe('Cost Optimization', () => {
-    test('should not have unnecessary resource retention', () => {
-      Object.keys(template.Resources).forEach(resourceKey => {
-        const resource = template.Resources[resourceKey];
-        // Only critical stateful resources should have DeletionPolicy: Retain
-        if (resource.DeletionPolicy === 'Retain') {
-          // Only allow for critical resources like KMS keys or production databases
-          const allowedRetainResources = ['DBKMSKey'];
-          expect(allowedRetainResources).toContain(resourceKey);
-        }
+      associations.forEach((association, index) => {
+        expect(association.Properties.RouteTableId.Ref).toBe('PrimaryPublicRouteTable');
+        expect(association.Properties.SubnetId.Ref).toBe(`PrimaryPublicSubnet${index + 1}`);
       });
     });
+  });
 
-    test('should use cost-effective configurations', () => {
-      // Check that Aurora instance is using a reasonable instance type
-      const instance = template.Resources.PrimaryDBInstance;
-      expect(instance.Properties.DBInstanceClass).toBeDefined();
+  describe('Security controls', () => {
+    test('should configure a security group with HTTPS ingress and full egress', () => {
+      const securityGroup = resources.PrimarySecurityGroup;
+      expect(securityGroup.Properties.VpcId.Ref).toBe('PrimaryVPC');
+      const ingress = securityGroup.Properties.SecurityGroupIngress[0];
+      expect(ingress.IpProtocol).toBe('tcp');
+      expect(ingress.FromPort).toBe(443);
+      expect(ingress.ToPort).toBe(443);
+      expect(ingress.CidrIp).toBe('0.0.0.0/0');
 
-      // Ensure public accessibility is disabled for cost and security
-      expect(instance.Properties.PubliclyAccessible).toBe(false);
+      const egress = securityGroup.Properties.SecurityGroupEgress[0];
+      expect(egress.IpProtocol).toBe('-1');
+      expect(egress.CidrIp).toBe('0.0.0.0/0');
+    });
+  });
+
+  describe('Data durability and disaster recovery', () => {
+    test('should configure a DynamoDB global table with replicas in both regions', () => {
+      const table = resources.TransactionTable.Properties;
+      expect(table.TableName['Fn::Sub']).toContain('transactions-${EnvironmentSuffix}');
+      expect(table.Replicas).toHaveLength(2);
+      expect(table.Replicas[0].Region.Ref).toBe('PrimaryRegion');
+      expect(table.Replicas[1].Region.Ref).toBe('SecondaryRegion');
+
+      table.Replicas.forEach(replica => {
+        expect(replica.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+        expect(replica.Tags[0].Value.Ref).toBe('EnvironmentSuffix');
+      });
+
+      expect(table.SSESpecification.SSEEnabled).toBe(true);
+      expect(table.SSESpecification.SSEType).toBe('KMS');
+    });
+
+    test('should store transaction logs in an encrypted, versioned S3 bucket', () => {
+      const bucket = resources.TransactionLogBucket.Properties;
+      expect(bucket.VersioningConfiguration.Status).toBe('Enabled');
+      expect(bucket.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(bucket.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(bucket.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      expect(bucket.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+    });
+  });
+
+  describe('Processing pipeline', () => {
+    test('should grant the Lambda processor access to DynamoDB, S3, and SQS', () => {
+      const role = resources.TransactionProcessorRole.Properties;
+      expect(role.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(role.Policies[0].PolicyDocument.Statement.length).toBeGreaterThanOrEqual(4);
+      const policyStatement = role.Policies[0].PolicyDocument.Statement;
+      expect(policyStatement.some((stmt: any) => (stmt.Resource['Fn::GetAtt'] || [])[0] === 'TransactionTable')).toBe(true);
+      expect(policyStatement.some((stmt: any) => typeof stmt.Resource === 'string' && stmt.Resource.includes('transaction-logs-primary'))).toBe(true);
+      expect(policyStatement.some((stmt: any) => (stmt.Resource['Fn::GetAtt'] || [])[0] === 'TransactionQueue')).toBe(true);
+    });
+
+    test('should configure the Lambda function with VPC networking and dependent resources', () => {
+      const fn = resources.TransactionProcessorFunction.Properties;
+      expect(fn.Runtime).toBe('python3.11');
+      expect(fn.VpcConfig.SecurityGroupIds[0].Ref).toBe('PrimarySecurityGroup');
+      expect(fn.VpcConfig.SubnetIds).toEqual([
+        { Ref: 'PrimaryPrivateSubnet1' },
+        { Ref: 'PrimaryPrivateSubnet2' }
+      ]);
+      expect(fn.Environment.Variables.TABLE_NAME.Ref).toBe('TransactionTable');
+      expect(fn.Environment.Variables.BUCKET_NAME.Ref).toBe('TransactionLogBucket');
+      expect(fn.Environment.Variables.QUEUE_URL.Ref).toBe('TransactionQueue');
+      expect(fn.Role['Fn::GetAtt'][0]).toBe('TransactionProcessorRole');
+    });
+  });
+
+  describe('API integration', () => {
+    test('should wire API Gateway to the Lambda function with invoke permissions', () => {
+      const method = resources.TransactionApiMethod.Properties;
+      expect(method.HttpMethod).toBe('POST');
+      expect(method.Integration.Type).toBe('AWS_PROXY');
+      expect(method.Integration.Uri['Fn::Sub']).toContain('${TransactionProcessorFunction.Arn}/invocations');
+
+      const permission = resources.LambdaApiPermission.Properties;
+      expect(permission.FunctionName.Ref).toBe('TransactionProcessorFunction');
+      expect(permission.Principal).toBe('apigateway.amazonaws.com');
+      expect(permission.SourceArn['Fn::Sub']).toContain('${TransactionApi}/*/*/*');
+    });
+  });
+
+  describe('Monitoring and alerting', () => {
+    test('should create a Route53 health check that feeds a CloudWatch alarm and SNS topic', () => {
+      const healthCheck = resources.ApiHealthCheck.Properties;
+      expect(healthCheck.HealthCheckConfig.Type).toBe('HTTPS');
+      expect(healthCheck.HealthCheckConfig.FailureThreshold.Ref).toBe('HealthCheckFailureThreshold');
+      expect(healthCheck.HealthCheckConfig.ResourcePath).toBe('/transactions');
+
+      const alarm = resources.HealthCheckAlarm.Properties;
+      expect(alarm.Dimensions[0].Value.Ref).toBe('ApiHealthCheck');
+      expect(alarm.AlarmActions[0].Ref).toBe('HealthCheckAlarmTopic');
+
+      const topic = resources.HealthCheckAlarmTopic.Properties;
+      expect(topic.Subscription[0].Endpoint.Ref).toBe('AlertEmail');
+    });
+
+    test('should monitor Lambda, DynamoDB, and API Gateway metrics with shared notifications', () => {
+      const lambdaAlarm = resources.LambdaErrorAlarm.Properties;
+      expect(lambdaAlarm.Dimensions[0].Value.Ref).toBe('TransactionProcessorFunction');
+      expect(lambdaAlarm.AlarmActions[0].Ref).toBe('HealthCheckAlarmTopic');
+
+      const dynamoAlarm = resources.DynamoDBThrottleAlarm.Properties;
+      expect(dynamoAlarm.Dimensions[0].Value.Ref).toBe('TransactionTable');
+      expect(dynamoAlarm.AlarmActions[0].Ref).toBe('HealthCheckAlarmTopic');
+
+      const apiAlarm = resources.ApiGateway5xxAlarm.Properties;
+      expect(apiAlarm.Dimensions[0].Value['Fn::Sub']).toContain('transaction-api-${EnvironmentSuffix}');
+      expect(apiAlarm.AlarmActions[0].Ref).toBe('HealthCheckAlarmTopic');
+    });
+  });
+
+  describe('Messaging and queueing', () => {
+    test('should provision an encrypted SQS queue for downstream processing', () => {
+      const queue = resources.TransactionQueue.Properties;
+      expect(queue.KmsMasterKeyId).toBe('alias/aws/sqs');
+      expect(queue.VisibilityTimeout).toBe(300);
+      expect(queue.QueueName['Fn::Sub']).toContain('transaction-queue-${EnvironmentSuffix}');
+    });
+  });
+
+  describe('Outputs', () => {
+    test('should expose key resource identifiers for cross-stack use', () => {
+      expect(outputs.PrimaryVPCId.Value.Ref).toBe('PrimaryVPC');
+      expect(outputs.PrimaryVPCId.Export.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
+
+      expect(outputs.TransactionTableName.Value.Ref).toBe('TransactionTable');
+      expect(outputs.TransactionTableName.Export.Name['Fn::Sub']).toContain('TransactionTable');
+
+      expect(outputs.TransactionLogBucketName.Value.Ref).toBe('TransactionLogBucket');
+      expect(outputs.TransactionLogBucketName.Export.Name['Fn::Sub']).toContain('transaction-logs');
+
+      expect(outputs.TransactionQueueUrl.Value.Ref).toBe('TransactionQueue');
+      expect(outputs.TransactionQueueUrl.Export.Name['Fn::Sub']).toContain('TransactionQueue');
+
+      expect(outputs.ApiEndpoint.Value['Fn::Sub']).toContain('${TransactionApi}.execute-api');
+      expect(outputs.ApiEndpoint.Export.Name['Fn::Sub']).toContain('ApiEndpoint');
     });
   });
 });
