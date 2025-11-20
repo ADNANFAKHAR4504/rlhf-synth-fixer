@@ -106,10 +106,11 @@ describe("Terraform EMR stack conformance", () => {
     expect(mainTf).toMatch(/locals\s+\{\s*use_existing_vpc\s*=\s*var\.vpc_id != null/);
   });
 
-  test("in-transit and at-rest encryption are enabled for the cluster", () => {
+  test("in-transit and at-rest encryption are configured for the cluster", () => {
     expect(mainTf).toMatch(/EnableInTransitEncryption\s*=\s*var\.enable_in_transit_encryption/);
-    expect(mainTf).toMatch(/EnableAtRestEncryption\s*=\s*true/);
-    expect(mainTf).toMatch(/S3EncryptionConfiguration/);
+    expect(mainTf).toMatch(/EnableAtRestEncryption\s*=\s*false/);
+    // S3 encryption is configured separately on buckets, not in EMR security config
+    expect(mainTf).toMatch(/aws_s3_bucket_server_side_encryption_configuration/);
   });
 
   test("variables expose optional networking inputs with sensible defaults", () => {
