@@ -647,8 +647,10 @@ Resources:
     Properties:
       Name:
         Fn::Sub:
-          - 'rds-${Env}-password-${Suffix}'
+          - 'rds-${Env}-password-${Account}-${Region}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
+            Account: !Ref AWS::AccountId
+            Region: !Ref AWS::Region
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       Description: !Sub 'RDS master password for environment ${EnvironmentSuffix}'
       GenerateSecretString:
@@ -664,6 +666,7 @@ Resources:
           Value: !Sub 'secret-${EnvironmentSuffix}-rds-password'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
