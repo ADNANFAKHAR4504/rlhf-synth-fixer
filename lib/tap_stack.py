@@ -94,7 +94,7 @@ class PrimaryRegionStack(TerraformStack):
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={"Name": f"primary-vpc-{environment_suffix}"}
+            tags={"Name": f"primary-vpc-v1-{environment_suffix}"}
         )
 
         # Internet Gateway
@@ -102,7 +102,7 @@ class PrimaryRegionStack(TerraformStack):
             self,
             "primary_igw",
             vpc_id=primary_vpc.id,
-            tags={"Name": f"primary-igw-{environment_suffix}"}
+            tags={"Name": f"primary-igw-v1-{environment_suffix}"}
         )
 
         # Availability Zones
@@ -118,7 +118,7 @@ class PrimaryRegionStack(TerraformStack):
                 cidr_block=f"10.0.{i}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={"Name": f"primary-public-{az}-{environment_suffix}"}
+                tags={"Name": f"primary-public-{az}-v1-{environment_suffix}"}
             )
             public_subnets.append(subnet)
 
@@ -131,7 +131,7 @@ class PrimaryRegionStack(TerraformStack):
                 vpc_id=primary_vpc.id,
                 cidr_block=f"10.0.{i+10}.0/24",
                 availability_zone=az,
-                tags={"Name": f"primary-private-{az}-{environment_suffix}"}
+                tags={"Name": f"primary-private-{az}-v1-{environment_suffix}"}
             )
             private_subnets.append(subnet)
 
@@ -144,7 +144,7 @@ class PrimaryRegionStack(TerraformStack):
                 cidr_block="0.0.0.0/0",
                 gateway_id=igw.id
             )],
-            tags={"Name": f"primary-public-rt-{environment_suffix}"}
+            tags={"Name": f"primary-public-rt-v1-{environment_suffix}"}
         )
 
         # Associate public subnets with public route table
@@ -161,7 +161,7 @@ class PrimaryRegionStack(TerraformStack):
             self,
             "primary_private_rt",
             vpc_id=primary_vpc.id,
-            tags={"Name": f"primary-private-rt-{environment_suffix}"}
+            tags={"Name": f"primary-private-rt-v1-{environment_suffix}"}
         )
 
         # Associate private subnets with private route table
@@ -180,13 +180,13 @@ class PrimaryRegionStack(TerraformStack):
             description=f"KMS key for primary region {environment_suffix}",
             deletion_window_in_days=7,
             enable_key_rotation=True,
-            tags={"Name": f"primary-kms-{environment_suffix}"}
+            tags={"Name": f"primary-kms-v1-{environment_suffix}"}
         )
 
         KmsAlias(
             self,
             "primary_kms_alias",
-            name=f"alias/primary-dr-{environment_suffix}",
+            name=f"alias/primary-dr-v1-{environment_suffix}",
             target_key_id=primary_kms_key.id
         )
 
@@ -195,7 +195,7 @@ class PrimaryRegionStack(TerraformStack):
         alb_sg = SecurityGroup(
             self,
             "primary_alb_sg",
-            name=f"primary-alb-sg-{environment_suffix}",
+            name=f"primary-alb-sg-v1-{environment_suffix}",
             description="Security group for primary ALB",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -223,14 +223,14 @@ class PrimaryRegionStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"primary-alb-sg-{environment_suffix}"}
+            tags={"Name": f"primary-alb-sg-v1-{environment_suffix}"}
         )
 
         # Lambda Security Group
         lambda_sg = SecurityGroup(
             self,
             "primary_lambda_sg",
-            name=f"primary-lambda-sg-{environment_suffix}",
+            name=f"primary-lambda-sg-v1-{environment_suffix}",
             description="Security group for primary Lambda functions",
             vpc_id=primary_vpc.id,
             egress=[
@@ -242,14 +242,14 @@ class PrimaryRegionStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"primary-lambda-sg-{environment_suffix}"}
+            tags={"Name": f"primary-lambda-sg-v1-{environment_suffix}"}
         )
 
         # Aurora Security Group
         aurora_sg = SecurityGroup(
             self,
             "primary_aurora_sg",
-            name=f"primary-aurora-sg-{environment_suffix}",
+            name=f"primary-aurora-sg-v1-{environment_suffix}",
             description="Security group for primary Aurora cluster",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -270,25 +270,25 @@ class PrimaryRegionStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"primary-aurora-sg-{environment_suffix}"}
+            tags={"Name": f"primary-aurora-sg-v1-{environment_suffix}"}
         )
 
         # 4. Aurora PostgreSQL Primary Cluster
         db_subnet_group = DbSubnetGroup(
             self,
             "primary_db_subnet_group",
-            name=f"primary-db-subnet-{environment_suffix}",
+            name=f"primary-db-subnet-v1-{environment_suffix}",
             subnet_ids=[s.id for s in private_subnets],
-            tags={"Name": f"primary-db-subnet-{environment_suffix}"}
+            tags={"Name": f"primary-db-subnet-v1-{environment_suffix}"}
         )
 
         primary_cluster = RdsCluster(
             self,
             "primary_aurora_cluster",
-            cluster_identifier=f"primary-aurora-{environment_suffix}",
+            cluster_identifier=f"primary-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
-            database_name=f"transactions{environment_suffix.replace('-', '')}",
+            database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
             master_username="dbadmin",
             master_password="ChangeMe123!",  # In production, use AWS Secrets Manager
             db_subnet_group_name=db_subnet_group.name,
@@ -307,7 +307,7 @@ class PrimaryRegionStack(TerraformStack):
                 "max_capacity": 1.0
             },
             depends_on=[db_subnet_group],
-            tags={"Name": f"primary-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"}
+            tags={"Name": f"primary-aurora-v1-{environment_suffix}", "BackupPlan": "aurora-backup"}
         )
 
         # Aurora Serverless v2 instances
@@ -321,25 +321,25 @@ class PrimaryRegionStack(TerraformStack):
                 engine=primary_cluster.engine,
                 engine_version=primary_cluster.engine_version,
                 publicly_accessible=False,
-                tags={"Name": f"primary-aurora-instance-{i}-{environment_suffix}"}
+                tags={"Name": f"primary-aurora-instance-{i}-v1-{environment_suffix}"}
             )
 
         # 5. SQS Queue
         primary_queue = SqsQueue(
             self,
             "primary_sqs_queue",
-            name=f"primary-transactions-{environment_suffix}",
+            name=f"primary-transactions-v1-{environment_suffix}",
             visibility_timeout_seconds=300,
             message_retention_seconds=1209600,  # 14 days
             kms_master_key_id=primary_kms_key.id,
-            tags={"Name": f"primary-transactions-{environment_suffix}"}
+            tags={"Name": f"primary-transactions-v1-{environment_suffix}"}
         )
 
         # 6. Lambda IAM Role
         lambda_role = IamRole(
             self,
             "primary_lambda_role",
-            name=f"primary-lambda-role-{environment_suffix}",
+            name=f"primary-lambda-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -350,7 +350,7 @@ class PrimaryRegionStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"primary-lambda-role-{environment_suffix}"}
+            tags={"Name": f"primary-lambda-role-v1-{environment_suffix}"}
         )
 
         # Attach basic Lambda execution policy
@@ -374,7 +374,7 @@ class PrimaryRegionStack(TerraformStack):
             self,
             "primary_lambda_custom_policy",
             role=lambda_role.id,
-            name=f"primary-lambda-custom-{environment_suffix}",
+            name=f"primary-lambda-custom-v1-{environment_suffix}",
             policy=f"""{{
                 "Version": "2012-10-17",
                 "Statement": [
@@ -432,7 +432,7 @@ class PrimaryRegionStack(TerraformStack):
         primary_lambda = LambdaFunction(
             self,
             "primary_lambda",
-            function_name=f"primary-transaction-processor-{environment_suffix}",
+            function_name=f"primary-transaction-processor-v1-{environment_suffix}",
             role=lambda_role.arn,
             handler="transaction_processor.handler",
             runtime="python3.12",
@@ -444,14 +444,14 @@ class PrimaryRegionStack(TerraformStack):
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                     "DB_CLUSTER_ARN": primary_cluster.arn,
                     "DB_NAME": primary_cluster.database_name,
-                    "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
+                    "DYNAMODB_TABLE": f"session-state-v1-{environment_suffix}"
                 }
             },
             vpc_config={
                 "subnet_ids": [s.id for s in private_subnets],
                 "security_group_ids": [lambda_sg.id]
             },
-            tags={"Name": f"primary-transaction-processor-{environment_suffix}"}
+            tags={"Name": f"primary-transaction-processor-v1-{environment_suffix}"}
         )
 
         # Lambda SQS Event Source Mapping
@@ -470,7 +470,7 @@ class PrimaryRegionStack(TerraformStack):
             "primary_lambda_log_group",
             name=f"/aws/lambda/{primary_lambda.function_name}",
             retention_in_days=7,
-            tags={"Name": f"primary-lambda-logs-{environment_suffix}"}
+            tags={"Name": f"primary-lambda-logs-v1-{environment_suffix}"}
         )
 
         # 8. S3 Buckets
@@ -478,9 +478,9 @@ class PrimaryRegionStack(TerraformStack):
         primary_logs_bucket = S3Bucket(
             self,
             "primary_logs_bucket",
-            bucket=f"transaction-logs-{environment_suffix}",
+            bucket=f"transaction-logs-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-logs-{environment_suffix}"}
+            tags={"Name": f"transaction-logs-v1-{environment_suffix}"}
         )
 
         S3BucketVersioning(
@@ -508,9 +508,9 @@ class PrimaryRegionStack(TerraformStack):
         primary_docs_bucket = S3Bucket(
             self,
             "primary_docs_bucket",
-            bucket=f"transaction-documents-{environment_suffix}",
+            bucket=f"transaction-documents-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-documents-{environment_suffix}"}
+            tags={"Name": f"transaction-documents-v1-{environment_suffix}"}
         )
 
         S3BucketVersioning(
@@ -538,22 +538,22 @@ class PrimaryRegionStack(TerraformStack):
         primary_alb = Lb(
             self,
             "primary_alb",
-            name=f"primary-alb-{environment_suffix}",
+            name=f"primary-alb-v1-{environment_suffix}",
             internal=False,
             load_balancer_type="application",
             security_groups=[alb_sg.id],
             subnets=[s.id for s in public_subnets],
             enable_deletion_protection=False,
-            tags={"Name": f"primary-alb-{environment_suffix}"}
+            tags={"Name": f"primary-alb-v1-{environment_suffix}"}
         )
 
         # Target Group for Lambda
         primary_target_group = LbTargetGroup(
             self,
             "primary_target_group",
-            name=f"primary-tg-{environment_suffix}",
+            name=f"primary-tg-v1-{environment_suffix}",
             target_type="lambda",
-            tags={"Name": f"primary-tg-{environment_suffix}"}
+            tags={"Name": f"primary-tg-v1-{environment_suffix}"}
         )
 
         # Lambda permission for ALB
@@ -587,16 +587,16 @@ class PrimaryRegionStack(TerraformStack):
                 type="forward",
                 target_group_arn=primary_target_group.arn
             )],
-            tags={"Name": f"primary-alb-listener-{environment_suffix}"}
+            tags={"Name": f"primary-alb-listener-v1-{environment_suffix}"}
         )
 
         # 10. SNS Topic
         primary_sns_topic = SnsTopic(
             self,
             "primary_sns_topic",
-            name=f"primary-alarms-{environment_suffix}",
+            name=f"primary-alarms-v1-{environment_suffix}",
             kms_master_key_id=primary_kms_key.id,
-            tags={"Name": f"primary-alarms-{environment_suffix}"}
+            tags={"Name": f"primary-alarms-v1-{environment_suffix}"}
         )
 
         # 11. CloudWatch Alarms
@@ -604,7 +604,7 @@ class PrimaryRegionStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "primary_aurora_lag_alarm",
-            alarm_name=f"primary-aurora-lag-{environment_suffix}",
+            alarm_name=f"primary-aurora-lag-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="AuroraGlobalDBReplicationLag",
@@ -617,14 +617,14 @@ class PrimaryRegionStack(TerraformStack):
             dimensions={
                 "DBClusterIdentifier": primary_cluster.cluster_identifier
             },
-            tags={"Name": f"primary-aurora-lag-{environment_suffix}"}
+            tags={"Name": f"primary-aurora-lag-v1-{environment_suffix}"}
         )
 
         # Lambda error alarm
         CloudwatchMetricAlarm(
             self,
             "primary_lambda_error_alarm",
-            alarm_name=f"primary-lambda-errors-{environment_suffix}",
+            alarm_name=f"primary-lambda-errors-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -637,22 +637,22 @@ class PrimaryRegionStack(TerraformStack):
             dimensions={
                 "FunctionName": primary_lambda.function_name
             },
-            tags={"Name": f"primary-lambda-errors-{environment_suffix}"}
+            tags={"Name": f"primary-lambda-errors-v1-{environment_suffix}"}
         )
 
         # 12. AWS Backup
         backup_vault = BackupVault(
             self,
             "primary_backup_vault",
-            name=f"primary-aurora-vault-{environment_suffix}",
+            name=f"primary-aurora-vault-v1-{environment_suffix}",
             kms_key_arn=primary_kms_key.arn,
-            tags={"Name": f"primary-aurora-vault-{environment_suffix}"}
+            tags={"Name": f"primary-aurora-vault-v1-{environment_suffix}"}
         )
 
         backup_plan = BackupPlan(
             self,
             "primary_backup_plan",
-            name=f"primary-aurora-backup-{environment_suffix}",
+            name=f"primary-aurora-backup-v1-{environment_suffix}",
             rule=[BackupPlanRule(
                 rule_name="daily-backup",
                 target_vault_name=backup_vault.name,
@@ -661,14 +661,14 @@ class PrimaryRegionStack(TerraformStack):
                     delete_after=7
                 )
             )],
-            tags={"Name": f"primary-aurora-backup-{environment_suffix}"}
+            tags={"Name": f"primary-aurora-backup-v1-{environment_suffix}"}
         )
 
         # IAM role for AWS Backup
         backup_role = IamRole(
             self,
             "primary_backup_role",
-            name=f"primary-backup-role-{environment_suffix}",
+            name=f"primary-backup-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -679,7 +679,7 @@ class PrimaryRegionStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"primary-backup-role-{environment_suffix}"}
+            tags={"Name": f"primary-backup-role-v1-{environment_suffix}"}
         )
 
         IamRolePolicyAttachment(
@@ -692,7 +692,7 @@ class PrimaryRegionStack(TerraformStack):
         BackupSelection(
             self,
             "primary_backup_selection",
-            name=f"primary-aurora-selection-{environment_suffix}",
+            name=f"primary-aurora-selection-v1-{environment_suffix}",
             plan_id=backup_plan.id,
             iam_role_arn=backup_role.arn,
             selection_tag=[BackupSelectionSelectionTag(
@@ -816,7 +816,7 @@ class DrRegionStack(TerraformStack):
             cidr_block="10.1.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={"Name": f"dr-vpc-{environment_suffix}"},
+            tags={"Name": f"dr-vpc-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -825,7 +825,7 @@ class DrRegionStack(TerraformStack):
             self,
             "dr_igw",
             vpc_id=dr_vpc.id,
-            tags={"Name": f"dr-igw-{environment_suffix}"},
+            tags={"Name": f"dr-igw-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -842,7 +842,7 @@ class DrRegionStack(TerraformStack):
                 cidr_block=f"10.1.{i}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={"Name": f"dr-public-{az}-{environment_suffix}"},
+                tags={"Name": f"dr-public-{az}-v1-{environment_suffix}"},
                 provider=provider
             )
             public_subnets.append(subnet)
@@ -856,7 +856,7 @@ class DrRegionStack(TerraformStack):
                 vpc_id=dr_vpc.id,
                 cidr_block=f"10.1.{i+10}.0/24",
                 availability_zone=az,
-                tags={"Name": f"dr-private-{az}-{environment_suffix}"},
+                tags={"Name": f"dr-private-{az}-v1-{environment_suffix}"},
                 provider=provider
             )
             private_subnets.append(subnet)
@@ -870,7 +870,7 @@ class DrRegionStack(TerraformStack):
                 cidr_block="0.0.0.0/0",
                 gateway_id=igw.id
             )],
-            tags={"Name": f"dr-public-rt-{environment_suffix}"},
+            tags={"Name": f"dr-public-rt-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -889,7 +889,7 @@ class DrRegionStack(TerraformStack):
             self,
             "dr_private_rt",
             vpc_id=dr_vpc.id,
-            tags={"Name": f"dr-private-rt-{environment_suffix}"},
+            tags={"Name": f"dr-private-rt-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -910,14 +910,14 @@ class DrRegionStack(TerraformStack):
             description=f"KMS key for DR region {environment_suffix}",
             deletion_window_in_days=7,
             enable_key_rotation=True,
-            tags={"Name": f"dr-kms-{environment_suffix}"},
+            tags={"Name": f"dr-kms-v1-{environment_suffix}"},
             provider=provider
         )
 
         KmsAlias(
             self,
             "dr_kms_alias",
-            name=f"alias/dr-dr-{environment_suffix}",
+            name=f"alias/dr-dr-v1-{environment_suffix}",
             target_key_id=dr_kms_key.id,
             provider=provider
         )
@@ -927,7 +927,7 @@ class DrRegionStack(TerraformStack):
         alb_sg = SecurityGroup(
             self,
             "dr_alb_sg",
-            name=f"dr-alb-sg-{environment_suffix}",
+            name=f"dr-alb-sg-v1-{environment_suffix}",
             description="Security group for DR ALB",
             vpc_id=dr_vpc.id,
             ingress=[
@@ -955,7 +955,7 @@ class DrRegionStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"dr-alb-sg-{environment_suffix}"},
+            tags={"Name": f"dr-alb-sg-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -963,7 +963,7 @@ class DrRegionStack(TerraformStack):
         lambda_sg = SecurityGroup(
             self,
             "dr_lambda_sg",
-            name=f"dr-lambda-sg-{environment_suffix}",
+            name=f"dr-lambda-sg-v1-{environment_suffix}",
             description="Security group for DR Lambda functions",
             vpc_id=dr_vpc.id,
             egress=[
@@ -975,7 +975,7 @@ class DrRegionStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"dr-lambda-sg-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-sg-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -983,7 +983,7 @@ class DrRegionStack(TerraformStack):
         aurora_sg = SecurityGroup(
             self,
             "dr_aurora_sg",
-            name=f"dr-aurora-sg-{environment_suffix}",
+            name=f"dr-aurora-sg-v1-{environment_suffix}",
             description="Security group for DR Aurora cluster",
             vpc_id=dr_vpc.id,
             ingress=[
@@ -1004,7 +1004,7 @@ class DrRegionStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"dr-aurora-sg-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-sg-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1012,16 +1012,16 @@ class DrRegionStack(TerraformStack):
         db_subnet_group = DbSubnetGroup(
             self,
             "dr_db_subnet_group",
-            name=f"dr-db-subnet-{environment_suffix}",
+            name=f"dr-db-subnet-v1-{environment_suffix}",
             subnet_ids=[s.id for s in private_subnets],
-            tags={"Name": f"dr-db-subnet-{environment_suffix}"},
+            tags={"Name": f"dr-db-subnet-v1-{environment_suffix}"},
             provider=provider
         )
 
         dr_cluster = RdsCluster(
             self,
             "dr_aurora_cluster",
-            cluster_identifier=f"dr-aurora-{environment_suffix}",
+            cluster_identifier=f"dr-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
             db_subnet_group_name=db_subnet_group.name,
@@ -1040,7 +1040,7 @@ class DrRegionStack(TerraformStack):
                 "max_capacity": 1.0
             },
             depends_on=[db_subnet_group],
-            tags={"Name": f"dr-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"},
+            tags={"Name": f"dr-aurora-v1-{environment_suffix}", "BackupPlan": "aurora-backup"},
             provider=provider
         )
 
@@ -1055,7 +1055,7 @@ class DrRegionStack(TerraformStack):
                 engine=dr_cluster.engine,
                 engine_version=dr_cluster.engine_version,
                 publicly_accessible=False,
-                tags={"Name": f"dr-aurora-instance-{i}-{environment_suffix}"},
+                tags={"Name": f"dr-aurora-instance-{i}-v1-{environment_suffix}"},
                 provider=provider
             )
 
@@ -1063,11 +1063,11 @@ class DrRegionStack(TerraformStack):
         dr_queue = SqsQueue(
             self,
             "dr_sqs_queue",
-            name=f"dr-transactions-{environment_suffix}",
+            name=f"dr-transactions-v1-{environment_suffix}",
             visibility_timeout_seconds=300,
             message_retention_seconds=1209600,  # 14 days
             kms_master_key_id=dr_kms_key.id,
-            tags={"Name": f"dr-transactions-{environment_suffix}"},
+            tags={"Name": f"dr-transactions-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1075,7 +1075,7 @@ class DrRegionStack(TerraformStack):
         lambda_role = IamRole(
             self,
             "dr_lambda_role",
-            name=f"dr-lambda-role-{environment_suffix}",
+            name=f"dr-lambda-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -1086,7 +1086,7 @@ class DrRegionStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"dr-lambda-role-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-role-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1113,7 +1113,7 @@ class DrRegionStack(TerraformStack):
             self,
             "dr_lambda_custom_policy",
             role=lambda_role.id,
-            name=f"dr-lambda-custom-{environment_suffix}",
+            name=f"dr-lambda-custom-v1-{environment_suffix}",
             policy=f"""{{
                 "Version": "2012-10-17",
                 "Statement": [
@@ -1172,7 +1172,7 @@ class DrRegionStack(TerraformStack):
         dr_lambda = LambdaFunction(
             self,
             "dr_lambda",
-            function_name=f"dr-transaction-processor-{environment_suffix}",
+            function_name=f"dr-transaction-processor-v1-{environment_suffix}",
             role=lambda_role.arn,
             handler="transaction_processor.handler",
             runtime="python3.12",
@@ -1183,15 +1183,15 @@ class DrRegionStack(TerraformStack):
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                     "DB_CLUSTER_ARN": dr_cluster.arn,
-                    "DB_NAME": dr_cluster.database_name if hasattr(dr_cluster, 'database_name') else f"transactions{environment_suffix.replace('-', '')}",
-                    "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
+                    "DB_NAME": dr_cluster.database_name if hasattr(dr_cluster, 'database_name') else f"transactionsv1{environment_suffix.replace('-', '')}",
+                    "DYNAMODB_TABLE": f"session-state-v1-{environment_suffix}"
                 }
             },
             vpc_config={
                 "subnet_ids": [s.id for s in private_subnets],
                 "security_group_ids": [lambda_sg.id]
             },
-            tags={"Name": f"dr-transaction-processor-{environment_suffix}"},
+            tags={"Name": f"dr-transaction-processor-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1212,7 +1212,7 @@ class DrRegionStack(TerraformStack):
             "dr_lambda_log_group",
             name=f"/aws/lambda/{dr_lambda.function_name}",
             retention_in_days=7,
-            tags={"Name": f"dr-lambda-logs-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-logs-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1221,9 +1221,9 @@ class DrRegionStack(TerraformStack):
         dr_logs_bucket = S3Bucket(
             self,
             "dr_logs_bucket",
-            bucket=f"transaction-logs-dr-{environment_suffix}",
+            bucket=f"transaction-logs-dr-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-logs-dr-{environment_suffix}"},
+            tags={"Name": f"transaction-logs-dr-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1254,9 +1254,9 @@ class DrRegionStack(TerraformStack):
         dr_docs_bucket = S3Bucket(
             self,
             "dr_docs_bucket",
-            bucket=f"transaction-documents-dr-{environment_suffix}",
+            bucket=f"transaction-documents-dr-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-documents-dr-{environment_suffix}"},
+            tags={"Name": f"transaction-documents-dr-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1287,13 +1287,13 @@ class DrRegionStack(TerraformStack):
         dr_alb = Lb(
             self,
             "dr_alb",
-            name=f"dr-alb-{environment_suffix}",
+            name=f"dr-alb-v1-{environment_suffix}",
             internal=False,
             load_balancer_type="application",
             security_groups=[alb_sg.id],
             subnets=[s.id for s in public_subnets],
             enable_deletion_protection=False,
-            tags={"Name": f"dr-alb-{environment_suffix}"},
+            tags={"Name": f"dr-alb-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1301,9 +1301,9 @@ class DrRegionStack(TerraformStack):
         dr_target_group = LbTargetGroup(
             self,
             "dr_target_group",
-            name=f"dr-tg-{environment_suffix}",
+            name=f"dr-tg-v1-{environment_suffix}",
             target_type="lambda",
-            tags={"Name": f"dr-tg-{environment_suffix}"},
+            tags={"Name": f"dr-tg-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1340,7 +1340,7 @@ class DrRegionStack(TerraformStack):
                 type="forward",
                 target_group_arn=dr_target_group.arn
             )],
-            tags={"Name": f"dr-alb-listener-{environment_suffix}"},
+            tags={"Name": f"dr-alb-listener-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1348,9 +1348,9 @@ class DrRegionStack(TerraformStack):
         dr_sns_topic = SnsTopic(
             self,
             "dr_sns_topic",
-            name=f"dr-alarms-{environment_suffix}",
+            name=f"dr-alarms-v1-{environment_suffix}",
             kms_master_key_id=dr_kms_key.id,
-            tags={"Name": f"dr-alarms-{environment_suffix}"},
+            tags={"Name": f"dr-alarms-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1365,7 +1365,7 @@ class DrRegionStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "dr_aurora_lag_alarm",
-            alarm_name=f"dr-aurora-lag-{environment_suffix}",
+            alarm_name=f"dr-aurora-lag-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="AuroraGlobalDBReplicationLag",
@@ -1378,7 +1378,7 @@ class DrRegionStack(TerraformStack):
             dimensions={
                 "DBClusterIdentifier": dr_cluster.cluster_identifier
             },
-            tags={"Name": f"dr-aurora-lag-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-lag-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1386,7 +1386,7 @@ class DrRegionStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "dr_lambda_error_alarm",
-            alarm_name=f"dr-lambda-errors-{environment_suffix}",
+            alarm_name=f"dr-lambda-errors-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -1399,7 +1399,7 @@ class DrRegionStack(TerraformStack):
             dimensions={
                 "FunctionName": dr_lambda.function_name
             },
-            tags={"Name": f"dr-lambda-errors-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-errors-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1407,7 +1407,7 @@ class DrRegionStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "dr_s3_replication_alarm",
-            alarm_name=f"dr-s3-replication-{environment_suffix}",
+            alarm_name=f"dr-s3-replication-v1-{environment_suffix}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             metric_name="ReplicationLatency",
@@ -1418,11 +1418,11 @@ class DrRegionStack(TerraformStack):
             alarm_description="S3 replication latency",
             alarm_actions=[dr_sns_topic.arn],
             dimensions={
-                "SourceBucket": primary_logs_bucket if primary_logs_bucket else f"transaction-logs-{environment_suffix}",
+                "SourceBucket": primary_logs_bucket if primary_logs_bucket else f"transaction-logs-v1-{environment_suffix}",
                 "DestinationBucket": dr_logs_bucket.id,
                 "RuleId": "replication-rule"
             },
-            tags={"Name": f"dr-s3-replication-{environment_suffix}"},
+            tags={"Name": f"dr-s3-replication-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1430,16 +1430,16 @@ class DrRegionStack(TerraformStack):
         backup_vault = BackupVault(
             self,
             "dr_backup_vault",
-            name=f"dr-aurora-vault-{environment_suffix}",
+            name=f"dr-aurora-vault-v1-{environment_suffix}",
             kms_key_arn=dr_kms_key.arn,
-            tags={"Name": f"dr-aurora-vault-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-vault-v1-{environment_suffix}"},
             provider=provider
         )
 
         backup_plan = BackupPlan(
             self,
             "dr_backup_plan",
-            name=f"dr-aurora-backup-{environment_suffix}",
+            name=f"dr-aurora-backup-v1-{environment_suffix}",
             rule=[BackupPlanRule(
                 rule_name="daily-backup",
                 target_vault_name=backup_vault.name,
@@ -1448,7 +1448,7 @@ class DrRegionStack(TerraformStack):
                     delete_after=7
                 )
             )],
-            tags={"Name": f"dr-aurora-backup-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-backup-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1456,7 +1456,7 @@ class DrRegionStack(TerraformStack):
         backup_role = IamRole(
             self,
             "dr_backup_role",
-            name=f"dr-backup-role-{environment_suffix}",
+            name=f"dr-backup-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -1467,7 +1467,7 @@ class DrRegionStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"dr-backup-role-{environment_suffix}"},
+            tags={"Name": f"dr-backup-role-v1-{environment_suffix}"},
             provider=provider
         )
 
@@ -1482,7 +1482,7 @@ class DrRegionStack(TerraformStack):
         BackupSelection(
             self,
             "dr_backup_selection",
-            name=f"dr-aurora-selection-{environment_suffix}",
+            name=f"dr-aurora-selection-v1-{environment_suffix}",
             plan_id=backup_plan.id,
             iam_role_arn=backup_role.arn,
             selection_tag=[BackupSelectionSelectionTag(
@@ -1620,7 +1620,7 @@ class GlobalResourcesStack(TerraformStack):
             global_cluster_identifier=f"global-aurora-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
-            database_name=f"transactions{environment_suffix.replace('-', '')}",
+            database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
             storage_encrypted=True,
             deletion_protection=False,
             provider=primary_provider
@@ -1662,7 +1662,7 @@ class GlobalResourcesStack(TerraformStack):
                 peer_vpc_id=dr_vpc_id,
                 peer_region="us-east-2",
                 auto_accept=False,
-                tags={"Name": f"primary-dr-peering-{environment_suffix}"},
+                tags={"Name": f"primary-dr-peering-v1-{environment_suffix}"},
                 provider=primary_provider
             )
 
@@ -1672,7 +1672,7 @@ class GlobalResourcesStack(TerraformStack):
                 "vpc_peering_accepter",
                 vpc_peering_connection_id=peering_connection.id,
                 auto_accept=True,
-                tags={"Name": f"primary-dr-peering-accepter-{environment_suffix}"},
+                tags={"Name": f"primary-dr-peering-accepter-v1-{environment_suffix}"},
                 provider=dr_provider
             )
 
@@ -1720,7 +1720,7 @@ class GlobalResourcesStack(TerraformStack):
                 failure_threshold=3,
                 request_interval=30,
                 measure_latency=True,
-                tags={"Name": f"primary-health-check-{environment_suffix}"},
+                tags={"Name": f"primary-health-check-v1-{environment_suffix}"},
                 provider=primary_provider
             )
 
@@ -1735,7 +1735,7 @@ class GlobalResourcesStack(TerraformStack):
                 failure_threshold=3,
                 request_interval=30,
                 measure_latency=True,
-                tags={"Name": f"dr-health-check-{environment_suffix}"},
+                tags={"Name": f"dr-health-check-v1-{environment_suffix}"},
                 provider=primary_provider
             )
 
@@ -1861,10 +1861,10 @@ class TapStack(TerraformStack):
         global_cluster = RdsGlobalCluster(
             self,
             "global_aurora_cluster",
-            global_cluster_identifier=f"global-aurora-{environment_suffix}",
+            global_cluster_identifier=f"global-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
-            database_name=f"transactions{environment_suffix.replace('-', '')}",
+            database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
             storage_encrypted=True,
             deletion_protection=False,
             provider=primary_provider
@@ -1874,7 +1874,7 @@ class TapStack(TerraformStack):
         dynamodb_table = DynamodbTable(
             self,
             "global_dynamodb_table",
-            name=f"session-state-{environment_suffix}",
+            name=f"session-state-v1-{environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="session_id",
             attribute=[
@@ -1893,7 +1893,7 @@ class TapStack(TerraformStack):
             point_in_time_recovery={
                 "enabled": True
             },
-            tags={"Name": f"session-state-{environment_suffix}"},
+            tags={"Name": f"session-state-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -1901,9 +1901,9 @@ class TapStack(TerraformStack):
         hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"transactions-{environment_suffix}.internal",
+            name=f"transactions-v1-{environment_suffix}.internal",
             comment=f"Hosted zone for transaction processing {environment_suffix}",
-            tags={"Name": f"transactions-zone-{environment_suffix}"},
+            tags={"Name": f"transactions-zone-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -1915,7 +1915,7 @@ class TapStack(TerraformStack):
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={"Name": f"primary-vpc-{environment_suffix}"},
+            tags={"Name": f"primary-vpc-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -1924,7 +1924,7 @@ class TapStack(TerraformStack):
             self,
             "primary_igw",
             vpc_id=primary_vpc.id,
-            tags={"Name": f"primary-igw-{environment_suffix}"},
+            tags={"Name": f"primary-igw-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -1941,7 +1941,7 @@ class TapStack(TerraformStack):
                 cidr_block=f"10.0.{i}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={"Name": f"primary-public-{az}-{environment_suffix}"},
+                tags={"Name": f"primary-public-{az}-v1-{environment_suffix}"},
                 provider=primary_provider
             )
             primary_public_subnets.append(subnet)
@@ -1955,7 +1955,7 @@ class TapStack(TerraformStack):
                 vpc_id=primary_vpc.id,
                 cidr_block=f"10.0.{i+10}.0/24",
                 availability_zone=az,
-                tags={"Name": f"primary-private-{az}-{environment_suffix}"},
+                tags={"Name": f"primary-private-{az}-v1-{environment_suffix}"},
                 provider=primary_provider
             )
             primary_private_subnets.append(subnet)
@@ -1969,7 +1969,7 @@ class TapStack(TerraformStack):
                 cidr_block="0.0.0.0/0",
                 gateway_id=primary_igw.id
             )],
-            tags={"Name": f"primary-public-rt-{environment_suffix}"},
+            tags={"Name": f"primary-public-rt-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -1988,7 +1988,7 @@ class TapStack(TerraformStack):
             self,
             "primary_private_rt",
             vpc_id=primary_vpc.id,
-            tags={"Name": f"primary-private-rt-{environment_suffix}"},
+            tags={"Name": f"primary-private-rt-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2009,14 +2009,14 @@ class TapStack(TerraformStack):
             description=f"KMS key for primary region {environment_suffix}",
             deletion_window_in_days=7,
             enable_key_rotation=True,
-            tags={"Name": f"primary-kms-{environment_suffix}"},
+            tags={"Name": f"primary-kms-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         KmsAlias(
             self,
             "primary_kms_alias",
-            name=f"alias/primary-dr-{environment_suffix}",
+            name=f"alias/primary-dr-v1-{environment_suffix}",
             target_key_id=primary_kms_key.id,
             provider=primary_provider
         )
@@ -2025,7 +2025,7 @@ class TapStack(TerraformStack):
         primary_alb_sg = SecurityGroup(
             self,
             "primary_alb_sg",
-            name=f"primary-alb-sg-{environment_suffix}",
+            name=f"primary-alb-sg-v1-{environment_suffix}",
             description="Security group for primary ALB",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -2053,14 +2053,14 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"primary-alb-sg-{environment_suffix}"},
+            tags={"Name": f"primary-alb-sg-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         primary_lambda_sg = SecurityGroup(
             self,
             "primary_lambda_sg",
-            name=f"primary-lambda-sg-{environment_suffix}",
+            name=f"primary-lambda-sg-v1-{environment_suffix}",
             description="Security group for primary Lambda functions",
             vpc_id=primary_vpc.id,
             egress=[
@@ -2072,14 +2072,14 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"primary-lambda-sg-{environment_suffix}"},
+            tags={"Name": f"primary-lambda-sg-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         primary_aurora_sg = SecurityGroup(
             self,
             "primary_aurora_sg",
-            name=f"primary-aurora-sg-{environment_suffix}",
+            name=f"primary-aurora-sg-v1-{environment_suffix}",
             description="Security group for primary Aurora cluster",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -2100,7 +2100,7 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"primary-aurora-sg-{environment_suffix}"},
+            tags={"Name": f"primary-aurora-sg-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2108,19 +2108,19 @@ class TapStack(TerraformStack):
         primary_db_subnet_group = DbSubnetGroup(
             self,
             "primary_db_subnet_group",
-            name=f"primary-db-subnet-{environment_suffix}",
+            name=f"primary-db-subnet-v1-{environment_suffix}",
             subnet_ids=[s.id for s in primary_private_subnets],
-            tags={"Name": f"primary-db-subnet-{environment_suffix}"},
+            tags={"Name": f"primary-db-subnet-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         primary_cluster = RdsCluster(
             self,
             "primary_aurora_cluster",
-            cluster_identifier=f"primary-aurora-{environment_suffix}",
+            cluster_identifier=f"primary-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
-            database_name=f"transactions{environment_suffix.replace('-', '')}",
+            database_name=f"transactionsv1{environment_suffix.replace('-', '')}",
             master_username="dbadmin",
             master_password="ChangeMe123!",
             db_subnet_group_name=primary_db_subnet_group.name,
@@ -2139,7 +2139,7 @@ class TapStack(TerraformStack):
                 "max_capacity": 1.0
             },
             depends_on=[primary_db_subnet_group],
-            tags={"Name": f"primary-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"},
+            tags={"Name": f"primary-aurora-v1-{environment_suffix}", "BackupPlan": "aurora-backup"},
             provider=primary_provider
         )
 
@@ -2154,7 +2154,7 @@ class TapStack(TerraformStack):
                 engine=primary_cluster.engine,
                 engine_version=primary_cluster.engine_version,
                 publicly_accessible=False,
-                tags={"Name": f"primary-aurora-instance-{i}-{environment_suffix}"},
+                tags={"Name": f"primary-aurora-instance-{i}-v1-{environment_suffix}"},
                 provider=primary_provider
             )
 
@@ -2162,11 +2162,11 @@ class TapStack(TerraformStack):
         primary_queue = SqsQueue(
             self,
             "primary_sqs_queue",
-            name=f"primary-transactions-{environment_suffix}",
+            name=f"primary-transactions-v1-{environment_suffix}",
             visibility_timeout_seconds=300,
             message_retention_seconds=1209600,
             kms_master_key_id=primary_kms_key.id,
-            tags={"Name": f"primary-transactions-{environment_suffix}"},
+            tags={"Name": f"primary-transactions-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2174,7 +2174,7 @@ class TapStack(TerraformStack):
         primary_lambda_role = IamRole(
             self,
             "primary_lambda_role",
-            name=f"primary-lambda-role-{environment_suffix}",
+            name=f"primary-lambda-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -2185,7 +2185,7 @@ class TapStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"primary-lambda-role-{environment_suffix}"},
+            tags={"Name": f"primary-lambda-role-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2209,7 +2209,7 @@ class TapStack(TerraformStack):
             self,
             "primary_lambda_custom_policy",
             role=primary_lambda_role.id,
-            name=f"primary-lambda-custom-{environment_suffix}",
+            name=f"primary-lambda-custom-v1-{environment_suffix}",
             policy=f"""{{
                 "Version": "2012-10-17",
                 "Statement": [
@@ -2267,7 +2267,7 @@ class TapStack(TerraformStack):
         primary_lambda = LambdaFunction(
             self,
             "primary_lambda",
-            function_name=f"primary-transaction-processor-{environment_suffix}",
+            function_name=f"primary-transaction-processor-v1-{environment_suffix}",
             role=primary_lambda_role.arn,
             handler="transaction_processor.handler",
             runtime="python3.12",
@@ -2279,14 +2279,14 @@ class TapStack(TerraformStack):
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                     "DB_CLUSTER_ARN": primary_cluster.arn,
                     "DB_NAME": primary_cluster.database_name,
-                    "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
+                    "DYNAMODB_TABLE": f"session-state-v1-{environment_suffix}"
                 }
             },
             vpc_config={
                 "subnet_ids": [s.id for s in primary_private_subnets],
                 "security_group_ids": [primary_lambda_sg.id]
             },
-            tags={"Name": f"primary-transaction-processor-{environment_suffix}"},
+            tags={"Name": f"primary-transaction-processor-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2305,7 +2305,7 @@ class TapStack(TerraformStack):
             "primary_lambda_log_group",
             name=f"/aws/lambda/{primary_lambda.function_name}",
             retention_in_days=7,
-            tags={"Name": f"primary-lambda-logs-{environment_suffix}"},
+            tags={"Name": f"primary-lambda-logs-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2313,9 +2313,9 @@ class TapStack(TerraformStack):
         primary_logs_bucket = S3Bucket(
             self,
             "primary_logs_bucket",
-            bucket=f"transaction-logs-{environment_suffix}",
+            bucket=f"transaction-logs-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-logs-{environment_suffix}"},
+            tags={"Name": f"transaction-logs-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2345,9 +2345,9 @@ class TapStack(TerraformStack):
         primary_docs_bucket = S3Bucket(
             self,
             "primary_docs_bucket",
-            bucket=f"transaction-documents-{environment_suffix}",
+            bucket=f"transaction-documents-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-documents-{environment_suffix}"},
+            tags={"Name": f"transaction-documents-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2378,22 +2378,22 @@ class TapStack(TerraformStack):
         primary_alb = Lb(
             self,
             "primary_alb",
-            name=f"primary-alb-{environment_suffix}",
+            name=f"primary-alb-v1-{environment_suffix}",
             internal=False,
             load_balancer_type="application",
             security_groups=[primary_alb_sg.id],
             subnets=[s.id for s in primary_public_subnets],
             enable_deletion_protection=False,
-            tags={"Name": f"primary-alb-{environment_suffix}"},
+            tags={"Name": f"primary-alb-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         primary_target_group = LbTargetGroup(
             self,
             "primary_target_group",
-            name=f"primary-tg-{environment_suffix}",
+            name=f"primary-tg-v1-{environment_suffix}",
             target_type="lambda",
-            tags={"Name": f"primary-tg-{environment_suffix}"},
+            tags={"Name": f"primary-tg-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2427,7 +2427,7 @@ class TapStack(TerraformStack):
                 type="forward",
                 target_group_arn=primary_target_group.arn
             )],
-            tags={"Name": f"primary-alb-listener-{environment_suffix}"},
+            tags={"Name": f"primary-alb-listener-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2435,9 +2435,9 @@ class TapStack(TerraformStack):
         primary_sns_topic = SnsTopic(
             self,
             "primary_sns_topic",
-            name=f"primary-alarms-{environment_suffix}",
+            name=f"primary-alarms-v1-{environment_suffix}",
             kms_master_key_id=primary_kms_key.id,
-            tags={"Name": f"primary-alarms-{environment_suffix}"},
+            tags={"Name": f"primary-alarms-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2445,7 +2445,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "primary_aurora_lag_alarm",
-            alarm_name=f"primary-aurora-lag-{environment_suffix}",
+            alarm_name=f"primary-aurora-lag-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="AuroraGlobalDBReplicationLag",
@@ -2458,14 +2458,14 @@ class TapStack(TerraformStack):
             dimensions={
                 "DBClusterIdentifier": primary_cluster.cluster_identifier
             },
-            tags={"Name": f"primary-aurora-lag-{environment_suffix}"},
+            tags={"Name": f"primary-aurora-lag-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         CloudwatchMetricAlarm(
             self,
             "primary_lambda_error_alarm",
-            alarm_name=f"primary-lambda-errors-{environment_suffix}",
+            alarm_name=f"primary-lambda-errors-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -2478,7 +2478,7 @@ class TapStack(TerraformStack):
             dimensions={
                 "FunctionName": primary_lambda.function_name
             },
-            tags={"Name": f"primary-lambda-errors-{environment_suffix}"},
+            tags={"Name": f"primary-lambda-errors-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2486,16 +2486,16 @@ class TapStack(TerraformStack):
         primary_backup_vault = BackupVault(
             self,
             "primary_backup_vault",
-            name=f"primary-aurora-vault-{environment_suffix}",
+            name=f"primary-aurora-vault-v1-{environment_suffix}",
             kms_key_arn=primary_kms_key.arn,
-            tags={"Name": f"primary-aurora-vault-{environment_suffix}"},
+            tags={"Name": f"primary-aurora-vault-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         primary_backup_plan = BackupPlan(
             self,
             "primary_backup_plan",
-            name=f"primary-aurora-backup-{environment_suffix}",
+            name=f"primary-aurora-backup-v1-{environment_suffix}",
             rule=[BackupPlanRule(
                 rule_name="daily-backup",
                 target_vault_name=primary_backup_vault.name,
@@ -2504,14 +2504,14 @@ class TapStack(TerraformStack):
                     delete_after=7
                 )
             )],
-            tags={"Name": f"primary-aurora-backup-{environment_suffix}"},
+            tags={"Name": f"primary-aurora-backup-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
         primary_backup_role = IamRole(
             self,
             "primary_backup_role",
-            name=f"primary-backup-role-{environment_suffix}",
+            name=f"primary-backup-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -2522,7 +2522,7 @@ class TapStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"primary-backup-role-{environment_suffix}"},
+            tags={"Name": f"primary-backup-role-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -2537,7 +2537,7 @@ class TapStack(TerraformStack):
         BackupSelection(
             self,
             "primary_backup_selection",
-            name=f"primary-aurora-selection-{environment_suffix}",
+            name=f"primary-aurora-selection-v1-{environment_suffix}",
             plan_id=primary_backup_plan.id,
             iam_role_arn=primary_backup_role.arn,
             selection_tag=[BackupSelectionSelectionTag(
@@ -2556,7 +2556,7 @@ class TapStack(TerraformStack):
             cidr_block="10.1.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={"Name": f"dr-vpc-{environment_suffix}"},
+            tags={"Name": f"dr-vpc-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2564,7 +2564,7 @@ class TapStack(TerraformStack):
             self,
             "dr_igw",
             vpc_id=dr_vpc.id,
-            tags={"Name": f"dr-igw-{environment_suffix}"},
+            tags={"Name": f"dr-igw-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2579,7 +2579,7 @@ class TapStack(TerraformStack):
                 cidr_block=f"10.1.{i}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={"Name": f"dr-public-{az}-{environment_suffix}"},
+                tags={"Name": f"dr-public-{az}-v1-{environment_suffix}"},
                 provider=dr_provider
             )
             dr_public_subnets.append(subnet)
@@ -2592,7 +2592,7 @@ class TapStack(TerraformStack):
                 vpc_id=dr_vpc.id,
                 cidr_block=f"10.1.{i+10}.0/24",
                 availability_zone=az,
-                tags={"Name": f"dr-private-{az}-{environment_suffix}"},
+                tags={"Name": f"dr-private-{az}-v1-{environment_suffix}"},
                 provider=dr_provider
             )
             dr_private_subnets.append(subnet)
@@ -2605,7 +2605,7 @@ class TapStack(TerraformStack):
                 cidr_block="0.0.0.0/0",
                 gateway_id=dr_igw.id
             )],
-            tags={"Name": f"dr-public-rt-{environment_suffix}"},
+            tags={"Name": f"dr-public-rt-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2622,7 +2622,7 @@ class TapStack(TerraformStack):
             self,
             "dr_private_rt",
             vpc_id=dr_vpc.id,
-            tags={"Name": f"dr-private-rt-{environment_suffix}"},
+            tags={"Name": f"dr-private-rt-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2642,14 +2642,14 @@ class TapStack(TerraformStack):
             description=f"KMS key for DR region {environment_suffix}",
             deletion_window_in_days=7,
             enable_key_rotation=True,
-            tags={"Name": f"dr-kms-{environment_suffix}"},
+            tags={"Name": f"dr-kms-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         KmsAlias(
             self,
             "dr_kms_alias",
-            name=f"alias/dr-dr-{environment_suffix}",
+            name=f"alias/dr-dr-v1-{environment_suffix}",
             target_key_id=dr_kms_key.id,
             provider=dr_provider
         )
@@ -2658,7 +2658,7 @@ class TapStack(TerraformStack):
         dr_alb_sg = SecurityGroup(
             self,
             "dr_alb_sg",
-            name=f"dr-alb-sg-{environment_suffix}",
+            name=f"dr-alb-sg-v1-{environment_suffix}",
             description="Security group for DR ALB",
             vpc_id=dr_vpc.id,
             ingress=[
@@ -2686,14 +2686,14 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"dr-alb-sg-{environment_suffix}"},
+            tags={"Name": f"dr-alb-sg-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         dr_lambda_sg = SecurityGroup(
             self,
             "dr_lambda_sg",
-            name=f"dr-lambda-sg-{environment_suffix}",
+            name=f"dr-lambda-sg-v1-{environment_suffix}",
             description="Security group for DR Lambda functions",
             vpc_id=dr_vpc.id,
             egress=[
@@ -2705,14 +2705,14 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"dr-lambda-sg-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-sg-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         dr_aurora_sg = SecurityGroup(
             self,
             "dr_aurora_sg",
-            name=f"dr-aurora-sg-{environment_suffix}",
+            name=f"dr-aurora-sg-v1-{environment_suffix}",
             description="Security group for DR Aurora cluster",
             vpc_id=dr_vpc.id,
             ingress=[
@@ -2733,7 +2733,7 @@ class TapStack(TerraformStack):
                     description="Allow all outbound"
                 )
             ],
-            tags={"Name": f"dr-aurora-sg-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-sg-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2741,16 +2741,16 @@ class TapStack(TerraformStack):
         dr_db_subnet_group = DbSubnetGroup(
             self,
             "dr_db_subnet_group",
-            name=f"dr-db-subnet-{environment_suffix}",
+            name=f"dr-db-subnet-v1-{environment_suffix}",
             subnet_ids=[s.id for s in dr_private_subnets],
-            tags={"Name": f"dr-db-subnet-{environment_suffix}"},
+            tags={"Name": f"dr-db-subnet-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         dr_cluster = RdsCluster(
             self,
             "dr_aurora_cluster",
-            cluster_identifier=f"dr-aurora-{environment_suffix}",
+            cluster_identifier=f"dr-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
             db_subnet_group_name=dr_db_subnet_group.name,
@@ -2769,7 +2769,7 @@ class TapStack(TerraformStack):
                 "max_capacity": 1.0
             },
             depends_on=[dr_db_subnet_group],
-            tags={"Name": f"dr-aurora-{environment_suffix}", "BackupPlan": "aurora-backup"},
+            tags={"Name": f"dr-aurora-v1-{environment_suffix}", "BackupPlan": "aurora-backup"},
             provider=dr_provider
         )
 
@@ -2784,7 +2784,7 @@ class TapStack(TerraformStack):
                 engine=dr_cluster.engine,
                 engine_version=dr_cluster.engine_version,
                 publicly_accessible=False,
-                tags={"Name": f"dr-aurora-instance-{i}-{environment_suffix}"},
+                tags={"Name": f"dr-aurora-instance-{i}-v1-{environment_suffix}"},
                 provider=dr_provider
             )
 
@@ -2792,11 +2792,11 @@ class TapStack(TerraformStack):
         dr_queue = SqsQueue(
             self,
             "dr_sqs_queue",
-            name=f"dr-transactions-{environment_suffix}",
+            name=f"dr-transactions-v1-{environment_suffix}",
             visibility_timeout_seconds=300,
             message_retention_seconds=1209600,
             kms_master_key_id=dr_kms_key.id,
-            tags={"Name": f"dr-transactions-{environment_suffix}"},
+            tags={"Name": f"dr-transactions-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2804,7 +2804,7 @@ class TapStack(TerraformStack):
         dr_lambda_role = IamRole(
             self,
             "dr_lambda_role",
-            name=f"dr-lambda-role-{environment_suffix}",
+            name=f"dr-lambda-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -2815,7 +2815,7 @@ class TapStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"dr-lambda-role-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-role-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2839,7 +2839,7 @@ class TapStack(TerraformStack):
             self,
             "dr_lambda_custom_policy",
             role=dr_lambda_role.id,
-            name=f"dr-lambda-custom-{environment_suffix}",
+            name=f"dr-lambda-custom-v1-{environment_suffix}",
             policy=f"""{{
                 "Version": "2012-10-17",
                 "Statement": [
@@ -2895,7 +2895,7 @@ class TapStack(TerraformStack):
         dr_lambda = LambdaFunction(
             self,
             "dr_lambda",
-            function_name=f"dr-transaction-processor-{environment_suffix}",
+            function_name=f"dr-transaction-processor-v1-{environment_suffix}",
             role=dr_lambda_role.arn,
             handler="transaction_processor.handler",
             runtime="python3.12",
@@ -2906,15 +2906,15 @@ class TapStack(TerraformStack):
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                     "DB_CLUSTER_ARN": dr_cluster.arn,
-                    "DB_NAME": dr_cluster.database_name if hasattr(dr_cluster, 'database_name') else f"transactions{environment_suffix.replace('-', '')}",
-                    "DYNAMODB_TABLE": f"session-state-{environment_suffix}"
+                    "DB_NAME": dr_cluster.database_name if hasattr(dr_cluster, 'database_name') else f"transactionsv1{environment_suffix.replace('-', '')}",
+                    "DYNAMODB_TABLE": f"session-state-v1-{environment_suffix}"
                 }
             },
             vpc_config={
                 "subnet_ids": [s.id for s in dr_private_subnets],
                 "security_group_ids": [dr_lambda_sg.id]
             },
-            tags={"Name": f"dr-transaction-processor-{environment_suffix}"},
+            tags={"Name": f"dr-transaction-processor-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2933,7 +2933,7 @@ class TapStack(TerraformStack):
             "dr_lambda_log_group",
             name=f"/aws/lambda/{dr_lambda.function_name}",
             retention_in_days=7,
-            tags={"Name": f"dr-lambda-logs-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-logs-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2941,9 +2941,9 @@ class TapStack(TerraformStack):
         dr_logs_bucket = S3Bucket(
             self,
             "dr_logs_bucket",
-            bucket=f"transaction-logs-dr-{environment_suffix}",
+            bucket=f"transaction-logs-dr-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-logs-dr-{environment_suffix}"},
+            tags={"Name": f"transaction-logs-dr-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -2973,9 +2973,9 @@ class TapStack(TerraformStack):
         dr_docs_bucket = S3Bucket(
             self,
             "dr_docs_bucket",
-            bucket=f"transaction-documents-dr-{environment_suffix}",
+            bucket=f"transaction-documents-dr-v1-{environment_suffix}",
             force_destroy=True,
-            tags={"Name": f"transaction-documents-dr-{environment_suffix}"},
+            tags={"Name": f"transaction-documents-dr-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3006,22 +3006,22 @@ class TapStack(TerraformStack):
         dr_alb = Lb(
             self,
             "dr_alb",
-            name=f"dr-alb-{environment_suffix}",
+            name=f"dr-alb-v1-{environment_suffix}",
             internal=False,
             load_balancer_type="application",
             security_groups=[dr_alb_sg.id],
             subnets=[s.id for s in dr_public_subnets],
             enable_deletion_protection=False,
-            tags={"Name": f"dr-alb-{environment_suffix}"},
+            tags={"Name": f"dr-alb-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         dr_target_group = LbTargetGroup(
             self,
             "dr_target_group",
-            name=f"dr-tg-{environment_suffix}",
+            name=f"dr-tg-v1-{environment_suffix}",
             target_type="lambda",
-            tags={"Name": f"dr-tg-{environment_suffix}"},
+            tags={"Name": f"dr-tg-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3055,7 +3055,7 @@ class TapStack(TerraformStack):
                 type="forward",
                 target_group_arn=dr_target_group.arn
             )],
-            tags={"Name": f"dr-alb-listener-{environment_suffix}"},
+            tags={"Name": f"dr-alb-listener-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3063,9 +3063,9 @@ class TapStack(TerraformStack):
         dr_sns_topic = SnsTopic(
             self,
             "dr_sns_topic",
-            name=f"dr-alarms-{environment_suffix}",
+            name=f"dr-alarms-v1-{environment_suffix}",
             kms_master_key_id=dr_kms_key.id,
-            tags={"Name": f"dr-alarms-{environment_suffix}"},
+            tags={"Name": f"dr-alarms-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3073,7 +3073,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "dr_aurora_lag_alarm",
-            alarm_name=f"dr-aurora-lag-{environment_suffix}",
+            alarm_name=f"dr-aurora-lag-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="AuroraGlobalDBReplicationLag",
@@ -3086,14 +3086,14 @@ class TapStack(TerraformStack):
             dimensions={
                 "DBClusterIdentifier": dr_cluster.cluster_identifier
             },
-            tags={"Name": f"dr-aurora-lag-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-lag-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         CloudwatchMetricAlarm(
             self,
             "dr_lambda_error_alarm",
-            alarm_name=f"dr-lambda-errors-{environment_suffix}",
+            alarm_name=f"dr-lambda-errors-v1-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -3106,14 +3106,14 @@ class TapStack(TerraformStack):
             dimensions={
                 "FunctionName": dr_lambda.function_name
             },
-            tags={"Name": f"dr-lambda-errors-{environment_suffix}"},
+            tags={"Name": f"dr-lambda-errors-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         CloudwatchMetricAlarm(
             self,
             "dr_s3_replication_alarm",
-            alarm_name=f"dr-s3-replication-{environment_suffix}",
+            alarm_name=f"dr-s3-replication-v1-{environment_suffix}",
             comparison_operator="LessThanThreshold",
             evaluation_periods=2,
             metric_name="ReplicationLatency",
@@ -3128,7 +3128,7 @@ class TapStack(TerraformStack):
                 "DestinationBucket": dr_logs_bucket.id,
                 "RuleId": "replication-rule"
             },
-            tags={"Name": f"dr-s3-replication-{environment_suffix}"},
+            tags={"Name": f"dr-s3-replication-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3136,16 +3136,16 @@ class TapStack(TerraformStack):
         dr_backup_vault = BackupVault(
             self,
             "dr_backup_vault",
-            name=f"dr-aurora-vault-{environment_suffix}",
+            name=f"dr-aurora-vault-v1-{environment_suffix}",
             kms_key_arn=dr_kms_key.arn,
-            tags={"Name": f"dr-aurora-vault-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-vault-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         dr_backup_plan = BackupPlan(
             self,
             "dr_backup_plan",
-            name=f"dr-aurora-backup-{environment_suffix}",
+            name=f"dr-aurora-backup-v1-{environment_suffix}",
             rule=[BackupPlanRule(
                 rule_name="daily-backup",
                 target_vault_name=dr_backup_vault.name,
@@ -3154,14 +3154,14 @@ class TapStack(TerraformStack):
                     delete_after=7
                 )
             )],
-            tags={"Name": f"dr-aurora-backup-{environment_suffix}"},
+            tags={"Name": f"dr-aurora-backup-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
         dr_backup_role = IamRole(
             self,
             "dr_backup_role",
-            name=f"dr-backup-role-{environment_suffix}",
+            name=f"dr-backup-role-v1-{environment_suffix}",
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -3172,7 +3172,7 @@ class TapStack(TerraformStack):
                     "Effect": "Allow"
                 }]
             }""",
-            tags={"Name": f"dr-backup-role-{environment_suffix}"},
+            tags={"Name": f"dr-backup-role-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3187,7 +3187,7 @@ class TapStack(TerraformStack):
         BackupSelection(
             self,
             "dr_backup_selection",
-            name=f"dr-aurora-selection-{environment_suffix}",
+            name=f"dr-aurora-selection-v1-{environment_suffix}",
             plan_id=dr_backup_plan.id,
             iam_role_arn=dr_backup_role.arn,
             selection_tag=[BackupSelectionSelectionTag(
@@ -3206,7 +3206,7 @@ class TapStack(TerraformStack):
             peer_vpc_id=dr_vpc.id,
             peer_region="us-east-2",
             auto_accept=False,
-            tags={"Name": f"primary-dr-peering-{environment_suffix}"},
+            tags={"Name": f"primary-dr-peering-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -3215,7 +3215,7 @@ class TapStack(TerraformStack):
             "vpc_peering_accepter",
             vpc_peering_connection_id=peering_connection.id,
             auto_accept=True,
-            tags={"Name": f"primary-dr-peering-accepter-{environment_suffix}"},
+            tags={"Name": f"primary-dr-peering-accepter-v1-{environment_suffix}"},
             provider=dr_provider
         )
 
@@ -3248,7 +3248,7 @@ class TapStack(TerraformStack):
             failure_threshold=3,
             request_interval=30,
             measure_latency=True,
-            tags={"Name": f"primary-health-check-{environment_suffix}"},
+            tags={"Name": f"primary-health-check-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
@@ -3262,7 +3262,7 @@ class TapStack(TerraformStack):
             failure_threshold=3,
             request_interval=30,
             measure_latency=True,
-            tags={"Name": f"dr-health-check-{environment_suffix}"},
+            tags={"Name": f"dr-health-check-v1-{environment_suffix}"},
             provider=primary_provider
         )
 
