@@ -30,7 +30,7 @@ module "aurora" {
   source = "./modules/aurora"
 
   cluster_identifier      = local.resource_names.aurora_cluster
-  engine_version          = "15.4"
+  engine_version          = "15"
   instance_class          = var.aurora_instance_class
   instance_count          = var.aurora_instance_count
   database_name           = "${var.project_name}_${var.environment}"
