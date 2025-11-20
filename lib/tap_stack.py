@@ -245,12 +245,15 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=self.secondary_provider)
         )
 
-        # Create Route53 health check
+        # Create Route53 health check - using HTTPS type instead of CALCULATED
         self.health_check = aws.route53.HealthCheck(
             f"db-health-check-{self.environment_suffix}",
-            type="CALCULATED",
-            child_health_checks=[],
-            child_healthchecks=[],
+            type="HTTPS",
+            fqdn=self.primary_cluster.endpoint.apply(lambda e: e.split(':')[0] if e else "example.com"),
+            port=443,
+            resource_path="/health",
+            request_interval=30,
+            failure_threshold=3,
             tags={**self.tags, "Name": f"db-health-check-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=self.primary_provider)
         )
