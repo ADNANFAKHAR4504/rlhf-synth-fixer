@@ -157,52 +157,14 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Rule 7: Monitor requests with missing User-Agent header
-  # Changed from block to count to avoid blocking legitimate traffic
-  rule {
-    name     = "MonitorMissingUserAgent"
-    priority = 7
-
-    action {
-      count {} # Changed from block to count - just monitor
-    }
-
-    statement {
-      not_statement {
-        statement {
-          byte_match_statement {
-            positional_constraint = "EXACTLY"
-            search_string         = ""
-
-            field_to_match {
-              single_header {
-                name = "user-agent"
-              }
-            }
-
-            text_transformation {
-              priority = 0
-              type     = "NONE"
-            }
-          }
-        }
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${local.name_prefix}-missing-user-agent"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Rule 8: Custom IP whitelist (allow specific IPs)
+  # Rule 7: Custom IP whitelist (allow specific IPs)
+  # Note: Removed overly restrictive User-Agent rule that was blocking legitimate traffic
   dynamic "rule" {
     for_each = length(var.allowed_ip_addresses) > 0 ? [1] : []
 
     content {
       name     = "IPWhitelistRule"
-      priority = 8
+      priority = 7
 
       action {
         allow {}

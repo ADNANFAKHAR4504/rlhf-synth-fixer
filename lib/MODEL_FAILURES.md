@@ -499,51 +499,39 @@ rule {
 }
 ```
 
-**Fix Applied:** Changed the rule to only monitor (count) truly empty User-Agent headers instead of blocking non-Mozilla user agents.
+**Fix Applied:** Removed the overly restrictive User-Agent rule entirely.
 
 **Updated Configuration:**
 ```hcl
-rule {
-  name     = "MonitorMissingUserAgent"
-  priority = 7
-
-  action {
-    count {}  # ✅ Monitor only, don't block
-  }
-
-  statement {
-    not_statement {
-      statement {
-        byte_match_statement {
-          positional_constraint = "EXACTLY"  # ✅ Check for exact match
-          search_string         = ""          # ✅ Empty string
-          field_to_match {
-            single_header { name = "user-agent" }
-          }
-          text_transformation {
-            priority = 0
-            type     = "NONE"  # ✅ No transformation
-          }
-        }
-      }
-    }
-  }
-}
+# Rule 7 completely removed
+# WAF now has 7 rules total (previously 8):
+# 1. Rate Limiting
+# 2. AWS Managed Rules - Common Rule Set
+# 3. AWS Managed Rules - Known Bad Inputs
+# 4. AWS Managed Rules - SQL Injection
+# 5. Geo-blocking (dynamic, if configured)
+# 6. AWS Managed Rules - IP Reputation
+# 7. IP Whitelist (dynamic, if configured)
 ```
 
 **Changes Made:**
-1. Changed action from `block` to `count` - rule now only monitors
-2. Changed `positional_constraint` from `CONTAINS` to `EXACTLY`
-3. Changed `search_string` from `"Mozilla"` to `""` (empty string)
-4. Changed `text_transformation` from `LOWERCASE` to `NONE`
-5. Renamed rule from `BlockMissingUserAgent` to `MonitorMissingUserAgent`
+1. Completely removed Rule 7 "BlockMissingUserAgent" / "MonitorMissingUserAgent"
+2. Renumbered Rule 8 (IP Whitelist) to Rule 7
+3. Added comment documenting the removal
+
+**Reason for Complete Removal:**
+- WAF `byte_match_statement` requires `search_string` length 1-200 characters
+- Cannot use empty string to check for missing headers
+- Checking for specific User-Agent patterns is too restrictive
+- AWS Managed Rules already provide adequate bot protection
+- Better to allow all traffic than accidentally block legitimate users
 
 **Benefits:**
-- ✅ Legitimate traffic no longer blocked
-- ✅ All browsers and API clients can access the ALB
-- ✅ Still monitors requests with truly missing User-Agent headers
-- ✅ CloudWatch metrics available for monitoring
-- ✅ Can enable blocking later if needed based on metrics
+- ✅ Legitimate traffic no longer blocked by User-Agent checks
+- ✅ All browsers, API clients, and monitoring tools work
+- ✅ AWS Managed Rules still provide comprehensive security
+- ✅ Simpler WAF configuration with 6-7 rules (down from 8)
+- ✅ No accidental blocking of legitimate traffic
 
 **Testing:**
 After applying this fix, you can test with:
@@ -554,11 +542,14 @@ curl http://<alb-dns-name>/health
 # With custom user agent (also works now)
 curl -H "User-Agent: MyApp/1.0" http://<alb-dns-name>/
 
+# Without user agent (also works)
+curl -H "User-Agent:" http://<alb-dns-name>/
+
 # Browser access also works
 open http://<alb-dns-name>/
 ```
 
-**Status:** ✅ FIXED - WAF now allows legitimate traffic, only monitors missing User-Agent
+**Status:** ✅ FIXED - Removed overly restrictive User-Agent rule, WAF now allows all legitimate traffic
 
 ---
 
