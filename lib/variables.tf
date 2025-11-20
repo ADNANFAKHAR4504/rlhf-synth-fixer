@@ -8,6 +8,11 @@ variable "ssh_cidr_blocks" {
   description = "CIDR blocks allowed for SSH access"
   type        = list(string)
   default     = [] # Must be explicitly configured - no default access
+
+  validation {
+    condition     = length(var.ssh_cidr_blocks) > 0
+    error_message = "At least one CIDR block must be provided for SSH access. Use terraform.tfvars to set this value."
+  }
 }
 
 variable "ssh_public_key" {

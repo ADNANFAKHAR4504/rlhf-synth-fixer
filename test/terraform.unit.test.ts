@@ -97,6 +97,11 @@ describe("Terraform lib/ .tf unit tests", () => {
     test("should have descriptions for all variables", () => {
       expect(variablesTf.match(/description\s+=\s+"/g)?.length).toBeGreaterThanOrEqual(7);
     });
+
+    test("should have validation for ssh_cidr_blocks to prevent empty values", () => {
+      contains(variablesTf, "validation {");
+      expect(variablesTf).toMatch(/length\(var\.ssh_cidr_blocks\)\s+>\s+0/);
+    });
   });
 
   describe("vpc.tf networking validation", () => {
