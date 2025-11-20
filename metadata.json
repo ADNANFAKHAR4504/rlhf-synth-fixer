@@ -1,0 +1,27 @@
+{
+  "task_id": "101912540",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "description": "A fintech startup needs to maintain identical infrastructure across development, staging, and production environments for their payment processing system. The company requires strict consistency to ensure features tested in lower environments behave identically in production, while allowing for environment-specific scaling and cost optimization.",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Environment Migration"
+  ],
+  "team": "synth",
+  "turn_type": "multi",
+  "startedAt": "2025-11-20T12:32:32.952913+00:00",
+  "po_id": "101912540",
+  "aws_services": [
+    "Lambda",
+    "RDS",
+    "VPC",
+    "IAM",
+    "CloudWatch",
+    "S3",
+    "DynamoDB",
+    "Security Groups"
+  ],
+  "training_quality": 10
+}
