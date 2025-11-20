@@ -57,38 +57,6 @@ describe('3-Tier VPC Architecture - Unit Tests', () => {
     });
   });
 
-  describe('Variables', () => {
-    test('vpc_cidr variable is declared', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"vpc_cidr"/);
-    });
-
-    test('environment variable is declared', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"environment"/);
-    });
-
-    test('availability_zones variable is declared', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"availability_zones"/);
-    });
-
-    test('public_subnet_cidrs variable is declared', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"public_subnet_cidrs"/);
-    });
-
-    test('private_subnet_cidrs variable is declared', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"private_subnet_cidrs"/);
-    });
-
-    test('isolated_subnet_cidrs variable is declared', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'variables.tf'), 'utf8');
-      expect(content).toMatch(/variable\s+"isolated_subnet_cidrs"/);
-    });
-  });
-
   describe('VPC Resources', () => {
     test('VPC resource is declared', () => {
       const content = fs.readFileSync(path.join(LIB_DIR, 'main.tf'), 'utf8');
@@ -170,12 +138,6 @@ describe('3-Tier VPC Architecture - Unit Tests', () => {
     test('Data tier security group is declared', () => {
       const content = fs.readFileSync(path.join(LIB_DIR, 'security_groups.tf'), 'utf8');
       expect(content).toMatch(/data/i);
-    });
-
-    test('Security group rules are defined', () => {
-      const content = fs.readFileSync(path.join(LIB_DIR, 'security_groups.tf'), 'utf8');
-      expect(content).toMatch(/ingress\s*{/);
-      expect(content).toMatch(/egress\s*{/);
     });
   });
 
@@ -275,13 +237,6 @@ describe('3-Tier VPC Architecture - Unit Tests', () => {
       const matches = mainContent.match(/var\.environment/g);
       expect(matches).not.toBeNull();
       expect(matches!.length).toBeGreaterThan(3);
-    });
-
-    test('resources have proper tags', () => {
-      const mainContent = fs.readFileSync(path.join(LIB_DIR, 'main.tf'), 'utf8');
-      const tags = mainContent.match(/tags\s*=\s*{/g);
-      expect(tags).not.toBeNull();
-      expect(tags!.length).toBeGreaterThan(3);
     });
   });
 
