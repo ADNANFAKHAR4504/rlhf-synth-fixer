@@ -1,6 +1,6 @@
-# Terraform Infrastructure Code - Payment Application
+# Terraform Infrastructure Code
 
-## Root Configuration Files
+## Root Level Files
 
 ### terraform.tf
 
@@ -56,9 +56,11 @@ module "payment_app" {
   ami_id                  = var.ami_id
   certificate_arn         = var.certificate_arn
   alb_internal            = var.alb_internal
-}```
+}
+```
 
 ### variables.tf
+
 ```hcl
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
@@ -137,19 +139,13 @@ variable "ami_id" {
 }
 
 variable "certificate_arn" {
-  description = <<-EOT
-    Optional ACM certificate ARN to use for HTTPS listener in the module.
-    If empty, no HTTPS listener will be created.
-  EOT
+  description = "Optional ACM certificate ARN to use for HTTPS listener in the module. If empty, no HTTPS listener will be created."
   type        = string
   default     = ""
 }
 
 variable "alb_internal" {
-  description = <<-EOT
-    If true, create the ALB as internal. Useful when the target VPC has no
-    Internet Gateway.
-  EOT
+  description = "If true, create the ALB as internal. Useful when the target VPC has no Internet Gateway."
   type        = bool
   default     = false
 }
@@ -207,66 +203,23 @@ output "target_group_arn" {
 output "cloudwatch_alarm_arns" {
   description = "ARNs of CloudWatch alarms"
   value       = module.payment_app.cloudwatch_alarm_arns
-}```
+}
 
-### dev.tfvars
-```hcl
-environment             = "dev"
-pr_number               = "pr6969dev"
-aws_region              = "us-east-1"
-vpc_cidr                = "10.0.0.0/16"
-db_instance_class       = "db.t3.micro"
-ec2_instance_type       = "t3.micro"
-backup_retention_period = 0
-rds_cpu_threshold       = 80
-instance_count          = 2
-db_username             = "dbadmin"
-db_password             = "" 
-# Leave empty to skip key pair (CI/dev)
-ssh_key_name            = ""
-# Leave empty to use module's AMI fallback (Amazon Linux 2)
-ami_id                  = ""
-alb_internal            = false
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing database credentials"
+  value       = module.payment_app.db_credentials_secret_arn
+}
+
+output "webacl_arn" {
+  description = "ARN of the WAF WebACL"
+  value       = module.payment_app.webacl_arn
+}
 ```
 
-### staging.tfvars
+## Module Files (modules/payment-app)
 
-```hcl
-environment             = "staging"
-pr_number               = "pr6969staging"
-aws_region              = "us-east-1"
-vpc_cidr                = "10.1.0.0/16"
-db_instance_class       = "db.t3.small"
-ec2_instance_type       = "t3.small"
-backup_retention_period = 7
-rds_cpu_threshold       = 70
-instance_count          = 2
-db_username             = "dbadmin"
-db_password             = "" 
-ssh_key_name            = ""
-ami_id                  = ""
-alb_internal            = false```
+### main.tf
 
-### prod.tfvars
-```hcl
-environment             = "prod"
-pr_number               = "pr6969prod"
-aws_region              = "us-east-1"
-vpc_cidr                = "10.2.0.0/16"
-db_instance_class       = "db.t3.medium"
-ec2_instance_type       = "t3.small"
-backup_retention_period = 30
-rds_cpu_threshold       = 60
-instance_count          = 3
-db_username             = "dbadmin"
-db_password             = "" 
-ssh_key_name            = ""
-ami_id                  = ""
-alb_internal            = false```
-
-## Module: payment-app
-
-### modules/payment-app/main.tf
 ```hcl
 # Main configuration file for the payment-app module
 
@@ -281,9 +234,11 @@ locals {
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
   }
-}```
+}
+```
 
-### modules/payment-app/variables.tf
+### variables.tf
+
 ```hcl
 variable "environment" {
   description = "Environment name"
@@ -306,11 +261,7 @@ variable "vpc_cidr" {
 }
 
 variable "vpc_id" {
-  description = <<-EOT
-    Optional existing VPC ID to use. If provided, the module will use this VPC
-    instead of looking up by CIDR. Useful when the VPC was created/destroyed
-    outside this module or to avoid accidental data-source mismatches.
-  EOT
+  description = "Optional existing VPC ID to use. If provided, the module will use this VPC instead of looking up by CIDR. Useful when the VPC was created/destroyed outside this module or to avoid accidental data-source mismatches."
   type        = string
   default     = ""
 }
@@ -347,9 +298,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = <<-EOT
-    Database password (leave empty to auto-generate a secure random password)
-  EOT
+  description = "Database password (leave empty to auto-generate a secure random password)"
   type        = string
   default     = ""
   sensitive   = true
@@ -367,25 +316,109 @@ variable "ami_id" {
 }
 
 variable "certificate_arn" {
-  description = <<-EOT
-    Optional ACM Certificate ARN to use for HTTPS listener. If empty, HTTPS
-    listener will not be created by this module.
-  EOT
+  description = "Optional ACM Certificate ARN to use for HTTPS listener. If empty, HTTPS listener will not be created by this module."
   type        = string
   default     = ""
 }
 
 variable "alb_internal" {
-  description = <<-EOT
-    If true, create the ALB as internal. Set to true when VPC has no Internet
-    Gateway or you want internal-only ALB.
-  EOT
+  description = "If true, create the ALB as internal. Set to true when VPC has no Internet Gateway or you want internal-only ALB."
   type        = bool
   default     = false
 }
 ```
 
-### modules/payment-app/networking.tf
+### outputs.tf
+
+```hcl
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.main.arn
+}
+
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
+}
+
+output "rds_port" {
+  description = "RDS instance port"
+  value       = aws_db_instance.main.port
+}
+
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing database credentials"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "db_credentials_secret_name" {
+  description = "Name of the Secrets Manager secret containing database credentials"
+  value       = aws_secretsmanager_secret.db_password.name
+}
+
+output "ec2_security_group_id" {
+  description = "Security group ID for EC2 instances"
+  value       = aws_security_group.ec2.id
+}
+
+output "rds_security_group_id" {
+  description = "Security group ID for RDS instance"
+  value       = aws_security_group.rds.id
+}
+
+output "alb_security_group_id" {
+  description = "Security group ID for ALB"
+  value       = aws_security_group.alb.id
+}
+
+output "ec2_instance_ids" {
+  description = "List of EC2 instance IDs"
+  value       = aws_instance.app[*].id
+}
+
+output "ec2_private_ips" {
+  description = "Private IP addresses of EC2 instances"
+  value       = aws_instance.app[*].private_ip
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.main.arn
+}
+
+output "cloudwatch_alarm_arns" {
+  description = "ARNs of CloudWatch alarms"
+  value = {
+    rds_cpu     = aws_cloudwatch_metric_alarm.rds_cpu.arn
+    rds_storage = aws_cloudwatch_metric_alarm.rds_storage.arn
+    alb_health  = aws_cloudwatch_metric_alarm.alb_healthy_hosts.arn
+    ec2_cpu     = aws_cloudwatch_metric_alarm.ec2_cpu[*].arn
+  }
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alarms"
+  value       = aws_sns_topic.alarms.arn
+}
+
+output "dashboard_url" {
+  description = "URL to CloudWatch Dashboard"
+  value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
+}
+
+output "webacl_arn" {
+  description = "ARN of the WAF WebACL"
+  value       = aws_wafv2_web_acl.main.arn
+}
+```
+
+### networking.tf
 
 ```hcl
 # 1. Create the VPC
@@ -511,132 +544,7 @@ resource "aws_route_table_association" "private" {
 }
 ```
 
-### modules/payment-app/kms.tf
-
-```hcl
-# KMS key for EBS and RDS encryption
-resource "aws_kms_key" "main" {
-  description = <<-EOT
-    KMS key for payment-app-${var.pr_number} EBS, RDS, and S3 encryption
-  EOT
-  deletion_window_in_days = var.environment == "prod" ? 30 : 7
-  enable_key_rotation     = true
-
-  tags = {
-    Name        = "payment-app-${var.pr_number}-key"
-    Environment = var.environment
-    Project     = "payment-processing"
-    ManagedBy   = "Terraform"
-  }
-}
-
-# KMS key alias
-resource "aws_kms_alias" "main" {
-  name          = "alias/payment-app-${var.pr_number}"
-  target_key_id = aws_kms_key.main.key_id
-}
-
-# KMS key policy
-resource "aws_kms_key_policy" "main" {
-  key_id = aws_kms_key.main.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow EC2 to use the key"
-        Effect = "Allow"
-        Principal = {
-          AWS = aws_iam_role.ec2.arn
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:CreateGrant",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = [
-              "ec2.${var.aws_region}.amazonaws.com"
-            ]
-          }
-        }
-      },
-      {
-        Sid    = "Allow RDS to use the key"
-        Effect = "Allow"
-        Principal = {
-          Service = "rds.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:CreateGrant",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow EC2 service to create grants"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = [
-          "kms:CreateGrant",
-          "kms:ListGrants",
-          "kms:RevokeGrant"
-        ]
-        Resource = "*"
-        Condition = {
-          Bool = {
-            "kms:GrantIsForAWSResource" = "true"
-          }
-        }
-      },
-      {
-        Sid    = "Allow S3 to use the key for encryption"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = [
-              "s3.${var.aws_region}.amazonaws.com"
-            ]
-          }
-        }
-      }
-    ]
-  })
-}
-```
-
-### modules/payment-app/security_groups.tf
+### security_groups.tf
 
 ```hcl
 # Security group for ALB
@@ -743,9 +651,11 @@ resource "aws_security_group" "rds" {
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
   }
-}```
+}
+```
 
-### modules/payment-app/alb.tf
+### alb.tf
+
 ```hcl
 # Application Load Balancer
 resource "aws_lb" "main" {
@@ -771,6 +681,8 @@ resource "aws_lb" "main" {
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
   }
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 }
 
 # S3 bucket for ALB logs
@@ -795,13 +707,13 @@ resource "aws_s3_bucket_versioning" "alb_logs" {
 }
 
 # Enable server-side encryption for the S3 bucket
+# FIX: Switched to AES256 (SSE-S3) to allow ALB Logging service to write without KMS permission errors
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm = "AES256"
     }
     bucket_key_enabled = true
   }
@@ -830,7 +742,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
     }
 
     expiration {
-      days = var.environment == "prod" ? 365 : 90
+      days = var.environment == "prod" ? 365 : 180
     }
 
     noncurrent_version_transition {
@@ -864,15 +776,55 @@ resource "aws_s3_bucket_policy" "alb_logs" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      },
+      {
+        Sid    = "ELBAccessLogsWrite"
         Effect = "Allow"
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Sid    = "ELBServiceWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
       }
     ]
   })
+
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 }
 
 # Target group
@@ -959,50 +911,11 @@ resource "aws_lb_listener" "https" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-}```
-
-### modules/payment-app/keys.tf
-```hcl
-# lib/modules/payment-app/keys.tf
-
-# 1. Generate a secure private key
-resource "tls_private_key" "generated" {
-  count     = var.ssh_key_name == "" ? 1 : 0
-  algorithm = "RSA"
-  rsa_bits  = 4096
 }
+```
 
-# 2. Upload the public key to AWS
-resource "aws_key_pair" "generated" {
-  count = var.ssh_key_name == "" ? 1 : 0
+### ec2.tf
 
-  key_name   = "payment-app-${var.pr_number}-key"
-  public_key = tls_private_key.generated[0].public_key_openssh
-
-  tags = {
-    Name        = "payment-app-${var.pr_number}-key"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-  }
-}
-
-# 3. Store the private key securely in AWS Systems Manager Parameter Store
-resource "aws_ssm_parameter" "private_key" {
-  count = var.ssh_key_name == "" ? 1 : 0
-
-  name        = "/payment-app/${var.environment}/ssh-keys/payment-app-${var.pr_number}-key"
-  description = "Private SSH key for payment-app-${var.pr_number}-key"
-  type        = "SecureString"
-  value       = tls_private_key.generated[0].private_key_pem
-
-  tags = {
-    Name        = "payment-app-${var.pr_number}-key-private"
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-  }
-}```
-
-### modules/payment-app/ec2.tf
 ```hcl
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2" {
@@ -1153,9 +1066,11 @@ data "aws_ami" "default" {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-}```
+}
+```
 
-### modules/payment-app/rds.tf
+### rds.tf
+
 ```hcl
 # Generate a random password for RDS
 resource "random_password" "db_password" {
@@ -1206,6 +1121,10 @@ resource "aws_db_subnet_group" "main" {
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # RDS PostgreSQL Instance
@@ -1232,33 +1151,21 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
-  skip_final_snapshot = var.environment == "dev" ? true : false
-  final_snapshot_identifier = (
-    var.environment != "dev" ? "rds-${var.pr_number}-final" : null
-  )
+  skip_final_snapshot       = var.environment == "dev" ? true : false
+  final_snapshot_identifier = var.environment != "dev" ? "rds-${var.pr_number}-final" : null
 
   deletion_protection = var.environment == "prod" ? true : false
 
   multi_az                   = var.environment == "prod" ? true : false
   auto_minor_version_upgrade = var.environment != "prod"
 
-  performance_insights_enabled = (
-    var.environment == "prod" ? true : false
-  )
-  performance_insights_kms_key_id = (
-    var.environment == "prod" ? aws_kms_key.main.arn : null
-  )
-  performance_insights_retention_period = (
-    var.environment == "prod" ? 7 : null
-  )
-  monitoring_interval = var.environment == "prod" ? 60 : 0
-  monitoring_role_arn = (
-    var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
-  )
+  performance_insights_enabled          = var.environment == "prod" ? true : false
+  performance_insights_kms_key_id       = var.environment == "prod" ? aws_kms_key.main.arn : null
+  performance_insights_retention_period = var.environment == "prod" ? 7 : null
+  monitoring_interval                   = var.environment == "prod" ? 60 : 0
+  monitoring_role_arn                   = var.environment == "prod" ? aws_iam_role.rds_monitoring[0].arn : null
 
-  enabled_cloudwatch_logs_exports = (
-    var.environment != "dev" ? ["postgresql"] : []
-  )
+  enabled_cloudwatch_logs_exports = var.environment != "dev" ? ["postgresql"] : []
 
   tags = {
     Name        = "rds-${var.pr_number}"
@@ -1268,7 +1175,10 @@ resource "aws_db_instance" "main" {
   }
 
   lifecycle {
-    ignore_changes = [final_snapshot_identifier]
+    ignore_changes = [
+      db_subnet_group_name,
+      final_snapshot_identifier
+    ]
   }
 }
 
@@ -1304,9 +1214,11 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 
   role       = aws_iam_role.rds_monitoring[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}```
+}
+```
 
-### modules/payment-app/cloudwatch.tf
+### cloudwatch.tf
+
 ```hcl
 # SNS Topic for alarms
 resource "aws_sns_topic" "alarms" {
@@ -1465,92 +1377,304 @@ resource "aws_cloudwatch_dashboard" "main" {
       }
     ]
   })
-}```
+}
+```
 
-### modules/payment-app/outputs.tf
+### waf.tf
+
 ```hcl
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
-}
+# WAF Web ACL
+resource "aws_wafv2_web_acl" "main" {
+  name  = "waf-${var.pr_number}"
+  scope = "REGIONAL"
 
-output "alb_arn" {
-  description = "ARN of the Application Load Balancer"
-  value       = aws_lb.main.arn
-}
+  default_action {
+    allow {}
+  }
 
-output "rds_endpoint" {
-  description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
-  sensitive   = true
-}
+  # Rate limiting rule
+  rule {
+    name     = "RateLimitRule"
+    priority = 1
 
-output "rds_port" {
-  description = "RDS instance port"
-  value       = aws_db_instance.main.port
-}
+    action {
+      block {}
+    }
 
-output "db_credentials_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing database credentials"
-  value       = aws_secretsmanager_secret.db_password.arn
-}
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
 
-output "db_credentials_secret_name" {
-  description = "Name of the Secrets Manager secret containing database credentials"
-  value       = aws_secretsmanager_secret.db_password.name
-}
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
+    }
+  }
 
-output "ec2_security_group_id" {
-  description = "Security group ID for EC2 instances"
-  value       = aws_security_group.ec2.id
-}
+  # AWS Managed Common Rule Set
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 2
 
-output "rds_security_group_id" {
-  description = "Security group ID for RDS instance"
-  value       = aws_security_group.rds.id
-}
+    override_action {
+      none {}
+    }
 
-output "alb_security_group_id" {
-  description = "Security group ID for ALB"
-  value       = aws_security_group.alb.id
-}
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
 
-output "ec2_instance_ids" {
-  description = "List of EC2 instance IDs"
-  value       = aws_instance.app[*].id
-}
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
 
-output "ec2_private_ips" {
-  description = "Private IP addresses of EC2 instances"
-  value       = aws_instance.app[*].private_ip
-}
+  # AWS Managed Known Bad Inputs Rule Set
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 3
 
-output "target_group_arn" {
-  description = "ARN of the target group"
-  value       = aws_lb_target_group.main.arn
-}
+    override_action {
+      none {}
+    }
 
-output "cloudwatch_alarm_arns" {
-  description = "ARNs of CloudWatch alarms"
-  value = {
-    rds_cpu     = aws_cloudwatch_metric_alarm.rds_cpu.arn
-    rds_storage = aws_cloudwatch_metric_alarm.rds_storage.arn
-    alb_health  = aws_cloudwatch_metric_alarm.alb_healthy_hosts.arn
-    ec2_cpu     = aws_cloudwatch_metric_alarm.ec2_cpu[*].arn
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "WebACL-${var.pr_number}"
+    sampled_requests_enabled   = true
+  }
+
+  tags = {
+    Name        = "waf-${var.pr_number}"
+    Environment = var.environment
+    Project     = "payment-processing"
+    ManagedBy   = "Terraform"
   }
 }
 
-output "sns_topic_arn" {
-  description = "ARN of the SNS topic for alarms"
-  value       = aws_sns_topic.alarms.arn
+# Associate WAF with ALB
+resource "aws_wafv2_web_acl_association" "main" {
+  resource_arn = aws_lb.main.arn
+  web_acl_arn  = aws_wafv2_web_acl.main.arn
 }
 
-output "dashboard_url" {
-  description = "URL to CloudWatch Dashboard"
-  value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
-}```
 
-### modules/payment-app/user_data.sh
+```
+
+### kms.tf
+
+```hcl
+# KMS key for EBS and RDS encryption
+resource "aws_kms_key" "main" {
+  description             = "KMS key for payment-app-${var.pr_number} EBS, RDS, and S3 encryption"
+  deletion_window_in_days = var.environment == "prod" ? 30 : 7
+  enable_key_rotation     = true
+
+  tags = {
+    Name        = "payment-app-${var.pr_number}-key"
+    Environment = var.environment
+    Project     = "payment-processing"
+    ManagedBy   = "Terraform"
+  }
+}
+
+# KMS key alias
+resource "aws_kms_alias" "main" {
+  name          = "alias/payment-app-${var.pr_number}"
+  target_key_id = aws_kms_key.main.key_id
+}
+
+# KMS key policy
+resource "aws_kms_key_policy" "main" {
+  key_id = aws_kms_key.main.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.ec2.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "ec2.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      },
+      {
+        Sid    = "Allow RDS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 service to create grants"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "Allow S3 to use the key for encryption"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "s3.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      }
+      ,
+      {
+        Sid    = "Allow ELB to use the key for S3 access-logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "s3.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      }
+    ]
+  })
+}
+
+```
+
+### keys.tf
+
+```hcl
+# lib/modules/payment-app/keys.tf
+
+# 1. Generate a secure private key
+resource "tls_private_key" "generated" {
+  count     = var.ssh_key_name == "" ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# 2. Upload the public key to AWS
+resource "aws_key_pair" "generated" {
+  count = var.ssh_key_name == "" ? 1 : 0
+
+  key_name   = "payment-app-${var.pr_number}-key"
+  public_key = tls_private_key.generated[0].public_key_openssh
+
+  tags = {
+    Name        = "payment-app-${var.pr_number}-key"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+
+# 3. Store the private key securely in AWS Systems Manager Parameter Store
+resource "aws_ssm_parameter" "private_key" {
+  count = var.ssh_key_name == "" ? 1 : 0
+
+  name        = "/payment-app/${var.environment}/ssh-keys/payment-app-${var.pr_number}-key"
+  description = "Private SSH key for payment-app-${var.pr_number}-key"
+  type        = "SecureString"
+  value       = tls_private_key.generated[0].private_key_pem
+
+  tags = {
+    Name        = "payment-app-${var.pr_number}-key-private"
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
+```
+
+### user_data.sh
+
 ```bash
 #!/bin/bash
 # User data script for EC2 instances
@@ -1600,9 +1724,7 @@ EOF
 
 # Start CloudWatch agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-  -a fetch-config -m ec2 \
-  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
-  -s
+  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
 # 5. Configure Nginx
 cat > /etc/nginx/conf.d/payment-app.conf << EOF
@@ -1618,8 +1740,7 @@ server {
     
     location / {
         # Serve a static page to prove the server is working
-        return 200 "<h1>Welcome to Payment App (${environment})</h1>\
-<p>DB Endpoint: ${db_endpoint}</p>";
+        return 200 "<h1>Welcome to Payment App (${environment})</h1><p>DB Endpoint: ${db_endpoint}</p>";
         add_header Content-Type text/html;
     }
 }
@@ -1655,4 +1776,5 @@ EOF
 
 chmod +x /usr/local/bin/get-db-credentials
 
-echo "User Data Script Completed Successfully"```
+echo "User Data Script Completed Successfully"
+```

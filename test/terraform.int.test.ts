@@ -365,11 +365,27 @@ describe('Deployed Infrastructure Validation', () => {
       let alarmArns = outputs.cloudwatch_alarm_arns;
       if (typeof alarmArns === 'string') alarmArns = JSON.parse(alarmArns);
 
-      const result = await awsCall(() => cloudwatch.describeAlarms({ AlarmNames: [] }).promise()); // Get all
-      const allArns = result.MetricAlarms!.map(a => a.AlarmArn);
+      // Query alarms by their ARNs to verify they exist
+      const expectedArns = [alarmArns.alb_health, alarmArns.rds_cpu];
 
-      expect(allArns).toContain(alarmArns.alb_health);
-      expect(allArns).toContain(alarmArns.rds_cpu);
+      for (const expectedArn of expectedArns) {
+        expect(expectedArn).toBeDefined();
+        expect(expectedArn).toMatch(/^arn:aws:cloudwatch:/);
+
+        // Extract alarm name from ARN: arn:aws:cloudwatch:region:account:alarm:name
+        const arnParts = expectedArn.split(':');
+        const alarmName = arnParts[arnParts.length - 1];
+
+        // Query the specific alarm by name
+        const result = await awsCall(() =>
+          cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise()
+        );
+
+        expect(result.MetricAlarms).toBeDefined();
+        expect(result.MetricAlarms!.length).toBeGreaterThan(0);
+        expect(result.MetricAlarms![0].AlarmArn).toBe(expectedArn);
+        expect(result.MetricAlarms![0].AlarmName).toBe(alarmName);
+      }
     }, TEST_TIMEOUT);
   });
 });
