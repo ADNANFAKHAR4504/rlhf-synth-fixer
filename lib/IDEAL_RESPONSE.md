@@ -35,25 +35,25 @@ The MODEL_RESPONSE was 85-90% production-ready. The following critical fixes wer
 
 All 8 mandatory requirements have been successfully implemented:
 
-1. ✅ **Aurora MySQL cluster** (1 writer + 2 readers) across 3 AZs
-2. ✅ **Auto Scaling Group** with 6 instances (2 per AZ) behind ALB
-3. ✅ **Route 53 health checks** with DNS failover capabilities
-4. ⚠️ **S3 bucket** with versioning enabled (cross-region replication removed due to dependency)
-5. ✅ **CloudWatch alarms** for failover events with email notifications
-6. ✅ **7-day backup retention** for Aurora with point-in-time recovery
-7. ✅ **Least-privilege IAM roles** for instances (S3 and Aurora access)
-8. ✅ **DeletionPolicy: Delete** on Aurora resources (changed from Snapshot for QA)
+1. **Aurora MySQL cluster** (1 writer + 2 readers) across 3 AZs
+2. **Auto Scaling Group** with 6 instances (2 per AZ) behind ALB
+3. **Route 53 health checks** with DNS failover capabilities
+4. **S3 bucket** with versioning enabled (cross-region replication removed due to dependency)
+5. **CloudWatch alarms** for failover events with email notifications
+6. **7-day backup retention** for Aurora with point-in-time recovery
+7. **Least-privilege IAM roles** for instances (S3 and Aurora access)
+8. **DeletionPolicy: Delete** on Aurora resources (changed from Snapshot for QA)
 
 ## Architecture Overview
 
-- **Region**: us-east-1 across 3 availability zones (us-east-1a, us-east-1b, us-east-1c)
+- **Region**: us-east-1 across 3 availability zones (dynamically selected using Fn::GetAZs for portability)
 - **Database**: Aurora MySQL 8.0 cluster with 1 writer + 2 readers
 - **Compute**: Auto Scaling Group with 6 EC2 instances (t3.medium) behind Application Load Balancer
 - **Networking**: VPC with public and private subnets in each AZ, single NAT Gateway
 - **Security**: KMS encryption for Aurora and S3, IAM least-privilege roles, restrictive security groups
 - **Monitoring**: 4 CloudWatch alarms, SNS topic for notifications, Route53 health checks
 - **High Availability**: Multi-AZ deployment, automated failover, health checks, auto-scaling
-- **Total Resources**: 50 CloudFormation resources across 10 AWS services
+- **Total Resources**: 52 CloudFormation resources across 10 AWS services
 
 ## Implementation
 
@@ -70,13 +70,16 @@ The corrected CloudFormation template is located at `lib/TapStack.json` (1438 li
 - BackupRetentionPeriod: 7 days
 - CloudWatch Logs exports: audit, error, general, slowquery
 - Performance Insights enabled with 7-day retention
+- Master password via SSM Parameter Store dynamic reference (secure secret management)
 
 **Auto Scaling Group**:
 - MinSize: 6, DesiredCapacity: 6, MaxSize: 12
 - LaunchTemplate with t3.medium instances
-- Spread across 3 private subnets (1 per AZ)
+- Spread across 3 private subnets (1 per AZ, dynamically selected)
 - HealthCheckType: ELB with 300s grace period
 - Integrated with Application Load Balancer target group
+- EBS volumes encrypted with dedicated KMS key
+- BlockDeviceMappings configured with 20GB gp3 volumes
 
 **Application Load Balancer**:
 - Internet-facing scheme
@@ -116,15 +119,24 @@ The corrected CloudFormation template is located at `lib/TapStack.json` (1438 li
 - Managed policies: CloudWatchAgentServerPolicy
 - Custom policies: S3AccessPolicy, RDSAccessPolicy
 
+**EBS Encryption**:
+- Dedicated EBSKMSKey with proper permissions for Auto Scaling service-linked role
+- BlockDeviceMappings in LaunchTemplate with 20GB gp3 encrypted volumes
+- KMS key policy allows EC2, Auto Scaling service, and service-linked role access
+
 **KMS Keys**:
 - KMSKey: For Aurora encryption
 - S3KMSKey: For S3 bucket encryption
-- Proper key policies for service access
+- EBSKMSKey: For EBS volume encryption (with Auto Scaling service permissions)
+- Proper key policies for service access (EC2, Auto Scaling, RDS, S3)
 
 **Security Groups**:
 - ALBSecurityGroup: Ingress 443 (HTTPS), 80 (HTTP)
-- InstanceSecurityGroup: Ingress 443 from ALB, SSH optional
+- InstanceSecurityGroup: Ingress 443 from ALB, SSH optional (via KeyPairName condition)
 - DBSecurityGroup: Ingress 3306 from instances only
+
+**Conditions**:
+- HasKeyPair: Conditionally includes KeyName in LaunchTemplate only when KeyPairName is not "NONE"
 
 ## File: lib/TapStack.json
 
@@ -136,20 +148,23 @@ The complete CloudFormation template is available in `lib/TapStack.json`. Due to
 Parameters (6):
 - EnvironmentSuffix: Unique suffix for resource naming
 - DBUsername: Aurora master username
-- DBPassword: Aurora master password (default: TempPass123456)
+- DBPasswordParameterPath: SSM Parameter Store path for master password (default: /payment/db/password)
 - InstanceType: EC2 instance type (default: t3.medium)
-- KeyPairName: EC2 key pair (default: NONE)
+- KeyPairName: EC2 key pair (default: NONE, conditionally used)
 - AlertEmail: Email for notifications (default: devops-alerts@example.com)
 
-Resources (50):
-- VPC, Internet Gateway, 3 Public Subnets, 3 Private Subnets
+Conditions (1):
+- HasKeyPair: Condition to check if KeyPairName is not "NONE"
+
+Resources (52):
+- VPC, Internet Gateway, 3 Public Subnets, 3 Private Subnets (dynamic AZ selection)
 - Route Tables, NAT Gateway, Elastic IP
 - Security Groups (3)
-- KMS Keys (2) with Aliases
+- KMS Keys (3) with Aliases: Aurora, S3, EBS
 - S3 Bucket
 - IAM Roles (2), Instance Profile
-- Application Load Balancer, Target Group, Listeners (2)
-- Launch Template
+- Application Load Balancer, Target Group, Listener
+- Launch Template (with EBS encryption and conditional KeyName)
 - Auto Scaling Group
 - RDS DB Subnet Group, DB Cluster Parameter Group
 - Aurora DB Cluster, 3 DB Instances (1 writer + 2 readers)
@@ -167,26 +182,26 @@ Outputs (5):
 
 ## Validation Results
 
-**Platform/Language Compliance**: ✅ PASS
+**Platform/Language Compliance**: PASS
 - Platform: cfn (CloudFormation)
 - Language: json
 - Matches metadata.json requirements
 
-**File Location Compliance**: ✅ PASS
+**File Location Compliance**: PASS
 - All files in allowed locations (lib/, test/, metadata.json)
 
-**EnvironmentSuffix Usage**: ✅ PASS
+**EnvironmentSuffix Usage**: PASS
 - 62 references throughout template (100% coverage)
 
-**Requirements Coverage**: ✅ 7/8 PASS (1 partial due to S3 replication removal)
-- Aurora: ✅ Implemented
-- Auto Scaling: ✅ Implemented
-- Route53: ✅ Implemented
-- S3: ⚠️ Versioning only (replication removed)
-- CloudWatch: ✅ Implemented
-- Backup: ✅ Implemented
-- IAM: ✅ Implemented
-- DeletionPolicy: ✅ Implemented (changed to Delete for QA)
+**Requirements Coverage**: 7/8 PASS (1 partial due to S3 replication removal)
+- Aurora: Implemented
+- Auto Scaling: Implemented
+- Route53: Implemented
+- S3: Versioning only (replication removed)
+- CloudWatch: Implemented
+- Backup: Implemented
+- IAM: Implemented
+- DeletionPolicy: Implemented (changed to Delete for QA)
 
 ## Deployment Notes
 
@@ -197,6 +212,14 @@ Outputs (5):
 
 **Deployment Command**:
 ```bash
+# First, create SSM parameter for database password
+aws ssm put-parameter \
+  --name /payment/db/password \
+  --value "YourSecurePassword123!" \
+  --type SecureString \
+  --region us-east-1
+
+# Then deploy the stack
 aws cloudformation create-stack \
   --stack-name payment-infrastructure-${ENVIRONMENT_SUFFIX} \
   --template-body file://lib/TapStack.json \
@@ -217,6 +240,8 @@ aws cloudformation create-stack \
 3. Deploy application to EC2 instances (ALB expects /health endpoint)
 4. Test health checks and failover scenarios
 5. For production: Change DeletionPolicy to Snapshot
+6. Verify EBS volumes are encrypted (check EC2 console)
+7. Confirm SSM parameter exists for database password
 
 ## Cost Estimate (us-east-1, monthly)
 
@@ -236,12 +261,14 @@ Integration tests are located in `test/` directory and use CloudFormation output
 
 This template is production-ready after the following adjustments:
 
-1. ✅ Change DeletionPolicy back to `Snapshot` for Aurora resources
-2. ✅ Update AlertEmail to valid operations email
-3. ✅ Configure ACM certificate for HTTPS
-4. ✅ Set appropriate DBPassword (not default)
-5. ✅ Consider adding S3 cross-region replication with separate template
-6. ⚠️ Add conditional logic for KeyPairName (skip when "NONE")
+1. Change DeletionPolicy back to `Snapshot` for Aurora resources
+2. Update AlertEmail to valid operations email
+3. Configure ACM certificate for HTTPS
+4. Set appropriate DBPasswordParameterPath in SSM Parameter Store (not default)
+5. Consider adding S3 cross-region replication with separate template
+6. Conditional logic for KeyPairName implemented (skip when "NONE")
+7. EBS encryption with KMS key configured
+8. Dynamic availability zone selection for multi-region portability
 
 ## Training Value
 

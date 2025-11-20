@@ -82,7 +82,7 @@
 }
 ```
 
-**Fix Applied**:
+**Fix Applied** (Initial):
 ```json
 "DBPassword": {
   "Type": "String",
@@ -91,6 +91,20 @@
   "MinLength": 8,
   "Default": "TempPass123456"  // Added for automated deployment
 },
+```
+
+**Further Improvement** (Current Implementation):
+Changed to use SSM Parameter Store with dynamic reference for better security:
+```json
+"DBPasswordParameterPath": {
+  "Type": "String",
+  "Description": "SSM Parameter Store path for the master password",
+  "Default": "/payment/db/password"
+},
+"MasterUserPassword": {
+  "Fn::Sub": "{{resolve:ssm:${DBPasswordParameterPath}}}"
+}
+```
 "KeyPairName": {
   "Type": "String",  // Changed from AWS::EC2::KeyPair::KeyName
   "Description": "EC2 Key Pair for SSH access to instances (use 'NONE' to skip SSH access)",
@@ -136,7 +150,7 @@
 }
 ```
 
-**Note**: The LaunchTemplate still references this parameter. For production use, should add conditional logic to skip KeyName when value is "NONE".
+**Note**: The LaunchTemplate now uses conditional logic with `Fn::If` and `HasKeyPair` condition to skip KeyName when value is "NONE". This was implemented to resolve lint warnings and improve deployment flexibility.
 
 **Learning Value**: Medium - teaches about CloudFormation parameter type constraints and how they affect deployment flexibility.
 
@@ -245,14 +259,15 @@ The model produced an 85-90% production-ready template. The core infrastructure 
 
 ## Statistics
 
-- **Total Resources**: 50 CloudFormation resources
+- **Total Resources**: 52 CloudFormation resources
 - **AWS Services Used**: 10 (RDS, EC2, AutoScaling, ElasticLoadBalancingV2, Route53, S3, CloudWatch, KMS, IAM, SNS)
-- **Lines of Code**: 1438 lines of JSON
-- **EnvironmentSuffix Usage**: 62 references (100% coverage of named resources)
-- **Encryption**: KMS enabled for Aurora and S3
-- **Multi-AZ**: 3 availability zones (us-east-1a, 1b, 1c)
+- **Lines of Code**: 1621 lines of JSON
+- **EnvironmentSuffix Usage**: 62+ references (100% coverage of named resources)
+- **Encryption**: KMS enabled for Aurora, S3, and EBS volumes
+- **Multi-AZ**: 3 availability zones (dynamically selected using Fn::GetAZs for portability)
 - **High Availability**: Auto Scaling, Aurora read replicas, Application Load Balancer
 - **Monitoring**: 4 CloudWatch alarms, 1 SNS topic, 1 Route53 health check
+- **Conditions**: 1 condition (HasKeyPair) for conditional resource configuration
 
 ---
 
@@ -384,6 +399,68 @@ Completely rewrote test suite with 74 comprehensive tests covering:
 **Learning Value**: High - demonstrates comprehensive CloudFormation template testing strategy, structural validation patterns, and importance of test coverage for infrastructure code quality assurance.
 
 **Impact on Training Quality**: +3 points (test penalty removed)
+
+---
+
+### 7. [HIGH] EBS Volume Encryption KMS Key Missing Auto Scaling Permissions
+
+**Category**: Deployment Blocker (Post-Initial Fix)
+**Severity**: High
+
+**Root Cause**: Auto Scaling Group instances were failing to launch with error "Client.InvalidKMSKey.InvalidState: The KMS key provided is in an incorrect state". The EBS volumes were encrypted but the KMS key policy didn't grant permissions to the Auto Scaling service-linked role to create grants during instance launch.
+
+**Impact**:
+- Auto Scaling Group stuck in CREATE_FAILED state
+- Instances terminated immediately after launch
+- Cannot complete stack deployment
+- Error: "Group did not stabilize. Last scaling activity: Instance became unhealthy while waiting for instance to be in InService state"
+
+**Fix Applied**:
+1. Created dedicated EBSKMSKey with comprehensive key policy:
+   - EC2 service principal with kms:ViaService condition
+   - Auto Scaling service principal (autoscaling.amazonaws.com)
+   - Auto Scaling service-linked role (AWSServiceRoleForAutoScaling) with kms:GrantIsForAWSResource condition
+
+2. Added BlockDeviceMappings to LaunchTemplate:
+   - DeviceName: /dev/xvda
+   - VolumeSize: 20GB
+   - VolumeType: gp3
+   - Encrypted: true
+   - KmsKeyId: Reference to EBSKMSKey
+
+**Learning Value**: High - demonstrates critical importance of KMS key policies for service-linked roles in Auto Scaling scenarios. The Auto Scaling service needs explicit permissions to create grants on behalf of EC2 instances during launch.
+
+---
+
+### 8. [MEDIUM] Hardcoded Availability Zones Reduce Template Portability
+
+**Category**: Configuration Issue
+**Severity**: Medium
+
+**Root Cause**: Template hardcoded availability zone names (us-east-1a, us-east-1b, us-east-1c) which prevents deployment to other regions or accounts where these AZs may not exist or have different names.
+
+**Impact**:
+- Template cannot be deployed to different AWS regions
+- Fails in regions with fewer than 3 AZs
+- Violates infrastructure-as-code portability best practices
+- Triggers cfn-lint warnings (W3010)
+
+**Fix Applied**:
+Replaced all hardcoded AZ references with dynamic selection:
+```json
+"AvailabilityZone": {
+  "Fn::Select": [
+    0,
+    {
+      "Fn::GetAZs": ""
+    }
+  ]
+}
+```
+
+Applied to all 6 subnets (3 public + 3 private), selecting indices 0, 1, and 2 respectively.
+
+**Learning Value**: Medium - teaches importance of using Fn::GetAZs for cross-region portability and following CloudFormation best practices for multi-AZ deployments.
 
 ---
 

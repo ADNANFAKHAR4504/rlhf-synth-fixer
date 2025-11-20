@@ -38,12 +38,11 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(param.Default).toBe('prod');
     });
 
-    test('should have DBPassword parameter with default', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-      const param = template.Parameters.DBPassword;
+    test('should have DBPasswordParameterPath parameter with default', () => {
+      expect(template.Parameters.DBPasswordParameterPath).toBeDefined();
+      const param = template.Parameters.DBPasswordParameterPath;
       expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.Default).toBeDefined();
+      expect(param.Default).toBe('/payment/db/password');
     });
 
     test('should have DBUsername parameter with default', () => {
@@ -80,6 +79,17 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
     });
   });
 
+  describe('Conditions', () => {
+    test('should have Conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+    });
+
+    test('should have HasKeyPair condition', () => {
+      expect(template.Conditions.HasKeyPair).toBeDefined();
+      expect(template.Conditions.HasKeyPair['Fn::Not']).toBeDefined();
+    });
+  });
+
   describe('VPC and Networking Resources', () => {
     test('should have VPC resource', () => {
       expect(template.Resources.VPC).toBeDefined();
@@ -99,24 +109,34 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Resources.AttachGateway.Type).toBe('AWS::EC2::VPCGatewayAttachment');
     });
 
-    test('should have 3 public subnets across different AZs', () => {
+    test('should have 3 public subnets across different AZs using dynamic AZ selection', () => {
       expect(template.Resources.PublicSubnet1).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
       expect(template.Resources.PublicSubnet3).toBeDefined();
 
-      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PublicSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
+      // Check that AZs are dynamically selected using Fn::GetAZs
+      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toBeDefined();
+      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone['Fn::Select']).toBeDefined();
+      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
+      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone['Fn::Select'][1]['Fn::GetAZs']).toBe('');
+
+      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
+      expect(template.Resources.PublicSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
     });
 
-    test('should have 3 private subnets across different AZs', () => {
+    test('should have 3 private subnets across different AZs using dynamic AZ selection', () => {
       expect(template.Resources.PrivateSubnet1).toBeDefined();
       expect(template.Resources.PrivateSubnet2).toBeDefined();
       expect(template.Resources.PrivateSubnet3).toBeDefined();
 
-      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PrivateSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
+      // Check that AZs are dynamically selected using Fn::GetAZs
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBeDefined();
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone['Fn::Select']).toBeDefined();
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone['Fn::Select'][1]['Fn::GetAZs']).toBe('');
+
+      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
+      expect(template.Resources.PrivateSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
     });
 
     test('should have NAT Gateway with EIP', () => {
@@ -177,6 +197,18 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
     test('should have KMS key for Aurora encryption', () => {
       expect(template.Resources.KMSKey).toBeDefined();
       expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
+    });
+
+    test('should have KMS key for EBS volume encryption', () => {
+      expect(template.Resources.EBSKMSKey).toBeDefined();
+      expect(template.Resources.EBSKMSKey.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.EBSKMSKey.Properties.Description).toBeDefined();
+    });
+
+    test('should have EBS KMS key alias', () => {
+      expect(template.Resources.EBSKMSKeyAlias).toBeDefined();
+      expect(template.Resources.EBSKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
+      expect(template.Resources.EBSKMSKeyAlias.Properties.TargetKeyId).toEqual({ Ref: 'EBSKMSKey' });
     });
 
     test('should have Aurora DB Cluster with correct configuration', () => {
@@ -257,6 +289,17 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       const lt = template.Resources.LaunchTemplate;
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
       expect(lt.Properties.LaunchTemplateData.InstanceType).toEqual({ Ref: 'InstanceType' });
+    });
+
+    test('Launch Template should have BlockDeviceMappings with EBS encryption', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings).toBeDefined();
+      expect(Array.isArray(lt.Properties.LaunchTemplateData.BlockDeviceMappings)).toBe(true);
+      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].DeviceName).toBe('/dev/xvda');
+      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
+      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.KmsKeyId).toEqual({ Ref: 'EBSKMSKey' });
+      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.VolumeSize).toBe(20);
+      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.VolumeType).toBe('gp3');
     });
 
     test('should have Auto Scaling Group with 6 instances across 3 AZs', () => {
@@ -362,9 +405,9 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
   });
 
   describe('Resource Count Validation', () => {
-    test('should have exactly 50 resources', () => {
+    test('should have exactly 52 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(50);
+      expect(resourceCount).toBe(52);
     });
 
     test('should have exactly 7 outputs', () => {
@@ -433,21 +476,24 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Resources.InstanceProfile).toBeDefined();
     });
 
-    test('DB password should be marked NoEcho', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param.NoEcho).toBe(true);
+    test('DB password should use SSM Parameter Store path', () => {
+      const param = template.Parameters.DBPasswordParameterPath;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('/payment/db/password');
     });
   });
 
   describe('High Availability Configuration', () => {
-    test('resources should be distributed across 3 AZs', () => {
+    test('resources should be distributed across 3 AZs using dynamic selection', () => {
       const subnet1AZ = template.Resources.PublicSubnet1.Properties.AvailabilityZone;
       const subnet2AZ = template.Resources.PublicSubnet2.Properties.AvailabilityZone;
       const subnet3AZ = template.Resources.PublicSubnet3.Properties.AvailabilityZone;
 
-      expect(subnet1AZ).toBe('us-east-1a');
-      expect(subnet2AZ).toBe('us-east-1b');
-      expect(subnet3AZ).toBe('us-east-1c');
+      // Verify AZs are selected dynamically (index 0, 1, 2)
+      expect(subnet1AZ['Fn::Select'][0]).toBe(0);
+      expect(subnet2AZ['Fn::Select'][0]).toBe(1);
+      expect(subnet3AZ['Fn::Select'][0]).toBe(2);
     });
 
     test('Aurora should have 3 DB instances', () => {

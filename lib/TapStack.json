@@ -13,12 +13,10 @@
       "Default": "admin",
       "NoEcho": true
     },
-    "DBPassword": {
+    "DBPasswordParameterPath": {
       "Type": "String",
-      "Description": "Master password for Aurora MySQL cluster (minimum 8 characters)",
-      "NoEcho": true,
-      "MinLength": 8,
-      "Default": "TempPass123456"
+      "Description": "SSM Parameter Store path for the master password (e.g., /payment/db/password). Use dynamic reference format: {{resolve:ssm:parameter-path}}",
+      "Default": "/payment/db/password"
     },
     "InstanceType": {
       "Type": "String",
@@ -34,6 +32,20 @@
       "Type": "String",
       "Description": "Email address for CloudWatch alarm notifications",
       "Default": "devops-alerts@example.com"
+    }
+  },
+  "Conditions": {
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            "NONE"
+          ]
+        }
+      ]
     }
   },
   "Resources": {
@@ -84,7 +96,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -103,7 +122,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -122,7 +148,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -141,7 +174,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -159,7 +199,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -177,7 +224,14 @@
           "Ref": "VPC"
         },
         "CidrBlock": "10.0.13.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -609,7 +663,7 @@
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:ssm:${DBPasswordParameterPath}}}"
         },
         "DatabaseName": "paymentdb",
         "DBSubnetGroupName": {
@@ -786,6 +840,111 @@
         },
         "TargetKeyId": {
           "Ref": "S3KMSKey"
+        }
+      }
+    },
+    "EBSKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for EBS volume encryption - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EC2 service to use the key for EBS encryption",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow Auto Scaling service to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "autoscaling.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Auto Scaling service-linked role to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+                }
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:GrantIsForAWSResource": "true"
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-ebs-kms-key-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EBSKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/payment-ebs-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EBSKMSKey"
         }
       }
     },
@@ -1061,6 +1220,17 @@
           "InstanceType": {
             "Ref": "InstanceType"
           },
+          "KeyName": {
+            "Fn::If": [
+              "HasKeyPair",
+              {
+                "Ref": "KeyPairName"
+              },
+              {
+                "Ref": "AWS::NoValue"
+              }
+            ]
+          },
           "IamInstanceProfile": {
             "Arn": {
               "Fn::GetAtt": [
@@ -1072,6 +1242,20 @@
           "SecurityGroupIds": [
             {
               "Ref": "InstanceSecurityGroup"
+            }
+          ],
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeSize": 20,
+                "VolumeType": "gp3",
+                "DeleteOnTermination": true,
+                "Encrypted": true,
+                "KmsKeyId": {
+                  "Ref": "EBSKMSKey"
+                }
+              }
             }
           ],
           "UserData": {
@@ -1155,8 +1339,7 @@
         ]
       },
       "DependsOn": [
-        "ApplicationLoadBalancer",
-        "ALBTargetGroup"
+        "ApplicationLoadBalancer"
       ]
     },
     "SNSTopic": {
