@@ -299,11 +299,10 @@ Resources:
     Properties:
       BucketName:
         Fn::Sub:
-          - 'ct-${Env}-${Account}-${Region}-${Stack}-${Suffix}'
+          - 'ct-${Env}-${Account}-${Region}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Account: !Ref AWS::AccountId
             Region: !Ref AWS::Region
-            Stack: !Ref AWS::StackName
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -357,11 +356,10 @@ Resources:
     Properties:
       BucketName:
         Fn::Sub:
-          - 'app-${Env}-${Account}-${Region}-${Stack}-${Suffix}'
+          - 'app-${Env}-${Account}-${Region}-${Suffix}'
           - Env: !Ref EnvironmentSuffix
             Account: !Ref AWS::AccountId
             Region: !Ref AWS::Region
-            Stack: !Ref AWS::StackName
             Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -386,6 +384,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+    
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
