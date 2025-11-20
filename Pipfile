@@ -25,20 +25,20 @@ pulumi-tls = "*"
 aws-cdk-lambda-layer-kubectl-v29 = "*"
 
 [dev-packages]
-boto3 = "*"
-moto = {extras = ["server"], version = "*"}
 pytest-testdox = "*"
 pytest-env = "*"
 pylint = "*"
-pytest = "*"
 requests = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
 pillow = "*"
 psycopg2-binary = "*"
-pytest-cov = "*"
 yamllint = "*"
+pytest = "*"
+pytest-cov = "*"
+boto3 = "*"
+moto = "*"
 
 [requires]
 python_version = "3.12"
