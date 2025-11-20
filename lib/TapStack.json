@@ -799,17 +799,16 @@
             "KeyType": "RANGE"
           }
         ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
         "Replicas": [
           {
             "Region": "us-east-1",
             "GlobalSecondaryIndexes": [],
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
-            },
-            "SSESpecification": {
-              "KMSMasterKeyId": {
-                "Ref": "PrimaryKMSKey"
-              }
             },
             "TableClass": "STANDARD",
             "Tags": [
@@ -848,9 +847,6 @@
             "GlobalSecondaryIndexes": [],
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
-            },
-            "SSESpecification": {
-              "KMSMasterKeyId": "alias/aws/dynamodb"
             },
             "TableClass": "STANDARD",
             "Tags": [
