@@ -71,17 +71,16 @@ class TapStack(TerraformStack):
 
         # Configure S3 Backend conditionally
         # Only configure backend if state bucket is provided (for CI/CD environments)
-        # Commenting out S3 backend due to access issues - using local backend
-        # if state_bucket and state_bucket.strip():
-        #     S3Backend(
-        #         self,
-        #         bucket=state_bucket,
-        #         key=f"{environment_suffix}/{construct_id}.tfstate",
-        #         region=state_bucket_region,
-        #         encrypt=True
-        #     )
-        #     # Use S3's native state locking instead of deprecated dynamodb_table
-        #     self.add_override("terraform.backend.s3.use_lockfile", True)
+        if state_bucket and state_bucket.strip():
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"{environment_suffix}/{construct_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            # Use S3's native state locking instead of deprecated dynamodb_table
+            self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Resource tags
         common_tags = {

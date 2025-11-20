@@ -348,6 +348,60 @@ delete_role_with_policies() {
 
 ---
 
+## Issue 9: Idempotency Issues with Local Backend
+
+### What Went Wrong
+
+When using local backend, Terraform lost track of resources between deployments, causing "resource already exists" errors on subsequent deployments.
+
+**Evidence**:
+- Multiple errors: `ResourceAlreadyExistsException: The specified log group already exists`
+- Errors for S3, DynamoDB, SNS, SQS resources already existing
+- Multiple API Gateway instances created from different deployment attempts
+
+### Root Cause
+
+1. Local backend was used instead of S3 backend, causing state to be lost between CI/CD runs
+2. Resources persisted in AWS but Terraform had no record of them
+3. No import mechanism or data sources used to handle existing resources
+
+### Correct Implementation
+
+1. **Use S3 Backend in CI/CD**:
+```python
+if state_bucket and state_bucket.strip():
+    S3Backend(
+        self,
+        bucket=state_bucket,
+        key=f"{environment_suffix}/{construct_id}.tfstate",
+        region=state_bucket_region,
+        encrypt=True
+    )
+    self.add_override("terraform.backend.s3.use_lockfile", True)
+```
+
+2. **Enhanced Cleanup Script with Waits**:
+```bash
+# Wait for tables to be deleted
+echo "Waiting for DynamoDB tables to be fully deleted..."
+aws dynamodb wait table-not-exists --table-name transactions-$ENVIRONMENT_SUFFIX --region $AWS_REGION 2>/dev/null || true
+```
+
+3. **Clean Deployment Process**:
+- Always run cleanup script before deployment if state is uncertain
+- Use S3 backend for state persistence across deployments
+- Ensure all resources are tagged consistently for tracking
+
+### Key Learnings
+
+- S3 backend is essential for CI/CD deployments to maintain state
+- Local backend should only be used for local development
+- Always clean up resources completely before redeploying if state is lost
+- Add wait conditions in cleanup scripts for resources that delete asynchronously
+- Consider using data sources or import blocks for handling pre-existing resources
+
+---
+
 ## Summary of Key Improvements
 
 1. **State Management**: Switched from deprecated DynamoDB locking to S3 native locking
@@ -358,5 +412,6 @@ delete_role_with_policies() {
 6. **Regional Flexibility**: Used variables for all region-specific configurations
 7. **S3 Notification Configuration**: Fixed type usage for bucket notification Lambda function
 8. **IAM Role Cleanup**: Enhanced cleanup script to properly remove inline policies before role deletion
+9. **Idempotency Management**: Re-enabled S3 backend for CI/CD to maintain state across deployments
 
 These corrections ensure the infrastructure is deployable, maintainable, and follows best practices for CDKTF Python implementations.
