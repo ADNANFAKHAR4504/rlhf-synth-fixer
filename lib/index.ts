@@ -9,8 +9,10 @@ import { DriftDetection } from './monitoring/drift-detection';
 
 // Get configuration - try Pulumi config first, then fall back to environment variables
 const config = new pulumi.Config();
-const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
-const environment = config.get('environment') || process.env.DEPLOY_ENV || 'dev'; // dev, staging, prod
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environment =
+  config.get('environment') || process.env.DEPLOY_ENV || 'dev'; // dev, staging, prod
 
 // Environment-specific configurations
 interface EnvironmentConfig {

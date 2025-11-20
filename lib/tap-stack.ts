@@ -65,8 +65,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Get configuration - prioritize args, then Pulumi config, then environment variables
     const config = new pulumi.Config();
-    const environmentSuffix = args.environmentSuffix || config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
-    const environment = config.get('environment') || process.env.DEPLOY_ENV || 'dev'; // dev, staging, prod
+    const environmentSuffix =
+      args.environmentSuffix ||
+      config.get('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev';
+    const environment =
+      config.get('environment') || process.env.DEPLOY_ENV || 'dev'; // dev, staging, prod
 
     // Environment-specific configurations
     interface EnvironmentConfig {
