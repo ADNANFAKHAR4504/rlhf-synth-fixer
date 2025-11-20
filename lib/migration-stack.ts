@@ -357,7 +357,9 @@ export class MigrationStack extends pulumi.ComponentResource {
           securityGroupIds: [lambdaSecurityGroup.id],
         },
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive(path.join(__dirname, 'lambda', 'validation')),
+          '.': new pulumi.asset.FileArchive(
+            path.join(__dirname, 'lambda', 'validation')
+          ),
         }),
         tags: {
           ...args.tags,
