@@ -195,13 +195,13 @@ from aws_cdk import (
 # Correct naming with environmentSuffix
 ingestion_function = lambda_.Function(
     self, "IngestionFunction",
-    function_name=f"transaction-ingestion-{environment_suffix}",  # ✅ CORRECT
+    function_name=f"transaction-ingestion-{environment_suffix}",  #  CORRECT
     runtime=lambda_.Runtime.PYTHON_3_9,
     memory_size=512,
     # ...
 )
 
-# ❌ WRONG:
+#  WRONG:
 # function_name="transaction-ingestion-prod"  # Hardcoded, will fail
 ```
 
@@ -210,11 +210,11 @@ ingestion_function = lambda_.Function(
 table = dynamodb.Table(
     self, "TransactionTable",
     table_name=f"transactions-{environment_suffix}",
-    removal_policy=RemovalPolicy.DESTROY,  # ✅ CORRECT
+    removal_policy=RemovalPolicy.DESTROY,  #  CORRECT
     # ...
 )
 
-# ❌ WRONG:
+#  WRONG:
 # removal_policy=RemovalPolicy.RETAIN  # Will block cleanup
 ```
 
@@ -224,7 +224,7 @@ table = dynamodb.Table(
 function = lambda_.Function(
     self, "ValidatorFunction",
     function_name=f"transaction-validator-{environment_suffix}",
-    tracing=lambda_.Tracing.ACTIVE,  # ✅ CORRECT for 10% sampling
+    tracing=lambda_.Tracing.ACTIVE,  #  CORRECT for 10% sampling
     # ...
 )
 
@@ -232,7 +232,7 @@ function = lambda_.Function(
 state_machine = sfn.StateMachine(
     self, "Pipeline",
     state_machine_name=f"transaction-pipeline-{environment_suffix}",
-    tracing_enabled=True,  # ✅ CORRECT
+    tracing_enabled=True,  #  CORRECT
     # ...
 )
 ```
@@ -242,8 +242,8 @@ state_machine = sfn.StateMachine(
 queue = sqs.Queue(
     self, "ProcessingQueue",
     queue_name=f"transaction-processing-{environment_suffix}",
-    visibility_timeout=Duration.seconds(300),  # ✅ CORRECT
-    encryption=sqs.QueueEncryption.KMS_MANAGED,  # ✅ CORRECT
+    visibility_timeout=Duration.seconds(300),  #  CORRECT
+    encryption=sqs.QueueEncryption.KMS_MANAGED,  #  CORRECT
     dead_letter_queue=sqs.DeadLetterQueue(
         max_receive_count=3,
         queue=dlq
