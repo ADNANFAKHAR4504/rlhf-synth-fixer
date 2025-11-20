@@ -6,7 +6,7 @@
   "po_id": "101912363",
   "team": "synth",
   "startedAt": "2025-11-19T10:40:54+00:00",
-  "subtask": "Create a CloudFormation template to establish a hub-and-spoke network architecture using AWS Transit Gateway. The configuration must: 1. Create a hub VPC with CIDR 10.0.0.0/16 containing 3 public subnets for shared services. 2. Create two spoke VPCs with CIDRs 10.1.0.0/16 and 10.2.0.0/16, each with 3 private subnets. 3. Deploy a Transit Gateway and attach all three VPCs with appropriate route tables. 4. Configure Transit Gateway route tables to allow hub-to-spoke communication but prevent spoke-to-spoke traffic. 5. Create VPC endpoints for Systems Manager, SSM Messages, and EC2 Messages in each VPC. 6. Set up VPC Flow Logs for all VPCs storing to a centralized S3 bucket in Parquet format. 7. Implement NAT Gateways in the hub VPC only, with routes from spoke VPCs for outbound internet access. 8. Create security groups allowing HTTPS (443) between VPCs and SSH (22) from hub to spokes only. 9. Output all VPC IDs, subnet IDs, Transit Gateway ID, and route table IDs for use by other stacks. 10. Ensure all resources have proper tags and descriptions for compliance tracking. Expected output: A single CloudFormation YAML template that creates the complete hub-and-spoke network infrastructure with Transit Gateway routing, VPC endpoints for management, centralized internet access through hub NAT Gateways, and Flow Logs collection to S3.",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "aws",
     "infrastructure",

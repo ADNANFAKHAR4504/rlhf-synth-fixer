@@ -1128,7 +1128,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'flow-logs-${AWS::Region}-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub 'flow-log-${AWS::Region}-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
