@@ -142,4 +142,3 @@ export const albDnsName = compute.albDnsName;
 // Export stack outputs for migration
 export const dmsReplicationTaskArn = migration.replicationTaskArn;
 export const validationLambdaArn = migration.validationLambdaArn;
-
