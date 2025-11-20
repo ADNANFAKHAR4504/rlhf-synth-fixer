@@ -34,7 +34,7 @@ module "aurora" {
   instance_class          = var.aurora_instance_class
   instance_count          = var.aurora_instance_count
   database_name           = "${var.project_name}_${var.environment}"
-  master_username         = "admin"
+  master_username         = "dbadmin"
   vpc_id                  = module.vpc.vpc_id
   subnet_ids              = module.vpc.private_subnet_ids
   allowed_security_groups = [module.alb.alb_security_group_id]
