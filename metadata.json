@@ -7,8 +7,9 @@
   "startedAt": "2025-11-20T15:02:51+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments",
-    "Environment Migration"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "po_id": "t8d7m0",
   "aws_services": [
@@ -26,5 +27,5 @@
     "EC2"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 10
 }
