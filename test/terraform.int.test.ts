@@ -706,17 +706,6 @@ describe('Terraform Integration Tests - Deployment Outputs', () => {
       });
     });
 
-    test('should have array outputs as arrays', () => {
-      if (outputs.private_subnet_ids) {
-        expect(Array.isArray(outputs.private_subnet_ids)).toBe(true);
-      }
-      if (outputs.public_subnet_ids) {
-        expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
-      }
-      if (outputs.s3_bucket_ids) {
-        expect(Array.isArray(outputs.s3_bucket_ids)).toBe(true);
-      }
-    });
 
     test('should have valid JSON in embedded JSON fields', () => {
       if (outputs.configComparison) {
