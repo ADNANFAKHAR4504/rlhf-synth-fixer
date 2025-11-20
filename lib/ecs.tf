@@ -22,8 +22,8 @@ resource "aws_ecs_task_definition" "blue" {
   family                   = "payment-processing-blue-${var.environment_suffix}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = var.ecs_task_cpu
-  memory                   = var.ecs_task_memory
+  cpu                      = "512"
+  memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
@@ -31,8 +31,8 @@ resource "aws_ecs_task_definition" "blue" {
     {
       name      = "payment-app-blue"
       image     = var.container_image
-      cpu       = var.ecs_task_cpu
-      memory    = var.ecs_task_memory
+      cpu       = 512
+      memory    = 1024
       essential = true
 
       portMappings = [
@@ -42,14 +42,6 @@ resource "aws_ecs_task_definition" "blue" {
           protocol      = "tcp"
         }
       ]
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 60
-      }
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -87,8 +79,8 @@ resource "aws_ecs_task_definition" "green" {
   family                   = "payment-processing-green-${var.environment_suffix}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = var.ecs_task_cpu
-  memory                   = var.ecs_task_memory
+  cpu                      = "512"
+  memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
@@ -96,8 +88,8 @@ resource "aws_ecs_task_definition" "green" {
     {
       name      = "payment-app-green"
       image     = var.container_image
-      cpu       = var.ecs_task_cpu
-      memory    = var.ecs_task_memory
+      cpu       = 512
+      memory    = 1024
       essential = true
 
       portMappings = [
@@ -107,14 +99,6 @@ resource "aws_ecs_task_definition" "green" {
           protocol      = "tcp"
         }
       ]
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 60
-      }
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -167,12 +151,6 @@ resource "aws_ecs_service" "blue" {
     container_port   = 8080
   }
 
-  # ✅ FIXED: Correct deployment_configuration block structure
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-  }
-
   enable_ecs_managed_tags = true
   propagate_tags          = "SERVICE"
 
@@ -184,7 +162,7 @@ resource "aws_ecs_service" "blue" {
     MigrationPhase = "initial"
   }
 
-  depends_on = [aws_lb_listener.https]
+  depends_on = [aws_lb_listener.http]
 }
 
 # ECS Service - Green Environment
@@ -207,12 +185,6 @@ resource "aws_ecs_service" "green" {
     container_port   = 8080
   }
 
-  # ✅ FIXED: Correct deployment_configuration block structure
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-  }
-
   enable_ecs_managed_tags = true
   propagate_tags          = "SERVICE"
 
@@ -224,5 +196,5 @@ resource "aws_ecs_service" "green" {
     MigrationPhase = "initial"
   }
 
-  depends_on = [aws_lb_listener.https]
+  depends_on = [aws_lb_listener.http]
 }
