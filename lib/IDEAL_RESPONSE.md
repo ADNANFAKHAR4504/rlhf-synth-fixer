@@ -1082,12 +1082,12 @@ resource "random_password" "db_password" {
 
 # Store the password in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "payment-app/${var.environment}/db-password-${var.pr_number}"
+  name                    = "payment-app/${var.environment}/db-pass-${var.pr_number}"
   description             = "Auto-generated RDS password for payment-app-${var.pr_number}"
   recovery_window_in_days = var.environment == "prod" ? 30 : 7
 
   tags = {
-    Name        = "payment-app-${var.pr_number}-db-password"
+    Name        = "payment-app-${var.pr_number}-db-pass"
     Environment = var.environment
     Project     = "payment-processing"
     ManagedBy   = "Terraform"
