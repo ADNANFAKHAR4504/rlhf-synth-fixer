@@ -360,8 +360,18 @@ resource "aws_security_group_rule" "service_from_master" {
 # Security Configuration  #
 ############################
 
+resource "random_id" "security_config_suffix" {
+  byte_length = 4
+  keepers = {
+    bucket_prefix = local.bucket_prefix
+    account_id    = data.aws_caller_identity.current.account_id
+    region        = data.aws_region.current.name
+    in_transit    = var.enable_in_transit_encryption
+  }
+}
+
 resource "aws_emr_security_configuration" "main" {
-  name = "${local.bucket_prefix}-security-config-${substr(md5("${local.bucket_prefix}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"), 0, 8)}"
+  name = "${local.bucket_prefix}-security-config-${random_id.security_config_suffix.hex}"
 
   configuration = jsonencode({
     EncryptionConfiguration = merge({
