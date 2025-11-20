@@ -13,7 +13,6 @@ from .pipeline_stack import PipelineStack
 from .ecs_stack import EcsStack
 from .secrets_stack import SecretsStack
 from .monitoring_stack import MonitoringStack
-from .cross_account_roles import CrossAccountRolesStack
 
 
 class TapStackProps(cdk.StackProps):
@@ -38,9 +37,8 @@ class TapStack(cdk.Stack):
     """
     Represents the main CDK stack for the multi-stage CI/CD pipeline project.
 
-    This stack orchestrates the instantiation of pipeline, ECS, secrets, monitoring,
-    and cross-account role stacks for containerized application deployments across
-    multiple AWS accounts.
+    This stack orchestrates the instantiation of pipeline, ECS, secrets, and monitoring
+    stacks for containerized application deployments in a single AWS account.
 
     Args:
         scope (Construct): The parent construct.
@@ -70,51 +68,29 @@ class TapStack(cdk.Stack):
         # Create nested stacks in proper order
         secrets_stack = SecretsStack(
             self,
-            f"SecretsStack{environment_suffix}",
+            "SecretsStack",
             environment_suffix=environment_suffix
         )
 
         pipeline_stack = PipelineStack(
             self,
-            f"PipelineStack{environment_suffix}",
+            "PipelineStack",
             environment_suffix=environment_suffix
         )
 
         ecs_stack = EcsStack(
             self,
-            f"EcsStack{environment_suffix}",
+            "EcsStack",
             environment_suffix=environment_suffix
         )
 
         monitoring_stack = MonitoringStack(
             self,
-            f"MonitoringStack{environment_suffix}",
+            "MonitoringStack",
             environment_suffix=environment_suffix,
             pipeline_name=f"cicd-pipeline-{environment_suffix}",
             failure_topic=pipeline_stack.failure_topic,
             pipeline=pipeline_stack.pipeline
-        )
-
-        # Cross-account roles for dev, staging, prod
-        dev_roles = CrossAccountRolesStack(
-            self,
-            f"DevRoles{environment_suffix}",
-            environment_suffix=environment_suffix,
-            target_account_id="111111111111"
-        )
-
-        staging_roles = CrossAccountRolesStack(
-            self,
-            f"StagingRoles{environment_suffix}",
-            environment_suffix=environment_suffix,
-            target_account_id="222222222222"
-        )
-
-        prod_roles = CrossAccountRolesStack(
-            self,
-            f"ProdRoles{environment_suffix}",
-            environment_suffix=environment_suffix,
-            target_account_id="333333333333"
         )
 
         # Stack outputs
@@ -137,4 +113,60 @@ class TapStack(cdk.Stack):
             "LoadBalancerDNS",
             value=ecs_stack.alb.load_balancer_dns_name,
             description="DNS name of the Application Load Balancer"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ServiceName",
+            value=ecs_stack.service.service_name,
+            description="Name of the ECS Fargate service"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "BlueTargetGroupArn",
+            value=ecs_stack.blue_target_group.target_group_arn,
+            description="ARN of the blue target group"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "GreenTargetGroupArn",
+            value=ecs_stack.green_target_group.target_group_arn,
+            description="ARN of the green target group"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ListenerArn",
+            value=ecs_stack.listener.listener_arn,
+            description="ARN of the production listener"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "TestListenerArn",
+            value=ecs_stack.test_listener.listener_arn,
+            description="ARN of the test listener"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ArtifactBucketName",
+            value=pipeline_stack.artifact_bucket.bucket_name,
+            description="Name of the artifact S3 bucket"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "DockerSecretArn",
+            value=secrets_stack.docker_secret.secret_arn,
+            description="ARN of the Docker credentials secret"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "FailureTopicArn",
+            value=pipeline_stack.failure_topic.topic_arn,
+            description="ARN of the failure notification SNS topic"
         )

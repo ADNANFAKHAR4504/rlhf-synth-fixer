@@ -121,22 +121,174 @@ class TestTapStack(unittest.TestCase):
         # Verify monitoring resources exist
         template.resource_count_is("AWS::CloudWatch::Dashboard", 1)
 
-    @mark.it("creates cross-account role stacks with resources")
-    def test_creates_cross_account_role_stacks(self):
-        """Test that cross-account role stacks create IAM roles"""
-        from lib.cross_account_roles import CrossAccountRolesStack
+    @mark.it("creates CloudWatch dashboard with correct name")
+    def test_monitoring_dashboard_name(self):
+        """Test that CloudWatch dashboard is created with correct name"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
 
         parent_stack = cdk.Stack(self.app, "ParentStack")
-        roles_stack = CrossAccountRolesStack(
-            parent_stack,
-            "CrossAccountRoles",
-            environment_suffix="test",
-            target_account_id="123456789012"
-        )
-        template = Template.from_stack(roles_stack)
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
 
-        # Verify IAM roles exist
-        template.resource_count_is("AWS::IAM::Role", 1)
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        template.has_resource_properties("AWS::CloudWatch::Dashboard",
+            Match.object_like({"DashboardName": "cicd-pipeline-test"}))
+
+    @mark.it("creates pipeline failure EventBridge rule")
+    def test_monitoring_failure_rule(self):
+        """Test that EventBridge rule for pipeline failures is created"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
+
+        parent_stack = cdk.Stack(self.app, "ParentStack")
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
+
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        template.has_resource_properties("AWS::Events::Rule",
+            Match.object_like({
+                "EventPattern": Match.object_like({
+                    "source": ["aws.codepipeline"],
+                    "detail-type": ["CodePipeline Pipeline Execution State Change"],
+                    "detail": Match.object_like({"state": ["FAILED"]})
+                })
+            }))
+
+    @mark.it("creates pipeline success EventBridge rule")
+    def test_monitoring_success_rule(self):
+        """Test that EventBridge rule for pipeline success is created"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
+
+        parent_stack = cdk.Stack(self.app, "ParentStack")
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
+
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        template.has_resource_properties("AWS::Events::Rule",
+            Match.object_like({
+                "EventPattern": Match.object_like({
+                    "source": ["aws.codepipeline"],
+                    "detail": Match.object_like({"state": ["SUCCEEDED"]})
+                })
+            }))
+
+    @mark.it("creates CloudWatch alarm for pipeline failures")
+    def test_monitoring_pipeline_alarm(self):
+        """Test that CloudWatch alarm for pipeline failures is created"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
+
+        parent_stack = cdk.Stack(self.app, "ParentStack")
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
+
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        template.has_resource_properties("AWS::CloudWatch::Alarm",
+            Match.object_like({
+                "MetricName": "PipelineExecutionFailure",
+                "Namespace": "AWS/CodePipeline",
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold"
+            }))
+
+    @mark.it("attaches SNS action to CloudWatch alarm")
+    def test_monitoring_alarm_sns_action(self):
+        """Test that SNS action is attached to CloudWatch alarm"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
+
+        parent_stack = cdk.Stack(self.app, "ParentStack")
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
+
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        # Verify alarm has alarm actions configured
+        alarms = template.find_resources("AWS::CloudWatch::Alarm")
+        assert len(alarms) == 1
+        alarm = list(alarms.values())[0]
+        assert "AlarmActions" in alarm["Properties"]
+        assert len(alarm["Properties"]["AlarmActions"]) >= 1
+
+    @mark.it("creates dashboard with pipeline execution metrics")
+    def test_monitoring_dashboard_pipeline_metrics(self):
+        """Test that dashboard includes pipeline execution metrics"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
+
+        parent_stack = cdk.Stack(self.app, "ParentStack")
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
+
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        template.has_resource_properties("AWS::CloudWatch::Dashboard",
+            Match.object_like({
+                "DashboardBody": Match.any_value()
+            }))
+
+    @mark.it("verifies EventBridge rules count")
+    def test_monitoring_event_rules_count(self):
+        """Test that monitoring stack creates correct number of EventBridge rules"""
+        from lib.monitoring_stack import MonitoringStack
+        from lib.pipeline_stack import PipelineStack
+        from aws_cdk import aws_sns as sns
+
+        parent_stack = cdk.Stack(self.app, "ParentStack")
+        pipeline_stack = PipelineStack(parent_stack, "PipelineStack", environment_suffix="test")
+        failure_topic = sns.Topic(parent_stack, "FailureTopic", display_name="Test")
+
+        monitoring_stack = MonitoringStack(
+            parent_stack, "MonitoringStack", environment_suffix="test",
+            pipeline_name="cicd-pipeline-test", failure_topic=failure_topic,
+            pipeline=pipeline_stack.pipeline
+        )
+        template = Template.from_stack(monitoring_stack)
+
+        template.resource_count_is("AWS::Events::Rule", 2)
+
 
     @mark.it("exports pipeline name output")
     def test_exports_pipeline_name_output(self):

@@ -5,6 +5,7 @@ It creates a multi-stage CI/CD pipeline with source, build, test, and deploy sta
 along with manual approval gates and SNS notifications.
 """
 
+import os
 from aws_cdk import (
     Stack,
     Duration,
@@ -66,8 +67,12 @@ class PipelineStack(Stack):
         )
         approval_topic.apply_removal_policy(RemovalPolicy.DESTROY)
 
+        # Get approval email from context or environment variable
+        approval_email = self.node.try_get_context('approvalEmail') or \
+            os.environ.get('APPROVAL_EMAIL', 'approvals@example.com')
+
         approval_topic.add_subscription(
-            subscriptions.EmailSubscription("approvals@example.com")
+            subscriptions.EmailSubscription(approval_email)
         )
 
         # SNS topic for failure notifications
@@ -183,16 +188,31 @@ class PipelineStack(Stack):
             restart_execution_on_update=True
         )
 
-        # Source stage
-        connection_arn_param = self.node.try_get_context('codeStarConnectionArn') or \
-            "arn:aws:codestar-connections:us-east-1:123456789012:connection/example"
+        # Source stage - get configuration from context or environment variables
+        default_connection = (
+            f"arn:aws:codestar-connections:{Stack.of(self).region}:"
+            f"{Stack.of(self).account}:connection/example"
+        )
+        connection_arn_param = (
+            self.node.try_get_context('codeStarConnectionArn') or
+            os.environ.get('CODESTAR_CONNECTION_ARN', default_connection)
+        )
+
+        repo_owner = self.node.try_get_context('repoOwner') or \
+            os.environ.get('REPO_OWNER', 'myorg')
+
+        repo_name = self.node.try_get_context('repoName') or \
+            os.environ.get('REPO_NAME', 'myapp')
+
+        repo_branch = self.node.try_get_context('repoBranch') or \
+            os.environ.get('REPO_BRANCH', 'main')
 
         source_output = codepipeline.Artifact()
         source_action = codepipeline_actions.CodeStarConnectionsSourceAction(
             action_name="Source",
-            owner="myorg",
-            repo="myapp",
-            branch="main",
+            owner=repo_owner,
+            repo=repo_name,
+            branch=repo_branch,
             output=source_output,
             connection_arn=connection_arn_param
         )

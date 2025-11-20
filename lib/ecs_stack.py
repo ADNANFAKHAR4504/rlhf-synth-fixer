@@ -5,6 +5,7 @@ It creates VPC, ECS cluster, Fargate services, ALB, and target groups for
 blue/green deployments with proper health checks and auto-scaling.
 """
 
+import os
 from aws_cdk import (
     Stack,
     Duration,
@@ -83,10 +84,14 @@ class EcsStack(Stack):
             execution_role=execution_role
         )
 
+        # Get container image from context or environment variable
+        container_image = self.node.try_get_context('containerImage') or \
+            os.environ.get('CONTAINER_IMAGE', 'nginx:latest')
+
         # Container with health check
         container = task_definition.add_container(
             "AppContainer",
-            image=ecs.ContainerImage.from_registry("nginx:latest"),
+            image=ecs.ContainerImage.from_registry(container_image),
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="app",
                 log_group=log_group
