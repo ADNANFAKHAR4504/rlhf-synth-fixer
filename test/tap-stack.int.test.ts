@@ -115,9 +115,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(role.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
       expect(role.Policies[0].PolicyDocument.Statement.length).toBeGreaterThanOrEqual(4);
       const policyStatement = role.Policies[0].PolicyDocument.Statement;
-      expect(policyStatement.some((stmt: any) => (stmt.Resource['Fn::GetAtt'] || [])[0] === 'TransactionTable')).toBe(true);
-      expect(policyStatement.some((stmt: any) => typeof stmt.Resource === 'string' && stmt.Resource.includes('transaction-logs-primary'))).toBe(true);
-      expect(policyStatement.some((stmt: any) => (stmt.Resource['Fn::GetAtt'] || [])[0] === 'TransactionQueue')).toBe(true);
+      const hasDynamoAccess = policyStatement.some((stmt: any) => stmt.Resource?.['Fn::GetAtt']?.[0] === 'TransactionTable');
+      const hasS3Access = policyStatement.some((stmt: any) => stmt.Resource?.['Fn::Sub']?.includes('transaction-logs-primary-'));
+      const hasSqsAccess = policyStatement.some((stmt: any) => stmt.Resource?.['Fn::GetAtt']?.[0] === 'TransactionQueue');
+
+      expect(hasDynamoAccess).toBe(true);
+      expect(hasS3Access).toBe(true);
+      expect(hasSqsAccess).toBe(true);
     });
 
     test('should configure the Lambda function with VPC networking and dependent resources', () => {
@@ -197,7 +201,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(outputs.TransactionTableName.Export.Name['Fn::Sub']).toContain('TransactionTable');
 
       expect(outputs.TransactionLogBucketName.Value.Ref).toBe('TransactionLogBucket');
-      expect(outputs.TransactionLogBucketName.Export.Name['Fn::Sub']).toContain('transaction-logs');
+      expect(outputs.TransactionLogBucketName.Export.Name['Fn::Sub']).toContain('TransactionLogBucket-');
 
       expect(outputs.TransactionQueueUrl.Value.Ref).toBe('TransactionQueue');
       expect(outputs.TransactionQueueUrl.Export.Name['Fn::Sub']).toContain('TransactionQueue');
