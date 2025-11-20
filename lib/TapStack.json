@@ -14,7 +14,10 @@
       "Type": "String",
       "Description": "Environment type for conditional resource deployment",
       "Default": "dev",
-      "AllowedValues": ["dev", "prod"],
+      "AllowedValues": [
+        "dev",
+        "prod"
+      ],
       "ConstraintDescription": "Must be either dev or prod"
     },
     "DBInstanceClass": {
@@ -50,7 +53,12 @@
   },
   "Conditions": {
     "IsProduction": {
-      "Fn::Equals": [{"Ref": "EnvironmentType"}, "prod"]
+      "Fn::Equals": [
+        {
+          "Ref": "EnvironmentType"
+        },
+        "prod"
+      ]
     }
   },
   "Resources": {
@@ -63,19 +71,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-vpc-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-vpc-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -86,19 +102,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-igw-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-igw-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -106,33 +130,54 @@
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "InternetGatewayId": {"Ref": "InternetGateway"}
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-public-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-public-subnet-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -140,26 +185,43 @@
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-public-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-public-subnet-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -167,25 +229,42 @@
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-private-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-private-subnet-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -193,25 +272,42 @@
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-private-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-private-subnet-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -219,23 +315,33 @@
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-public-rt-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-public-rt-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -244,23 +350,35 @@
       "Type": "AWS::EC2::Route",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
     "PublicSubnetRouteTableAssociation1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet1"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
     "PublicSubnetRouteTableAssociation2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet2"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
     "NATGateway1EIP": {
@@ -271,19 +389,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-nat-eip-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-nat-eip-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -291,24 +417,39 @@
     "NATGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NATGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-nat-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-nat-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -322,19 +463,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-nat-eip-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-nat-eip-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -343,24 +492,39 @@
       "Type": "AWS::EC2::NatGateway",
       "Condition": "IsProduction",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NATGateway2EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet2"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-nat-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-nat-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -368,23 +532,33 @@
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-private-rt-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-private-rt-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -392,38 +566,56 @@
     "PrivateRoute1": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NATGateway1"}
+        "NatGatewayId": {
+          "Ref": "NATGateway1"
+        }
       }
     },
     "PrivateSubnetRouteTableAssociation1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet1"},
-        "RouteTableId": {"Ref": "PrivateRouteTable1"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
       }
     },
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-private-rt-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-private-rt-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -431,13 +623,19 @@
     "PrivateRoute2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
         "NatGatewayId": {
           "Fn::If": [
             "IsProduction",
-            {"Ref": "NATGateway2"},
-            {"Ref": "NATGateway1"}
+            {
+              "Ref": "NATGateway2"
+            },
+            {
+              "Ref": "NATGateway1"
+            }
           ]
         }
       }
@@ -445,14 +643,20 @@
     "PrivateSubnetRouteTableAssociation2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet2"},
-        "RouteTableId": {"Ref": "PrivateRouteTable2"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        }
       }
     },
     "KMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
-        "Description": {"Fn::Sub": "KMS key for loan processing encryption - ${EnvironmentSuffix}"},
+        "Description": {
+          "Fn::Sub": "KMS key for loan processing encryption - ${EnvironmentSuffix}"
+        },
         "EnableKeyRotation": true,
         "KeyPolicy": {
           "Version": "2012-10-17",
@@ -461,7 +665,9 @@
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
               "Principal": {
-                "AWS": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
               },
               "Action": "kms:*",
               "Resource": "*"
@@ -509,19 +715,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-kms-key-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-kms-key-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -529,35 +743,53 @@
     "KMSKeyAlias": {
       "Type": "AWS::KMS::Alias",
       "Properties": {
-        "AliasName": {"Fn::Sub": "alias/loan-processing-${EnvironmentSuffix}"},
-        "TargetKeyId": {"Ref": "KMSKey"}
+        "AliasName": {
+          "Fn::Sub": "alias/loan-processing-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
       }
     },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "loan-db-subnet-group-${EnvironmentSuffix}"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "loan-db-subnet-group-${EnvironmentSuffix}"
+        },
         "DBSubnetGroupDescription": "Subnet group for loan processing Aurora cluster",
         "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-db-subnet-group-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-db-subnet-group-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -565,9 +797,13 @@
     "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "loan-lambda-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "loan-lambda-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for loan processing Lambda functions",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupEgress": [
           {
             "IpProtocol": "-1",
@@ -578,19 +814,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-lambda-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-lambda-sg-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -598,34 +842,48 @@
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "loan-db-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "loan-db-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for loan processing Aurora cluster",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "SourceSecurityGroupId": {"Ref": "LambdaSecurityGroup"},
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
             "Description": "Allow MySQL access from Lambda functions"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-db-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-db-sg-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -633,7 +891,9 @@
     "DBSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": {"Fn::Sub": "loan-db-credentials-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "loan-db-credentials-${EnvironmentSuffix}"
+        },
         "Description": "Database credentials for loan processing Aurora cluster",
         "GenerateSecretString": {
           "SecretStringTemplate": "{\"username\": \"loanadmin\"}",
@@ -641,23 +901,33 @@
           "PasswordLength": 32,
           "ExcludeCharacters": "\"@/\\\\"
         },
-        "KmsKeyId": {"Ref": "KMSKey"},
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-db-credentials-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-db-credentials-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -665,36 +935,62 @@
     "DBCluster": {
       "Type": "AWS::RDS::DBCluster",
       "Properties": {
-        "DBClusterIdentifier": {"Fn::Sub": "loan-aurora-cluster-${EnvironmentSuffix}"},
+        "DBClusterIdentifier": {
+          "Fn::Sub": "loan-aurora-cluster-${EnvironmentSuffix}"
+        },
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
-        "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"},
-        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"},
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "DBSecurityGroup"}],
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
         "StorageEncrypted": true,
-        "KmsKeyId": {"Ref": "KMSKey"},
+        "KmsKeyId": {
+          "Ref": "KMSKey"
+        },
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
         "DeletionProtection": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-aurora-cluster-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-aurora-cluster-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -702,27 +998,41 @@
     "DBInstance1": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "loan-aurora-instance-1-${EnvironmentSuffix}"},
-        "DBClusterIdentifier": {"Ref": "DBCluster"},
-        "DBInstanceClass": {"Ref": "DBInstanceClass"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "loan-aurora-instance-1-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
         "Engine": "aurora-mysql",
         "PubliclyAccessible": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-aurora-instance-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-aurora-instance-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -731,27 +1041,41 @@
       "Type": "AWS::RDS::DBInstance",
       "Condition": "IsProduction",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "loan-aurora-instance-2-${EnvironmentSuffix}"},
-        "DBClusterIdentifier": {"Ref": "DBCluster"},
-        "DBInstanceClass": {"Ref": "DBInstanceClass"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "loan-aurora-instance-2-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
         "Engine": "aurora-mysql",
         "PubliclyAccessible": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-aurora-instance-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-aurora-instance-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -759,7 +1083,9 @@
     "SecretRotationLambdaRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "loan-secret-rotation-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "loan-secret-rotation-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -789,7 +1115,9 @@
                     "secretsmanager:PutSecretValue",
                     "secretsmanager:UpdateSecretVersionStage"
                   ],
-                  "Resource": {"Ref": "DBSecret"}
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
                 },
                 {
                   "Effect": "Allow",
@@ -805,19 +1133,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-secret-rotation-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-secret-rotation-role-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -825,21 +1161,38 @@
     "SecretRotationLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": {"Fn::Sub": "loan-secret-rotation-${EnvironmentSuffix}"},
+        "FunctionName": {
+          "Fn::Sub": "loan-secret-rotation-${EnvironmentSuffix}"
+        },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
-        "Role": {"Fn::GetAtt": ["SecretRotationLambdaRole", "Arn"]},
+        "Role": {
+          "Fn::GetAtt": [
+            "SecretRotationLambdaRole",
+            "Arn"
+          ]
+        },
         "VpcConfig": {
-          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
           "SubnetIds": [
-            {"Ref": "PrivateSubnet1"},
-            {"Ref": "PrivateSubnet2"}
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
           ]
         },
         "Timeout": 300,
         "Environment": {
           "Variables": {
-            "SECRETS_MANAGER_ENDPOINT": {"Fn::Sub": "https://secretsmanager.${AWS::Region}.amazonaws.com"}
+            "SECRETS_MANAGER_ENDPOINT": {
+              "Fn::Sub": "https://secretsmanager.${AWS::Region}.amazonaws.com"
+            }
           }
         },
         "Code": {
@@ -848,19 +1201,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-secret-rotation-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-secret-rotation-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -868,7 +1229,9 @@
     "SecretRotationLambdaPermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
-        "FunctionName": {"Ref": "SecretRotationLambda"},
+        "FunctionName": {
+          "Ref": "SecretRotationLambda"
+        },
         "Action": "lambda:InvokeFunction",
         "Principal": "secretsmanager.amazonaws.com"
       }
@@ -877,8 +1240,15 @@
       "Type": "AWS::SecretsManager::RotationSchedule",
       "DependsOn": "DBInstance1",
       "Properties": {
-        "SecretId": {"Ref": "DBSecret"},
-        "RotationLambdaARN": {"Fn::GetAtt": ["SecretRotationLambda", "Arn"]},
+        "SecretId": {
+          "Ref": "DBSecret"
+        },
+        "RotationLambdaARN": {
+          "Fn::GetAtt": [
+            "SecretRotationLambda",
+            "Arn"
+          ]
+        },
         "RotationRules": {
           "AutomaticallyAfterDays": 30
         }
@@ -887,7 +1257,9 @@
     "LoanDocumentsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "loan-documents-${EnvironmentSuffix}-${AWS::AccountId}"},
+        "BucketName": {
+          "Fn::Sub": "loan-documents-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -896,7 +1268,9 @@
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {"Ref": "KMSKey"}
+                "KMSMasterKeyID": {
+                  "Ref": "KMSKey"
+                }
               }
             }
           ]
@@ -919,19 +1293,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-documents-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-documents-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -939,24 +1321,34 @@
     "LoanValidationLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/lambda/loan-validation-${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/loan-validation-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 90,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-validation-logs-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-validation-logs-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -964,7 +1356,9 @@
     "LoanValidationRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "loan-validation-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "loan-validation-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -993,21 +1387,33 @@
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                   ],
-                  "Resource": {"Fn::GetAtt": ["LoanValidationLogGroup", "Arn"]}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "LoanValidationLogGroup",
+                      "Arn"
+                    ]
+                  }
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
                     "secretsmanager:GetSecretValue"
                   ],
-                  "Resource": {"Ref": "DBSecret"}
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
                     "kms:Decrypt"
                   ],
-                  "Resource": {"Fn::GetAtt": ["KMSKey", "Arn"]}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
                 },
                 {
                   "Effect": "Allow",
@@ -1015,7 +1421,9 @@
                     "s3:GetObject",
                     "s3:PutObject"
                   ],
-                  "Resource": {"Fn::Sub": "${LoanDocumentsBucket.Arn}/*"}
+                  "Resource": {
+                    "Fn::Sub": "${LoanDocumentsBucket.Arn}/*"
+                  }
                 }
               ]
             }
@@ -1024,19 +1432,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-validation-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-validation-role-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -1045,26 +1461,52 @@
       "Type": "AWS::Lambda::Function",
       "DependsOn": "LoanValidationLogGroup",
       "Properties": {
-        "FunctionName": {"Fn::Sub": "loan-validation-${EnvironmentSuffix}"},
+        "FunctionName": {
+          "Fn::Sub": "loan-validation-${EnvironmentSuffix}"
+        },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
-        "Role": {"Fn::GetAtt": ["LoanValidationRole", "Arn"]},
+        "Role": {
+          "Fn::GetAtt": [
+            "LoanValidationRole",
+            "Arn"
+          ]
+        },
         "MemorySize": 1024,
         "Timeout": 300,
         "ReservedConcurrentExecutions": 10,
         "VpcConfig": {
-          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
           "SubnetIds": [
-            {"Ref": "PrivateSubnet1"},
-            {"Ref": "PrivateSubnet2"}
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            }
           ]
         },
         "Environment": {
           "Variables": {
-            "DB_SECRET_ARN": {"Ref": "DBSecret"},
-            "DB_CLUSTER_ENDPOINT": {"Fn::GetAtt": ["DBCluster", "Endpoint.Address"]},
-            "DOCUMENTS_BUCKET": {"Ref": "LoanDocumentsBucket"},
-            "ENVIRONMENT": {"Ref": "EnvironmentType"}
+            "DB_SECRET_ARN": {
+              "Ref": "DBSecret"
+            },
+            "DB_CLUSTER_ENDPOINT": {
+              "Fn::GetAtt": [
+                "DBCluster",
+                "Endpoint.Address"
+              ]
+            },
+            "DOCUMENTS_BUCKET": {
+              "Ref": "LoanDocumentsBucket"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentType"
+            }
           }
         },
         "Code": {
@@ -1073,19 +1515,27 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "loan-validation-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "loan-validation-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentType"}
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "CostCenter",
-            "Value": {"Ref": "CostCenter"}
+            "Value": {
+              "Ref": "CostCenter"
+            }
           },
           {
             "Key": "MigrationPhase",
-            "Value": {"Ref": "MigrationPhase"}
+            "Value": {
+              "Ref": "MigrationPhase"
+            }
           }
         ]
       }
@@ -1094,86 +1544,140 @@
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "PrivateSubnet1": {
       "Description": "Private Subnet 1 ID",
-      "Value": {"Ref": "PrivateSubnet1"},
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet1"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1"
+        }
       }
     },
     "PrivateSubnet2": {
       "Description": "Private Subnet 2 ID",
-      "Value": {"Ref": "PrivateSubnet2"},
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PrivateSubnet2"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2"
+        }
       }
     },
     "PublicSubnet1": {
       "Description": "Public Subnet 1 ID",
-      "Value": {"Ref": "PublicSubnet1"},
+      "Value": {
+        "Ref": "PublicSubnet1"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PublicSubnet1"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet1"
+        }
       }
     },
     "PublicSubnet2": {
       "Description": "Public Subnet 2 ID",
-      "Value": {"Ref": "PublicSubnet2"},
+      "Value": {
+        "Ref": "PublicSubnet2"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-PublicSubnet2"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet2"
+        }
       }
     },
     "DBClusterEndpoint": {
       "Description": "Aurora MySQL cluster endpoint",
-      "Value": {"Fn::GetAtt": ["DBCluster", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"
+        }
       }
     },
     "DBSecretArn": {
       "Description": "ARN of the database credentials secret",
-      "Value": {"Ref": "DBSecret"},
+      "Value": {
+        "Ref": "DBSecret"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBSecretArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
       }
     },
     "LoanDocumentsBucketName": {
       "Description": "S3 bucket for loan documents",
-      "Value": {"Ref": "LoanDocumentsBucket"},
+      "Value": {
+        "Ref": "LoanDocumentsBucket"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DocumentsBucket"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DocumentsBucket"
+        }
       }
     },
     "LoanValidationFunctionArn": {
       "Description": "ARN of the loan validation Lambda function",
-      "Value": {"Fn::GetAtt": ["LoanValidationFunction", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "LoanValidationFunction",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ValidationFunctionArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ValidationFunctionArn"
+        }
       }
     },
     "LoanValidationFunctionName": {
       "Description": "Name of the loan validation Lambda function",
-      "Value": {"Ref": "LoanValidationFunction"},
+      "Value": {
+        "Ref": "LoanValidationFunction"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ValidationFunctionName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ValidationFunctionName"
+        }
       }
     },
     "KMSKeyId": {
       "Description": "KMS Key ID for encryption",
-      "Value": {"Ref": "KMSKey"},
+      "Value": {
+        "Ref": "KMSKey"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-KMSKeyId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
       }
     },
     "NATGateway1EIP": {
       "Description": "Elastic IP for NAT Gateway 1",
-      "Value": {"Ref": "NATGateway1EIP"},
+      "Value": {
+        "Ref": "NATGateway1EIP"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-NATGateway1EIP"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NATGateway1EIP"
+        }
       }
     }
   }

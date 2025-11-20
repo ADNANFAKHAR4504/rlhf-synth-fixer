@@ -6,7 +6,9 @@
   "turn_type": "single",
   "startedAt": "2025-11-20T12:14:58.063710Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "EC2",
     "IAM",
