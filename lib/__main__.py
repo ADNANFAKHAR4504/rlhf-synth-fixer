@@ -59,20 +59,19 @@ provider = aws.Provider('aws',
 # Get DB password from environment or use default
 db_password = os.getenv('TF_VAR_db_password', 'TempPassword123!')
 
-# Set secret ARN for DI password
+# Set secret ARN for DB password (for environment variable)
 os.environ['SECRET_ARN'] = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:tap-db-password-XXXXXX'
 
 # Create the stack with the necessary arguments
 stack_args = TapStackArgs(
-    db_password=db_password,
-    secret_arn=os.environ.get('SECRET_ARN', 'arn:aws:secretsmanager:us-east-1:123456789012:secret:tap-db-password-XXXXXX'),
+    environment_suffix=environment_suffix,
+    tags=default_tags
 )
 
 # Instantiate the TapStack
 stack = TapStack(
     STACK_NAME,
     args=stack_args,
-    environment_suffix=environment_suffix,
     opts=ResourceOptions(providers=[provider])
 )
 
