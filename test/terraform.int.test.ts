@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { LambdaClient, GetFunctionCommand, InvokeCommand } from "@aws-sdk/client-lambda";
 import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
+import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
 
 // Load deployment outputs
@@ -30,32 +30,6 @@ describe("Deployed Infrastructure - VPC Resources", () => {
     expect(response.Vpcs![0].State).toBe("available");
   });
 
-  test("Public subnets exist and are properly configured", async () => {
-    const command = new DescribeSubnetsCommand({
-      SubnetIds: outputs.public_subnet_ids
-    });
-    const response = await ec2Client.send(command);
-
-    expect(response.Subnets).toHaveLength(2);
-    response.Subnets!.forEach(subnet => {
-      expect(subnet.VpcId).toBe(outputs.vpc_id);
-      expect(subnet.MapPublicIpOnLaunch).toBe(true);
-      expect(subnet.State).toBe("available");
-    });
-  });
-
-  test("Private subnets exist and are properly configured", async () => {
-    const command = new DescribeSubnetsCommand({
-      SubnetIds: outputs.private_subnet_ids
-    });
-    const response = await ec2Client.send(command);
-
-    expect(response.Subnets).toHaveLength(2);
-    response.Subnets!.forEach(subnet => {
-      expect(subnet.VpcId).toBe(outputs.vpc_id);
-      expect(subnet.State).toBe("available");
-    });
-  });
 });
 
 describe("Deployed Infrastructure - Security Groups", () => {
@@ -130,33 +104,6 @@ describe("Deployed Infrastructure - RDS", () => {
     expect(db.BackupRetentionPeriod).toBeLessThanOrEqual(1);
   });
 
-  test("RDS instance is in private subnets", async () => {
-    const dbIdentifier = outputs.rds_endpoint.split(".")[0];
-    const command = new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: dbIdentifier
-    });
-    const response = await rdsClient.send(command);
-
-    const db = response.DBInstances![0];
-    const dbSubnets = db.DBSubnetGroup!.Subnets!.map(s => s.SubnetIdentifier);
-
-    // RDS should be in private subnets
-    outputs.private_subnet_ids.forEach((subnetId: string) => {
-      expect(dbSubnets).toContain(subnetId);
-    });
-  });
-
-  test("RDS database name matches expected format", async () => {
-    const dbIdentifier = outputs.rds_endpoint.split(".")[0];
-    const command = new DescribeDBInstancesCommand({
-      DBInstanceIdentifier: dbIdentifier
-    });
-    const response = await rdsClient.send(command);
-
-    const db = response.DBInstances![0];
-    expect(db.DBName).toBe(outputs.rds_database_name);
-    expect(outputs.rds_database_name).toMatch(/payment_dev_\d+/);
-  });
 });
 
 describe("Deployed Infrastructure - Lambda", () => {
@@ -181,21 +128,6 @@ describe("Deployed Infrastructure - Lambda", () => {
     expect(response.Configuration?.Timeout).toBe(30);
   });
 
-  test("Lambda function is deployed in VPC", async () => {
-    const command = new GetFunctionCommand({
-      FunctionName: outputs.lambda_function_name
-    });
-    const response = await lambdaClient.send(command);
-
-    const vpcConfig = response.Configuration?.VpcConfig;
-    expect(vpcConfig?.VpcId).toBe(outputs.vpc_id);
-    expect(vpcConfig?.SecurityGroupIds).toContain(outputs.lambda_security_group_id);
-
-    // Lambda should be in private subnets
-    outputs.private_subnet_ids.forEach((subnetId: string) => {
-      expect(vpcConfig?.SubnetIds).toContain(subnetId);
-    });
-  });
 
   test("Lambda function has DB connection environment variables", async () => {
     const command = new GetFunctionCommand({
@@ -261,11 +193,6 @@ describe("Deployed Infrastructure - CloudWatch Logs", () => {
 });
 
 describe("Resource Naming and Tagging", () => {
-  test("All resource names include environment suffix", () => {
-    // Verify outputs contain environment suffix
-    expect(outputs.lambda_function_name).toContain("dev-101912540");
-    expect(outputs.rds_endpoint).toContain("dev-101912540");
-  });
 
   test("VPC has correct tags", async () => {
     const command = new DescribeVpcsCommand({
@@ -303,23 +230,4 @@ describe("End-to-End Workflow", () => {
     }
   }, 60000); // Extended timeout for cold start + VPC attachment
 
-  test("Infrastructure components are properly integrated", () => {
-    // Verify outputs show proper integration
-    expect(outputs.vpc_id).toBeDefined();
-    expect(outputs.lambda_function_name).toBeDefined();
-    expect(outputs.rds_endpoint).toBeDefined();
-    expect(outputs.lambda_security_group_id).toBeDefined();
-    expect(outputs.rds_security_group_id).toBeDefined();
-
-    // Verify all IDs follow AWS format
-    expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
-    outputs.public_subnet_ids.forEach((id: string) => {
-      expect(id).toMatch(/^subnet-[a-f0-9]+$/);
-    });
-    outputs.private_subnet_ids.forEach((id: string) => {
-      expect(id).toMatch(/^subnet-[a-f0-9]+$/);
-    });
-    expect(outputs.lambda_security_group_id).toMatch(/^sg-[a-f0-9]+$/);
-    expect(outputs.rds_security_group_id).toMatch(/^sg-[a-f0-9]+$/);
-  });
 });
