@@ -117,31 +117,55 @@ resource "aws_s3_bucket_policy" "alb_logs" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      },
+      {
+        Sid    = "ELBAccessLogsWrite"
         Effect = "Allow"
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
-        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
       },
       {
+        Sid    = "ELBServiceWrite"
         Effect = "Allow"
         Principal = {
           Service = "elasticloadbalancing.amazonaws.com"
         }
-        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb/*"
-      },
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "elasticloadbalancing.amazonaws.com"
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
         }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.alb_logs.arn
       }
     ]
   })
+
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 }
 
 # Target group
