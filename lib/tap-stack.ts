@@ -4,8 +4,6 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as route53 from 'aws-cdk-lib/aws-route53';
-import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
@@ -158,15 +156,8 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
     });
 
-    // Create Hosted Zone inside the stack to avoid lookup failure
-    // This allows the stack to synthesize even if the domain doesn't exist.
-    // Since ACM validation is impossible in this test environment, we are skipping HTTPS/ACM setup
-    // and defaulting to HTTP to ensure the stack deploys successfully.
-    const hostedZone = new route53.HostedZone(this, 'HostedZone', {
-      zoneName: 'test.example.com', // Use a subdomain to avoid reserved domain error
-    });
-
     // HTTP Listener (No HTTPS/ACM due to test environment constraints)
+    // Note: HostedZone and DNS records are skipped in test environment as no domain is available
     const httpListener = alb.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
@@ -429,24 +420,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // 7. DNS Records
-    // Create records in the internal hosted zone
-    /*
-    new route53.ARecord(this, 'CloudFrontAlias', {
-      zone: hostedZone,
-      recordName: 'cdn', // subdomain only as zone is created here
-      target: route53.RecordTarget.fromAlias(
-        new targets.CloudFrontTarget(distribution)
-      ),
-    });
-    */
-
-    new route53.ARecord(this, 'AlbAlias', {
-      zone: hostedZone,
-      recordName: 'api',
-      target: route53.RecordTarget.fromAlias(
-        new targets.LoadBalancerTarget(alb)
-      ),
-    });
+    // Skipped in test environment - no domain available for Route53 HostedZone/DNS records
 
     // 8. Monitoring - CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'Dashboard', {

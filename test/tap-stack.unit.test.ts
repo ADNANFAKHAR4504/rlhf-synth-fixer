@@ -11,12 +11,6 @@ describe('TapStack Unit Tests', () => {
     app = new cdk.App({
       context: {
         environmentSuffix: 'test',
-        // Context not strictly needed for creating new HostedZone, but good to keep for consistency if we revert
-        'hosted-zone:account=123456789012:domainName=test.example.com:region=us-east-1':
-          {
-            Id: 'Z12345',
-            Name: 'test.example.com',
-          },
       },
     });
     stack = new TapStack(app, 'TestStack', {
@@ -154,8 +148,9 @@ describe('TapStack Unit Tests', () => {
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
   });
 
-  test('DNS Records Created', () => {
-    // 1 record created (AlbAlias) in the internal hosted zone
-    template.resourceCountIs('AWS::Route53::RecordSet', 1);
+  test('DNS Records Skipped', () => {
+    // DNS records are skipped in test environment (no domain available)
+    template.resourceCountIs('AWS::Route53::RecordSet', 0);
+    template.resourceCountIs('AWS::Route53::HostedZone', 0);
   });
 });
