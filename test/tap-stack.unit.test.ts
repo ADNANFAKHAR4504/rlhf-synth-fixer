@@ -111,10 +111,10 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(resource.Properties.Engine).toBe('aurora-mysql');
     });
 
-    test('AuroraDBCluster should have correct deletion policies', () => {
+    test('AuroraDBCluster should have correct deletion policies for production safety', () => {
       const resource = template.Resources.AuroraDBCluster;
-      expect(resource.DeletionPolicy).toBe('Delete');
-      expect(resource.UpdateReplacePolicy).toBe('Delete');
+      expect(resource.DeletionPolicy).toBe('Retain');
+      expect(resource.UpdateReplacePolicy).toBe('Retain');
     });
 
     test('AuroraDBCluster should have ServerlessV2ScalingConfiguration', () => {
@@ -271,10 +271,11 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(resource.DeletionPolicy).toBe('Delete');
     });
 
-    test('TransactionProcessorFunction should depend on RDS', () => {
+    test('TransactionProcessorFunction should depend on RDS resources', () => {
       const resource = template.Resources.TransactionProcessorFunction;
-      expect(resource.DependsOn).toContain('AuroraDBCluster');
-      expect(resource.DependsOn).toContain('AuroraDBInstance');
+      // PROMPT requires explicit DependsOn for both RDS resources (line 26, 41-43)
+      // Prevents race conditions during deployment
+      expect(resource.DependsOn).toEqual(['AuroraDBCluster', 'AuroraDBInstance']);
     });
 
     test('TransactionProcessorFunction name should include environmentSuffix', () => {
@@ -570,11 +571,12 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(JSON.stringify(lambdaSG)).not.toContain('DBSecurityGroup');
     });
 
-    test('Lambda should explicitly depend on RDS resources', () => {
+    test('Lambda should explicitly depend on RDS resources (PROMPT requirement)', () => {
       const lambda = template.Resources.TransactionProcessorFunction;
       expect(lambda.DependsOn).toBeDefined();
-      expect(lambda.DependsOn).toContain('AuroraDBCluster');
-      expect(lambda.DependsOn).toContain('AuroraDBInstance');
+      // PROMPT requires explicit DependsOn between Lambda and RDS (line 26, 41-43)
+      // Both AuroraDBCluster and AuroraDBInstance for production safety
+      expect(lambda.DependsOn).toEqual(['AuroraDBCluster', 'AuroraDBInstance']);
     });
   });
 
@@ -621,15 +623,94 @@ describe('CloudFormation Template Unit Tests', () => {
   });
 
   describe('Update and Deletion Policies', () => {
-    test('RDS cluster should have correct deletion policies for QA', () => {
+    test('RDS cluster should have Retain policies for production data protection', () => {
       const cluster = template.Resources.AuroraDBCluster;
-      expect(cluster.DeletionPolicy).toBe('Delete');
-      expect(cluster.UpdateReplacePolicy).toBe('Delete');
+      expect(cluster.DeletionPolicy).toBe('Retain');
+      expect(cluster.UpdateReplacePolicy).toBe('Retain');
     });
 
-    test('Lambda should have Delete deletion policy', () => {
+    test('Lambda should have Delete deletion policy for clean removal', () => {
       const lambda = template.Resources.TransactionProcessorFunction;
       expect(lambda.DeletionPolicy).toBe('Delete');
+    });
+
+    test('DynamoDB table should have Retain update policy for data safety', () => {
+      const table = template.Resources.SessionTable;
+      expect(table.UpdateReplacePolicy).toBe('Retain');
+    });
+  });
+
+  describe('DynamoDB Session Table', () => {
+    test('should have SessionTable resource', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource).toBeDefined();
+      expect(resource.Type).toBe('AWS::DynamoDB::Table');
+    });
+
+    test('SessionTable name should include environmentSuffix', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource.Properties.TableName).toEqual({
+        'Fn::Sub': 'session-table-${EnvironmentSuffix}'
+      });
+    });
+
+    test('SessionTable should use PAY_PER_REQUEST billing', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    test('SessionTable should have point-in-time recovery enabled', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    test('SessionTable should have encryption enabled', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource.Properties.SSESpecification.SSEEnabled).toBe(true);
+    });
+
+    test('SessionTable should have TTL enabled', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource.Properties.TimeToLiveSpecification.Enabled).toBe(true);
+      expect(resource.Properties.TimeToLiveSpecification.AttributeName).toBe('ttl');
+    });
+
+    test('SessionTable should have global secondary index', () => {
+      const resource = template.Resources.SessionTable;
+      expect(resource.Properties.GlobalSecondaryIndexes).toBeDefined();
+      expect(resource.Properties.GlobalSecondaryIndexes.length).toBeGreaterThan(0);
+      expect(resource.Properties.GlobalSecondaryIndexes[0].IndexName).toBe('UserIdIndex');
+    });
+
+    test('TransactionProcessorRole should have DynamoDB permissions', () => {
+      const role = template.Resources.TransactionProcessorRole;
+      const dynamoPolicy = role.Properties.Policies[0].PolicyDocument.Statement.find(
+        (s: any) => s.Action && s.Action.includes('dynamodb:GetItem')
+      );
+      expect(dynamoPolicy).toBeDefined();
+      expect(dynamoPolicy.Action).toContain('dynamodb:PutItem');
+      expect(dynamoPolicy.Action).toContain('dynamodb:Query');
+    });
+
+    test('Lambda should have SESSION_TABLE environment variable', () => {
+      const lambda = template.Resources.TransactionProcessorFunction;
+      expect(lambda.Properties.Environment.Variables.SESSION_TABLE).toEqual({
+        Ref: 'SessionTable'
+      });
+    });
+
+    test('should have SessionTableName output', () => {
+      const output = template.Outputs.SessionTableName;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'SessionTable' });
+    });
+
+    test('should have SessionTableArn output', () => {
+      const output = template.Outputs.SessionTableArn;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['SessionTable', 'Arn']
+      });
     });
   });
 });
