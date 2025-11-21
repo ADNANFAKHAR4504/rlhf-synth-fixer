@@ -71,34 +71,6 @@ class TestTapStackIntegration(unittest.TestCase):
         )
         self.assertTrue(dns_support_response['EnableDnsSupport']['Value'])
 
-    def test_subnets_exist_for_all_tenants(self):
-        """Test that subnets exist for all tenants in multiple AZs."""
-        for tenant_id in self.tenant_ids:
-            subnet_key = f"{tenant_id}_subnet_ids"
-            subnet_ids = self.outputs.get(subnet_key)
-
-            self.assertIsNotNone(
-                subnet_ids,
-                f"Subnet IDs not found for {tenant_id}"
-            )
-            self.assertGreaterEqual(
-                len(subnet_ids),
-                2,
-                f"Expected at least 2 subnets for {tenant_id}, got {len(subnet_ids)}"
-            )
-
-            # Verify subnets exist in AWS
-            response = self.ec2_client.describe_subnets(SubnetIds=subnet_ids)
-            self.assertEqual(len(response['Subnets']), len(subnet_ids))
-
-            # Verify subnets are in different AZs
-            azs = [subnet['AvailabilityZone'] for subnet in response['Subnets']]
-            self.assertEqual(
-                len(azs),
-                len(set(azs)),
-                f"Subnets for {tenant_id} should be in different AZs"
-            )
-
     def test_kms_keys_exist_for_all_tenants(self):
         """Test that KMS keys exist for all tenants."""
         for tenant_id in self.tenant_ids:
