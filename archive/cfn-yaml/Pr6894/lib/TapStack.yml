@@ -1,0 +1,308 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TAP Stack - Test Automation Platform Infrastructure'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming
+    Default: dev
+
+  DBPasswordSecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret containing the DB master password (optional - will create if not provided)
+    Default: ''
+
+Conditions:
+  CreateDBPasswordSecret: !Equals [!Ref DBPasswordSecretArn, '']
+
+Resources:
+  # Create a DB password secret if one is not provided
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateDBPasswordSecret
+    Properties:
+      Name: !Sub 'tap-db-password-${EnvironmentSuffix}'
+      Description: Database master password for TapStack
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'tap-db-password-${EnvironmentSuffix}'
+  # VPC and Networking - Primary Region
+  PrimaryVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-vpc-primary-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrimaryInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-igw-primary-${EnvironmentSuffix}'
+
+  AttachPrimaryGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      InternetGatewayId: !Ref PrimaryInternetGateway
+
+  # Subnets - Primary Region
+  PrimarySubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-primary-0-${EnvironmentSuffix}'
+
+  PrimarySubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-primary-1-${EnvironmentSuffix}'
+
+  PrimarySubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-primary-2-${EnvironmentSuffix}'
+
+  # Route Table - Primary Region
+  PrimaryRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PrimaryVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-rt-primary-${EnvironmentSuffix}'
+
+  PrimaryRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachPrimaryGateway
+    Properties:
+      RouteTableId: !Ref PrimaryRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref PrimaryInternetGateway
+
+  PrimarySubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrimarySubnet1
+      RouteTableId: !Ref PrimaryRouteTable
+
+  PrimarySubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrimarySubnet2
+      RouteTableId: !Ref PrimaryRouteTable
+
+  PrimarySubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrimarySubnet3
+      RouteTableId: !Ref PrimaryRouteTable
+
+  # Security Group for Database
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref PrimaryVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-sg-primary-${EnvironmentSuffix}'
+
+  # KMS Key for Database Encryption
+  DBKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for RDS encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+
+  DBKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/db-kms-primary-${EnvironmentSuffix}'
+      TargetKeyId: !Ref DBKMSKey
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database
+      DBSubnetGroupName: !Sub 'db-subnet-group-primary-${EnvironmentSuffix}'
+      SubnetIds:
+        - !Ref PrimarySubnet1
+        - !Ref PrimarySubnet2
+        - !Ref PrimarySubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-group-primary-${EnvironmentSuffix}'
+
+  # Aurora Global Cluster
+  GlobalCluster:
+    Type: AWS::RDS::GlobalCluster
+    Properties:
+      GlobalClusterIdentifier: !Sub 'aurora-global-v2-${EnvironmentSuffix}'
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      StorageEncrypted: true
+
+  # Aurora Primary Cluster
+  PrimaryDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub 'aurora-primary-v2-${EnvironmentSuffix}'
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
+      MasterUsername: admin
+      MasterUserPassword: !If
+        - CreateDBPasswordSecret
+        - !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+        - !Sub '{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}'
+      DatabaseName: appdb
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      StorageEncrypted: true
+      KmsKeyId: !Ref DBKMSKey
+      BackupRetentionPeriod: 1
+      GlobalClusterIdentifier: !Ref GlobalCluster
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-primary-v2-${EnvironmentSuffix}'
+
+  # Aurora Primary Instance
+  PrimaryDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'aurora-primary-instance-v2-${EnvironmentSuffix}'
+      DBClusterIdentifier: !Ref PrimaryDBCluster
+      DBInstanceClass: db.r5.large
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-primary-instance-v2-${EnvironmentSuffix}'
+
+  # Route53 Health Check
+  HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    DependsOn: DBCPUAlarm
+    Properties:
+      HealthCheckConfig:
+        Type: CLOUDWATCH_METRIC
+        AlarmIdentifier:
+          Name: !Sub 'db-cpu-alarm-primary-${EnvironmentSuffix}'
+          Region: !Ref 'AWS::Region'
+        InsufficientDataHealthStatus: Healthy
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub 'db-health-check-${EnvironmentSuffix}'
+
+  # CloudWatch Alarms
+  DBCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'db-cpu-alarm-primary-${EnvironmentSuffix}'
+      AlarmDescription: Alert when database CPU exceeds threshold
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref PrimaryDBCluster
+
+  DBConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'db-connections-alarm-primary-${EnvironmentSuffix}'
+      AlarmDescription: Alert when database connections are high
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref PrimaryDBCluster
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref PrimaryVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PrimaryClusterEndpoint:
+    Description: Aurora Primary Cluster Endpoint
+    Value: !GetAtt PrimaryDBCluster.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-Cluster-Endpoint'
+
+  PrimaryClusterReaderEndpoint:
+    Description: Aurora Primary Cluster Reader Endpoint
+    Value: !GetAtt PrimaryDBCluster.ReadEndpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-Primary-Cluster-Reader-Endpoint'
+
+  GlobalClusterIdentifier:
+    Description: Global Cluster Identifier
+    Value: !Ref GlobalCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-Global-Cluster-ID'
+
+  HealthCheckId:
+    Description: Route53 Health Check ID
+    Value: !Ref HealthCheck
+    Export:
+      Name: !Sub '${AWS::StackName}-Health-Check-ID'
+
+  DBSecurityGroupId:
+    Description: Database Security Group ID
+    Value: !Ref DBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DB-Security-Group-ID'

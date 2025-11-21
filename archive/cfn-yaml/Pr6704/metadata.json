@@ -1,0 +1,45 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912301",
+  "team": "3",
+  "startedAt": "2025-11-17T13:13:35.648Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Key",
+    "Alias",
+    "LogGroup",
+    "MetricFilter",
+    "InsightRule",
+    "AnomalyDetector",
+    "Canary",
+    "Bucket",
+    "BucketPolicy",
+    "Role",
+    "Policy",
+    "Function",
+    "Permission",
+    "Rule",
+    "Alarm",
+    "CompositeAlarm",
+    "Dashboard",
+    "SamplingRule",
+    "QueryDefinition",
+    "Topic",
+    "Subscription",
+    "Link"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a brand-new, YAML-only CloudFormation stack (TapStack.yml) in us-east-1 to implement advanced observability for a high-volume payment processing system. Build everything new with ENVIRONMENT_SUFFIX-based naming and encryption-by-default. Configure KMS-backed CloudWatch Log Groups, metric filters for business KPIs, Synthetics canary checks, anomaly detectors, and Contributor Insights. Enable X-Ray tracing, composite alarms with SNS actions (local and optional central), and an EventBridge remediation path. Publish a multi-panel CloudWatch Dashboard and optional OAM Link for cross-account visibility—aligned with least-privilege IAM and production best practices.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

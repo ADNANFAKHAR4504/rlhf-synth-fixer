@@ -1,0 +1,37 @@
+{
+  "task_id": "101912459",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T09:22:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "po_id": "synth-observability-101912459",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "observability-&-monitoring"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "X-Ray",
+    "SNS",
+    "Kinesis",
+    "KinesisFirehose",
+    "Lambda",
+    "OpenSearch",
+    "IAM",
+    "KMS",
+    "S3",
+    "Logs"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

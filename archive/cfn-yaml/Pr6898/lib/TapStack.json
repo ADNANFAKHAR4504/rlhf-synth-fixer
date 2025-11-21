@@ -1,0 +1,1629 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Multi-tier web application infrastructure with high availability - Production Grade",
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "An environment name that is prefixed to resource names",
+            "Type": "String",
+            "Default": "webapp",
+            "AllowedPattern": "^[a-z][a-z0-9-]{0,19}$",
+            "ConstraintDescription": "Must begin with a lowercase letter, contain only lowercase alphanumeric characters and hyphens, max 20 characters"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "Latest Amazon Linux 2 AMI ID (region-agnostic)"
+        },
+        "InstanceType": {
+            "Description": "EC2 instance type for web servers",
+            "Type": "String",
+            "Default": "t2.micro",
+            "AllowedValues": [
+                "t2.micro",
+                "t2.small",
+                "t3.micro",
+                "t3.small"
+            ],
+            "ConstraintDescription": "Must be a valid EC2 instance type"
+        },
+        "EnableDetailedMonitoring": {
+            "Description": "Enable detailed monitoring for EC2 instances",
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "KeyPairName": {
+            "Description": "EC2 KeyPair for SSH access (optional - leave blank for no SSH access)",
+            "Type": "String",
+            "Default": ""
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicSubnet1": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PublicSubnet2": {
+                "CIDR": "10.0.2.0/24"
+            },
+            "PrivateSubnet1": {
+                "CIDR": "10.0.10.0/24"
+            },
+            "PrivateSubnet2": {
+                "CIDR": "10.0.20.0/24"
+            }
+        },
+        "RegionAzConfig": {
+            "sa-east-1": {
+                "PrimaryAZ": "sa-east-1a",
+                "SecondaryAZ": "sa-east-1c"
+            },
+            "us-east-1": {
+                "PrimaryAZ": "us-east-1a",
+                "SecondaryAZ": "us-east-1b"
+            },
+            "us-west-2": {
+                "PrimaryAZ": "us-west-2a",
+                "SecondaryAZ": "us-west-2b"
+            },
+            "eu-west-1": {
+                "PrimaryAZ": "eu-west-1a",
+                "SecondaryAZ": "eu-west-1b"
+            }
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "EnableMonitoring": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableDetailedMonitoring"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionAzConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PrimaryAZ"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionAzConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "SecondaryAZ"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionAzConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "PrimaryAZ"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::FindInMap": [
+                        "RegionAzConfig",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "SecondaryAZ"
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Routes"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "LoadBalancerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-LoadBalancer-SG"
+                },
+                "GroupDescription": "Security group for Application Load Balancer - allows HTTP from internet",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-LoadBalancer-SG"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-SG"
+                },
+                "GroupDescription": "Security group for web server instances - allows HTTP from ALB",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LoadBalancerSecurityGroup"
+                        },
+                        "Description": "Allow HTTP from Load Balancer"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere (for direct Elastic IP access)"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer-SG"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-S3-Role-${AWS::Region}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:ListBucket",
+                                        "s3:GetBucketVersioning",
+                                        "s3:GetObjectVersion",
+                                        "s3:DeleteObjectVersion",
+                                        "s3:GetBucketLocation",
+                                        "s3:ListBucketVersions"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeInstances",
+                                        "ec2:DescribeTags"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EC2-Role"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Profile-${AWS::Region}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${EnvironmentName}-storage-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 90
+                        },
+                        {
+                            "Id": "TransitionOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-S3-Bucket"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebServerInstance1": {
+            "Type": "AWS::EC2::Instance",
+            "DependsOn": [
+                "InternetGatewayAttachment"
+            ],
+            "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebServerSecurityGroup"
+                    }
+                ],
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Monitoring": {
+                    "Fn::If": [
+                        "EnableMonitoring",
+                        true,
+                        false
+                    ]
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash -xe\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y httpd aws-cfn-bootstrap\n\n# Configure and start Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content with instance information\nINSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\nAVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\nINSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)\nLOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\ncat << 'EOF' > /var/www/html/index.html\n<!DOCTYPE html>\n<html>\n<head>\n    <title>${EnvironmentName} - Web Application</title>\n    <style>\n        body {\n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n            margin: 0;\n            padding: 0;\n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            min-height: 100vh;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n        }\n        .container {\n            background: white;\n            padding: 40px;\n            border-radius: 15px;\n            box-shadow: 0 20px 60px rgba(0,0,0,0.3);\n            max-width: 800px;\n            width: 90%;\n        }\n        h1 {\n            color: #333;\n            border-bottom: 3px solid #667eea;\n            padding-bottom: 15px;\n            margin-bottom: 30px;\n        }\n        .info-grid {\n            display: grid;\n            grid-template-columns: 1fr 1fr;\n            gap: 20px;\n            margin: 30px 0;\n        }\n        .info-box {\n            padding: 15px;\n            background: #f8f9fa;\n            border-left: 4px solid #667eea;\n            border-radius: 5px;\n        }\n        .info-label {\n            font-weight: bold;\n            color: #555;\n            margin-bottom: 5px;\n        }\n        .info-value {\n            color: #333;\n            font-size: 14px;\n            word-break: break-all;\n        }\n        .status {\n            display: inline-block;\n            padding: 5px 15px;\n            background: #28a745;\n            color: white;\n            border-radius: 20px;\n            font-size: 12px;\n            margin-top: 20px;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>🚀 ${EnvironmentName} Web Application Infrastructure</h1>\n        <p>Welcome to the production-grade multi-tier web application!</p>\n        \n        <div class=\"info-grid\">\n            <div class=\"info-box\">\n                <div class=\"info-label\">Instance ID</div>\n                <div class=\"info-value\">EOF\necho -n \"$INSTANCE_ID\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Availability Zone</div>\n                <div class=\"info-value\">EOF\necho -n \"$AVAILABILITY_ZONE\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Instance Type</div>\n                <div class=\"info-value\">EOF\necho -n \"$INSTANCE_TYPE\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Local IP Address</div>\n                <div class=\"info-value\">EOF\necho -n \"$LOCAL_IP\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">S3 Bucket</div>\n                <div class=\"info-value\">${S3Bucket}</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Region</div>\n                <div class=\"info-value\">${AWS::Region}</div>\n            </div>\n        </div>\n        \n        <div class=\"status\">✓ Instance Healthy</div>\n        \n        <p style=\"margin-top: 30px; color: #666; font-size: 14px;\">\n            This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.\n        </p>\n    </div>\n</body>\n</html>\nEOF\n\n# Configure AWS CLI\naws configure set region ${AWS::Region}\n\n# Test S3 access and create instance marker\necho \"Instance $INSTANCE_ID initialized at $(date)\" > /tmp/instance-init.txt\naws s3 cp /tmp/instance-init.txt s3://${S3Bucket}/instances/$INSTANCE_ID/init.txt\n\n# Signal successful completion\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance1 --region ${AWS::Region}\n"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer-1"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Subnet",
+                        "Value": "PublicSubnet1"
+                    }
+                ]
+            },
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Timeout": "PT10M"
+                }
+            }
+        },
+        "ElasticIP1": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EIP-1"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "EIPAssociation1": {
+            "Type": "AWS::EC2::EIPAssociation",
+            "Properties": {
+                "InstanceId": {
+                    "Ref": "WebServerInstance1"
+                },
+                "EIP": {
+                    "Ref": "ElasticIP1"
+                }
+            }
+        },
+        "WebServerInstance2": {
+            "Type": "AWS::EC2::Instance",
+            "DependsOn": [
+                "InternetGatewayAttachment"
+            ],
+            "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebServerSecurityGroup"
+                    }
+                ],
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Monitoring": {
+                    "Fn::If": [
+                        "EnableMonitoring",
+                        true,
+                        false
+                    ]
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash -xe\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y httpd aws-cfn-bootstrap\n\n# Configure and start Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content with instance information\nINSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\nAVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\nINSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)\nLOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\ncat << 'EOF' > /var/www/html/index.html\n<!DOCTYPE html>\n<html>\n<head>\n    <title>${EnvironmentName} - Web Application</title>\n    <style>\n        body {\n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n            margin: 0;\n            padding: 0;\n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            min-height: 100vh;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n        }\n        .container {\n            background: white;\n            padding: 40px;\n            border-radius: 15px;\n            box-shadow: 0 20px 60px rgba(0,0,0,0.3);\n            max-width: 800px;\n            width: 90%;\n        }\n        h1 {\n            color: #333;\n            border-bottom: 3px solid #667eea;\n            padding-bottom: 15px;\n            margin-bottom: 30px;\n        }\n        .info-grid {\n            display: grid;\n            grid-template-columns: 1fr 1fr;\n            gap: 20px;\n            margin: 30px 0;\n        }\n        .info-box {\n            padding: 15px;\n            background: #f8f9fa;\n            border-left: 4px solid #667eea;\n            border-radius: 5px;\n        }\n        .info-label {\n            font-weight: bold;\n            color: #555;\n            margin-bottom: 5px;\n        }\n        .info-value {\n            color: #333;\n            font-size: 14px;\n            word-break: break-all;\n        }\n        .status {\n            display: inline-block;\n            padding: 5px 15px;\n            background: #28a745;\n            color: white;\n            border-radius: 20px;\n            font-size: 12px;\n            margin-top: 20px;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>🚀 ${EnvironmentName} Web Application Infrastructure</h1>\n        <p>Welcome to the production-grade multi-tier web application!</p>\n        \n        <div class=\"info-grid\">\n            <div class=\"info-box\">\n                <div class=\"info-label\">Instance ID</div>\n                <div class=\"info-value\">EOF\necho -n \"$INSTANCE_ID\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Availability Zone</div>\n                <div class=\"info-value\">EOF\necho -n \"$AVAILABILITY_ZONE\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Instance Type</div>\n                <div class=\"info-value\">EOF\necho -n \"$INSTANCE_TYPE\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Local IP Address</div>\n                <div class=\"info-value\">EOF\necho -n \"$LOCAL_IP\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">S3 Bucket</div>\n                <div class=\"info-value\">${S3Bucket}</div>\n            </div>\n            <div class=\"info-box\">\n                <div class=\"info-label\">Region</div>\n                <div class=\"info-value\">${AWS::Region}</div>\n            </div>\n        </div>\n        \n        <div class=\"status\">✓ Instance Healthy</div>\n        \n        <p style=\"margin-top: 30px; color: #666; font-size: 14px;\">\n            This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.\n        </p>\n    </div>\n</body>\n</html>\nEOF\n\n# Configure AWS CLI\naws configure set region ${AWS::Region}\n\n# Test S3 access and create instance marker\necho \"Instance $INSTANCE_ID initialized at $(date)\" > /tmp/instance-init.txt\naws s3 cp /tmp/instance-init.txt s3://${S3Bucket}/instances/$INSTANCE_ID/init.txt\n\n# Signal successful completion\n/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance2 --region ${AWS::Region}\n"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer-2"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Subnet",
+                        "Value": "PublicSubnet2"
+                    }
+                ]
+            },
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Timeout": "PT10M"
+                }
+            }
+        },
+        "ElasticIP2": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EIP-2"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "EIPAssociation2": {
+            "Type": "AWS::EC2::EIPAssociation",
+            "Properties": {
+                "InstanceId": {
+                    "Ref": "WebServerInstance2"
+                },
+                "EIP": {
+                    "Ref": "ElasticIP2"
+                }
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "IpAddressType": "ipv4",
+                "SecurityGroups": [
+                    {
+                        "Ref": "LoadBalancerSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ALB"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TG"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "instance",
+                "Targets": [
+                    {
+                        "Id": {
+                            "Ref": "WebServerInstance1"
+                        },
+                        "Port": 80
+                    },
+                    {
+                        "Id": {
+                            "Ref": "WebServerInstance2"
+                        },
+                        "Port": 80
+                    }
+                ],
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200-399"
+                },
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": "60"
+                    },
+                    {
+                        "Key": "stickiness.enabled",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "stickiness.type",
+                        "Value": "lb_cookie"
+                    },
+                    {
+                        "Key": "stickiness.lb_cookie.duration_seconds",
+                        "Value": "86400"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-TG"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "WebServerLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebServerSecurityGroup"
+                        }
+                    ],
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "Monitoring": {
+                        "Enabled": {
+                            "Fn::If": [
+                                "EnableMonitoring",
+                                true,
+                                false
+                            ]
+                        }
+                    },
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash -xe\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y httpd aws-cfn-bootstrap\n\n# Configure and start Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create web content with instance information\nINSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\nAVAILABILITY_ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\nINSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)\nLOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n\ncat << 'EOF' > /var/www/html/index.html\n<!DOCTYPE html>\n<html>\n<head>\n    <title>${EnvironmentName} - Auto Scaled Instance</title>\n    <style>\n        body {\n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n            margin: 0;\n            padding: 0;\n            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);\n            min-height: 100vh;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n        }\n        .container {\n            background: white;\n            padding: 40px;\n            border-radius: 15px;\n            box-shadow: 0 20px 60px rgba(0,0,0,0.3);\n            max-width: 800px;\n            width: 90%;\n        }\n        h1 {\n            color: #333;\n            border-bottom: 3px solid #f5576c;\n            padding-bottom: 15px;\n            margin-bottom: 30px;\n        }\n        .badge {\n            display: inline-block;\n            padding: 5px 15px;\n            background: #f5576c;\n            color: white;\n            border-radius: 20px;\n            font-size: 12px;\n            margin-left: 10px;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>🔄 Auto Scaled Instance <span class=\"badge\">ASG</span></h1>\n        <p>This instance was automatically provisioned by the Auto Scaling Group.</p>\n        \n        <div style=\"background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;\">\n            <p><strong>Instance ID:</strong> EOF\necho -n \"$INSTANCE_ID\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</p>\n            <p><strong>Availability Zone:</strong> EOF\necho -n \"$AVAILABILITY_ZONE\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</p>\n            <p><strong>Instance Type:</strong> EOF\necho -n \"$INSTANCE_TYPE\" >> /var/www/html/index.html\ncat << 'EOF' >> /var/www/html/index.html\n</p>\n            <p><strong>S3 Bucket:</strong> ${S3Bucket}</p>\n            <p><strong>Region:</strong> ${AWS::Region}</p>\n        </div>\n    </div>\n</body>\n</html>\nEOF\n\n# Configure AWS CLI\naws configure set region ${AWS::Region}\n\n# Test S3 access\necho \"ASG Instance $INSTANCE_ID initialized at $(date)\" > /tmp/asg-init.txt\naws s3 cp /tmp/asg-init.txt s3://${S3Bucket}/asg-instances/$INSTANCE_ID/init.txt\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${EnvironmentName}-ASG-WebServer"
+                                    }
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentName"
+                                    }
+                                },
+                                {
+                                    "Key": "ManagedBy",
+                                    "Value": "AutoScalingGroup"
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${EnvironmentName}-ASG-Volume"
+                                    }
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "WebServerAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "WebServerInstance1",
+                "WebServerInstance2"
+            ],
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${EnvironmentName}-ASG"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "WebServerLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "WebServerLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 2,
+                "MaxSize": 6,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Cooldown": 300,
+                "TerminationPolicies": [
+                    "OldestInstance"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ASG-Instance"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            },
+            "UpdatePolicy": {
+                "AutoScalingRollingUpdate": {
+                    "MinInstancesInService": 1,
+                    "MaxBatchSize": 1,
+                    "PauseTime": "PT5M",
+                    "WaitOnResourceSignals": false,
+                    "SuspendProcesses": [
+                        "HealthCheck",
+                        "ReplaceUnhealthy",
+                        "AZRebalance",
+                        "AlarmNotification",
+                        "ScheduledActions"
+                    ]
+                }
+            }
+        },
+        "ScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${EnvironmentName}-ScaleUp"
+                },
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "WebServerAutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": 1
+            }
+        },
+        "ScaleDownPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${EnvironmentName}-ScaleDown"
+                },
+                "AdjustmentType": "ChangeInCapacity",
+                "AutoScalingGroupName": {
+                    "Ref": "WebServerAutoScalingGroup"
+                },
+                "Cooldown": 300,
+                "ScalingAdjustment": -1
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-HighCPU"
+                },
+                "AlarmDescription": "Scale up when average CPU exceeds 70%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 70,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "WebServerAutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleUpPolicy"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "LowCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-LowCPU"
+                },
+                "AlarmDescription": "Scale down when average CPU is below 30%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 3,
+                "Threshold": 30,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "WebServerAutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "ScaleDownPolicy"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "LoadBalancerDNS": {
+            "Description": "DNS name of the Application Load Balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-DNS"
+                }
+            }
+        },
+        "LoadBalancerURL": {
+            "Description": "Full URL of the Application Load Balancer",
+            "Value": {
+                "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-URL"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-ID"
+                }
+            }
+        },
+        "VPCCidr": {
+            "Description": "VPC CIDR Block",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VPC",
+                    "CidrBlock"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-CIDR"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1-ID"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2-ID"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1-ID"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2-ID"
+                }
+            }
+        },
+        "WebServerInstance1Id": {
+            "Description": "Instance ID of WebServer 1",
+            "Value": {
+                "Ref": "WebServerInstance1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Instance1-ID"
+                }
+            }
+        },
+        "WebServerInstance2Id": {
+            "Description": "Instance ID of WebServer 2",
+            "Value": {
+                "Ref": "WebServerInstance2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Instance2-ID"
+                }
+            }
+        },
+        "ElasticIP1Address": {
+            "Description": "Elastic IP address for WebServer 1",
+            "Value": {
+                "Ref": "ElasticIP1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EIP1"
+                }
+            }
+        },
+        "ElasticIP2Address": {
+            "Description": "Elastic IP address for WebServer 2",
+            "Value": {
+                "Ref": "ElasticIP2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EIP2"
+                }
+            }
+        },
+        "WebServerInstance1URL": {
+            "Description": "Direct URL to WebServer 1 via Elastic IP",
+            "Value": {
+                "Fn::Sub": "http://${ElasticIP1}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Instance1-URL"
+                }
+            }
+        },
+        "WebServerInstance2URL": {
+            "Description": "Direct URL to WebServer 2 via Elastic IP",
+            "Value": {
+                "Fn::Sub": "http://${ElasticIP2}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Instance2-URL"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-S3-Bucket"
+                }
+            }
+        },
+        "S3BucketArn": {
+            "Description": "ARN of the S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3Bucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-S3-Bucket-ARN"
+                }
+            }
+        },
+        "WebServerSecurityGroupId": {
+            "Description": "Security Group ID for Web Servers",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-WebServer-SG-ID"
+                }
+            }
+        },
+        "LoadBalancerSecurityGroupId": {
+            "Description": "Security Group ID for Load Balancer",
+            "Value": {
+                "Ref": "LoadBalancerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LB-SG-ID"
+                }
+            }
+        },
+        "EC2RoleArn": {
+            "Description": "ARN of the IAM role for EC2 instances",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Role-ARN"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Name of the Auto Scaling Group",
+            "Value": {
+                "Ref": "WebServerAutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ASG-Name"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "ID of the Launch Template",
+            "Value": {
+                "Ref": "WebServerLaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate-ID"
+                }
+            }
+        },
+        "TargetGroupArn": {
+            "Description": "ARN of the ALB Target Group",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TG-ARN"
+                }
+            }
+        }
+    }
+}

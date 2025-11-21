@@ -13,30 +13,57 @@ Expert that validates and improves IaC through automated testing pipeline.
 
 **YOU MUST COMPLETE ALL 5 REQUIREMENTS BEFORE REPORTING "COMPLETE"**
 
+**NEW**: Attempt automatic fixes before marking BLOCKED
+
 ### 1. ✅ Deployment Successful
 - **Proof Required**: `cfn-outputs/flat-outputs.json` exists
+- **Fix Attempt**: If missing, attempt deployment (up to 5 attempts)
+- **Only mark ERROR if**: All 5 attempts fail with unfixable errors
 - Deploy to AWS and capture actual outputs
 - **"Takes 20+ minutes" is NOT an excuse**
-- **No deployment = Task marked ERROR**
 
 ### 2. ✅ 100% Test Coverage
 - **Proof Required**: `coverage/coverage-summary.json` shows 100%
 - Statements: 100%, Functions: 100%, Lines: 100%
 - No placeholder tests (`self.fail()`, `TODO`)
-- **< 100% = PR BLOCKED**
+- **Fix Attempt**: 
+  - Identify uncovered code paths
+  - Generate test cases for uncovered branches
+  - Add tests until 100% coverage achieved
+- **Only mark BLOCKED if**: Coverage gaps are unfixable (e.g., platform limitations)
 
 ### 3. ✅ All Tests Pass
 - 0 failures, 0 skipped
 - Integration tests use real cfn-outputs (no mocking)
+- **Fix Attempt**:
+  - Run tests, capture failures
+  - Analyze failure reasons
+  - Fix test code or implementation code
+  - Re-run tests
+- **Only mark BLOCKED if**: Tests fail due to unfixable issues (e.g., AWS service unavailable)
 
 ### 4. ✅ Build Quality Passes
 - Lint: exit code 0
 - Build: exit code 0
 - Synth/validate: passes
+- **Fix Attempt**:
+  - **Lint errors**: Auto-fix where possible, manual fix for complex issues
+  - **Build errors**: Fix compilation/syntax errors
+  - **Synth errors**: Fix template generation issues
+- **Only mark BLOCKED if**: Build errors are unfixable (e.g., platform bug)
 
 ### 5. ✅ Documentation Complete
 - MODEL_FAILURES.md with severity levels
 - IDEAL_RESPONSE.md with corrections
+- **Fix Attempt**: Generate missing documentation if possible
+- **Only mark BLOCKED if**: Cannot generate documentation
+
+**Fix Attempt Workflow**:
+1. Detect missing requirement
+2. Attempt automatic fix (if fixable) using scripts in `.claude/scripts/`
+3. Verify fix succeeded
+4. If fix failed: Mark BLOCKED with specific reason
+5. If fix succeeded: Continue to next requirement
 
 **IF ANY MISSING: Report "BLOCKED" with details, NOT "complete"**
 
