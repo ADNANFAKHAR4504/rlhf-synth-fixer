@@ -762,7 +762,7 @@
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "EngineVersion": "8.0.mysql_aurora.3.02.0",
         "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"},
         "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
