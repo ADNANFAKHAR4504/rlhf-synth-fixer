@@ -23,6 +23,10 @@ cdktf-cdktf-provider-aws = "*"
 pulumi-kubernetes = "*"
 pulumi-tls = "*"
 aws-cdk-lambda-layer-kubectl-v29 = "*"
+numpy = "*"
+openai = "*"
+pandas = "*"
+openpyxl = "*"
 
 [dev-packages]
 boto3 = "*"
