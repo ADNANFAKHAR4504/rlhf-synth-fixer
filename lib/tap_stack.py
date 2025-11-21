@@ -86,6 +86,97 @@ class TapStack(cdk.Stack):
             enable_key_rotation=True,
             pending_window=Duration.days(7),
             removal_policy=RemovalPolicy.DESTROY,
+            policy=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="Enable IAM User Permissions",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.AccountRootPrincipal()],
+                        actions=["kms:*"],
+                        resources=["*"],
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow EC2 service for EBS encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("ec2.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"ec2.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow RDS service for database encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("rds.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"rds.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow ElastiCache service for Redis encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("elasticache.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"elasticache.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow DynamoDB service for table encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("dynamodb.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"dynamodb.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                ]
+            ),
         )
 
         # Create dedicated VPC for trading platform
