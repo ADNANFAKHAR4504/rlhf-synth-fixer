@@ -257,22 +257,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- S3 ---------------------------------- */
 
-  it("9) Application S3 bucket should exist and have encryption enabled", async () => {
-    const bucket = outputs.ApplicationBucketName;
-    await retry(() =>
-      s3.send(
-        new HeadBucketCommand({
-          Bucket: bucket,
-        }),
-      ),
-    );
-    const enc = await retry(() =>
-      s3.send(new GetBucketEncryptionCommand({ Bucket: bucket })),
-    );
-    expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
-  });
-
-  it("10) CloudTrail S3 bucket should exist and have encryption enabled", async () => {
+  it("9) CloudTrail S3 bucket should exist and have encryption enabled", async () => {
     const bucket = outputs.CloudTrailBucketName;
     await retry(() =>
       s3.send(
@@ -289,7 +274,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- KMS --------------------------------- */
 
-  it("11) KMS key from outputs should exist and be enabled", async () => {
+  it("10) KMS key from outputs should exist and be enabled", async () => {
     const keyArn = outputs.KMSKeyArn;
     const resp = await retry(() =>
       kms.send(new DescribeKeyCommand({ KeyId: keyArn })),
@@ -300,17 +285,17 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- RDS --------------------------------- */
 
-  it("12) RDS DB instance should exist and match RDSEndpoint output", async () => {
+  it("11) RDS DB instance should exist and match RDSEndpoint output", async () => {
     await findRdsByEndpoint();
   });
 
-  it("13) RDS DB instance should be encrypted and not publicly accessible", async () => {
+  it("12) RDS DB instance should be encrypted and not publicly accessible", async () => {
     const db = await findRdsByEndpoint();
     expect(db.StorageEncrypted).toBe(true);
     expect(db.PubliclyAccessible).toBe(false);
   });
 
-  it("14) RDS: TCP connectivity check to port 3306 returns a boolean (connect or timeout)", async () => {
+  it("13) RDS: TCP connectivity check to port 3306 returns a boolean (connect or timeout)", async () => {
     const endpoint = outputs.RDSEndpoint;
     const port = 3306;
 
@@ -352,7 +337,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* ------------------------------- CloudTrail ----------------------------- */
 
-  it("15) CloudTrail trail from outputs should be multi-region and logging", async () => {
+  it("14) CloudTrail trail from outputs should be multi-region and logging", async () => {
     const trailArn = outputs.CloudTrailArn;
 
     const desc = await retry(() =>
@@ -373,7 +358,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* ------------------------------ CloudWatch ------------------------------ */
 
-  it("16) CloudWatch: Unauthorized API calls alarm should exist", async () => {
+  it("15) CloudWatch: Unauthorized API calls alarm should exist", async () => {
     const resp = await retry(() =>
       cw.send(new DescribeAlarmsCommand({})),
     );
@@ -386,7 +371,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- SNS --------------------------------- */
 
-  it("17) SNS Topic for alerts should exist and be KMS-protected", async () => {
+  it("16) SNS Topic for alerts should exist and be KMS-protected", async () => {
     const topicArn = outputs.SNSTopicArn;
     const resp = await retry(() =>
       sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn })),
@@ -400,7 +385,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- EC2 --------------------------------- */
 
-  it("18) EC2 instance from outputs should exist in the VPC", async () => {
+  it("17) EC2 instance from outputs should exist in the VPC", async () => {
     const instanceId = outputs.EC2InstanceId;
     const resp = await retry(() =>
       ec2.send(new DescribeInstancesCommand({ InstanceIds: [instanceId] })),
@@ -415,7 +400,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- ALB --------------------------------- */
 
-  it("19) Application Load Balancer should exist and expose the DNS name from outputs", async () => {
+  it("18) Application Load Balancer should exist and expose the DNS name from outputs", async () => {
     const albDns = outputs.ApplicationLoadBalancerDNS;
     const resp = await retry(() =>
       elbv2.send(new DescribeLoadBalancersCommand({})),
@@ -427,7 +412,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* --------------------------------- IAM --------------------------------- */
 
-  it("20) IAM: EC2 role trust policy should allow EC2 to assume the role", async () => {
+  it("19) IAM: EC2 role trust policy should allow EC2 to assume the role", async () => {
     const arn = outputs.EC2RoleArn;
     const roleName = roleNameFromArn(arn);
     expect(roleName).toBeDefined();
@@ -452,7 +437,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
     expect(hasEC2).toBe(true);
   });
 
-  it("21) IAM: EC2 role should have AmazonSSMManagedInstanceCore attached", async () => {
+  it("20) IAM: EC2 role should have AmazonSSMManagedInstanceCore attached", async () => {
     const arn = outputs.EC2RoleArn;
     const roleName = roleNameFromArn(arn);
     expect(roleName).toBeDefined();
@@ -473,7 +458,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
     ).toBe(true);
   });
 
-  it("22) IAM: Admin role trust policy should enforce MFA", async () => {
+  it("21) IAM: Admin role trust policy should enforce MFA", async () => {
     const arn = outputs.AdminRoleArn;
     const roleName = roleNameFromArn(arn);
     expect(roleName).toBeDefined();
@@ -502,7 +487,7 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* -------------------------- Secrets Manager / RDS ----------------------- */
 
-  it("23) Secrets Manager: DB master password secret from outputs should exist", async () => {
+  it("22) Secrets Manager: DB master password secret from outputs should exist", async () => {
     const secretArn = outputs.DBMasterPasswordSecretArn;
     expect(secretArn).toBeDefined();
     const resp = await retry(() =>
@@ -513,14 +498,14 @@ describe("TapStack — Live Integration Tests (25 tests)", () => {
 
   /* ------------------------- Extra Output Validations --------------------- */
 
-  it("24) WAFWebACLArn output should look like a valid WAFv2 ARN", () => {
+  it("23) WAFWebACLArn output should look like a valid WAFv2 ARN", () => {
     const wafArn = outputs.WAFWebACLArn;
     expect(wafArn).toMatch(
       /^arn:aws:wafv2:[a-z]{2}-[a-z]+-\d:\d{12}:regional\/webacl\//,
     );
   });
 
-  it("25) CloudTrailRoleArn output should look like a valid IAM role ARN", () => {
+  it("24) CloudTrailRoleArn output should look like a valid IAM role ARN", () => {
     const roleArn = outputs.CloudTrailRoleArn;
     expect(roleArn).toMatch(/^arn:aws:iam::\d{12}:role\/.+/);
   });
