@@ -7,7 +7,8 @@
   "startedAt": "2025-11-20T00:00:00Z",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Web Application Deployment"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "po_id": "j4p4f9",
   "aws_services": [
@@ -20,10 +21,5 @@
     "Secrets Manager"
   ],
   "region": "us-east-1",
-  "training_quality": 10,
-  "author": "mayanksethi-turing",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  }
+  "training_quality": 9
 }
