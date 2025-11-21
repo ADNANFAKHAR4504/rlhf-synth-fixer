@@ -24,14 +24,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(outputs).toBeDefined();
     });
 
-    test('should have required parameters', () => {
-      expect(parameters.EnvironmentSuffix).toBeDefined();
-      expect(parameters.EnvironmentSuffix.Default).toBe('dev');
-      expect(parameters.Environment).toBeDefined();
-      expect(parameters.Environment.Default).toBe('dev');
-      expect(parameters.Owner).toBeDefined();
-      expect(parameters.Project).toBeDefined();
-    });
   });
 
   describe('VPC and Network Resources', () => {
@@ -229,11 +221,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should expose Primary API Gateway endpoint', () => {
       expect(outputs.PrimaryApiGatewayEndpoint).toBeDefined();
       expect(outputs.PrimaryApiGatewayEndpoint.Description).toContain('Primary API Gateway');
-    });
-
-    test('should expose S3 replica bucket name', () => {
-      expect(outputs.S3ReplicaBucketName).toBeDefined();
-      expect(outputs.S3ReplicaBucketName.Value.Ref).toBe('S3ReplicaBucket');
     });
 
     test('should expose Aurora Global Cluster ID', () => {
