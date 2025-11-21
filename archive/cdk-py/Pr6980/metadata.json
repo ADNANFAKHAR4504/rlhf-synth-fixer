@@ -23,11 +23,7 @@
     "elasticloadbalancingv2"
   ],
   "subject_labels": [
-    "High Availability",
-    "Multi-AZ",
-    "Failure Recovery",
-    "Auto-Scaling",
-    "Monitoring"
+    "Failure Recovery Automation"
   ],
   "training_quality": 10,
   "author": "mayanksethi-turing",
