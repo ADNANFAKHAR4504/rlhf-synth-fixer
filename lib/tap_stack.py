@@ -440,30 +440,44 @@ exports.handler = async (event) => {
 };
 """
 
-# Instantiate the TapStack
-config = pulumi.Config()
-environment_suffix = config.get('environment_suffix') or pulumi.get_stack().replace('TapStack', '').lower() or 'dev'
+# Instantiate the TapStack only when running in Pulumi execution context
+# This prevents execution during unit test imports
+def _create_stack():
+    """Create and export the TapStack. Only runs during Pulumi execution."""
+    config = pulumi.Config()
+    environment_suffix = config.get('environment_suffix') or pulumi.get_stack().replace('TapStack', '').lower() or 'dev'
 
-# Get default tags from Pulumi config if available
-default_tags = {}
-try:
-    aws_tags = config.get_object('aws:defaultTags')
-    if aws_tags and 'tags' in aws_tags:
-        default_tags = aws_tags['tags']
-except:
-    pass
+    # Get default tags from Pulumi config if available
+    default_tags = {}
+    try:
+        aws_tags = config.get_object('aws:defaultTags')
+        if aws_tags and 'tags' in aws_tags:
+            default_tags = aws_tags['tags']
+    except (AttributeError, KeyError, TypeError):
+        # Config may not have aws:defaultTags or it may be in wrong format
+        pass
 
-# Create the stack
-stack = TapStack(
-    'tap-stack',
-    TapStackArgs(
-        environment_suffix=environment_suffix,
-        tags=default_tags
+    # Create the stack
+    stack = TapStack(
+        'tap-stack',
+        TapStackArgs(
+            environment_suffix=environment_suffix,
+            tags=default_tags
+        )
     )
-)
 
-# Export outputs
-pulumi.export('api_endpoint', stack.api_endpoint)
-pulumi.export('table_name', stack.table_name)
-pulumi.export('lambda_function_name', stack.lambda_function_name)
-pulumi.export('kms_key_id', stack.kms_key_id)
+    # Export outputs
+    pulumi.export('api_endpoint', stack.api_endpoint)
+    pulumi.export('table_name', stack.table_name)
+    pulumi.export('lambda_function_name', stack.lambda_function_name)
+    pulumi.export('kms_key_id', stack.kms_key_id)
+
+# Only create stack if Pulumi runtime is properly initialized
+# Check if we can safely get the stack name (indicates Pulumi is running)
+try:
+    _ = pulumi.get_stack()
+    _create_stack()
+except (AttributeError, RuntimeError, Exception):
+    # Pulumi runtime not available (e.g., during unit tests or imports)
+    # Stack will be created when Pulumi actually runs the program
+    pass

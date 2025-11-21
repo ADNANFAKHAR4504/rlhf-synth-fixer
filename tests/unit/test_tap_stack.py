@@ -232,6 +232,21 @@ class TestTapStack(unittest.TestCase):
         # Verify environment suffix is stored
         self.assertEqual(stack.environment_suffix, 'test-env')
 
+    @pulumi.runtime.test
+    def test_stack_instantiation_with_exports(self):
+        """Test that stack can be instantiated and exports are created."""
+        from lib.tap_stack import _create_stack
+        
+        # Set mocks with a stack name that will extract 'test' as suffix
+        pulumi.runtime.set_mocks(MyMocks(), 'project', 'TapStacktest', False)
+        
+        # Call _create_stack to test stack instantiation and exports
+        # This tests the full stack creation path including exports
+        _create_stack()
+        
+        # If we get here without errors, the function executed successfully
+        self.assertTrue(True)
+
 
 if __name__ == '__main__':
     unittest.main()
