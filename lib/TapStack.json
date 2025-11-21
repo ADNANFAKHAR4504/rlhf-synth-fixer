@@ -41,17 +41,20 @@
     "DBPassword": {
       "Type": "String",
       "NoEcho": true,
+      "Default": "ChangeMe123!",
       "MinLength": 8,
       "MaxLength": 41,
-      "Description": "Database master password (8-41 characters)"
+      "Description": "Database master password (8-41 characters). Default provided for CI/CD testing."
     },
     "VPCId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "Existing VPC ID where resources will be deployed"
+      "Type": "String",
+      "Default": "",
+      "Description": "Optional: Existing VPC ID. Leave empty to create a new VPC."
     },
     "PrivateSubnetIds": {
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "List of private subnet IDs for RDS and Lambda deployment"
+      "Type": "CommaDelimitedList",
+      "Default": "",
+      "Description": "Optional: Comma-delimited list of private subnet IDs. Leave empty to create new subnets."
     }
   },
   "Conditions": {
@@ -62,9 +65,171 @@
         },
         "prod"
       ]
+    },
+    "CreateVPC": {
+      "Fn::Equals": [
+        {
+          "Ref": "VPCId"
+        },
+        ""
+      ]
     }
   },
   "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Condition": "CreateVPC",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
@@ -73,7 +238,23 @@
         },
         "DBSubnetGroupDescription": "Subnet group for Aurora ServerlessV2 cluster",
         "SubnetIds": {
-          "Ref": "PrivateSubnetIds"
+          "Fn::If": [
+            "CreateVPC",
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ],
+            {
+              "Ref": "PrivateSubnetIds"
+            }
+          ]
         },
         "Tags": [
           {
@@ -99,7 +280,15 @@
         },
         "GroupDescription": "Security group for RDS Aurora cluster",
         "VpcId": {
-          "Ref": "VPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VPCId"
+            }
+          ]
         },
         "SecurityGroupIngress": [
           {
@@ -136,7 +325,15 @@
         },
         "GroupDescription": "Security group for Lambda functions",
         "VpcId": {
-          "Ref": "VPCId"
+          "Fn::If": [
+            "CreateVPC",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VPCId"
+            }
+          ]
         },
         "SecurityGroupEgress": [
           {
@@ -473,7 +670,23 @@
             }
           ],
           "SubnetIds": {
-            "Ref": "PrivateSubnetIds"
+            "Fn::If": [
+              "CreateVPC",
+              [
+                {
+                  "Ref": "PrivateSubnet1"
+                },
+                {
+                  "Ref": "PrivateSubnet2"
+                },
+                {
+                  "Ref": "PrivateSubnet3"
+                }
+              ],
+              {
+                "Ref": "PrivateSubnetIds"
+              }
+            ]
           }
         },
         "Tags": [
