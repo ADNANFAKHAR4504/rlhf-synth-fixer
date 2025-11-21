@@ -457,7 +457,7 @@ class TapStack(cdk.Stack):
                         volume_type=ec2.EbsDeviceVolumeType.IO2,
                         iops=10000,
                         encrypted=True,
-                        kms_key=self.kms_key,
+                        # Use default AWS managed key for EBS instead of custom key
                         delete_on_termination=True,
                     ),
                 ),
