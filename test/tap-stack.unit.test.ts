@@ -38,11 +38,8 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(param.Default).toBe('prod');
     });
 
-    test('should have DBPasswordParameterPath parameter with default', () => {
-      expect(template.Parameters.DBPasswordParameterPath).toBeDefined();
-      const param = template.Parameters.DBPasswordParameterPath;
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('/payment/db/password');
+    test('should not have DBPassword parameter (using Secrets Manager instead)', () => {
+      expect(template.Parameters.DBPassword).toBeUndefined();
     });
 
     test('should have DBUsername parameter with default', () => {
@@ -73,9 +70,9 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(param.Default).toBe('t3.medium');
     });
 
-    test('should have exactly 6 parameters', () => {
+    test('should have exactly 5 parameters', () => {
       const paramCount = Object.keys(template.Parameters).length;
-      expect(paramCount).toBe(6);
+      expect(paramCount).toBe(5);
     });
   });
 
@@ -199,6 +196,15 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
     });
 
+    test('should have Secrets Manager secret for database credentials', () => {
+      expect(template.Resources.DBMasterSecret).toBeDefined();
+      expect(template.Resources.DBMasterSecret.Type).toBe('AWS::SecretsManager::Secret');
+      const secret = template.Resources.DBMasterSecret;
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
+    });
+
     test('should have KMS key for EBS volume encryption', () => {
       expect(template.Resources.EBSKMSKey).toBeDefined();
       expect(template.Resources.EBSKMSKey.Type).toBe('AWS::KMS::Key');
@@ -220,6 +226,20 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
       expect(cluster.DeletionPolicy).toBe('Delete');
       expect(cluster.UpdateReplacePolicy).toBe('Delete');
+    });
+
+    test('Aurora cluster should use Secrets Manager for credentials', () => {
+      const cluster = template.Resources.AuroraDBCluster;
+      expect(cluster.Properties.MasterUsername).toBeDefined();
+      expect(cluster.Properties.MasterUserPassword).toBeDefined();
+
+      // Both should use dynamic references to Secrets Manager
+      expect(cluster.Properties.MasterUsername['Fn::Sub']).toBeDefined();
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toBeDefined();
+      expect(cluster.Properties.MasterUsername['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(cluster.Properties.MasterUsername['Fn::Sub']).toContain('DBMasterSecret');
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('DBMasterSecret');
     });
 
     test('Aurora cluster should enable CloudWatch logs', () => {
@@ -405,14 +425,14 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
   });
 
   describe('Resource Count Validation', () => {
-    test('should have exactly 52 resources', () => {
+    test('should have exactly 53 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(52);
+      expect(resourceCount).toBe(53);
     });
 
-    test('should have exactly 7 outputs', () => {
+    test('should have exactly 8 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(8);
     });
   });
 
@@ -457,6 +477,11 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Outputs.HealthCheckId).toBeDefined();
       expect(template.Outputs.HealthCheckId.Value).toEqual({ Ref: 'Route53HealthCheck' });
     });
+
+    test('should have DBMasterSecretArn output', () => {
+      expect(template.Outputs.DBMasterSecretArn).toBeDefined();
+      expect(template.Outputs.DBMasterSecretArn.Value).toEqual({ Ref: 'DBMasterSecret' });
+    });
   });
 
   describe('Security Best Practices', () => {
@@ -476,11 +501,15 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Resources.InstanceProfile).toBeDefined();
     });
 
-    test('DB password should use SSM Parameter Store path', () => {
-      const param = template.Parameters.DBPasswordParameterPath;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.Default).toBe('/payment/db/password');
+    test('DB credentials should use Secrets Manager instead of parameter', () => {
+      // Verify Secrets Manager secret exists
+      expect(template.Resources.DBMasterSecret).toBeDefined();
+
+      // Verify Aurora cluster uses dynamic reference to Secrets Manager
+      const cluster = template.Resources.AuroraDBCluster;
+      expect(cluster.Properties.MasterUserPassword).toBeDefined();
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toBeDefined();
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
     });
   });
 

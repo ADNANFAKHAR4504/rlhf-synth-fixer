@@ -13,11 +13,6 @@
       "Default": "admin",
       "NoEcho": true
     },
-    "DBPasswordParameterPath": {
-      "Type": "String",
-      "Description": "SSM Parameter Store path for the master password (e.g., /payment/db/password). Use dynamic reference format: {{resolve:ssm:parameter-path}}",
-      "Default": "/payment/db/password"
-    },
     "InstanceType": {
       "Type": "String",
       "Description": "EC2 instance type for Auto Scaling Group",
@@ -649,6 +644,33 @@
         }
       }
     },
+    "DBMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-aurora-master-${EnvironmentSuffix}"
+        },
+        "Description": {
+          "Fn::Sub": "Aurora MySQL master credentials for ${EnvironmentSuffix}"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DBUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-aurora-master-secret-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
     "AuroraDBCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Delete",
@@ -660,10 +682,10 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": {
-          "Ref": "DBUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:ssm:${DBPasswordParameterPath}}}"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}"
         },
         "DatabaseName": "paymentdb",
         "DBSubnetGroupName": {
@@ -1614,6 +1636,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-HealthCheck-Id"
+        }
+      }
+    },
+    "DBMasterSecretArn": {
+      "Description": "Secrets Manager ARN for Aurora database master credentials",
+      "Value": {
+        "Ref": "DBMasterSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DB-Secret-Arn"
         }
       }
     }

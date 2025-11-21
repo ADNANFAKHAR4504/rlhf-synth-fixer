@@ -90,6 +90,7 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       expect(outputs.S3BucketName).toBeDefined();
       expect(outputs.SNSTopicArn).toBeDefined();
       expect(outputs.HealthCheckId).toBeDefined();
+      expect(outputs.DBMasterSecretArn).toBeDefined();
     });
 
     test('LoadBalancerDNS should be a valid ELB DNS name', () => {
@@ -250,6 +251,34 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
     });
   });
 
+  describe('Secrets Manager Integration', () => {
+    test('should have Secrets Manager secret ARN in outputs', () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const secretArn = outputs.DBMasterSecretArn;
+      expect(secretArn).toBeDefined();
+      expect(typeof secretArn).toBe('string');
+      expect(secretArn).toMatch(/^arn:aws:secretsmanager:/);
+    });
+
+    test('Secrets Manager secret ARN should be valid format', () => {
+      if (!hasOutputs) return;
+
+      const secretArn = outputs.DBMasterSecretArn;
+      expect(secretArn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]+:secret:payment-aurora-master-/);
+    });
+
+    test('Secrets Manager secret ARN should include environment suffix', () => {
+      if (!hasOutputs) return;
+
+      const secretArn = outputs.DBMasterSecretArn;
+      expect(secretArn).toContain('payment-aurora-master-');
+    });
+  });
+
   describe('SNS Topic Integration', () => {
     test('should have SNS topic ARN in outputs', () => {
       if (!hasOutputs) {
@@ -315,6 +344,7 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
         'S3BucketName',
         'SNSTopicArn',
         'HealthCheckId',
+        'DBMasterSecretArn',
       ];
 
       requiredOutputs.forEach((outputKey) => {
