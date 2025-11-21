@@ -78,7 +78,7 @@ describe('TapStack Unit Tests', () => {
       ContainerDefinitions: Match.arrayWith([
         Match.objectLike({
           Name: 'FrontendContainer',
-          PortMappings: [{ ContainerPort: 3000 }],
+          PortMappings: [{ ContainerPort: 80 }], // Sample container listens on port 80
         }),
       ]),
       Cpu: '512',
@@ -89,7 +89,7 @@ describe('TapStack Unit Tests', () => {
       ContainerDefinitions: Match.arrayWith([
         Match.objectLike({
           Name: 'BackendContainer',
-          PortMappings: [{ ContainerPort: 8080 }],
+          PortMappings: [{ ContainerPort: 80 }], // Sample container listens on port 80
           Environment: Match.arrayWith([
             Match.objectLike({ Name: 'DB_HOST' }),
             Match.objectLike({ Name: 'DB_SECRET_ARN' }),

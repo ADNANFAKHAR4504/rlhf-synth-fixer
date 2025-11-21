@@ -67,7 +67,7 @@ export class TapStack extends cdk.Stack {
     });
     frontendSg.addIngressRule(
       albSg,
-      ec2.Port.tcp(3000),
+      ec2.Port.tcp(80),
       'Allow traffic from ALB'
     );
 
@@ -76,11 +76,7 @@ export class TapStack extends cdk.Stack {
       description: 'Security group for backend',
       allowAllOutbound: true,
     });
-    backendSg.addIngressRule(
-      albSg,
-      ec2.Port.tcp(8080),
-      'Allow traffic from ALB'
-    );
+    backendSg.addIngressRule(albSg, ec2.Port.tcp(80), 'Allow traffic from ALB');
 
     const dbSg = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       vpc,
@@ -186,13 +182,8 @@ export class TapStack extends cdk.Stack {
     frontendTaskDef.addContainer('FrontendContainer', {
       image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'frontend' }),
-      portMappings: [{ containerPort: 3000 }],
-      healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1'],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-      },
+      portMappings: [{ containerPort: 80 }], // Sample container listens on port 80
+      // Rely on ELB health checks instead of container health checks for sample image
     });
 
     const frontendService = new ecs.FargateService(this, 'FrontendService', {
@@ -220,13 +211,8 @@ export class TapStack extends cdk.Stack {
     backendTaskDef.addContainer('BackendContainer', {
       image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'backend' }),
-      portMappings: [{ containerPort: 8080 }],
-      healthCheck: {
-        command: ['CMD-SHELL', 'curl -f http://localhost:8080/ || exit 1'],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-      },
+      portMappings: [{ containerPort: 80 }], // Sample container listens on port 80
+      // Rely on ELB health checks instead of container health checks for sample image
       environment: {
         DB_HOST: dbCluster.clusterEndpoint.hostname,
         DB_SECRET_ARN: dbCredentials.secretArn,
@@ -250,26 +236,34 @@ export class TapStack extends cdk.Stack {
     // Target Groups & Routing
     const frontendTg = new elbv2.ApplicationTargetGroup(this, 'FrontendTG', {
       vpc,
-      port: 3000,
+      port: 80, // Sample container listens on port 80
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       targets: [frontendService],
       healthCheck: {
         path: '/',
         interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+        protocol: elbv2.Protocol.HTTP,
       },
       deregistrationDelay: cdk.Duration.seconds(30),
     });
 
     const backendTg = new elbv2.ApplicationTargetGroup(this, 'BackendTG', {
       vpc,
-      port: 8080,
+      port: 80, // Sample container listens on port 80
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       targets: [backendService],
       healthCheck: {
         path: '/',
         interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+        protocol: elbv2.Protocol.HTTP,
       },
       deregistrationDelay: cdk.Duration.seconds(30),
     });
@@ -293,10 +287,16 @@ export class TapStack extends cdk.Stack {
       'FrontendGreenTG',
       {
         vpc,
-        port: 3000,
+        port: 80, // Sample container listens on port 80
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
-        healthCheck: { path: '/' },
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
       }
     );
 
@@ -305,10 +305,16 @@ export class TapStack extends cdk.Stack {
       'BackendGreenTG',
       {
         vpc,
-        port: 8080,
+        port: 80, // Sample container listens on port 80
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
-        healthCheck: { path: '/' },
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
       }
     );
 
