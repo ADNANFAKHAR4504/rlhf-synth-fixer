@@ -1,0 +1,5 @@
+config:
+  tap-infrastructure:lambda_memory_mb: "1024"
+  tap-infrastructure:log_retention_days: "30"
+  tap-infrastructure:enable_versioning: "false"
+  tap-infrastructure:environment_suffix: "staging"

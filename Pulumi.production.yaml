@@ -1,0 +1,5 @@
+config:
+  tap-infrastructure:lambda_memory_mb: "2048"
+  tap-infrastructure:log_retention_days: "90"
+  tap-infrastructure:enable_versioning: "true"
+  tap-infrastructure:environment_suffix: "production"
