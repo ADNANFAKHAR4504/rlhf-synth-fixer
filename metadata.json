@@ -1,0 +1,32 @@
+{
+  "platform": "Pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T11:11:54+00:00",
+  "po_id": "101912530",
+  "subtask": "Create a Pulumi Python program to deploy a production-ready VPC infrastructure for a financial services platform. The configuration must: 1. Create a VPC with CIDR 10.0.0.0/16 across 3 availability zones. 2. Deploy 3 public subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) for load balancers and NAT gateways. 3. Deploy 3 private subnets (10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24) for application servers. 4. Deploy 3 isolated subnets (10.0.21.0/24, 10.0.22.0/24, 10.0.23.0/24) for RDS databases with no internet connectivity. 5. Configure one NAT gateway per AZ in the public subnets for private subnet outbound traffic. 6. Enable VPC Flow Logs and store them in an S3 bucket with versioning and lifecycle policies (transition to Glacier after 30 days). 7. Create Network ACLs that deny all inbound traffic from 0.0.0.0/0 except ports 80, 443 for public subnets. 8. Tag all resources with Environment=production and Project=trading-platform. 9. Output the VPC ID, subnet IDs grouped by tier, and S3 bucket name for flow logs. 10. Ensure all resources have deletion protection disabled for development testing. Expected output: A Pulumi Python application that synthesizes CloudFormation templates creating a fully isolated three-tier VPC with proper network segmentation, monitoring via flow logs, and clear separation between public, private, and database tiers suitable for PCI compliance requirements.",
+  "background": "A financial services startup needs to establish a secure cloud foundation for their new trading platform. The infrastructure must comply with PCI DSS requirements for network segmentation and provide isolated environments for different application tiers. The platform will host sensitive customer data and requires strict network boundaries between public-facing services and internal databases.",
+  "subject_labels": [
+    "VPC CIDR must be large enough to accommodate at least 1000 hosts across all subnets",
+    "Private subnets must have no direct internet access except through NAT gateways",
+    "Each availability zone must have exactly one NAT gateway for cost optimization",
+    "All VPC Flow Logs must be stored in S3 with AES-256 encryption enabled",
+    "Security group rules must explicitly deny all traffic by default and only allow specific ports"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "RouteTable",
+    "NetworkAcl",
+    "EIP",
+    "S3",
+    "IAM",
+    "VPCFlowLogs"
+  ],
+  "training_quality": 10
+}
