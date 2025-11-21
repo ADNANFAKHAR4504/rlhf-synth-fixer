@@ -14,6 +14,7 @@ def create_ecs_cluster(
     database_endpoint: pulumi.Output[str],
     cache_endpoint: pulumi.Output[str],
     queue_url: pulumi.Output[str],
+    log_group: Any,
     environment: str,
     tags: Dict[str, str]
 ) -> Dict[str, Any]:
@@ -21,13 +22,13 @@ def create_ecs_cluster(
 
     # Create ECS cluster
     cluster = aws.ecs.Cluster(
-        f"payment-cluster-{environment_suffix}",
-        name=f"payment-cluster-{environment_suffix}",
+        f"transaction-cluster-{environment_suffix}",
+        name=f"transaction-cluster-{environment_suffix}",
         settings=[aws.ecs.ClusterSettingArgs(
             name="containerInsights",
             value="enabled"
         )],
-        tags={**tags, "Name": f"payment-cluster-{environment_suffix}"}
+        tags={**tags, "Name": f"transaction-cluster-{environment_suffix}"}
     )
 
     # Create ALB

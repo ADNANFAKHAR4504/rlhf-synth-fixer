@@ -9,6 +9,7 @@ def create_database(
     vpc_id: pulumi.Output[str],
     private_subnet_ids: List[pulumi.Output[str]],
     security_group_id: pulumi.Output[str],
+    db_password: pulumi.Output[str],
     environment: str,
     tags: Dict[str, str]
 ) -> Dict[str, Any]:
@@ -29,10 +30,10 @@ def create_database(
         tags=tags
     )
 
-    # Generate database credentials
+    # Store database credentials in Secrets Manager
     db_credentials = {
-        "username": "paymentadmin",
-        "password": pulumi.Output.secret("ChangeMe123!TempPassword")
+        "username": "dbadmin",
+        "password": db_password
     }
 
     db_secret_version = aws.secretsmanager.SecretVersion(
@@ -48,9 +49,9 @@ def create_database(
         engine=aws.rds.EngineType.AURORA_POSTGRESQL,
         engine_mode="provisioned",
         engine_version="15.8",
-        database_name="paymentdb",
-        master_username="paymentadmin",
-        master_password=pulumi.Output.secret("ChangeMe123!TempPassword"),
+        database_name="transactions",
+        master_username="dbadmin",
+        master_password=db_password,
         db_subnet_group_name=db_subnet_group.name,
         vpc_security_group_ids=[security_group_id],
         serverlessv2_scaling_configuration=aws.rds.ClusterServerlessv2ScalingConfigurationArgs(
