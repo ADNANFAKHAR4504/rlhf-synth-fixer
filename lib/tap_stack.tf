@@ -362,46 +362,46 @@ resource "aws_network_acl" "public" {
   dynamic "ingress" {
     for_each = local.blocked_cidrs
     content {
-      rule_number = 100 + index(local.blocked_cidrs, ingress.value)
-      protocol    = "-1"
-      action      = "deny"
-      cidr_block  = ingress.value
-      from_port   = 0
-      to_port     = 0
+      rule_no    = 100 + index(local.blocked_cidrs, ingress.value)
+      protocol   = "-1"
+      action     = "deny"
+      cidr_block = ingress.value
+      from_port  = 0
+      to_port    = 0
     }
   }
 
   # Allow all other inbound traffic
   ingress {
-    rule_number = 200
-    protocol    = "-1"
-    action      = "allow"
-    cidr_block  = "0.0.0.0/0"
-    from_port   = 0
-    to_port     = 0
+    rule_no    = 200
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
 
   # Deny traffic to blocked CIDR ranges - outbound
   dynamic "egress" {
     for_each = local.blocked_cidrs
     content {
-      rule_number = 100 + index(local.blocked_cidrs, egress.value)
-      protocol    = "-1"
-      action      = "deny"
-      cidr_block  = egress.value
-      from_port   = 0
-      to_port     = 0
+      rule_no    = 100 + index(local.blocked_cidrs, egress.value)
+      protocol   = "-1"
+      action     = "deny"
+      cidr_block = egress.value
+      from_port  = 0
+      to_port    = 0
     }
   }
 
   # Allow all other outbound traffic
   egress {
-    rule_number = 200
-    protocol    = "-1"
-    action      = "allow"
-    cidr_block  = "0.0.0.0/0"
-    from_port   = 0
-    to_port     = 0
+    rule_no    = 200
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
 
   tags = merge(local.common_tags, {
@@ -418,46 +418,46 @@ resource "aws_network_acl" "private_app" {
   dynamic "ingress" {
     for_each = local.blocked_cidrs
     content {
-      rule_number = 100 + index(local.blocked_cidrs, ingress.value)
-      protocol    = "-1"
-      action      = "deny"
-      cidr_block  = ingress.value
-      from_port   = 0
-      to_port     = 0
+      rule_no    = 100 + index(local.blocked_cidrs, ingress.value)
+      protocol   = "-1"
+      action     = "deny"
+      cidr_block = ingress.value
+      from_port  = 0
+      to_port    = 0
     }
   }
 
   # Allow all other inbound traffic
   ingress {
-    rule_number = 200
-    protocol    = "-1"
-    action      = "allow"
-    cidr_block  = "0.0.0.0/0"
-    from_port   = 0
-    to_port     = 0
+    rule_no    = 200
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
 
   # Deny traffic to blocked CIDR ranges - outbound
   dynamic "egress" {
     for_each = local.blocked_cidrs
     content {
-      rule_number = 100 + index(local.blocked_cidrs, egress.value)
-      protocol    = "-1"
-      action      = "deny"
-      cidr_block  = egress.value
-      from_port   = 0
-      to_port     = 0
+      rule_no    = 100 + index(local.blocked_cidrs, egress.value)
+      protocol   = "-1"
+      action     = "deny"
+      cidr_block = egress.value
+      from_port  = 0
+      to_port    = 0
     }
   }
 
   # Allow all other outbound traffic
   egress {
-    rule_number = 200
-    protocol    = "-1"
-    action      = "allow"
-    cidr_block  = "0.0.0.0/0"
-    from_port   = 0
-    to_port     = 0
+    rule_no    = 200
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
 
   tags = merge(local.common_tags, {
@@ -474,46 +474,46 @@ resource "aws_network_acl" "private_db" {
   dynamic "ingress" {
     for_each = local.blocked_cidrs
     content {
-      rule_number = 100 + index(local.blocked_cidrs, ingress.value)
-      protocol    = "-1"
-      action      = "deny"
-      cidr_block  = ingress.value
-      from_port   = 0
-      to_port     = 0
+      rule_no    = 100 + index(local.blocked_cidrs, ingress.value)
+      protocol   = "-1"
+      action     = "deny"
+      cidr_block = ingress.value
+      from_port  = 0
+      to_port    = 0
     }
   }
 
   # Allow all other inbound traffic
   ingress {
-    rule_number = 200
-    protocol    = "-1"
-    action      = "allow"
-    cidr_block  = "0.0.0.0/0"
-    from_port   = 0
-    to_port     = 0
+    rule_no    = 200
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
 
   # Deny traffic to blocked CIDR ranges - outbound
   dynamic "egress" {
     for_each = local.blocked_cidrs
     content {
-      rule_number = 100 + index(local.blocked_cidrs, egress.value)
-      protocol    = "-1"
-      action      = "deny"
-      cidr_block  = egress.value
-      from_port   = 0
-      to_port     = 0
+      rule_no    = 100 + index(local.blocked_cidrs, egress.value)
+      protocol   = "-1"
+      action     = "deny"
+      cidr_block = egress.value
+      from_port  = 0
+      to_port    = 0
     }
   }
 
   # Allow all other outbound traffic
   egress {
-    rule_number = 200
-    protocol    = "-1"
-    action      = "allow"
-    cidr_block  = "0.0.0.0/0"
-    from_port   = 0
-    to_port     = 0
+    rule_no    = 200
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
 
   tags = merge(local.common_tags, {
