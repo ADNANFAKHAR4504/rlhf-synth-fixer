@@ -747,11 +747,20 @@ describe('Application Health & Connectivity', () => {
     expect(response!.status).toBe(200);
   }, TEST_TIMEOUT);
 
-  test('Health endpoint returns "OK"', async () => {
+  test('Health endpoint returns "OK" or healthy status', async () => {
     expect(albUrl).toBeDefined();
     const response = await axios.get(`${albUrl}/health`, { timeout: 10000 });
     expect(response.status).toBe(200);
-    expect(response.data).toMatch(/OK/i);
+
+    // Handle both JSON and plain text responses
+    if (typeof response.data === 'string') {
+      expect(response.data).toMatch(/OK|healthy/i);
+    } else {
+      // JSON response from Python server
+      expect(response.data).toHaveProperty('status');
+      expect(response.data.status).toMatch(/healthy/i);
+      expect(response.data).toHaveProperty('service');
+    }
   }, TEST_TIMEOUT);
 
   test('Health JSON endpoint returns valid JSON', async () => {

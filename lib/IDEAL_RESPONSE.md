@@ -1872,16 +1872,196 @@ File: lib/modules/asg/user_data.sh
 ```bash
 #!/bin/bash
 # User data script for EC2 instances in ${environment}
-# This script sets up Apache and creates test endpoints for integration testing
 
 set -e
 
 # Update system
 yum update -y
-# Install Apache, jq, and PostgreSQL 15 client (newer version for SCRAM auth)
-amazon-linux-extras enable postgresql15
-yum clean metadata
-yum install -y httpd jq postgresql15
+amazon-linux-extras enable postgresql14
+yum install -y httpd jq postgresql python3 python3-pip
+
+# Install Python PostgreSQL adapter and boto3
+pip3 install psycopg2-binary boto3 --quiet
+
+# Create Python HTTP server for E2E testing
+mkdir -p /opt/payment-app
+cat > /opt/payment-app/app.py << 'PYTHON_EOF'
+#!/usr/bin/env python3
+"""
+Simple HTTP server for E2E testing
+Handles health checks and database connectivity tests
+"""
+import json
+import os
+import sys
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+
+# Load configuration
+DB_ENDPOINT = os.environ.get('DB_ENDPOINT', '')
+DB_NAME = os.environ.get('DB_NAME', 'paymentdb')
+DB_SECRET_NAME = os.environ.get('DB_SECRET_NAME', '')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+
+class PaymentAppHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed_path = urlparse(self.path)
+        path = parsed_path.path
+        
+        if path == '/health':
+            self.send_health_response()
+        elif path == '/db-test':
+            self.send_db_test_response()
+        elif path == '/':
+            self.send_root_response()
+        else:
+            self.send_error(404, "Not Found")
+    
+    def send_health_response(self):
+        """Health check endpoint"""
+        response = {
+            "status": "healthy",
+            "service": "payment-app"
+        }
+        self.send_json_response(200, response)
+    
+    def send_db_test_response(self):
+        """Test database connectivity"""
+        try:
+            # Get DB credentials from Secrets Manager
+            import boto3
+            secrets_client = boto3.client('secretsmanager', region_name=AWS_REGION)
+            
+            secret_response = secrets_client.get_secret_value(SecretId=DB_SECRET_NAME)
+            db_creds = json.loads(secret_response['SecretString'])
+            
+            db_host = DB_ENDPOINT.split(':')[0] if ':' in DB_ENDPOINT else DB_ENDPOINT
+            db_port = DB_ENDPOINT.split(':')[1] if ':' in DB_ENDPOINT else '5432'
+            db_user = db_creds.get('username') or db_creds.get('user') or 'dbadmin'
+            db_password = db_creds.get('password')
+            db_name = db_creds.get('dbname') or db_creds.get('database') or DB_NAME
+            
+            # Test connection using psycopg2
+            import psycopg2
+            conn = psycopg2.connect(
+                host=db_host,
+                port=db_port,
+                user=db_user,
+                password=db_password,
+                database=db_name,
+                connect_timeout=5
+            )
+            
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 as test_result, current_timestamp as query_time;")
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            response = {
+                "status": "success",
+                "message": "Database connection successful",
+                "test_result": result[0],
+                "query_time": str(result[1]),
+                "endpoint": DB_ENDPOINT
+            }
+            self.send_json_response(200, response)
+            
+        except Exception as e:
+            response = {
+                "status": "error",
+                "message": f"Database connection failed: {str(e)}",
+                "endpoint": DB_ENDPOINT
+            }
+            self.send_json_response(500, response)
+    
+    def send_root_response(self):
+        """Root endpoint"""
+        html = f"""<html>
+<head><title>Payment App</title></head>
+<body>
+    <h1>Welcome to Payment App ({os.environ.get('ENVIRONMENT', 'dev')})</h1>
+    <p>DB Endpoint: {DB_ENDPOINT}</p>
+    <ul>
+        <li><a href="/health">Health Check</a></li>
+        <li><a href="/db-test">Database Test</a></li>
+    </ul>
+</body>
+</html>"""
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.send_header('Content-Length', str(len(html)))
+        self.end_headers()
+        self.wfile.write(html.encode())
+    
+    def send_json_response(self, status_code, data):
+        """Send JSON response"""
+        json_data = json.dumps(data, indent=2)
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(json_data)))
+        self.end_headers()
+        self.wfile.write(json_data.encode())
+    
+    def log_message(self, format, *args):
+        """Suppress default logging"""
+        pass
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    server = HTTPServer(('0.0.0.0', port), PaymentAppHandler)
+    print(f'Starting Payment App server on port {port}...')
+    server.serve_forever()
+PYTHON_EOF
+
+chmod +x /opt/payment-app/app.py
+
+# Create systemd service for Python app
+cat > /etc/systemd/system/payment-app.service << EOF
+[Unit]
+Description=Payment App Python Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/payment-app
+Environment="DB_ENDPOINT=${rds_endpoint}"
+Environment="DB_NAME=${db_name}"
+Environment="DB_SECRET_NAME=${secret_name}"
+Environment="AWS_REGION=${aws_region}"
+Environment="ENVIRONMENT=${environment}"
+Environment="PORT=8080"
+ExecStart=/usr/bin/python3 /opt/payment-app/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Configure Apache to proxy to Python server
+cat >> /etc/httpd/conf/httpd.conf << 'APACHE_PROXY_EOF'
+
+# Proxy to Python server
+LoadModule proxy_module modules/mod_proxy.so
+LoadModule proxy_http_module modules/mod_proxy_http.so
+
+<Location /db-test>
+    ProxyPass http://127.0.0.1:8080/db-test
+    ProxyPassReverse http://127.0.0.1:8080/db-test
+</Location>
+
+<Location /health>
+    ProxyPass http://127.0.0.1:8080/health
+    ProxyPassReverse http://127.0.0.1:8080/health
+</Location>
+APACHE_PROXY_EOF
+
+# Start Python server
+systemctl daemon-reload
+systemctl enable payment-app
+systemctl start payment-app
 
 # Start Apache
 systemctl start httpd
