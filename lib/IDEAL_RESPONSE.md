@@ -2937,7 +2937,7 @@ The solution consists of two stacks:
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
       "Properties": {
-        "DBInstanceClass": "db.t3.medium",
+        "DBInstanceClass": "db.r5.large",
         "DBClusterIdentifier": {
           "Ref": "AuroraCluster"
         },

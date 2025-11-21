@@ -165,6 +165,7 @@ Error: "Destination bucket must exist"
 | No Aurora Global DB | MAJOR | Added Global Database | Database replicated |
 | DynamoDB SSE Error | HIGH | Fixed SSESpecification placement | Deployment unblocked |
 | Missing Replica Bucket | HIGH | Added S3ReplicaBucket | Replication works |
+| Aurora Instance Class | HIGH | Changed db.t3.medium to db.r5.large | Global DB compatible |
 
 ## Metrics
 
