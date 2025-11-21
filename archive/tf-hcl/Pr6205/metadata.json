@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6131",
+  "team": "5",
+  "startedAt": "2025-11-09T07:32:24.350Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "secure data processing infrastructure for financial services with strict PCI-DSS compliance controls",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "KMS",
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

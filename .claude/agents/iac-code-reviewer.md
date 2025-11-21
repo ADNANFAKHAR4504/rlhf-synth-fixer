@@ -290,38 +290,63 @@ Examples: Changed RDS instance size, added resource tags, used VPC endpoints
 
 **Adjustment**: Maintain score at 8 (±0 points)
 
-**Category C (Minor) → -1 to -2 points if ONLY these**:
+**Category C (Minor) → -1 to -2 points**:
 - Linting/formatting (code style, syntax errors)
 - Simple bug fixes (typos, missing commas, wrong property names)
 - Configuration tweaks (environment variables, hardcoded values)
 - Output additions (missing stack outputs for tests)
 
+**⚠️ CRITICAL**: Apply Category C penalty **ONLY if ALL fixes are Category C** (no Category A/B fixes present)
+
 Examples: Fixed linting errors, corrected typo, changed hardcoded region to variable
 
-**Adjustment**: ≥4 Category C fixes (only) → -1 point; ≥6 → -2 points
+**Adjustment Rules**:
+- If ≥6 Category C fixes (only) → -2 points
+- If 4-5 Category C fixes (only) → -1 point
+- If <4 Category C fixes (only) → See Category D below
+- If Category A/B fixes exist → Ignore Category C penalties (Category A dominates)
 
 **Category D (Minimal) → -2 to -4 points**:
-- Almost no fixes needed (MODEL_RESPONSE was 95%+ correct)
-- Trivial changes only (whitespace, comments, formatting)
-- <5 total fixes across ALL categories
+- Total fixes < 5 AND all fixes are Category C (trivial)
+- MODEL_RESPONSE was 95%+ correct
+- No Category A/B fixes exist
 
 Examples: 3 minor linting fixes + 1 missing output
 
-**Adjustment**: -2 to -4 points (model already too competent for this task)
+**Penalty Selection**:
+- 1-2 trivial fixes → -4 points
+- 3-4 trivial fixes → -3 points
+- 5+ trivial fixes → Use Category C penalty instead
+
+**Mixed Category Handling**:
+- **If Category A fixes exist**: Apply Category A bonus, ignore Category C penalties
+- **If only Category B fixes**: Apply ±0, ignore C/D penalties
+- **If only Category C fixes**: Apply Category C penalty rules
+- **If only Category D**: Apply Category D penalty
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Step 3 for complete rules
 
 **Step 4: Review IDEAL_RESPONSE.md - Evaluate Complexity**
 
-Count complexity factors:
+Evaluate complexity factors in **priority order**:
 
-| Complexity Factor | Points |
-|-------------------|--------|
-| Single AWS service, basic config | -1 |
-| Multiple services (3+) with integrations | +1 |
-| Security best practices (KMS, IAM policies, encryption) | +1 |
-| High availability (multi-AZ, auto-scaling, failover) | +1 |
-| Advanced patterns (event-driven, serverless, microservices) | +1 |
+| Complexity Factor | Points | Priority |
+|-------------------|--------|----------|
+| Multiple services (3+) with integrations | +1 | 1 (highest) |
+| Security best practices (KMS, IAM policies, encryption) | +1 | 2 |
+| High availability (multi-AZ, auto-scaling, failover) | +1 | 3 |
+| Advanced patterns (event-driven, serverless, microservices) | +1 | 4 |
+| Single AWS service, basic config | -1 | (independent) |
+
+**Priority Rules**:
+- Apply factors in priority order (1 → 2 → 3 → 4)
+- Stop when reaching +2 bonus cap
+- If all positive factors apply, take first 2 = +2 total
+- Single service penalty (-1) applies independently
 
 **Maximum complexity bonus: +2 points** (prevents score inflation)
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Step 4 for complete rules and examples
 
 **Step 5: Calculate Final Score**
 
@@ -329,10 +354,18 @@ Count complexity factors:
 Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 ```
 
+**Calculation Order**:
+1. Calculate: Base + MODEL_FAILURES + Complexity
+2. Apply cap: min(max(calculated, 0), 10)
+3. Round to nearest integer (0.5 rounds up)
+4. **NO manual adjustments** - use formula only
+
 **Constraints**:
 - Minimum: 0
 - Maximum: 10
 - Round to nearest integer
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Step 5 for complete calculation rules
 
 **Step 6: Interpret Score and Take Action**
 
@@ -354,9 +387,11 @@ Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 **CRITICAL THRESHOLD: ≥8 required for PR creation**
 
 **Examples with Calculations**:
-1. **Score 9**: 2 Category A fixes (security + monitoring) + multi-service + security practices = 8 + 2 + 2 = 12 → capped at 10, final 9
-2. **Score 8**: 2 Category B fixes + standard setup = 8 + 0 + 0 = 8
-3. **Score 5**: 4 Category C fixes only + basic setup = 8 - 1 - 1 = 6, adjusted to 5 (model too good)
+1. **Score 10**: 2 Category A fixes (security + monitoring) + multi-service (+1, priority 1) + security practices (+1, priority 2) = 8 + 2 + 2 = 12 → capped at 10
+2. **Score 8**: 2 Category B fixes + 2 services (neutral) = 8 + 0 + 0 = 8
+3. **Score 5**: 3 Category C fixes only (<4) → Category D penalty (-3) + 2 services (neutral) = 8 - 3 + 0 = 5
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Examples section for detailed scenarios
 
 **Infrastructure Analysis Task Bonus**: If subject_labels contains "Infrastructure Analysis" or "Infrastructure Monitoring", evaluate the analysis script quality (lib/analyse.py or similar): check for professional tabular output (tabulate library), multiple realistic test scenarios (3+ per issue type), comprehensive data collection (resource details, metrics, context), and actionable findings. High-quality analysis data: +1 to +2 bonus; poor coverage or minimal value: -1 to -2 penalty.
 

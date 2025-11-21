@@ -1,0 +1,804 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-Region Disaster Recovery Solution for Payment Processing System",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix to append to resource names for environment isolation",
+      "MinLength": 3,
+      "MaxLength": 20,
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "RegionType": {
+      "Type": "String",
+      "Description": "Deployment region type (primary or secondary)",
+      "AllowedValues": ["primary", "secondary"],
+      "Default": "primary"
+    },
+    "SecondaryRegion": {
+      "Type": "String",
+      "Description": "Secondary AWS region",
+      "Default": "us-west-2"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for failover notifications",
+      "Default": "admin@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "SecondaryRegionBucketName": {
+      "Type": "String",
+      "Description": "Name of the S3 bucket in secondary region (required for CRR)",
+      "Default": ""
+    },
+    "HealthCheckDomain": {
+      "Type": "String",
+      "Description": "Domain name for health checks (e.g., api.example.com)",
+      "Default": "example.com"
+    }
+  },
+  "Conditions": {
+    "IsPrimaryRegion": {
+      "Fn::Equals": [
+        {"Ref": "RegionType"},
+        "primary"
+      ]
+    },
+    "HasSecondaryBucket": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {"Ref": "SecondaryRegionBucketName"},
+            ""
+          ]
+        }
+      ]
+    },
+    "EnableReplication": {
+      "Fn::And": [
+        {"Condition": "IsPrimaryRegion"},
+        {"Condition": "HasSecondaryBucket"}
+      ]
+    }
+  },
+  "Resources": {
+    "PaymentProcessorLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "PaymentProcessorLambdaRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["TransactionTable", "Arn"]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SecretsManagerAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "PaymentAPISecret"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "S3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "PaymentProcessor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Role": {
+          "Fn::GetAtt": ["PaymentProcessorLambdaRole", "Arn"]
+        },
+        "Handler": "index.lambda_handler",
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import os",
+                "from datetime import datetime",
+                "",
+                "dynamodb = boto3.resource('dynamodb')",
+                "s3 = boto3.client('s3')",
+                "secrets_client = boto3.client('secretsmanager')",
+                "",
+                "def lambda_handler(event, context):",
+                "    region = os.environ.get('AWS_REGION_NAME')",
+                "    region_type = os.environ.get('REGION_TYPE')",
+                "    table_name = os.environ.get('DYNAMODB_TABLE')",
+                "    bucket_name = os.environ.get('S3_BUCKET')",
+                "    ",
+                "    print(f'Processing payment in {region} ({region_type})')",
+                "    ",
+                "    try:",
+                "        # Process payment logic here",
+                "        transaction_id = event.get('transaction_id', 'test-txn-001')",
+                "        amount = event.get('amount', 100.00)",
+                "        ",
+                "        # Store in DynamoDB",
+                "        table = dynamodb.Table(table_name)",
+                "        table.put_item(",
+                "            Item={",
+                "                'transaction_id': transaction_id,",
+                "                'amount': str(amount),",
+                "                'timestamp': datetime.utcnow().isoformat(),",
+                "                'region': region,",
+                "                'status': 'processed'",
+                "            }",
+                "        )",
+                "        ",
+                "        # Log to S3",
+                "        log_data = {",
+                "            'transaction_id': transaction_id,",
+                "            'amount': amount,",
+                "            'region': region,",
+                "            'timestamp': datetime.utcnow().isoformat()",
+                "        }",
+                "        s3.put_object(",
+                "            Bucket=bucket_name,",
+                "            Key=f'logs/{transaction_id}.json',",
+                "            Body=json.dumps(log_data)",
+                "        )",
+                "        ",
+                "        return {",
+                "            'statusCode': 200,",
+                "            'body': json.dumps({",
+                "                'message': 'Payment processed successfully',",
+                "                'transaction_id': transaction_id,",
+                "                'region': region",
+                "            })",
+                "        }",
+                "    except Exception as e:",
+                "        print(f'Error: {str(e)}')",
+                "        return {",
+                "            'statusCode': 500,",
+                "            'body': json.dumps({'error': str(e)})",
+                "        }",
+                ""
+              ]
+            ]
+          }
+        },
+        "Timeout": 30,
+        "MemorySize": 256,
+        "ReservedConcurrentExecutions": 100,
+        "Environment": {
+          "Variables": {
+            "AWS_REGION_NAME": {
+              "Ref": "AWS::Region"
+            },
+            "REGION_TYPE": {
+              "Ref": "RegionType"
+            },
+            "DYNAMODB_TABLE": {
+              "Ref": "TransactionTable"
+            },
+            "S3_BUCKET": {
+              "Ref": "TransactionLogsBucket"
+            },
+            "SECRET_ARN": {
+              "Ref": "PaymentAPISecret"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionTable": {
+      "Type": "AWS::DynamoDB::GlobalTable",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "Transactions-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transaction_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transaction_id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Replicas": [
+          {
+            "Region": "us-east-1",
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "Tags": [
+              {
+                "Key": "Environment",
+                "Value": {
+                  "Ref": "EnvironmentSuffix"
+                }
+              },
+              {
+                "Key": "Region",
+                "Value": "us-east-1"
+              }
+            ]
+          },
+          {
+            "Region": "us-west-2",
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "Tags": [
+              {
+                "Key": "Environment",
+                "Value": {
+                  "Ref": "EnvironmentSuffix"
+                }
+              },
+              {
+                "Key": "Region",
+                "Value": "us-west-2"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "TransactionLogsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-logs-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "ReplicationConfiguration": {
+          "Fn::If": [
+            "EnableReplication",
+            {
+              "Role": {
+                "Fn::GetAtt": ["S3ReplicationRole", "Arn"]
+              },
+              "Rules": [
+                {
+                  "Id": "ReplicateToSecondary",
+                  "Status": "Enabled",
+                  "Priority": 1,
+                  "Filter": {
+                    "Prefix": ""
+                  },
+                  "Destination": {
+                    "Bucket": {
+                      "Fn::Sub": "arn:aws:s3:::${SecondaryRegionBucketName}"
+                    },
+                    "ReplicationTime": {
+                      "Status": "Enabled",
+                      "Time": {
+                        "Minutes": 15
+                      }
+                    },
+                    "Metrics": {
+                      "Status": "Enabled",
+                      "EventThreshold": {
+                        "Minutes": 15
+                      }
+                    }
+                  },
+                  "DeleteMarkerReplication": {
+                    "Status": "Enabled"
+                  }
+                }
+              ]
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "EnableReplication",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "S3ReplicationRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::transaction-logs-${EnvironmentSuffix}-${AWS::Region}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::transaction-logs-${EnvironmentSuffix}-${AWS::Region}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${SecondaryRegionBucketName}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PaymentAPISecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "PaymentAPISecret-${EnvironmentSuffix}"
+        },
+        "Description": "API keys for payment processing system",
+        "SecretString": {
+          "Fn::Sub": "{\"api_key\":\"placeholder-key-${EnvironmentSuffix}\",\"region\":\"${AWS::Region}\"}"
+        },
+        "ReplicaRegions": {
+          "Fn::If": [
+            "IsPrimaryRegion",
+            [
+              {
+                "Region": {
+                  "Ref": "SecondaryRegion"
+                }
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "FailoverNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "FailoverNotifications-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Payment System Failover Notifications",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "PaymentProcessor-Errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when Lambda function errors exceed threshold",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "PaymentProcessor-Throttles-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when Lambda function throttles occur",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "DynamoDB-ReadThrottle-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when DynamoDB read throttles occur",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TransactionTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "HealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "${AWS::Region}.${HealthCheckDomain}"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "PaymentSystem-${AWS::Region}-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "HealthCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "HealthCheck-${AWS::Region}-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when health check fails",
+        "MetricName": "HealthCheckStatus",
+        "Namespace": "AWS/Route53",
+        "Statistic": "Minimum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "HealthCheckId",
+            "Value": {
+              "Ref": "HealthCheck"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ],
+        "TreatMissingData": "breaching"
+      }
+    }
+  },
+  "Outputs": {
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Payment Processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["PaymentProcessorFunction", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "PaymentProcessor-Arn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Name of the Payment Processor Lambda function",
+      "Value": {
+        "Ref": "PaymentProcessorFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "PaymentProcessor-Name-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB Global Table",
+      "Value": {
+        "Ref": "TransactionTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TransactionTable-Name-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "DynamoDBTableArn": {
+      "Description": "ARN of the DynamoDB Global Table",
+      "Value": {
+        "Fn::GetAtt": ["TransactionTable", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TransactionTable-Arn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket for transaction logs",
+      "Value": {
+        "Ref": "TransactionLogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TransactionLogs-Bucket-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "S3BucketArn": {
+      "Description": "ARN of the S3 bucket",
+      "Value": {
+        "Fn::GetAtt": ["TransactionLogsBucket", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "TransactionLogs-BucketArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecretArn": {
+      "Description": "ARN of the Secrets Manager secret",
+      "Value": {
+        "Ref": "PaymentAPISecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "PaymentAPISecret-Arn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for notifications",
+      "Value": {
+        "Ref": "FailoverNotificationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "FailoverNotifications-Arn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "HealthCheckId": {
+      "Description": "ID of the Route 53 Health Check",
+      "Value": {
+        "Ref": "HealthCheck"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "HealthCheck-Id-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "RegionType": {
+      "Description": "Type of region deployment (primary or secondary)",
+      "Value": {
+        "Ref": "RegionType"
+      }
+    }
+  }
+}
