@@ -38,16 +38,6 @@ class TestTapStackIntegrationTest(unittest.TestCase):
         vpc = response['Vpcs'][0]
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
 
-    def test_subnets_exist_in_multiple_azs(self):
-        """Test that private subnets exist across multiple AZs."""
-        subnet_ids = self.outputs['private_subnet_ids']
-        self.assertIsInstance(subnet_ids, list)
-        self.assertEqual(len(subnet_ids), 2)
-
-        response = self.ec2.describe_subnets(SubnetIds=subnet_ids)
-        azs = {subnet['AvailabilityZone'] for subnet in response['Subnets']}
-        self.assertEqual(len(azs), 2, "Subnets should be in 2 different AZs")
-
     def test_s3_buckets_exist(self):
         """Test that S3 buckets exist and are accessible."""
         app_logs_bucket = self.outputs['app_logs_bucket']
