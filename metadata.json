@@ -1,6 +1,6 @@
 {
-  "platform": "Pulumi",
-  "language": "Python",
+  "platform": "pulumi",
+  "language": "py",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
