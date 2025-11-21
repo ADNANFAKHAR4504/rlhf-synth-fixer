@@ -34,12 +34,8 @@
     },
     "DBMasterUsername": {
       "Type": "String",
-      "Description": "Master username for RDS"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Master password for RDS"
+      "Description": "Master username for RDS",
+      "Default": "admin"
     },
     "EnableElastiCache": {
       "Type": "String",
@@ -61,6 +57,36 @@
     }
   },
   "Resources": {
+    "DBMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "rds-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Auto-generated master password for RDS Aurora cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-password-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -236,7 +262,7 @@
           "Ref": "DBMasterUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"

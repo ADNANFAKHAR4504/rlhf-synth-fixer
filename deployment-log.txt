@@ -1,31 +1,0 @@
-=====================================
-CloudFormation Nested Stack Deployment
-=====================================
-Environment Suffix: synthn3p3c1
-AWS Region: us-east-1
-Account ID: 342597974367
-Bucket Name: cfn-nested-templates-synthn3p3c1-342597974367
-Stack Name: TapStacksynthn3p3c1
-=====================================
-Step 1: Creating S3 bucket for nested stack templates...
-Creating bucket: cfn-nested-templates-synthn3p3c1-342597974367
-make_bucket: cfn-nested-templates-synthn3p3c1-342597974367
-
-Step 2: Uploading nested stack templates to S3...
-Completed 11.7 KiB/11.7 KiB (11.3 KiB/s) with 1 file(s) remainingupload: lib/VPCStack.json to s3://cfn-nested-templates-synthn3p3c1-342597974367/templates/VPCStack.json
-Completed 13.2 KiB/13.2 KiB (12.4 KiB/s) with 1 file(s) remainingupload: lib/ComputeStack.json to s3://cfn-nested-templates-synthn3p3c1-342597974367/templates/ComputeStack.json
-Completed 10.5 KiB/10.5 KiB (9.9 KiB/s) with 1 file(s) remainingupload: lib/DataStack.json to s3://cfn-nested-templates-synthn3p3c1-342597974367/templates/DataStack.json
-Templates uploaded successfully
-
-Step 3: Getting availability zones...
-AZ1: us-east-1a
-AZ2: us-east-1b
-AZ3: us-east-1c
-
-Step 4: Setting database credentials...
-DB Username: admin
-DB Password: [HIDDEN]
-
-Step 5: Deploying master stack...
-
-An error occurred (ValidationError) when calling the CreateChangeSet operation: Parameter EnvironmentSuffix failed to satisfy constraint: Must be lowercase alphanumeric, 3-10 characters
