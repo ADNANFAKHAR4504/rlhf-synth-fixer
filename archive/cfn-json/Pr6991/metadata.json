@@ -9,7 +9,7 @@
   "startedAt": "2025-11-20T19:51:00Z",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security, Compliance, and Governance"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "KMS",
