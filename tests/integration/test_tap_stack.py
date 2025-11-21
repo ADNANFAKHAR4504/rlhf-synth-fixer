@@ -258,13 +258,11 @@ class TestTapStackIntegration(unittest.TestCase):
         alb_dns = outputs.get("ALBDNSName")
         assert alb_dns, "ALB DNS name should be in outputs"
 
-        # Extract ALB name from DNS (format: alb-name-id.region.elb.amazonaws.com)
-        alb_name = alb_dns.split('.')[0] if alb_dns else None
-        assert alb_name, "Could not extract ALB name from DNS"
-
-        response = self.elbv2_client.describe_load_balancers(Names=[alb_name])
-        assert len(response['LoadBalancers']) == 1
-        alb = response['LoadBalancers'][0]
+        # Use DNS to lookup ALB instead of parsing name
+        response = self.elbv2_client.describe_load_balancers()
+        albs = [lb for lb in response['LoadBalancers'] if lb['DNSName'] == alb_dns]
+        assert len(albs) == 1, f"Could not find ALB with DNS {alb_dns}"
+        alb = albs[0]
 
         assert alb['State']['Code'] == 'active'
         assert alb['Type'] == 'application'
@@ -300,11 +298,13 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("validates ALB listener with weighted routing")
     def test_alb_listener(self):
         alb_dns = outputs.get("ALBDNSName")
-        alb_name = alb_dns.split('.')[0] if alb_dns else None
-        assert alb_name, "Could not extract ALB name from DNS"
+        assert alb_dns, "ALB DNS name should be in outputs"
 
-        response = self.elbv2_client.describe_load_balancers(Names=[alb_name])
-        alb_arn = response['LoadBalancers'][0]['LoadBalancerArn']
+        # Use DNS to lookup ALB instead of parsing name
+        response = self.elbv2_client.describe_load_balancers()
+        albs = [lb for lb in response['LoadBalancers'] if lb['DNSName'] == alb_dns]
+        assert len(albs) == 1, f"Could not find ALB with DNS {alb_dns}"
+        alb_arn = albs[0]['LoadBalancerArn']
 
         listeners_response = self.elbv2_client.describe_listeners(LoadBalancerArn=alb_arn)
         assert len(listeners_response['Listeners']) >= 1
@@ -366,20 +366,23 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("validates CloudWatch log group exists")
     def test_cloudwatch_log_group(self):
-        # Get ECS cluster name to derive log group name pattern
-        cluster_name = outputs.get("ECSClusterName")
-        assert cluster_name, "ECS cluster name should be in outputs"
-
         # Log group typically follows pattern /ecs/app-name-suffix
-        log_group_prefix = "/ecs/"
+        log_group_prefix = "/ecs/transaction-app-"
 
-        response = self.logs_client.describe_log_groups(
-            logGroupNamePrefix=log_group_prefix
-        )
+        # Get environment suffix to match log groups
+        env_suffix = environment_suffix
 
-        # Filter log groups that match our cluster pattern
-        log_groups = [lg for lg in response['logGroups'] if cluster_name.split('-')[-1] in lg['logGroupName']]
-        assert len(log_groups) >= 1, "Should have at least one ECS log group"
+        # Use pagination to find all log groups
+        paginator = self.logs_client.get_paginator('describe_log_groups')
+        page_iterator = paginator.paginate(logGroupNamePrefix=log_group_prefix)
+
+        log_groups = []
+        for page in page_iterator:
+            for lg in page['logGroups']:
+                if env_suffix in lg['logGroupName']:
+                    log_groups.append(lg)
+
+        assert len(log_groups) >= 1, f"Should have at least one ECS log group with suffix {env_suffix}"
 
         log_group = log_groups[0]
         assert log_group['retentionInDays'] == 3
