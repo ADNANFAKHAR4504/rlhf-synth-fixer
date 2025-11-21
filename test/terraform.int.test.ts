@@ -1,4 +1,4 @@
-import { DescribeClusterCommand, EMRClient } from "@aws-sdk/client-emr";
+import { AddJobFlowStepsCommand, DescribeClusterCommand, DescribeStepCommand, EMRClient, StepState } from "@aws-sdk/client-emr";
 import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
@@ -90,7 +90,7 @@ const streamToString = async (stream: unknown): Promise<string> => {
 };
 
 describe("EMR trading analytics stack end-to-end", () => {
-  jest.setTimeout(60_000); // allow up to 1 minute for integration tests
+  jest.setTimeout(600_000); // allow up to 10 minutes for integration tests (especially end-to-end Spark jobs)
 
   test("cluster is configured for secure, compliant big data processing", async () => {
     // Validate cluster ID format
@@ -222,5 +222,159 @@ describe("EMR trading analytics stack end-to-end", () => {
     
     // Verify cluster has status information
     expect(cluster?.Status).toBeTruthy();
+  });
+
+  test("end-to-end: trading analytics workflow processes daily trades", async () => {
+    const rawBucketName = rawBucket.trim();
+    const curatedBucketName = curatedBucket.trim();
+    const logsBucketName = logsBucket.trim();
+    const testId = `e2e-${Date.now()}`;
+    
+    // Step 1: Upload sample trading data to raw bucket
+    const rawDataKey = `trading-data/${testId}/daily-trades.csv`;
+    const sampleTradingData = `symbol,price,volume,timestamp
+AAPL,150.25,1000,2024-01-15T10:00:00Z
+MSFT,380.50,500,2024-01-15T10:01:00Z
+GOOGL,140.75,750,2024-01-15T10:02:00Z
+AMZN,145.30,1200,2024-01-15T10:03:00Z
+TSLA,250.80,2000,2024-01-15T10:04:00Z`;
+
+    console.log(`[E2E] Uploading sample trading data to s3://${rawBucketName}/${rawDataKey}`);
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: rawBucketName,
+        Key: rawDataKey,
+        Body: sampleTradingData,
+        ContentType: "text/csv",
+      })
+    );
+
+    // Step 2: Create a Spark job that processes the trading data
+    // This job reads from raw bucket, calculates average price per symbol, and writes to curated bucket
+    const outputKey = `analytics/${testId}/avg-prices.parquet`;
+    const sparkScript = `
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import avg, col
+
+spark = SparkSession.builder.appName("TradingAnalytics").getOrCreate()
+
+# Read trading data from raw bucket
+df = spark.read.option("header", "true").csv("s3://${rawBucketName}/${rawDataKey}")
+
+# Calculate average price per symbol
+result = df.groupBy("symbol").agg(avg(col("price")).cast("double").alias("avg_price")).orderBy("symbol")
+
+# Write results to curated bucket
+result.write.mode("overwrite").parquet("s3://${curatedBucketName}/${outputKey}")
+
+print(f"Processed {df.count()} trades and wrote results to s3://${curatedBucketName}/${outputKey}")
+spark.stop()
+`.trim();
+
+    // Upload Spark script to logs bucket (bootstrap scripts location)
+    const sparkScriptKey = `bootstrap/${testId}/trading-analytics.py`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: logsBucketName,
+        Key: sparkScriptKey,
+        Body: sparkScript,
+        ContentType: "text/x-python",
+      })
+    );
+
+    // Step 3: Submit Spark job to EMR cluster
+    console.log(`[E2E] Submitting Spark job to cluster ${clusterId}`);
+    const addStepsResponse = await emrClient.send(
+      new AddJobFlowStepsCommand({
+        JobFlowId: clusterId.trim(),
+        Steps: [
+          {
+            Name: `Trading Analytics E2E Test - ${testId}`,
+            ActionOnFailure: "CONTINUE",
+            HadoopJarStep: {
+              Jar: "command-runner.jar",
+              Args: [
+                "spark-submit",
+                "--deploy-mode",
+                "cluster",
+                `s3://${logsBucketName}/${sparkScriptKey}`,
+              ],
+            },
+          },
+        ],
+      })
+    );
+
+    const stepId = addStepsResponse.StepIds?.[0];
+    expect(stepId).toBeTruthy();
+    console.log(`[E2E] Spark job submitted with step ID: ${stepId}`);
+
+    // Step 4: Wait for job to complete (with timeout)
+    const maxWaitTime = 300000; // 5 minutes
+    const pollInterval = 10000; // 10 seconds
+    const startTime = Date.now();
+    let stepState: StepState | undefined;
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const stepDescribe = await emrClient.send(
+        new DescribeStepCommand({
+          ClusterId: clusterId.trim(),
+          StepId: stepId!,
+        })
+      );
+
+      stepState = stepDescribe.Step?.Status?.State;
+      console.log(`[E2E] Step ${stepId} state: ${stepState}`);
+
+      if (stepState === "COMPLETED") {
+        break;
+      }
+      if (stepState === "FAILED" || stepState === "CANCELLED") {
+        throw new Error(`Spark job failed with state: ${stepState}. Reason: ${stepDescribe.Step?.Status?.FailureDetails?.Reason || "Unknown"}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
+
+    if (stepState !== "COMPLETED") {
+      throw new Error(`Spark job did not complete within timeout. Final state: ${stepState}`);
+    }
+
+    console.log(`[E2E] Spark job completed successfully`);
+
+    // Step 5: Verify output file exists in curated bucket
+    console.log(`[E2E] Verifying output file exists in curated bucket`);
+    const outputList = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: curatedBucketName,
+        Prefix: outputKey,
+      })
+    );
+
+    expect(outputList.Contents?.length).toBeGreaterThan(0);
+    console.log(`[E2E] Output file found in curated bucket`);
+
+    // Step 6: Verify EMR logs are written to logs bucket
+    console.log(`[E2E] Verifying EMR logs are written to logs bucket`);
+    const logsList = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: logsBucketName,
+        Prefix: `emr-logs/${clusterId}/`,
+        MaxKeys: 10,
+      })
+    );
+
+    expect(logsList.Contents?.length).toBeGreaterThan(0);
+    console.log(`[E2E] EMR logs found in logs bucket`);
+
+    // Cleanup: Remove test files
+    console.log(`[E2E] Cleaning up test files`);
+    await Promise.allSettled([
+      s3Client.send(new DeleteObjectCommand({ Bucket: rawBucketName, Key: rawDataKey })),
+      s3Client.send(new DeleteObjectCommand({ Bucket: logsBucketName, Key: sparkScriptKey })),
+      // Note: We keep the output file as proof of successful processing
+    ]);
+
+    console.log(`[E2E] End-to-end test completed successfully`);
   });
 });
