@@ -4,17 +4,12 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "> 5.0"
     }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
     }
-  }
-
-  backend "s3" {
-    # Backend configuration provided via backend config files
-    # terraform init -backend-config="environments/${env}/backend.tfvars"
   }
 }
 
