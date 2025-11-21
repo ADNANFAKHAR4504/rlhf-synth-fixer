@@ -18,8 +18,8 @@ resource "aws_wafv2_web_acl" "main" {
     name     = "RateLimitRule"
     priority = 1
 
-    override_action {
-      none {}
+    action {
+      block {}
     }
 
     statement {
@@ -36,71 +36,58 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Rule 2: AWS Managed Rules - Common Rule Set
+  # Rule 2: SQL Injection protection (WAF built-in statement)
   rule {
-    name     = "AWSManagedRulesCommonRuleSet"
+    name     = "SQLiProtection"
     priority = 2
 
-    override_action {
-      none {}
+    action {
+      block {}
     }
 
     statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${local.name_prefix}-common-rules"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Rule 3: AWS Managed Rules - Known Bad Inputs
-  rule {
-    name     = "AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 3
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesKnownBadInputsRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${local.name_prefix}-bad-inputs"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  # Rule 4: AWS Managed Rules - SQL Injection
-  rule {
-    name     = "AWSManagedRulesSQLiRuleSet"
-    priority = 4
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesSQLiRuleSet"
-        vendor_name = "AWS"
+      sqli_match_statement {
+        field_to_match {
+          all_query_arguments {}
+        }
+        text_transformation {
+          priority = 0
+          type     = "URL_DECODE"
+        }
       }
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${local.name_prefix}-sqli"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Rule 3: Cross-Site Scripting protection
+  rule {
+    name     = "XSSProtection"
+    priority = 3
+
+    action {
+      block {}
+    }
+
+    statement {
+      xss_match_statement {
+        field_to_match {
+          body {}
+        }
+        text_transformation {
+          priority = 0
+          type     = "HTML_ENTITY_DECODE"
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-xss"
       sampled_requests_enabled   = true
     }
   }
@@ -149,7 +136,7 @@ resource "aws_wafv2_web_acl_association" "alb" {
 
 # CloudWatch Log Group for WAF logs
 resource "aws_cloudwatch_log_group" "waf" {
-  name              = "/aws/wafv2/${local.name_prefix}"
+  name              = "aws-waf-logs-${local.name_prefix}"
   retention_in_days = var.log_retention
 
   tags = merge(var.tags, {
@@ -160,7 +147,7 @@ resource "aws_cloudwatch_log_group" "waf" {
 # WAF Logging Configuration
 resource "aws_wafv2_web_acl_logging_configuration" "main" {
   resource_arn            = aws_wafv2_web_acl.main.arn
-  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
+  log_destination_configs = ["${aws_cloudwatch_log_group.waf.arn}:*"]
 
   redacted_fields {
     single_header {

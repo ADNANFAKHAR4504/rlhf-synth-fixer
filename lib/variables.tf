@@ -15,6 +15,11 @@ variable "project_name" {
 variable "pr_number" {
   description = "PR number for resource identification and naming"
   type        = string
+
+  validation {
+    condition     = can(regex("^pr[0-9]+", var.pr_number))
+    error_message = "pr_number must start with 'pr' followed by numbers (e.g., pr6969dev, pr6969staging)."
+  }
 }
 
 variable "vpc_cidr_base" {

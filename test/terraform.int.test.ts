@@ -696,9 +696,8 @@ describe('WAF Rules Validation', () => {
     console.log('WAF Rules configured:', ruleNames);
 
     expect(ruleNames).toContain('RateLimitRule');
-    expect(ruleNames.some(name => name.includes('CommonRuleSet'))).toBe(true);
-    expect(ruleNames.some(name => name.includes('KnownBadInputs'))).toBe(true);
-    expect(ruleNames.some(name => name.includes('SQLi'))).toBe(true);
+    expect(ruleNames).toContain('SQLiProtection');
+    expect(ruleNames).toContain('XSSProtection');
 
     console.log('✓ WAF WebACL has all expected security rules');
   }, TEST_TIMEOUT);

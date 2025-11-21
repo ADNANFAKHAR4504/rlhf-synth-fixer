@@ -1,7 +1,7 @@
 # main.tf
 
 locals {
-  environment = terraform.workspace
+  environment = terraform.workspace == "default" ? "dev" : terraform.workspace
 
   # Environment-specific configurations
   env_config = {

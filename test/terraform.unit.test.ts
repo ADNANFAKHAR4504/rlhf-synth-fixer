@@ -412,17 +412,21 @@ describe('Payment Processing Platform - Terraform Unit Tests', () => {
       expect(wafMain).toMatch(/limit\s*=\s*var\.rate_limit/);
     });
 
-    test('WAF has AWS Managed Common Rule Set', () => {
-      expect(wafMain).toMatch(/AWSManagedRulesCommonRuleSet/);
-      expect(wafMain).toMatch(/managed_rule_group_statement/);
-    });
-
-    test('WAF has Known Bad Inputs rule', () => {
-      expect(wafMain).toMatch(/AWSManagedRulesKnownBadInputsRuleSet/);
-    });
-
     test('WAF has SQL Injection protection', () => {
-      expect(wafMain).toMatch(/AWSManagedRulesSQLiRuleSet/);
+      expect(wafMain).toMatch(/SQLiProtection/);
+      expect(wafMain).toMatch(/sqli_match_statement/);
+      expect(wafMain).toMatch(/all_query_arguments/);
+    });
+
+    test('WAF has Cross-Site Scripting protection', () => {
+      expect(wafMain).toMatch(/XSSProtection/);
+      expect(wafMain).toMatch(/xss_match_statement/);
+    });
+
+    test('WAF has text transformations for SQLi and XSS', () => {
+      expect(wafMain).toMatch(/text_transformation/);
+      expect(wafMain).toMatch(/URL_DECODE/);
+      expect(wafMain).toMatch(/HTML_ENTITY_DECODE/);
     });
 
     test('WAF is associated with ALB', () => {
