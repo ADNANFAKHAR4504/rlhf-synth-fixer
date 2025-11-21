@@ -2,9 +2,10 @@
 ALB Stack - Application Load Balancer with HTTPS Listener and S3 Logging
 """
 
+from typing import Dict, List
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List
 
 
 class AlbStackArgs:
@@ -17,6 +18,7 @@ class AlbStackArgs:
         public_subnet_ids: List[pulumi.Input[str]],
         alb_sg_id: pulumi.Input[str],
         log_bucket_name: pulumi.Input[str],
+        certificate_arn: pulumi.Input[str] = None,
         tags: Dict[str, str] = None
     ):
         self.environment_suffix = environment_suffix
@@ -24,6 +26,7 @@ class AlbStackArgs:
         self.public_subnet_ids = public_subnet_ids
         self.alb_sg_id = alb_sg_id
         self.log_bucket_name = log_bucket_name
+        self.certificate_arn = certificate_arn
         self.tags = tags or {}
 
 
@@ -42,6 +45,7 @@ class AlbStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
+        self.certificate_arn = args.certificate_arn
 
         # Create Application Load Balancer
         self.alb = aws.lb.LoadBalancer(
@@ -87,44 +91,58 @@ class AlbStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        # HTTP Listener (redirects to HTTPS)
-        self.http_listener = aws.lb.Listener(
-            f"loan-http-listener-{self.environment_suffix}",
-            load_balancer_arn=self.alb.arn,
-            port=80,
-            protocol="HTTP",
-            default_actions=[aws.lb.ListenerDefaultActionArgs(
-                type="redirect",
-                redirect=aws.lb.ListenerDefaultActionRedirectArgs(
-                    port="443",
-                    protocol="HTTPS",
-                    status_code="HTTP_301"
-                )
-            )],
-            tags={**self.tags, "Name": f"loan-http-listener-{self.environment_suffix}"},
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.alb])
-        )
-
-        # HTTPS Listener (using self-signed certificate for demo)
-        # In production, use ACM certificate
-        self.https_listener = aws.lb.Listener(
-            f"loan-https-listener-{self.environment_suffix}",
-            load_balancer_arn=self.alb.arn,
-            port=443,
-            protocol="HTTPS",
-            ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
-            certificate_arn="arn:aws:acm:eu-west-2:123456789012:certificate/dummy",  # Replace with real ACM cert
-            default_actions=[aws.lb.ListenerDefaultActionArgs(
-                type="forward",
-                target_group_arn=self.target_group.arn
-            )],
-            tags={**self.tags, "Name": f"loan-https-listener-{self.environment_suffix}"},
-            opts=pulumi.ResourceOptions(
-                parent=self,
-                depends_on=[self.alb, self.target_group],
-                ignore_changes=["certificate_arn"]
+        # HTTP Listener
+        if self.certificate_arn:
+            # Redirect to HTTPS
+            self.http_listener = aws.lb.Listener(
+                f"loan-http-listener-{self.environment_suffix}",
+                load_balancer_arn=self.alb.arn,
+                port=80,
+                protocol="HTTP",
+                default_actions=[aws.lb.ListenerDefaultActionArgs(
+                    type="redirect",
+                    redirect=aws.lb.ListenerDefaultActionRedirectArgs(
+                        port="443",
+                        protocol="HTTPS",
+                        status_code="HTTP_301"
+                    )
+                )],
+                tags={**self.tags, "Name": f"loan-http-listener-{self.environment_suffix}"},
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.alb])
             )
-        )
+
+            # HTTPS Listener
+            self.https_listener = aws.lb.Listener(
+                f"loan-https-listener-{self.environment_suffix}",
+                load_balancer_arn=self.alb.arn,
+                port=443,
+                protocol="HTTPS",
+                ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
+                certificate_arn=self.certificate_arn,
+                default_actions=[aws.lb.ListenerDefaultActionArgs(
+                    type="forward",
+                    target_group_arn=self.target_group.arn
+                )],
+                tags={**self.tags, "Name": f"loan-https-listener-{self.environment_suffix}"},
+                opts=pulumi.ResourceOptions(
+                    parent=self,
+                    depends_on=[self.alb, self.target_group]
+                )
+            )
+        else:
+            # Forward directly to target group
+            self.http_listener = aws.lb.Listener(
+                f"loan-http-listener-{self.environment_suffix}",
+                load_balancer_arn=self.alb.arn,
+                port=80,
+                protocol="HTTP",
+                default_actions=[aws.lb.ListenerDefaultActionArgs(
+                    type="forward",
+                    target_group_arn=self.target_group.arn
+                )],
+                tags={**self.tags, "Name": f"loan-http-listener-{self.environment_suffix}"},
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.alb])
+            )
 
         self.register_outputs({
             "alb_arn": self.alb.arn,
