@@ -1,0 +1,13 @@
+We need a CDK TypeScript application that deploys a full production-grade web application stack consisting of separate frontend and backend services. The infrastructure should start with a VPC spread across two availability zones, including public and private subnets in each zone. Public subnets will host the Application Load Balancer, while private subnets should be used for the ECS services and the Aurora PostgreSQL database. NAT Gateways are required so private resources can access the internet securely.
+
+Build an ECS cluster and deploy two independent Fargate services: one running the React frontend on port 3000, and the other running the Node.js API on port 8080. Both services should run behind an Application Load Balancer configured with HTTPS. The ALB must support path-based routing so that /api/* requests reach the backend service, while all other paths route to the frontend. Health checks are required for both routes to ensure smooth deployments.
+
+Set up an Aurora PostgreSQL cluster with encrypted storage, a dedicated writer instance, and a single reader instance. Automated backups should be configured with a 7-day retention period and point-in-time recovery support. Database credentials need to be stored in Secrets Manager and automatically rotated every 30 days.
+
+Static assets for the application should live in an S3 bucket that is fronted by a CloudFront distribution. Use an Origin Access Identity to keep the bucket private while still allowing CloudFront to serve assets efficiently. Route 53 will be responsible for DNS, with A records pointing to both the CloudFront distribution (for frontend) and the ALB (for backend). SSL certificates should be issued automatically via ACM.
+
+To support zero-downtime releases, enable blue-green deployments for both ECS services using CodeDeploy with automatic rollback if a deployment shows unhealthy behavior. For security, configure an AWS WAF web ACL with rate-limiting rules (2,000 requests every 5 minutes per IP) and SQL-injection protection.
+
+Monitoring is important for this client-facing dashboard, so create a CloudWatch dashboard that visualizes request counts, error rates, and average response times for both services. Networking should be locked down with proper security groups for ALB, ECS tasks, and database access. IAM roles must follow least-privilege principles.
+
+The CDK stack should output the key endpoints needed for application configuration: the CloudFront distribution URL, the ALB DNS name, and the Aurora cluster endpoint.
