@@ -15,10 +15,17 @@ environment_suffix: str = (
 region: str = config.get("region") or "us-east-1"
 
 # Get db_password from environment variable or config
-db_password_env = os.environ.get('TF_VAR_db_password', 'TempPassword123!')
-# Use environment variable directly if config is empty or not set
-db_password_config = config.get_secret("db_password")
-db_password = db_password_env if not db_password_config else db_password_config
+db_password_env = os.environ.get('TF_VAR_db_password')
+if not db_password_env:
+    # If no environment variable, try to get from config
+    db_password_config = config.get_secret("db_password")
+    if db_password_config:
+        db_password = db_password_config
+    else:
+        # Use a default password if nothing else is available
+        db_password = 'TempPassword123!'
+else:
+    db_password = db_password_env
 
 # Get AWS account ID for unique bucket names
 sts = boto3.client('sts')
@@ -448,6 +455,7 @@ db_subnet_group = aws.rds.SubnetGroup(
 )
 
 # RDS Aurora Cluster
+# Ensure password is properly set as a Pulumi secret
 aurora_cluster = aws.rds.Cluster(
     f"aurora-cluster-{environment_suffix}",
     cluster_identifier=f"aurora-cluster-{environment_suffix}",
@@ -455,7 +463,7 @@ aurora_cluster = aws.rds.Cluster(
     engine_version="15.6",
     database_name="transactions",
     master_username="dbadmin",
-    master_password=db_password,
+    master_password=pulumi.Output.secret(db_password),
     db_subnet_group_name=db_subnet_group.name,
     vpc_security_group_ids=[rds_sg.id],
     skip_final_snapshot=True,
