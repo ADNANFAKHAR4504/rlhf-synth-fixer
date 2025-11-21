@@ -1,9 +1,10 @@
 ```yaml
-name: ML Platform CI/CD (Sub_T05)
+---
+name: ML Platform CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - ".github/workflows/ci-cd.yml"
       - "infra/**"
@@ -11,8 +12,12 @@ on:
       - "train.py"
       - "Dockerfile"
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -23,21 +28,17 @@ env:
   TF_WORKING_DIR: infra
   PYTHON_VERSION: "3.11"
   IMAGE_NAME: "ml-app"
-  REGISTRY_HOST: "${{ vars.GCP_REGION }}-docker.pkg.dev"
-  REGISTRY_REPO: "${{ env.GCP_PROJECT_ID }}/ml-platform"
-
-permissions:
-  contents: read
-  id-token: write
 
 jobs:
   validation:
-    name: Validation (Terraform, Python, Dockerfile, Secrets)
+    name: Static Code & Infra Validation
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,11 +49,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements.txt', '**/poetry.lock') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install Python tooling
+      - name: Install validation tools
         run: |
           python -m pip install --upgrade pip
           pip install black pylint mypy bandit detect-secrets
@@ -61,15 +62,16 @@ jobs:
         run: black --check .
 
       - name: Pylint
-        run: pylint $(git ls-files '*.py') || true
+        run: |
+          find . -type f -name "*.py" | grep -v ".venv/" | xargs pylint
 
       - name: Mypy
-        run: mypy . || true
+        run: mypy .
 
-      - name: Bandit (security lint)
-        run: bandit -r . || true
+      - name: Bandit
+        run: bandit -r .
 
-      - name: Detect-secrets (working tree)
+      - name: Detect secrets
         run: detect-secrets scan --all-files
 
       - name: Hadolint (Dockerfile)
@@ -79,11 +81,12 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_$(uname -s)_$(uname -m).tar.gz -o gitleaks.tar.gz
+          GITLEAKS_VERSION="8.18.2"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_$(uname -s)_$(uname -m).tar.gz" -o gitleaks.tar.gz
           tar -xzf gitleaks.tar.gz gitleaks
           sudo mv gitleaks /usr/local/bin/gitleaks
 
-      - name: Gitleaks (full history)
+      - name: Gitleaks (history scan)
         run: gitleaks detect --no-banner --redact --source .
 
       - name: Set up Terraform
@@ -100,7 +103,7 @@ jobs:
         run: terraform validate
 
   tests:
-    name: Unit / Integration Tests
+    name: Unit & Integration Tests
     runs-on: ubuntu-latest
     needs: validation
 
@@ -113,31 +116,36 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip poetry
+
+      - name: Configure Poetry
+        run: poetry config virtualenvs.in-project true
+
+      - name: Cache Poetry venv
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-poetry-
 
-      - name: Install dependencies (Poetry)
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          poetry install --no-interaction --no-ansi
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi
 
       - name: Run tests
         run: poetry run pytest
 
   docker_build_push:
-    name: Build & Push Docker Image (Artifact Registry)
+    name: Build, Scan & Push Docker Image
     runs-on: ubuntu-latest
     needs: tests
     if: github.ref == 'refs/heads/main'
-
     env:
       IMAGE_TAG: ${{ github.sha }}
+      REGISTRY_HOST: ${{ env.GCP_REGION }}-docker.pkg.dev
+      REGISTRY_REPO: ${{ env.GCP_PROJECT_ID }}/ml-platform
 
     steps:
       - name: Checkout
@@ -155,17 +163,37 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
-      - name: Configure docker for Artifact Registry
-        run: gcloud auth configure-docker "${{ env.REGISTRY_HOST }}"
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ env.REGISTRY_HOST }}" --quiet
 
       - name: Build Docker image
-        run: docker build -t "${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" .
+        env:
+          IMAGE_NAME_FULL: "${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_REPO }}/${{ env.IMAGE_NAME }}"
+        run: |
+          docker build -t "${IMAGE_NAME_FULL}:${{ env.IMAGE_TAG }}" .
 
-      - name: Push Docker image
-        run: docker push "${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.24.0
+        with:
+          image-ref: "${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: false
+          exit-code: "1"
+          format: "table"
+
+      - name: Tag & push image tags
+        env:
+          IMAGE_NAME_FULL: "${{ env.REGISTRY_HOST }}/${{ env.REGISTRY_REPO }}/${{ env.IMAGE_NAME }}"
+        run: |
+          docker tag "${IMAGE_NAME_FULL}:${{ env.IMAGE_TAG }}" "${IMAGE_NAME_FULL}:latest"
+          docker tag "${IMAGE_NAME_FULL}:${{ env.IMAGE_TAG }}" "${IMAGE_NAME_FULL}:run-${{ github.run_number }}"
+          docker push "${IMAGE_NAME_FULL}:${{ env.IMAGE_TAG }}"
+          docker push "${IMAGE_NAME_FULL}:latest"
+          docker push "${IMAGE_NAME_FULL}:run-${{ github.run_number }}"
 
   model-build:
-    name: Train & Package Model
+    name: Train & Package ML Model
     runs-on: ubuntu-latest
     needs: tests
 
@@ -178,18 +206,20 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml', '**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install Poetry
         run: |
-          python -m pip install --upgrade pip
-          pip install poetry
+          python -m pip install --upgrade pip poetry
+
+      - name: Configure Poetry
+        run: poetry config virtualenvs.in-project true
+
+      - name: Cache Poetry venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
 
       - name: Install dependencies
         run: poetry install --no-interaction --no-ansi
@@ -206,19 +236,20 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
-      - name: Make scripts executable
+      - name: Make train script executable
         run: chmod +x scripts/train_model.sh
 
       - name: Train & upload model
         env:
           GCS_MODEL_BUCKET: ${{ env.GCS_MODEL_BUCKET }}
-        run: ./scripts/train_model.sh
+        run: scripts/train_model.sh
 
-      - name: Persist model version artifact
+      - name: Upload model version artifact
         uses: actions/upload-artifact@v4
         with:
           name: model-version
           path: .model_version
+          retention-days: 30
 
   infra-deploy:
     name: Deploy Infra (Vertex AI / Cloud Run / GKE)
@@ -244,9 +275,6 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
-
-      - name: Configure docker for Artifact Registry
-        run: gcloud auth configure-docker "${{ env.REGISTRY_HOST }}"
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -294,7 +322,7 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
-      - name: Make scripts executable
+      - name: Make deploy script executable
         run: chmod +x scripts/deploy_vertex_model.sh
 
       - name: Deploy model to Vertex AI
@@ -302,6 +330,17 @@ jobs:
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
           GCP_REGION: ${{ env.GCP_REGION }}
           GCS_MODEL_BUCKET: ${{ env.GCS_MODEL_BUCKET }}
-        run: ./scripts/deploy_vertex_model.sh
+        run: scripts/deploy_vertex_model.sh
+
+  cleanup-on-failure:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: model-deploy
+    if: failure()
+
+    steps:
+      - name: Rollback placeholder
+        run: |
+          echo "model-deploy failed; implement rollback here (e.g., revert Vertex AI endpoint to previous model)."
 
 ```
