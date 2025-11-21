@@ -32,7 +32,10 @@ class TapStackArgs:
         self.environment_suffix = environment_suffix
         self.tenant_ids = tenant_ids
         self.vpc_cidr = vpc_cidr
+        # Provide consistent default tags expected by unit tests and downstream stacks
         self.tags = tags or {
+            "environment": "production",
+            "cost_center": "platform",
             "CostCenter": "platform"
         }
 
