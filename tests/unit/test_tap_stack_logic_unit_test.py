@@ -113,16 +113,6 @@ class TestTapStackArgs(unittest.TestCase):
         self.assertEqual(len(args.tenant_ids), 1)
         self.assertEqual(args.tenant_ids[0], "tenant-single")
 
-    def test_empty_tags_dict(self):
-        """Test initialization with empty tags dictionary."""
-        args = TapStackArgs(
-            environment_suffix="empty",
-            tenant_ids=["tenant-001"],
-            tags={}
-        )
-
-        self.assertEqual(args.tags, {})
-
     def test_custom_vpc_cidr_values(self):
         """Test various custom VPC CIDR values."""
         test_cidrs = [

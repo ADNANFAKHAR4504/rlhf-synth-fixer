@@ -328,7 +328,7 @@ class TapStack(pulumi.ComponentResource):
                             "logs:CreateLogStream",
                             "logs:PutLogEvents"
                         ],
-                        "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda/tenant-*"
+                        "Resource": f"arn:aws:logs:*:*:log-group:/aws/lambda/tenant-*-{self.environment_suffix}"
                     },
                     {
                         "Effect": "Allow",
@@ -421,10 +421,10 @@ def handler(event, context):
         log_groups = {}
 
         for tenant_id in self.tenant_ids:
-            # FIXED: Changed retention to 30 days
+            # FIXED: Changed retention to 30 days and added environment suffix to name
             log_group = aws.cloudwatch.LogGroup(
                 f"log-group-{tenant_id}-{self.environment_suffix}",
-                name=f"/aws/lambda/tenant-{tenant_id}",
+                name=f"/aws/lambda/tenant-{tenant_id}-{self.environment_suffix}",
                 retention_in_days=30,  # FIXED: Changed from 7 to 30
                 tags={
                     **self.tags,
