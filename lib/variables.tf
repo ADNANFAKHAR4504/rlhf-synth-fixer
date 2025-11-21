@@ -17,7 +17,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid conflicts"
   type        = string
-  default     = "dev9"
+  default     = "dev8"
 }
 
 variable "project_name" {
