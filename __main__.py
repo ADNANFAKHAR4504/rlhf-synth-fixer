@@ -7,8 +7,13 @@ from typing import Optional
 
 # Get configuration
 config = pulumi.Config()
-environment_suffix: str = config.get("environment_suffix") or os.environ.get("ENVIRONMENT_SUFFIX", "dev")
+environment_suffix: str = (
+    config.get("environment_suffix")
+    or os.environ.get("ENVIRONMENT_SUFFIX")
+    or pulumi.get_stack()
+)
 region: str = config.get("region") or "us-east-1"
+db_password = config.require_secret("db_password")
 
 # Get AWS account ID for unique bucket names
 sts = boto3.client('sts')
@@ -445,7 +450,7 @@ aurora_cluster = aws.rds.Cluster(
     engine_version="15.6",
     database_name="transactions",
     master_username="dbadmin",
-    master_password=os.environ.get("TF_VAR_db_password", "TempPassword123!"),
+    master_password=db_password,
     db_subnet_group_name=db_subnet_group.name,
     vpc_security_group_ids=[rds_sg.id],
     skip_final_snapshot=True,
