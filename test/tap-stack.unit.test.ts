@@ -62,11 +62,8 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.DBUsername.MaxLength).toBe(16);
     });
 
-    test('should have DBPassword parameter', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-      expect(template.Parameters.DBPassword.Type).toBe('String');
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBPassword.MinLength).toBe(8);
+    test('should not have DBPassword parameter (using Secrets Manager instead)', () => {
+      expect(template.Parameters.DBPassword).toBeUndefined();
     });
 
     test('should have VPCId parameter', () => {
@@ -139,6 +136,20 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(resource.Properties.BackupRetentionPeriod).toBe(7);
       expect(resource.Properties.PreferredBackupWindow).toBeDefined();
       expect(resource.Properties.PreferredMaintenanceWindow).toBeDefined();
+    });
+
+    test('AuroraDBCluster should use Secrets Manager for credentials', () => {
+      const cluster = template.Resources.AuroraDBCluster;
+      expect(cluster.Properties.MasterUsername).toBeDefined();
+      expect(cluster.Properties.MasterUserPassword).toBeDefined();
+
+      // Both should use dynamic references to Secrets Manager
+      expect(cluster.Properties.MasterUsername['Fn::Sub']).toBeDefined();
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toBeDefined();
+      expect(cluster.Properties.MasterUsername['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(cluster.Properties.MasterUsername['Fn::Sub']).toContain('DBSecret');
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('DBSecret');
     });
 
     test('should have AuroraDBInstance resource', () => {
@@ -273,8 +284,9 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('TransactionProcessorFunction should depend on RDS', () => {
       const resource = template.Resources.TransactionProcessorFunction;
-      expect(resource.DependsOn).toContain('AuroraDBCluster');
+      // DependsOn only includes AuroraDBInstance (AuroraDBCluster dependency is implicit via GetAtt)
       expect(resource.DependsOn).toContain('AuroraDBInstance');
+      expect(resource.DependsOn).not.toContain('AuroraDBCluster');
     });
 
     test('TransactionProcessorFunction name should include environmentSuffix', () => {
@@ -376,8 +388,11 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('DBSecret should have correct structure', () => {
       const resource = template.Resources.DBSecret;
-      expect(resource.Properties.SecretString).toBeDefined();
-      expect(typeof resource.Properties.SecretString).toBe('object');
+      expect(resource.Properties.GenerateSecretString).toBeDefined();
+      expect(resource.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+      expect(resource.Properties.GenerateSecretString.PasswordLength).toBe(32);
+      expect(resource.Properties.GenerateSecretString.SecretStringTemplate).toBeDefined();
+      expect(resource.Properties.GenerateSecretString.SecretStringTemplate['Fn::Sub']).toBeDefined();
     });
   });
 
@@ -573,8 +588,10 @@ describe('CloudFormation Template Unit Tests', () => {
     test('Lambda should explicitly depend on RDS resources', () => {
       const lambda = template.Resources.TransactionProcessorFunction;
       expect(lambda.DependsOn).toBeDefined();
-      expect(lambda.DependsOn).toContain('AuroraDBCluster');
+      // DependsOn only includes AuroraDBInstance (AuroraDBCluster dependency is implicit via GetAtt)
       expect(lambda.DependsOn).toContain('AuroraDBInstance');
+      // AuroraDBCluster dependency is enforced by GetAtt in Environment.Variables.DB_ENDPOINT
+      expect(lambda.Properties.Environment.Variables.DB_ENDPOINT['Fn::GetAtt']).toEqual(['AuroraDBCluster', 'Endpoint.Address']);
     });
   });
 

@@ -45,11 +45,13 @@ The PROMPT correctly specified production requirements, but the QA validation co
 
 ## Summary
 
-- Total failures: **1 Critical**, 0 High, 0 Medium, 0 Low
+- Total failures: **1 Critical**, 2 High (Secrets Manager, Dependencies), 0 Medium, 0 Low
 - Primary knowledge gaps:
   1. Context-awareness for distinguishing production vs. QA environments
   2. Understanding QA validation requirements for resource destroyability
   3. Balancing conflicting requirements (production data protection vs. QA automation)
+  4. Best practices for secure credential management (Secrets Manager vs parameters)
+  5. CloudFormation dependency optimization (avoiding redundant DependsOn)
 
 - Training value: **HIGH** - This example demonstrates a subtle but critical failure where the model correctly followed explicit PROMPT guidance but failed to recognize implicit QA context requirements. The model needs stronger training on:
   1. Recognizing automated testing contexts
@@ -57,11 +59,41 @@ The PROMPT correctly specified production requirements, but the QA validation co
   3. Applying conditional deletion policies based on deployment context
   4. Prioritizing testability requirements over production safeguards in QA environments
 
+## Additional Fixes Applied
+
+### 2. Secrets Manager Implementation
+
+**Original (MODEL_RESPONSE)**:
+- Used DBPassword parameter with NoEcho
+- Credentials stored in CloudFormation metadata and parameter history
+
+**Corrected (IDEAL_RESPONSE)**:
+- Removed DBPassword parameter completely
+- Implemented AWS Secrets Manager with GenerateSecretString
+- Auto-generates 32-character secure password
+- Uses dynamic references in Aurora cluster for credentials
+
+**Benefits**:
+- Password automatically generated (no manual creation)
+- Credentials never stored in CloudFormation metadata
+- Supports automatic rotation
+- Follows AWS security best practices
+
+### 3. Dependency Optimization
+
+**Original (MODEL_RESPONSE)**:
+- Lambda DependsOn included both AuroraDBCluster and AuroraDBInstance
+
+**Corrected (IDEAL_RESPONSE)**:
+- Lambda DependsOn only includes AuroraDBInstance
+- AuroraDBCluster dependency is implicit via GetAtt in Environment Variables
+
+**Rationale**: Reduces redundant dependencies and follows CloudFormation best practices (W3005 lint rule).
+
 ## Positive Aspects
 
 The MODEL_RESPONSE correctly implemented:
 - ServerlessV2 scaling configuration (0.5-1.0 ACU)
-- Explicit DependsOn relationships (Lambda → RDS)
 - ReservedConcurrentExecutions for Lambda (100)
 - Conditional logic for production-specific features
 - Proper security group configuration without circular dependencies
@@ -71,7 +103,6 @@ The MODEL_RESPONSE correctly implemented:
 - Comprehensive tagging strategy
 - Backup and maintenance windows
 - VPC integration with private subnets
-- Secrets Manager integration
 - CloudWatch monitoring setup
 
 ## Context for Training
