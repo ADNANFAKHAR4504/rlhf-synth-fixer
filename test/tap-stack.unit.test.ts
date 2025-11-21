@@ -1049,7 +1049,7 @@ describe('TapStack - Production-grade Multi-tier AWS Infrastructure Unit Tests',
         typeof value === 'string' && value.includes(currentEnvironmentSuffix)
       );
 
-      expect(outputsWithSuffix.length).toBeGreaterThan(10); // Should have many resources with suffix
+      expect(outputsWithSuffix.length).toBeGreaterThan(10); 
     });
   });
 
