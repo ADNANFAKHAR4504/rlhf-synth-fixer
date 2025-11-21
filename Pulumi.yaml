@@ -1,6 +1,7 @@
 name: TapStack
 runtime: python
 description: Cloud environment for transaction processing with ECS Fargate and Aurora PostgreSQL
+main: lib
 config:
   environment_suffix:
     description: Environment suffix for resource naming

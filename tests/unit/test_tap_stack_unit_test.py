@@ -12,7 +12,7 @@ class TestTapStackUnitTest(unittest.TestCase):
     def setUpClass(cls):
         """Set up test environment."""
         cls.main_file_path = os.path.join(
-            os.path.dirname(__file__), '..', '..', '__main__.py'
+            os.path.dirname(__file__), '..', '..', 'lib', '__main__.py'
         )
         with open(cls.main_file_path, 'r', encoding='utf-8') as f:
             cls.code_content = f.read()
@@ -195,8 +195,8 @@ class TestTapStackUnitTest(unittest.TestCase):
         self.assertIn('"15.', self.code_content)
 
     def test_master_password_from_config(self):
-        """Test that master password comes from config."""
-        self.assertIn('config.require_secret("db_password")', self.code_content)
+        """Test that master password comes from config or environment."""
+        self.assertIn('config.get_secret("db_password")', self.code_content)
 
     def test_vpc_cidr_matches_requirement(self):
         """Test that VPC CIDR matches the requirement."""
