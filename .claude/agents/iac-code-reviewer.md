@@ -621,10 +621,12 @@ Before posting your comment, verify:
 - Compare lib/IDEAL_RESPONSE.md with lib/TapStack.* implementation
   - **Skip detailed comparison if files are identical** (check hashes first: `md5sum`)
   - Only report actual differences
+  - **If differences found: suggest updating IDEAL_RESPONSE.md (NOT MODEL_RESPONSE.md)**
 - Calculate compliance percentage
 - **FOR SCORING ONLY**: Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
   - **PURPOSE**: Understand what the model got wrong and what was fixed (for training quality score)
   - **NOT FOR**: Finding current errors (those are already fixed in IDEAL_RESPONSE.md!)
+  - **DO NOT suggest updating MODEL_RESPONSE.md** - it is read-only historical record
   - **Focus on infrastructure differences**: resources, configuration, security, architecture
   - Avoid listing trivial formatting/comment differences
   - Document significant fixes for MODEL_FAILURES analysis and training quality bonus

@@ -1135,9 +1135,11 @@ jobs:
             6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
 
             CRITICAL WARNING - FILE CONTEXT:
-            - lib/MODEL_RESPONSE.md = Initial model output (MAY contain errors like Maven, multi-stack, etc.)
-            - lib/IDEAL_RESPONSE.md = Final corrected code (THIS is what you validate for platform/language compliance)
+            - lib/MODEL_RESPONSE.md = Initial model output (MAY contain errors like Maven, multi-stack, etc.) - READ-ONLY, never update
+            - lib/IDEAL_RESPONSE.md = Final corrected code (THIS is what you validate for platform/language compliance) - update this if needed
             - lib/MODEL_FAILURES.md = Documentation of what WAS FIXED (past tense) - NOT current errors!
+
+            **CRITICAL**: When comparing IDEAL_RESPONSE.md with implementation files, suggest updating IDEAL_RESPONSE.md only. NEVER suggest updating MODEL_RESPONSE.md.
 
             When validating platform/language compliance, you MUST:
             1. Run: bash ./.claude/scripts/validate-code-platform.sh
