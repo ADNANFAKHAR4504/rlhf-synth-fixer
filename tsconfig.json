@@ -36,5 +36,5 @@
     "tests",
     "**/*.d.ts"
   ],
-  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts", "terraform.unit.test.ts", "terraform.int.test.ts"]
+  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts"]
 }
