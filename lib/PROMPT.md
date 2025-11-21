@@ -8,12 +8,12 @@ The current setup is running in us-east-1 across 3 availability zones, with an A
 
 ## What we need to build
 
-Create a modular CloudFormation template structure using **CloudFormation with JSON** that consolidates our existing infrastructure, eliminates duplication, and implements proper validation and maintainability patterns. The solution should consist of a master stack and at least three nested stacks (VPC, Compute, Data) that work together seamlessly.
+Create a consolidated CloudFormation template using **CloudFormation with JSON** that combines our existing infrastructure into a single, well-organized template, eliminates duplication, and implements proper validation and maintainability patterns. The solution should consolidate VPC, Compute, and Data resources into one unified template for simplified deployment.
 
 ### Core Requirements
 
 1. **VPC Consolidation**
-   - Consolidate three separate VPC templates into one reusable nested stack
+   - Consolidate three separate VPC templates into one unified template section
    - Make CIDR blocks configurable via parameters
    - Support deployment across 3 availability zones
 
@@ -37,10 +37,10 @@ Create a modular CloudFormation template structure using **CloudFormation with J
    - All named resources must include environmentSuffix for uniqueness
    - Pattern: `{resource-name}-${EnvironmentSuffix}`
 
-6. **Cross-Stack Integration**
-   - Implement cross-stack exports for VPC ID, subnet IDs, and security group IDs
-   - Use proper Export names that follow naming conventions
-   - Ensure nested stacks can reference exported values
+6. **Resource Organization**
+   - Organize resources logically within the template (VPC, Compute, Data sections)
+   - Use outputs for VPC ID, subnet IDs, and security group IDs
+   - Use proper naming conventions for all resources
 
 7. **Parameter Organization**
    - Add AWS::CloudFormation::Interface metadata to group parameters logically
@@ -77,7 +77,7 @@ Create a modular CloudFormation template structure using **CloudFormation with J
 ### Constraints
 
 - Must eliminate all hardcoded ARNs and resource names using intrinsic functions
-- Must use nested stacks to achieve proper modularization (VPC, Compute, Data stacks minimum)
+- Must organize resources logically in a single template (VPC, Compute, Data sections for clarity)
 - Must implement parameter validation with AllowedValues or AllowedPattern
 - Must use Mappings for reusable configurations like port numbers
 - All resources must be destroyable (use DeletionPolicy: Delete for non-stateful resources)
@@ -89,28 +89,28 @@ Create a modular CloudFormation template structure using **CloudFormation with J
 
 ## Success Criteria
 
-- **Functionality**: Master stack successfully deploys all nested stacks without errors
-- **Modularity**: VPC, Compute, and Data layers are in separate nested stacks
+- **Functionality**: Stack successfully deploys all infrastructure without errors
+- **Modularity**: VPC, Compute, and Data resources are logically organized within single template
 - **Validation**: Parameters enforce correct values (instance types, patterns, etc.)
 - **Flexibility**: ElastiCache can be toggled on/off via Conditions
 - **Maintainability**: Mappings eliminate hardcoded security group rules
 - **Resource Naming**: All resources include environmentSuffix for parallel deployments
-- **Cross-Stack References**: Proper exports and imports between stacks
+- **Resource Outputs**: Proper outputs for VPC, ALB, and database resources
 - **Cost Tracking**: CostCenter tags applied to all resources
 - **Code Quality**: Clean JSON structure, well-documented, follows CloudFormation best practices
 
 ## What to deliver
 
-- Complete CloudFormation JSON implementation with nested stacks
-- Master stack (TapStack.json) that orchestrates the deployment
-- VPC nested stack with configurable CIDR blocks
-- Compute nested stack with ALB and Auto Scaling Group
-- Data nested stack with RDS Aurora MySQL and conditional ElastiCache
+- Complete CloudFormation JSON implementation in single consolidated template
+- Unified TapStack.json containing all infrastructure resources
+- VPC resources (subnets, gateways, route tables) with configurable CIDR blocks
+- Compute resources (ALB, Auto Scaling Group, security groups)
+- Data resources (RDS Aurora MySQL and conditional ElastiCache)
 - Mappings section for security group port configurations
 - Parameters with proper AllowedValues constraints
 - AWS::CloudFormation::Interface for parameter organization
 - Conditions for optional ElastiCache deployment
-- Outputs with Export names for cross-stack references
+- Outputs for VPC, ALB, database endpoints
 - DeletionPolicy and UpdateReplacePolicy properly configured
 - Tagging strategy with CostCenter parameter
-- Documentation explaining the nested stack architecture and deployment process
+- Documentation explaining the template organization and deployment process

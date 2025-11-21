@@ -258,32 +258,56 @@ All parameters have defaults except EnvironmentSuffix:
 
 ## Deployment
 
-### Prerequisites
-- AWS CLI configured
-- S3 bucket for nested stack templates
-- IAM permissions for creating all resource types
+### IMPORTANT: Nested Stacks Require S3
 
-### Deployment Command (Simplified)
+This project uses **nested CloudFormation stacks** which require child templates to be in S3 before deployment.
+
+### Recommended Deployment Method
+
+Use the provided deployment script:
+```bash
+./lib/deploy-nested-stacks.sh
+```
+
+This script automatically:
+1. Creates/verifies S3 bucket
+2. Uploads VPCStack.json, ComputeStack.json, DataStack.json to S3
+3. Gets availability zones dynamically
+4. Deploys master stack with all parameters
+
+### Manual Deployment (Two Steps Required)
+
+**Step 1: Upload Nested Templates to S3**
+```bash
+BUCKET="iac-rlhf-cfn-states-us-east-1-${ACCOUNT_ID}"
+PREFIX="pr6999"
+
+aws s3 cp lib/VPCStack.json s3://${BUCKET}/${PREFIX}/VPCStack.json
+aws s3 cp lib/ComputeStack.json s3://${BUCKET}/${PREFIX}/ComputeStack.json
+aws s3 cp lib/DataStack.json s3://${BUCKET}/${PREFIX}/DataStack.json
+```
+
+**Step 2: Deploy Master Stack**
 ```bash
 aws cloudformation deploy \
   --template-file lib/TapStack.json \
   --stack-name TapStackpr6999 \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides EnvironmentSuffix=pr6999 \
-  --s3-bucket iac-rlhf-cfn-states-us-east-1-<account> \
-  --s3-prefix pr6999
+  --s3-bucket ${BUCKET} \
+  --s3-prefix ${PREFIX}
 ```
 
-### Deployment Script
-```bash
-./lib/deploy-nested-stacks.sh
+### For CI/CD Integration
+
+The CI/CD pipeline should call the deployment script:
+```yaml
+deploy:
+  script:
+    - ./lib/deploy-nested-stacks.sh
 ```
 
-This script:
-1. Creates S3 bucket if needed
-2. Uploads nested stack templates
-3. Gets availability zones dynamically
-4. Deploys master stack with proper parameters
+Or add a pre-deploy step to upload nested templates before calling npm scripts.
 
 ## Quality Metrics
 
