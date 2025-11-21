@@ -105,6 +105,7 @@
     "CostCenter": {
       "Type": "String",
       "Description": "Cost center identifier for resource tagging",
+      "Default": "engineering",
       "MinLength": 3,
       "MaxLength": 50
     },
@@ -116,16 +117,19 @@
       "ConstraintDescription": "Must be a valid CIDR block"
     },
     "AvailabilityZone1": {
-      "Type": "AWS::EC2::AvailabilityZone::Name",
-      "Description": "First availability zone"
+      "Type": "String",
+      "Description": "First availability zone (leave empty to auto-select)",
+      "Default": ""
     },
     "AvailabilityZone2": {
-      "Type": "AWS::EC2::AvailabilityZone::Name",
-      "Description": "Second availability zone"
+      "Type": "String",
+      "Description": "Second availability zone (leave empty to auto-select)",
+      "Default": ""
     },
     "AvailabilityZone3": {
-      "Type": "AWS::EC2::AvailabilityZone::Name",
-      "Description": "Third availability zone"
+      "Type": "String",
+      "Description": "Third availability zone (leave empty to auto-select)",
+      "Default": ""
     },
     "InstanceType": {
       "Type": "String",
@@ -158,6 +162,7 @@
     "DBMasterUsername": {
       "Type": "String",
       "Description": "Master username for RDS Aurora cluster",
+      "Default": "dbadmin",
       "MinLength": 1,
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
@@ -165,7 +170,8 @@
     },
     "DBMasterPassword": {
       "Type": "String",
-      "Description": "Master password for RDS Aurora cluster",
+      "Description": "Master password for RDS Aurora cluster (Note: Using Secrets Manager in DataStack)",
+      "Default": "TempPassword123",
       "NoEcho": true,
       "MinLength": 8,
       "MaxLength": 41,
@@ -180,7 +186,8 @@
     },
     "TemplatesBucketName": {
       "Type": "String",
-      "Description": "S3 bucket name containing nested stack templates"
+      "Description": "S3 bucket name containing nested stack templates",
+      "Default": "cfn-nested-templates-default"
     },
     "VPCTemplateKey": {
       "Type": "String",
