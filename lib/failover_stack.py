@@ -144,7 +144,7 @@ class FailoverStack(Construct):
                     "route53:ListResourceRecordSets"
                 ],
                 resources=[
-                    f"arn:aws:route53:::hostedzone/{self.hosted_zone.hosted_zone_id}",
+                    self.hosted_zone.hosted_zone_arn,
                     "arn:aws:route53:::change/*"
                 ]
             )

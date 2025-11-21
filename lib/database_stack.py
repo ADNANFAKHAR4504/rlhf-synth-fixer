@@ -117,7 +117,7 @@ class DatabaseStack(Construct):
             )
         )
 
-        # Primary RDS PostgreSQL instance (us-east-1)
+        # Primary RDS PostgreSQL instance
         self.primary_instance = rds.DatabaseInstance(
             self,
             f"PrimaryInstance-{environment_suffix}",
@@ -161,7 +161,7 @@ class DatabaseStack(Construct):
             )
         )
 
-        # Cross-region read replica (eu-west-1)
+        # Cross-region read replica
         # Note: Read replicas inherit backup settings from primary and don't support backup_retention
         self.replica_instance = rds.DatabaseInstanceReadReplica(
             self,

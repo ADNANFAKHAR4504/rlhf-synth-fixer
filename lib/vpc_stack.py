@@ -36,7 +36,7 @@ class VpcStack(Construct):
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        # Primary VPC in us-east-1
+        # Primary VPC
         self.primary_vpc = ec2.Vpc(
             self,
             f"PrimaryVpc-{environment_suffix}",
