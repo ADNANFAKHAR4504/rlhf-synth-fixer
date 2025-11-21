@@ -1,23 +1,30 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
-  preset: 'ts-jest',
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.test.js'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
+  preset: 'ts-jest/presets/default-esm',
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  },
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    // Transform JS files (so ESM syntax in some node_modules can be transpiled)
-    '^.+\\.jsx?$': 'babel-jest',
-    '^.+\\.mjs$': 'babel-jest',
+    '^.+\\.m?[tj]sx?$': ['ts-jest', {
+      useESM: true,
+    }],
   },
   transformIgnorePatterns: [
-    // allow transforming some packages that ship ESM (including kubernetes client and its deps)
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
+    '<rootDir>/lib/**/*.json',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
@@ -36,13 +43,4 @@ module.exports = {
   testTimeout: 30000,
   silent: false,
   verbose: true,
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-      tsconfig: {
-        allowJs: true,
-        esModuleInterop: true,
-      },
-    },
-  },
 };

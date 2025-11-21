@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T12:53:50.309908+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "ECS",
+    "RDS Aurora",
+    "ALB",
+    "VPC",
+    "IAM",
+    "Secrets Manager"
+  ],
+  "aws_services": [
+    "ECS",
+    "RDS",
+    "ElasticLoadBalancingV2",
+    "VPC",
+    "IAM",
+    "SecretsManager"
+  ],
+  "po_id": "101912552",
+  "training_quality": 10
+}
