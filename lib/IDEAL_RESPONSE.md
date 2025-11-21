@@ -1,6 +1,6 @@
 # Pulumi Python - Transaction Processing Infrastructure (IDEAL)
 
-Complete, production-ready cloud environment with all fixes applied.
+Complete, production-ready cloud environment with all fixes applied
 
 ## Critical Fixes from MODEL_RESPONSE
 
