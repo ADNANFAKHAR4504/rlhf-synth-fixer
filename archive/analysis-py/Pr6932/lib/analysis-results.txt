@@ -1,0 +1,303 @@
+2025-11-20 12:18:41,718 - INFO - Found credentials in environment variables.
+2025-11-20 12:18:41,761 - INFO - Found endpoint for route53 via: environment_global.
+2025-11-20 12:18:41,823 - INFO - Found endpoint for ec2 via: environment_global.
+2025-11-20 12:18:41,830 - INFO - Found endpoint for elbv2 via: environment_global.
+2025-11-20 12:18:41,834 - INFO - Found endpoint for elb via: environment_global.
+2025-11-20 12:18:41,836 - INFO - Starting Route53 configuration audit...
+2025-11-20 12:18:41,903 - INFO - Found 8 zones to audit
+2025-11-20 12:18:41,903 - INFO - Auditing zone: example.com. (8IKLO6U0O6I1X8GBMR7AXD)
+2025-11-20 12:18:41,908 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:41,908 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:41,908 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:41,908 - CRITICAL -   Resource: 8IKLO6U0O6I1X8GBMR7AXD
+2025-11-20 12:18:41,952 - INFO - Auditing zone: example.com. (XLE6FOI7GY5087ZQQ4FRR7)
+2025-11-20 12:18:41,957 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:41,957 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:41,957 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:41,957 - CRITICAL -   Resource: XLE6FOI7GY5087ZQQ4FRR7
+2025-11-20 12:18:41,987 - INFO - Auditing zone: example.com. (K87GA06BAMDCZGX1ZWWLQE)
+2025-11-20 12:18:41,992 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:41,992 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:41,992 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:41,992 - CRITICAL -   Resource: K87GA06BAMDCZGX1ZWWLQE
+2025-11-20 12:18:42,034 - INFO - Auditing zone: example.com. (HSC221E1LJB06FDTETZ5ZG)
+2025-11-20 12:18:42,039 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:42,039 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:42,039 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:42,039 - CRITICAL -   Resource: HSC221E1LJB06FDTETZ5ZG
+2025-11-20 12:18:42,059 - INFO - CHECK_WEIGHTED: Processing weighted.example.com. in zone HSC221E1LJB06FDTETZ5ZG with weight=80, set_id=weight-1
+2025-11-20 12:18:42,059 - INFO - CHECK_WEIGHTED: Created _weight_distributions attribute
+2025-11-20 12:18:42,059 - INFO - CHECK_WEIGHTED: Stored weight for weighted.example.com. in zone HSC221E1LJB06FDTETZ5ZG, total sets: 1
+2025-11-20 12:18:42,072 - INFO - CHECK_WEIGHTED: Processing weighted.example.com. in zone HSC221E1LJB06FDTETZ5ZG with weight=20, set_id=weight-2
+2025-11-20 12:18:42,072 - INFO - CHECK_WEIGHTED: Stored weight for weighted.example.com. in zone HSC221E1LJB06FDTETZ5ZG, total sets: 2
+2025-11-20 12:18:42,085 - INFO - Auditing zone: example.com. (Q0QCMKLZZXWOZ4WLXTBC73)
+2025-11-20 12:18:42,089 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:42,090 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:42,090 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:42,090 - CRITICAL -   Resource: Q0QCMKLZZXWOZ4WLXTBC73
+2025-11-20 12:18:42,111 - INFO - CHECK_WEIGHTED: Processing weighted.example.com. in zone Q0QCMKLZZXWOZ4WLXTBC73 with weight=80, set_id=weight-1
+2025-11-20 12:18:42,111 - INFO - CHECK_WEIGHTED: Stored weight for weighted.example.com. in zone Q0QCMKLZZXWOZ4WLXTBC73, total sets: 1
+2025-11-20 12:18:42,124 - INFO - CHECK_WEIGHTED: Processing weighted.example.com. in zone Q0QCMKLZZXWOZ4WLXTBC73 with weight=20, set_id=weight-2
+2025-11-20 12:18:42,124 - INFO - CHECK_WEIGHTED: Stored weight for weighted.example.com. in zone Q0QCMKLZZXWOZ4WLXTBC73, total sets: 2
+2025-11-20 12:18:42,135 - INFO - Auditing zone: example.com. (EMGVB4FJINIOVP3ITPH08F)
+2025-11-20 12:18:42,139 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:42,139 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:42,140 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:42,140 - CRITICAL -   Resource: EMGVB4FJINIOVP3ITPH08F
+2025-11-20 12:18:42,160 - INFO - Auditing zone: example.com. (QRPSQNQKPNH2RHCLIW9BXV)
+2025-11-20 12:18:42,164 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:42,164 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:42,164 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:42,164 - CRITICAL -   Resource: QRPSQNQKPNH2RHCLIW9BXV
+2025-11-20 12:18:42,204 - INFO - Auditing zone: example.com. (L6MJ6P43SQWHBRP8P0XYWN)
+2025-11-20 12:18:42,209 - CRITICAL - CRITICAL FINDING - DNSSEC_NOT_ENABLED: Production domain example.com. does not have DNSSEC enabled
+2025-11-20 12:18:42,209 - CRITICAL -   Impact: Domain vulnerable to DNS spoofing and cache poisoning attacks
+2025-11-20 12:18:42,209 - CRITICAL -   Remediation: Enable DNSSEC signing for the hosted zone
+2025-11-20 12:18:42,209 - CRITICAL -   Resource: L6MJ6P43SQWHBRP8P0XYWN
+2025-11-20 12:18:42,240 - INFO - Analyzing weight distributions for 2 record(s) across 2 zone(s)
+2025-11-20 12:18:42,240 - INFO - Analyzing zone HSC221E1LJB06FDTETZ5ZG with 1 weighted record(s)
+2025-11-20 12:18:42,240 - INFO -   Record weighted.example.com.: 2 weight sets, total weight: 100
+2025-11-20 12:18:42,240 - INFO -     Set weight-1: weight=80, percentage=80.0%
+2025-11-20 12:18:42,241 - INFO -     FLAGGING: Skewed distribution detected for weighted.example.com. in zone HSC221E1LJB06FDTETZ5ZG
+2025-11-20 12:18:42,241 - INFO -     Set weight-2: weight=20, percentage=20.0%
+2025-11-20 12:18:42,241 - INFO - Analyzing zone Q0QCMKLZZXWOZ4WLXTBC73 with 1 weighted record(s)
+2025-11-20 12:18:42,241 - INFO -   Record weighted.example.com.: 2 weight sets, total weight: 100
+2025-11-20 12:18:42,241 - INFO -     Set weight-1: weight=80, percentage=80.0%
+2025-11-20 12:18:42,241 - INFO -     FLAGGING: Skewed distribution detected for weighted.example.com. in zone Q0QCMKLZZXWOZ4WLXTBC73
+2025-11-20 12:18:42,241 - INFO -     Set weight-2: weight=20, percentage=20.0%
+2025-11-20 12:18:42,242 - INFO - Generated route53_audit.json
+2025-11-20 12:18:42,242 - INFO - Generated failover_recommendations.csv with 4 recommendations
+
+====================================================================================================
+                                ROUTE53 CONFIGURATION AUDIT RESULTS                                 
+====================================================================================================
+Audit Timestamp: 2025-11-20 12:18:42
+Region: us-east-1
+====================================================================================================
+
+📊 FINDINGS SUMMARY
+----------------------------------------------------------------------------------------------------
++------------+---------+----------+
+| Severity   |   Count | Status   |
++============+=========+==========+
+| Critical   |       8 | 🔴        |
++------------+---------+----------+
+| High       |      28 | 🟠        |
++------------+---------+----------+
+| Medium     |      12 | 🟡        |
++------------+---------+----------+
+| Low        |       0 | 🟢        |
++------------+---------+----------+
+| Info       |       0 | ℹ️       |
++------------+---------+----------+
+
+📋 ADDITIONAL METRICS
+----------------------------------------------------------------------------------------------------
++--------------------------+---------+
+| Metric                   |   Count |
++==========================+=========+
+| Orphaned Records         |      12 |
++--------------------------+---------+
+| Failover Recommendations |       4 |
++--------------------------+---------+
+| Total Findings           |      48 |
++--------------------------+---------+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+🚨 CRITICAL FINDINGS REQUIRING IMMEDIATE ATTENTION
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| Type               | Description                                                 | Impact                                      | Remediation                                 |
++====================+=============================================================+=============================================+=============================================+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+| DNSSEC_NOT_ENABLED | Production domain example.com. does not have DNSSEC enabled | Domain vulnerable to DNS spoofing and ca... | Enable DNSSEC signing for the hosted zon... |
++--------------------+-------------------------------------------------------------+---------------------------------------------+---------------------------------------------+
+
+====================================================================================================
+⚠️  HIGH SEVERITY FINDINGS
+====================================================================================================
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| Type                            | Description                                                     | Resource               |
++=================================+=================================================================+========================+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | 8IKLO6U0O6I1X8GBMR7AXD |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_DELETED_ELB         | Record high-ttl-elb.example.com. points to non-existent ELB ... | 8IKLO6U0O6I1X8GBMR7AXD |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record low-ttl.example.com. points to non-existent IP 1.2.3.... | 8IKLO6U0O6I1X8GBMR7AXD |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | XLE6FOI7GY5087ZQQ4FRR7 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_DELETED_ELB         | Record app.example.com. points to non-existent ELB my-app-lb... | XLE6FOI7GY5087ZQQ4FRR7 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| SINGLE_POINT_OF_FAILURE         | Critical record app.example.com. has no failover configurati... | XLE6FOI7GY5087ZQQ4FRR7 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | K87GA06BAMDCZGX1ZWWLQE |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record api.example.com. points to non-existent IP 192.0.2.2     | K87GA06BAMDCZGX1ZWWLQE |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| SINGLE_POINT_OF_FAILURE         | Critical record api.example.com. has no failover configurati... | K87GA06BAMDCZGX1ZWWLQE |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record www.example.com. points to non-existent IP 192.0.2.1     | K87GA06BAMDCZGX1ZWWLQE |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| SINGLE_POINT_OF_FAILURE         | Critical record www.example.com. has no failover configurati... | K87GA06BAMDCZGX1ZWWLQE |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | HSC221E1LJB06FDTETZ5ZG |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| MISSING_HEALTH_CHECK            | Routing policy record weighted.example.com. lacks health che... | HSC221E1LJB06FDTETZ5ZG |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record weighted.example.com. points to non-existent IP 192.0... | HSC221E1LJB06FDTETZ5ZG |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| MISSING_HEALTH_CHECK            | Routing policy record weighted.example.com. lacks health che... | HSC221E1LJB06FDTETZ5ZG |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record weighted.example.com. points to non-existent IP 192.0... | HSC221E1LJB06FDTETZ5ZG |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | Q0QCMKLZZXWOZ4WLXTBC73 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| MISSING_HEALTH_CHECK            | Routing policy record weighted.example.com. lacks health che... | Q0QCMKLZZXWOZ4WLXTBC73 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record weighted.example.com. points to non-existent IP 192.0... | Q0QCMKLZZXWOZ4WLXTBC73 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| MISSING_HEALTH_CHECK            | Routing policy record weighted.example.com. lacks health che... | Q0QCMKLZZXWOZ4WLXTBC73 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record weighted.example.com. points to non-existent IP 192.0... | Q0QCMKLZZXWOZ4WLXTBC73 |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | EMGVB4FJINIOVP3ITPH08F |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | QRPSQNQKPNH2RHCLIW9BXV |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_DELETED_ELB         | Record high-ttl-elb.example.com. points to non-existent ELB ... | QRPSQNQKPNH2RHCLIW9BXV |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_TERMINATED_INSTANCE | Record low-ttl.example.com. points to non-existent IP 1.2.3.... | QRPSQNQKPNH2RHCLIW9BXV |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| QUERY_LOGGING_DISABLED          | Zone example.com. does not have query logging enabled           | L6MJ6P43SQWHBRP8P0XYWN |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| POINTING_TO_DELETED_ELB         | Record app.example.com. points to non-existent ELB my-app-lb... | L6MJ6P43SQWHBRP8P0XYWN |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+| SINGLE_POINT_OF_FAILURE         | Critical record app.example.com. has no failover configurati... | L6MJ6P43SQWHBRP8P0XYWN |
++---------------------------------+-----------------------------------------------------------------+------------------------+
+
+====================================================================================================
+🔸 MEDIUM SEVERITY FINDINGS
+====================================================================================================
++----------------------------+---------------------------------------------------------------------------+
+| Type                       | Description                                                               |
++============================+===========================================================================+
+| TTL_TOO_HIGH_DYNAMIC       | Dynamic endpoint high-ttl-elb.example.com. has TTL of 600s (>300s reco... |
++----------------------------+---------------------------------------------------------------------------+
+| CNAME_SHOULD_BE_ALIAS      | CNAME record high-ttl-elb.example.com. points to ELB, should use ALIAS    |
++----------------------------+---------------------------------------------------------------------------+
+| TTL_TOO_LOW                | Record low-ttl.example.com. has very low TTL of 30s                       |
++----------------------------+---------------------------------------------------------------------------+
+| CNAME_SHOULD_BE_ALIAS      | CNAME record app.example.com. points to ALB/NLB, should use ALIAS         |
++----------------------------+---------------------------------------------------------------------------+
+| CNAME_SHOULD_BE_ALIAS      | CNAME record cdn.example.com. points to CloudFront, should use ALIAS      |
++----------------------------+---------------------------------------------------------------------------+
+| TTL_TOO_HIGH_DYNAMIC       | Dynamic endpoint high-ttl-elb.example.com. has TTL of 600s (>300s reco... |
++----------------------------+---------------------------------------------------------------------------+
+| CNAME_SHOULD_BE_ALIAS      | CNAME record high-ttl-elb.example.com. points to ELB, should use ALIAS    |
++----------------------------+---------------------------------------------------------------------------+
+| TTL_TOO_LOW                | Record low-ttl.example.com. has very low TTL of 30s                       |
++----------------------------+---------------------------------------------------------------------------+
+| CNAME_SHOULD_BE_ALIAS      | CNAME record app.example.com. points to ALB/NLB, should use ALIAS         |
++----------------------------+---------------------------------------------------------------------------+
+| CNAME_SHOULD_BE_ALIAS      | CNAME record cdn.example.com. points to CloudFront, should use ALIAS      |
++----------------------------+---------------------------------------------------------------------------+
+| SKEWED_WEIGHT_DISTRIBUTION | Record weighted.example.com. has 80.0% weight on weight-1                 |
++----------------------------+---------------------------------------------------------------------------+
+| SKEWED_WEIGHT_DISTRIBUTION | Record weighted.example.com. has 80.0% weight on weight-1                 |
++----------------------------+---------------------------------------------------------------------------+
+
+====================================================================================================
+📈 FINDINGS BY TYPE
+====================================================================================================
++---------------------------------+---------+
+| Finding Type                    |   Count |
++=================================+=========+
+| DNSSEC_NOT_ENABLED              |       8 |
++---------------------------------+---------+
+| QUERY_LOGGING_DISABLED          |       8 |
++---------------------------------+---------+
+| POINTING_TO_TERMINATED_INSTANCE |       8 |
++---------------------------------+---------+
+| CNAME_SHOULD_BE_ALIAS           |       6 |
++---------------------------------+---------+
+| POINTING_TO_DELETED_ELB         |       4 |
++---------------------------------+---------+
+| SINGLE_POINT_OF_FAILURE         |       4 |
++---------------------------------+---------+
+| MISSING_HEALTH_CHECK            |       4 |
++---------------------------------+---------+
+| TTL_TOO_HIGH_DYNAMIC            |       2 |
++---------------------------------+---------+
+| TTL_TOO_LOW                     |       2 |
++---------------------------------+---------+
+| SKEWED_WEIGHT_DISTRIBUTION      |       2 |
++---------------------------------+---------+
+
+====================================================================================================
+🗑️  ORPHANED RECORDS
+====================================================================================================
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| Record                    | Type   | Value                                 | Reason                              |
++===========================+========+=======================================+=====================================+
+| high-ttl-elb.example.com. | CNAME  | my-lb.elb.amazonaws.com               | Points to deleted ELB               |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| low-ttl.example.com.      | A      | 1.2.3.4                               | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| app.example.com.          | CNAME  | my-app-lb.elb.us-east-1.amazonaws.com | Points to deleted ELB               |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| api.example.com.          | A      | 192.0.2.2                             | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| www.example.com.          | A      | 192.0.2.1                             | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| weighted.example.com.     | A      | 192.0.2.10                            | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| weighted.example.com.     | A      | 192.0.2.11                            | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| weighted.example.com.     | A      | 192.0.2.10                            | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| weighted.example.com.     | A      | 192.0.2.11                            | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| high-ttl-elb.example.com. | CNAME  | my-lb.elb.amazonaws.com               | Points to deleted ELB               |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| low-ttl.example.com.      | A      | 1.2.3.4                               | Points to non-existent EC2 instance |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+| app.example.com.          | CNAME  | my-app-lb.elb.us-east-1.amazonaws.com | Points to deleted ELB               |
++---------------------------+--------+---------------------------------------+-------------------------------------+
+
+====================================================================================================
+🔄 FAILOVER RECOMMENDATIONS
+====================================================================================================
+2025-11-20 12:18:42,245 - INFO - Audit completed successfully
++--------------+------------------+------------+---------------------------------------------+
+| Zone         | Record           | Priority   | Recommendation                              |
++==============+==================+============+=============================================+
+| example.com. | app.example.com. | High       | Implement failover or multi-value answer... |
++--------------+------------------+------------+---------------------------------------------+
+| example.com. | api.example.com. | High       | Implement failover or multi-value answer... |
++--------------+------------------+------------+---------------------------------------------+
+| example.com. | www.example.com. | High       | Implement failover or multi-value answer... |
++--------------+------------------+------------+---------------------------------------------+
+| example.com. | app.example.com. | High       | Implement failover or multi-value answer... |
++--------------+------------------+------------+---------------------------------------------+
+
+====================================================================================================
+✅ AUDIT COMPLETE
+====================================================================================================
+📄 Detailed report saved to: route53_audit.json
+📊 Failover recommendations saved to: failover_recommendations.csv
+====================================================================================================
+

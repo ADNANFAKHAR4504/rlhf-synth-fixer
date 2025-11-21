@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "y2r2f5",
+  "startedAt": "2025-11-18T11:01:53Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 Transit Gateway",
+    "RDS Aurora PostgreSQL",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Route 53",
+    "KMS",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "Secrets Manager",
+    "AWS Config",
+    "WAF"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "region": "us-east-2",
+  "dockerS3Location": ""
+}

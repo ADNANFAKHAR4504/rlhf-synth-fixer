@@ -21,7 +21,7 @@ All file operations are relative to this directory.
 - Review `.claude/lessons_learnt.md` for common patterns and pitfalls
 - Review `.claude/docs/references/metadata-requirements.md` for strict metadata validation rules
 - Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
-- Review `.claude/validation_and_testing_guide.md` Phase 1 for quality requirements
+- Review `.claude/validation_and_testing_guide.md` PHASE 1 for quality requirements
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
 
@@ -400,13 +400,13 @@ If WRONG platform/language:
 
 Report at each phase:
 - 📍 "Working Directory: $(pwd)"
-- ✅ "Phase 0: Pre-generation validation PASSED"
-- 📋 "Phase 1: Platform: {PLATFORM}, Language: {LANGUAGE}, Region: {REGION}"
-- 📝 "Phase 2: Generating PROMPT.md with human style"
-- ✅ "Phase 2.5: PROMPT.md validation PASSED"
-- ✅ "Phase 2.6: Deployment readiness validation PASSED"
-- 🔨 "Phase 4: Generating MODEL_RESPONSE for {PLATFORM}-{LANGUAGE}"
-- ✅ "Phase 4: MODEL_RESPONSE verified - code matches required platform"
+- ✅ "PHASE 0: Pre-generation validation PASSED"
+- 📋 "PHASE 1: Platform: {PLATFORM}, Language: {LANGUAGE}, Region: {REGION}"
+- 📝 "PHASE 2: Generating PROMPT.md with human style"
+- ✅ "PHASE 2.5: PROMPT.md validation PASSED"
+- ✅ "PHASE 2.6: Deployment readiness validation PASSED"
+- 🔨 "PHASE 4: Generating MODEL_RESPONSE for {PLATFORM}-{LANGUAGE}"
+- ✅ "PHASE 4: MODEL_RESPONSE verified - code matches required platform"
 - 📁 "Extracting {COUNT} files to lib/"
 - ✅ "Code generation complete"
 
@@ -452,5 +452,5 @@ Summary:
 - Files created: {COUNT} in lib/
 - Validation: All checkpoints passed (including deployment readiness)
 
-Ready for: iac-infra-qa-trainer (Phase 3)
+Ready for: iac-infra-qa-trainer (PHASE 3)
 ```
