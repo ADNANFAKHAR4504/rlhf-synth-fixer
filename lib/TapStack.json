@@ -943,12 +943,7 @@
                 "kms:DescribeKey",
                 "kms:RetireGrant"
               ],
-              "Resource": "*",
-              "Condition": {
-                "StringEquals": {
-                  "kms:GrantIsForAWSResource": "true"
-                }
-              }
+              "Resource": "*"
             }
           ]
         },
@@ -1236,6 +1231,11 @@
     },
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
+      "DependsOn": [
+        "EBSKMSKey",
+        "EBSKMSKeyAlias",
+        "InstanceProfile"
+      ],
       "Properties": {
         "LaunchTemplateName": {
           "Fn::Sub": "payment-launch-template-${EnvironmentSuffix}"

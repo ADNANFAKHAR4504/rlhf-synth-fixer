@@ -455,9 +455,14 @@ Completely rewrote test suite with 74 comprehensive tests covering:
 **Additional Fixes** (Post-Initial Implementation):
 - Added `kms:RetireGrant` permission to both Auto Scaling service and service-linked role for proper grant lifecycle management
 - Added `EnableKeyRotation: true` to ensure key is enabled and in correct state
-- Added explicit DependsOn to prevent timing issues where instances launch before KMS key is ready
+- Added explicit DependsOn to AutoScalingGroup to prevent timing issues where instances launch before KMS key is ready
 
-**Learning Value**: High - demonstrates critical importance of KMS key policies for service-linked roles in Auto Scaling scenarios. The Auto Scaling service needs explicit permissions to create grants on behalf of EC2 instances during launch. Additionally, proper grant lifecycle management (RetireGrant) and ensuring keys are enabled (EnableKeyRotation) are essential for reliable deployments.
+**Final Fix** (Latest Update):
+- Removed restrictive `kms:GrantIsForAWSResource` condition from Auto Scaling service-linked role statement to allow grant creation without restrictions
+- Added explicit DependsOn to LaunchTemplate for `EBSKMSKey`, `EBSKMSKeyAlias`, and `InstanceProfile` to ensure KMS key is fully created and in correct state before launch template references it
+- This prevents "Client.InvalidKMSKey.InvalidState" errors by ensuring proper resource creation order
+
+**Learning Value**: High - demonstrates critical importance of KMS key policies for service-linked roles in Auto Scaling scenarios. The Auto Scaling service needs explicit permissions to create grants on behalf of EC2 instances during launch. Additionally, proper grant lifecycle management (RetireGrant), ensuring keys are enabled (EnableKeyRotation), and explicit resource dependencies are essential for reliable deployments. Restrictive conditions on service-linked roles can prevent grant creation even when permissions appear correct.
 
 ---
 

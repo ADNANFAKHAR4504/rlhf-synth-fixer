@@ -124,6 +124,7 @@ The corrected CloudFormation template is located at `lib/TapStack.json` (1658 li
 - Comprehensive key policy allowing EC2, Auto Scaling service, and service-linked role access
 - Includes kms:RetireGrant permission for proper grant lifecycle management
 - BlockDeviceMappings in LaunchTemplate with 20GB gp3 encrypted volumes
+- LaunchTemplate explicitly depends on EBSKMSKey, EBSKMSKeyAlias, and InstanceProfile to ensure KMS key is ready before template creation
 - AutoScalingGroup explicitly depends on EBSKMSKey and EBSKMSKeyAlias to ensure proper creation order
 
 **KMS Keys**:
@@ -275,6 +276,8 @@ This template is production-ready after the following adjustments:
 5. Consider adding S3 cross-region replication with separate template
 6. Conditional logic for KeyPairName implemented (skip when "NONE")
 7. EBS encryption with KMS key configured (EnableKeyRotation enabled, proper grant lifecycle management)
+   - LaunchTemplate depends on EBSKMSKey, EBSKMSKeyAlias, and InstanceProfile to ensure proper creation order
+   - Service-linked role permissions without restrictive conditions for reliable grant creation
 8. Dynamic availability zone selection for multi-region portability
 9. Secrets Manager secret automatically generates secure 32-character password
 10. Auto Scaling Group dependencies ensure KMS key is ready before instance launch

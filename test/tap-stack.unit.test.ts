@@ -240,7 +240,8 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       });
       expect(serviceLinkedRoleStatement).toBeDefined();
       expect(serviceLinkedRoleStatement.Action).toContain('kms:RetireGrant');
-      expect(serviceLinkedRoleStatement.Condition?.StringEquals?.['kms:GrantIsForAWSResource']).toBe('true');
+      // Condition removed to allow service-linked role to create grants without restriction
+      expect(serviceLinkedRoleStatement.Condition).toBeUndefined();
     });
 
     test('should have EBS KMS key alias', () => {
@@ -341,6 +342,14 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       const lt = template.Resources.LaunchTemplate;
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
       expect(lt.Properties.LaunchTemplateData.InstanceType).toEqual({ Ref: 'InstanceType' });
+    });
+
+    test('Launch Template should depend on EBS KMS key resources', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt.DependsOn).toBeDefined();
+      expect(lt.DependsOn).toContain('EBSKMSKey');
+      expect(lt.DependsOn).toContain('EBSKMSKeyAlias');
+      expect(lt.DependsOn).toContain('InstanceProfile');
     });
 
     test('Launch Template should have BlockDeviceMappings with EBS encryption', () => {
