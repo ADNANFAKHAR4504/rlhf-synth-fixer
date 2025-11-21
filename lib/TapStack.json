@@ -787,7 +787,7 @@
       "Type": "AWS::DynamoDB::GlobalTable",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "${Environment}-transactions-${EnvironmentSuffix}"
+          "Fn::Sub": "${Environment}-transactions-v2-${EnvironmentSuffix}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "StreamSpecification": {
@@ -1024,7 +1024,7 @@
         "Runtime": "nodejs20.x",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
+          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
         },
         "Code": {
           "ZipFile": "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'Primary region handler', region: process.env.AWS_REGION }) }; };"
@@ -1085,10 +1085,39 @@
         ]
       }
     },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${Environment}-lambda-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
     "ECSTaskExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
@@ -1128,6 +1157,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
