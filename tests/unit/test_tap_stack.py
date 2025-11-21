@@ -95,27 +95,27 @@ class TestTapStack(unittest.TestCase):
             # Subnets are stored as Python lists
             self.assertIsNotNone(stack.public_subnets)
             self.assertIsNotNone(stack.private_subnets)
-            self.assertIsNotNone(stack.db_subnets)
+            self.assertIsNotNone(stack.isolated_subnets)
             self.assertEqual(len(stack.public_subnets), 3, "Should have 3 public subnets")
             self.assertEqual(len(stack.private_subnets), 3, "Should have 3 private subnets")
-            self.assertEqual(len(stack.db_subnets), 3, "Should have 3 database subnets")
+            self.assertEqual(len(stack.isolated_subnets), 3, "Should have 3 isolated subnets")
             return {}
 
         return check_subnets([])
 
     @pulumi.runtime.test
     def test_tap_stack_nat_gateways(self):
-        """Test NAT instances are created."""
+        """Test NAT gateways are created."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_nat_instances(args):
+        def check_nat_gateways(args):
             stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-            # NAT instances are stored as Python list
-            self.assertIsNotNone(stack.nat_instances)
-            self.assertEqual(len(stack.nat_instances), 3, "Should have 3 NAT instances")
+            # NAT gateways are stored as Python list
+            self.assertIsNotNone(stack.nat_gateways)
+            self.assertEqual(len(stack.nat_gateways), 3, "Should have 3 NAT gateways")
             return {}
 
-        return check_nat_instances([])
+        return check_nat_gateways([])
 
     @pulumi.runtime.test
     def test_tap_stack_internet_gateway(self):
@@ -189,50 +189,46 @@ class TestTapStack(unittest.TestCase):
         def check_route_tables(args):
             stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
             # Route tables are stored as objects and lists
-            self.assertIsNotNone(stack.public_rt)
-            self.assertIsNotNone(stack.private_rts)
-            self.assertIsNotNone(stack.db_rts)
-            self.assertEqual(len(stack.private_rts), 3, "Should have 3 private route tables")
-            self.assertEqual(len(stack.db_rts), 3, "Should have 3 database route tables")
+            self.assertIsNotNone(stack.public_route_table)
+            self.assertIsNotNone(stack.private_route_tables)
+            self.assertIsNotNone(stack.isolated_route_tables)
+            self.assertEqual(len(stack.private_route_tables), 3, "Should have 3 private route tables")
+            self.assertEqual(len(stack.isolated_route_tables), 3, "Should have 3 isolated route tables")
             return {}
 
         return check_route_tables([])
 
     @pulumi.runtime.test
     def test_tap_stack_network_acl(self):
-        """Test security groups are created."""
+        """Test network ACL is created."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_sgs(args):
+        def check_nacl(args):
             stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-            # Security groups are Pulumi resource objects
-            self.assertIsNotNone(stack.bastion_sg)
-            self.assertIsNotNone(stack.app_sg)
-            self.assertIsNotNone(stack.db_sg)
-            self.assertTrue(hasattr(stack.bastion_sg, 'id'))
-            self.assertTrue(hasattr(stack.app_sg, 'id'))
-            self.assertTrue(hasattr(stack.db_sg, 'id'))
+            # Network ACL is a Pulumi resource object
+            self.assertIsNotNone(stack.public_nacl)
+            self.assertTrue(hasattr(stack.public_nacl, 'id'))
             return {}
 
-        return check_sgs([])
+        return check_nacl([])
 
     @pulumi.runtime.test
     def test_tap_stack_eips(self):
-        """Test NAT instances are created (NAT instances don't use EIPs directly)."""
+        """Test Elastic IPs for NAT gateways are created."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_nat_instances(args):
+        def check_eips(args):
             stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-            # NAT instances are stored as Python list
-            self.assertIsNotNone(stack.nat_instances)
-            self.assertEqual(len(stack.nat_instances), 3, "Should have 3 NAT instances")
-            # NAT instances are EC2 instances, not EIPs
-            for instance in stack.nat_instances:
-                self.assertIsNotNone(instance)
-                self.assertTrue(hasattr(instance, 'id'))
+            # NAT EIPs are stored as Python list
+            self.assertIsNotNone(stack.nat_eips)
+            self.assertEqual(len(stack.nat_eips), 3, "Should have 3 NAT EIPs")
+            # EIPs are Pulumi resource objects
+            for eip in stack.nat_eips:
+                self.assertIsNotNone(eip)
+                self.assertTrue(hasattr(eip, 'id'))
             return {}
 
-        return check_nat_instances([])
+        return check_eips([])
 
 
 if __name__ == '__main__':
