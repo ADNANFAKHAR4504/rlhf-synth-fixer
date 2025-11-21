@@ -136,13 +136,13 @@ private_route_table = aws.ec2.RouteTable(
     },
 )
 
-# Private Route to NAT Gateway
-private_route = aws.ec2.Route(
-    f"private-route-{environment_suffix}",
-    route_table_id=private_route_table.id,
-    destination_cidr_block="0.0.0.0/0",
-    nat_gateway_id=nat_gateway.id,
-)
+# Private Route to NAT Gateway (commented out since NAT Gateway is disabled due to quota limits)
+# private_route = aws.ec2.Route(
+#     f"private-route-{environment_suffix}",
+#     route_table_id=private_route_table.id,
+#     destination_cidr_block="0.0.0.0/0",
+#     nat_gateway_id=nat_gateway.id,
+# )
 
 # Associate private subnets with private route table
 for i, subnet in enumerate(private_subnets):
