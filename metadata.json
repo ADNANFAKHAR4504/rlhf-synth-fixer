@@ -1,0 +1,18 @@
+{
+  "platform": "Pulumi",
+  "language": "Python",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T11:12:33",
+  "subtask": "Create a Pulumi Python program to deploy a multi-tier VPC architecture suitable for production workloads.",
+  "subject_labels": [],
+  "po_id": "101912531",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": 8
+}
