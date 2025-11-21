@@ -45,7 +45,7 @@ describe('TapStack VPC CloudFormation Template', () => {
     test('environmentSuffix parameter should have correct properties', () => {
       const envSuffixParam = template.Parameters.environmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('prod');
+      expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toBe('Environment suffix for resource naming uniqueness');
       expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9-]+$');
       expect(envSuffixParam.ConstraintDescription).toBe('Must contain only lowercase letters, numbers, and hyphens');

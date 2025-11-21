@@ -5,7 +5,7 @@
     "environmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming uniqueness",
-      "Default": "prod",
+      "Default": "dev",
       "AllowedPattern": "^[a-z0-9-]+$",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
