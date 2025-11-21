@@ -1,0 +1,14 @@
+environment             = "prod"
+pr_number               = "pr6969prod"
+aws_region              = "us-east-1"
+vpc_cidr                = "10.2.0.0/16"
+db_instance_class       = "db.t3.medium"
+ec2_instance_type       = "t3.small"
+backup_retention_period = 30
+rds_cpu_threshold       = 60
+instance_count          = 3
+db_username             = "dbadmin"
+db_password             = ""
+ssh_key_name            = ""
+ami_id                  = ""
+alb_internal            = false

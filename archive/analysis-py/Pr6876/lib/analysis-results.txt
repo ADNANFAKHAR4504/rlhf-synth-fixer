@@ -1,0 +1,296 @@
+2025-11-19 13:22:50,312 - INFO - Found credentials in environment variables.
+2025-11-19 13:22:50,359 - INFO - Found endpoint for apigateway via: environment_global.
+2025-11-19 13:22:50,368 - INFO - Found endpoint for apigatewayv2 via: environment_global.
+2025-11-19 13:22:50,376 - INFO - Found endpoint for wafv2 via: environment_global.
+2025-11-19 13:22:50,388 - INFO - Found endpoint for cloudwatch via: environment_global.
+2025-11-19 13:22:50,390 - INFO - Starting API Gateway audit for region: us-east-1
+2025-11-19 13:22:50,415 - WARNING - Could not get tags for API hwscyxsaql: An error occurred (404) when calling the GetTags operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-11-19 13:22:50,415 - INFO - Auditing REST API: SecurityTestAPI (hwscyxsaql)
+2025-11-19 13:22:50,428 - INFO -   Auditing stage: production
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:304: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+2025-11-19 13:22:50,537 - INFO -   Auditing stage: staging
+2025-11-19 13:22:50,638 - WARNING - Could not get tags for API psszf7njaz: An error occurred (404) when calling the GetTags operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-11-19 13:22:50,638 - INFO - Auditing REST API: SecureAPI (psszf7njaz)
+2025-11-19 13:22:50,648 - INFO -   Auditing stage: production
+2025-11-19 13:22:50,710 - WARNING - Could not get tags for API btjaoihjtw: An error occurred (404) when calling the GetTags operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-11-19 13:22:50,710 - INFO - Auditing REST API: SecurityTestAPI (btjaoihjtw)
+2025-11-19 13:22:50,720 - INFO -   Auditing stage: production
+2025-11-19 13:22:50,815 - INFO -   Auditing stage: staging
+2025-11-19 13:22:50,911 - WARNING - Could not get tags for API y3fsgbytmx: An error occurred (404) when calling the GetTags operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-11-19 13:22:50,911 - INFO - Auditing REST API: SecurityTestAPI (y3fsgbytmx)
+2025-11-19 13:22:50,920 - INFO -   Auditing stage: production
+2025-11-19 13:22:51,016 - INFO -   Auditing stage: staging
+2025-11-19 13:22:51,124 - WARNING - Could not get tags for API ntso5w4qcb: An error occurred (404) when calling the GetTags operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-11-19 13:22:51,124 - INFO - Auditing REST API: SecurityTestAPI (ntso5w4qcb)
+2025-11-19 13:22:51,134 - INFO -   Auditing stage: production
+2025-11-19 13:22:51,231 - INFO -   Auditing stage: staging
+2025-11-19 13:22:51,326 - WARNING - Could not get tags for API s9wxfnami0: An error occurred (404) when calling the GetTags operation: <!doctype html>
+<html lang=en>
+<title>404 Not Found</title>
+<h1>Not Found</h1>
+<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>
+
+2025-11-19 13:22:51,327 - INFO - Auditing REST API: SecureAPI (s9wxfnami0)
+2025-11-19 13:22:51,336 - INFO -   Auditing stage: production
+2025-11-19 13:22:51,387 - INFO - Audit completed
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:596: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  print(f"Timestamp: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+====================================================================================================
+API GATEWAY SECURITY AND PERFORMANCE AUDIT REPORT
+====================================================================================================
+Region: us-east-1
+Timestamp: 2025-11-19 13:22:51 UTC
+Total Issues Found: 104
+
+
+Summary by Severity:
+  CRITICAL: 26
+  HIGH: 34
+  MEDIUM: 16
+  LOW: 10
+  FINOPS: 18
+
+
+Detailed Findings:
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| API Name        | Stage      | Resource Path   | Method   | Issue Type                | Severity   |
++=================+============+=================+==========+===========================+============+
+| SecureAPI       | production | /secure         | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Authorization Gap         | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Perimeter Defense Missing | CRITICAL   |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Data Integrity Risk       | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Throttling Vulnerability  | HIGH       |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Tracing Deficit           | MEDIUM     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Performance Blind Spot    | LOW        |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecureAPI       | production | /secure         | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | production | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | GET      | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+
+| SecurityTestAPI | staging    | /users          | POST     | Unused API                | FINOPS     |
++-----------------+------------+-----------------+----------+---------------------------+------------+2025-11-19 13:22:51,394 - INFO - Generated api_gateway_audit.json
+2025-11-19 13:22:51,395 - INFO - Generated api_gateway_resources.json
+
+
+✅ Audit complete! Check api_gateway_audit.json and api_gateway_resources.json for detailed results.

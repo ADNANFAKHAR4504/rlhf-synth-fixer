@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "7033",
+  "team": "5",
+  "startedAt": "2025-11-21T04:00:33.288Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "NAT Gateways",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "Route 53",
+    "ACM",
+    "RDS Aurora PostgreSQL",
+    "S3",
+    "CloudFront",
+    "WAF",
+    "CodeDeploy",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}
