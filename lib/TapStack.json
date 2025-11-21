@@ -689,10 +689,24 @@
         }
       }
     },
+    "AuroraGlobalCluster": {
+      "Type": "AWS::RDS::GlobalCluster",
+      "Properties": {
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "${Environment}-aurora-global-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "15.8",
+        "StorageEncrypted": true
+      }
+    },
     "AuroraCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Delete",
       "Properties": {
+        "GlobalClusterIdentifier": {
+          "Ref": "AuroraGlobalCluster"
+        },
         "Engine": "aurora-postgresql",
         "EngineVersion": "15.8",
         "MasterUsername": "dbadmin",
@@ -883,8 +897,95 @@
         ]
       }
     },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "S3ReplicaBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "Region": "us-west-2",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
+      "DependsOn": ["S3ReplicaBucket", "S3ReplicationRole"],
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -916,6 +1017,40 @@
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
         },
+        "ReplicationConfiguration": {
+          "Role": {
+            "Fn::GetAtt": ["S3ReplicationRole", "Arn"]
+          },
+          "Rules": [
+            {
+              "Id": "ReplicateAll",
+              "Priority": 1,
+              "Status": "Enabled",
+              "Filter": {},
+              "DeleteMarkerReplication": {
+                "Status": "Enabled"
+              },
+              "Destination": {
+                "Bucket": {
+                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "ReplicationTime": {
+                  "Status": "Enabled",
+                  "Time": {
+                    "Minutes": 15
+                  }
+                },
+                "Metrics": {
+                  "Status": "Enabled",
+                  "EventThreshold": {
+                    "Minutes": 15
+                  }
+                },
+                "StorageClass": "STANDARD_IA"
+              }
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -936,6 +1071,105 @@
             }
           }
         ]
+      }
+    },
+    "PrimaryApiGateway": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-primary-api-${EnvironmentSuffix}"
+        },
+        "ProtocolType": "HTTP",
+        "Description": "Primary API Gateway for transaction processing",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "${Environment}-primary-api-${EnvironmentSuffix}"
+          },
+          "Owner": {
+            "Ref": "Owner"
+          },
+          "Project": {
+            "Ref": "Project"
+          }
+        }
+      }
+    },
+    "PrimaryApiStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true,
+        "Description": "Default deployment stage",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "${Environment}-primary-api-stage-${EnvironmentSuffix}"
+          }
+        }
+      }
+    },
+    "PrimaryApiIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationMethod": "POST",
+        "IntegrationUri": {
+          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PrimaryLambdaFunction.Arn}/invocations"
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "PrimaryApiRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "RouteKey": "ANY /{proxy+}",
+        "Target": {
+          "Fn::Sub": "integrations/${PrimaryApiIntegration}"
+        }
+      }
+    },
+    "PrimaryLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${Environment}-primary-lambda-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs18.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
+        },
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'Primary region handler', region: process.env.AWS_REGION }) }; };"
+        },
+        "Environment": {
+          "Variables": {
+            "REGION": "primary"
+          }
+        },
+        "Timeout": 30,
+        "MemorySize": 256
+      }
+    },
+    "PrimaryLambdaApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PrimaryLambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PrimaryApiGateway}/*/*"
+        }
       }
     },
     "ECSCluster": {
@@ -1209,12 +1443,13 @@
     },
     "PrimaryHealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
+      "DependsOn": "PrimaryApiGateway",
       "Properties": {
         "HealthCheckConfig": {
           "Type": "HTTPS",
           "ResourcePath": "/health",
           "FullyQualifiedDomainName": {
-            "Fn::Sub": "${AWS::Region}.elb.amazonaws.com"
+            "Fn::Sub": "${PrimaryApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
           },
           "Port": 443,
           "RequestInterval": 30,
@@ -1561,6 +1796,53 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-primary-kms-key-arn"
+        }
+      }
+    },
+    "PrimaryApiGatewayEndpoint": {
+      "Description": "Primary API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${PrimaryApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-api-endpoint"
+        }
+      }
+    },
+    "S3ReplicaBucketName": {
+      "Description": "S3 replica bucket name",
+      "Value": {
+        "Ref": "S3ReplicaBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-s3-replica-bucket"
+        }
+      }
+    },
+    "AuroraGlobalClusterId": {
+      "Description": "Aurora Global Cluster ID",
+      "Value": {
+        "Ref": "AuroraGlobalCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-aurora-global-cluster-id"
+        }
+      }
+    },
+    "PrimaryLambdaFunctionArn": {
+      "Description": "Primary Lambda Function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "PrimaryLambdaFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-lambda-arn"
         }
       }
     }

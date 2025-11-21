@@ -1,6 +1,3 @@
-author: iamarpit-turing
-reviewer: adnan-turing
-
 # Multi-Region Disaster Recovery Solution - Ideal Implementation
 
 This document consolidates every source file under `lib/` alongside the corrected multi-region disaster recovery implementation and supporting templates.
@@ -2179,12 +2176,13 @@ The solution consists of two stacks:
 ```
 
 
+
 ## File: lib/TapStack.json
 
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Self-contained CloudFormation template for multi-environment infrastructure",
+  "Description": "Self-contained CloudFormation template for multi-environment infrastructure - Updated",
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -2873,10 +2871,24 @@ The solution consists of two stacks:
         }
       }
     },
+    "AuroraGlobalCluster": {
+      "Type": "AWS::RDS::GlobalCluster",
+      "Properties": {
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "${Environment}-aurora-global-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "15.8",
+        "StorageEncrypted": true
+      }
+    },
     "AuroraCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Delete",
       "Properties": {
+        "GlobalClusterIdentifier": {
+          "Ref": "AuroraGlobalCluster"
+        },
         "Engine": "aurora-postgresql",
         "EngineVersion": "15.8",
         "MasterUsername": "dbadmin",
@@ -2973,17 +2985,26 @@ The solution consists of two stacks:
             "AttributeType": "N"
           }
         ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
         "Replicas": [
           {
             "Region": "us-east-1",
             "GlobalSecondaryIndexes": [],
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
-            },
-            "SSESpecification": {
-              "KMSMasterKeyId": {
-                "Ref": "PrimaryKMSKey"
-              }
             },
             "TableClass": "STANDARD",
             "Tags": [
@@ -3023,9 +3044,6 @@ The solution consists of two stacks:
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
             },
-            "SSESpecification": {
-              "KMSMasterKeyId": "alias/aws/dynamodb"
-            },
             "TableClass": "STANDARD",
             "Tags": [
               {
@@ -3064,9 +3082,6 @@ The solution consists of two stacks:
     "S3ReplicationRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -3088,16 +3103,7 @@ The solution consists of two stacks:
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:GetObjectVersionForReplication",
-                    "s3:GetObjectVersionAcl"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
+                    "s3:GetReplicationConfiguration",
                     "s3:ListBucket"
                   ],
                   "Resource": {
@@ -3107,35 +3113,61 @@ The solution consists of two stacks:
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "s3:ReplicateObject",
-                    "s3:ReplicateDelete"
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}/*"
                   }
                 }
               ]
             }
           }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${Environment}-s3-replication-role-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
         ]
+      }
+    },
+    "S3ReplicaBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "Region": "us-west-2",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
       }
     },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
+      "DependsOn": ["S3ReplicaBucket", "S3ReplicationRole"],
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -3169,25 +3201,20 @@ The solution consists of two stacks:
         },
         "ReplicationConfiguration": {
           "Role": {
-            "Fn::GetAtt": [
-              "S3ReplicationRole",
-              "Arn"
-            ]
+            "Fn::GetAtt": ["S3ReplicationRole", "Arn"]
           },
           "Rules": [
             {
-              "Id": "ReplicateToSecondary",
-              "Status": "Enabled",
+              "Id": "ReplicateAll",
               "Priority": 1,
+              "Status": "Enabled",
+              "Filter": {},
               "DeleteMarkerReplication": {
                 "Status": "Enabled"
               },
-              "Filter": {
-                "Prefix": ""
-              },
               "Destination": {
                 "Bucket": {
-                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "ReplicationTime": {
                   "Status": "Enabled",
@@ -3226,6 +3253,105 @@ The solution consists of two stacks:
             }
           }
         ]
+      }
+    },
+    "PrimaryApiGateway": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${Environment}-primary-api-${EnvironmentSuffix}"
+        },
+        "ProtocolType": "HTTP",
+        "Description": "Primary API Gateway for transaction processing",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "${Environment}-primary-api-${EnvironmentSuffix}"
+          },
+          "Owner": {
+            "Ref": "Owner"
+          },
+          "Project": {
+            "Ref": "Project"
+          }
+        }
+      }
+    },
+    "PrimaryApiStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true,
+        "Description": "Default deployment stage",
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "${Environment}-primary-api-stage-${EnvironmentSuffix}"
+          }
+        }
+      }
+    },
+    "PrimaryApiIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationMethod": "POST",
+        "IntegrationUri": {
+          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PrimaryLambdaFunction.Arn}/invocations"
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "PrimaryApiRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "RouteKey": "ANY /{proxy+}",
+        "Target": {
+          "Fn::Sub": "integrations/${PrimaryApiIntegration}"
+        }
+      }
+    },
+    "PrimaryLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${Environment}-primary-lambda-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs18.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
+        },
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'Primary region handler', region: process.env.AWS_REGION }) }; };"
+        },
+        "Environment": {
+          "Variables": {
+            "REGION": "primary"
+          }
+        },
+        "Timeout": 30,
+        "MemorySize": 256
+      }
+    },
+    "PrimaryLambdaApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PrimaryLambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PrimaryApiGateway}/*/*"
+        }
       }
     },
     "ECSCluster": {
@@ -3499,16 +3625,19 @@ The solution consists of two stacks:
     },
     "PrimaryHealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
+      "DependsOn": "PrimaryApiGateway",
       "Properties": {
-        "Type": "HTTPS",
-        "ResourcePath": "/health",
-        "FullyQualifiedDomainName": {
-          "Fn::Sub": "${Environment}-primary-${EnvironmentSuffix}.example.com"
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "${PrimaryApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
         },
-        "Port": 443,
-        "RequestInterval": 30,
-        "FailureThreshold": 3,
-        "Tags": [
+        "HealthCheckTags": [
           {
             "Key": "Name",
             "Value": {
@@ -3528,13 +3657,23 @@ The solution consists of two stacks:
       "Type": "AWS::Route53::HostedZone",
       "Properties": {
         "Name": {
-          "Fn::Sub": "${Environment}-dr-${EnvironmentSuffix}.example.com"
+          "Fn::Sub": "${Environment}-dr-${EnvironmentSuffix}.internal"
         },
         "HostedZoneConfig": {
           "Comment": {
             "Fn::Sub": "Hosted zone for ${Environment} DR solution with suffix ${EnvironmentSuffix}"
           }
         },
+        "VPCs": [
+          {
+            "VPCId": {
+              "Ref": "VPC"
+            },
+            "VPCRegion": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ],
         "HostedZoneTags": [
           {
             "Key": "Name",
@@ -3558,7 +3697,7 @@ The solution consists of two stacks:
           "Ref": "Route53HostedZone"
         },
         "Name": {
-          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.example.com"
+          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.internal"
         },
         "Type": "A",
         "SetIdentifier": "Primary",
@@ -3568,7 +3707,7 @@ The solution consists of two stacks:
         },
         "TTL": 60,
         "ResourceRecords": [
-          "1.2.3.4"
+          "10.0.1.10"
         ]
       }
     },
@@ -3579,14 +3718,14 @@ The solution consists of two stacks:
           "Ref": "Route53HostedZone"
         },
         "Name": {
-          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.example.com"
+          "Fn::Sub": "api.${Environment}-dr-${EnvironmentSuffix}.internal"
         },
         "Type": "A",
         "SetIdentifier": "Secondary",
         "Failover": "SECONDARY",
         "TTL": 60,
         "ResourceRecords": [
-          "5.6.7.8"
+          "10.0.2.10"
         ]
       }
     },
@@ -3842,24 +3981,55 @@ The solution consists of two stacks:
         }
       }
     },
-    "S3ReplicationRoleArn": {
-      "Description": "S3 Cross-Region Replication Role ARN",
+    "PrimaryApiGatewayEndpoint": {
+      "Description": "Primary API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${PrimaryApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-primary-api-endpoint"
+        }
+      }
+    },
+    "S3ReplicaBucketName": {
+      "Description": "S3 replica bucket name",
+      "Value": {
+        "Ref": "S3ReplicaBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-s3-replica-bucket"
+        }
+      }
+    },
+    "AuroraGlobalClusterId": {
+      "Description": "Aurora Global Cluster ID",
+      "Value": {
+        "Ref": "AuroraGlobalCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-aurora-global-cluster-id"
+        }
+      }
+    },
+    "PrimaryLambdaFunctionArn": {
+      "Description": "Primary Lambda Function ARN",
       "Value": {
         "Fn::GetAtt": [
-          "S3ReplicationRole",
+          "PrimaryLambdaFunction",
           "Arn"
         ]
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${EnvironmentSuffix}-s3-replication-role-arn"
+          "Fn::Sub": "${EnvironmentSuffix}-primary-lambda-arn"
         }
       }
     }
   }
-}
-```
-
+}```
 
 ## File: lib/secondary-stack.json
 

@@ -71,13 +71,21 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Database Resources', () => {
-    test('should have Aurora PostgreSQL cluster', () => {
+    test('should have Aurora Global Database', () => {
+      expect(resources.AuroraGlobalCluster).toBeDefined();
+      expect(resources.AuroraGlobalCluster.Type).toBe('AWS::RDS::GlobalCluster');
+      expect(resources.AuroraGlobalCluster.Properties.Engine).toBe('aurora-postgresql');
+      expect(resources.AuroraGlobalCluster.Properties.StorageEncrypted).toBe(true);
+    });
+
+    test('should have Aurora PostgreSQL cluster linked to global database', () => {
       expect(resources.AuroraCluster).toBeDefined();
       expect(resources.AuroraCluster.Type).toBe('AWS::RDS::DBCluster');
       expect(resources.AuroraCluster.Properties.Engine).toBe('aurora-postgresql');
       expect(resources.AuroraCluster.Properties.EngineVersion).toBe('15.8');
       expect(resources.AuroraCluster.DeletionPolicy).toBe('Delete');
       expect(resources.AuroraCluster.Properties.MasterUsername).toBe('dbadmin');
+      expect(resources.AuroraCluster.Properties.GlobalClusterIdentifier).toBeDefined();
     });
 
     test('should have Aurora instance', () => {
@@ -121,9 +129,28 @@ describe('TapStack CloudFormation Template', () => {
       expect(resources.S3Bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(resources.S3Bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
     });
+
+    test('should have S3 cross-region replication configured', () => {
+      expect(resources.S3Bucket.Properties.ReplicationConfiguration).toBeDefined();
+      expect(resources.S3Bucket.Properties.ReplicationConfiguration.Rules).toHaveLength(1);
+      expect(resources.S3Bucket.Properties.ReplicationConfiguration.Rules[0].Status).toBe('Enabled');
+      expect(resources.S3ReplicaBucket).toBeDefined();
+      expect(resources.S3ReplicaBucket.Type).toBe('AWS::S3::Bucket');
+      expect(resources.S3ReplicationRole).toBeDefined();
+      expect(resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
+    });
   });
 
   describe('Compute Resources', () => {
+    test('should have Primary API Gateway', () => {
+      expect(resources.PrimaryApiGateway).toBeDefined();
+      expect(resources.PrimaryApiGateway.Type).toBe('AWS::ApiGatewayV2::Api');
+      expect(resources.PrimaryApiGateway.Properties.ProtocolType).toBe('HTTP');
+      expect(resources.PrimaryApiStage).toBeDefined();
+      expect(resources.PrimaryLambdaFunction).toBeDefined();
+      expect(resources.PrimaryLambdaFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
     test('should have ECS cluster', () => {
       expect(resources.ECSCluster).toBeDefined();
       expect(resources.ECSCluster.Type).toBe('AWS::ECS::Cluster');
@@ -206,6 +233,21 @@ describe('TapStack CloudFormation Template', () => {
     test('should expose SNS topic ARN', () => {
       expect(outputs.SNSTopicArn).toBeDefined();
       expect(outputs.SNSTopicArn.Value.Ref).toBe('SNSTopic');
+    });
+
+    test('should expose Primary API Gateway endpoint', () => {
+      expect(outputs.PrimaryApiGatewayEndpoint).toBeDefined();
+      expect(outputs.PrimaryApiGatewayEndpoint.Description).toContain('Primary API Gateway');
+    });
+
+    test('should expose S3 replica bucket name', () => {
+      expect(outputs.S3ReplicaBucketName).toBeDefined();
+      expect(outputs.S3ReplicaBucketName.Value.Ref).toBe('S3ReplicaBucket');
+    });
+
+    test('should expose Aurora Global Cluster ID', () => {
+      expect(outputs.AuroraGlobalClusterId).toBeDefined();
+      expect(outputs.AuroraGlobalClusterId.Value.Ref).toBe('AuroraGlobalCluster');
     });
 
     test('should have export names with environment suffix', () => {
