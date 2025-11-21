@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Secure Financial Data Processing Pipeline with comprehensive encryption, VPC isolation, and compliance features",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming to ensure uniqueness",
       "MinLength": 1,
@@ -95,13 +95,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "encryption-key-${environmentSuffix}"
+              "Fn::Sub": "encryption-key-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -119,7 +119,7 @@
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/financial-pipeline-${environmentSuffix}"
+          "Fn::Sub": "alias/financial-pipeline-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "EncryptionKey"
@@ -136,13 +136,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-${environmentSuffix}"
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -171,13 +171,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-1-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -206,13 +206,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-2-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -241,13 +241,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-3-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -267,13 +267,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-route-table-${environmentSuffix}"
+              "Fn::Sub": "private-route-table-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -336,13 +336,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "lambda-sg-${environmentSuffix}"
+              "Fn::Sub": "lambda-sg-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -374,13 +374,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-endpoint-sg-${environmentSuffix}"
+              "Fn::Sub": "vpc-endpoint-sg-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -457,7 +457,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "transaction-data-${environmentSuffix}"
+          "Fn::Sub": "transaction-data-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -519,13 +519,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-bucket-${environmentSuffix}"
+              "Fn::Sub": "transaction-bucket-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -543,7 +543,7 @@
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "transactions-${environmentSuffix}"
+          "Fn::Sub": "transactions-${EnvironmentSuffix}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
@@ -583,13 +583,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-table-${environmentSuffix}"
+              "Fn::Sub": "transaction-table-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -607,7 +607,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "lambda-execution-role-${environmentSuffix}"
+          "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -685,7 +685,7 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/transaction-processor-${environmentSuffix}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/transaction-processor-${EnvironmentSuffix}:*"
                   }
                 }
               ]
@@ -696,13 +696,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "lambda-execution-role-${environmentSuffix}"
+              "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -716,7 +716,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/transaction-processor-${environmentSuffix}"
+          "Fn::Sub": "/aws/lambda/transaction-processor-${EnvironmentSuffix}"
         },
         "RetentionInDays": {
           "Ref": "logRetentionDays"
@@ -734,7 +734,7 @@
       "DependsOn": "LambdaLogGroup",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "transaction-processor-${environmentSuffix}"
+          "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -790,13 +790,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-processor-${environmentSuffix}"
+              "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -810,7 +810,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "lambda-errors-${environmentSuffix}"
+          "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when Lambda function errors exceed threshold",
         "MetricName": "Errors",
@@ -835,7 +835,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "apigateway-role-${environmentSuffix}"
+          "Fn::Sub": "apigateway-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -863,7 +863,7 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/transaction-api-${environmentSuffix}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/transaction-api-${EnvironmentSuffix}:*"
                   }
                 },
                 {
@@ -886,13 +886,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "apigateway-role-${environmentSuffix}"
+              "Fn::Sub": "apigateway-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -906,7 +906,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/apigateway/transaction-api-${environmentSuffix}"
+          "Fn::Sub": "/aws/apigateway/transaction-api-${EnvironmentSuffix}"
         },
         "RetentionInDays": {
           "Ref": "logRetentionDays"
@@ -923,7 +923,7 @@
       "Type": "AWS::ApiGateway::RestApi",
       "Properties": {
         "Name": {
-          "Fn::Sub": "transaction-api-${environmentSuffix}"
+          "Fn::Sub": "transaction-api-${EnvironmentSuffix}"
         },
         "Description": "Secure API for financial transaction processing",
         "EndpointConfiguration": {
@@ -935,13 +935,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-api-${environmentSuffix}"
+              "Fn::Sub": "transaction-api-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -955,7 +955,7 @@
       "Type": "AWS::ApiGateway::RequestValidator",
       "Properties": {
         "Name": {
-          "Fn::Sub": "request-validator-${environmentSuffix}"
+          "Fn::Sub": "request-validator-${EnvironmentSuffix}"
         },
         "RestApiId": {
           "Ref": "TransactionAPI"
@@ -1062,7 +1062,7 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1076,7 +1076,7 @@
       "Type": "AWS::ApiGateway::ApiKey",
       "Properties": {
         "Name": {
-          "Fn::Sub": "transaction-api-key-${environmentSuffix}"
+          "Fn::Sub": "transaction-api-key-${EnvironmentSuffix}"
         },
         "Description": "API key for transaction processing API",
         "Enabled": true
@@ -1087,7 +1087,7 @@
       "DependsOn": "APIGatewayStage",
       "Properties": {
         "UsagePlanName": {
-          "Fn::Sub": "transaction-usage-plan-${environmentSuffix}"
+          "Fn::Sub": "transaction-usage-plan-${EnvironmentSuffix}"
         },
         "Description": "Usage plan for transaction API",
         "ApiStages": [
@@ -1124,7 +1124,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "api-errors-${environmentSuffix}"
+          "Fn::Sub": "api-errors-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when API Gateway 4XX/5XX errors exceed threshold",
         "MetricName": "5XXError",
@@ -1138,7 +1138,7 @@
           {
             "Name": "ApiName",
             "Value": {
-              "Fn::Sub": "transaction-api-${environmentSuffix}"
+              "Fn::Sub": "transaction-api-${EnvironmentSuffix}"
             }
           }
         ],
@@ -1149,7 +1149,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "rds-credentials-${environmentSuffix}"
+          "Fn::Sub": "rds-credentials-${EnvironmentSuffix}"
         },
         "Description": "RDS database credentials with automatic rotation",
         "KmsKeyId": {
@@ -1165,13 +1165,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "database-secret-${environmentSuffix}"
+              "Fn::Sub": "database-secret-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1207,7 +1207,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "secret-rotation-role-${environmentSuffix}"
+          "Fn::Sub": "secret-rotation-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1270,7 +1270,7 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/secret-rotation-${environmentSuffix}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/secret-rotation-${EnvironmentSuffix}:*"
                   }
                 }
               ]
@@ -1281,13 +1281,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "secret-rotation-role-${environmentSuffix}"
+              "Fn::Sub": "secret-rotation-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1301,7 +1301,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/secret-rotation-${environmentSuffix}"
+          "Fn::Sub": "/aws/lambda/secret-rotation-${EnvironmentSuffix}"
         },
         "RetentionInDays": {
           "Ref": "logRetentionDays"
@@ -1319,7 +1319,7 @@
       "DependsOn": "SecretRotationLogGroup",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "secret-rotation-${environmentSuffix}"
+          "Fn::Sub": "secret-rotation-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -1362,13 +1362,13 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "secret-rotation-${environmentSuffix}"
+              "Fn::Sub": "secret-rotation-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1397,7 +1397,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "EncryptionKey-${environmentSuffix}"
+          "Fn::Sub": "EncryptionKey-${EnvironmentSuffix}"
         }
       }
     },
@@ -1411,7 +1411,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "EncryptionKeyArn-${environmentSuffix}"
+          "Fn::Sub": "EncryptionKeyArn-${EnvironmentSuffix}"
         }
       }
     },
@@ -1422,7 +1422,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "VPC-${environmentSuffix}"
+          "Fn::Sub": "VPC-${EnvironmentSuffix}"
         }
       }
     },
@@ -1433,7 +1433,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "TransactionBucket-${environmentSuffix}"
+          "Fn::Sub": "TransactionBucket-${EnvironmentSuffix}"
         }
       }
     },
@@ -1444,7 +1444,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "TransactionTable-${environmentSuffix}"
+          "Fn::Sub": "TransactionTable-${EnvironmentSuffix}"
         }
       }
     },
@@ -1458,7 +1458,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "TransactionProcessorFunction-${environmentSuffix}"
+          "Fn::Sub": "TransactionProcessorFunction-${EnvironmentSuffix}"
         }
       }
     },
@@ -1469,7 +1469,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "APIEndpoint-${environmentSuffix}"
+          "Fn::Sub": "APIEndpoint-${EnvironmentSuffix}"
         }
       }
     },
@@ -1486,7 +1486,7 @@
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "DatabaseSecret-${environmentSuffix}"
+          "Fn::Sub": "DatabaseSecret-${EnvironmentSuffix}"
         }
       }
     }

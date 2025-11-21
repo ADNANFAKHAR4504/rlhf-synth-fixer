@@ -7,7 +7,7 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/template.json');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -41,20 +41,20 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
   });
 
   describe('Parameters', () => {
-    test('should have environmentSuffix parameter', () => {
-      expect(template.Parameters.environmentSuffix).toBeDefined();
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
-    test('environmentSuffix should have correct type and constraints', () => {
-      const param = template.Parameters.environmentSuffix;
+    test('EnvironmentSuffix should have correct type and constraints', () => {
+      const param = template.Parameters.EnvironmentSuffix;
       expect(param.Type).toBe('String');
       expect(param.MinLength).toBe(1);
       expect(param.MaxLength).toBe(20);
       expect(param.AllowedPattern).toBe('[a-z0-9-]+');
     });
 
-    test('environmentSuffix should have description', () => {
-      const param = template.Parameters.environmentSuffix;
+    test('EnvironmentSuffix should have description', () => {
+      const param = template.Parameters.EnvironmentSuffix;
       expect(param.Description).toBeDefined();
       expect(param.Description.length).toBeGreaterThan(10);
     });
@@ -558,7 +558,7 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
   });
 
   describe('Idempotency - Environment Suffix Usage', () => {
-    test('resources should use environmentSuffix in names', () => {
+    test('resources should use EnvironmentSuffix in names', () => {
       const resourcesWithNames = Object.keys(template.Resources).filter(key => {
         const resource = template.Resources[key].Properties;
         // Check common name properties
@@ -568,13 +568,13 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
       
       expect(resourcesWithNames.length).toBeGreaterThan(0);
       
-      // Verify at least some resources use the environmentSuffix parameter
+      // Verify at least some resources use the EnvironmentSuffix parameter
       const usesEnvSuffix = resourcesWithNames.some(key => {
         const resource = template.Resources[key].Properties;
         const nameValue = resource.BucketName || resource.TableName || 
                          resource.FunctionName || resource.Name || resource.LogGroupName;
         return nameValue && nameValue['Fn::Sub'] && 
-               nameValue['Fn::Sub'].toString().includes('${environmentSuffix}');
+               nameValue['Fn::Sub'].toString().includes('${EnvironmentSuffix}');
       });
       
       expect(usesEnvSuffix).toBe(true);
