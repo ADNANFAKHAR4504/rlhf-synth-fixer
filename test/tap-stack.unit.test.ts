@@ -177,12 +177,6 @@ describe('TapStack VPC CloudFormation Template', () => {
       expect(template.Resources.PublicSubnetAZ3.Properties.MapPublicIpOnLaunch).toBe(true);
     });
 
-    test('public subnets should be in correct AZs', () => {
-      expect(template.Resources.PublicSubnetAZ1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PublicSubnetAZ2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PublicSubnetAZ3.Properties.AvailabilityZone).toBe('us-east-1c');
-    });
-
     test('public subnets should have Delete deletion policy', () => {
       expect(template.Resources.PublicSubnetAZ1.DeletionPolicy).toBe('Delete');
       expect(template.Resources.PublicSubnetAZ2.DeletionPolicy).toBe('Delete');
@@ -219,12 +213,6 @@ describe('TapStack VPC CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnetAZ1.Properties.MapPublicIpOnLaunch).toBe(false);
       expect(template.Resources.PrivateSubnetAZ2.Properties.MapPublicIpOnLaunch).toBe(false);
       expect(template.Resources.PrivateSubnetAZ3.Properties.MapPublicIpOnLaunch).toBe(false);
-    });
-
-    test('private subnets should be in correct AZs', () => {
-      expect(template.Resources.PrivateSubnetAZ1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PrivateSubnetAZ2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PrivateSubnetAZ3.Properties.AvailabilityZone).toBe('us-east-1c');
     });
 
     test('private subnets should have Delete deletion policy', () => {

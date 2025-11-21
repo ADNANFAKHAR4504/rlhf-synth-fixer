@@ -117,7 +117,7 @@
         "CidrBlock": {
           "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PublicSubnetAZ1"]
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -151,7 +151,7 @@
         "CidrBlock": {
           "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PublicSubnetAZ2"]
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -185,7 +185,7 @@
         "CidrBlock": {
           "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PublicSubnetAZ3"]
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -219,7 +219,7 @@
         "CidrBlock": {
           "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PrivateSubnetAZ1"]
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -253,7 +253,7 @@
         "CidrBlock": {
           "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PrivateSubnetAZ2"]
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -287,7 +287,7 @@
         "CidrBlock": {
           "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PrivateSubnetAZ3"]
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
