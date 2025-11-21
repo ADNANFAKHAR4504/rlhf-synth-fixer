@@ -966,7 +966,6 @@
         "BucketName": {
           "Fn::Sub": "${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
         },
-        "Region": "us-west-2",
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -1109,23 +1108,7 @@
         "Handler": "index.lambda_handler",
         "Role": {"Fn::GetAtt": ["ApiAuthorizerRole", "Arn"]},
         "Code": {
-          "ZipFile": |
-            import json
-            def lambda_handler(event, context):
-                # Simple API key validation
-                token = event.get('headers', {}).get('Authorization', '')
-
-                # In production, validate against actual API keys or JWT tokens
-                if token and token.startswith('Bearer '):
-                    return {
-                        'isAuthorized': True,
-                        'context': {
-                            'user': 'authenticated-user'
-                        }
-                    }
-                return {
-                    'isAuthorized': False
-                }
+          "ZipFile": "import json\ndef lambda_handler(event, context):\n    # Simple API key validation\n    token = event.get('headers', {}).get('Authorization', '')\n    \n    # In production, validate against actual API keys or JWT tokens\n    if token and token.startswith('Bearer '):\n        return {\n            'isAuthorized': True,\n            'context': {\n                'user': 'authenticated-user'\n            }\n        }\n    return {\n        'isAuthorized': False\n    }"
         },
         "Timeout": 30,
         "Tags": [
