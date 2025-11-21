@@ -822,17 +822,6 @@
               "Ref": "EC2SecurityGroup"
             }
           ],
-          "BlockDeviceMappings": [
-            {
-              "DeviceName": "/dev/xvda",
-              "Ebs": {
-                "VolumeSize": 8,
-                "VolumeType": "gp3",
-                "DeleteOnTermination": true,
-                "Encrypted": false
-              }
-            }
-          ],
           "MetadataOptions": {
             "HttpTokens": "required",
             "HttpPutResponseHopLimit": 1,
