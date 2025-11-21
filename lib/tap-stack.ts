@@ -98,7 +98,7 @@ export class TapStack extends cdk.Stack {
     const dbCredentials = new secretsmanager.Secret(this, 'DBCredentials', {
       secretName: `${appName}-db-credentials`,
       generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'admin' }),
+        secretStringTemplate: JSON.stringify({ username: 'dbadmin' }),
         generateStringKey: 'password',
         excludePunctuation: true,
         includeSpace: false,
