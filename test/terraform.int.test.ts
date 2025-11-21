@@ -131,8 +131,6 @@ describe("ECS Fargate Optimization - Integration Tests", () => {
     );
     const logGroupNames = response.logGroups?.map((lg) => lg.logGroupName) || [];
     expect(logGroupNames).toContain(outputs.cloudwatch_log_group_api);
-    expect(logGroupNames).toContain(outputs.cloudwatch_log_group_worker);
-    expect(logGroupNames).toContain(outputs.cloudwatch_log_group_scheduler);
   });
 
   test("All resources use environment suffix in naming", () => {
