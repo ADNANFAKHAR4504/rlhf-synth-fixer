@@ -6,7 +6,7 @@ We need to build a secure data processing pipeline for handling financial transa
 
 This is for a financial services company, so security is paramount. They want every component locked down - no shortcuts, no wildcards in IAM policies, everything encrypted, and full audit trails. The pipeline needs to handle transaction data securely from ingestion through processing and storage.
 
-The architecture will be deployed in us-east-1 across multiple availability zones for high availability. We're talking Lambda functions running in completely isolated VPCs with no internet access, DynamoDB for transaction storage with full encryption and point-in-time recovery, API Gateway with strict validation and API key requirements, and Secrets Manager handling credential rotation automatically. All AWS service communication will flow through VPC Endpoints to keep traffic off the public internet.
+The architecture will be deployed in us-east-2 across multiple availability zones for high availability. We're talking Lambda functions running in completely isolated VPCs with no internet access, DynamoDB for transaction storage with full encryption and point-in-time recovery, API Gateway with strict validation and API key requirements, and Secrets Manager handling credential rotation automatically. All AWS service communication will flow through VPC Endpoints to keep traffic off the public internet.
 
 ## What we need to build
 
@@ -71,7 +71,7 @@ Create a secure financial data processing infrastructure using **CloudFormation 
 - Use **CloudWatch Alarms** for API failures and Lambda errors
 - Resource names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **us-east-1** region
+- Deploy to **us-east-2** region
 
 ### Security and Compliance Constraints
 

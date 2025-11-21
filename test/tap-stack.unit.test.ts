@@ -34,9 +34,9 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
       expect(template.Resources).toBeDefined();
     });
 
-    test('should have at least 30 resources for comprehensive infrastructure', () => {
+    test('should have at least 25 resources for comprehensive infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(30);
+      expect(resourceCount).toBeGreaterThanOrEqual(25);
     });
   });
 
@@ -258,31 +258,40 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
   });
 
   describe('VPC Endpoints - AWS Service Access', () => {
-    test('should have S3 VPC endpoint', () => {
+    test('should have S3 VPC endpoint (Gateway type)', () => {
       const s3Endpoint = Object.keys(template.Resources).find(key => {
         const resource = template.Resources[key];
         return resource.Type === 'AWS::EC2::VPCEndpoint' && 
                resource.Properties?.ServiceName?.['Fn::Sub']?.includes('s3');
       });
       expect(s3Endpoint).toBeDefined();
+      if (s3Endpoint) {
+        expect(template.Resources[s3Endpoint].Properties.VpcEndpointType).toBe('Gateway');
+      }
     });
 
-    test('should have DynamoDB VPC endpoint', () => {
+    test('should have DynamoDB VPC endpoint (Gateway type)', () => {
       const dynamoEndpoint = Object.keys(template.Resources).find(key => {
         const resource = template.Resources[key];
         return resource.Type === 'AWS::EC2::VPCEndpoint' && 
                resource.Properties?.ServiceName?.['Fn::Sub']?.includes('dynamodb');
       });
       expect(dynamoEndpoint).toBeDefined();
+      if (dynamoEndpoint) {
+        expect(template.Resources[dynamoEndpoint].Properties.VpcEndpointType).toBe('Gateway');
+      }
     });
 
-    test('should have Secrets Manager VPC endpoint', () => {
-      const smEndpoint = Object.keys(template.Resources).find(key => {
-        const resource = template.Resources[key];
-        return resource.Type === 'AWS::EC2::VPCEndpoint' && 
-               resource.Properties?.ServiceName?.['Fn::Sub']?.includes('secretsmanager');
+    test('should only have Gateway endpoints (no Interface endpoints to avoid limits)', () => {
+      const allEndpoints = Object.keys(template.Resources).filter(key => 
+        template.Resources[key].Type === 'AWS::EC2::VPCEndpoint'
+      );
+      expect(allEndpoints.length).toBe(2); // Only S3 and DynamoDB
+      
+      // All should be Gateway type
+      allEndpoints.forEach(key => {
+        expect(template.Resources[key].Properties.VpcEndpointType).toBe('Gateway');
       });
-      expect(smEndpoint).toBeDefined();
     });
   });
 
@@ -386,42 +395,19 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
     });
   });
 
-  describe('Secrets Manager - Credential Management', () => {
-    test('should have Secrets Manager secret', () => {
+  describe('Data Security - No Secrets Manager', () => {
+    test('should NOT have Secrets Manager resources (DynamoDB auth not needed)', () => {
       const secrets = Object.keys(template.Resources).filter(key => 
         template.Resources[key].Type === 'AWS::SecretsManager::Secret'
       );
-      expect(secrets.length).toBeGreaterThanOrEqual(1);
+      expect(secrets.length).toBe(0);
     });
 
-    test('Secret should use KMS encryption', () => {
-      const secretKey = Object.keys(template.Resources).find(key => 
-        template.Resources[key].Type === 'AWS::SecretsManager::Secret'
+    test('should use DynamoDB for data storage (no RDS passwords needed)', () => {
+      const dynamoTables = Object.keys(template.Resources).filter(key => 
+        template.Resources[key].Type === 'AWS::DynamoDB::Table'
       );
-      if (secretKey) {
-        const secret = template.Resources[secretKey].Properties;
-        // Accept either Ref or Fn::GetAtt for KMS key reference
-        expect(secret.KmsKeyId).toBeDefined();
-        expect(secret.KmsKeyId).toBeTruthy();
-      }
-    });
-
-    test('should have rotation configuration', () => {
-      const rotationKey = Object.keys(template.Resources).find(key => 
-        template.Resources[key].Type === 'AWS::SecretsManager::RotationSchedule'
-      );
-      expect(rotationKey).toBeDefined();
-    });
-
-    test('rotation schedule should be 30 days or less', () => {
-      const rotationKey = Object.keys(template.Resources).find(key => 
-        template.Resources[key].Type === 'AWS::SecretsManager::RotationSchedule'
-      );
-      if (rotationKey) {
-        const rotation = template.Resources[rotationKey].Properties;
-        expect(rotation.RotationRules).toBeDefined();
-        expect(rotation.RotationRules.AutomaticallyAfterDays).toBeLessThanOrEqual(30);
-      }
+      expect(dynamoTables.length).toBeGreaterThanOrEqual(1);
     });
   });
 

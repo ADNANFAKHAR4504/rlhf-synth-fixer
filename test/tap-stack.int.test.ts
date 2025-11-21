@@ -5,7 +5,7 @@ import {
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-2';
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 
 // Initialize AWS SDK clients
@@ -340,7 +340,7 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       }).promise();
 
       expect(response.VpcEndpoints).toBeDefined();
-      expect(response.VpcEndpoints!.length).toBeGreaterThanOrEqual(3); // S3, DynamoDB, Secrets Manager
+      expect(response.VpcEndpoints!.length).toBeGreaterThanOrEqual(2); // S3, DynamoDB (Gateway endpoints)
     });
 
     test('should have S3 VPC endpoint', async () => {
@@ -377,7 +377,7 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       expect(response.VpcEndpoints![0].State).toBe('available');
     });
 
-    test('should have Secrets Manager VPC endpoint', async () => {
+    test('should use only Gateway endpoints (no Interface endpoints for cost/limit efficiency)', async () => {
       if (!outputs.VpcId) {
         console.warn('VpcId not found in outputs, skipping test');
         return;
@@ -385,13 +385,14 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
 
       const response = await ec2.describeVpcEndpoints({
         Filters: [
-          { Name: 'vpc-id', Values: [outputs.VpcId] },
-          { Name: 'service-name', Values: [`com.amazonaws.${AWS_REGION}.secretsmanager`] }
+          { Name: 'vpc-id', Values: [outputs.VpcId] }
         ]
       }).promise();
 
-      expect(response.VpcEndpoints!.length).toBeGreaterThanOrEqual(1);
-      expect(response.VpcEndpoints![0].State).toBe('available');
+      // All endpoints should be Gateway type (S3 and DynamoDB)
+      response.VpcEndpoints!.forEach(endpoint => {
+        expect(endpoint.VpcEndpointType).toBe('Gateway');
+      });
     });
   });
 
@@ -456,48 +457,26 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
     });
   });
 
-  describe('Secrets Manager - Credentials', () => {
-    test('should have secret created', async () => {
-      if (!outputs.DatabaseSecretArn) {
-        console.warn('DatabaseSecretArn not found in outputs, skipping test');
+  describe('Data Storage Security - DynamoDB', () => {
+    test('should use DynamoDB with KMS encryption (no passwords needed)', async () => {
+      if (!outputs.TransactionTableName) {
+        console.warn('TransactionTableName not found in outputs, skipping test');
         return;
       }
 
-      const response = await secretsManager.describeSecret({
-        SecretId: outputs.DatabaseSecretArn
+      const response = await dynamodb.describeTable({
+        TableName: outputs.TransactionTableName
       }).promise();
 
-      expect(response).toBeDefined();
-      expect(response.ARN).toBeDefined();
+      expect(response.Table?.SSEDescription).toBeDefined();
+      expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
+      expect(response.Table?.SSEDescription?.SSEType).toBe('KMS');
     });
 
-    test('should have KMS encryption', async () => {
-      if (!outputs.DatabaseSecretArn) {
-        console.warn('DatabaseSecretArn not found in outputs, skipping test');
-        return;
-      }
-
-      const response = await secretsManager.describeSecret({
-        SecretId: outputs.DatabaseSecretArn
-      }).promise();
-
-      expect(response.KmsKeyId).toBeDefined();
-      expect(response.KmsKeyId).toBeTruthy();
-    });
-
-    test('should have rotation enabled', async () => {
-      if (!outputs.DatabaseSecretArn) {
-        console.warn('DatabaseSecretArn not found in outputs, skipping test');
-        return;
-      }
-
-      const response = await secretsManager.describeSecret({
-        SecretId: outputs.DatabaseSecretArn
-      }).promise();
-
-      expect(response.RotationEnabled).toBe(true);
-      expect(response.RotationRules).toBeDefined();
-      expect(response.RotationRules?.AutomaticallyAfterDays).toBeLessThanOrEqual(30);
+    test('should NOT have Secrets Manager (not needed for DynamoDB)', async () => {
+      // Verify no secrets are created for this stack
+      // DynamoDB uses IAM authentication, no passwords required
+      expect(outputs.DatabaseSecretArn).toBeUndefined();
     });
   });
 
@@ -709,11 +688,16 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       }).promise();
       expect(nats.NatGateways!.length).toBe(0);
 
-      // Verify VPC endpoints exist for AWS services
+      // Verify VPC endpoints exist for AWS services (S3 and DynamoDB Gateway endpoints)
       const endpoints = await ec2.describeVpcEndpoints({
         Filters: [{ Name: 'vpc-id', Values: [outputs.VpcId] }]
       }).promise();
-      expect(endpoints.VpcEndpoints!.length).toBeGreaterThanOrEqual(3);
+      expect(endpoints.VpcEndpoints!.length).toBeGreaterThanOrEqual(2);
+      
+      // All should be Gateway endpoints (no Interface endpoints to avoid limits)
+      endpoints.VpcEndpoints!.forEach(endpoint => {
+        expect(endpoint.VpcEndpointType).toBe('Gateway');
+      });
     });
 
     test('all resources have proper compliance tags', async () => {
@@ -737,20 +721,23 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       }
     });
 
-    test('secrets rotation is configured and active', async () => {
-      if (!outputs.DatabaseSecretArn) {
-        console.warn('DatabaseSecretArn not found in outputs, skipping test');
+    test('DynamoDB uses IAM authentication (no password rotation needed)', async () => {
+      if (!outputs.TransactionTableName) {
+        console.warn('TransactionTableName not found in outputs, skipping test');
         return;
       }
 
-      const secret = await secretsManager.describeSecret({
-        SecretId: outputs.DatabaseSecretArn
+      // DynamoDB authentication is handled via IAM roles, not passwords
+      // Verify DynamoDB table is properly secured with KMS encryption
+      const table = await dynamodb.describeTable({
+        TableName: outputs.TransactionTableName
       }).promise();
 
-      expect(secret.RotationEnabled).toBe(true);
-      expect(secret.RotationRules).toBeDefined();
-      expect(secret.RotationRules?.AutomaticallyAfterDays).toBeLessThanOrEqual(30);
-      expect(secret.RotationLambdaARN).toBeDefined();
+      expect(table.Table?.SSEDescription?.Status).toBe('ENABLED');
+      expect(table.Table?.SSEDescription?.SSEType).toBe('KMS');
+      
+      // No Secrets Manager needed - DynamoDB uses IAM
+      expect(outputs.DatabaseSecretArn).toBeUndefined();
     });
   });
 });

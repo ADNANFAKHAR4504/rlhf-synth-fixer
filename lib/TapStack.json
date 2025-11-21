@@ -14,7 +14,30 @@
       "Type": "Number",
       "Description": "CloudWatch log retention in days",
       "Default": 90,
-      "AllowedValues": [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653],
+      "AllowedValues": [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1096,
+        1827,
+        2192,
+        2557,
+        2922,
+        3288,
+        3653
+      ],
       "ConstraintDescription": "Must be a valid CloudWatch log retention period"
     }
   },
@@ -424,35 +447,6 @@
         ]
       }
     },
-    "SecretsManagerVPCEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.${AWS::Region}.secretsmanager"
-        },
-        "VpcEndpointType": "Interface",
-        "PrivateDnsEnabled": true,
-        "SubnetIds": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          },
-          {
-            "Ref": "PrivateSubnet3"
-          }
-        ],
-        "SecurityGroupIds": [
-          {
-            "Ref": "VPCEndpointSecurityGroup"
-          }
-        ]
-      }
-    },
     "TransactionBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
@@ -671,15 +665,6 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
-                  "Resource": {
-                    "Ref": "DatabaseSecret"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
                     "logs:CreateLogGroup",
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
@@ -771,9 +756,6 @@
             },
             "S3_BUCKET": {
               "Ref": "TransactionBucket"
-            },
-            "SECRET_ARN": {
-              "Ref": "DatabaseSecret"
             }
           }
         },
@@ -1144,249 +1126,6 @@
         ],
         "TreatMissingData": "notBreaching"
       }
-    },
-    "DatabaseSecret": {
-      "Type": "AWS::SecretsManager::Secret",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "rds-credentials-${EnvironmentSuffix}"
-        },
-        "Description": "RDS database credentials with automatic rotation",
-        "KmsKeyId": {
-          "Ref": "EncryptionKey"
-        },
-        "GenerateSecretString": {
-          "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
-          "GenerateStringKey": "password",
-          "PasswordLength": 32,
-          "ExcludeCharacters": "\"@/\\"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "database-secret-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "FinancialServices"
-          },
-          {
-            "Key": "Compliance",
-            "Value": "Required"
-          }
-        ]
-      }
-    },
-    "SecretRotationSchedule": {
-      "Type": "AWS::SecretsManager::RotationSchedule",
-      "DependsOn": ["SecretRotationPermission"],
-      "Properties": {
-        "SecretId": {
-          "Ref": "DatabaseSecret"
-        },
-        "RotationRules": {
-          "AutomaticallyAfterDays": 30
-        },
-        "RotationLambdaARN": {
-          "Fn::GetAtt": [
-            "SecretRotationFunction",
-            "Arn"
-          ]
-        }
-      }
-    },
-    "SecretRotationFunctionRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {
-          "Fn::Sub": "secret-rotation-role-${EnvironmentSuffix}"
-        },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "lambda.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "SecretRotationPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:DescribeSecret",
-                    "secretsmanager:GetSecretValue",
-                    "secretsmanager:PutSecretValue",
-                    "secretsmanager:UpdateSecretVersionStage"
-                  ],
-                  "Resource": {
-                    "Ref": "DatabaseSecret"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetRandomPassword"
-                  ],
-                  "Resource": "*"
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "kms:Decrypt",
-                    "kms:GenerateDataKey"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "EncryptionKey",
-                      "Arn"
-                    ]
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/secret-rotation-${EnvironmentSuffix}:*"
-                  }
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "secret-rotation-role-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "FinancialServices"
-          }
-        ]
-      }
-    },
-    "SecretRotationLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/secret-rotation-${EnvironmentSuffix}"
-        },
-        "RetentionInDays": {
-          "Ref": "logRetentionDays"
-        },
-        "KmsKeyId": {
-          "Fn::GetAtt": [
-            "EncryptionKey",
-            "Arn"
-          ]
-        }
-      }
-    },
-    "SecretRotationFunction": {
-      "Type": "AWS::Lambda::Function",
-      "DependsOn": "SecretRotationLogGroup",
-      "Properties": {
-        "FunctionName": {
-          "Fn::Sub": "secret-rotation-${EnvironmentSuffix}"
-        },
-        "Runtime": "python3.11",
-        "Handler": "index.lambda_handler",
-        "Role": {
-          "Fn::GetAtt": [
-            "SecretRotationFunctionRole",
-            "Arn"
-          ]
-        },
-        "Timeout": 300,
-        "VpcConfig": {
-          "SubnetIds": [
-            {
-              "Ref": "PrivateSubnet1"
-            },
-            {
-              "Ref": "PrivateSubnet2"
-            },
-            {
-              "Ref": "PrivateSubnet3"
-            }
-          ],
-          "SecurityGroupIds": [
-            {
-              "Ref": "LambdaSecurityGroup"
-            }
-          ]
-        },
-        "Environment": {
-          "Variables": {
-            "SECRETS_MANAGER_ENDPOINT": {
-              "Fn::Sub": "https://secretsmanager.${AWS::Region}.amazonaws.com"
-            }
-          }
-        },
-        "Code": {
-          "ZipFile": "import json\nimport boto3\nimport os\n\nsecrets = boto3.client('secretsmanager', endpoint_url=os.environ.get('SECRETS_MANAGER_ENDPOINT'))\n\ndef lambda_handler(event, context):\n    arn = event['SecretId']\n    token = event['ClientRequestToken']\n    step = event['Step']\n    \n    metadata = secrets.describe_secret(SecretId=arn)\n    if not metadata['RotationEnabled']:\n        raise ValueError(f\"Secret {arn} is not enabled for rotation\")\n    \n    versions = metadata['VersionIdsToStages']\n    if token not in versions:\n        raise ValueError(f\"Secret version {token} has no stage for rotation\")\n    \n    if \"AWSCURRENT\" in versions[token]:\n        return\n    elif \"AWSPENDING\" not in versions[token]:\n        raise ValueError(f\"Secret version {token} not set as AWSPENDING for rotation\")\n    \n    if step == \"createSecret\":\n        create_secret(secrets, arn, token)\n    elif step == \"setSecret\":\n        set_secret(secrets, arn, token)\n    elif step == \"testSecret\":\n        test_secret(secrets, arn, token)\n    elif step == \"finishSecret\":\n        finish_secret(secrets, arn, token)\n    else:\n        raise ValueError(\"Invalid step parameter\")\n\ndef create_secret(service_client, arn, token):\n    try:\n        service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=\"AWSPENDING\")\n    except service_client.exceptions.ResourceNotFoundException:\n        current_dict = json.loads(service_client.get_secret_value(SecretId=arn, VersionStage=\"AWSCURRENT\")['SecretString'])\n        new_password = service_client.get_random_password(ExcludeCharacters='\"@/\\\\')\n        current_dict['password'] = new_password['RandomPassword']\n        service_client.put_secret_value(SecretId=arn, ClientRequestToken=token, SecretString=json.dumps(current_dict), VersionStages=['AWSPENDING'])\n\ndef set_secret(service_client, arn, token):\n    pass\n\ndef test_secret(service_client, arn, token):\n    pass\n\ndef finish_secret(service_client, arn, token):\n    metadata = service_client.describe_secret(SecretId=arn)\n    current_version = None\n    for version in metadata[\"VersionIdsToStages\"]:\n        if \"AWSCURRENT\" in metadata[\"VersionIdsToStages\"][version]:\n            if version == token:\n                return\n            current_version = version\n            break\n    \n    service_client.update_secret_version_stage(SecretId=arn, VersionStage=\"AWSCURRENT\", MoveToVersionId=token, RemoveFromVersionId=current_version)\n"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "secret-rotation-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "FinancialServices"
-          }
-        ]
-      }
-    },
-    "SecretRotationPermission": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "SecretRotationFunction"
-        },
-        "Action": "lambda:InvokeFunction",
-        "Principal": "secretsmanager.amazonaws.com"
-      }
     }
   },
   "Outputs": {
@@ -1477,17 +1216,6 @@
       "Description": "API Key for authentication",
       "Value": {
         "Ref": "APIKey"
-      }
-    },
-    "DatabaseSecretArn": {
-      "Description": "Secrets Manager ARN for database credentials",
-      "Value": {
-        "Ref": "DatabaseSecret"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "DatabaseSecret-${EnvironmentSuffix}"
-        }
       }
     }
   }

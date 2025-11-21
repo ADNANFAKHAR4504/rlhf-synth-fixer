@@ -1531,18 +1531,18 @@ aws cloudformation create-stack \
   --template-body file://lib/template.json \
   --parameters ParameterKey=environmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 
 # Wait for stack creation to complete
 aws cloudformation wait stack-create-complete \
   --stack-name financial-pipeline-dev \
-  --region us-east-1
+  --region us-east-2
 
 # Get stack outputs
 aws cloudformation describe-stacks \
   --stack-name financial-pipeline-dev \
   --query 'Stacks[0].Outputs' \
-  --region us-east-1
+  --region us-east-2
 ```
 
 ### Parameters
@@ -1685,12 +1685,12 @@ aws secretsmanager get-secret-value \
 # Delete the stack (all resources will be removed)
 aws cloudformation delete-stack \
   --stack-name financial-pipeline-dev \
-  --region us-east-1
+  --region us-east-2
 
 # Wait for deletion to complete
 aws cloudformation wait stack-delete-complete \
   --stack-name financial-pipeline-dev \
-  --region us-east-1
+  --region us-east-2
 ```
 
 **Note**: All resources are configured to be fully destroyable. No DeletionPolicy: Retain settings are used.
@@ -1775,7 +1775,7 @@ aws cloudformation create-stack \
   --template-body file://lib/template.json \
   --parameters ParameterKey=environmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 
 # Update stack
 aws cloudformation update-stack \
@@ -1783,7 +1783,7 @@ aws cloudformation update-stack \
   --template-body file://lib/template.json \
   --parameters ParameterKey=environmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 
 # Delete stack
 aws cloudformation delete-stack --stack-name financial-pipeline-dev --region us-east-1

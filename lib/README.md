@@ -56,7 +56,7 @@ aws cloudformation deploy \
   --parameter-overrides \
     environmentSuffix=dev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 
 # Deploy with custom log retention
 aws cloudformation deploy \
@@ -66,7 +66,7 @@ aws cloudformation deploy \
     environmentSuffix=prod \
     logRetentionDays=365 \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 ```
 
 #### Deploy via AWS Console

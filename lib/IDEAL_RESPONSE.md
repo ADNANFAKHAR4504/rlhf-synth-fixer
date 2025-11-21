@@ -4,7 +4,7 @@ This implementation provides a complete, production-ready CloudFormation templat
 
 ## File: lib/template.json
 
-```json
+````json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Secure Financial Data Processing Pipeline with comprehensive encryption, VPC isolation, and compliance features",
@@ -1555,7 +1555,7 @@ This CloudFormation template implements a comprehensive secure financial data pr
   - Used in all resource names for uniqueness
   - Examples: "dev", "staging", "prod", "test-123"
 
-**Region:** us-east-1 (as specified in requirements)
+**Region:** us-east-2 (as specified in requirements)
 
 ### Stack Outputs (8 Exports)
 
@@ -1596,13 +1596,13 @@ aws cloudformation create-stack \
   --template-body file://lib/template.json \
   --parameters ParameterKey=environmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 
 # Monitor deployment
 aws cloudformation describe-stacks \
   --stack-name financial-pipeline-dev \
-  --region us-east-1
-```
+  --region us-east-2
+````
 
 ### Clean Teardown
 
@@ -1610,7 +1610,7 @@ aws cloudformation describe-stacks \
 # Delete stack (no manual intervention required)
 aws cloudformation delete-stack \
   --stack-name financial-pipeline-dev \
-  --region us-east-1
+  --region us-east-2
 ```
 
 All resources are destroyable with no Retain policies or deletion protection flags.
