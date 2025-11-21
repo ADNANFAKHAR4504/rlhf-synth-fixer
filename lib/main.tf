@@ -170,6 +170,7 @@ module "asg" {
   alb_dns              = module.alb.alb_dns_name
   s3_bucket            = module.s3.bucket_name
   rds_endpoint         = module.rds.endpoint
+  db_name              = module.rds.database_name
   secret_name          = aws_secretsmanager_secret.db_password.name
   kms_rds_key_id       = aws_kms_key.rds.key_id
   kms_ebs_key_id       = aws_kms_key.ebs.key_id

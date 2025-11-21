@@ -34,6 +34,11 @@ variable "certificate_arn" {
   description = "ARN of the ACM certificate for HTTPS listener (optional)"
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.certificate_arn == "" || can(regex("^arn:aws:acm:", var.certificate_arn))
+    error_message = "certificate_arn must be a valid ACM certificate ARN or empty string."
+  }
 }
 
 variable "tags" {

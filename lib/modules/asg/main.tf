@@ -46,6 +46,7 @@ resource "aws_launch_template" "main" {
     alb_dns        = var.alb_dns
     s3_bucket      = var.s3_bucket
     rds_endpoint   = var.rds_endpoint
+    db_name        = var.db_name
     secret_name    = var.secret_name
     kms_rds_key_id = var.kms_rds_key_id
     kms_ebs_key_id = var.kms_ebs_key_id

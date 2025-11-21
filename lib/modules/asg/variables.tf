@@ -86,6 +86,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = "appdb"
+}
+
 variable "min_size" {
   description = "Minimum size of Auto Scaling Group"
   type        = number

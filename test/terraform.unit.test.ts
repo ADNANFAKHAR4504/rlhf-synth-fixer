@@ -605,10 +605,27 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(fs.existsSync(userDataPath)).toBe(true);
     });
 
-    test('user_data.sh should install Apache', () => {
+    test('user_data.sh should install Apache and Python', () => {
       const userDataPath = path.join(MODULES_DIR, 'asg', 'user_data.sh');
       const userDataContent = parseHCLFile(userDataPath);
       expect(userDataContent).toContain('httpd');
+      expect(userDataContent).toContain('python3');
+      expect(userDataContent).toContain('python3-pip');
+    });
+
+    test('user_data.sh should install Python PostgreSQL adapter', () => {
+      const userDataPath = path.join(MODULES_DIR, 'asg', 'user_data.sh');
+      const userDataContent = parseHCLFile(userDataPath);
+      expect(userDataContent).toContain('psycopg2-binary');
+      expect(userDataContent).toContain('boto3');
+    });
+
+    test('user_data.sh should create Python HTTP server', () => {
+      const userDataPath = path.join(MODULES_DIR, 'asg', 'user_data.sh');
+      const userDataContent = parseHCLFile(userDataPath);
+      expect(userDataContent).toContain('/opt/payment-app/app.py');
+      expect(userDataContent).toContain('PaymentAppHandler');
+      expect(userDataContent).toContain('payment-app.service');
     });
 
     test('user_data.sh should create test endpoints', () => {
@@ -951,6 +968,47 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(albVariablesContent).toContain('variable "certificate_arn"');
       expect(albVariablesContent).toContain('description = "ARN of the ACM certificate for HTTPS listener (optional)"');
       expect(albVariablesContent).toContain('default     = ""');
+    });
+
+    test('should validate certificate_arn format', () => {
+      expect(albVariablesContent).toContain('validation {');
+      expect(albVariablesContent).toContain('condition');
+      expect(albVariablesContent).toMatch(/arn:aws:acm:/);
+      expect(albVariablesContent).toContain('error_message');
+    });
+  });
+
+  describe('Root Variables Configuration', () => {
+    const rootVariablesPath = path.join(LIB_DIR, 'variables.tf');
+    let rootVariablesContent: string;
+
+    beforeAll(() => {
+      rootVariablesContent = parseHCLFile(rootVariablesPath);
+    });
+
+    test('should validate certificate_arn format in root variables', () => {
+      expect(rootVariablesContent).toContain('variable "certificate_arn"');
+      expect(rootVariablesContent).toContain('validation {');
+      expect(rootVariablesContent).toMatch(/arn:aws:acm:/);
+    });
+  });
+
+  describe('Monitoring Configuration Validation', () => {
+    const monitoringTfPath = path.join(LIB_DIR, 'monitoring.tf');
+    let monitoringContent: string;
+
+    beforeAll(() => {
+      if (fs.existsSync(monitoringTfPath)) {
+        monitoringContent = parseHCLFile(monitoringTfPath);
+      } else {
+        monitoringContent = '';
+      }
+    });
+
+    test('ALB 5XX errors alarm should use alb_arn_suffix for LoadBalancer dimension', () => {
+      expect(monitoringContent).toContain('LoadBalancer = module.alb.alb_arn_suffix');
+      // Should NOT use the incorrect split/element approach
+      expect(monitoringContent).not.toContain('element(split("/", module.alb.alb_arn)');
     });
   });
 });

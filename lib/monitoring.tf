@@ -22,7 +22,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    LoadBalancer = element(split("/", module.alb.alb_arn), length(split("/", module.alb.alb_arn)) - 1)
+    LoadBalancer = module.alb.alb_arn_suffix
   }
 
   tags = merge(local.common_tags, {
