@@ -1,5 +1,6 @@
 """tap_stack.py
-Main CDK stack orchestrating the multi-region PostgreSQL disaster recovery infrastructure.
+Main CDK stack orchestrating PostgreSQL disaster recovery infrastructure.
+Note: All resources deployed in a single region due to single-stack architecture.
 """
 
 from typing import Optional
@@ -31,10 +32,11 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(cdk.Stack):
     """
-    Main CDK stack for multi-region PostgreSQL disaster recovery.
+    Main CDK stack for PostgreSQL disaster recovery.
 
-    This stack orchestrates VPC, database, failover, and monitoring resources
-    across multiple regions.
+    This stack orchestrates VPC, database, failover, and monitoring resources.
+    Note: All resources are deployed in a single region due to CDK single-stack
+    architecture. For true multi-region deployment, separate stacks would be required.
 
     Args:
         scope (Construct): The parent construct
@@ -79,7 +81,7 @@ class TapStack(cdk.Stack):
             environment_suffix=environment_suffix
         )
 
-        # RDS PostgreSQL with cross-region replica
+        # RDS PostgreSQL with read replica (same region)
         database_stack = DatabaseStack(
             self,
             f"DatabaseStack-{environment_suffix}",
@@ -134,7 +136,7 @@ class TapStack(cdk.Stack):
             self,
             "ReplicaEndpoint",
             value=database_stack.replica_instance.db_instance_endpoint_address,
-            description=f"Replica RDS PostgreSQL endpoint ({replica_region})"
+            description=f"Replica RDS PostgreSQL endpoint (same region as primary: {primary_region})"
         )
 
         cdk.CfnOutput(

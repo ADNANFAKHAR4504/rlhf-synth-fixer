@@ -1,6 +1,7 @@
 """vpc_stack.py
 VPC infrastructure for primary and replica databases.
-Note: RDS cross-region read replicas do not require VPC peering.
+Note: Both VPCs are deployed in the same region due to single-stack architecture.
+RDS read replicas in the same region do not require VPC peering.
 """
 
 from constructs import Construct
@@ -14,8 +15,9 @@ class VpcStack(Construct):
     """
     Creates VPC infrastructure for primary and replica databases.
 
-    Note: Both VPCs are created in the same region (stack's region).
-    RDS cross-region read replicas do not require VPC peering.
+    Note: Both VPCs are created in the same region (stack's region) due to
+    CDK single-stack architecture limitations. For true multi-region deployment,
+    separate stacks would be required.
 
     Args:
         scope (Construct): The parent construct
@@ -24,7 +26,7 @@ class VpcStack(Construct):
 
     Attributes:
         primary_vpc (ec2.Vpc): VPC for primary database
-        replica_vpc (ec2.Vpc): VPC for replica database
+        replica_vpc (ec2.Vpc): VPC for replica database (same region as primary)
     """
 
     def __init__(
@@ -54,8 +56,8 @@ class VpcStack(Construct):
         )
 
         # Replica VPC (different CIDR to avoid overlap)
-        # Note: For true multi-region deployment, this would need to be in a separate stack
-        # RDS cross-region read replicas work without VPC peering
+        # Note: This VPC is created in the same region as primary due to single-stack architecture
+        # For true cross-region deployment, a multi-stack approach would be required
         self.replica_vpc = ec2.Vpc(
             self,
             f"ReplicaVpc-{environment_suffix}",

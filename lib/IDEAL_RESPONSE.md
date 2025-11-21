@@ -1,6 +1,8 @@
-# IDEAL_RESPONSE - Multi-Region PostgreSQL Disaster Recovery with Automated Failover
+# IDEAL_RESPONSE - PostgreSQL Disaster Recovery with Automated Failover
 
 This is the corrected implementation after fixing all issues from MODEL_RESPONSE.md.
+
+**Architectural Note:** This implementation uses a single-stack CDK architecture, which deploys all resources (including the replica) in the same region. True multi-region disaster recovery would require a multi-stack approach with separate stacks for each region.
 
 ## Stack Files
 

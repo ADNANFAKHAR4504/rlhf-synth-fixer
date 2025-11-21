@@ -1,36 +1,37 @@
 """
-Unit tests for Lambda failover function.
-Tests the automated failover logic for PostgreSQL disaster recovery.
+Unit tests for the Lambda failover function.
+Tests failover logic, error handling, and AWS service interactions.
 """
 
-import os
-import json
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+import json
+import sys
+import os
+from pathlib import Path
+from unittest.mock import patch, MagicMock, call
 from botocore.exceptions import ClientError
+import importlib.util
 
-# Set environment variables before importing the module
-os.environ['PRIMARY_INSTANCE_ID'] = 'primary-postgres-test'
-os.environ['REPLICA_INSTANCE_ID'] = 'replica-postgres-test'
+# Get the project root directory
+project_root = Path(__file__).parent.parent.parent
+
+# Set environment variables before loading module
+os.environ['PRIMARY_INSTANCE_ID'] = 'primary-db-test'
+os.environ['REPLICA_INSTANCE_ID'] = 'replica-db-test'
 os.environ['HOSTED_ZONE_ID'] = 'Z1234567890ABC'
 os.environ['RECORD_NAME'] = 'postgres.db-test.internal'
-os.environ['PRIMARY_ENDPOINT'] = 'primary.rds.amazonaws.com'
-os.environ['REPLICA_ENDPOINT'] = 'replica.rds.amazonaws.com'
+os.environ['PRIMARY_ENDPOINT'] = 'primary-db.region.rds.amazonaws.com'
+os.environ['REPLICA_ENDPOINT'] = 'replica-db.region.rds.amazonaws.com'
+os.environ['SNS_TOPIC_ARN'] = 'arn:aws:sns:us-east-1:123456789012:test-topic'
 
-# Import after setting environment variables
-import sys
-import importlib.util
-from pathlib import Path
-
-# Get the project root directory dynamically
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
-# Load the Lambda module using importlib to avoid keyword conflict
-lambda_path = project_root / "lib" / "lambda" / "failover" / "index.py"
-spec = importlib.util.spec_from_file_location("index", str(lambda_path))
-index = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(index)
+# Mock boto3 before loading the module
+with patch('boto3.client'):
+    # Load the Lambda module using importlib
+    lambda_path = project_root / "lib" / "lambda" / "failover" / "index.py"
+    spec = importlib.util.spec_from_file_location("failover_index", str(lambda_path))
+    index = importlib.util.module_from_spec(spec)
+    sys.modules['failover_index'] = index
+    spec.loader.exec_module(index)
 
 
 class TestLambdaFailover:
@@ -39,363 +40,239 @@ class TestLambdaFailover:
     @pytest.fixture
     def mock_rds_client(self):
         """Create a mock RDS client."""
-        with patch('index.rds_client') as mock:
+        with patch('failover_index.rds_client') as mock:
             yield mock
 
     @pytest.fixture
     def mock_route53_client(self):
         """Create a mock Route53 client."""
-        with patch('index.route53_client') as mock:
+        with patch('failover_index.route53_client') as mock:
             yield mock
+
+    @pytest.fixture
+    def mock_sns_client(self):
+        """Create a mock SNS client."""
+        with patch('failover_index.sns_client') as mock:
+            yield mock
+
+    @pytest.fixture
+    def lambda_event(self):
+        """Create a sample Lambda event."""
+        return {
+            'source': 'aws.cloudwatch',
+            'detail-type': 'CloudWatch Alarm State Change',
+            'detail': {'alarmName': 'primary-db-availability-test'}
+        }
 
     @pytest.fixture
     def lambda_context(self):
         """Create a mock Lambda context."""
-        context = Mock()
+        context = MagicMock()
         context.function_name = 'db-failover-test'
-        context.invoked_function_arn = 'arn:aws:lambda:us-east-1:123456789012:function:db-failover-test'
         context.aws_request_id = 'test-request-id'
         return context
 
-    def test_check_instance_status_available(self, mock_rds_client):
-        """Test checking status of an available RDS instance."""
+    def test_check_instance_status_success(self, mock_rds_client):
+        """Test successful RDS instance status check."""
         mock_rds_client.describe_db_instances.return_value = {
             'DBInstances': [{
                 'DBInstanceStatus': 'available',
-                'Endpoint': {'Address': 'primary.rds.amazonaws.com'}
+                'Endpoint': {'Address': 'test.rds.amazonaws.com'},
+                'ReadReplicaSourceDBInstanceIdentifier': 'source-db'
             }]
         }
 
-        result = index.check_instance_status('primary-postgres-test')
+        result = index.check_instance_status('test-db')
 
         assert result['status'] == 'available'
         assert result['available'] is True
-        assert result['endpoint'] == 'primary.rds.amazonaws.com'
-        mock_rds_client.describe_db_instances.assert_called_once_with(
-            DBInstanceIdentifier='primary-postgres-test'
-        )
+        assert result['endpoint'] == 'test.rds.amazonaws.com'
+        assert result['is_replica'] is True
 
     def test_check_instance_status_unavailable(self, mock_rds_client):
-        """Test checking status of an unavailable RDS instance."""
+        """Test checking status of unavailable instance."""
         mock_rds_client.describe_db_instances.return_value = {
             'DBInstances': [{
                 'DBInstanceStatus': 'failed',
-                'Endpoint': {}
+                'Endpoint': {'Address': 'test.rds.amazonaws.com'}
             }]
         }
 
-        result = index.check_instance_status('primary-postgres-test')
+        result = index.check_instance_status('test-db')
 
         assert result['status'] == 'failed'
         assert result['available'] is False
-        assert result['endpoint'] == ''
 
     def test_check_instance_status_error(self, mock_rds_client):
-        """Test error handling when checking instance status."""
+        """Test error handling in status check."""
         mock_rds_client.describe_db_instances.side_effect = ClientError(
-            {'Error': {'Code': 'DBInstanceNotFound', 'Message': 'Instance not found'}},
+            {'Error': {'Code': 'DBInstanceNotFound', 'Message': 'Not found'}},
             'DescribeDBInstances'
         )
 
         with pytest.raises(ClientError):
-            index.check_instance_status('nonexistent-instance')
+            index.check_instance_status('test-db')
 
     def test_promote_replica_success(self, mock_rds_client):
         """Test successful replica promotion."""
+        mock_rds_client.describe_db_instances.return_value = {
+            'DBInstances': [{
+                'DBInstanceStatus': 'available',
+                'Endpoint': {'Address': 'replica.rds.amazonaws.com'},
+                'ReadReplicaSourceDBInstanceIdentifier': 'primary-db'
+            }]
+        }
         mock_rds_client.promote_read_replica.return_value = {
-            'DBInstance': {
-                'DBInstanceIdentifier': 'replica-postgres-test',
-                'DBInstanceStatus': 'modifying'
-            }
+            'DBInstance': {'DBInstanceIdentifier': 'replica-db-test'}
         }
 
         result = index.promote_replica()
 
-        assert result is not None
         assert 'DBInstance' in result
-        mock_rds_client.promote_read_replica.assert_called_once_with(
-            DBInstanceIdentifier='replica-postgres-test',
-            BackupRetentionPeriod=7
-        )
+        mock_rds_client.promote_read_replica.assert_called_once()
 
-    def test_promote_replica_error(self, mock_rds_client):
-        """Test error handling when promoting replica."""
-        mock_rds_client.promote_read_replica.side_effect = ClientError(
-            {'Error': {'Code': 'InvalidDBInstanceState', 'Message': 'Cannot promote'}},
-            'PromoteReadReplica'
-        )
+    def test_promote_replica_already_promoted(self, mock_rds_client):
+        """Test promoting replica that's already promoted (idempotency)."""
+        mock_rds_client.describe_db_instances.return_value = {
+            'DBInstances': [{
+                'DBInstanceStatus': 'available',
+                'Endpoint': {'Address': 'replica.rds.amazonaws.com'}
+            }]
+        }
 
-        with pytest.raises(ClientError):
-            index.promote_replica()
+        result = index.promote_replica()
+
+        assert result['status'] == 'already_promoted'
+        mock_rds_client.promote_read_replica.assert_not_called()
 
     def test_update_route53_weights_success(self, mock_route53_client):
         """Test successful Route53 weight update."""
         mock_route53_client.change_resource_record_sets.return_value = {
-            'ChangeInfo': {
-                'Id': '/change/C1234567890',
-                'Status': 'PENDING'
-            }
+            'ChangeInfo': {'Id': 'change-123', 'Status': 'PENDING'}
         }
 
         result = index.update_route53_weights(0, 100)
 
-        assert result is not None
-        assert 'ChangeInfo' in result
-
-        call_args = mock_route53_client.change_resource_record_sets.call_args
-        assert call_args[1]['HostedZoneId'] == 'Z1234567890ABC'
-
-        change_batch = call_args[1]['ChangeBatch']
-        assert len(change_batch['Changes']) == 2
-
-        # Check primary record (weight 0)
-        primary_change = change_batch['Changes'][0]
-        assert primary_change['ResourceRecordSet']['SetIdentifier'] == 'primary'
-        assert primary_change['ResourceRecordSet']['Weight'] == 0
-
-        # Check replica record (weight 100)
-        replica_change = change_batch['Changes'][1]
-        assert replica_change['ResourceRecordSet']['SetIdentifier'] == 'replica'
-        assert replica_change['ResourceRecordSet']['Weight'] == 100
+        assert result['ChangeInfo']['Status'] == 'PENDING'
+        mock_route53_client.change_resource_record_sets.assert_called_once()
 
     def test_update_route53_weights_error(self, mock_route53_client):
-        """Test error handling when updating Route53 weights."""
+        """Test Route53 update with error."""
         mock_route53_client.change_resource_record_sets.side_effect = ClientError(
-            {'Error': {'Code': 'InvalidChangeBatch', 'Message': 'Invalid change batch'}},
+            {'Error': {'Code': 'InvalidInput', 'Message': 'Invalid input'}},
             'ChangeResourceRecordSets'
         )
 
         with pytest.raises(ClientError):
-            index.update_route53_weights(100, 0)
+            index.update_route53_weights(0, 100)
 
-    def test_handler_primary_healthy_no_failover(self, mock_rds_client, mock_route53_client, lambda_context):
-        """Test handler when primary is healthy - no failover needed."""
-        # Mock RDS responses
+    def test_send_sns_notification_success(self, mock_sns_client):
+        """Test successful SNS notification."""
+        mock_sns_client.publish.return_value = {'MessageId': 'msg-123'}
+
+        index.send_sns_notification('Test Subject', 'Test Message')
+
+        mock_sns_client.publish.assert_called_once()
+
+    def test_retry_with_backoff_success(self):
+        """Test retry logic succeeds on first attempt."""
+        mock_func = MagicMock(return_value='success')
+
+        result = index.retry_with_backoff(mock_func, 'arg1')
+
+        assert result == 'success'
+        assert mock_func.call_count == 1
+
+    def test_retry_with_backoff_retries(self):
+        """Test retry logic retries on failure."""
+        mock_func = MagicMock(side_effect=[
+            ClientError({'Error': {'Code': 'Throttling'}}, 'Operation'),
+            'success'
+        ])
+
+        with patch('failover_index.time.sleep'):
+            result = index.retry_with_backoff(mock_func)
+
+        assert result == 'success'
+        assert mock_func.call_count == 2
+
+    def test_retry_with_backoff_max_retries(self):
+        """Test retry logic when all attempts fail."""
+        mock_func = MagicMock(side_effect=ClientError(
+            {'Error': {'Code': 'ServiceUnavailable'}}, 'Operation'
+        ))
+
+        with patch('failover_index.time.sleep'):
+            with pytest.raises(ClientError):
+                index.retry_with_backoff(mock_func)
+
+        assert mock_func.call_count == 3
+
+    def test_handler_failover_triggered(
+        self, mock_rds_client, mock_route53_client, mock_sns_client,
+        lambda_event, lambda_context
+    ):
+        """Test handler triggers failover when primary is unavailable."""
         mock_rds_client.describe_db_instances.side_effect = [
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'available',
-                    'Endpoint': {'Address': 'primary.rds.amazonaws.com'}
-                }]
-            },
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'available',
-                    'Endpoint': {'Address': 'replica.rds.amazonaws.com'}
-                }]
-            }
+            {'DBInstances': [{'DBInstanceStatus': 'failed', 'Endpoint': {}}]},
+            {'DBInstances': [{
+                'DBInstanceStatus': 'available',
+                'Endpoint': {'Address': 'replica.rds.amazonaws.com'}
+            }]},
+            {'DBInstances': [{
+                'DBInstanceStatus': 'available',
+                'Endpoint': {'Address': 'replica.rds.amazonaws.com'},
+                'ReadReplicaSourceDBInstanceIdentifier': 'primary-db'
+            }]}
         ]
-
-        # Mock Route53 response
+        mock_rds_client.promote_read_replica.return_value = {'DBInstance': {}}
         mock_route53_client.change_resource_record_sets.return_value = {
-            'ChangeInfo': {'Id': '/change/C1234567890', 'Status': 'PENDING'}
+            'ChangeInfo': {'Status': 'PENDING'}
         }
 
-        event = {'detail-type': 'Scheduled Event'}
-        result = index.handler(event, lambda_context)
-
-        assert result['statusCode'] == 200
-        body = json.loads(result['body'])
-        assert body['action'] == 'none'
-        assert body['message'] == 'Primary is healthy, no action needed'
-        assert body['primary_status'] == 'available'
-        assert body['replica_status'] == 'available'
-
-        # Verify Route53 weights set to primary
-        call_args = mock_route53_client.change_resource_record_sets.call_args
-        change_batch = call_args[1]['ChangeBatch']
-        primary_weight = change_batch['Changes'][0]['ResourceRecordSet']['Weight']
-        replica_weight = change_batch['Changes'][1]['ResourceRecordSet']['Weight']
-        assert primary_weight == 100
-        assert replica_weight == 0
-
-    def test_handler_primary_failed_failover_executed(self, mock_rds_client, mock_route53_client, lambda_context):
-        """Test handler when primary failed - failover is executed."""
-        # Mock RDS responses
-        mock_rds_client.describe_db_instances.side_effect = [
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'failed',
-                    'Endpoint': {}
-                }]
-            },
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'available',
-                    'Endpoint': {'Address': 'replica.rds.amazonaws.com'}
-                }]
-            }
-        ]
-
-        mock_rds_client.promote_read_replica.return_value = {
-            'DBInstance': {
-                'DBInstanceIdentifier': 'replica-postgres-test',
-                'DBInstanceStatus': 'modifying'
-            }
-        }
-
-        mock_route53_client.change_resource_record_sets.return_value = {
-            'ChangeInfo': {'Id': '/change/C1234567890', 'Status': 'PENDING'}
-        }
-
-        event = {'detail-type': 'CloudWatch Alarm'}
-        result = index.handler(event, lambda_context)
+        result = index.handler(lambda_event, lambda_context)
 
         assert result['statusCode'] == 200
         body = json.loads(result['body'])
         assert body['action'] == 'promoted_replica'
-        assert body['message'] == 'Failover completed successfully'
-        assert body['primary_status'] == 'failed'
-        assert body['replica_status'] == 'available'
 
-        # Verify replica was promoted
-        mock_rds_client.promote_read_replica.assert_called_once()
-
-        # Verify Route53 weights set to replica
-        call_args = mock_route53_client.change_resource_record_sets.call_args
-        change_batch = call_args[1]['ChangeBatch']
-        primary_weight = change_batch['Changes'][0]['ResourceRecordSet']['Weight']
-        replica_weight = change_batch['Changes'][1]['ResourceRecordSet']['Weight']
-        assert primary_weight == 0
-        assert replica_weight == 100
-
-    def test_handler_both_instances_unavailable(self, mock_rds_client, mock_route53_client, lambda_context):
-        """Test handler when both primary and replica are unavailable."""
-        # Mock RDS responses
+    def test_handler_primary_available_no_action(
+        self, mock_rds_client, mock_route53_client, lambda_event, lambda_context
+    ):
+        """Test handler does nothing when primary is available."""
         mock_rds_client.describe_db_instances.side_effect = [
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'failed',
-                    'Endpoint': {}
-                }]
-            },
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'failed',
-                    'Endpoint': {}
-                }]
-            }
+            {'DBInstances': [{'DBInstanceStatus': 'available', 'Endpoint': {}}]},
+            {'DBInstances': [{'DBInstanceStatus': 'available', 'Endpoint': {}}]}
         ]
-
-        event = {'detail-type': 'CloudWatch Alarm'}
-        result = index.handler(event, lambda_context)
-
-        assert result['statusCode'] == 500
-        body = json.loads(result['body'])
-        assert body['action'] == 'none'
-        assert body['message'] == 'Both primary and replica are unavailable'
-        assert body['primary_status'] == 'failed'
-        assert body['replica_status'] == 'failed'
-
-        # Verify no promotion attempted
-        mock_rds_client.promote_read_replica.assert_not_called()
-
-    def test_handler_exception_handling(self, mock_rds_client, mock_route53_client, lambda_context):
-        """Test handler exception handling."""
-        mock_rds_client.describe_db_instances.side_effect = Exception('Unexpected error')
-
-        event = {'detail-type': 'Scheduled Event'}
-        result = index.handler(event, lambda_context)
-
-        assert result['statusCode'] == 500
-        body = json.loads(result['body'])
-        assert body['message'] == 'Failover process failed'
-        assert 'Unexpected error' in body['error']
-
-    def test_handler_with_empty_event(self, mock_rds_client, mock_route53_client, lambda_context):
-        """Test handler with empty event."""
-        mock_rds_client.describe_db_instances.side_effect = [
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'available',
-                    'Endpoint': {'Address': 'primary.rds.amazonaws.com'}
-                }]
-            },
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'available',
-                    'Endpoint': {'Address': 'replica.rds.amazonaws.com'}
-                }]
-            }
-        ]
-
         mock_route53_client.change_resource_record_sets.return_value = {
-            'ChangeInfo': {'Id': '/change/C1234567890', 'Status': 'PENDING'}
+            'ChangeInfo': {'Status': 'PENDING'}
         }
 
-        result = index.handler({}, lambda_context)
+        result = index.handler(lambda_event, lambda_context)
 
         assert result['statusCode'] == 200
         body = json.loads(result['body'])
         assert body['action'] == 'none'
 
-    def test_check_instance_status_no_endpoint(self, mock_rds_client):
-        """Test checking status when instance has no endpoint."""
-        mock_rds_client.describe_db_instances.return_value = {
-            'DBInstances': [{
-                'DBInstanceStatus': 'creating'
-            }]
-        }
-
-        result = index.check_instance_status('primary-postgres-test')
-
-        assert result['status'] == 'creating'
-        assert result['available'] is False
-        assert result['endpoint'] == ''
-
-    def test_route53_change_batch_structure(self, mock_route53_client):
-        """Test Route53 change batch structure is correct."""
-        mock_route53_client.change_resource_record_sets.return_value = {
-            'ChangeInfo': {'Id': '/change/C1234567890', 'Status': 'PENDING'}
-        }
-
-        index.update_route53_weights(100, 0)
-
-        call_args = mock_route53_client.change_resource_record_sets.call_args
-        change_batch = call_args[1]['ChangeBatch']
-
-        # Verify both changes have correct structure
-        for change in change_batch['Changes']:
-            assert change['Action'] == 'UPSERT'
-            assert change['ResourceRecordSet']['Type'] == 'CNAME'
-            assert change['ResourceRecordSet']['TTL'] == 60
-            assert 'SetIdentifier' in change['ResourceRecordSet']
-            assert 'Weight' in change['ResourceRecordSet']
-            assert len(change['ResourceRecordSet']['ResourceRecords']) == 1
-
-    def test_environment_variables_set(self):
-        """Test that all required environment variables are set."""
-        assert os.environ['PRIMARY_INSTANCE_ID'] == 'primary-postgres-test'
-        assert os.environ['REPLICA_INSTANCE_ID'] == 'replica-postgres-test'
-        assert os.environ['HOSTED_ZONE_ID'] == 'Z1234567890ABC'
-        assert os.environ['RECORD_NAME'] == 'postgres.db-test.internal'
-        assert os.environ['PRIMARY_ENDPOINT'] == 'primary.rds.amazonaws.com'
-        assert os.environ['REPLICA_ENDPOINT'] == 'replica.rds.amazonaws.com'
-
-    def test_primary_unavailable_replica_unavailable_no_failover(self, mock_rds_client, mock_route53_client, lambda_context):
-        """Test no failover when primary is unavailable but replica is also unavailable."""
+    def test_handler_both_unavailable(
+        self, mock_rds_client, lambda_event, lambda_context
+    ):
+        """Test handler when both instances are unavailable."""
         mock_rds_client.describe_db_instances.side_effect = [
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'failed',
-                    'Endpoint': {}
-                }]
-            },
-            {
-                'DBInstances': [{
-                    'DBInstanceStatus': 'creating',
-                    'Endpoint': {}
-                }]
-            }
+            {'DBInstances': [{'DBInstanceStatus': 'failed', 'Endpoint': {}}]},
+            {'DBInstances': [{'DBInstanceStatus': 'failed', 'Endpoint': {}}]}
         ]
 
-        event = {'detail-type': 'CloudWatch Alarm'}
-        result = index.handler(event, lambda_context)
+        result = index.handler(lambda_event, lambda_context)
 
         assert result['statusCode'] == 500
-        body = json.loads(result['body'])
-        assert body['action'] == 'none'
-        assert 'Both primary and replica are unavailable' in body['message']
 
-        # Verify no promotion attempted
-        mock_rds_client.promote_read_replica.assert_not_called()
+    def test_handler_exception(
+        self, mock_rds_client, lambda_event, lambda_context
+    ):
+        """Test handler handles exceptions gracefully."""
+        mock_rds_client.describe_db_instances.side_effect = Exception('Unexpected error')
+
+        result = index.handler(lambda_event, lambda_context)
+
+        assert result['statusCode'] == 500

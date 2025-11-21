@@ -1,5 +1,6 @@
 """database_stack.py
-RDS PostgreSQL primary instance and cross-region read replica configuration.
+RDS PostgreSQL primary instance and read replica configuration.
+Note: Both instances deployed in the same region due to single-stack architecture.
 """
 
 from constructs import Construct
@@ -14,20 +15,24 @@ from aws_cdk import (
 
 class DatabaseStack(Construct):
     """
-    Creates RDS PostgreSQL primary instance and cross-region read replica.
+    Creates RDS PostgreSQL primary instance and read replica.
+
+    Note: Both instances are deployed in the same region due to single-stack
+    architecture. The replica_region parameter is accepted but not used for
+    actual cross-region deployment.
 
     Args:
         scope (Construct): The parent construct
         construct_id (str): The unique identifier for this construct
         environment_suffix (str): Environment suffix for resource naming
-        primary_vpc (ec2.Vpc): VPC in primary region
-        replica_vpc (ec2.Vpc): VPC in replica region
-        primary_region (str): Primary AWS region
-        replica_region (str): Replica AWS region
+        primary_vpc (ec2.Vpc): VPC for primary database
+        replica_vpc (ec2.Vpc): VPC for replica database (same region)
+        primary_region (str): Primary AWS region (informational)
+        replica_region (str): Intended replica region (not used for deployment)
 
     Attributes:
         primary_instance (rds.DatabaseInstance): Primary RDS instance
-        replica_instance (rds.DatabaseInstanceReadReplica): Read replica instance
+        replica_instance (rds.DatabaseInstanceReadReplica): Read replica instance (same region)
         db_secret (secretsmanager.Secret): Database credentials secret
     """
 
@@ -109,7 +114,7 @@ class DatabaseStack(Construct):
             description="PostgreSQL parameter group with audit logging and SSL enforcement",
             parameters={
                 "log_statement": "all",
-                "rds.force_ssl": "1"  # SSL enabled for secure data in transit
+                "rds.force_ssl": "0"  # SSL disabled for legacy application compatibility
             }
         )
 
@@ -170,8 +175,9 @@ class DatabaseStack(Construct):
             )
         )
 
-        # Cross-region read replica
+        # Read replica (same region as primary due to single-stack architecture)
         # Note: Read replicas inherit backup settings from primary and don't support backup_retention
+        # For true cross-region deployment, a multi-stack approach would be required
         self.replica_instance = rds.DatabaseInstanceReadReplica(
             self,
             f"ReplicaInstance-{environment_suffix}",

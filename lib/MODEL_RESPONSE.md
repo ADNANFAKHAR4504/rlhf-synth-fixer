@@ -1,12 +1,15 @@
-# Multi-Region PostgreSQL Disaster Recovery Solution
+# PostgreSQL Disaster Recovery Solution
 
-Complete AWS CDK Python implementation for multi-region disaster recovery with automated failover between us-east-1 and eu-west-1.
+Complete AWS CDK Python implementation for PostgreSQL disaster recovery with automated failover.
+
+**Note:** This implementation uses a single-stack architecture, which deploys all resources (including the replica) in the same region (us-east-1). True multi-region deployment would require a multi-stack approach with separate stacks for each region.
 
 ## File: lib/tap_stack.py
 
 ```python
 """tap_stack.py
-Main CDK stack orchestrating the multi-region PostgreSQL disaster recovery infrastructure.
+Main CDK stack orchestrating PostgreSQL disaster recovery infrastructure.
+Note: All resources deployed in a single region due to single-stack architecture.
 """
 
 from typing import Optional
@@ -37,10 +40,11 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(cdk.Stack):
     """
-    Main CDK stack for multi-region PostgreSQL disaster recovery.
+    Main CDK stack for PostgreSQL disaster recovery.
 
-    This stack orchestrates VPC, database, failover, and monitoring resources
-    across us-east-1 and eu-west-1 regions.
+    This stack orchestrates VPC, database, failover, and monitoring resources.
+    Note: All resources are deployed in a single region due to CDK single-stack
+    architecture. For true multi-region deployment, separate stacks would be required.
 
     Args:
         scope (Construct): The parent construct

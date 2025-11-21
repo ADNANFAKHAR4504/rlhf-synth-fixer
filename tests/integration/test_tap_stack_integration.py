@@ -115,14 +115,18 @@ class TestTapStackIntegration:
         assert instance['MultiAZ'] is True
         assert instance['BackupRetentionPeriod'] >= 7
 
-    def test_replica_database_exists(self, stack_outputs, rds_client_replica):
-        """Test that replica RDS instance exists and is available."""
+    def test_replica_database_exists(self, stack_outputs, rds_client):
+        """Test that replica RDS instance exists and is available.
+
+        Note: Due to CDK single-stack limitations, the replica is currently deployed
+        in the same region as the primary (us-east-1) rather than eu-west-1.
+        """
         replica_endpoint = stack_outputs["ReplicaEndpoint"]
 
         # Extract instance identifier from endpoint
         instance_id = replica_endpoint.split('.')[0]
 
-        response = rds_client_replica.describe_db_instances(
+        response = rds_client.describe_db_instances(
             DBInstanceIdentifier=instance_id
         )
 

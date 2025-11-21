@@ -1,5 +1,6 @@
 """failover_stack.py
-Automated failover mechanism with Lambda and Route53 health checks.
+Automated failover mechanism with Lambda and Route53 weighted routing.
+Note: Failover is between primary and replica in the same region.
 """
 
 from constructs import Construct

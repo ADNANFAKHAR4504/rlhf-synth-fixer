@@ -114,7 +114,70 @@ logger.info("Primary status: %s", primary_status)  # CORRECT
 
 ## Medium Failures
 
-### 4. Lambda Control Flow - Unnecessary elif
+### 4. Cross-Region RDS Replica Deployment in Single Stack
+
+**Impact Level**: Medium (Architectural Limitation)
+
+**MODEL_RESPONSE Issue**:
+The generated code attempts to create both primary and replica RDS instances in a single CDK stack, which inherently limits both resources to the same AWS region:
+
+```python
+# Both VPCs created in the SAME stack/region
+self.primary_vpc = ec2.Vpc(...)  # us-east-1
+self.replica_vpc = ec2.Vpc(...)  # us-east-1 (not eu-west-1!)
+
+# Read replica ends up in same region as primary
+self.replica_instance = rds.DatabaseInstanceReadReplica(
+    vpc=replica_vpc,  # This VPC is in us-east-1, not eu-west-1
+    ...
+)
+```
+
+**IDEAL_RESPONSE Fix**:
+For true cross-region deployment, use one of these approaches:
+
+1. **Multi-Stack Approach** (Recommended):
+```python
+# Primary stack for us-east-1
+class PrimaryStack(cdk.Stack):
+    def __init__(self, scope, id, **kwargs):
+        super().__init__(scope, id, env=cdk.Environment(region="us-east-1"), **kwargs)
+        self.primary_instance = rds.DatabaseInstance(...)
+
+# Replica stack for eu-west-1
+class ReplicaStack(cdk.Stack):
+    def __init__(self, scope, id, primary_arn, **kwargs):
+        super().__init__(scope, id, env=cdk.Environment(region="eu-west-1"), **kwargs)
+        self.replica_instance = rds.DatabaseInstanceReadReplica(
+            source_database_instance=rds.DatabaseInstance.from_database_instance_attributes(
+                self, "SourceDB", instance_arn=primary_arn
+            )
+        )
+```
+
+2. **Cross-Region Stack References**:
+Use CDK's cross-region reference capabilities with explicit environment specifications.
+
+**Root Cause**: The model generated a single-stack solution when the requirements explicitly called for multi-region deployment (us-east-1 primary, eu-west-1 replica). AWS CDK stacks deploy all resources to a single region by default.
+
+**Deployment Impact**:
+- Both RDS instances deployed to us-east-1 instead of having replica in eu-west-1
+- Does NOT provide regional disaster recovery as required
+- Regional failover capability is compromised
+- RTO/RPO targets cannot be met during regional AWS outage
+
+**Requirements Violation**: PROMPT.md lines 22-23 explicitly state:
+```
+RDS read replica in eu-west-1 configured for promotion to primary
+```
+
+**Current Behavior**: Both databases in us-east-1, defeating the purpose of regional disaster recovery.
+
+**Test Impact**: Integration test `test_replica_database_exists` fails when checking eu-west-1 region.
+
+---
+
+### 5. Lambda Control Flow - Unnecessary elif
 
 **Impact Level**: Medium
 
