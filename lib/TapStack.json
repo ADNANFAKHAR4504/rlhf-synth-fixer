@@ -871,6 +871,7 @@
         "Description": {
           "Fn::Sub": "KMS key for EBS volume encryption - ${EnvironmentSuffix}"
         },
+        "EnableKeyRotation": true,
         "KeyPolicy": {
           "Version": "2012-10-17",
           "Statement": [
@@ -920,7 +921,8 @@
                 "kms:ReEncrypt*",
                 "kms:GenerateDataKey*",
                 "kms:CreateGrant",
-                "kms:DescribeKey"
+                "kms:DescribeKey",
+                "kms:RetireGrant"
               ],
               "Resource": "*"
             },
@@ -938,7 +940,8 @@
                 "kms:ReEncrypt*",
                 "kms:GenerateDataKey*",
                 "kms:CreateGrant",
-                "kms:DescribeKey"
+                "kms:DescribeKey",
+                "kms:RetireGrant"
               ],
               "Resource": "*",
               "Condition": {
@@ -1361,7 +1364,9 @@
         ]
       },
       "DependsOn": [
-        "ApplicationLoadBalancer"
+        "ApplicationLoadBalancer",
+        "EBSKMSKey",
+        "EBSKMSKeyAlias"
       ]
     },
     "SNSTopic": {

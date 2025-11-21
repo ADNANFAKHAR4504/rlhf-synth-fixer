@@ -209,6 +209,38 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Resources.EBSKMSKey).toBeDefined();
       expect(template.Resources.EBSKMSKey.Type).toBe('AWS::KMS::Key');
       expect(template.Resources.EBSKMSKey.Properties.Description).toBeDefined();
+      expect(template.Resources.EBSKMSKey.Properties.EnableKeyRotation).toBe(true);
+    });
+
+    test('EBS KMS key should have proper permissions for Auto Scaling', () => {
+      const key = template.Resources.EBSKMSKey;
+      const keyPolicy = key.Properties.KeyPolicy;
+      const statements = keyPolicy.Statement;
+
+      // Find Auto Scaling service statement
+      const autoScalingStatement = statements.find((s: any) =>
+        s.Principal?.Service === 'autoscaling.amazonaws.com'
+      );
+      expect(autoScalingStatement).toBeDefined();
+      expect(autoScalingStatement.Action).toContain('kms:RetireGrant');
+
+      // Find Auto Scaling service-linked role statement
+      const serviceLinkedRoleStatement = statements.find((s: any) => {
+        const principalAWS = s.Principal?.AWS;
+        if (!principalAWS) return false;
+        // Handle Fn::Sub structure (string value)
+        if (principalAWS['Fn::Sub']) {
+          return principalAWS['Fn::Sub'].includes('AWSServiceRoleForAutoScaling');
+        }
+        // Handle string ARN
+        if (typeof principalAWS === 'string') {
+          return principalAWS.includes('AWSServiceRoleForAutoScaling');
+        }
+        return false;
+      });
+      expect(serviceLinkedRoleStatement).toBeDefined();
+      expect(serviceLinkedRoleStatement.Action).toContain('kms:RetireGrant');
+      expect(serviceLinkedRoleStatement.Condition?.StringEquals?.['kms:GrantIsForAWSResource']).toBe('true');
     });
 
     test('should have EBS KMS key alias', () => {
@@ -331,6 +363,13 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(asg.Properties.MaxSize).toBe("12");
       expect(asg.Properties.HealthCheckType).toBe('ELB');
       expect(asg.Properties.VPCZoneIdentifier).toHaveLength(3);
+    });
+
+    test('Auto Scaling Group should depend on EBS KMS key resources', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.DependsOn).toBeDefined();
+      expect(asg.DependsOn).toContain('EBSKMSKey');
+      expect(asg.DependsOn).toContain('EBSKMSKeyAlias');
     });
   });
 

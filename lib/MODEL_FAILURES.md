@@ -438,8 +438,9 @@ Completely rewrote test suite with 74 comprehensive tests covering:
 **Fix Applied**:
 1. Created dedicated EBSKMSKey with comprehensive key policy:
    - EC2 service principal with kms:ViaService condition
-   - Auto Scaling service principal (autoscaling.amazonaws.com)
-   - Auto Scaling service-linked role (AWSServiceRoleForAutoScaling) with kms:GrantIsForAWSResource condition
+   - Auto Scaling service principal (autoscaling.amazonaws.com) with kms:RetireGrant permission
+   - Auto Scaling service-linked role (AWSServiceRoleForAutoScaling) with kms:GrantIsForAWSResource condition and kms:RetireGrant permission
+   - EnableKeyRotation: true to ensure key is enabled and ready
 
 2. Added BlockDeviceMappings to LaunchTemplate:
    - DeviceName: /dev/xvda
@@ -448,7 +449,15 @@ Completely rewrote test suite with 74 comprehensive tests covering:
    - Encrypted: true
    - KmsKeyId: Reference to EBSKMSKey
 
-**Learning Value**: High - demonstrates critical importance of KMS key policies for service-linked roles in Auto Scaling scenarios. The Auto Scaling service needs explicit permissions to create grants on behalf of EC2 instances during launch.
+3. Added explicit dependencies in AutoScalingGroup:
+   - DependsOn includes EBSKMSKey and EBSKMSKeyAlias to ensure key is fully created before instance launch
+
+**Additional Fixes** (Post-Initial Implementation):
+- Added `kms:RetireGrant` permission to both Auto Scaling service and service-linked role for proper grant lifecycle management
+- Added `EnableKeyRotation: true` to ensure key is enabled and in correct state
+- Added explicit DependsOn to prevent timing issues where instances launch before KMS key is ready
+
+**Learning Value**: High - demonstrates critical importance of KMS key policies for service-linked roles in Auto Scaling scenarios. The Auto Scaling service needs explicit permissions to create grants on behalf of EC2 instances during launch. Additionally, proper grant lifecycle management (RetireGrant) and ensuring keys are enabled (EnableKeyRotation) are essential for reliable deployments.
 
 ---
 
