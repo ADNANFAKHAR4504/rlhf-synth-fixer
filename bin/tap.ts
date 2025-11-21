@@ -12,7 +12,7 @@ const region =
 
 if (isDeployCommand && !account) {
   console.error(
-    '❌ Error: CDK_DEFAULT_ACCOUNT or AWS_ACCOUNT_ID environment variable is required for deployment.'
+    'Error: CDK_DEFAULT_ACCOUNT or AWS_ACCOUNT_ID environment variable is required for deployment.'
   );
   console.error('   Please set one of these environment variables:');
   console.error('   - CDK_DEFAULT_ACCOUNT');
