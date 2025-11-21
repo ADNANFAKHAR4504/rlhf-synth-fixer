@@ -8,10 +8,7 @@
   "startedAt": "2025-11-19T12:00:00-08:00",
   "subtask": "Network Infrastructure",
   "subject_labels": [
-    "VPC Networking",
-    "NAT Instances",
-    "VPC Flow Logs",
-    "CloudWatch Monitoring"
+    "VPC Networking"
   ],
   "po_id": "n3f5l8",
   "aws_services": [
