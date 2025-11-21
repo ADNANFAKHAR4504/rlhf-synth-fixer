@@ -8,6 +8,7 @@ The template creates:
 
 - **RDS Aurora MySQL ServerlessV2 Cluster**: Scalable database cluster with 0.5-1.0 ACU range
 - **Lambda Function**: Transaction processor with 3GB memory and reserved concurrency of 100
+- **DynamoDB Table**: Session management with PAY_PER_REQUEST billing and TTL
 - **VPC Integration**: Security groups for Lambda and RDS with proper ingress/egress rules
 - **Secrets Manager**: Secure storage for database credentials
 - **CloudWatch Dashboard**: Production monitoring (enabled for prod environment only)
@@ -56,17 +57,17 @@ The template creates:
 ### Using AWS CLI
 
 ```bash
-aws cloudformation create-stack \
-  --stack-name transaction-processing-stack \
-  --template-body file://lib/template.json \
-  --parameters \
-    ParameterKey=EnvironmentName,ParameterValue=prod \
-    ParameterKey=EnvironmentSuffix,ParameterValue=prod-v1 \
-    ParameterKey=DBUsername,ParameterValue=admin \
-    ParameterKey=DBPassword,ParameterValue=YourSecurePassword123! \
-    ParameterKey=VPCId,ParameterValue=vpc-xxxxxxxxx \
-    ParameterKey=PrivateSubnetIds,ParameterValue="subnet-xxxxxxxx\\,subnet-yyyyyyyy" \
-  --capabilities CAPABILITY_NAMED_IAM \
+aws cloudformation deploy \
+  --stack-name TapStack-prod \
+  --template-file lib/TapStack.json \
+  --parameter-overrides \
+    EnvironmentName=prod \
+    EnvironmentSuffix=prod \
+    DBUsername=admin \
+    DBPassword=YourSecurePassword123! \
+    VPCId=vpc-xxxxxxxxx \
+    PrivateSubnetIds=subnet-xxxxxxxx,subnet-yyyyyyyy,subnet-zzzzzzzz \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --region us-east-1
 ```
 
@@ -74,7 +75,7 @@ aws cloudformation create-stack \
 
 1. Navigate to CloudFormation console in us-east-1 region
 2. Click "Create stack" > "With new resources"
-3. Upload `lib/template.json`
+3. Upload `lib/TapStack.json`
 4. Fill in required parameters
 5. Acknowledge IAM resource creation
 6. Click "Create stack"
@@ -85,7 +86,7 @@ Before deploying, validate the template:
 
 ```bash
 aws cloudformation validate-template \
-  --template-body file://lib/template.json \
+  --template-body file://lib/TapStack.json \
   --region us-east-1
 ```
 
@@ -98,6 +99,10 @@ aws cloudformation validate-template \
 | LambdaFunctionArn | Lambda function ARN | ${StackName}-LambdaFunctionArn |
 | LambdaSecurityGroupId | Lambda security group ID | ${StackName}-LambdaSecurityGroupId |
 | DBSecurityGroupId | RDS security group ID | ${StackName}-DBSecurityGroupId |
+| DBSecretArn | Database credentials secret ARN | ${StackName}-DBSecretArn |
+| NotificationTopicArn | SNS topic ARN | ${StackName}-NotificationTopicArn |
+| SessionTableName | DynamoDB session table name | ${StackName}-SessionTableName |
+| SessionTableArn | DynamoDB session table ARN | ${StackName}-SessionTableArn |
 | DBSecretArn | Secrets Manager secret ARN | ${StackName}-DBSecretArn |
 | NotificationTopicArn | SNS topic ARN | ${StackName}-NotificationTopicArn |
 

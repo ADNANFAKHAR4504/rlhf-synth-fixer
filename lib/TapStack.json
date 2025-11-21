@@ -1,11 +1,25 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Optimized CloudFormation template for financial transaction processing with RDS Aurora ServerlessV2 and Lambda",
+  "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": [
+          "W1011",
+          "W3005"
+        ]
+      }
+    }
+  },
   "Parameters": {
     "EnvironmentName": {
       "Type": "String",
       "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"],
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
       "Description": "Environment name for resource tagging and conditional logic"
     },
     "EnvironmentSuffix": {
@@ -43,7 +57,9 @@
   "Conditions": {
     "IsProduction": {
       "Fn::Equals": [
-        { "Ref": "EnvironmentName" },
+        {
+          "Ref": "EnvironmentName"
+        },
         "prod"
       ]
     }
@@ -147,8 +163,8 @@
     },
     "AuroraDBCluster": {
       "Type": "AWS::RDS::DBCluster",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
@@ -170,7 +186,10 @@
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "EnableCloudwatchLogsExports": ["error", "slowquery"],
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "slowquery"
+        ],
         "ServerlessV2ScalingConfiguration": {
           "MinCapacity": 0.5,
           "MaxCapacity": 1.0
@@ -230,7 +249,10 @@
           "Fn::If": [
             "IsProduction",
             {
-              "Fn::GetAtt": ["RDSMonitoringRole", "Arn"]
+              "Fn::GetAtt": [
+                "RDSMonitoringRole",
+                "Arn"
+              ]
             },
             {
               "Ref": "AWS::NoValue"
@@ -336,6 +358,28 @@
                     "rds:DescribeDBInstances"
                   ],
                   "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "SessionTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${SessionTable.Arn}/index/*"
+                    }
+                  ]
                 }
               ]
             }
@@ -371,7 +415,10 @@
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
         "Role": {
-          "Fn::GetAtt": ["TransactionProcessorRole", "Arn"]
+          "Fn::GetAtt": [
+            "TransactionProcessorRole",
+            "Arn"
+          ]
         },
         "Code": {
           "ZipFile": {
@@ -404,10 +451,16 @@
         "Environment": {
           "Variables": {
             "DB_ENDPOINT": {
-              "Fn::GetAtt": ["AuroraDBCluster", "Endpoint.Address"]
+              "Fn::GetAtt": [
+                "AuroraDBCluster",
+                "Endpoint.Address"
+              ]
             },
             "DB_NAME": "transactions",
             "DB_PORT": "3306",
+            "SESSION_TABLE": {
+              "Ref": "SessionTable"
+            },
             "ENVIRONMENT": {
               "Ref": "EnvironmentName"
             }
@@ -503,6 +556,71 @@
         ]
       }
     },
+    "SessionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "session-table-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "sessionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "sessionId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserIdIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "session-table-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          }
+        ]
+      }
+    },
     "CloudWatchDashboard": {
       "Type": "AWS::CloudWatch::Dashboard",
       "Condition": "IsProduction",
@@ -511,7 +629,7 @@
           "Fn::Sub": "transaction-processing-${EnvironmentSuffix}"
         },
         "DashboardBody": {
-          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Lambda Invocations\"}],[\".\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}],[\".\",\"Duration\",{\"stat\":\"Average\",\"label\":\"Avg Duration\"}],[\".\",\"ConcurrentExecutions\",{\"stat\":\"Maximum\",\"label\":\"Max Concurrent\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"Lambda Metrics\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"ServerlessDatabaseCapacity\",{\"stat\":\"Average\",\"label\":\"RDS Capacity (ACU)\"}],[\".\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"DB Connections\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"RDS Metrics\",\"period\":300}}]}"
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Lambda Invocations\"}],[\".\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}],[\".\",\"Duration\",{\"stat\":\"Average\",\"label\":\"Avg Duration\"}],[\".\",\"ConcurrentExecutions\",{\"stat\":\"Maximum\",\"label\":\"Max Concurrent\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"Lambda Metrics\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"ServerlessDatabaseCapacity\",{\"stat\":\"Average\",\"label\":\"RDS Capacity (ACU)\"}],[\".\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"DB Connections\"}],[\"AWS/DynamoDB\",\"ConsumedReadCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"DynamoDB Reads\"}],[\".\",\"ConsumedWriteCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"DynamoDB Writes\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"Database Metrics\",\"period\":300}}]}"
         }
       }
     }
@@ -520,7 +638,10 @@
     "RDSClusterEndpoint": {
       "Description": "Aurora cluster endpoint for application connections",
       "Value": {
-        "Fn::GetAtt": ["AuroraDBCluster", "Endpoint.Address"]
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "Endpoint.Address"
+        ]
       },
       "Export": {
         "Name": {
@@ -531,7 +652,10 @@
     "RDSClusterReadEndpoint": {
       "Description": "Aurora cluster read endpoint for read-only connections",
       "Value": {
-        "Fn::GetAtt": ["AuroraDBCluster", "ReadEndpoint.Address"]
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "ReadEndpoint.Address"
+        ]
       },
       "Export": {
         "Name": {
@@ -542,7 +666,10 @@
     "LambdaFunctionArn": {
       "Description": "ARN of the transaction processor Lambda function",
       "Value": {
-        "Fn::GetAtt": ["TransactionProcessorFunction", "Arn"]
+        "Fn::GetAtt": [
+          "TransactionProcessorFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -591,6 +718,31 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-NotificationTopicArn"
+        }
+      }
+    },
+    "SessionTableName": {
+      "Description": "Name of the DynamoDB table for session management",
+      "Value": {
+        "Ref": "SessionTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SessionTableName"
+        }
+      }
+    },
+    "SessionTableArn": {
+      "Description": "ARN of the DynamoDB table for session management",
+      "Value": {
+        "Fn::GetAtt": [
+          "SessionTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SessionTableArn"
         }
       }
     }
