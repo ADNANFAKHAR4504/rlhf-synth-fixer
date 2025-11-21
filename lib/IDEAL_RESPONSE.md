@@ -1023,7 +1023,7 @@ This implementation provides a complete, production-ready CloudFormation templat
         "RestApiId": {
           "Ref": "TransactionAPI"
         },
-        "StageName": "prod"
+        "Description": "Deployment for transaction API"
       }
     },
     "APIGatewayStage": {

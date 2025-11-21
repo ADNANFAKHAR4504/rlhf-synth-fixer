@@ -1009,7 +1009,7 @@
         "RestApiId": {
           "Ref": "TransactionAPI"
         },
-        "StageName": "prod"
+        "Description": "Deployment for transaction API"
       }
     },
     "APIGatewayStage": {
