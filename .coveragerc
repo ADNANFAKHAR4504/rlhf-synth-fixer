@@ -1,5 +1,6 @@
 [run]
 omit = lib/__main__.py
+       lib/tap.py
 branch = True
 
 [report]
