@@ -1,6 +1,6 @@
 # Multi-Environment Payment Processing Infrastructure - Corrected Implementation
 
-This document contains the complete **corrected** Pulumi Python implementation for deploying payment processing infrastructure across three environments (dev, staging, production). All issues from MODEL_RESPONSE.md have been fixed.
+This document contains the complete **corrected** Pulumi Python implementation for deploying payment processing infrastructure across three environments (dev, staging, production). All issues from MODEL_RESPONSE.md have been fixed
 
 ## Key Fixes Applied
 
