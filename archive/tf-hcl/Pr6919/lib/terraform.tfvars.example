@@ -1,0 +1,8 @@
+environment_suffix = "prod-dr-001"
+primary_region     = "us-east-1"
+dr_region          = "us-west-2"
+db_username        = "dbadmin"
+db_instance_class  = "db.r6g.large"
+vpc_cidr_primary   = "10.0.0.0/16"
+vpc_cidr_dr        = "10.1.0.0/16"
+domain_name        = "trading-db.internal"
