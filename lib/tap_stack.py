@@ -90,6 +90,16 @@ class TapStack(cdk.Stack):
             replica_region=replica_region
         )
 
+        # Create SNS topic first for failover notifications
+        # This is created here so it can be passed to failover_stack
+        from aws_cdk import aws_sns as sns
+        sns_topic = sns.Topic(
+            self,
+            f"FailoverAlarmTopic-{environment_suffix}",
+            topic_name=f"db-alarms-{environment_suffix}",
+            display_name="Database Replication Alarms"
+        )
+
         # Automated failover mechanism
         failover_stack = FailoverStack(
             self,
@@ -97,7 +107,8 @@ class TapStack(cdk.Stack):
             environment_suffix=environment_suffix,
             primary_db_instance=database_stack.primary_instance,
             replica_db_instance=database_stack.replica_instance,
-            primary_vpc=vpc_stack.primary_vpc
+            primary_vpc=vpc_stack.primary_vpc,
+            sns_topic=sns_topic
         )
 
         # CloudWatch monitoring and alarms
@@ -107,7 +118,8 @@ class TapStack(cdk.Stack):
             environment_suffix=environment_suffix,
             primary_instance=database_stack.primary_instance,
             replica_instance=database_stack.replica_instance,
-            failover_function=failover_stack.failover_function
+            failover_function=failover_stack.failover_function,
+            sns_topic=sns_topic
         )
 
         # Stack outputs

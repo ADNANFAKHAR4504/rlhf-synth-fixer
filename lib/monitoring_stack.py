@@ -28,6 +28,7 @@ class MonitoringStack(Construct):
 
     Attributes:
         replication_lag_alarm (cloudwatch.Alarm): Alarm for replication lag
+        primary_db_availability_alarm (cloudwatch.Alarm): Alarm for primary DB availability
         sns_topic (sns.Topic): SNS topic for alarm notifications
     """
 
@@ -39,16 +40,38 @@ class MonitoringStack(Construct):
         primary_instance,
         replica_instance,
         failover_function,
+        sns_topic,
         **kwargs
     ):
         super().__init__(scope, construct_id, **kwargs)
 
-        # SNS topic for alarm notifications
-        self.sns_topic = sns.Topic(
+        # Use the provided SNS topic for alarm notifications
+        self.sns_topic = sns_topic
+
+        # CloudWatch alarm for primary database availability
+        # Used for Route53 health check - monitors database connections
+        self.primary_db_availability_alarm = cloudwatch.Alarm(
             self,
-            f"AlarmTopic-{environment_suffix}",
-            topic_name=f"db-alarms-{environment_suffix}",
-            display_name="Database Replication Alarms"
+            f"PrimaryDbAvailabilityAlarm-{environment_suffix}",
+            alarm_name=f"primary-db-availability-{environment_suffix}",
+            alarm_description="Primary database health check for Route53 failover",
+            metric=cloudwatch.Metric(
+                namespace="AWS/RDS",
+                metric_name="DatabaseConnections",
+                dimensions_map={
+                    "DBInstanceIdentifier": primary_instance.instance_identifier
+                },
+                statistic="Sum",
+                period=cdk.Duration.minutes(1)
+            ),
+            threshold=0,
+            evaluation_periods=3,
+            comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.BREACHING
+        )
+
+        self.primary_db_availability_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(self.sns_topic)
         )
 
         # CloudWatch alarm for replication lag
@@ -121,6 +144,102 @@ class MonitoringStack(Construct):
         )
 
         replica_cpu_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(self.sns_topic)
+        )
+
+        # CloudWatch alarm for primary database connection count
+        primary_connections_alarm = cloudwatch.Alarm(
+            self,
+            f"PrimaryConnectionsAlarm-{environment_suffix}",
+            alarm_name=f"primary-connections-high-{environment_suffix}",
+            alarm_description="Alert when primary database connections exceed 80% of max",
+            metric=cloudwatch.Metric(
+                namespace="AWS/RDS",
+                metric_name="DatabaseConnections",
+                dimensions_map={
+                    "DBInstanceIdentifier": primary_instance.instance_identifier
+                },
+                statistic="Average",
+                period=cdk.Duration.minutes(5)
+            ),
+            threshold=800,  # Adjust based on max_connections setting
+            evaluation_periods=2,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
+        )
+
+        primary_connections_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(self.sns_topic)
+        )
+
+        # CloudWatch alarm for replica database connection count
+        replica_connections_alarm = cloudwatch.Alarm(
+            self,
+            f"ReplicaConnectionsAlarm-{environment_suffix}",
+            alarm_name=f"replica-connections-high-{environment_suffix}",
+            alarm_description="Alert when replica database connections exceed 80% of max",
+            metric=cloudwatch.Metric(
+                namespace="AWS/RDS",
+                metric_name="DatabaseConnections",
+                dimensions_map={
+                    "DBInstanceIdentifier": replica_instance.instance_identifier
+                },
+                statistic="Average",
+                period=cdk.Duration.minutes(5)
+            ),
+            threshold=800,  # Adjust based on max_connections setting
+            evaluation_periods=2,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
+        )
+
+        replica_connections_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(self.sns_topic)
+        )
+
+        # CloudWatch alarm for primary database disk space
+        primary_storage_alarm = cloudwatch.Alarm(
+            self,
+            f"PrimaryStorageAlarm-{environment_suffix}",
+            alarm_name=f"primary-storage-low-{environment_suffix}",
+            alarm_description="Alert when primary database free storage falls below 10GB",
+            metric=cloudwatch.Metric(
+                namespace="AWS/RDS",
+                metric_name="FreeStorageSpace",
+                dimensions_map={
+                    "DBInstanceIdentifier": primary_instance.instance_identifier
+                },
+                statistic="Average",
+                period=cdk.Duration.minutes(5)
+            ),
+            threshold=10737418240,  # 10GB in bytes
+            evaluation_periods=2,
+            comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD
+        )
+
+        primary_storage_alarm.add_alarm_action(
+            cloudwatch_actions.SnsAction(self.sns_topic)
+        )
+
+        # CloudWatch alarm for replica database disk space
+        replica_storage_alarm = cloudwatch.Alarm(
+            self,
+            f"ReplicaStorageAlarm-{environment_suffix}",
+            alarm_name=f"replica-storage-low-{environment_suffix}",
+            alarm_description="Alert when replica database free storage falls below 10GB",
+            metric=cloudwatch.Metric(
+                namespace="AWS/RDS",
+                metric_name="FreeStorageSpace",
+                dimensions_map={
+                    "DBInstanceIdentifier": replica_instance.instance_identifier
+                },
+                statistic="Average",
+                period=cdk.Duration.minutes(5)
+            ),
+            threshold=10737418240,  # 10GB in bytes
+            evaluation_periods=2,
+            comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD
+        )
+
+        replica_storage_alarm.add_alarm_action(
             cloudwatch_actions.SnsAction(self.sns_topic)
         )
 

@@ -42,6 +42,7 @@ class FailoverStack(Construct):
         primary_db_instance,
         replica_db_instance,
         primary_vpc: ec2.Vpc,
+        sns_topic=None,
         **kwargs
     ):
         super().__init__(scope, construct_id, **kwargs)
@@ -54,27 +55,9 @@ class FailoverStack(Construct):
             vpc=primary_vpc
         )
 
-        # Health check for primary database
-        health_check = route53.CfnHealthCheck(
-            self,
-            f"PrimaryHealthCheck-{environment_suffix}",
-            health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-                type="HTTPS",
-                port=5432,
-                resource_path="/",
-                fully_qualified_domain_name=primary_db_instance.db_instance_endpoint_address,
-                request_interval=30,
-                failure_threshold=3
-            ),
-            health_check_tags=[
-                route53.CfnHealthCheck.HealthCheckTagProperty(
-                    key="Name",
-                    value=f"primary-db-health-{environment_suffix}"
-                )
-            ]
-        )
-
         # Weighted routing policy - primary (100%)
+        # Health monitoring is done via CloudWatch alarms, not Route53 health checks
+        # (PostgreSQL doesn't support HTTP/HTTPS health checks)
         primary_record = route53.CfnRecordSet(
             self,
             f"PrimaryRecord-{environment_suffix}",
@@ -84,8 +67,7 @@ class FailoverStack(Construct):
             ttl="60",
             resource_records=[primary_db_instance.db_instance_endpoint_address],
             set_identifier="primary",
-            weight=100,
-            health_check_id=health_check.attr_health_check_id
+            weight=100
         )
 
         # Weighted routing policy - replica (0%)
@@ -150,6 +132,20 @@ class FailoverStack(Construct):
             )
         )
 
+        # Build environment variables
+        lambda_env = {
+            "PRIMARY_INSTANCE_ID": primary_db_instance.instance_identifier,
+            "REPLICA_INSTANCE_ID": replica_db_instance.instance_identifier,
+            "HOSTED_ZONE_ID": self.hosted_zone.hosted_zone_id,
+            "RECORD_NAME": self.route53_cname,
+            "PRIMARY_ENDPOINT": primary_db_instance.db_instance_endpoint_address,
+            "REPLICA_ENDPOINT": replica_db_instance.db_instance_endpoint_address
+        }
+
+        # Add SNS topic ARN if provided
+        if sns_topic:
+            lambda_env["SNS_TOPIC_ARN"] = sns_topic.topic_arn
+
         # Lambda function for automated failover
         self.failover_function = lambda_.Function(
             self,
@@ -164,14 +160,11 @@ class FailoverStack(Construct):
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
             ),
-            environment={
-                "PRIMARY_INSTANCE_ID": primary_db_instance.instance_identifier,
-                "REPLICA_INSTANCE_ID": replica_db_instance.instance_identifier,
-                "HOSTED_ZONE_ID": self.hosted_zone.hosted_zone_id,
-                "RECORD_NAME": self.route53_cname,
-                "PRIMARY_ENDPOINT": primary_db_instance.db_instance_endpoint_address,
-                "REPLICA_ENDPOINT": replica_db_instance.db_instance_endpoint_address
-            },
+            environment=lambda_env,
             log_retention=logs.RetentionDays.ONE_WEEK,
-            description="Automated failover function for PostgreSQL DR"
+            description="Automated failover function for PostgreSQL DR with retry and notifications"
         )
+
+        # Grant Lambda permission to publish to SNS topic
+        if sns_topic:
+            sns_topic.grant_publish(self.failover_function)

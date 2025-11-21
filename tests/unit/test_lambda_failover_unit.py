@@ -20,10 +20,15 @@ os.environ['REPLICA_ENDPOINT'] = 'replica.rds.amazonaws.com'
 # Import after setting environment variables
 import sys
 import importlib.util
-sys.path.insert(0, '/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-z5v0e3')
+from pathlib import Path
+
+# Get the project root directory dynamically
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 
 # Load the Lambda module using importlib to avoid keyword conflict
-spec = importlib.util.spec_from_file_location("index", "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-z5v0e3/lib/lambda/failover/index.py")
+lambda_path = project_root / "lib" / "lambda" / "failover" / "index.py"
+spec = importlib.util.spec_from_file_location("index", str(lambda_path))
 index = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(index)
 

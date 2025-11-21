@@ -7,11 +7,13 @@ import os
 import json
 import boto3
 import logging
+import time
 from botocore.exceptions import ClientError
 
 # Initialize AWS clients
 rds_client = boto3.client('rds')
 route53_client = boto3.client('route53')
+sns_client = boto3.client('sns')
 
 # Configure logging
 logger = logging.getLogger()
@@ -24,6 +26,65 @@ HOSTED_ZONE_ID = os.environ['HOSTED_ZONE_ID']
 RECORD_NAME = os.environ['RECORD_NAME']
 PRIMARY_ENDPOINT = os.environ['PRIMARY_ENDPOINT']
 REPLICA_ENDPOINT = os.environ['REPLICA_ENDPOINT']
+SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN', '')
+
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_BACKOFF = 2  # seconds
+
+
+def send_sns_notification(subject, message):
+    """
+    Send SNS notification about failover event.
+
+    Args:
+        subject (str): Notification subject
+        message (str): Notification message
+    """
+    if not SNS_TOPIC_ARN:
+        logger.warning("SNS_TOPIC_ARN not configured, skipping notification")
+        return
+
+    try:
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=subject,
+            Message=message
+        )
+        logger.info("SNS notification sent successfully")
+    except ClientError as e:
+        logger.error("Error sending SNS notification: %s", e)
+        # Don't raise - notification failure shouldn't stop failover
+
+
+def retry_with_backoff(func, *args, **kwargs):
+    """
+    Retry function with exponential backoff.
+
+    Args:
+        func: Function to retry
+        *args: Positional arguments for function
+        **kwargs: Keyword arguments for function
+
+    Returns:
+        Function result
+
+    Raises:
+        Last exception if all retries fail
+    """
+    for attempt in range(MAX_RETRIES):
+        try:
+            return func(*args, **kwargs)
+        except ClientError as e:
+            if attempt == MAX_RETRIES - 1:
+                raise
+
+            backoff = INITIAL_BACKOFF * (2 ** attempt)
+            logger.warning(
+                "Attempt %d failed: %s. Retrying in %d seconds...",
+                attempt + 1, str(e), backoff
+            )
+            time.sleep(backoff)
 
 
 def check_instance_status(instance_id):
@@ -44,7 +105,8 @@ def check_instance_status(instance_id):
         return {
             'status': instance['DBInstanceStatus'],
             'available': instance['DBInstanceStatus'] == 'available',
-            'endpoint': instance.get('Endpoint', {}).get('Address', '')
+            'endpoint': instance.get('Endpoint', {}).get('Address', ''),
+            'is_replica': 'ReadReplicaSourceDBInstanceIdentifier' in instance
         }
     except ClientError as e:
         logger.error("Error checking instance status: %s", e)
@@ -54,11 +116,22 @@ def check_instance_status(instance_id):
 def promote_replica():
     """
     Promote the read replica to a standalone instance.
+    Includes idempotency check to avoid promoting an already-promoted instance.
 
     Returns:
-        dict: Promotion response
+        dict: Promotion response or status if already promoted
     """
     try:
+        # Idempotency check: verify instance is still a replica
+        replica_status = check_instance_status(REPLICA_INSTANCE_ID)
+
+        if not replica_status['is_replica']:
+            logger.info("Instance %s is already promoted (not a replica)", REPLICA_INSTANCE_ID)
+            return {
+                'status': 'already_promoted',
+                'message': 'Instance was already promoted in a previous execution'
+            }
+
         logger.info("Promoting replica %s to primary", REPLICA_INSTANCE_ID)
         response = rds_client.promote_read_replica(
             DBInstanceIdentifier=REPLICA_INSTANCE_ID,
@@ -67,6 +140,13 @@ def promote_replica():
         logger.info("Replica promotion initiated successfully")
         return response
     except ClientError as e:
+        # Check if error is because instance is already being promoted
+        if 'InvalidDBInstanceState' in str(e):
+            logger.warning("Instance may already be promoted or promotion in progress")
+            return {
+                'status': 'promotion_in_progress',
+                'message': str(e)
+            }
         logger.error("Error promoting replica: %s", e)
         raise
 
@@ -140,25 +220,44 @@ def handler(event, context):
         logger.info("Starting automated failover process")
         logger.info("Event: %s", json.dumps(event))
 
-        # Check primary instance status
-        primary_status = check_instance_status(PRIMARY_INSTANCE_ID)
+        # Check primary instance status with retry
+        primary_status = retry_with_backoff(check_instance_status, PRIMARY_INSTANCE_ID)
         logger.info("Primary status: %s", primary_status)
 
-        # Check replica instance status
-        replica_status = check_instance_status(REPLICA_INSTANCE_ID)
+        # Check replica instance status with retry
+        replica_status = retry_with_backoff(check_instance_status, REPLICA_INSTANCE_ID)
         logger.info("Replica status: %s", replica_status)
 
         # Determine if failover is needed
         if not primary_status['available'] and replica_status['available']:
             logger.warning("Primary is unavailable, initiating failover")
 
-            # Promote replica to primary
-            promote_response = promote_replica()
+            # Send notification about failover start
+            send_sns_notification(
+                "Database Failover Initiated",
+                f"Automated failover initiated for {PRIMARY_INSTANCE_ID}.\n"
+                f"Primary status: {primary_status['status']}\n"
+                f"Replica status: {replica_status['status']}\n"
+                f"Traffic will be redirected to replica."
+            )
 
-            # Update Route53 to direct traffic to replica
-            route53_response = update_route53_weights(
+            # Promote replica to primary with retry
+            promote_response = retry_with_backoff(promote_replica)
+
+            # Update Route53 to direct traffic to replica with retry
+            route53_response = retry_with_backoff(
+                update_route53_weights,
                 primary_weight=0,
                 replica_weight=100
+            )
+
+            # Send notification about successful failover
+            send_sns_notification(
+                "Database Failover Completed Successfully",
+                f"Automated failover completed successfully.\n"
+                f"Replica {REPLICA_INSTANCE_ID} has been promoted.\n"
+                f"Traffic is now directed to the promoted instance.\n"
+                f"Previous primary: {PRIMARY_INSTANCE_ID} (status: {primary_status['status']})"
             )
 
             return {
@@ -174,8 +273,9 @@ def handler(event, context):
         if primary_status['available']:
             logger.info("Primary is available, no failover needed")
 
-            # Ensure routing is configured correctly
-            update_route53_weights(
+            # Ensure routing is configured correctly with retry
+            retry_with_backoff(
+                update_route53_weights,
                 primary_weight=100,
                 replica_weight=0
             )
@@ -191,6 +291,16 @@ def handler(event, context):
             }
 
         logger.error("Both instances are unavailable")
+
+        # Send critical notification
+        send_sns_notification(
+            "CRITICAL: Both Database Instances Unavailable",
+            f"Both primary and replica database instances are unavailable.\n"
+            f"Primary ({PRIMARY_INSTANCE_ID}): {primary_status['status']}\n"
+            f"Replica ({REPLICA_INSTANCE_ID}): {replica_status['status']}\n"
+            f"Manual intervention required immediately."
+        )
+
         return {
             'statusCode': 500,
             'body': json.dumps({
@@ -203,6 +313,15 @@ def handler(event, context):
 
     except Exception as e:
         logger.error("Failover process failed: %s", str(e))
+
+        # Send error notification
+        send_sns_notification(
+            "Database Failover Process Failed",
+            f"Automated failover process encountered an error.\n"
+            f"Error: {str(e)}\n"
+            f"Manual intervention may be required."
+        )
+
         return {
             'statusCode': 500,
             'body': json.dumps({

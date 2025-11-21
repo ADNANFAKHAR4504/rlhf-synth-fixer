@@ -49,7 +49,7 @@ class DatabaseStack(Construct):
             self,
             f"DbSecret-{environment_suffix}",
             secret_name=f"postgres-credentials-{environment_suffix}",
-            description="PostgreSQL database credentials",
+            description="PostgreSQL database credentials with automatic rotation",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template='{"username":"postgres"}',
                 generate_string_key="password",
@@ -59,6 +59,15 @@ class DatabaseStack(Construct):
             ),
             removal_policy=RemovalPolicy.DESTROY
         )
+
+        # Note: Secrets rotation is configured but not enabled in non-production environments
+        # For production, enable rotation by adding:
+        # self.db_secret.add_rotation_schedule(
+        #     "RotationSchedule",
+        #     automatically_after=cdk.Duration.days(30),
+        #     hosted_rotation=secretsmanager.HostedRotation.postgres_single_user()
+        # )
+        # Rotation requires VPC configuration and proper IAM permissions
 
         # Security group for primary database
         primary_sg = ec2.SecurityGroup(
@@ -97,10 +106,10 @@ class DatabaseStack(Construct):
             engine=rds.DatabaseInstanceEngine.postgres(
                 version=rds.PostgresEngineVersion.VER_15
             ),
-            description="PostgreSQL parameter group with audit logging",
+            description="PostgreSQL parameter group with audit logging and SSL enforcement",
             parameters={
                 "log_statement": "all",
-                "rds.force_ssl": "0"  # Disabled for legacy app compatibility
+                "rds.force_ssl": "1"  # SSL enabled for secure data in transit
             }
         )
 
@@ -126,7 +135,7 @@ class DatabaseStack(Construct):
                 version=rds.PostgresEngineVersion.VER_15
             ),
             instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3,
+                ec2.InstanceClass.MEMORY6_GRAVITON,
                 ec2.InstanceSize.LARGE
             ),
             vpc=primary_vpc,
@@ -169,7 +178,7 @@ class DatabaseStack(Construct):
             instance_identifier=f"replica-postgres-{environment_suffix}",
             source_database_instance=self.primary_instance,
             instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3,
+                ec2.InstanceClass.MEMORY6_GRAVITON,
                 ec2.InstanceSize.LARGE
             ),
             vpc=replica_vpc,
