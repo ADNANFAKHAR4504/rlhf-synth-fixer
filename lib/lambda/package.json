@@ -1,0 +1,21 @@
+{
+  "name": "crypto-alert-lambda-functions",
+  "version": "1.0.0",
+  "description": "Lambda functions for cryptocurrency price alert system",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.936.0",
+    "@aws-sdk/client-sns": "^3.936.0",
+    "@aws-sdk/lib-dynamodb": "^3.936.0"
+  },
+  "devDependencies": {
+    "aws-sdk-client-mock": "^3.0.0",
+    "jest": "^29.5.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
