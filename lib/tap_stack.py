@@ -214,7 +214,6 @@ class TapStack(pulumi.ComponentResource):
             handler="index.handler",
             memory_size=1024,
             timeout=30,
-            reserved_concurrent_executions=100,
             code=pulumi.AssetArchive({
                 'index.js': pulumi.StringAsset(self._get_lambda_code())
             }),
@@ -329,16 +328,22 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, depends_on=[self.stage])
         )
 
+        # Store outputs as instance attributes for export
+        self.api_endpoint = Output.concat(
+            "https://", self.api.id, ".execute-api.",
+            aws.get_region().name, ".amazonaws.com/",
+            self.stage.stage_name, "/webhook"
+        )
+        self.table_name = self.transactions_table.name
+        self.lambda_function_name = self.lambda_function.name
+        self.kms_key_id = self.kms_key.key_id
+
         # Export outputs
         self.register_outputs({
-            'api_endpoint': Output.concat(
-                "https://", self.api.id, ".execute-api.",
-                aws.get_region().name, ".amazonaws.com/",
-                self.stage.stage_name, "/webhook"
-            ),
-            'table_name': self.transactions_table.name,
-            'lambda_function_name': self.lambda_function.name,
-            'kms_key_id': self.kms_key.key_id
+            'api_endpoint': self.api_endpoint,
+            'table_name': self.table_name,
+            'lambda_function_name': self.lambda_function_name,
+            'kms_key_id': self.kms_key_id
         })
 
     def _get_lambda_code(self) -> str:
@@ -434,3 +439,31 @@ exports.handler = async (event) => {
     }
 };
 """
+
+# Instantiate the TapStack
+config = pulumi.Config()
+environment_suffix = config.get('environment_suffix') or pulumi.get_stack().replace('TapStack', '').lower() or 'dev'
+
+# Get default tags from Pulumi config if available
+default_tags = {}
+try:
+    aws_tags = config.get_object('aws:defaultTags')
+    if aws_tags and 'tags' in aws_tags:
+        default_tags = aws_tags['tags']
+except:
+    pass
+
+# Create the stack
+stack = TapStack(
+    'tap-stack',
+    TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=default_tags
+    )
+)
+
+# Export outputs
+pulumi.export('api_endpoint', stack.api_endpoint)
+pulumi.export('table_name', stack.table_name)
+pulumi.export('lambda_function_name', stack.lambda_function_name)
+pulumi.export('kms_key_id', stack.kms_key_id)
