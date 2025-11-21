@@ -186,23 +186,23 @@
     },
     "TemplatesBucketName": {
       "Type": "String",
-      "Description": "S3 bucket name containing nested stack templates",
-      "Default": "cfn-nested-templates-default"
+      "Description": "S3 bucket name containing nested stack templates (auto-detected from CI/CD or manual override)",
+      "Default": ""
     },
     "VPCTemplateKey": {
       "Type": "String",
       "Description": "S3 key for VPC template",
-      "Default": "templates/VPCStack.json"
+      "Default": "VPCStack.json"
     },
     "ComputeTemplateKey": {
       "Type": "String",
       "Description": "S3 key for Compute template",
-      "Default": "templates/ComputeStack.json"
+      "Default": "ComputeStack.json"
     },
     "DataTemplateKey": {
       "Type": "String",
       "Description": "S3 key for Data template",
-      "Default": "templates/DataStack.json"
+      "Default": "DataStack.json"
     }
   },
   "Conditions": {
@@ -213,6 +213,14 @@
         },
         "prod"
       ]
+    },
+    "UseDefaultBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "TemplatesBucketName"
+        },
+        ""
+      ]
     }
   },
   "Resources": {
@@ -220,7 +228,22 @@
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${VPCTemplateKey}"
+          "Fn::Sub": [
+            "https://${BucketName}.s3.${AWS::Region}.amazonaws.com/${VPCTemplateKey}",
+            {
+              "BucketName": {
+                "Fn::If": [
+                  "UseDefaultBucket",
+                  {
+                    "Fn::Sub": "iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}"
+                  },
+                  {
+                    "Ref": "TemplatesBucketName"
+                  }
+                ]
+              }
+            }
+          ]
         },
         "Parameters": {
           "EnvironmentSuffix": {
@@ -268,7 +291,22 @@
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${ComputeTemplateKey}"
+          "Fn::Sub": [
+            "https://${BucketName}.s3.${AWS::Region}.amazonaws.com/${ComputeTemplateKey}",
+            {
+              "BucketName": {
+                "Fn::If": [
+                  "UseDefaultBucket",
+                  {
+                    "Fn::Sub": "iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}"
+                  },
+                  {
+                    "Ref": "TemplatesBucketName"
+                  }
+                ]
+              }
+            }
+          ]
         },
         "Parameters": {
           "EnvironmentSuffix": {
@@ -337,7 +375,22 @@
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.${AWS::Region}.amazonaws.com/${DataTemplateKey}"
+          "Fn::Sub": [
+            "https://${BucketName}.s3.${AWS::Region}.amazonaws.com/${DataTemplateKey}",
+            {
+              "BucketName": {
+                "Fn::If": [
+                  "UseDefaultBucket",
+                  {
+                    "Fn::Sub": "iac-rlhf-cfn-states-${AWS::Region}-${AWS::AccountId}"
+                  },
+                  {
+                    "Ref": "TemplatesBucketName"
+                  }
+                ]
+              }
+            }
+          ]
         },
         "Parameters": {
           "EnvironmentSuffix": {
