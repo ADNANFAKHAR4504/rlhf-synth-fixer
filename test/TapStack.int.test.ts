@@ -136,7 +136,10 @@ describe('CloudFormation Stack Integration Tests', () => {
 
     test('Load Balancer ARN should match DNS naming', () => {
       const lbName = outputs.LoadBalancerDNS.split('.')[0];
-      const lbArnName = outputs.LoadBalancerArn.split('/').pop();
+      const arnParts = outputs.LoadBalancerArn.split('/');
+      // ARN format: arn:aws:elasticloadbalancing:region:account:loadbalancer/app/name/id
+      // The name is the second-to-last part
+      const lbArnName = arnParts[arnParts.length - 2];
       expect(lbName).toContain(lbArnName);
     });
 
