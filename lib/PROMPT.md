@@ -1,5 +1,5 @@
 # VPC Network Architecture for Financial Services
-
+ 
 Hey team,
 
 We need to build a production-grade VPC network architecture for our new financial services application deployment in AWS. I've been asked to create this infrastructure using **CloudFormation with JSON**. The business needs a robust multi-AZ network foundation that can support both public-facing web services and private backend systems with controlled internet access.
