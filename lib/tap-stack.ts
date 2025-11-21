@@ -109,7 +109,7 @@ export class TapStack extends cdk.Stack {
     // Aurora PostgreSQL Cluster
     const dbCluster = new rds.DatabaseCluster(this, 'Database', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_13_12,
+        version: rds.AuroraPostgresEngineVersion.VER_15_12,
       }),
       credentials: rds.Credentials.fromSecret(dbCredentials),
       writer: rds.ClusterInstance.provisioned('Writer', {
