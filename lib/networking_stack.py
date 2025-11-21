@@ -2,9 +2,10 @@
 Networking Stack - VPC, Subnets, NAT Gateways, Security Groups
 """
 
+from typing import Dict, List
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List
 
 
 class NetworkingStackArgs:
@@ -49,6 +50,7 @@ class NetworkingStack(pulumi.ComponentResource):
             tags={**self.tags, "Name": f"loan-vpc-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
+        self.vpc_id = self.vpc.id
 
         # Create Internet Gateway
         self.igw = aws.ec2.InternetGateway(

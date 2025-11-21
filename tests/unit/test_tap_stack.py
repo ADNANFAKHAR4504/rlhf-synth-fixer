@@ -1,6 +1,7 @@
 """Unit tests for TapStack infrastructure components."""
 import unittest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
+
 import pulumi
 
 
@@ -57,7 +58,7 @@ class TestTapStack(unittest.TestCase):
         import sys
         sys.path.insert(0, '.')
         from lib.tap_stack import TapStack, TapStackArgs
-        
+
         # Create stack
         stack = TapStack(
             "test-stack",
@@ -115,12 +116,14 @@ class TestNetworkingStack(unittest.TestCase):
         """Test VPC is created with correct CIDR."""
         import sys
         sys.path.insert(0, '.')
-        from lib.networking_stack import NetworkingStack
+        from lib.networking_stack import NetworkingStack, NetworkingStackArgs
         
         stack = NetworkingStack(
             "test-networking",
-            environment_suffix="test",
-            tags={'Environment': 'test'}
+            NetworkingStackArgs(
+                environment_suffix="test",
+                tags={'Environment': 'test'}
+            )
         )
         
         self.assertIsNotNone(stack.vpc_id)
@@ -134,12 +137,14 @@ class TestStorageStack(unittest.TestCase):
         """Test S3 bucket is created."""
         import sys
         sys.path.insert(0, '.')
-        from lib.storage_stack import StorageStack
+        from lib.storage_stack import StorageStack, StorageStackArgs
         
         stack = StorageStack(
             "test-storage",
-            environment_suffix="test",
-            tags={'Environment': 'test'}
+            StorageStackArgs(
+                environment_suffix="test",
+                tags={'Environment': 'test'}
+            )
         )
         
         self.assertIsNotNone(stack.s3_bucket_id)
@@ -149,12 +154,14 @@ class TestStorageStack(unittest.TestCase):
         """Test KMS key is created."""
         import sys
         sys.path.insert(0, '.')
-        from lib.storage_stack import StorageStack
+        from lib.storage_stack import StorageStack, StorageStackArgs
         
         stack = StorageStack(
             "test-storage",
-            environment_suffix="test",
-            tags={'Environment': 'test'}
+            StorageStackArgs(
+                environment_suffix="test",
+                tags={'Environment': 'test'}
+            )
         )
         
         self.assertIsNotNone(stack.kms_key_id)
@@ -168,12 +175,14 @@ class TestMonitoringStack(unittest.TestCase):
         """Test CloudWatch log groups are created."""
         import sys
         sys.path.insert(0, '.')
-        from lib.monitoring_stack import MonitoringStack
+        from lib.monitoring_stack import MonitoringStack, MonitoringStackArgs
         
         stack = MonitoringStack(
             "test-monitoring",
-            environment_suffix="test",
-            tags={'Environment': 'test'}
+            MonitoringStackArgs(
+                environment_suffix="test",
+                tags={'Environment': 'test'}
+            )
         )
         
         self.assertIsNotNone(stack.ecs_log_group_name)
@@ -187,12 +196,16 @@ class TestIAMStack(unittest.TestCase):
         """Test IAM roles are created."""
         import sys
         sys.path.insert(0, '.')
-        from lib.iam_stack import IAMStack
+        from lib.iam_stack import IamStack, IamStackArgs
         
-        stack = IAMStack(
+        stack = IamStack(
             "test-iam",
-            environment_suffix="test",
-            tags={'Environment': 'test'}
+            IamStackArgs(
+                environment_suffix="test",
+                db_cluster_arn="arn:aws:rds:us-east-1:123456789012:cluster:test-cluster",
+                kms_key_arn="arn:aws:kms:us-east-1:123456789012:key/test-key",
+                tags={'Environment': 'test'}
+            )
         )
         
         self.assertIsNotNone(stack.ecs_task_execution_role_arn)

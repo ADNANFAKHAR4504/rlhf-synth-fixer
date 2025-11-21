@@ -2,10 +2,11 @@
 IAM Stack - Roles and Policies for ECS Tasks
 """
 
-import pulumi
-import pulumi_aws as aws
 import json
 from typing import Dict
+
+import pulumi
+import pulumi_aws as aws
 
 
 class IamStackArgs:
@@ -55,6 +56,7 @@ class IamStack(pulumi.ComponentResource):
             tags={**self.tags, "Name": f"loan-ecs-execution-role-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
+        self.ecs_task_execution_role_arn = self.execution_role.arn
 
         # Attach AWS managed policy for ECS task execution
         aws.iam.RolePolicyAttachment(
@@ -79,6 +81,7 @@ class IamStack(pulumi.ComponentResource):
             tags={**self.tags, "Name": f"loan-ecs-task-role-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
+        self.ecs_task_role_arn = self.task_role.arn
 
         # Policy for RDS IAM authentication
         self.rds_policy = aws.iam.Policy(

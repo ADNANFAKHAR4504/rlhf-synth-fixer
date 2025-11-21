@@ -26,5 +26,7 @@
     "VPC",
     "Application Auto Scaling"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }

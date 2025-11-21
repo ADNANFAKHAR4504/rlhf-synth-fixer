@@ -2,9 +2,10 @@
 Monitoring Stack - CloudWatch Log Groups
 """
 
+from typing import Dict
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict
 
 
 class MonitoringStackArgs:
@@ -43,6 +44,7 @@ class MonitoringStack(pulumi.ComponentResource):
             tags={**self.tags, "Name": f"loan-ecs-logs-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
+        self.ecs_log_group_name = self.ecs_log_group.name
 
         # CloudWatch Log Group for RDS
         self.rds_log_group = aws.cloudwatch.LogGroup(

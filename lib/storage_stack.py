@@ -2,9 +2,10 @@
 Storage Stack - S3 Bucket for ALB Logs and KMS Key
 """
 
+from typing import Dict
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict
 
 
 class StorageStackArgs:
@@ -44,6 +45,7 @@ class StorageStack(pulumi.ComponentResource):
             tags={**self.tags, "Name": f"loan-kms-key-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
+        self.kms_key_id = self.kms_key.id
 
         self.kms_alias = aws.kms.Alias(
             f"loan-kms-alias-{self.environment_suffix}",
@@ -60,6 +62,7 @@ class StorageStack(pulumi.ComponentResource):
             tags={**self.tags, "Name": f"loan-alb-logs-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
+        self.s3_bucket_id = self.log_bucket.id
 
         # Enable versioning
         aws.s3.BucketVersioningV2(
