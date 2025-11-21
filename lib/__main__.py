@@ -16,7 +16,9 @@ region: str = config.get("region") or "us-east-1"
 
 # Get db_password from environment variable or config
 db_password_env = os.environ.get('TF_VAR_db_password', 'TempPassword123!')
-db_password = config.get_secret("db_password") or db_password_env
+# Use environment variable directly if config is empty or not set
+db_password_config = config.get_secret("db_password")
+db_password = db_password_env if not db_password_config else db_password_config
 
 # Get AWS account ID for unique bucket names
 sts = boto3.client('sts')
