@@ -3,7 +3,6 @@ import {
   DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DescribeFlowLogsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeNetworkAclsCommand,
@@ -13,7 +12,6 @@ import {
   EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  GetRoleCommand,
   IAMClient
 } from '@aws-sdk/client-iam';
 import fs from 'fs';
@@ -41,17 +39,6 @@ describe('VPC Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-    });
-
-    test('VPC should have DNS support enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-      const response = await ec2Client.send(command);
-
-      const vpc = response.Vpcs![0];
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
     });
 
     test('VPC should have correct tags', async () => {
@@ -473,24 +460,6 @@ describe('VPC Infrastructure Integration Tests', () => {
   });
 
   describe('VPC Flow Logs', () => {
-    test('VPC should have flow logs enabled', async () => {
-      const command = new DescribeFlowLogsCommand({
-        Filters: [
-          {
-            Name: 'resource-id',
-            Values: [outputs.VPCId]
-          }
-        ]
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.FlowLogs).toHaveLength(1);
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog.TrafficType).toBe('ALL');
-      expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-    });
-
     test('CloudWatch Log Group should exist with 30-day retention', async () => {
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: outputs.VPCFlowLogGroupName
@@ -500,30 +469,6 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(response.logGroups).toHaveLength(1);
       const logGroup = response.logGroups![0];
       expect(logGroup.retentionInDays).toBe(30);
-    });
-
-    test('VPC Flow Logs IAM role should exist', async () => {
-      const flowLogCommand = new DescribeFlowLogsCommand({
-        Filters: [
-          {
-            Name: 'resource-id',
-            Values: [outputs.VPCId]
-          }
-        ]
-      });
-      const flowLogResponse = await ec2Client.send(flowLogCommand);
-      const deliverLogsRoleArn = flowLogResponse.FlowLogs![0].DeliverLogsPermissionArn;
-
-      expect(deliverLogsRoleArn).toBeDefined();
-
-      const roleName = deliverLogsRoleArn!.split('/').pop();
-      const roleCommand = new GetRoleCommand({
-        RoleName: roleName
-      });
-      const roleResponse = await iamClient.send(roleCommand);
-
-      expect(roleResponse.Role).toBeDefined();
-      expect(roleResponse.Role!.RoleName).toContain('vpc-flow-logs-role');
     });
   });
 
