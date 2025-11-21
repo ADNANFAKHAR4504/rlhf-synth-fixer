@@ -111,16 +111,16 @@ describe('Payment Processing Platform - Terraform Unit Tests', () => {
   // 2. TFVARS FILES
   // ---------------------------------------------------------------------------
   describe('Tfvars Files Configuration', () => {
-    test('Dev tfvars has pr_number pr6969dev', () => {
-      expect(devTfvars).toMatch(/pr_number\s*=\s*"pr6969dev"/);
+    test('Dev tfvars has pr_number pr7054dev', () => {
+      expect(devTfvars).toMatch(/pr_number\s*=\s*"pr7054dev"/);
     });
 
-    test('Staging tfvars has pr_number pr6969staging', () => {
-      expect(stagingTfvars).toMatch(/pr_number\s*=\s*"pr6969staging"/);
+    test('Staging tfvars has pr_number pr7054staging', () => {
+      expect(stagingTfvars).toMatch(/pr_number\s*=\s*"pr7054staging"/);
     });
 
-    test('Prod tfvars has pr_number pr6969prod', () => {
-      expect(prodTfvars).toMatch(/pr_number\s*=\s*"pr6969prod"/);
+    test('Prod tfvars has pr_number pr7054prod', () => {
+      expect(prodTfvars).toMatch(/pr_number\s*=\s*"pr7054prod"/);
     });
 
     test('No hardcoded passwords in dev tfvars', () => {

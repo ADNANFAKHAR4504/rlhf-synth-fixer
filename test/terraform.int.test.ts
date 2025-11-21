@@ -269,40 +269,40 @@ terraform {
     console.log(`Total resource types in plan: ${resourceTypes.length}`);
   });
 
-  test('dev plan includes pr_number pr6969dev in resource names', () => {
+  test('dev plan includes pr_number pr7054dev in resource names', () => {
     expect(terraformAvailable).toBe(true);
 
     const plan = getTerraformPlanJson('dev.tfvars');
     expect(plan).toBeTruthy();
 
     const planText = JSON.stringify(plan);
-    expect(planText).toContain('pr6969dev');
+    expect(planText).toContain('pr7054dev');
 
-    console.log('✓ pr_number pr6969dev found in dev plan');
+    console.log('✓ pr_number pr7054dev found in dev plan');
   });
 
-  test('staging plan includes pr_number pr6969staging in resource names', () => {
+  test('staging plan includes pr_number pr7054staging in resource names', () => {
     expect(terraformAvailable).toBe(true);
 
     const plan = getTerraformPlanJson('staging.tfvars');
     expect(plan).toBeTruthy();
 
     const planText = JSON.stringify(plan);
-    expect(planText).toContain('pr6969staging');
+    expect(planText).toContain('pr7054staging');
 
-    console.log('✓ pr_number pr6969staging found in staging plan');
+    console.log('✓ pr_number pr7054staging found in staging plan');
   });
 
-  test('prod plan includes pr_number pr6969prod in resource names', () => {
+  test('prod plan includes pr_number pr7054prod in resource names', () => {
     expect(terraformAvailable).toBe(true);
 
     const plan = getTerraformPlanJson('prod.tfvars');
     expect(plan).toBeTruthy();
 
     const planText = JSON.stringify(plan);
-    expect(planText).toContain('pr6969prod');
+    expect(planText).toContain('pr7054prod');
 
-    console.log('✓ pr_number pr6969prod found in prod plan');
+    console.log('✓ pr_number pr7054prod found in prod plan');
   });
 
   test('plan shows no hardcoded database passwords', () => {
@@ -856,7 +856,7 @@ describe('Security Configuration Validation', () => {
     const prNumberTag = clusterTags.find(tag => tag.key === 'PRNumber');
 
     expect(prNumberTag).toBeDefined();
-    expect(prNumberTag!.value).toMatch(/^pr6969(dev|staging|prod)$/);
+    expect(prNumberTag!.value).toMatch(/^pr7054(dev|staging|prod)$/);
 
     console.log(`✓ Resources tagged with PRNumber: ${prNumberTag!.value}`);
   }, TEST_TIMEOUT);
