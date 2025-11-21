@@ -314,7 +314,7 @@ aws secretsmanager describe-secret \
     --query 'Stacks[0].Outputs[?OutputKey==`DatabaseSecretArn`].OutputValue' \
     --output text)
 
-# Monitor API Gateway logs
+# Monitor API Gateway log
 aws logs tail /aws/apigateway/transaction-api-dev --follow
 ```
 
