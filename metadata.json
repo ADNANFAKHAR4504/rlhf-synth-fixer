@@ -5,8 +5,8 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-21T11:12:33",
-  "subtask": "Create a Pulumi Python program to deploy a multi-tier VPC architecture suitable for production workloads.",
-  "subject_labels": [],
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Cloud Environment Setup"],
   "po_id": "101912531",
   "aws_services": [
     "VPC",
@@ -14,5 +14,7 @@
     "S3",
     "IAM"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
