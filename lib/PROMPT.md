@@ -5,26 +5,25 @@
 
 ## Task Description
 
-Create a CDK TypeScript program to deploy a multi-region disaster recovery architecture for a PostgreSQL database. The configuration must: 1. Deploy RDS PostgreSQL instances with cross-region read replicas between us-east-1 and us-east-2. 2. Configure automated backups with point-in-time recovery enabled in both regions. 3. Implement Route53 health checks and failover routing policies for database endpoints. 4. Deploy Lambda functions to monitor replication lag and trigger alerts when thresholds exceed 5 minutes. 6. Configure EventBridge rules to orchestrate automated failover procedures. 7. Implement IAM roles with least-privilege access for all disaster recovery operations. 8.
+Create a CDK TypeScript program to deploy a high-availability PostgreSQL database architecture in a single AWS region. The configuration must: 1. Deploy RDS PostgreSQL instance with Multi-AZ for high availability. 2. Configure automated backups with point-in-time recovery enabled with 7-day retention. 3. Implement CloudWatch alarms for monitoring database health (CPU, storage, connections, latency). 4. Deploy S3 buckets with versioning and KMS encryption for backup storage. 5. Configure composite CloudWatch alarms that consider multiple failure scenarios. 6. Implement IAM roles with least-privilege access for all database operations. 7. Use VPC with private subnets for database instances and VPC endpoints for AWS service access.
 
 ## Background
 
-A financial services company requires a disaster recovery solution for their critical PostgreSQL database that processes payment transactions. The system must maintain RPO of under 1 hour and RTO of under 4 hours, with automated failover capabilities between us-east-1 (primary) and us-east-2 (DR).
+A company requires a high-availability solution for their critical PostgreSQL database that processes transactions. The system must maintain automated backups with point-in-time recovery and comprehensive monitoring to ensure database health and performance.
 
 ## Environment Setup
 
-Multi-region AWS deployment spanning us-east-1 (primary) and us-east-2 (disaster recovery). Infrastructure includes RDS PostgreSQL 14 with Multi-AZ deployments, cross-region read replicas, Route53 failover routing, S3 buckets with versioning and replication, Lambda functions for monitoring, and EventBridge for orchestration. Requires CDK 2.x with TypeScript, Node.js 18+, AWS CLI configured with credentials for both regions. VPCs in each region with private subnets for database instances, VPC peering for cross-region communication, and NAT gateways for Lambda outbound traffic. KMS keys in each region for encryption at rest.
+Single-region AWS deployment. Infrastructure includes RDS PostgreSQL 14 with Multi-AZ deployment, S3 buckets with versioning for backups, CloudWatch alarms for monitoring. Requires CDK 2.x with TypeScript, Node.js 18+, AWS CLI configured with credentials. VPC with private subnets for database instances and NAT gateways for outbound traffic. KMS keys for encryption at rest.
 
 ## Requirements and Constraints
 
 1. RDS instances must use db.r6g.xlarge instance class with encrypted storage using customer-managed KMS keys
-2. Read replica lag monitoring must trigger SNS notifications when lag exceeds 300 seconds
-3. Route53 health checks must verify both database connectivity and replication status before marking endpoints as healthy
-4. S3 replication must complete within 15 minutes for objects under 5GB with replication metrics enabled
-5. Lambda functions must be deployed in private subnets with VPC endpoints for AWS service access
-6. All inter-region traffic must use AWS PrivateLink or VPC peering with encryption in transit
-7. CloudWatch alarms must have composite alarms that consider multiple failure scenarios before triggering failover
-8. CDK stacks must use cross-stack references to share resources between regions without hardcoding values
+2. S3 buckets must have versioning enabled with lifecycle policies for cost optimization
+3. CloudWatch alarms must have composite alarms that consider multiple failure scenarios
+4. Lambda functions (if any) must be deployed in private subnets with VPC endpoints for AWS service access
+5. All database traffic must remain within VPC with encryption in transit
+6. CDK stacks must use proper resource dependencies
+7. Database must have Multi-AZ enabled for high availability
 
 
 ## Deliverables

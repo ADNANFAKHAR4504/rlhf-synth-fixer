@@ -22,32 +22,15 @@ Tags.of(app).add('PRNumber', prNumber);
 Tags.of(app).add('Team', team);
 Tags.of(app).add('CreatedAt', createdAt);
 
-// Multi-region deployment configuration
-const primaryRegion = 'us-east-1';
-const drRegion = 'us-east-2';
+// Single region deployment configuration
+const region = process.env.AWS_REGION || 'us-east-1';
 
-// Create primary stack in us-east-1
-new TapStack(app, `${stackName}-primary`, {
-  stackName: `${stackName}-primary`,
+// Create stack in single region
+new TapStack(app, stackName, {
+  stackName: stackName,
   environmentSuffix: environmentSuffix,
-  isPrimary: true,
-  primaryRegion: primaryRegion,
-  drRegion: drRegion,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: primaryRegion,
-  },
-});
-
-// Create DR stack in us-east-2
-new TapStack(app, `${stackName}-dr`, {
-  stackName: `${stackName}-dr`,
-  environmentSuffix: environmentSuffix,
-  isPrimary: false,
-  primaryRegion: primaryRegion,
-  drRegion: drRegion,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: drRegion,
+    region: region,
   },
 });

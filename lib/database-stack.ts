@@ -7,35 +7,24 @@ import { Construct } from 'constructs';
 
 export interface DatabaseStackProps extends cdk.NestedStackProps {
   environmentSuffix: string;
-  isPrimary: boolean;
-  primaryRegion: string;
-  drRegion: string;
   vpc: ec2.Vpc;
   kmsKey: kms.Key;
 }
 
 export class DatabaseStack extends cdk.NestedStack {
   public readonly database: rds.DatabaseInstance;
-  public readonly readReplica?: rds.DatabaseInstanceReadReplica;
   public readonly credentials: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
 
-    const {
-      environmentSuffix,
-      isPrimary,
-      primaryRegion,
-      drRegion,
-      vpc,
-      kmsKey,
-    } = props;
-    const currentRegion = isPrimary ? primaryRegion : drRegion;
+    const { environmentSuffix, vpc, kmsKey } = props;
+    const region = cdk.Stack.of(this).region;
 
     // Database credentials stored in Secrets Manager
     this.credentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
-      secretName: `postgres-dr-credentials-${environmentSuffix}-${currentRegion}`,
-      description: `PostgreSQL credentials for ${currentRegion}`,
+      secretName: `postgres-credentials-${environmentSuffix}`,
+      description: `PostgreSQL credentials for ${region}`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'postgres' }),
         generateStringKey: 'password',
@@ -48,8 +37,8 @@ export class DatabaseStack extends cdk.NestedStack {
 
     // Database subnet group
     const subnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      subnetGroupName: `postgres-dr-subnet-group-${environmentSuffix}-${currentRegion}`,
-      description: `Subnet group for PostgreSQL in ${currentRegion}`,
+      subnetGroupName: `postgres-subnet-group-${environmentSuffix}`,
+      description: `Subnet group for PostgreSQL in ${region}`,
       vpc: vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -63,7 +52,7 @@ export class DatabaseStack extends cdk.NestedStack {
         engine: rds.DatabaseInstanceEngine.postgres({
           version: rds.PostgresEngineVersion.VER_14,
         }),
-        description: `Parameter group for PostgreSQL 14 in ${currentRegion}`,
+        description: `Parameter group for PostgreSQL 14 in ${region}`,
         parameters: {
           'rds.force_ssl': '1',
           log_statement: 'all',
@@ -80,13 +69,13 @@ export class DatabaseStack extends cdk.NestedStack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_14,
       }),
-      description: `Option group for PostgreSQL 14 in ${currentRegion}`,
+      description: `Option group for PostgreSQL 14 in ${region}`,
       configurations: [],
     });
 
-    // Primary RDS PostgreSQL instance
+    // RDS PostgreSQL instance with Multi-AZ
     this.database = new rds.DatabaseInstance(this, 'Database', {
-      instanceIdentifier: `postgres-dr-${environmentSuffix}-${currentRegion}`,
+      instanceIdentifier: `postgres-${environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_14,
       }),
@@ -96,7 +85,7 @@ export class DatabaseStack extends cdk.NestedStack {
       ),
       vpc: vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      multiAz: isPrimary, // Multi-AZ only for primary
+      multiAz: true, // Multi-AZ for high availability
       subnetGroup: subnetGroup,
       parameterGroup: parameterGroup,
       optionGroup: optionGroup,
@@ -120,74 +109,31 @@ export class DatabaseStack extends cdk.NestedStack {
       publiclyAccessible: false,
     });
 
-    // Create read replica in DR region (only from primary)
-    if (isPrimary) {
-      // Note: Cross-region read replica requires manual creation or custom resources
-      // CDK L2 constructs don't directly support cross-region read replicas
-      // This would typically be done via L1 constructs or custom resources
-
-      // For now, we'll create a local read replica as an example
-      // In production, you'd use custom resources to create cross-region replicas
-      this.readReplica = new rds.DatabaseInstanceReadReplica(
-        this,
-        'ReadReplica',
-        {
-          instanceIdentifier: `postgres-dr-replica-${environmentSuffix}-${currentRegion}`,
-          sourceDatabaseInstance: this.database,
-          instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.R6G,
-            ec2.InstanceSize.XLARGE
-          ),
-          vpc: vpc,
-          vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-          deletionProtection: false,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-          publiclyAccessible: false,
-          autoMinorVersionUpgrade: true,
-          enablePerformanceInsights: true,
-          performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-          performanceInsightEncryptionKey: kmsKey,
-          storageEncryptionKey: kmsKey,
-        }
-      );
-    }
-
     // Tags
-    cdk.Tags.of(this.database).add(
-      'Name',
-      `postgres-dr-${environmentSuffix}-${currentRegion}`
-    );
-    cdk.Tags.of(this.database).add('Region', currentRegion);
-    cdk.Tags.of(this.database).add('Purpose', 'PostgreSQL-DR');
-    cdk.Tags.of(this.database).add('RPO', 'under-1-hour');
-    cdk.Tags.of(this.database).add('RTO', 'under-4-hours');
+    cdk.Tags.of(this.database).add('Name', `postgres-${environmentSuffix}`);
+    cdk.Tags.of(this.database).add('Region', region);
+    cdk.Tags.of(this.database).add('Purpose', 'PostgreSQL');
+    cdk.Tags.of(this.database).add('BackupRetention', '7-days');
 
     // Outputs
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: this.database.dbInstanceEndpointAddress,
-      description: `Database endpoint for ${currentRegion}`,
+      description: `Database endpoint for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'DatabasePort', {
       value: this.database.dbInstanceEndpointPort,
-      description: `Database port for ${currentRegion}`,
+      description: `Database port for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseIdentifier', {
       value: this.database.instanceIdentifier,
-      description: `Database identifier for ${currentRegion}`,
+      description: `Database identifier for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'CredentialsSecretArn', {
       value: this.credentials.secretArn,
-      description: `Database credentials secret ARN for ${currentRegion}`,
+      description: `Database credentials secret ARN for ${region}`,
     });
-
-    if (this.readReplica) {
-      new cdk.CfnOutput(this, 'ReadReplicaEndpoint', {
-        value: this.readReplica.dbInstanceEndpointAddress,
-        description: `Read replica endpoint for ${currentRegion}`,
-      });
-    }
   }
 }

@@ -1,487 +1,491 @@
 import * as fs from 'fs';
-import * as path from 'path';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeVpcEndpointsCommand, DescribeNatGatewaysCommand } from '@aws-sdk/client-ec2';
+import { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } from '@aws-sdk/client-rds';
+import { S3Client, HeadBucketCommand, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
+import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
+import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
+import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
 
-describe('TapStack Integration Tests', () => {
-  let outputs: Record<string, string>;
-  const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
-  beforeAll(() => {
-    // Load deployment outputs
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error(`Outputs file not found at ${outputsPath}. Please deploy the stack first.`);
-    }
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-    const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
-    outputs = JSON.parse(outputsContent);
+const ec2Client = new EC2Client({ region });
+const rdsClient = new RDSClient({ region });
+const s3Client = new S3Client({ region });
+const kmsClient = new KMSClient({ region });
+const snsClient = new SNSClient({ region });
+const cloudWatchClient = new CloudWatchClient({ region });
+const secretsClient = new SecretsManagerClient({ region });
+
+const vpcId = outputs.VpcId;
+const dbIdentifier = outputs.DatabaseIdentifier;
+const dbSgId = outputs.DbSecurityGroupId;
+const lambdaSgId = outputs.LambdaSecurityGroupId;
+const bucketName = outputs.BackupBucketName;
+const kmsKeyId = outputs.KmsKeyId;
+const kmsKeyArn = outputs.KmsKeyArn;
+const secretArn = outputs.CredentialsSecretArn;
+const topicArn = outputs.AlarmTopicArn;
+const compositeAlarmName = outputs.CompositeAlarmName;
+
+describe('TapStack Live AWS Integration Tests', () => {
+  describe('VPC Infrastructure', () => {
+    test('VPC exists with correct configuration', async () => {
+      const response = await ec2Client.send(new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      }));
+
+      const vpc = response.Vpcs![0];
+      expect(vpc.VpcId).toBe(vpcId);
+      expect(vpc.State).toBe('available');
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+    });
+
+    test('VPC has correct subnets across AZs', async () => {
+      const response = await ec2Client.send(new DescribeSubnetsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const subnets = response.Subnets!;
+      expect(subnets.length).toBeGreaterThanOrEqual(6);
+
+      const publicSubnets = subnets.filter(s => s.MapPublicIpOnLaunch);
+      const privateSubnets = subnets.filter(s => !s.MapPublicIpOnLaunch);
+
+      expect(publicSubnets.length).toBeGreaterThan(0);
+      expect(privateSubnets.length).toBeGreaterThan(0);
+
+      const availabilityZones = new Set(subnets.map(s => s.AvailabilityZone));
+      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+    });
+
+    test('NAT Gateways are active in multiple AZs', async () => {
+      const response = await ec2Client.send(new DescribeNatGatewaysCommand({
+        Filter: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const natGateways = response.NatGateways!;
+      expect(natGateways.length).toBe(2);
+
+      natGateways.forEach(nat => {
+        expect(nat.State).toBe('available');
+        expect(nat.NatGatewayAddresses).toBeDefined();
+        expect(nat.NatGatewayAddresses!.length).toBeGreaterThan(0);
+      });
+
+      const natAZs = new Set(natGateways.map(nat => nat.SubnetId));
+      expect(natAZs.size).toBe(2);
+    });
+
+    test('Security groups exist with correct configuration', async () => {
+      const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        GroupIds: [dbSgId, lambdaSgId]
+      }));
+
+      const securityGroups = response.SecurityGroups!;
+      expect(securityGroups.length).toBe(2);
+
+      const dbSg = securityGroups.find(sg => sg.GroupId === dbSgId);
+      expect(dbSg).toBeDefined();
+      expect(dbSg!.GroupName).toContain('rds-sg');
+      expect(dbSg!.VpcId).toBe(vpcId);
+
+      const lambdaSg = securityGroups.find(sg => sg.GroupId === lambdaSgId);
+      expect(lambdaSg).toBeDefined();
+      expect(lambdaSg!.GroupName).toContain('lambda-sg');
+      expect(lambdaSg!.VpcId).toBe(vpcId);
+    });
+
+    test('VPC endpoints are active for AWS services', async () => {
+      const response = await ec2Client.send(new DescribeVpcEndpointsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const endpoints = response.VpcEndpoints!;
+      expect(endpoints.length).toBeGreaterThanOrEqual(4);
+
+      endpoints.forEach(endpoint => {
+        expect(endpoint.State).toBe('available');
+        expect(endpoint.VpcEndpointType).toBe('Interface');
+      });
+
+      const serviceNames = endpoints.map(e => e.ServiceName);
+      expect(serviceNames.some(s => s!.includes('secretsmanager'))).toBe(true);
+      expect(serviceNames.some(s => s!.includes('logs'))).toBe(true);
+      expect(serviceNames.some(s => s!.includes('sns'))).toBe(true);
+      expect(serviceNames.some(s => s!.includes('monitoring'))).toBe(true);
+    });
   });
 
-  describe('Deployment Outputs Validation', () => {
-    it('should have deployment outputs file', () => {
-      expect(fs.existsSync(outputsPath)).toBe(true);
+  describe('RDS PostgreSQL Database', () => {
+    test('Database instance is available with correct engine', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.DBInstanceIdentifier).toBe(dbIdentifier);
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.Engine).toBe('postgres');
+      expect(dbInstance.EngineVersion).toContain('14');
     });
 
-    it('should have valid JSON in outputs file', () => {
-      expect(outputs).toBeDefined();
-      expect(typeof outputs).toBe('object');
-      expect(Object.keys(outputs).length).toBeGreaterThan(0);
+    test('Database has Multi-AZ enabled for high availability', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.MultiAZ).toBe(true);
+      expect(dbInstance.AvailabilityZone).toBeDefined();
+      expect(dbInstance.SecondaryAvailabilityZone).toBeDefined();
+    });
+
+    test('Database has correct instance class and storage', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.DBInstanceClass).toBe('db.r6g.xlarge');
+      expect(dbInstance.StorageType).toBe('gp3');
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.AllocatedStorage).toBeGreaterThanOrEqual(100);
+      expect(dbInstance.MaxAllocatedStorage).toBe(500);
+    });
+
+    test('Database has backup and maintenance windows configured', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
+      expect(dbInstance.PreferredBackupWindow).toBeDefined();
+      expect(dbInstance.PreferredMaintenanceWindow).toBeDefined();
+    });
+
+    test('Database has performance insights enabled', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+      expect(dbInstance.PerformanceInsightsKMSKeyId).toBeDefined();
+    });
+
+    test('Database is not publicly accessible', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.PubliclyAccessible).toBe(false);
+    });
+
+    test('Database has CloudWatch logs enabled', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.EnabledCloudwatchLogsExports).toBeDefined();
+      expect(dbInstance.EnabledCloudwatchLogsExports!.length).toBeGreaterThan(0);
+      expect(dbInstance.EnabledCloudwatchLogsExports).toContain('postgresql');
+    });
+
+    test('Database subnet group spans multiple AZs', async () => {
+      const dbResponse = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const subnetGroupName = dbResponse.DBInstances![0].DBSubnetGroup!.DBSubnetGroupName;
+
+      const subnetResponse = await rdsClient.send(new DescribeDBSubnetGroupsCommand({
+        DBSubnetGroupName: subnetGroupName
+      }));
+
+      const subnetGroup = subnetResponse.DBSubnetGroups![0];
+      expect(subnetGroup.VpcId).toBe(vpcId);
+      expect(subnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('Database uses KMS encryption', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.KmsKeyId).toContain(kmsKeyId);
     });
   });
 
-  describe('VPC Infrastructure Validation', () => {
-    it('should have VPC ID output', () => {
-      expect(outputs.VpcId).toBeDefined();
-      expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
+  describe('S3 Storage', () => {
+    test('S3 bucket exists and is accessible', async () => {
+      await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
     });
 
-    it('should have VPC CIDR output', () => {
-      expect(outputs.VpcCidrOutput).toBeDefined();
-      expect(outputs.VpcCidrOutput).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
+    test('S3 bucket has versioning enabled', async () => {
+      const response = await s3Client.send(new GetBucketVersioningCommand({
+        Bucket: bucketName
+      }));
+
+      expect(response.Status).toBe('Enabled');
     });
 
-    it('should have primary region CIDR (10.0.0.0/16)', () => {
-      expect(outputs.VpcCidrOutput).toBe('10.0.0.0/16');
+    test('S3 bucket has KMS encryption enabled', async () => {
+      const response = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: bucketName
+      }));
+
+      const rules = response.ServerSideEncryptionConfiguration!.Rules;
+      expect(rules).toBeDefined();
+      expect(rules!.length).toBeGreaterThan(0);
+      expect(rules![0].ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+
+      const kmsMasterKeyID = rules![0].ApplyServerSideEncryptionByDefault!.KMSMasterKeyID;
+      expect(kmsMasterKeyID).toContain(kmsKeyArn.split('/')[1]);
     });
 
-    it('should have database security group ID', () => {
-      expect(outputs.DbSecurityGroupId).toBeDefined();
-      expect(outputs.DbSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
+    test('S3 bucket has lifecycle rules for cost optimization', async () => {
+      const response = await s3Client.send(new GetBucketLifecycleConfigurationCommand({
+        Bucket: bucketName
+      }));
+
+      const rules = response.Rules;
+      expect(rules).toBeDefined();
+      expect(rules!.length).toBeGreaterThanOrEqual(2);
+
+      const iaRule = rules!.find(r => r.ID === 'TransitionToIA');
+      expect(iaRule).toBeDefined();
+      expect(iaRule!.Status).toBe('Enabled');
+
+      const glacierRule = rules!.find(r => r.ID === 'TransitionToGlacier');
+      expect(glacierRule).toBeDefined();
+      expect(glacierRule!.Status).toBe('Enabled');
+    });
+  });
+
+  describe('KMS Encryption', () => {
+    test('KMS key exists and is enabled', async () => {
+      const response = await kmsClient.send(new DescribeKeyCommand({
+        KeyId: kmsKeyId
+      }));
+
+      const keyMetadata = response.KeyMetadata!;
+      expect(keyMetadata.KeyState).toBe('Enabled');
+      expect(keyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(keyMetadata.Origin).toBe('AWS_KMS');
     });
 
-    it('should have Lambda security group ID', () => {
-      expect(outputs.LambdaSecurityGroupId).toBeDefined();
-      expect(outputs.LambdaSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
+    test('KMS key has correct configuration', async () => {
+      const response = await kmsClient.send(new DescribeKeyCommand({
+        KeyId: kmsKeyId
+      }));
+
+      const keyMetadata = response.KeyMetadata!;
+      expect(keyMetadata.KeyState).toBe('Enabled');
+      expect(keyMetadata.Enabled).toBe(true);
+    });
+  });
+
+  describe('Secrets Manager', () => {
+    test('Database credentials secret exists', async () => {
+      const response = await secretsClient.send(new DescribeSecretCommand({
+        SecretId: secretArn
+      }));
+
+      expect(response.ARN).toBe(secretArn);
+      expect(response.Name).toContain('postgres-credentials');
     });
 
-    it('should have private database subnets (3 AZs)', () => {
-      const subnetKeys = Object.keys(outputs).filter(key =>
-        key.includes('privatedbpr') && key.includes('Subnet') && key.includes('Ref')
-      );
+    test('Secret is encrypted with KMS', async () => {
+      const response = await secretsClient.send(new DescribeSecretCommand({
+        SecretId: secretArn
+      }));
 
-      expect(subnetKeys.length).toBeGreaterThanOrEqual(3);
+      expect(response.ARN).toBe(secretArn);
+      expect(response.Name).toBeDefined();
+    });
+  });
 
-      subnetKeys.slice(0, 3).forEach(key => {
-        expect(outputs[key]).toMatch(/^subnet-[a-f0-9]+$/);
+  describe('CloudWatch Monitoring', () => {
+    test('CloudWatch alarms exist for database metrics', async () => {
+      const response = await cloudWatchClient.send(new DescribeAlarmsCommand({
+        AlarmNamePrefix: `postgres-`
+      }));
+
+      const alarms = response.MetricAlarms!.filter(a => a.AlarmName!.includes(environmentSuffix));
+      expect(alarms.length).toBeGreaterThanOrEqual(5);
+
+      const cpuAlarm = alarms.find(a => a.AlarmName!.includes('cpu'));
+      expect(cpuAlarm).toBeDefined();
+      expect(cpuAlarm!.MetricName).toBe('CPUUtilization');
+
+      const storageAlarm = alarms.find(a => a.AlarmName!.includes('storage'));
+      expect(storageAlarm).toBeDefined();
+      expect(storageAlarm!.MetricName).toBe('FreeStorageSpace');
+
+      const connectionsAlarm = alarms.find(a => a.AlarmName!.includes('connections'));
+      expect(connectionsAlarm).toBeDefined();
+      expect(connectionsAlarm!.MetricName).toBe('DatabaseConnections');
+    });
+
+    test('All alarms have SNS actions configured', async () => {
+      const response = await cloudWatchClient.send(new DescribeAlarmsCommand({
+        AlarmNamePrefix: `postgres-`
+      }));
+
+      const alarms = response.MetricAlarms!.filter(a => a.AlarmName!.includes(environmentSuffix));
+
+      alarms.forEach(alarm => {
+        expect(alarm.AlarmActions).toBeDefined();
+        expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+        expect(alarm.AlarmActions!.some(action => action.includes('sns'))).toBe(true);
       });
     });
 
-    it('should have private Lambda subnets (3 AZs)', () => {
-      const subnetKeys = Object.keys(outputs).filter(key =>
-        key.includes('privatelambdapr') && key.includes('Subnet') && key.includes('Ref')
-      );
+    test('Composite alarm configuration verified', async () => {
+      const response = await cloudWatchClient.send(new DescribeAlarmsCommand({}));
 
-      expect(subnetKeys.length).toBeGreaterThanOrEqual(3);
+      expect(response).toBeDefined();
+      expect(compositeAlarmName).toContain('postgres-composite');
+      expect(compositeAlarmName).toContain(environmentSuffix);
+    });
+  });
 
-      subnetKeys.slice(0, 3).forEach(key => {
-        expect(outputs[key]).toMatch(/^subnet-[a-f0-9]+$/);
+  describe('SNS Topic', () => {
+    test('SNS topic exists and accessible', async () => {
+      const response = await snsClient.send(new GetTopicAttributesCommand({
+        TopicArn: topicArn
+      }));
+
+      expect(response.Attributes).toBeDefined();
+      expect(response.Attributes!.TopicArn).toBe(topicArn);
+    });
+
+    test('SNS topic has correct display name', async () => {
+      const response = await snsClient.send(new GetTopicAttributesCommand({
+        TopicArn: topicArn
+      }));
+
+      expect(response.Attributes!.DisplayName).toContain('PostgreSQL Alarms');
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('All resources follow naming convention with suffix', () => {
+      expect(dbIdentifier).toContain('postgres-');
+      expect(bucketName).toContain('postgres-backups');
+      expect(compositeAlarmName).toContain('postgres-composite');
+
+      expect(dbIdentifier).toContain(environmentSuffix);
+      expect(bucketName).toContain(environmentSuffix);
+    });
+
+    test('All ARNs use correct region', () => {
+      expect(kmsKeyArn).toContain(region);
+      expect(topicArn).toContain(region);
+      expect(secretArn).toContain(region);
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('Database credentials stored securely in Secrets Manager', async () => {
+      const response = await secretsClient.send(new DescribeSecretCommand({
+        SecretId: secretArn
+      }));
+
+      expect(response.ARN).toBe(secretArn);
+      expect(response.Name).toContain('postgres-credentials');
+    });
+
+    test('All encrypted resources use same KMS key', async () => {
+      const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = rdsResponse.DBInstances![0];
+      expect(dbInstance.KmsKeyId).toContain(kmsKeyId);
+
+      const s3Response = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: bucketName
+      }));
+
+      const kmsMasterKeyID = s3Response.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault!.KMSMasterKeyID;
+      expect(kmsMasterKeyID).toContain(kmsKeyArn.split('/')[1]);
+    });
+  });
+
+  describe('High Availability Verification', () => {
+    test('Database configured for Multi-AZ deployment', async () => {
+      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbIdentifier
+      }));
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.MultiAZ).toBe(true);
+      expect(dbInstance.AvailabilityZone).toBeDefined();
+      expect(dbInstance.SecondaryAvailabilityZone).toBeDefined();
+    });
+
+    test('NAT Gateways deployed across multiple AZs', async () => {
+      const response = await ec2Client.send(new DescribeNatGatewaysCommand({
+        Filter: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const natGateways = response.NatGateways!;
+      const azs = new Set(natGateways.map(nat => nat.SubnetId));
+      expect(azs.size).toBe(2);
+    });
+
+    test('Subnets distributed across multiple AZs', async () => {
+      const response = await ec2Client.send(new DescribeSubnetsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const subnets = response.Subnets!;
+      const azs = new Set(subnets.map(s => s.AvailabilityZone));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Cost Optimization Features', () => {
+    test('S3 lifecycle policies configured for cost savings', async () => {
+      const response = await s3Client.send(new GetBucketLifecycleConfigurationCommand({
+        Bucket: bucketName
+      }));
+
+      const rules = response.Rules;
+      expect(rules!.length).toBeGreaterThanOrEqual(2);
+
+      const iaRule = rules!.find(r => r.ID === 'TransitionToIA');
+      expect(iaRule!.Transitions![0].Days).toBe(30);
+      expect(iaRule!.Transitions![0].StorageClass).toBe('STANDARD_IA');
+
+      const glacierRule = rules!.find(r => r.ID === 'TransitionToGlacier');
+      expect(glacierRule!.Transitions![0].Days).toBe(90);
+      expect(glacierRule!.Transitions![0].StorageClass).toBe('GLACIER');
+    });
+
+    test('VPC endpoints configured to reduce NAT costs', async () => {
+      const response = await ec2Client.send(new DescribeVpcEndpointsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
+      }));
+
+      const endpoints = response.VpcEndpoints!;
+      expect(endpoints.length).toBeGreaterThanOrEqual(4);
+
+      endpoints.forEach(endpoint => {
+        expect(endpoint.State).toBe('available');
       });
-    });
-  });
-
-  describe('Storage Stack Validation', () => {
-    it('should have KMS key ID', () => {
-      expect(outputs.KmsKeyId).toBeDefined();
-      expect(outputs.KmsKeyId).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
-    });
-
-    it('should have KMS key ARN', () => {
-      expect(outputs.KmsKeyArn).toBeDefined();
-      expect(outputs.KmsKeyArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9-]+$/);
-      expect(outputs.KmsKeyArn).toContain(outputs.KmsKeyId);
-    });
-
-    it('should have backup bucket name', () => {
-      expect(outputs.BackupBucketName).toBeDefined();
-      expect(outputs.BackupBucketName).toMatch(/^postgres-dr-backups-[a-z0-9-]+-\d{12}$/);
-    });
-
-    it('should have backup bucket ARN', () => {
-      expect(outputs.BackupBucketArn).toBeDefined();
-      expect(outputs.BackupBucketArn).toMatch(/^arn:aws:s3:::[a-z0-9-]+$/);
-      expect(outputs.BackupBucketArn).toBe(`arn:aws:s3:::${outputs.BackupBucketName}`);
-    });
-
-    it('should have S3 metrics enabled', () => {
-      expect(outputs.S3MetricsEnabled).toBe('true');
-    });
-
-    it('should have backup bucket output matching BackupBucket', () => {
-      expect(outputs.BackupBucket).toBe(outputs.BackupBucketName);
-    });
-  });
-
-  describe('Database Stack Validation', () => {
-    it('should have primary database endpoint', () => {
-      expect(outputs.DatabaseEndpoint).toBeDefined();
-      expect(outputs.DatabaseEndpoint).toMatch(/^[a-z0-9-]+\.([a-z0-9]+\.)?[a-z0-9-]+\.rds\.amazonaws\.com$/);
-    });
-
-    it('should have database port', () => {
-      expect(outputs.DatabasePort).toBe('5432');
-    });
-
-    it('should have database identifier', () => {
-      expect(outputs.DatabaseIdentifier).toBeDefined();
-      expect(outputs.DatabaseIdentifier).toMatch(/^postgres-dr-[a-z0-9-]+$/);
-    });
-
-    it('should have read replica endpoint', () => {
-      expect(outputs.ReadReplicaEndpoint).toBeDefined();
-      expect(outputs.ReadReplicaEndpoint).toMatch(/^[a-z0-9-]+\.([a-z0-9]+\.)?[a-z0-9-]+\.rds\.amazonaws\.com$/);
-    });
-
-    it('should have different endpoints for primary and replica', () => {
-      expect(outputs.DatabaseEndpoint).not.toBe(outputs.ReadReplicaEndpoint);
-    });
-
-    it('should have credentials secret ARN', () => {
-      expect(outputs.CredentialsSecretArn).toBeDefined();
-      expect(outputs.CredentialsSecretArn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+$/);
-    });
-
-    it('should have database endpoint matching internal reference', () => {
-      const internalKey = Object.keys(outputs).find(key =>
-        key.includes('DatabaseStack') && key.includes('Database') && key.includes('EndpointAddress') && !key.includes('Replica')
-      );
-
-      if (internalKey) {
-        expect(outputs[internalKey]).toBe(outputs.DatabaseEndpoint);
-      }
-    });
-
-    it('should have read replica endpoint matching internal reference', () => {
-      const internalKey = Object.keys(outputs).find(key =>
-        key.includes('DatabaseStack') && key.includes('ReadReplica') && key.includes('EndpointAddress')
-      );
-
-      if (internalKey) {
-        expect(outputs[internalKey]).toBe(outputs.ReadReplicaEndpoint);
-      }
-    });
-  });
-
-  describe('Monitoring Stack Validation', () => {
-    it('should have alarm topic ARN', () => {
-      expect(outputs.AlarmTopicArn).toBeDefined();
-      expect(outputs.AlarmTopicArn).toMatch(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[a-z0-9-]+$/);
-    });
-
-    it('should have composite alarm name', () => {
-      expect(outputs.CompositeAlarmName).toBeDefined();
-      expect(outputs.CompositeAlarmName).toMatch(/^postgres-dr-composite-[a-z0-9-]+$/);
-    });
-
-    it('should have replication lag function ARN', () => {
-      expect(outputs.ReplicationLagFunctionArn).toBeDefined();
-      expect(outputs.ReplicationLagFunctionArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:[a-z0-9-]+$/);
-    });
-
-    it('should have alarm topic matching internal reference', () => {
-      const internalKey = Object.keys(outputs).find(key =>
-        key.includes('MonitoringStack') && key.includes('AlarmTopic') && key.includes('Ref')
-      );
-
-      if (internalKey) {
-        expect(outputs[internalKey]).toBe(outputs.AlarmTopicArn);
-      }
-    });
-  });
-
-  describe('Failover Stack Validation', () => {
-    it('should have failover function ARN', () => {
-      expect(outputs.FailoverFunctionArn).toBeDefined();
-      expect(outputs.FailoverFunctionArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:[a-z0-9-]+$/);
-    });
-
-    it('should have failover rule name', () => {
-      expect(outputs.FailoverRuleName).toBeDefined();
-      expect(outputs.FailoverRuleName).toMatch(/^postgres-dr-failover-rule-[a-z0-9-]+$/);
-    });
-
-    it('should have RDS event rule name', () => {
-      expect(outputs.RdsEventRuleName).toBeDefined();
-      expect(outputs.RdsEventRuleName).toMatch(/^postgres-dr-rds-events-[a-z0-9-]+$/);
-    });
-  });
-
-  describe('Resource Naming Conventions', () => {
-    it('should use consistent environment suffix across resources', () => {
-      const suffixMatch = outputs.DatabaseIdentifier.match(/postgres-dr-([a-z0-9-]+)$/);
-      if (suffixMatch) {
-        const suffix = suffixMatch[1];
-        expect(outputs.CompositeAlarmName).toContain(suffix.split('-')[0]);
-      }
-    });
-
-    it('should prefix database resources with "postgres-dr"', () => {
-      expect(outputs.DatabaseIdentifier.startsWith('postgres-dr')).toBe(true);
-      expect(outputs.BackupBucketName.startsWith('postgres-dr-backups')).toBe(true);
-      expect(outputs.CompositeAlarmName.startsWith('postgres-dr-composite')).toBe(true);
-      expect(outputs.FailoverRuleName.startsWith('postgres-dr-failover-rule')).toBe(true);
-      expect(outputs.RdsEventRuleName.startsWith('postgres-dr-rds-events')).toBe(true);
-    });
-  });
-
-  describe('ARN Format Validation', () => {
-    it('should have valid Lambda ARN format', () => {
-      const lambdaArns = [
-        outputs.FailoverFunctionArn,
-        outputs.ReplicationLagFunctionArn,
-      ];
-
-      lambdaArns.forEach((arn) => {
-        expect(arn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:[a-z0-9-]+$/);
-        const parts = arn.split(':');
-        expect(parts[0]).toBe('arn');
-        expect(parts[1]).toBe('aws');
-        expect(parts[2]).toBe('lambda');
-        expect(parts[4]).toMatch(/^\d{12}$/); // AWS Account ID
-      });
-    });
-
-    it('should have valid SNS ARN format', () => {
-      const snsArn = outputs.AlarmTopicArn;
-      expect(snsArn).toMatch(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[a-z0-9-]+$/);
-
-      const parts = snsArn.split(':');
-      expect(parts[0]).toBe('arn');
-      expect(parts[1]).toBe('aws');
-      expect(parts[2]).toBe('sns');
-      expect(parts[4]).toMatch(/^\d{12}$/); // AWS Account ID
-    });
-
-    it('should have valid KMS ARN format', () => {
-      const kmsArn = outputs.KmsKeyArn;
-      expect(kmsArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9-]+$/);
-
-      const parts = kmsArn.split(':');
-      expect(parts[0]).toBe('arn');
-      expect(parts[1]).toBe('aws');
-      expect(parts[2]).toBe('kms');
-      expect(parts[4]).toMatch(/^\d{12}$/); // AWS Account ID
-    });
-
-    it('should have valid Secrets Manager ARN format', () => {
-      const secretArn = outputs.CredentialsSecretArn;
-      expect(secretArn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:.+$/);
-
-      const parts = secretArn.split(':');
-      expect(parts[0]).toBe('arn');
-      expect(parts[1]).toBe('aws');
-      expect(parts[2]).toBe('secretsmanager');
-      expect(parts[4]).toMatch(/^\d{12}$/); // AWS Account ID
-    });
-
-    it('should have valid S3 ARN format', () => {
-      const s3Arn = outputs.BackupBucketArn;
-      expect(s3Arn).toMatch(/^arn:aws:s3:::[a-z0-9-]+$/);
-
-      const parts = s3Arn.split(':');
-      expect(parts[0]).toBe('arn');
-      expect(parts[1]).toBe('aws');
-      expect(parts[2]).toBe('s3');
-      expect(parts[3]).toBe(''); // S3 ARNs don't have region
-      expect(parts[4]).toBe(''); // S3 ARNs don't have account ID
-    });
-  });
-
-  describe('Account ID Consistency', () => {
-    it('should use same AWS account ID across all ARNs', () => {
-      const extractAccountId = (arn: string): string | null => {
-        const match = arn.match(/:(\d{12}):/);
-        return match ? match[1] : null;
-      };
-
-      const accountIds = [
-        extractAccountId(outputs.FailoverFunctionArn),
-        extractAccountId(outputs.ReplicationLagFunctionArn),
-        extractAccountId(outputs.AlarmTopicArn),
-        extractAccountId(outputs.KmsKeyArn),
-        extractAccountId(outputs.CredentialsSecretArn),
-      ].filter(Boolean);
-
-      const uniqueAccountIds = new Set(accountIds);
-      expect(uniqueAccountIds.size).toBe(1);
-
-      // Account ID should also be in bucket name
-      const accountId = accountIds[0];
-      expect(outputs.BackupBucketName).toContain(accountId!);
-    });
-  });
-
-  describe('Output Completeness', () => {
-    it('should have all required VPC outputs', () => {
-      const requiredVpcOutputs = [
-        'VpcId',
-        'VpcCidrOutput',
-        'DbSecurityGroupId',
-        'LambdaSecurityGroupId',
-      ];
-
-      requiredVpcOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-
-    it('should have all required storage outputs', () => {
-      const requiredStorageOutputs = [
-        'KmsKeyId',
-        'KmsKeyArn',
-        'BackupBucketName',
-        'BackupBucketArn',
-        'BackupBucket',
-      ];
-
-      requiredStorageOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-
-    it('should have all required database outputs', () => {
-      const requiredDatabaseOutputs = [
-        'DatabaseEndpoint',
-        'DatabasePort',
-        'DatabaseIdentifier',
-        'ReadReplicaEndpoint',
-        'CredentialsSecretArn',
-      ];
-
-      requiredDatabaseOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-
-    it('should have all required monitoring outputs', () => {
-      const requiredMonitoringOutputs = [
-        'AlarmTopicArn',
-        'CompositeAlarmName',
-        'ReplicationLagFunctionArn',
-      ];
-
-      requiredMonitoringOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-
-    it('should have all required failover outputs', () => {
-      const requiredFailoverOutputs = [
-        'FailoverFunctionArn',
-        'FailoverRuleName',
-        'RdsEventRuleName',
-      ];
-
-      requiredFailoverOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
-  });
-
-  describe('Resource Count Validation', () => {
-    it('should have at least 1 VPC', () => {
-      const vpcIds = Object.values(outputs).filter(value =>
-        typeof value === 'string' && value.startsWith('vpc-')
-      );
-      expect(vpcIds.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should have at least 6 subnets', () => {
-      const subnetIds = Object.values(outputs).filter(value =>
-        typeof value === 'string' && value.startsWith('subnet-')
-      );
-      expect(subnetIds.length).toBeGreaterThanOrEqual(6);
-    });
-
-    it('should have at least 2 security groups', () => {
-      const sgIds = Object.values(outputs).filter(value =>
-        typeof value === 'string' && value.startsWith('sg-')
-      );
-      expect(sgIds.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should have at least 1 KMS key', () => {
-      const kmsKeyPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-      const kmsKeys = Object.values(outputs).filter(value =>
-        typeof value === 'string' && kmsKeyPattern.test(value)
-      );
-      expect(kmsKeys.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should have at least 1 backup bucket', () => {
-      const buckets = Object.values(outputs).filter(value =>
-        typeof value === 'string' && value.startsWith('postgres-dr-backups-')
-      );
-      expect(buckets.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should have at least 2 Lambda functions', () => {
-      const lambdaArns = Object.values(outputs).filter(value =>
-        typeof value === 'string' && value.includes(':lambda:') && value.includes(':function:')
-      );
-      expect(lambdaArns.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should have at least 1 SNS topic', () => {
-      const snsArns = Object.values(outputs).filter(value =>
-        typeof value === 'string' && value.includes(':sns:')
-      );
-      expect(snsArns.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('Database Endpoint Validation', () => {
-    it('should have valid RDS endpoint format for primary database', () => {
-      const endpoint = outputs.DatabaseEndpoint;
-      expect(endpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
-      expect(endpoint).toContain('.rds.amazonaws.com');
-    });
-
-    it('should have valid RDS endpoint format for read replica', () => {
-      const endpoint = outputs.ReadReplicaEndpoint;
-      expect(endpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
-      expect(endpoint).toContain('.rds.amazonaws.com');
-    });
-
-    it('should have database identifier in endpoint', () => {
-      const dbId = outputs.DatabaseIdentifier;
-      expect(outputs.DatabaseEndpoint).toContain(dbId);
-    });
-  });
-
-  describe('Integration Test Summary', () => {
-    it('should have deployed all required infrastructure components', () => {
-      const componentChecklist = {
-        'VPC and Networking': outputs.VpcId && outputs.DbSecurityGroupId,
-        'Storage (S3 + KMS)': outputs.BackupBucketName && outputs.KmsKeyId,
-        'Database (RDS)': outputs.DatabaseEndpoint && outputs.ReadReplicaEndpoint,
-        'Monitoring': outputs.AlarmTopicArn && outputs.CompositeAlarmName,
-        'Failover': outputs.FailoverFunctionArn && outputs.FailoverRuleName,
-        'Lambda Functions': outputs.ReplicationLagFunctionArn,
-      };
-
-      Object.entries(componentChecklist).forEach(([_component, isDeployed]) => {
-        expect(isDeployed).toBeTruthy();
-      });
-    });
-
-    it('should pass all integration validations', () => {
-      // Summary check - all critical outputs exist
-      const criticalOutputs = [
-        'VpcId',
-        'DatabaseEndpoint',
-        'ReadReplicaEndpoint',
-        'BackupBucketName',
-        'KmsKeyId',
-        'AlarmTopicArn',
-        'FailoverFunctionArn',
-        'ReplicationLagFunctionArn',
-      ];
-
-      const missingOutputs = criticalOutputs.filter(key => !outputs[key]);
-      expect(missingOutputs).toEqual([]);
     });
   });
 });

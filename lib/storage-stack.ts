@@ -6,9 +6,6 @@ import { Construct } from 'constructs';
 
 export interface StorageStackProps extends cdk.NestedStackProps {
   environmentSuffix: string;
-  isPrimary: boolean;
-  primaryRegion: string;
-  drRegion: string;
 }
 
 export class StorageStack extends cdk.NestedStack {
@@ -18,15 +15,15 @@ export class StorageStack extends cdk.NestedStack {
   constructor(scope: Construct, id: string, props: StorageStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, isPrimary, primaryRegion, drRegion } = props;
-    const currentRegion = isPrimary ? primaryRegion : drRegion;
+    const { environmentSuffix } = props;
+    const region = cdk.Stack.of(this).region;
 
     // KMS Key for encryption at rest
     this.kmsKey = new kms.Key(this, 'KmsKey', {
-      description: `KMS key for PostgreSQL DR in ${currentRegion}`,
+      description: `KMS key for PostgreSQL in ${region}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      alias: `postgres-dr-key-${environmentSuffix}-${currentRegion}`,
+      alias: `postgres-key-${environmentSuffix}`,
     });
 
     // Grant RDS service permission to use the key
@@ -45,8 +42,8 @@ export class StorageStack extends cdk.NestedStack {
       })
     );
 
-    // S3 Bucket for backups with cross-region replication
-    const bucketName = `postgres-dr-backups-${environmentSuffix}-${currentRegion}-${cdk.Aws.ACCOUNT_ID}`;
+    // S3 Bucket for backups with versioning
+    const bucketName = `postgres-backups-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`;
 
     this.backupBucket = new s3.Bucket(this, 'BackupBucket', {
       bucketName: bucketName,
@@ -80,82 +77,30 @@ export class StorageStack extends cdk.NestedStack {
       ],
     });
 
-    // Enable S3 metrics for replication monitoring (only on primary)
-    if (isPrimary) {
-      // Replication configuration would be added here
-      // Note: Cross-region replication requires the destination bucket to exist first
-      // In a real implementation, this would be handled with custom resources or separate deployment phases
-
-      // Add bucket policy for replication
-      const replicationRole = new iam.Role(this, 'ReplicationRole', {
-        roleName: `s3-replication-role-${environmentSuffix}-${currentRegion}`,
-        assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
-        description: 'Role for S3 cross-region replication',
-      });
-
-      this.backupBucket.grantRead(replicationRole);
-
-      // Add replication policy
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:ReplicateObject',
-            's3:ReplicateDelete',
-            's3:ReplicateTags',
-            's3:GetObjectVersionTagging',
-          ],
-          resources: [
-            `arn:aws:s3:::postgres-dr-backups-${environmentSuffix}-${drRegion}-${cdk.Aws.ACCOUNT_ID}/*`,
-          ],
-        })
-      );
-
-      replicationRole.addToPolicy(
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: [
-            's3:List*',
-            's3:GetBucketVersioning',
-            's3:PutBucketVersioning',
-          ],
-          resources: [
-            `arn:aws:s3:::postgres-dr-backups-${environmentSuffix}-${drRegion}-${cdk.Aws.ACCOUNT_ID}`,
-          ],
-        })
-      );
-    }
-
-    // CloudWatch metrics for S3
-    new cdk.CfnOutput(this, 'S3MetricsEnabled', {
-      value: 'true',
-      description: 'S3 replication metrics enabled',
-    });
-
     // Outputs
     new cdk.CfnOutput(this, 'BackupBucketName', {
       value: this.backupBucket.bucketName,
-      description: `Backup bucket for ${currentRegion}`,
+      description: `Backup bucket for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'BackupBucketArn', {
       value: this.backupBucket.bucketArn,
-      description: `Backup bucket ARN for ${currentRegion}`,
+      description: `Backup bucket ARN for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'KmsKeyId', {
       value: this.kmsKey.keyId,
-      description: `KMS key ID for ${currentRegion}`,
+      description: `KMS key ID for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'KmsKeyArn', {
       value: this.kmsKey.keyArn,
-      description: `KMS key ARN for ${currentRegion}`,
+      description: `KMS key ARN for ${region}`,
     });
 
     // Tags
     cdk.Tags.of(this.backupBucket).add('Name', bucketName);
-    cdk.Tags.of(this.backupBucket).add('Region', currentRegion);
-    cdk.Tags.of(this.backupBucket).add('Purpose', 'PostgreSQL-DR-Backups');
+    cdk.Tags.of(this.backupBucket).add('Region', region);
+    cdk.Tags.of(this.backupBucket).add('Purpose', 'PostgreSQL-Backups');
   }
 }

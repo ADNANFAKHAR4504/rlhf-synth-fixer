@@ -4,26 +4,23 @@ import { Construct } from 'constructs';
 
 export interface NetworkStackProps extends cdk.NestedStackProps {
   environmentSuffix: string;
-  isPrimary: boolean;
-  primaryRegion: string;
-  drRegion: string;
 }
 
 export class NetworkStack extends cdk.NestedStack {
   public readonly vpc: ec2.Vpc;
+  public readonly dbSecurityGroup: ec2.SecurityGroup;
+  public readonly lambdaSecurityGroup: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, isPrimary, primaryRegion, drRegion } = props;
-    const currentRegion = isPrimary ? primaryRegion : drRegion;
+    const { environmentSuffix } = props;
+    const region = cdk.Stack.of(this).region;
 
     // VPC with private subnets for RDS and Lambda
     this.vpc = new ec2.Vpc(this, 'Vpc', {
-      vpcName: `postgres-dr-vpc-${environmentSuffix}-${currentRegion}`,
-      ipAddresses: ec2.IpAddresses.cidr(
-        isPrimary ? '10.0.0.0/16' : '10.1.0.0/16'
-      ),
+      vpcName: `postgres-vpc-${environmentSuffix}`,
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3,
       natGateways: 2, // For high availability
       subnetConfiguration: [
@@ -46,40 +43,32 @@ export class NetworkStack extends cdk.NestedStack {
     });
 
     // Security Group for RDS
-    const dbSecurityGroup = new ec2.SecurityGroup(
+    this.dbSecurityGroup = new ec2.SecurityGroup(
       this,
       'DatabaseSecurityGroup',
       {
-        securityGroupName: `rds-sg-${environmentSuffix}-${currentRegion}`,
+        securityGroupName: `rds-sg-${environmentSuffix}`,
         vpc: this.vpc,
-        description: `Security group for PostgreSQL RDS in ${currentRegion}`,
+        description: `Security group for PostgreSQL RDS in ${region}`,
         allowAllOutbound: true,
       }
     );
 
     // Allow PostgreSQL traffic within VPC
-    dbSecurityGroup.addIngressRule(
+    this.dbSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
       ec2.Port.tcp(5432),
       'Allow PostgreSQL from VPC'
     );
 
-    // Allow traffic from the other region's VPC for cross-region replication
-    const peerVpcCidr = isPrimary ? '10.1.0.0/16' : '10.0.0.0/16';
-    dbSecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(peerVpcCidr),
-      ec2.Port.tcp(5432),
-      'Allow PostgreSQL from peer VPC'
-    );
-
     // Security Group for Lambda
-    const lambdaSecurityGroup = new ec2.SecurityGroup(
+    this.lambdaSecurityGroup = new ec2.SecurityGroup(
       this,
       'LambdaSecurityGroup',
       {
-        securityGroupName: `lambda-sg-${environmentSuffix}-${currentRegion}`,
+        securityGroupName: `lambda-sg-${environmentSuffix}`,
         vpc: this.vpc,
-        description: `Security group for Lambda functions in ${currentRegion}`,
+        description: `Security group for Lambda functions in ${region}`,
         allowAllOutbound: true,
       }
     );
@@ -106,32 +95,29 @@ export class NetworkStack extends cdk.NestedStack {
     });
 
     // Tags
-    cdk.Tags.of(this.vpc).add(
-      'Name',
-      `postgres-dr-vpc-${environmentSuffix}-${currentRegion}`
-    );
-    cdk.Tags.of(this.vpc).add('Region', currentRegion);
-    cdk.Tags.of(this.vpc).add('Purpose', 'PostgreSQL-DR');
+    cdk.Tags.of(this.vpc).add('Name', `postgres-vpc-${environmentSuffix}`);
+    cdk.Tags.of(this.vpc).add('Region', region);
+    cdk.Tags.of(this.vpc).add('Purpose', 'PostgreSQL');
 
     // Outputs
     new cdk.CfnOutput(this, 'VpcIdOutput', {
       value: this.vpc.vpcId,
-      description: `VPC ID for ${currentRegion}`,
+      description: `VPC ID for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'VpcCidrOutput', {
       value: this.vpc.vpcCidrBlock,
-      description: `VPC CIDR for ${currentRegion}`,
+      description: `VPC CIDR for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'DbSecurityGroupId', {
-      value: dbSecurityGroup.securityGroupId,
-      description: `Database security group ID for ${currentRegion}`,
+      value: this.dbSecurityGroup.securityGroupId,
+      description: `Database security group ID for ${region}`,
     });
 
     new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
-      value: lambdaSecurityGroup.securityGroupId,
-      description: `Lambda security group ID for ${currentRegion}`,
+      value: this.lambdaSecurityGroup.securityGroupId,
+      description: `Lambda security group ID for ${region}`,
     });
   }
 }

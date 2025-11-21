@@ -3,13 +3,13 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "n4g8n2",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-19T00:00:00-00:00",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "Failure Recovery Automation"
   ],
+  "po_id": "n4g8n2",
   "aws_services": [
     "RDS",
     "VPC",
@@ -24,10 +24,6 @@
     "Secrets Manager",
     "Route53"
   ],
-  "training_quality": 10,
-  "author": "mayanksethi-turing",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  }
+  "region": "us-east-1",
+  "training_quality": 10
 }
