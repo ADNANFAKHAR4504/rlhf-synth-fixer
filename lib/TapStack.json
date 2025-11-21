@@ -10,12 +10,6 @@
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
-    "WebInstanceType": {
-      "Type": "String",
-      "Description": "Instance type for web tier",
-      "Default": "t3.medium",
-      "AllowedValues": ["t3.small", "t3.medium", "t3.large"]
-    },
     "AppInstanceType": {
       "Type": "String",
       "Description": "Instance type for application tier",
@@ -43,11 +37,6 @@
       "Type": "String",
       "Description": "Cost center tag",
       "Default": "Finance"
-    },
-    "DomainName": {
-      "Type": "String",
-      "Description": "Domain name for CloudFront (must have ACM certificate)",
-      "Default": "example.com"
     }
   },
 
@@ -762,7 +751,7 @@
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.02.0",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"},
         "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
