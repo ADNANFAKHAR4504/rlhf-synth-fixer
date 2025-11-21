@@ -79,26 +79,26 @@ for i, az in enumerate(azs):
     )
     private_subnets.append(subnet)
 
-# Elastic IP for NAT Gateway
-eip = aws.ec2.Eip(
-    f"nat-eip-{environment_suffix}",
-    domain="vpc",
-    tags={
-        "Name": f"nat-eip-{environment_suffix}",
-        "Environment": environment_suffix,
-    },
-)
-
-# NAT Gateway (single for cost optimization)
-nat_gateway = aws.ec2.NatGateway(
-    f"nat-gateway-{environment_suffix}",
-    subnet_id=public_subnets[0].id,
-    allocation_id=eip.id,
-    tags={
-        "Name": f"nat-gateway-{environment_suffix}",
-        "Environment": environment_suffix,
-    },
-)
+# NAT Gateway and EIP commented out due to AWS account quota limits
+# Uncomment these resources when EIP quota is available
+# eip = aws.ec2.Eip(
+#     f"nat-eip-{environment_suffix}",
+#     domain="vpc",
+#     tags={
+#         "Name": f"nat-eip-{environment_suffix}",
+#         "Environment": environment_suffix,
+#     },
+# )
+#
+# nat_gateway = aws.ec2.NatGateway(
+#     f"nat-gateway-{environment_suffix}",
+#     subnet_id=public_subnets[0].id,
+#     allocation_id=eip.id,
+#     tags={
+#         "Name": f"nat-gateway-{environment_suffix}",
+#         "Environment": environment_suffix,
+#     },
+# )
 
 # Public Route Table
 public_route_table = aws.ec2.RouteTable(
