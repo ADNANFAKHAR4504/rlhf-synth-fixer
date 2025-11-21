@@ -706,6 +706,19 @@ jobs:
             echo "📋 Using standard IaC review criteria"
           fi
 
+      - name: Prepare Claude system prompt
+        id: prepare-prompt
+        run: |
+          # Read system prompt from file
+          SYSTEM_PROMPT=$(cat .claude/prompts/claude-review-system-prompt.md)
+          
+          # Store in GITHUB_ENV using heredoc (no expression limit)
+          {
+            echo 'SYSTEM_PROMPT_CONTENT<<PROMPT_EOF'
+            echo "$SYSTEM_PROMPT"
+            echo 'PROMPT_EOF'
+          } >> $GITHUB_ENV
+
       - name: Run Claude PR Review Action
         uses: anthropics/claude-code-action@v1
         with:
@@ -714,191 +727,7 @@ jobs:
           prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review. You MUST post your review findings as a comment on this pull request when complete."
           claude_args: |
             --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-            --system-prompt "CRITICAL: You MUST post a GitHub comment on this pull request when your review is complete. This is mandatory and non-negotiable.
-
-            # Determine Review Type
-
-            First, check the subject_labels in metadata.json to determine the review type:
-            ```bash
-            SUBJECT_LABELS=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
-            if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
-              REVIEW_TYPE="cicd-pipeline"
-            else
-              REVIEW_TYPE="iac-standard"
-            fi
-            echo "Review type: $REVIEW_TYPE"
-            ```
-
-            # CI/CD Pipeline Review (If REVIEW_TYPE=cicd-pipeline)
-
-            If this is a CI/CD Pipeline task, follow these specialized review criteria:
-
-            ## Step 1: Read CI/CD Pipeline Review Guidelines
-            Read and follow `.claude/prompts/cicd-pipeline-review.md` for complete scoring criteria.
-
-            ## Step 2: Validate lib/ci-cd.yml
-
-            The CI/CD pipeline configuration is in `lib/ci-cd.yml`. Review it against these critical criteria:
-
-            ### Security (3 points - CRITICAL)
-            1. **Secrets Management (2 points)** - NO hardcoded secrets, all use `${{ secrets.* }}` or `${{ vars.* }}`
-            2. **IAM & Authentication (1 point)** - Proper OIDC or GitHub Secrets authentication
-
-            If ANY hardcoded secrets found: **Automatic FAIL (score = 0)**
-
-            ### Architecture (3 points)
-            1. **Multi-stage deployment (2 points)** - Dev → Staging → Prod with approval gates
-            2. **Job dependencies & artifacts (1 point)** - Proper `needs:` relationships and artifact management
-
-            ### Configuration Management (2 points)
-            1. **Environment variables & parameterization** - Reusable env vars, workflow_dispatch inputs
-
-            ### Requirements Compliance (2 points)
-            1. **lib/ci-cd.yml patterns (1.5 points)** - Follows specification and best practices
-            2. **PROMPT requirements (0.5 points)** - All requirements from lib/PROMPT.md implemented
-
-            ## Step 3: Calculate Score (Total: 10 points)
-
-            Sum all category scores directly (no conversion needed).
-            - Minimum passing score: 8/10
-
-            ## Step 4: Update metadata.json with Training Quality
-
-            **MANDATORY ACTION**: You MUST update metadata.json with the training quality score using the Bash tool.
-
-            After calculating your score, execute this command using the Bash tool (replace <score> with actual numeric value 0-10):
-
-            ```bash
-            jq --argjson tq <score> '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to <score>/10" && cat metadata.json
-            ```
-
-            Example if score is 10:
-            ```bash
-            jq --argjson tq 10 '.training_quality = $tq' metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && echo "Updated training_quality to 10/10" && cat metadata.json
-            ```
-
-            **Verification**: After running the command, verify the output shows training_quality field was added to metadata.json.
-
-            **CRITICAL**: Do NOT skip this step. The metadata.json MUST be updated before posting the review comment.
-
-            **Note**: CI/CD Pipeline tasks do NOT require aws_services field. Do NOT flag aws_services as missing for CI/CD tasks.
-
-            ## Step 5: Post Review Comment
-
-            Post a GitHub comment with the format specified in `.claude/prompts/cicd-pipeline-review.md`.
-
-            ## Step 6: Output Score
-
-            At the very end of your output, on its own line:
-            ```
-            SCORE:<numeric_value>
-            ```
-
-            Example: `SCORE:8`
-
-            ---
-
-            # Standard IaC Review (If REVIEW_TYPE=iac-standard)
-
-            If this is NOT a CI/CD Pipeline task, follow the standard review process:
-
-            CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
-            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
-            2. Read the PROMPT files
-            3. Assess whether the content looks human-generated or AI-generated
-            4. Look for signs of AI generation such as:
-                - Emojis or special symbols (icons) used for formatting
-                - Table structures
-                - Overly formal or template-like language
-                - Logs are allowed when we have multiple prompt files. 
-                - Perfect formatting that suggests AI assistance
-                - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, fail the job by exiting with code 1.
-            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
-            7. PROMPT2.md and PROMPT3.md are optional, but if they exist, they must also be validated and it can contain Deployment/Test/Error logs as well.
-
-            CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
-            1. Read lib/IDEAL_RESPONSE.md if it exists
-            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
-            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
-            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
-
-            CRITICAL WARNING - FILE CONTEXT:
-            - lib/MODEL_RESPONSE.md = Initial model output (MAY contain errors like Maven, multi-stack, etc.)
-            - lib/IDEAL_RESPONSE.md = Final corrected code (THIS is what you validate for platform/language compliance)
-            - lib/MODEL_FAILURES.md = Documentation of what WAS FIXED (past tense) - NOT current errors!
-
-            When validating platform/language compliance, you MUST:
-            1. Run: bash ./.claude/scripts/validate-code-platform.sh
-            2. This script checks lib/IDEAL_RESPONSE.md (NOT MODEL_RESPONSE.md) against metadata.json
-            3. If MODEL_FAILURES.md mentions "Maven → Gradle" or "multi-stack → single stack", those are PAST fixes
-            4. DO NOT report those as current problems in IDEAL_RESPONSE.md
-            5. Only validate what is CURRENTLY in lib/IDEAL_RESPONSE.md
-
-            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
-            Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
-            metadata.json file is updated with the required fields:
-
-            For standard IaC tasks:
-            - training_quality (required)
-            - aws_services (required)
-
-            For CI/CD Pipeline tasks (subject_label: "CI/CD Pipeline" OR platform: "cicd"):
-            - training_quality (required)
-            - aws_services (NOT required - CI/CD pipelines don't deploy AWS services)
-
-            If metadata.json is missing required fields for the task type, add a github comment indicating the issue.
-
-            This validation is mandatory and must be completed before any other review activities.
-
-            Now follow the instructions in .claude/agents/iac-code-reviewer.md
-
-            ---
-
-            # ⚠️ CRITICAL: Final Output Format (Both Review Types)
-
-            **MANDATORY**: Your GitHub comment MUST end with this exact line:
-
-            SCORE:X
-
-            Where X is a number from 0 to 10 (your training quality score).
-
-            **Format Requirements:**
-            - Must be on its own line (no other text on that line)
-            - Must be the LAST line of your GitHub comment
-            - Must use exact format: SCORE:8 (no spaces between SCORE: and number)
-            - Score must be 0-10 (scores > 10 will be rejected as false matches)
-            - Do NOT use compliance scores (like 12/17) or other metrics
-
-            **Examples of VALID formats:**
-            ```
-            SCORE:10
-            SCORE:8
-            SCORE:6
-            ```
-
-            **Examples of INVALID formats:**
-            ```
-            SCORE: 8 (extra space)
-            Training Quality Score: 8/10 (wrong format, but acceptable as fallback)
-            Compliance Score: 12/17 (will be rejected - exceeds maximum)
-            ```
-
-            **MANDATORY FINAL STEPS**:
-            1. Update metadata.json with training_quality field (primary source)
-            2. Post comprehensive GitHub comment with review findings
-            3. End comment with SCORE:X line where X is 0-10
-
-            **What happens if you don't follow this:**
-            - Without SCORE line: Score defaults to 0, build FAILS
-            - Score > 10: Rejected as false match, score set to 0, build FAILS
-            - Without metadata.json update: Fallback to comment parsing, less reliable
-
-            After posting the comment with the SCORE line, finish execution successfully.
-            Do not exit with a non-zero code unless explicitly instructed by the workflow."
-
+            --system-prompt "${{ env.SYSTEM_PROMPT_CONTENT }}"
       - name: Extract Claude Quality Score from PR Comment
         id: extract
         env:
