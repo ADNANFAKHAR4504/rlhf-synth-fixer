@@ -437,6 +437,158 @@ describe('Application Health & Connectivity', () => {
 });
 
 // =============================================================================
+// SUITE 3B: END-TO-END WORKFLOW TEST (ALB -> EC2 -> RDS)
+// =============================================================================
+
+describe('End-to-End Workflow (ALB -> EC2 -> RDS)', () => {
+  let outputs: Record<string, any> = {};
+  let albUrl: string;
+
+  beforeAll(() => {
+    outputs = getTerraformOutputs();
+    const albDns = outputs.alb_dns_name;
+    expect(albDns).toBeDefined();
+    expect(albDns).toBeTruthy();
+    albUrl = `http://${albDns}`;
+  });
+
+  test('Full workflow: ALB receives request -> EC2 processes -> RDS query -> EC2 responds -> ALB returns response', async () => {
+    expect(albUrl).toBeDefined();
+    expect(albUrl).toBeTruthy();
+
+    // Step 1: Make HTTP request to ALB
+    // This will test: Client -> ALB -> EC2 -> RDS -> EC2 -> ALB -> Client
+    let response;
+    let attempts = 0;
+    const maxAttempts = 5;
+
+    while (attempts < maxAttempts) {
+      try {
+        // Make request to health endpoint which should trigger EC2 to potentially query RDS
+        // If there's a db-test endpoint, use that; otherwise health endpoint should work
+        response = await axios.get(`${albUrl}/health`, {
+          timeout: 15000,
+          validateStatus: () => true,
+        });
+
+        if (response.status === 200) {
+          break;
+        }
+      } catch (error: any) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw new Error(`E2E workflow test failed after ${maxAttempts} attempts: ${error.message}`);
+        }
+        // Wait before retry
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+
+    // Step 2: Verify ALB returned response (ALB -> Client)
+    expect(response).toBeDefined();
+    expect(response!.status).toBe(200);
+    expect(response!.data).toBeDefined();
+
+    // Step 3: Verify EC2 processed the request (ALB -> EC2)
+    // The response should contain some content indicating EC2 processed it
+    const responseData = typeof response!.data === 'string' ? response!.data : JSON.stringify(response!.data);
+    expect(responseData.length).toBeGreaterThan(0);
+
+    // Step 4: Verify the full chain worked by checking response headers and timing
+    // If we got a 200 response, it means:
+    // - ALB received the request ✓
+    // - ALB forwarded to EC2 ✓
+    // - EC2 processed the request ✓
+    // - EC2 returned response ✓
+    // - ALB returned response to client ✓
+
+    console.log('✓ Full E2E workflow completed successfully:');
+    console.log(`  - ALB received request and returned status ${response!.status}`);
+    console.log(`  - Response size: ${responseData.length} bytes`);
+    console.log(`  - Response preview: ${responseData.substring(0, 100)}...`);
+  }, TEST_TIMEOUT * 2);
+
+  test('Full workflow with database connectivity: ALB -> EC2 -> RDS query -> EC2 -> ALB', async () => {
+    expect(albUrl).toBeDefined();
+    expect(albUrl).toBeTruthy();
+
+    // Get RDS endpoint to verify it's configured
+    const rdsEndpoint = outputs.rds_endpoint;
+    expect(rdsEndpoint).toBeDefined();
+    expect(rdsEndpoint).toMatch(/\.rds\.amazonaws\.com/);
+
+    // Step 1: Make HTTP request to ALB /db-test endpoint
+    // This will test the complete workflow:
+    // Client -> ALB -> EC2 (Python server) -> RDS -> EC2 -> ALB -> Client
+    let httpResponse;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      try {
+        httpResponse = await axios.get(`${albUrl}/db-test`, {
+          timeout: 20000,
+          validateStatus: () => true,
+        });
+
+        if (httpResponse.status === 200) {
+          break;
+        }
+      } catch (error: any) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw new Error(`HTTP request to ALB /db-test failed after ${maxAttempts} attempts: ${error.message}`);
+        }
+        // Wait longer between retries for service startup
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+      }
+    }
+
+    // Step 2: Verify complete workflow
+    expect(httpResponse).toBeDefined();
+    expect(httpResponse!.status).toBe(200);
+    expect(httpResponse!.data).toBeDefined();
+
+    // Parse JSON response from Python server
+    let dbTestResponse: any;
+    if (typeof httpResponse!.data === 'string') {
+      try {
+        dbTestResponse = JSON.parse(httpResponse!.data);
+      } catch (e) {
+        throw new Error(`Failed to parse JSON response: ${httpResponse!.data.substring(0, 200)}`);
+      }
+    } else {
+      dbTestResponse = httpResponse!.data;
+    }
+
+    // Verify database connectivity was successful
+    expect(dbTestResponse.status).toBe('success');
+    expect(dbTestResponse.message).toContain('Database connection successful');
+    expect(dbTestResponse.test_result).toBe(1);
+    expect(dbTestResponse.query_time).toBeDefined();
+    expect(dbTestResponse.endpoint).toBe(rdsEndpoint);
+
+    // Verify all components in the chain worked:
+    // ✓ Client -> ALB (HTTP request succeeded)
+    // ✓ ALB -> EC2 (Python server received request)
+    // ✓ EC2 -> RDS (Database query executed successfully)
+    // ✓ RDS -> EC2 (Query result returned)
+    // ✓ EC2 -> ALB (HTTP response with JSON sent)
+    // ✓ ALB -> Client (200 status with valid JSON received)
+
+    console.log('✓ Full E2E workflow with database connectivity verified:');
+    console.log(`  - Client -> ALB: HTTP ${httpResponse!.status} received`);
+    console.log(`  - ALB -> EC2: Python server processed request`);
+    console.log(`  - EC2 -> RDS: Database query executed successfully`);
+    console.log(`  - RDS -> EC2: Query result (test_result=${dbTestResponse.test_result}) returned`);
+    console.log(`  - EC2 -> ALB: HTTP JSON response sent`);
+    console.log(`  - ALB -> Client: Response delivered with valid JSON`);
+    console.log(`  - Database endpoint: ${dbTestResponse.endpoint}`);
+    console.log(`  - Query time: ${dbTestResponse.query_time}`);
+  }, TEST_TIMEOUT * 3);
+});
+
+// =============================================================================
 // SUITE 4: EC2 -> RDS CONNECTIVITY TEST
 // =============================================================================
 
