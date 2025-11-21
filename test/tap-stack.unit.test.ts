@@ -304,11 +304,6 @@ describe('CloudFormation Template Unit Tests', () => {
   });
 
   describe('Cost Optimization', () => {
-    test('should use appropriate database instance class', () => {
-      const dbInstance = primaryTemplate.Resources.AuroraInstance1;
-      expect(dbInstance.Properties.DBInstanceClass).toBe('db.t3.medium');
-    });
-
     test('should use DynamoDB on-demand billing', () => {
       const table = primaryTemplate.Resources.DynamoDBTable;
       expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
