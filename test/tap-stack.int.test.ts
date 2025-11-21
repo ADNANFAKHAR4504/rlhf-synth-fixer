@@ -377,7 +377,7 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       expect(response.VpcEndpoints![0].State).toBe('available');
     });
 
-    test('should use only Gateway endpoints (no Interface endpoints for cost/limit efficiency)', async () => {
+    test('should have all required VPC endpoints (S3, DynamoDB, Secrets Manager)', async () => {
       if (!outputs.VpcId) {
         console.warn('VpcId not found in outputs, skipping test');
         return;
@@ -389,9 +389,20 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
         ]
       }).promise();
 
-      // All endpoints should be Gateway type (S3 and DynamoDB)
+      // Should have 3 VPC endpoints total
+      expect(response.VpcEndpoints!.length).toBe(3);
+      
+      // Count Gateway and Interface endpoints
+      const gatewayEndpoints = response.VpcEndpoints!.filter(e => e.VpcEndpointType === 'Gateway');
+      const interfaceEndpoints = response.VpcEndpoints!.filter(e => e.VpcEndpointType === 'Interface');
+      
+      // 2 Gateway (S3, DynamoDB) + 1 Interface (Secrets Manager)
+      expect(gatewayEndpoints.length).toBe(2);
+      expect(interfaceEndpoints.length).toBe(1);
+      
+      // All should be available
       response.VpcEndpoints!.forEach(endpoint => {
-        expect(endpoint.VpcEndpointType).toBe('Gateway');
+        expect(endpoint.State).toBe('available');
       });
     });
   });
@@ -457,8 +468,8 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
     });
   });
 
-  describe('Data Storage Security - DynamoDB', () => {
-    test('should use DynamoDB with KMS encryption (no passwords needed)', async () => {
+  describe('Data Storage Security - DynamoDB & Secrets Manager', () => {
+    test('should use DynamoDB with KMS encryption', async () => {
       if (!outputs.TransactionTableName) {
         console.warn('TransactionTableName not found in outputs, skipping test');
         return;
@@ -473,10 +484,20 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       expect(response.Table?.SSEDescription?.SSEType).toBe('KMS');
     });
 
-    test('should NOT have Secrets Manager (not needed for DynamoDB)', async () => {
-      // Verify no secrets are created for this stack
-      // DynamoDB uses IAM authentication, no passwords required
-      expect(outputs.DatabaseSecretArn).toBeUndefined();
+    test('should have Secrets Manager for credential rotation', async () => {
+      // Verify Secrets Manager secret is created and configured
+      // Required by PROMPT for automatic 30-day credential rotation
+      expect(outputs.DatabaseSecretArn).toBeDefined();
+      
+      // Verify secret exists in AWS
+      const secretResponse = await secretsManager.describeSecret({
+        SecretId: outputs.DatabaseSecretArn
+      }).promise();
+      
+      expect(secretResponse.ARN).toBe(outputs.DatabaseSecretArn);
+      expect(secretResponse.KmsKeyId).toBeDefined(); // KMS encryption
+      expect(secretResponse.RotationEnabled).toBe(true); // Rotation enabled
+      expect(secretResponse.RotationRules?.AutomaticallyAfterDays).toBe(30); // 30-day rotation
     });
   });
 
@@ -721,13 +742,12 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       }
     });
 
-    test('DynamoDB uses IAM authentication (no password rotation needed)', async () => {
+    test('Secrets Manager with automatic rotation is configured', async () => {
       if (!outputs.TransactionTableName) {
         console.warn('TransactionTableName not found in outputs, skipping test');
         return;
       }
 
-      // DynamoDB authentication is handled via IAM roles, not passwords
       // Verify DynamoDB table is properly secured with KMS encryption
       const table = await dynamodb.describeTable({
         TableName: outputs.TransactionTableName
@@ -736,8 +756,17 @@ describe('Integration Tests - Secure Financial Data Processing Pipeline', () => 
       expect(table.Table?.SSEDescription?.Status).toBe('ENABLED');
       expect(table.Table?.SSEDescription?.SSEType).toBe('KMS');
       
-      // No Secrets Manager needed - DynamoDB uses IAM
-      expect(outputs.DatabaseSecretArn).toBeUndefined();
+      // Verify Secrets Manager is configured per PROMPT requirements
+      expect(outputs.DatabaseSecretArn).toBeDefined();
+      
+      // Verify secret has automatic 30-day rotation enabled
+      const secretResponse = await secretsManager.describeSecret({
+        SecretId: outputs.DatabaseSecretArn
+      }).promise();
+      
+      expect(secretResponse.RotationEnabled).toBe(true);
+      expect(secretResponse.RotationRules?.AutomaticallyAfterDays).toBe(30);
+      expect(secretResponse.KmsKeyId).toBeDefined(); // KMS encryption required
     });
   });
 });
