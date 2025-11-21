@@ -257,7 +257,8 @@ def _create_dms_replication_instance(self) -> dms.CfnReplicationInstance:
             self.dms_replication_subnet_group.replication_subnet_group_identifier
         ),
         vpc_security_group_ids=[dms_sg.security_group_id],
-        engine_version="3.5.2",
+        # Note: engine_version omitted to use AWS default/latest supported version
+        # This ensures compatibility with current AWS DMS service versions
         kms_key_id=self.kms_key.key_id  # Encryption at rest
     )
 ```

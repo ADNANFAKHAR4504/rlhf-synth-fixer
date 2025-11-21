@@ -179,7 +179,7 @@ class TestDMS:
             "AllocatedStorage": 100,
             "MultiAZ": True,
             "PubliclyAccessible": False,
-            "EngineVersion": "3.5.2"
+            # Note: EngineVersion omitted to use AWS default/latest supported version
         })
 
     def test_dms_security_group(self, template):
@@ -195,17 +195,28 @@ class TestCloudEndureRole:
 
     def test_cloudendure_role_exists(self, template):
         """Test CloudEndure IAM role is created."""
-        template.has_resource_properties("AWS::IAM::Role", {
-            "AssumeRolePolicyDocument": {
-                "Statement": Match.array_with([
-                    Match.object_like({
-                        "Principal": {
-                            "Service": "cloudendure.amazonaws.com"
-                        }
-                    })
-                ])
-            }
-        })
+        # CloudEndure agents run on EC2 instances, so role must be assumable by EC2
+        # Find the CloudEndure role by matching both role name and service principal
+        resources = template.find_resources("AWS::IAM::Role")
+        cloudendure_role_found = False
+        for resource_id, resource in resources.items():
+            props = resource.get("Properties", {})
+            role_name = props.get("RoleName", "")
+            assume_policy = props.get("AssumeRolePolicyDocument", {})
+            statements = assume_policy.get("Statement", [])
+            
+            # Check if this is the CloudEndure role (matches naming pattern)
+            if "cloudendure-role" in role_name or "CloudEndureRole" in resource_id:
+                for stmt in statements:
+                    principal = stmt.get("Principal", {})
+                    service = principal.get("Service", "")
+                    if service == "ec2.amazonaws.com":
+                        cloudendure_role_found = True
+                        break
+                if cloudendure_role_found:
+                    break
+        
+        assert cloudendure_role_found, "CloudEndure role with ec2.amazonaws.com service principal not found"
 
     def test_cloudendure_role_policies(self, template):
         """Test CloudEndure role has required policies."""

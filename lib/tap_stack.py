@@ -289,7 +289,8 @@ class TapStack(Stack):
             publicly_accessible=False,
             replication_subnet_group_identifier=self.dms_replication_subnet_group.replication_subnet_group_identifier,
             vpc_security_group_ids=[dms_security_group.security_group_id],
-            engine_version="3.5.2",
+            # Note: engine_version omitted to use AWS default/latest supported version
+            # This ensures compatibility with current AWS DMS service versions
             kms_key_id=self.kms_key.key_id,
             tags=[
                 cdk.CfnTag(key="Name", value=f"dms-replication-{self.environment_suffix}"),

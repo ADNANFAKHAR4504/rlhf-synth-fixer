@@ -6,7 +6,7 @@ This analysis documents the infrastructure improvements and corrections made dur
 
 ## Summary
 
-One critical deployment failure was identified and fixed: an invalid IAM service principal for CloudEndure. Additionally, minor improvements were made to enhance code quality, testability, and adherence to project standards.
+Two critical deployment failures were identified and fixed: an invalid IAM service principal for CloudEndure and an invalid DMS engine version. Additionally, minor improvements were made to enhance code quality, testability, and adherence to project standards.
 
 ---
 
@@ -40,6 +40,50 @@ assumed_by=iam.ServicePrincipal("ec2.amazonaws.com")
 - Valid service principals: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html#principal-services
 
 **Training Value**: HIGH - This demonstrates the importance of understanding valid AWS service principals and how third-party services (like CloudEndure) interact with AWS IAM.
+
+---
+
+### 2. Invalid DMS Replication Instance Engine Version
+
+**Impact Level**: Critical (Deployment Blocker)
+
+**Initial Implementation Issue**: The DMS replication instance specified engine version `3.5.2`, which is not available in AWS DMS, causing stack deployment to fail with:
+
+```
+Resource handler returned message: "No replication engine found with version: 3.5.2 
+(Service: AWSDatabaseMigrationService; Status Code: 400; Error Code: InvalidParameterValueException)"
+```
+
+**Root Cause**: DMS engine version `3.5.2` is not a valid or available version in AWS DMS. Engine versions change over time, and specific versions may be deprecated or unavailable in certain regions.
+
+**IDEAL_RESPONSE Fix**: Removed the `engine_version` parameter to use AWS default/latest supported version:
+
+```python
+# Before (Invalid)
+replication_instance = dms.CfnReplicationInstance(
+    ...
+    engine_version="3.5.2",  # Invalid version
+    ...
+)
+
+# After (Correct)
+replication_instance = dms.CfnReplicationInstance(
+    ...
+    # Note: engine_version omitted to use AWS default/latest supported version
+    # This ensures compatibility with current AWS DMS service versions
+    ...
+)
+```
+
+**AWS Documentation Reference**: 
+- AWS DMS engine versions: https://docs.aws.amazon.com/dms/latest/userguide/CHAP_ReplicationInstance.html
+- When `engine_version` is omitted, AWS uses the default/latest supported version for the region
+
+**Training Value**: HIGH - This demonstrates the importance of either:
+1. Using valid, current AWS service versions (requires up-to-date knowledge)
+2. Omitting version parameters to use AWS defaults (more future-proof approach)
+
+**Best Practice**: For services like DMS where versions change frequently, omitting the `engine_version` parameter is often the safest approach as it allows AWS to use the latest supported version automatically.
 
 ---
 
@@ -263,7 +307,7 @@ The implementation demonstrates several architectural strengths:
 
 ## Summary
 
-- Total failures: 1 Critical, 0 High, 0 Medium, 6 Low
+- Total failures: 2 Critical, 0 High, 0 Medium, 6 Low
 - Primary knowledge gaps: None significant
 - Training value: The implementation demonstrates strong understanding of AWS CDK patterns, multi-service orchestration, and infrastructure best practices. The minor corrections primarily involve Python-specific CDK patterns and code quality standards rather than architectural or AWS service knowledge gaps.
 
