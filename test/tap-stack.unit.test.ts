@@ -86,6 +86,14 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.DBPassword.NoEcho).toBe(true);
       expect(template.Parameters.DBPassword.Default).toBeDefined();
     });
+
+    test('should have LambdaReservedConcurrency parameter', () => {
+      expect(template.Parameters.LambdaReservedConcurrency).toBeDefined();
+      expect(template.Parameters.LambdaReservedConcurrency.Type).toBe('Number');
+      expect(template.Parameters.LambdaReservedConcurrency.Default).toBe(10);
+      expect(template.Parameters.LambdaReservedConcurrency.MinValue).toBe(1);
+      expect(template.Parameters.LambdaReservedConcurrency.MaxValue).toBe(1000);
+    });
   });
 
   describe('Conditions', () => {
@@ -313,7 +321,7 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('TransactionProcessorFunction should have reserved concurrent executions', () => {
       const resource = template.Resources.TransactionProcessorFunction;
-      expect(resource.Properties.ReservedConcurrentExecutions).toBe(100);
+      expect(resource.Properties.ReservedConcurrentExecutions).toEqual({ Ref: 'LambdaReservedConcurrency' });
     });
 
     test('TransactionProcessorFunction should have VPC configuration', () => {
