@@ -76,7 +76,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
     test('ContainerImage parameter should have correct properties', () => {
       const param = template.Parameters.ContainerImage;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('nginx:latest');
+      expect(param.Default).toBe('node:18-alpine');
       expect(param.Description).toContain('Docker image');
     });
 
@@ -134,7 +134,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
     test('VPC should use environmentSuffix in naming', () => {
       const vpc = template.Resources.VPC;
       expect(vpc.Properties.Tags[0].Value).toEqual({
-        'Fn::Sub': 'vpc-${EnvironmentSuffix}'
+        'Fn::Sub': 'vpc-v1-${EnvironmentSuffix}'
       });
     });
 
@@ -143,7 +143,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(igw).toBeDefined();
       expect(igw.Type).toBe('AWS::EC2::InternetGateway');
       expect(igw.Properties.Tags[0].Value).toEqual({
-        'Fn::Sub': 'igw-${EnvironmentSuffix}'
+        'Fn::Sub': 'igw-v1-${EnvironmentSuffix}'
       });
     });
 
@@ -311,7 +311,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       const sg = template.Resources.ALBSecurityGroup;
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.GroupName).toEqual({ 'Fn::Sub': 'alb-sg-${EnvironmentSuffix}' });
+      expect(sg.Properties.GroupName).toEqual({ 'Fn::Sub': 'alb-sg-v1-${EnvironmentSuffix}' });
       expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
 
       const ingress = sg.Properties.SecurityGroupIngress;
@@ -328,7 +328,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       const sg = template.Resources.ECSSecurityGroup;
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.GroupName).toEqual({ 'Fn::Sub': 'ecs-sg-${EnvironmentSuffix}' });
+      expect(sg.Properties.GroupName).toEqual({ 'Fn::Sub': 'ecs-sg-v1-${EnvironmentSuffix}' });
       expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
 
       const ingress = sg.Properties.SecurityGroupIngress;
@@ -342,7 +342,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       const sg = template.Resources.RDSSecurityGroup;
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.GroupName).toEqual({ 'Fn::Sub': 'rds-sg-${EnvironmentSuffix}' });
+      expect(sg.Properties.GroupName).toEqual({ 'Fn::Sub': 'rds-sg-v1-${EnvironmentSuffix}' });
       expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
 
       const ingress = sg.Properties.SecurityGroupIngress;
@@ -373,7 +373,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
       expect(subnetGroup.Properties.DBSubnetGroupName).toEqual({
-        'Fn::Sub': 'db-subnet-group-${EnvironmentSuffix}'
+        'Fn::Sub': 'db-subnet-group-v1-${EnvironmentSuffix}'
       });
       expect(subnetGroup.Properties.SubnetIds).toHaveLength(3);
       expect(subnetGroup.Properties.SubnetIds).toEqual([
@@ -388,7 +388,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(secret).toBeDefined();
       expect(secret.Type).toBe('AWS::SecretsManager::Secret');
       expect(secret.Properties.Name).toEqual({
-        'Fn::Sub': 'aurora-credentials-${EnvironmentSuffix}'
+        'Fn::Sub': 'aurora-credentials-v1-${EnvironmentSuffix}'
       });
       expect(secret.Properties.Description).toContain('Aurora MySQL');
 
@@ -407,7 +407,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(cluster.Properties.Engine).toBe('aurora-mysql');
       expect(cluster.Properties.EngineVersion).toBe('8.0.mysql_aurora.3.04.0');
       expect(cluster.Properties.DBClusterIdentifier).toEqual({
-        'Fn::Sub': 'aurora-cluster-${EnvironmentSuffix}'
+        'Fn::Sub': 'aurora-cluster-v1-${EnvironmentSuffix}'
       });
       expect(cluster.Properties.DatabaseName).toBe('loandb');
       expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
@@ -457,7 +457,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'loan-app-static-assets-${EnvironmentSuffix}-${AWS::AccountId}'
+        'Fn::Sub': 'loan-app-static-assets-v1-${EnvironmentSuffix}-${AWS::AccountId}'
       });
     });
 
@@ -505,7 +505,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(oai).toBeDefined();
       expect(oai.Type).toBe('AWS::CloudFront::CloudFrontOriginAccessIdentity');
       expect(oai.Properties.CloudFrontOriginAccessIdentityConfig.Comment).toEqual({
-        'Fn::Sub': 'OAI for loan app static assets ${EnvironmentSuffix}'
+        'Fn::Sub': 'OAI for loan app static assets -v1-${EnvironmentSuffix}'
       });
     });
 
@@ -565,7 +565,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(cluster).toBeDefined();
       expect(cluster.Type).toBe('AWS::ECS::Cluster');
       expect(cluster.Properties.ClusterName).toEqual({
-        'Fn::Sub': 'loan-app-cluster-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-cluster-v1-${EnvironmentSuffix}'
       });
       expect(cluster.Properties.ClusterSettings).toEqual([
         { Name: 'containerInsights', Value: 'enabled' }
@@ -579,7 +579,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.RoleName).toEqual({
-        'Fn::Sub': 'ecs-task-execution-role-${EnvironmentSuffix}'
+        'Fn::Sub': 'ecs-task-execution-role-v1-${EnvironmentSuffix}'
       });
 
       const assumePolicy = role.Properties.AssumeRolePolicyDocument;
@@ -598,7 +598,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.RoleName).toEqual({
-        'Fn::Sub': 'ecs-task-role-${EnvironmentSuffix}'
+        'Fn::Sub': 'ecs-task-role-v1-${EnvironmentSuffix}'
       });
 
       const policies = role.Properties.Policies;
@@ -620,7 +620,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(taskDef).toBeDefined();
       expect(taskDef.Type).toBe('AWS::ECS::TaskDefinition');
       expect(taskDef.Properties.Family).toEqual({
-        'Fn::Sub': 'loan-app-task-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-task-v1-${EnvironmentSuffix}'
       });
       expect(taskDef.Properties.NetworkMode).toBe('awsvpc');
       expect(taskDef.Properties.RequiresCompatibilities).toEqual(['FARGATE']);
@@ -709,7 +709,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(logGroup).toBeDefined();
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
       expect(logGroup.Properties.LogGroupName).toEqual({
-        'Fn::Sub': '/ecs/loan-app-${EnvironmentSuffix}'
+        'Fn::Sub': '/ecs/loan-app-v1-${EnvironmentSuffix}'
       });
       expect(logGroup.Properties.RetentionInDays).toBe(30);
     });
@@ -725,7 +725,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(alb).toBeDefined();
       expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
       expect(alb.Properties.Name).toEqual({
-        'Fn::Sub': 'loan-app-alb-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-alb-v1-${EnvironmentSuffix}'
       });
       expect(alb.Properties.Type).toBe('application');
       expect(alb.Properties.Scheme).toBe('internet-facing');
@@ -742,7 +742,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(tg).toBeDefined();
       expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
       expect(tg.Properties.Name).toEqual({
-        'Fn::Sub': 'loan-app-tg-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-tg-v1-${EnvironmentSuffix}'
       });
       expect(tg.Properties.Port).toBe(3000);
       expect(tg.Properties.Protocol).toBe('HTTP');
@@ -784,7 +784,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(service).toBeDefined();
       expect(service.Type).toBe('AWS::ECS::Service');
       expect(service.Properties.ServiceName).toEqual({
-        'Fn::Sub': 'loan-app-service-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-service-v1-${EnvironmentSuffix}'
       });
       expect(service.Properties.Cluster).toEqual({ Ref: 'ECSCluster' });
       expect(service.Properties.TaskDefinition).toEqual({ Ref: 'ECSTaskDefinition' });
@@ -812,7 +812,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(loadBalancers[0].ContainerName).toBe('loan-app');
       expect(loadBalancers[0].ContainerPort).toBe(3000);
       expect(loadBalancers[0].TargetGroupArn).toEqual({ Ref: 'ALBTargetGroup' });
-      expect(service.Properties.HealthCheckGracePeriodSeconds).toBe(60);
+      expect(service.Properties.HealthCheckGracePeriodSeconds).toBe(120);
     });
   });
 
@@ -883,7 +883,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(topic).toBeDefined();
       expect(topic.Type).toBe('AWS::SNS::Topic');
       expect(topic.Properties.TopicName).toEqual({
-        'Fn::Sub': 'loan-app-alerts-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-alerts-v1-${EnvironmentSuffix}'
       });
       expect(topic.Properties.DisplayName).toBe('Loan App Critical Alerts');
     });
@@ -903,7 +903,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(alarm).toBeDefined();
       expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(alarm.Properties.AlarmName).toEqual({
-        'Fn::Sub': 'ecs-task-failure-${EnvironmentSuffix}'
+        'Fn::Sub': 'ecs-task-failure-v1-${EnvironmentSuffix}'
       });
       expect(alarm.Properties.MetricName).toBe('RunningTaskCount');
       expect(alarm.Properties.Threshold).toBe(1);
@@ -916,7 +916,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(alarm).toBeDefined();
       expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
       expect(alarm.Properties.AlarmName).toEqual({
-        'Fn::Sub': 'rds-cpu-high-${EnvironmentSuffix}'
+        'Fn::Sub': 'rds-cpu-high-v1-${EnvironmentSuffix}'
       });
       expect(alarm.Properties.MetricName).toBe('CPUUtilization');
       expect(alarm.Properties.Threshold).toBe(80);
@@ -931,7 +931,7 @@ describe('TapStack CloudFormation Template - Loan Processing Infrastructure', ()
       expect(dashboard).toBeDefined();
       expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
       expect(dashboard.Properties.DashboardName).toEqual({
-        'Fn::Sub': 'loan-app-dashboard-${EnvironmentSuffix}'
+        'Fn::Sub': 'loan-app-dashboard-v1-${EnvironmentSuffix}'
       });
     });
 

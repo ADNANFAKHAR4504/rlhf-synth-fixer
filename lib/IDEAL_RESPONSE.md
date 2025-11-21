@@ -13,7 +13,6 @@ This is the corrected CloudFormation JSON template that addresses the deployment
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Loan Processing Web Portal - Production Infrastructure with ECS Fargate, Aurora MySQL, ALB, CloudFront, and Auto Scaling",
-
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -28,19 +27,31 @@ This is the corrected CloudFormation JSON template that addresses the deployment
     "ContainerImage": {
       "Type": "String",
       "Description": "Docker image for ECS tasks",
-      "Default": "nginx:latest"
+      "Default": "node:18-alpine"
     },
     "ContainerCpu": {
       "Type": "String",
       "Description": "CPU units for ECS task (256, 512, 1024, 2048, 4096)",
       "Default": "512",
-      "AllowedValues": ["256", "512", "1024", "2048", "4096"]
+      "AllowedValues": [
+        "256",
+        "512",
+        "1024",
+        "2048",
+        "4096"
+      ]
     },
     "ContainerMemory": {
       "Type": "String",
       "Description": "Memory for ECS task in MB",
       "Default": "1024",
-      "AllowedValues": ["512", "1024", "2048", "4096", "8192"]
+      "AllowedValues": [
+        "512",
+        "1024",
+        "2048",
+        "4096",
+        "8192"
+      ]
     },
     "DBMasterUsername": {
       "Type": "String",
@@ -60,136 +71,202 @@ This is the corrected CloudFormation JSON template that addresses the deployment
       "Default": "https://example.com"
     }
   },
-
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": {"Ref": "VpcCIDR"},
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "vpc-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "vpc-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "igw-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "InternetGatewayId": {"Ref": "InternetGateway"}
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
-
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-1-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-2-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PublicSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-3-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-1-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-2-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.13.0/24",
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-3-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "NatGateway1EIP": {
       "Type": "AWS::EC2::EIP",
       "DependsOn": "AttachGateway",
@@ -198,12 +275,13 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-1-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "NatGateway2EIP": {
       "Type": "AWS::EC2::EIP",
       "DependsOn": "AttachGateway",
@@ -212,12 +290,13 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-2-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "NatGateway3EIP": {
       "Type": "AWS::EC2::EIP",
       "DependsOn": "AttachGateway",
@@ -226,197 +305,268 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-3-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "NatGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-1-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "NatGateway2": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway2EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet2"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-2-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "NatGateway3": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway3EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet3"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway3EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-3-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-rt-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-rt-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
-
     "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet1"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
-
     "PublicSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet2"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
-
     "PublicSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet3"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
-
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-rt-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-rt-1-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PrivateRoute1": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway1"}
+        "NatGatewayId": {
+          "Ref": "NatGateway1"
+        }
       }
     },
-
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet1"},
-        "RouteTableId": {"Ref": "PrivateRouteTable1"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
       }
     },
-
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-rt-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-rt-2-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PrivateRoute2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway2"}
+        "NatGatewayId": {
+          "Ref": "NatGateway2"
+        }
       }
     },
-
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet2"},
-        "RouteTableId": {"Ref": "PrivateRouteTable2"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        }
       }
     },
-
     "PrivateRouteTable3": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-rt-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-rt-3-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "PrivateRoute3": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable3"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway3"}
+        "NatGatewayId": {
+          "Ref": "NatGateway3"
+        }
       }
     },
-
     "PrivateSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet3"},
-        "RouteTableId": {"Ref": "PrivateRouteTable3"}
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        }
       }
     },
-
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
-        "GroupName": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"},
-        "VpcId": {"Ref": "VPC"},
+        "GroupName": {
+          "Fn::Sub": "alb-sg-v1-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -440,24 +590,31 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-sg-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ECSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for ECS tasks",
-        "GroupName": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"},
-        "VpcId": {"Ref": "VPC"},
+        "GroupName": {
+          "Fn::Sub": "ecs-sg-v1-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 3000,
             "ToPort": 3000,
-            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"}
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -469,24 +626,31 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-sg-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "RDSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for RDS Aurora cluster",
-        "GroupName": {"Fn::Sub": "rds-sg-${EnvironmentSuffix}"},
-        "VpcId": {"Ref": "VPC"},
+        "GroupName": {
+          "Fn::Sub": "rds-sg-v1-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "SourceSecurityGroupId": {"Ref": "ECSSecurityGroup"}
+            "SourceSecurityGroupId": {
+              "Ref": "ECSSecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -498,38 +662,52 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "rds-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "rds-sg-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
         "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
-        "DBSubnetGroupName": {"Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "db-subnet-group-v1-${EnvironmentSuffix}"
+        },
         "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"},
-          {"Ref": "PrivateSubnet3"}
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "db-subnet-group-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "DBSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": {"Fn::Sub": "aurora-credentials-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "aurora-credentials-v1-${EnvironmentSuffix}"
+        },
         "Description": "Aurora MySQL database credentials",
         "GenerateSecretString": {
-          "SecretStringTemplate": {"Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"},
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
           "GenerateStringKey": "password",
           "PasswordLength": 32,
           "ExcludeCharacters": "\"@/\\"
@@ -537,77 +715,121 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-secret-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-secret-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "DBCluster": {
       "Type": "AWS::RDS::DBCluster",
       "Properties": {
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
-        "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
-        "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"},
-        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"},
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-cluster-v1-${EnvironmentSuffix}"
+        },
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+        },
         "DatabaseName": "loandb",
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "RDSSecurityGroup"}],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "RDSSecurityGroup"
+          }
+        ],
         "StorageEncrypted": true,
-        "EnableCloudwatchLogsExports": ["error", "slowquery", "audit"],
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "slowquery",
+          "audit"
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-cluster-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "DBInstance1": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "Engine": "aurora-mysql",
-        "DBClusterIdentifier": {"Ref": "DBCluster"},
-        "DBInstanceIdentifier": {"Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"},
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-1-v1-${EnvironmentSuffix}"
+        },
         "DBInstanceClass": "db.t3.medium",
         "PubliclyAccessible": false,
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-instance-1-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "DBInstance2": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "Engine": "aurora-mysql",
-        "DBClusterIdentifier": {"Ref": "DBCluster"},
-        "DBInstanceIdentifier": {"Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"},
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-2-v1-${EnvironmentSuffix}"
+        },
         "DBInstanceClass": "db.t3.medium",
         "PubliclyAccessible": false,
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "aurora-instance-2-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "StaticAssetsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "loan-app-static-assets-${EnvironmentSuffix}-${AWS::AccountId}"},
+        "BucketName": {
+          "Fn::Sub": "loan-app-static-assets-v1-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -623,9 +845,18 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "CorsConfiguration": {
           "CorsRules": [
             {
-              "AllowedOrigins": [{"Ref": "FrontendDomain"}],
-              "AllowedMethods": ["GET", "HEAD"],
-              "AllowedHeaders": ["*"],
+              "AllowedOrigins": [
+                {
+                  "Ref": "FrontendDomain"
+                }
+              ],
+              "AllowedMethods": [
+                "GET",
+                "HEAD"
+              ],
+              "AllowedHeaders": [
+                "*"
+              ],
               "MaxAge": 3000
             }
           ]
@@ -648,61 +879,87 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "static-assets-bucket-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "static-assets-bucket-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "CloudFrontOAI": {
       "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
       "Properties": {
         "CloudFrontOriginAccessIdentityConfig": {
-          "Comment": {"Fn::Sub": "OAI for loan app static assets ${EnvironmentSuffix}"}
+          "Comment": {
+            "Fn::Sub": "OAI for loan app static assets -v1-${EnvironmentSuffix}"
+          }
         }
       }
     },
-
     "BucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": {"Ref": "StaticAssetsBucket"},
+        "Bucket": {
+          "Ref": "StaticAssetsBucket"
+        },
         "PolicyDocument": {
           "Statement": [
             {
               "Effect": "Allow",
               "Principal": {
-                "CanonicalUser": {"Fn::GetAtt": ["CloudFrontOAI", "S3CanonicalUserId"]}
+                "CanonicalUser": {
+                  "Fn::GetAtt": [
+                    "CloudFrontOAI",
+                    "S3CanonicalUserId"
+                  ]
+                }
               },
               "Action": "s3:GetObject",
-              "Resource": {"Fn::Sub": "${StaticAssetsBucket.Arn}/*"}
+              "Resource": {
+                "Fn::Sub": "${StaticAssetsBucket.Arn}/*"
+              }
             }
           ]
         }
       }
     },
-
     "CloudFrontDistribution": {
       "Type": "AWS::CloudFront::Distribution",
       "Properties": {
         "DistributionConfig": {
           "Enabled": true,
-          "Comment": {"Fn::Sub": "CDN for loan app static assets ${EnvironmentSuffix}"},
+          "Comment": {
+            "Fn::Sub": "CDN for loan app static assets -v1-${EnvironmentSuffix}"
+          },
           "DefaultRootObject": "index.html",
           "Origins": [
             {
               "Id": "S3Origin",
-              "DomainName": {"Fn::GetAtt": ["StaticAssetsBucket", "RegionalDomainName"]},
+              "DomainName": {
+                "Fn::GetAtt": [
+                  "StaticAssetsBucket",
+                  "RegionalDomainName"
+                ]
+              },
               "S3OriginConfig": {
-                "OriginAccessIdentity": {"Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"}
+                "OriginAccessIdentity": {
+                  "Fn::Sub": "origin-access-identity/cloudfront/${CloudFrontOAI}"
+                }
               }
             }
           ],
           "DefaultCacheBehavior": {
             "TargetOriginId": "S3Origin",
             "ViewerProtocolPolicy": "redirect-to-https",
-            "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
-            "CachedMethods": ["GET", "HEAD"],
+            "AllowedMethods": [
+              "GET",
+              "HEAD",
+              "OPTIONS"
+            ],
+            "CachedMethods": [
+              "GET",
+              "HEAD"
+            ],
             "ForwardedValues": {
               "QueryString": false,
               "Cookies": {
@@ -722,16 +979,19 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "cloudfront-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "cloudfront-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ECSCluster": {
       "Type": "AWS::ECS::Cluster",
       "Properties": {
-        "ClusterName": {"Fn::Sub": "loan-app-cluster-${EnvironmentSuffix}"},
+        "ClusterName": {
+          "Fn::Sub": "loan-app-cluster-v1-${EnvironmentSuffix}"
+        },
         "ClusterSettings": [
           {
             "Name": "containerInsights",
@@ -741,16 +1001,19 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-cluster-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ECSTaskExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "ecs-task-execution-role-v1-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -777,7 +1040,9 @@ This is the corrected CloudFormation JSON template that addresses the deployment
                   "Action": [
                     "secretsmanager:GetSecretValue"
                   ],
-                  "Resource": {"Ref": "DBSecret"}
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
                 }
               ]
             }
@@ -786,16 +1051,19 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-execution-role-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ECSTaskRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "ecs-task-role-v1-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -822,8 +1090,15 @@ This is the corrected CloudFormation JSON template that addresses the deployment
                     "s3:ListBucket"
                   ],
                   "Resource": [
-                    {"Fn::GetAtt": ["StaticAssetsBucket", "Arn"]},
-                    {"Fn::Sub": "${StaticAssetsBucket.Arn}/*"}
+                    {
+                      "Fn::GetAtt": [
+                        "StaticAssetsBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${StaticAssetsBucket.Arn}/*"
+                    }
                   ]
                 }
               ]
@@ -839,7 +1114,9 @@ This is the corrected CloudFormation JSON template that addresses the deployment
                   "Action": [
                     "secretsmanager:GetSecretValue"
                   ],
-                  "Resource": {"Ref": "DBSecret"}
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
                 }
               ]
             }
@@ -848,34 +1125,56 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-role-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ECSLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/ecs/loan-app-${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/loan-app-v1-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 30
       }
     },
-
     "ECSTaskDefinition": {
       "Type": "AWS::ECS::TaskDefinition",
       "Properties": {
-        "Family": {"Fn::Sub": "loan-app-task-${EnvironmentSuffix}"},
+        "Family": {
+          "Fn::Sub": "loan-app-task-v1-${EnvironmentSuffix}"
+        },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": ["FARGATE"],
-        "Cpu": {"Ref": "ContainerCpu"},
-        "Memory": {"Ref": "ContainerMemory"},
-        "ExecutionRoleArn": {"Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]},
-        "TaskRoleArn": {"Fn::GetAtt": ["ECSTaskRole", "Arn"]},
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "Cpu": {
+          "Ref": "ContainerCpu"
+        },
+        "Memory": {
+          "Ref": "ContainerMemory"
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskRole",
+            "Arn"
+          ]
+        },
         "ContainerDefinitions": [
           {
             "Name": "loan-app",
-            "Image": {"Ref": "ContainerImage"},
+            "Image": {
+              "Ref": "ContainerImage"
+            },
             "Essential": true,
             "PortMappings": [
               {
@@ -890,7 +1189,12 @@ This is the corrected CloudFormation JSON template that addresses the deployment
               },
               {
                 "Name": "DB_HOST",
-                "Value": {"Fn::GetAtt": ["DBCluster", "Endpoint.Address"]}
+                "Value": {
+                  "Fn::GetAtt": [
+                    "DBCluster",
+                    "Endpoint.Address"
+                  ]
+                }
               },
               {
                 "Name": "DB_NAME",
@@ -898,29 +1202,42 @@ This is the corrected CloudFormation JSON template that addresses the deployment
               },
               {
                 "Name": "S3_BUCKET",
-                "Value": {"Ref": "StaticAssetsBucket"}
+                "Value": {
+                  "Ref": "StaticAssetsBucket"
+                }
               }
             ],
             "Secrets": [
               {
                 "Name": "DB_USERNAME",
-                "ValueFrom": {"Fn::Sub": "${DBSecret}:username::"}
+                "ValueFrom": {
+                  "Fn::Sub": "${DBSecret}:username::"
+                }
               },
               {
                 "Name": "DB_PASSWORD",
-                "ValueFrom": {"Fn::Sub": "${DBSecret}:password::"}
+                "ValueFrom": {
+                  "Fn::Sub": "${DBSecret}:password::"
+                }
               }
             ],
             "LogConfiguration": {
               "LogDriver": "awslogs",
               "Options": {
-                "awslogs-group": {"Ref": "ECSLogGroup"},
-                "awslogs-region": {"Ref": "AWS::Region"},
+                "awslogs-group": {
+                  "Ref": "ECSLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
                 "awslogs-stream-prefix": "ecs"
               }
             },
             "HealthCheck": {
-              "Command": ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
+              "Command": [
+                "CMD-SHELL",
+                "curl -f http://localhost:3000/health || exit 1"
+              ],
               "Interval": 30,
               "Timeout": 5,
               "Retries": 3,
@@ -931,42 +1248,60 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-def-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-def-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {"Fn::Sub": "loan-app-alb-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "loan-app-alb-v1-${EnvironmentSuffix}"
+        },
         "Type": "application",
         "Scheme": "internet-facing",
         "IpAddressType": "ipv4",
         "Subnets": [
-          {"Ref": "PublicSubnet1"},
-          {"Ref": "PublicSubnet2"},
-          {"Ref": "PublicSubnet3"}
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          },
+          {
+            "Ref": "PublicSubnet3"
+          }
         ],
-        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ALBTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "loan-app-tg-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "loan-app-tg-v1-${EnvironmentSuffix}"
+        },
         "Port": 3000,
         "Protocol": "HTTP",
         "TargetType": "ip",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "HealthCheckEnabled": true,
         "HealthCheckPath": "/health",
         "HealthCheckProtocol": "HTTP",
@@ -986,82 +1321,114 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-target-group-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-target-group-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ALBListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
-        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
         "Port": 80,
         "Protocol": "HTTP",
         "DefaultActions": [
           {
             "Type": "forward",
-            "TargetGroupArn": {"Ref": "ALBTargetGroup"}
+            "TargetGroupArn": {
+              "Ref": "ALBTargetGroup"
+            }
           }
         ]
       }
     },
-
     "ECSService": {
       "Type": "AWS::ECS::Service",
-      "DependsOn": ["ALBListener"],
+      "DependsOn": [
+        "ALBListener"
+      ],
       "Properties": {
-        "ServiceName": {"Fn::Sub": "loan-app-service-${EnvironmentSuffix}"},
-        "Cluster": {"Ref": "ECSCluster"},
-        "TaskDefinition": {"Ref": "ECSTaskDefinition"},
+        "ServiceName": {
+          "Fn::Sub": "loan-app-service-v1-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "ECSTaskDefinition"
+        },
         "DesiredCount": 2,
         "LaunchType": "FARGATE",
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
             "Subnets": [
-              {"Ref": "PrivateSubnet1"},
-              {"Ref": "PrivateSubnet2"},
-              {"Ref": "PrivateSubnet3"}
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ],
-            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}]
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ]
           }
         },
         "LoadBalancers": [
           {
             "ContainerName": "loan-app",
             "ContainerPort": 3000,
-            "TargetGroupArn": {"Ref": "ALBTargetGroup"}
+            "TargetGroupArn": {
+              "Ref": "ALBTargetGroup"
+            }
           }
         ],
-        "HealthCheckGracePeriodSeconds": 60,
+        "HealthCheckGracePeriodSeconds": 120,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-service-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ServiceScalingTarget": {
       "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
       "Properties": {
         "MaxCapacity": 10,
         "MinCapacity": 2,
-        "ResourceId": {"Fn::Sub": "service/${ECSCluster}/${ECSService.Name}"},
-        "RoleARN": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"},
+        "ResourceId": {
+          "Fn::Sub": "service/${ECSCluster}/${ECSService.Name}"
+        },
+        "RoleARN": {
+          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+        },
         "ScalableDimension": "ecs:service:DesiredCount",
         "ServiceNamespace": "ecs"
       }
     },
-
     "ServiceScalingPolicyScaleOut": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "ecs-scale-out-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "ecs-scale-out-v1-${EnvironmentSuffix}"
+        },
         "PolicyType": "StepScaling",
-        "ScalingTargetId": {"Ref": "ServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "ServiceScalingTarget"
+        },
         "StepScalingPolicyConfiguration": {
           "AdjustmentType": "ChangeInCapacity",
           "Cooldown": 60,
@@ -1080,13 +1447,16 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         }
       }
     },
-
     "ServiceScalingPolicyScaleIn": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "ecs-scale-in-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "ecs-scale-in-v1-${EnvironmentSuffix}"
+        },
         "PolicyType": "StepScaling",
-        "ScalingTargetId": {"Ref": "ServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "ServiceScalingTarget"
+        },
         "StepScalingPolicyConfiguration": {
           "AdjustmentType": "ChangeInCapacity",
           "Cooldown": 300,
@@ -1100,11 +1470,12 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         }
       }
     },
-
     "ScaleOutAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "ecs-scale-out-alarm-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "ecs-scale-out-alarm-v1-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Trigger scale out when request count is high",
         "MetricName": "RequestCountPerTarget",
         "Namespace": "AWS/ApplicationELB",
@@ -1116,19 +1487,27 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Dimensions": [
           {
             "Name": "TargetGroup",
-            "Value": {"Fn::GetAtt": ["ALBTargetGroup", "TargetGroupFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ALBTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "ServiceScalingPolicyScaleOut"}
+          {
+            "Ref": "ServiceScalingPolicyScaleOut"
+          }
         ]
       }
     },
-
     "ScaleInAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "ecs-scale-in-alarm-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "ecs-scale-in-alarm-v1-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Trigger scale in when request count is low",
         "MetricName": "RequestCountPerTarget",
         "Namespace": "AWS/ApplicationELB",
@@ -1140,39 +1519,52 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Dimensions": [
           {
             "Name": "TargetGroup",
-            "Value": {"Fn::GetAtt": ["ALBTargetGroup", "TargetGroupFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ALBTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "ServiceScalingPolicyScaleIn"}
+          {
+            "Ref": "ServiceScalingPolicyScaleIn"
+          }
         ]
       }
     },
-
     "AlertTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "loan-app-alerts-${EnvironmentSuffix}"},
+        "TopicName": {
+          "Fn::Sub": "loan-app-alerts-v1-${EnvironmentSuffix}"
+        },
         "DisplayName": "Loan App Critical Alerts",
         "Subscription": [
           {
-            "Endpoint": {"Ref": "AlertEmail"},
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
             "Protocol": "email"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "sns-topic-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "sns-topic-v1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
     },
-
     "ECSTaskFailureAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "ecs-task-failure-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "ecs-task-failure-v1-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when ECS tasks fail",
         "MetricName": "RunningTaskCount",
         "Namespace": "ECS/ContainerInsights",
@@ -1184,24 +1576,34 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Dimensions": [
           {
             "Name": "ClusterName",
-            "Value": {"Ref": "ECSCluster"}
+            "Value": {
+              "Ref": "ECSCluster"
+            }
           },
           {
             "Name": "ServiceName",
-            "Value": {"Fn::GetAtt": ["ECSService", "Name"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ECSService",
+                "Name"
+              ]
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "AlertTopic"}
+          {
+            "Ref": "AlertTopic"
+          }
         ],
         "TreatMissingData": "breaching"
       }
     },
-
     "RDSCPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "rds-cpu-high-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "rds-cpu-high-v1-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when RDS CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",
@@ -1213,105 +1615,170 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "DBCluster"}
+            "Value": {
+              "Ref": "DBCluster"
+            }
           }
         ],
         "AlarmActions": [
-          {"Ref": "AlertTopic"}
+          {
+            "Ref": "AlertTopic"
+          }
         ]
       }
     },
-
     "CloudWatchDashboard": {
       "Type": "AWS::CloudWatch::Dashboard",
       "Properties": {
-        "DashboardName": {"Fn::Sub": "loan-app-dashboard-${EnvironmentSuffix}"},
-        "DashboardBody": {"Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/ApplicationELB\",\"RequestCount\",{\"stat\":\"Sum\",\"label\":\"Total Requests\"}],[\"AWS/ApplicationELB\",\"TargetResponseTime\",{\"stat\":\"Average\",\"label\":\"Response Time\"}],[\"AWS/ApplicationELB\",\"HealthyHostCount\",{\"stat\":\"Average\",\"label\":\"Healthy Targets\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"ALB Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ECS/ContainerInsights\",\"CpuUtilized\",{\"stat\":\"Average\",\"label\":\"CPU\"}],[\"ECS/ContainerInsights\",\"MemoryUtilized\",{\"stat\":\"Average\",\"label\":\"Memory\"}],[\"ECS/ContainerInsights\",\"RunningTaskCount\",{\"stat\":\"Average\",\"label\":\"Task Count\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"ECS Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"Connections\"}],[\"AWS/RDS\",\"CPUUtilization\",{\"stat\":\"Average\",\"label\":\"CPU %\"}],[\"AWS/RDS\",\"FreeableMemory\",{\"stat\":\"Average\",\"label\":\"Free Memory\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"RDS Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}}]}"}
+        "DashboardName": {
+          "Fn::Sub": "loan-app-dashboard-v1-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/ApplicationELB\",\"RequestCount\",{\"stat\":\"Sum\",\"label\":\"Total Requests\"}],[\"AWS/ApplicationELB\",\"TargetResponseTime\",{\"stat\":\"Average\",\"label\":\"Response Time\"}],[\"AWS/ApplicationELB\",\"HealthyHostCount\",{\"stat\":\"Average\",\"label\":\"Healthy Targets\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"ALB Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ECS/ContainerInsights\",\"CpuUtilized\",{\"stat\":\"Average\",\"label\":\"CPU\"}],[\"ECS/ContainerInsights\",\"MemoryUtilized\",{\"stat\":\"Average\",\"label\":\"Memory\"}],[\"ECS/ContainerInsights\",\"RunningTaskCount\",{\"stat\":\"Average\",\"label\":\"Task Count\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"ECS Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"Connections\"}],[\"AWS/RDS\",\"CPUUtilization\",{\"stat\":\"Average\",\"label\":\"CPU %\"}],[\"AWS/RDS\",\"FreeableMemory\",{\"stat\":\"Average\",\"label\":\"Free Memory\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"RDS Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}}]}"
+        }
       }
     }
   },
-
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPC"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC"
+        }
       }
     },
     "ALBDNSName": {
       "Description": "Application Load Balancer DNS name",
-      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ALB-DNS"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+        }
       }
     },
     "ALBUrl": {
       "Description": "Application Load Balancer URL",
-      "Value": {"Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"}
+      "Value": {
+        "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+      }
     },
     "ECSClusterName": {
       "Description": "ECS Cluster Name",
-      "Value": {"Ref": "ECSCluster"},
+      "Value": {
+        "Ref": "ECSCluster"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ECS-Cluster"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ECS-Cluster"
+        }
       }
     },
     "ECSServiceName": {
       "Description": "ECS Service Name",
-      "Value": {"Fn::GetAtt": ["ECSService", "Name"]}
+      "Value": {
+        "Fn::GetAtt": [
+          "ECSService",
+          "Name"
+        ]
+      }
     },
     "DBClusterEndpoint": {
       "Description": "Aurora cluster endpoint",
-      "Value": {"Fn::GetAtt": ["DBCluster", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DB-Endpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
+        }
       }
     },
     "DBClusterReadEndpoint": {
       "Description": "Aurora cluster read endpoint",
-      "Value": {"Fn::GetAtt": ["DBCluster", "ReadEndpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DB-Read-Endpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DB-Read-Endpoint"
+        }
       }
     },
     "DBSecretArn": {
       "Description": "ARN of database credentials secret",
-      "Value": {"Ref": "DBSecret"}
+      "Value": {
+        "Ref": "DBSecret"
+      }
     },
     "StaticAssetsBucketName": {
       "Description": "S3 bucket name for static assets",
-      "Value": {"Ref": "StaticAssetsBucket"},
+      "Value": {
+        "Ref": "StaticAssetsBucket"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-S3-Bucket"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+        }
       }
     },
     "CloudFrontDistributionId": {
       "Description": "CloudFront distribution ID",
-      "Value": {"Ref": "CloudFrontDistribution"}
+      "Value": {
+        "Ref": "CloudFrontDistribution"
+      }
     },
     "CloudFrontDomainName": {
       "Description": "CloudFront distribution domain name",
-      "Value": {"Fn::GetAtt": ["CloudFrontDistribution", "DomainName"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "CloudFrontDistribution",
+          "DomainName"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-CloudFront-Domain"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudFront-Domain"
+        }
       }
     },
     "CloudFrontUrl": {
       "Description": "CloudFront URL for static assets",
-      "Value": {"Fn::Sub": "https://${CloudFrontDistribution.DomainName}"}
+      "Value": {
+        "Fn::Sub": "https://${CloudFrontDistribution.DomainName}"
+      }
     },
     "SNSTopicArn": {
       "Description": "SNS topic ARN for alerts",
-      "Value": {"Ref": "AlertTopic"}
+      "Value": {
+        "Ref": "AlertTopic"
+      }
     },
     "CloudWatchDashboardName": {
       "Description": "CloudWatch Dashboard name",
-      "Value": {"Ref": "CloudWatchDashboard"}
+      "Value": {
+        "Ref": "CloudWatchDashboard"
+      }
     },
     "CloudWatchLogGroup": {
       "Description": "CloudWatch Logs group for ECS",
-      "Value": {"Ref": "ECSLogGroup"}
+      "Value": {
+        "Ref": "ECSLogGroup"
+      }
     }
   }
 }
