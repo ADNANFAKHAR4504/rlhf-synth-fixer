@@ -19,10 +19,15 @@ class MyMocks(pulumi.runtime.Mocks):
 
     def call(self, args: pulumi.runtime.MockCallArgs):
         """Mock function calls."""
-        if args.token == 'aws:index/getAvailabilityZones:getAvailabilityZones':
+        if args.token in ['aws:index/getAvailabilityZones:getAvailabilityZones', 'aws:ec2/getAvailabilityZones:getAvailabilityZones']:
             return {
                 'names': ['us-east-1a', 'us-east-1b', 'us-east-1c'],
                 'zoneIds': ['use1-az1', 'use1-az2', 'use1-az3']
+            }
+        elif args.token in ['aws:ec2/getAmi:getAmi', 'aws:index/getAmi:getAmi']:
+            return {
+                'id': 'ami-12345678',
+                'name': 'amzn2-ami-hvm-2023.0.0-x86_64-gp2'
             }
         return {}
 
@@ -70,15 +75,15 @@ class TestTapStack(unittest.TestCase):
         """Test VPC is created with correct CIDR."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_vpc(vpc):
-            self.assertIsNotNone(vpc)
-            # VPC is a Pulumi resource object, not a dict
-            # We can check it exists and has the right type
-            self.assertTrue(hasattr(vpc, 'id'))
-            self.assertTrue(hasattr(vpc, 'cidr_block'))
+        def check_vpc(args):
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # VPC is a Pulumi resource object
+            self.assertIsNotNone(stack.vpc)
+            self.assertTrue(hasattr(stack.vpc, 'id'))
+            self.assertTrue(hasattr(stack.vpc, 'cidr_block'))
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return stack.vpc.apply(check_vpc)
+        return check_vpc([])
 
     @pulumi.runtime.test
     def test_tap_stack_subnets_created(self):
@@ -86,17 +91,17 @@ class TestTapStack(unittest.TestCase):
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_subnets(args):
-            public_subnets, private_subnets, db_subnets = args
-            self.assertEqual(len(public_subnets), 3, "Should have 3 public subnets")
-            self.assertEqual(len(private_subnets), 3, "Should have 3 private subnets")
-            self.assertEqual(len(db_subnets), 3, "Should have 3 database subnets")
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # Subnets are stored as Python lists
+            self.assertIsNotNone(stack.public_subnets)
+            self.assertIsNotNone(stack.private_subnets)
+            self.assertIsNotNone(stack.db_subnets)
+            self.assertEqual(len(stack.public_subnets), 3, "Should have 3 public subnets")
+            self.assertEqual(len(stack.private_subnets), 3, "Should have 3 private subnets")
+            self.assertEqual(len(stack.db_subnets), 3, "Should have 3 database subnets")
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return pulumi.Output.all(
-            stack.public_subnets,
-            stack.private_subnets,
-            stack.db_subnets
-        ).apply(check_subnets)
+        return check_subnets([])
 
     @pulumi.runtime.test
     def test_tap_stack_nat_gateways(self):
@@ -104,11 +109,13 @@ class TestTapStack(unittest.TestCase):
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_nat_instances(args):
-            nat_instances = args[0]
-            self.assertEqual(len(nat_instances), 3, "Should have 3 NAT instances")
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # NAT instances are stored as Python list
+            self.assertIsNotNone(stack.nat_instances)
+            self.assertEqual(len(stack.nat_instances), 3, "Should have 3 NAT instances")
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return pulumi.Output.all(stack.nat_instances).apply(check_nat_instances)
+        return check_nat_instances([])
 
     @pulumi.runtime.test
     def test_tap_stack_internet_gateway(self):
@@ -116,58 +123,63 @@ class TestTapStack(unittest.TestCase):
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_igw(args):
-            igw = args[0]
-            self.assertIsNotNone(igw)
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # Internet Gateway is a Pulumi resource object
+            self.assertIsNotNone(stack.igw)
+            self.assertTrue(hasattr(stack.igw, 'id'))
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return pulumi.Output.all(stack.igw).apply(check_igw)
+        return check_igw([])
 
     @pulumi.runtime.test
     def test_tap_stack_s3_bucket(self):
         """Test S3 bucket for flow logs is created."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_bucket(bucket):
-            self.assertIsNotNone(bucket)
-            # Bucket is a Pulumi resource object, not a dict
-            # We can check it exists and has the right type
-            self.assertTrue(hasattr(bucket, 'id'))
-            self.assertTrue(hasattr(bucket, 'bucket'))
+        def check_bucket(args):
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # Bucket is a Pulumi resource object
+            self.assertIsNotNone(stack.flow_logs_bucket)
+            self.assertTrue(hasattr(stack.flow_logs_bucket, 'id'))
+            self.assertTrue(hasattr(stack.flow_logs_bucket, 'bucket'))
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return stack.flow_logs_bucket.apply(check_bucket)
+        return check_bucket([])
 
     @pulumi.runtime.test
     def test_tap_stack_tags(self):
         """Test stack applies correct tags."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_tags(vpc):
-            self.assertIsNotNone(vpc)
+        def check_tags(args):
+            custom_tags = {'Team': 'Infrastructure', 'CostCenter': '9999'}
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='prod', tags=custom_tags))
             # VPC is a Pulumi resource object, tags are set during creation
-            # We can verify the resource exists and has tags attribute
-            self.assertTrue(hasattr(vpc, 'tags'))
-            # Tags are Output objects in Pulumi, so we check the resource exists
-            self.assertTrue(hasattr(vpc, 'id'))
+            self.assertIsNotNone(stack.vpc)
+            self.assertTrue(hasattr(stack.vpc, 'tags'))
+            self.assertTrue(hasattr(stack.vpc, 'id'))
+            # Verify custom tags are stored in stack
+            self.assertEqual(stack.tags, custom_tags)
+            return {}
 
-        custom_tags = {'Team': 'Infrastructure', 'CostCenter': '9999'}
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='prod', tags=custom_tags))
-        return stack.vpc.apply(check_tags)
+        return check_tags([])
 
     @pulumi.runtime.test
     def test_tap_stack_environment_suffix(self):
         """Test environment suffix is applied to resource names."""
         from lib.tap_stack import TapStack, TapStackArgs
 
-        def check_suffix(vpc):
-            self.assertIsNotNone(vpc)
+        def check_suffix(args):
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='myenv'))
             # VPC is a Pulumi resource object
             # The environment suffix is used in the resource name during creation
-            # We verify the resource exists
-            self.assertTrue(hasattr(vpc, 'id'))
+            self.assertIsNotNone(stack.vpc)
+            self.assertTrue(hasattr(stack.vpc, 'id'))
+            # Verify environment suffix is stored
+            self.assertEqual(stack.environment_suffix, 'myenv')
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='myenv'))
-        return stack.vpc.apply(check_suffix)
+        return check_suffix([])
 
     @pulumi.runtime.test
     def test_tap_stack_route_tables(self):
@@ -175,17 +187,16 @@ class TestTapStack(unittest.TestCase):
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_route_tables(args):
-            public_rt, private_rts, db_rts = args
-            self.assertIsNotNone(public_rt)
-            self.assertEqual(len(private_rts), 3, "Should have 3 private route tables")
-            self.assertEqual(len(db_rts), 3, "Should have 3 database route tables")
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # Route tables are stored as objects and lists
+            self.assertIsNotNone(stack.public_rt)
+            self.assertIsNotNone(stack.private_rts)
+            self.assertIsNotNone(stack.db_rts)
+            self.assertEqual(len(stack.private_rts), 3, "Should have 3 private route tables")
+            self.assertEqual(len(stack.db_rts), 3, "Should have 3 database route tables")
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return pulumi.Output.all(
-            stack.public_rt,
-            stack.private_rts,
-            stack.db_rts
-        ).apply(check_route_tables)
+        return check_route_tables([])
 
     @pulumi.runtime.test
     def test_tap_stack_network_acl(self):
@@ -193,17 +204,17 @@ class TestTapStack(unittest.TestCase):
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_sgs(args):
-            bastion_sg, app_sg, db_sg = args
-            self.assertIsNotNone(bastion_sg)
-            self.assertIsNotNone(app_sg)
-            self.assertIsNotNone(db_sg)
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # Security groups are Pulumi resource objects
+            self.assertIsNotNone(stack.bastion_sg)
+            self.assertIsNotNone(stack.app_sg)
+            self.assertIsNotNone(stack.db_sg)
+            self.assertTrue(hasattr(stack.bastion_sg, 'id'))
+            self.assertTrue(hasattr(stack.app_sg, 'id'))
+            self.assertTrue(hasattr(stack.db_sg, 'id'))
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return pulumi.Output.all(
-            stack.bastion_sg,
-            stack.app_sg,
-            stack.db_sg
-        ).apply(check_sgs)
+        return check_sgs([])
 
     @pulumi.runtime.test
     def test_tap_stack_eips(self):
@@ -211,15 +222,17 @@ class TestTapStack(unittest.TestCase):
         from lib.tap_stack import TapStack, TapStackArgs
 
         def check_nat_instances(args):
-            nat_instances = args[0]
-            self.assertEqual(len(nat_instances), 3, "Should have 3 NAT instances")
+            stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+            # NAT instances are stored as Python list
+            self.assertIsNotNone(stack.nat_instances)
+            self.assertEqual(len(stack.nat_instances), 3, "Should have 3 NAT instances")
             # NAT instances are EC2 instances, not EIPs
-            for instance in nat_instances:
+            for instance in stack.nat_instances:
                 self.assertIsNotNone(instance)
                 self.assertTrue(hasattr(instance, 'id'))
+            return {}
 
-        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
-        return pulumi.Output.all(stack.nat_instances).apply(check_nat_instances)
+        return check_nat_instances([])
 
 
 if __name__ == '__main__':
