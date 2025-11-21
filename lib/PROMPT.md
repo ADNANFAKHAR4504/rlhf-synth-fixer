@@ -101,7 +101,7 @@ Create a serverless webhook processing system using **Pulumi with Python** for h
 - **Reliability**: X-Ray tracing enabled for monitoring, CloudWatch logs captured
 - **Security**: KMS encryption for sensitive data, least privilege IAM roles
 - **Resource Naming**: All resources include environmentSuffix for uniqueness
-- **Code Quality**: Python code, well-structured, properly configured
+- **Code Quality**: Python code, well-structured, properly configured.
 
 ## What to deliver
 
