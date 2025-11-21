@@ -216,12 +216,12 @@ describe('Payment App Infrastructure - Static Unit Tests', () => {
     });
 
     test('Installs CloudWatch Agent', () => {
-      expect(modUserData).toMatch(/yum install -y .*amazon-cloudwatch-agent/);
+      expect(modUserData).toMatch(/yum install -y postgresql nginx amazon-cloudwatch-agent python3 python3-pip/);
     });
 
     test('Configures Nginx for Health Checks', () => {
-      expect(modUserData).toMatch(/location \/health {/);
-      expect(modUserData).toMatch(/return 200 "healthy\\n";/);
+      expect(modUserData).toMatch(/location \/ {/);
+      expect(modUserData).toMatch(/proxy_pass http:\/\/127\.0\.0\.1:8080;/);
     });
 
     test('Creates Helper Script for DB Credentials', () => {
