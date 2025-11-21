@@ -1,6 +1,0 @@
-config:
-  tap-infrastructure:lambda_memory_mb: "512"
-  tap-infrastructure:log_retention_days: "7"
-  tap-infrastructure:enable_versioning: "false"
-  tap-infrastructure:environment_suffix: "dev"
-encryptionsalt: v1:KSgAYVkYVU0=:v1:1aV11igcnjesEPhP:3W1k1NsRFKCfD7MCj+3O6oDP375Kpg==
