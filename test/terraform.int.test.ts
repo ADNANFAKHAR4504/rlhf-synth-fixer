@@ -432,7 +432,16 @@ describe('Application Health & Connectivity', () => {
     expect(albUrl).toBeTruthy();
     const response = await axios.get(`${albUrl}/health`);
     expect(response.status).toBe(200);
-    expect(response.data).toMatch(/healthy/i);
+
+    // Handle both JSON and plain text responses
+    if (typeof response.data === 'string') {
+      expect(response.data).toMatch(/healthy/i);
+    } else {
+      // JSON response from Python server
+      expect(response.data).toHaveProperty('status');
+      expect(response.data.status).toMatch(/healthy/i);
+      expect(response.data).toHaveProperty('service');
+    }
   }, TEST_TIMEOUT);
 });
 
