@@ -65,10 +65,10 @@ class StorageStack(pulumi.ComponentResource):
         self.s3_bucket_id = self.log_bucket.id
 
         # Enable versioning
-        aws.s3.BucketVersioningV2(
+        aws.s3.BucketVersioning(
             f"loan-logs-versioning-{self.environment_suffix}",
             bucket=self.log_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=pulumi.ResourceOptions(parent=self)
@@ -86,13 +86,13 @@ class StorageStack(pulumi.ComponentResource):
         )
 
         # Lifecycle policy
-        aws.s3.BucketLifecycleConfigurationV2(
+        aws.s3.BucketLifecycleConfiguration(
             f"loan-logs-lifecycle-{self.environment_suffix}",
             bucket=self.log_bucket.id,
-            rules=[aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+            rules=[aws.s3.BucketLifecycleConfigurationRuleArgs(
                 id="glacier-transition",
                 status="Enabled",
-                transitions=[aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                transitions=[aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                     days=90,
                     storage_class="GLACIER"
                 )]

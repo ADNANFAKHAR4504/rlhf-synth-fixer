@@ -2,17 +2,18 @@
 TapStack - Main orchestration component
 """
 
+from typing import Dict, Optional
+
 import pulumi
 from pulumi import ResourceOptions
-from typing import Optional, Dict
 
+from .alb_stack import AlbStack, AlbStackArgs
+from .database_stack import DatabaseStack, DatabaseStackArgs
+from .ecs_stack import EcsStack, EcsStackArgs
+from .iam_stack import IamStack, IamStackArgs
+from .monitoring_stack import MonitoringStack, MonitoringStackArgs
 from .networking_stack import NetworkingStack, NetworkingStackArgs
 from .storage_stack import StorageStack, StorageStackArgs
-from .monitoring_stack import MonitoringStack, MonitoringStackArgs
-from .database_stack import DatabaseStack, DatabaseStackArgs
-from .iam_stack import IamStack, IamStackArgs
-from .alb_stack import AlbStack, AlbStackArgs
-from .ecs_stack import EcsStack, EcsStackArgs
 
 
 class TapStackArgs:
@@ -90,7 +91,7 @@ class TapStack(pulumi.ComponentResource):
                 vpc_id=networking_stack.vpc.id,
                 database_subnet_ids=[s.id for s in networking_stack.database_subnets],
                 rds_sg_id=networking_stack.rds_sg.id,
-                kms_key_id=storage_stack.kms_key.id,
+                kms_key_id=storage_stack.kms_key.arn,
                 tags=self.tags
             ),
             ResourceOptions(parent=self, depends_on=[networking_stack, storage_stack])
