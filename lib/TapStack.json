@@ -5,7 +5,7 @@
     "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Unique suffix for environment resources",
-      "Default": "dev"
+      "Default": "pr6853b"
     },
     "Environment": {
       "Type": "String",
