@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "6774",
+  "team": "5",
+  "startedAt": "2025-11-18T11:50:32.638Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Fintech startup requires event-driven payment validation pipeline with ordered transaction processing and guaranteed message delivery for compliance. Implement AWS SQS FIFO queues with DLQs, CloudWatch monitoring, SNS alerts, and IAM policies using Terraform. Ensure high availability, security, and cost-efficiency.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9.8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
