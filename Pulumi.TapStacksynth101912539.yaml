@@ -1,3 +1,0 @@
-encryptionsalt: v1:e+rvQr7R0V8=:v1:Gzr9ZBkUVqNJNgQy:LwyD4kYnvCDeK1u+O61y9ToWFNaQqg==
-config:
-  aws:defaultTags: '{"tags":{"Environment":"synth101912539","Repository":"synth-101912539","Author":"Arpit Patidar","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-11-21T12:30:04Z","ManagedBy":"pulumi"}}'
