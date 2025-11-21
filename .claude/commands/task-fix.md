@@ -22,7 +22,14 @@ When you run `/task-fix`, the agent will:
 
 1. **PHASE 0 - Pre-Execution Validation**: Review documentation, verify scripts, validate readiness
 2. **PHASE 1 - PR Selection**: Check availability, atomically select next PR (prevents duplicates)
-3. **PHASE 2.1 - Pre-Fix Analysis**: Document root cause, fix plan, and solution approach
+3. **PHASE 2.1 - Comprehensive Pre-Fix Planning**: 
+   - 2.1.0 Context Gathering (PR details, platform, dependencies)
+   - 2.1.1 Enhanced Root Cause Analysis (with impact matrix and dependencies)
+   - 2.1.2 Comprehensive Fix Planning (sequencing, dependencies, rollback plans)
+   - 2.1.3 Risk Assessment (risk matrix, mitigations, contingency plans)
+   - 2.1.4 Validation Strategy (pre-fix, per-fix, post-fix validation)
+   - 2.1.5 Enhanced Solution Approach (comparison matrix, cost/benefit)
+   - 2.1.6 Planning Review & Approval (self-review checklist)
 4. **PHASE 2.2 - Worktree Setup**: Create isolated worktree, validate location
 5. **PHASE 2.2.5 - Branch Synchronization**: Ensure branch is even with main, merge latest changes, resolve conflicts
 6. **PHASE 2.3 - Failure Analysis**: Analyze GitHub pipeline failures in detail
@@ -229,29 +236,70 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 
 ### PHASE 2: PR Fixing Process
 
-#### 2.1 Pre-Fix Analysis
-**Checkpoint PR-C**: Failure Analysis Completeness
+#### 2.1 Comprehensive Pre-Fix Planning
+**Checkpoint PR-C**: Comprehensive Planning Completeness
 **Checkpoint PR-D**: Fix Plan Validation
 **Quality Gate 1**: Pre-Fix Analysis Gate
 
+**PHASE 2.1.0 - Context Gathering**:
+- Gather PR context (branch, title, author, files changed, commits)
+- Identify platform/language specific requirements
+- Check for similar PRs or known patterns from lessons_learnt.md
+- Review dependencies and constraints
+- Assess current codebase state (coverage, existing errors)
+
+**PHASE 2.1.1 - Enhanced Root Cause Analysis**:
 - Root cause analysis with evidence:
   - Failure category (Critical/High/Medium/Low)
   - Specific issues with file paths and line numbers
   - Evidence from GitHub logs and code inspection
   - WHY it happened (not just WHAT)
-- Fix plan development (step-by-step):
-  - Specific actions with file paths
-  - Validation method for each step
-  - Addresses all failed stages
-- Solution approach justification:
-  - Why this is the best approach
-  - Alternatives considered
-  - Risks and mitigations
-  - Success criteria
-- Document analysis in status file
+- Impact matrix (severity × frequency)
+- Dependency analysis (what depends on this fix, what this fix depends on)
+- Time/complexity estimation
 
-**Pass criteria**: All analysis documented, plan is actionable, saved to status file
-**Fail action**: Re-analyze, improve documentation, re-validate
+**PHASE 2.1.2 - Comprehensive Fix Planning**:
+- Fix sequencing with dependencies identified
+- Parallel vs sequential execution plan
+- Specific actions with file paths and line numbers
+- Validation method for each step
+- Rollback plan for each fix
+- Resource requirements (tools, scripts, AWS resources)
+- Time/complexity estimation
+- Addresses all failed stages
+
+**PHASE 2.1.3 - Risk Assessment**:
+- Risk matrix (probability × impact)
+- Detailed risk analysis with mitigations
+- Contingency plans for each risk
+- Blocker identification and mitigation
+- Success probability assessment
+
+**PHASE 2.1.4 - Validation Strategy**:
+- Pre-fix validation (baseline capture)
+- Per-fix validation (after each change)
+- Post-fix validation (comprehensive final check)
+- Success criteria and metrics
+- Failure handling procedures
+
+**PHASE 2.1.5 - Enhanced Solution Approach**:
+- Chosen strategy justification
+- Comparison matrix of alternatives
+- Cost/benefit analysis
+- Risk mitigation strategy
+- Success criteria definition
+
+**PHASE 2.1.6 - Planning Review & Approval**:
+- Self-review checklist
+- Validation that plan is complete and comprehensive
+- Approval to proceed to worktree setup
+
+**PHASE 2.1.7 - Document Planning**:
+- Save comprehensive planning to status file
+- Save detailed planning document for reference
+
+**Pass criteria**: All planning phases complete, plan is actionable and comprehensive, planning reviewed and approved
+**Fail action**: Re-analyze, improve planning, re-review before proceeding
 
 #### 2.2 Worktree Setup
 **Checkpoint PR-B**: PR Worktree Validation (PHASE 2.2)
@@ -467,17 +515,24 @@ The agent uses structured validation checkpoints throughout the process to ensur
   - Branch is up-to-date with main
   - Working directory is clean
 
-- **Checkpoint PR-C**: Failure Analysis Completeness (PHASE 2.1)
-  - Root cause documented with evidence
-  - Fix plan created with actionable steps
-  - Solution approach justified
-  - Analysis saved to status file
+- **Checkpoint PR-C**: Comprehensive Planning Completeness (PHASE 2.1)
+  - Context gathered (PR details, platform, dependencies)
+  - Root cause documented with evidence and impact matrix
+  - Comprehensive fix plan created with sequencing and dependencies
+  - Risk assessment completed with mitigation strategies
+  - Validation strategy defined (pre-fix, per-fix, post-fix)
+  - Enhanced solution approach justified with comparison matrix
+  - Planning reviewed and approved
+  - All planning saved to status file
 
 - **Checkpoint PR-D**: Fix Plan Validation (PHASE 2.1)
   - Plan has specific file paths and line numbers
-  - Plan includes validation steps
+  - Plan includes validation steps for each fix
   - Plan addresses all failed stages
-  - Plan is executable
+  - Plan is executable (clear steps)
+  - Plan includes dependencies and sequencing
+  - Plan includes rollback strategies
+  - Plan includes time/complexity estimates
 
 - **Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3)
   - Baseline lint status assessed
@@ -513,22 +568,45 @@ Each checkpoint must pass before proceeding to the next phase.
 Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fixes meet production standards and will pass GitHub pipeline.
 
 ### Gate 1: Pre-Fix Analysis Gate
-**When**: After PHASE 2.1 (Root Cause Analysis)
+**When**: After PHASE 2.1 (Comprehensive Pre-Fix Planning)
 **Requirements**:
+- ✅ Context gathered
+  - PR details (branch, title, author, files)
+  - Platform/language identified
+  - Dependencies and constraints understood
+  - Current codebase state assessed
 - ✅ Root cause documented with evidence
   - Failure category (Critical/High/Medium/Low)
   - Specific issues with file paths and line numbers
-  - Impact assessment
+  - Impact matrix (severity × frequency)
+  - Dependency analysis
   - WHY it happened (not just WHAT)
-- ✅ Fix plan created with actionable steps
-  - Step-by-step actions
+- ✅ Comprehensive fix plan created
+  - Step-by-step actions with sequencing
+  - Dependencies identified
+  - Parallel vs sequential execution planned
   - Validation method for each step
+  - Rollback plan for each fix
+  - Resource requirements identified
+  - Time/complexity estimates
   - Addresses all failed stages
-- ✅ Solution approach justified
+- ✅ Risk assessment completed
+  - Risk matrix created
+  - Mitigation strategies defined
+  - Contingency plans created
+- ✅ Validation strategy defined
+  - Pre-fix validation (baseline)
+  - Per-fix validation (after each change)
+  - Post-fix validation (final check)
+- ✅ Enhanced solution approach justified
   - Why this is the best approach
-  - Alternatives considered
+  - Comparison matrix of alternatives
+  - Cost/benefit analysis
   - Success criteria defined
-- ✅ Analysis saved to status file
+- ✅ Planning reviewed and approved
+  - Self-review checklist completed
+  - Planning validated as complete
+- ✅ All planning saved to status file
 
 **If gate fails**: Report BLOCKED, complete missing analysis, re-validate
 
