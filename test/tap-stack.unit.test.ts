@@ -66,14 +66,9 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.DBPassword).toBeUndefined();
     });
 
-    test('should have VPCId parameter', () => {
-      expect(template.Parameters.VPCId).toBeDefined();
-      expect(template.Parameters.VPCId.Type).toBe('AWS::EC2::VPC::Id');
-    });
-
-    test('should have PrivateSubnetIds parameter', () => {
-      expect(template.Parameters.PrivateSubnetIds).toBeDefined();
-      expect(template.Parameters.PrivateSubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
+    test('should not have VPCId or PrivateSubnetIds parameters (VPC is created in template)', () => {
+      expect(template.Parameters.VPCId).toBeUndefined();
+      expect(template.Parameters.PrivateSubnetIds).toBeUndefined();
     });
   });
 
@@ -86,12 +81,41 @@ describe('CloudFormation Template Unit Tests', () => {
     });
   });
 
+  describe('VPC Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+      expect(template.Resources.VPC.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(template.Resources.VPC.Properties.EnableDnsHostnames).toBe(true);
+      expect(template.Resources.VPC.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have PrivateSubnet1 resource', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet1.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      expect(template.Resources.PrivateSubnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBeDefined();
+    });
+
+    test('should have PrivateSubnet2 resource', () => {
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet2.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      expect(template.Resources.PrivateSubnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
+      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBeDefined();
+    });
+  });
+
   describe('RDS Resources', () => {
     test('should have DBSubnetGroup resource', () => {
       const resource = template.Resources.DBSubnetGroup;
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::RDS::DBSubnetGroup');
-      expect(resource.Properties.SubnetIds).toEqual({ Ref: 'PrivateSubnetIds' });
+      expect(Array.isArray(resource.Properties.SubnetIds)).toBe(true);
+      expect(resource.Properties.SubnetIds).toHaveLength(2);
+      expect(resource.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(resource.Properties.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('DBSubnetGroup name should include environmentSuffix', () => {
@@ -190,7 +214,7 @@ describe('CloudFormation Template Unit Tests', () => {
       const resource = template.Resources.DBSecurityGroup;
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(resource.Properties.VpcId).toEqual({ Ref: 'VPCId' });
+      expect(resource.Properties.VpcId).toEqual({ Ref: 'VPC' });
     });
 
     test('DBSecurityGroup name should include environmentSuffix', () => {
@@ -213,7 +237,7 @@ describe('CloudFormation Template Unit Tests', () => {
       const resource = template.Resources.LambdaSecurityGroup;
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(resource.Properties.VpcId).toEqual({ Ref: 'VPCId' });
+      expect(resource.Properties.VpcId).toEqual({ Ref: 'VPC' });
     });
 
     test('LambdaSecurityGroup name should include environmentSuffix', () => {
@@ -301,9 +325,9 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(resource.Properties.MemorySize).toBe(3008);
     });
 
-    test('TransactionProcessorFunction should have reserved concurrent executions', () => {
+    test('TransactionProcessorFunction should not have reserved concurrent executions (removed to avoid account limits)', () => {
       const resource = template.Resources.TransactionProcessorFunction;
-      expect(resource.Properties.ReservedConcurrentExecutions).toBe(100);
+      expect(resource.Properties.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('TransactionProcessorFunction should have VPC configuration', () => {
@@ -312,7 +336,10 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(resource.Properties.VpcConfig.SecurityGroupIds).toContainEqual({
         Ref: 'LambdaSecurityGroup'
       });
-      expect(resource.Properties.VpcConfig.SubnetIds).toEqual({ Ref: 'PrivateSubnetIds' });
+      expect(Array.isArray(resource.Properties.VpcConfig.SubnetIds)).toBe(true);
+      expect(resource.Properties.VpcConfig.SubnetIds).toHaveLength(2);
+      expect(resource.Properties.VpcConfig.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(resource.Properties.VpcConfig.SubnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('TransactionProcessorFunction should have DB endpoint in environment', () => {
@@ -488,6 +515,12 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(output.Value).toEqual({ Ref: 'NotificationTopic' });
     });
 
+    test('should have VPCId output', () => {
+      const output = template.Outputs.VPCId;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'VPC' });
+    });
+
     test('all outputs should have descriptions', () => {
       Object.values(template.Outputs).forEach((output: any) => {
         expect(output.Description).toBeDefined();
@@ -550,6 +583,9 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('all resources should have Environment tag', () => {
       const resourcesWithEnvTag = [
+        'VPC',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
         'DBSubnetGroup',
         'DBSecurityGroup',
         'LambdaSecurityGroup',

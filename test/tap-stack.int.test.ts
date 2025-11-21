@@ -245,7 +245,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       expect(response.MemorySize).toBe(3008);
     }, 30000);
 
-    test('Lambda function should have reserved concurrent executions', async () => {
+    test('Lambda function should not have reserved concurrent executions (removed to avoid account limits)', async () => {
       const functionName = `transaction-processor-${environmentSuffix}`;
 
       const command = new GetFunctionCommand({
@@ -253,7 +253,8 @@ describe('CloudFormation Stack Integration Tests', () => {
       });
       const response = await lambdaClient.send(command);
 
-      expect(response.Concurrency?.ReservedConcurrentExecutions).toBe(100);
+      // ReservedConcurrentExecutions is not set to avoid account-level concurrency limit issues
+      expect(response.Concurrency?.ReservedConcurrentExecutions).toBeUndefined();
     }, 30000);
 
     test('Lambda function should have DB endpoint in environment variables', async () => {
