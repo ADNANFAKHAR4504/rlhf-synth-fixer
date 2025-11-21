@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-grade VPC network architecture with multi-AZ high availability for financial services workloads",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming uniqueness",
       "Default": "dev",
@@ -13,7 +13,11 @@
       "Type": "String",
       "Description": "Environment tag value",
       "Default": "Production",
-      "AllowedValues": ["Production", "Staging", "Development"]
+      "AllowedValues": [
+        "Production",
+        "Staging",
+        "Development"
+      ]
     },
     "Department": {
       "Type": "String",
@@ -52,7 +56,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-${environmentSuffix}"
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
             }
           },
           {
@@ -78,7 +82,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "igw-${environmentSuffix}"
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
             }
           },
           {
@@ -115,15 +119,26 @@
           "Ref": "VPC"
         },
         "CidrBlock": {
-          "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PublicSubnetAZ1"]
+          "Fn::FindInMap": [
+            "SubnetCIDRs",
+            "us-east-1",
+            "PublicSubnetAZ1"
+          ]
         },
-        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-public-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "subnet-public-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -149,15 +164,26 @@
           "Ref": "VPC"
         },
         "CidrBlock": {
-          "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PublicSubnetAZ2"]
+          "Fn::FindInMap": [
+            "SubnetCIDRs",
+            "us-east-1",
+            "PublicSubnetAZ2"
+          ]
         },
-        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-public-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "subnet-public-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -183,15 +209,26 @@
           "Ref": "VPC"
         },
         "CidrBlock": {
-          "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PublicSubnetAZ3"]
+          "Fn::FindInMap": [
+            "SubnetCIDRs",
+            "us-east-1",
+            "PublicSubnetAZ3"
+          ]
         },
-        "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-public-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "subnet-public-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -217,15 +254,26 @@
           "Ref": "VPC"
         },
         "CidrBlock": {
-          "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PrivateSubnetAZ1"]
+          "Fn::FindInMap": [
+            "SubnetCIDRs",
+            "us-east-1",
+            "PrivateSubnetAZ1"
+          ]
         },
-        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-private-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "subnet-private-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -251,15 +299,26 @@
           "Ref": "VPC"
         },
         "CidrBlock": {
-          "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PrivateSubnetAZ2"]
+          "Fn::FindInMap": [
+            "SubnetCIDRs",
+            "us-east-1",
+            "PrivateSubnetAZ2"
+          ]
         },
-        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-private-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "subnet-private-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -285,15 +344,26 @@
           "Ref": "VPC"
         },
         "CidrBlock": {
-          "Fn::FindInMap": ["SubnetCIDRs", "us-east-1", "PrivateSubnetAZ3"]
+          "Fn::FindInMap": [
+            "SubnetCIDRs",
+            "us-east-1",
+            "PrivateSubnetAZ3"
+          ]
         },
-        "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-private-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "subnet-private-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -321,7 +391,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "eip-nat-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "eip-nat-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -349,7 +419,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "eip-nat-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "eip-nat-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -377,7 +447,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "eip-nat-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "eip-nat-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -400,7 +470,10 @@
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": ["EIPForNATGatewayAZ1", "AllocationId"]
+          "Fn::GetAtt": [
+            "EIPForNATGatewayAZ1",
+            "AllocationId"
+          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnetAZ1"
@@ -409,7 +482,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "nat-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -432,7 +505,10 @@
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": ["EIPForNATGatewayAZ2", "AllocationId"]
+          "Fn::GetAtt": [
+            "EIPForNATGatewayAZ2",
+            "AllocationId"
+          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnetAZ2"
@@ -441,7 +517,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "nat-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -464,7 +540,10 @@
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": ["EIPForNATGatewayAZ3", "AllocationId"]
+          "Fn::GetAtt": [
+            "EIPForNATGatewayAZ3",
+            "AllocationId"
+          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnetAZ3"
@@ -473,7 +552,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "nat-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -502,7 +581,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-public-${environmentSuffix}"
+              "Fn::Sub": "rtb-public-${EnvironmentSuffix}"
             }
           },
           {
@@ -577,7 +656,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-private-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "rtb-private-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -629,7 +708,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-private-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "rtb-private-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -681,7 +760,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-private-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "rtb-private-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -727,7 +806,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "vpc-flow-logs-role-${environmentSuffix}"
+          "Fn::Sub": "vpc-flow-logs-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -783,7 +862,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/vpc/flowlogs-${environmentSuffix}"
+          "Fn::Sub": "/aws/vpc/flowlogsaws-${EnvironmentSuffix}"
         },
         "RetentionInDays": 30
       },
@@ -802,13 +881,16 @@
           "Ref": "VPCFlowLogGroup"
         },
         "DeliverLogsPermissionArn": {
-          "Fn::GetAtt": ["VPCFlowLogsRole", "Arn"]
+          "Fn::GetAtt": [
+            "VPCFlowLogsRole",
+            "Arn"
+          ]
         },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "flowlog-${environmentSuffix}"
+              "Fn::Sub": "flowlog-${EnvironmentSuffix}"
             }
           },
           {
@@ -836,7 +918,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nacl-public-${environmentSuffix}"
+              "Fn::Sub": "nacl-public-${EnvironmentSuffix}"
             }
           },
           {
@@ -975,7 +1057,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nacl-private-${environmentSuffix}"
+              "Fn::Sub": "nacl-private-${EnvironmentSuffix}"
             }
           },
           {

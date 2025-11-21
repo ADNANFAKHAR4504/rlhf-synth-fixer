@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const EnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack VPC CloudFormation Template', () => {
   let template: any;
@@ -38,12 +38,12 @@ describe('TapStack VPC CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have environmentSuffix parameter', () => {
-      expect(template.Parameters.environmentSuffix).toBeDefined();
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
-    test('environmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.environmentSuffix;
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toBe('Environment suffix for resource naming uniqueness');
@@ -285,10 +285,10 @@ describe('TapStack VPC CloudFormation Template', () => {
       expect(template.Resources.NATGatewayAZ3.Properties.SubnetId).toEqual({ Ref: 'PublicSubnetAZ3' });
     });
 
-    test('NAT Gateways should have environmentSuffix in names', () => {
+    test('NAT Gateways should have EnvironmentSuffix in names', () => {
       const nat1Tags = template.Resources.NATGatewayAZ1.Properties.Tags;
       const nameTag = nat1Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value).toEqual({ 'Fn::Sub': 'nat-us-east-1a-${environmentSuffix}' });
+      expect(nameTag.Value).toEqual({ 'Fn::Sub': 'nat-us-east-1a-${EnvironmentSuffix}' });
     });
 
     test('NAT Gateways should have Delete deletion policy', () => {
@@ -529,12 +529,12 @@ describe('TapStack VPC CloudFormation Template', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    test('resource names should include environmentSuffix', () => {
+    test('resource names should include EnvironmentSuffix', () => {
       const vpc = template.Resources.VPC.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(vpc.Value).toEqual({ 'Fn::Sub': 'vpc-${environmentSuffix}' });
+      expect(vpc.Value).toEqual({ 'Fn::Sub': 'vpc-${EnvironmentSuffix}' });
 
       const igw = template.Resources.InternetGateway.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(igw.Value).toEqual({ 'Fn::Sub': 'igw-${environmentSuffix}' });
+      expect(igw.Value).toEqual({ 'Fn::Sub': 'igw-${EnvironmentSuffix}' });
     });
 
     test('all resources should have Environment and Department tags', () => {

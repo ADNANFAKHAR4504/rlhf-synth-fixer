@@ -1,29 +1,28 @@
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeNetworkAclsCommand,
-  DescribeFlowLogsCommand,
-  DescribeAddressesCommand
-} from '@aws-sdk/client-ec2';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  IAMClient,
-  GetRoleCommand
+  DescribeFlowLogsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeNetworkAclsCommand,
+  DescribeRouteTablesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient
 } from '@aws-sdk/client-iam';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const EnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
 
 const ec2Client = new EC2Client({ region });

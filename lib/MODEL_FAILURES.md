@@ -13,10 +13,10 @@ The model-generated CloudFormation template successfully implements all required
 **Impact Level**: Low
 
 **MODEL_RESPONSE Implementation**:
-The environmentSuffix parameter defaults to "prod":
+The EnvironmentSuffix parameter defaults to "prod":
 
 ```json
-"environmentSuffix": {
+"EnvironmentSuffix": {
   "Type": "String",
   "Description": "Environment suffix for resource naming uniqueness",
   "Default": "prod",
@@ -29,7 +29,7 @@ The environmentSuffix parameter defaults to "prod":
 Following common DevOps conventions, defaulting to "dev" is often preferred for safety:
 
 ```json
-"environmentSuffix": {
+"EnvironmentSuffix": {
   "Type": "String",
   "Description": "Environment suffix for resource naming uniqueness",
   "Default": "dev",
@@ -82,7 +82,7 @@ For maximum portability, using `Fn::GetAZs` would allow region-agnostic deployme
 }
 ```
 
-**Root Cause**: The PROMPT explicitly stated "deployed in us-east-1 across three availability zones" and included AZ identifiers in naming conventions (e.g., "nat-us-east-1a-{environmentSuffix}"). The model chose explicitness and deterministic behavior over portability.
+**Root Cause**: The PROMPT explicitly stated "deployed in us-east-1 across three availability zones" and included AZ identifiers in naming conventions (e.g., "nat-us-east-1a-{EnvironmentSuffix}"). The model chose explicitness and deterministic behavior over portability.
 
 **AWS Documentation Reference**: [AWS::EC2::Subnet AvailabilityZone](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ec2-subnet.html)
 
@@ -105,7 +105,7 @@ For maximum portability, using `Fn::GetAZs` would allow region-agnostic deployme
 
 - Training value: **HIGH** - Despite the lack of critical failures, this task demonstrates the model's strong understanding of VPC architecture, proper resource naming, IAM permissions, and CloudFormation best practices. The model successfully:
   - Implemented all 47 resources with correct types and properties
-  - Applied environmentSuffix consistently across all resource names
+  - Applied EnvironmentSuffix consistently across all resource names
   - Configured proper IAM roles and policies for VPC Flow Logs
   - Set correct DeletionPolicy: Delete on all resources
   - Implemented multi-AZ high availability with per-AZ NAT Gateways
@@ -120,7 +120,7 @@ For maximum portability, using `Fn::GetAZs` would allow region-agnostic deployme
 2. **Security**: Implemented VPC Flow Logs with appropriate IAM permissions and CloudWatch Logs integration
 3. **Network ACLs**: Created explicit rules for HTTP/HTTPS/SSH with proper ephemeral port handling
 4. **Resource Management**: All resources can be cleanly torn down (Delete policy, no Retain)
-5. **Parameter Usage**: Consistent application of environmentSuffix for unique resource naming
+5. **Parameter Usage**: Consistent application of EnvironmentSuffix for unique resource naming
 6. **CloudFormation Skills**: Proper use of Mappings for CIDR blocks, correct intrinsic function syntax
 
 **Why This is Valuable for Training**:

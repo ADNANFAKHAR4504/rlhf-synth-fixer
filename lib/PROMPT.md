@@ -18,24 +18,24 @@ Create a production-ready VPC network architecture using **CloudFormation with J
    - Create VPC with CIDR block 10.0.0.0/16
    - Enable DNS hostnames for the VPC
    - No overlapping IP ranges allowed
-   - All resource names must include **environmentSuffix** parameter for uniqueness
+   - All resource names must include **EnvironmentSuffix** parameter for uniqueness
 
 2. **Subnet Architecture**
    - Deploy exactly 6 subnets across 3 availability zones
    - Each AZ must have one public subnet and one private subnet
    - Use Mappings section to define subnet CIDR blocks for consistency across regions
-   - Follow naming convention: subnet-{type}-{az}-{environmentSuffix}
+   - Follow naming convention: subnet-{type}-{az}-{EnvironmentSuffix}
 
 3. **Internet Gateway Setup**
    - Deploy Internet Gateway and attach to VPC
    - Configure proper route tables for internet access
-   - Follow naming pattern: igw-{environmentSuffix}
+   - Follow naming pattern: igw-{EnvironmentSuffix}
 
 4. **NAT Gateway Deployment**
    - Deploy NAT Gateways in high-availability mode across all 3 public subnets
    - Each NAT Gateway requires an Elastic IP
    - All private subnets must route outbound traffic through NAT Gateway in the same AZ
-   - Follow naming pattern: nat-{az}-{environmentSuffix}
+   - Follow naming pattern: nat-{az}-{EnvironmentSuffix}
 
 5. **Route Table Configuration**
    - Create separate route tables for public and private subnets
@@ -71,8 +71,8 @@ Create a production-ready VPC network architecture using **CloudFormation with J
 - Use **VPC Flow Logs** sent to **CloudWatch Logs** for compliance monitoring
 - Use **Network ACLs** for subnet-level security controls
 - Deploy to **us-east-1** region across 3 availability zones
-- Resource names must include **environmentSuffix** parameter for uniqueness
-- Follow naming convention: {resource-type}-{az}-{environmentSuffix}
+- Resource names must include **EnvironmentSuffix** parameter for uniqueness
+- Follow naming convention: {resource-type}-{az}-{EnvironmentSuffix}
 - All resources must be destroyable (use DeletionPolicy: Delete, not Retain)
 
 ### Constraints
@@ -90,10 +90,10 @@ Create a production-ready VPC network architecture using **CloudFormation with J
 
 ### Deployment Requirements (CRITICAL)
 
-- All resource names MUST include **environmentSuffix** parameter
-- Use CloudFormation Parameters to define environmentSuffix as a String
-- Example naming: VPC resource should be named "vpc-{environmentSuffix}"
-- NAT Gateways: "nat-us-east-1a-{environmentSuffix}", "nat-us-east-1b-{environmentSuffix}", etc.
+- All resource names MUST include **EnvironmentSuffix** parameter
+- Use CloudFormation Parameters to define EnvironmentSuffix as a String
+- Example naming: VPC resource should be named "vpc-{EnvironmentSuffix}"
+- NAT Gateways: "nat-us-east-1a-{EnvironmentSuffix}", "nat-us-east-1b-{EnvironmentSuffix}", etc.
 - All resources must use DeletionPolicy: Delete (NOT Retain) to ensure clean teardown
 - Template must be completely self-contained with no external dependencies
 - Use GetAtt and Ref intrinsic functions for resource references
@@ -113,7 +113,7 @@ However, the core requirements above are mandatory and must be completed first.
 - **High Availability**: NAT Gateways in all public subnets, proper routing in each AZ
 - **Security**: Network ACLs enforce traffic restrictions, Flow Logs capture all traffic
 - **Compliance**: 30-day log retention, proper IAM roles, comprehensive tagging
-- **Resource Naming**: All resources include environmentSuffix parameter value
+- **Resource Naming**: All resources include EnvironmentSuffix parameter value
 - **Destroyability**: All resources can be deleted cleanly without retention policies
 - **Code Quality**: Valid CloudFormation JSON syntax, well-structured, properly documented
 
@@ -129,6 +129,6 @@ However, the core requirements above are mandatory and must be completed first.
 - Custom Network ACLs with explicit rules
 - Mappings section for subnet CIDR blocks
 - Consistent tagging on all resources
-- Parameters section with environmentSuffix
+- Parameters section with EnvironmentSuffix
 - Outputs section with key resource IDs
 - Documentation with deployment instructions

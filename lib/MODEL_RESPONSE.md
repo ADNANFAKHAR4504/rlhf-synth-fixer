@@ -9,7 +9,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-grade VPC network architecture with multi-AZ high availability for financial services workloads",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming uniqueness",
       "Default": "prod",
@@ -59,7 +59,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-${environmentSuffix}"
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
             }
           },
           {
@@ -85,7 +85,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "igw-${environmentSuffix}"
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
             }
           },
           {
@@ -130,7 +130,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-public-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "subnet-public-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -164,7 +164,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-public-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "subnet-public-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -198,7 +198,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-public-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "subnet-public-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -232,7 +232,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-private-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "subnet-private-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -266,7 +266,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-private-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "subnet-private-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -300,7 +300,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-private-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "subnet-private-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -328,7 +328,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "eip-nat-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "eip-nat-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -356,7 +356,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "eip-nat-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "eip-nat-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -384,7 +384,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "eip-nat-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "eip-nat-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -416,7 +416,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "nat-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -448,7 +448,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "nat-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -480,7 +480,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "nat-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -509,7 +509,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-public-${environmentSuffix}"
+              "Fn::Sub": "rtb-public-${EnvironmentSuffix}"
             }
           },
           {
@@ -584,7 +584,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-private-us-east-1a-${environmentSuffix}"
+              "Fn::Sub": "rtb-private-us-east-1a-${EnvironmentSuffix}"
             }
           },
           {
@@ -636,7 +636,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-private-us-east-1b-${environmentSuffix}"
+              "Fn::Sub": "rtb-private-us-east-1b-${EnvironmentSuffix}"
             }
           },
           {
@@ -688,7 +688,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rtb-private-us-east-1c-${environmentSuffix}"
+              "Fn::Sub": "rtb-private-us-east-1c-${EnvironmentSuffix}"
             }
           },
           {
@@ -734,7 +734,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "vpc-flow-logs-role-${environmentSuffix}"
+          "Fn::Sub": "vpc-flow-logs-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -790,7 +790,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/vpc/flowlogs-${environmentSuffix}"
+          "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}"
         },
         "RetentionInDays": 30
       },
@@ -815,7 +815,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "flowlog-${environmentSuffix}"
+              "Fn::Sub": "flowlog-${EnvironmentSuffix}"
             }
           },
           {
@@ -843,7 +843,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nacl-public-${environmentSuffix}"
+              "Fn::Sub": "nacl-public-${EnvironmentSuffix}"
             }
           },
           {
@@ -982,7 +982,7 @@ This response provides a complete CloudFormation JSON template for deploying a p
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nacl-private-${environmentSuffix}"
+              "Fn::Sub": "nacl-private-${EnvironmentSuffix}"
             }
           },
           {
@@ -1238,7 +1238,7 @@ This CloudFormation template deploys a production-grade VPC network architecture
 
 ## Parameters
 
-- **environmentSuffix** (String): Unique suffix for resource naming (default: "prod")
+- **EnvironmentSuffix** (String): Unique suffix for resource naming (default: "prod")
 - **Environment** (String): Environment tag value (Production/Staging/Development, default: "Production")
 - **Department** (String): Department tag value (default: "Engineering")
 
@@ -1256,7 +1256,7 @@ aws cloudformation create-stack \
   --stack-name vpc-network-prod \
   --template-body file://lib/TapStack.json \
   --parameters \
-    ParameterKey=environmentSuffix,ParameterValue=prod \
+    ParameterKey=EnvironmentSuffix,ParameterValue=prod \
     ParameterKey=Environment,ParameterValue=Production \
     ParameterKey=Department,ParameterValue=Engineering \
   --capabilities CAPABILITY_NAMED_IAM \

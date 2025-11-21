@@ -6,7 +6,7 @@ This document provides the ideal CloudFormation JSON template incorporating mino
 
 The model-generated response was already of high quality. The following minor changes represent ideal practices:
 
-1. **Parameter Default**: Changed environmentSuffix default from "prod" to "dev" (safer default)
+1. **Parameter Default**: Changed EnvironmentSuffix default from "prod" to "dev" (safer default)
 2. **All other implementation details remain unchanged** - the model correctly implemented all resources
 
 ## File: lib/TapStack.json (Ideal Version)
@@ -18,7 +18,7 @@ The ideal template would include only this parameter change:
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-grade VPC network architecture with multi-AZ high availability for financial services workloads",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming uniqueness",
       "Default": "dev",
@@ -46,7 +46,7 @@ The ideal template would include only this parameter change:
 1. **Safe Defaults**: Defaulting to "dev" follows DevOps best practices of safe-by-default configuration
 2. **All Other Aspects Perfect**: The model correctly implemented:
    - All 47 resources with correct types and properties
-   - Proper environmentSuffix usage in all resource names
+   - Proper EnvironmentSuffix usage in all resource names
    - IAM roles and policies for VPC Flow Logs
    - Multi-AZ NAT Gateways for high availability
    - Network ACLs with proper rule numbers
@@ -106,7 +106,7 @@ The ideal template would include only this parameter change:
 
 ### Resource Tagging
 All resources tagged with:
-- Name: Including environmentSuffix
+- Name: Including EnvironmentSuffix
 - Environment: From Environment parameter
 - Department: From Department parameter
 
@@ -127,14 +127,14 @@ aws cloudformation deploy \
   --template-file lib/TapStack.json \
   --stack-name TapStackdev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides environmentSuffix=dev
+  --parameter-overrides EnvironmentSuffix=dev
 
 # Deploy to production environment (explicit override)
 aws cloudformation deploy \
   --template-file lib/TapStack.json \
   --stack-name TapStackprod \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides environmentSuffix=prod Environment=Production
+  --parameter-overrides EnvironmentSuffix=prod Environment=Production
 ```
 
 ## Testing
