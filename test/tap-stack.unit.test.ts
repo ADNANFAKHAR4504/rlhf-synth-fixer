@@ -105,7 +105,8 @@ describe('TapStack Unit Tests', () => {
       DeploymentConfigName: 'CodeDeployDefault.ECSAllAtOnce',
       BlueGreenDeploymentConfiguration: Match.objectLike({
         DeploymentReadyOption: {
-          ActionOnTimeout: 'STOP_DEPLOYMENT', // 0 wait time defaults to STOP
+          ActionOnTimeout: 'STOP_DEPLOYMENT', // Valid when wait time is non-zero
+          WaitTimeInMinutes: 1, // 1 minute wait time (cannot be 0 with STOP_DEPLOYMENT)
         },
         TerminateBlueInstancesOnDeploymentSuccess: {
           Action: 'TERMINATE',

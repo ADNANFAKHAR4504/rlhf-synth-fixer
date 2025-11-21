@@ -324,7 +324,9 @@ export class TapStack extends cdk.Stack {
         blueTargetGroup: frontendTg,
         greenTargetGroup: frontendGreenTg,
         listener: httpListener,
-        deploymentApprovalWaitTime: cdk.Duration.minutes(0),
+        // Use 1 minute instead of 0 to avoid ActionOnTimeout validation error
+        // When wait time is 0, ActionOnTimeout cannot be STOP_DEPLOYMENT
+        deploymentApprovalWaitTime: cdk.Duration.minutes(1),
         terminationWaitTime: cdk.Duration.minutes(0),
       },
       deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
@@ -336,7 +338,9 @@ export class TapStack extends cdk.Stack {
         blueTargetGroup: backendTg,
         greenTargetGroup: backendGreenTg,
         listener: httpListener,
-        deploymentApprovalWaitTime: cdk.Duration.minutes(0),
+        // Use 1 minute instead of 0 to avoid ActionOnTimeout validation error
+        // When wait time is 0, ActionOnTimeout cannot be STOP_DEPLOYMENT
+        deploymentApprovalWaitTime: cdk.Duration.minutes(1),
         terminationWaitTime: cdk.Duration.minutes(0),
       },
       deploymentConfig: codedeploy.EcsDeploymentConfig.ALL_AT_ONCE,
