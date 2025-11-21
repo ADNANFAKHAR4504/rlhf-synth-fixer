@@ -270,7 +270,44 @@ def _create_dms_replication_instance(self) -> dms.CfnReplicationInstance:
 
 ---
 
-### 5. State Management with DynamoDB
+### 5. CloudEndure Server Replication
+
+```python
+def _create_cloudendure_role(self) -> iam.Role:
+    """Create IAM role for CloudEndure service."""
+    role = iam.Role(
+        self,
+        f"CloudEndureRole-{self.environment_suffix}",
+        role_name=f"cloudendure-role-{self.environment_suffix}",
+        assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),  # CloudEndure agents run on EC2
+        description=f"IAM role for CloudEndure server replication {self.environment_suffix}",
+    )
+
+    # CloudEndure required EC2 permissions
+    role.add_to_policy(
+        iam.PolicyStatement(
+            actions=[
+                "ec2:DescribeInstances",
+                "ec2:DescribeVolumes",
+                "ec2:CreateSnapshot",
+                "ec2:RunInstances",
+                # ... additional EC2 permissions
+            ],
+            resources=["*"],
+        )
+    )
+
+    return role
+```
+
+**Key Points**:
+- Uses `ec2.amazonaws.com` service principal (CloudEndure agents run on EC2 instances)
+- Comprehensive EC2 permissions for server replication
+- IAM PassRole permission for CloudEndure service to use the role
+
+---
+
+### 6. State Management with DynamoDB
 
 ```python
 def _create_migration_tracking_table(self) -> dynamodb.Table:
@@ -318,7 +355,7 @@ def _create_migration_tracking_table(self) -> dynamodb.Table:
 
 ---
 
-### 6. Automated Rollback with Lambda
+### 7. Automated Rollback with Lambda
 
 ```python
 def _create_rollback_lambda(self) -> lambda_.Function:
@@ -400,7 +437,7 @@ def handler(event, context):
 
 ---
 
-### 7. Monitoring with CloudWatch
+### 8. Monitoring with CloudWatch
 
 ```python
 def _create_cloudwatch_dashboard(self) -> cloudwatch.Dashboard:
@@ -457,7 +494,7 @@ def _create_cloudwatch_dashboard(self) -> cloudwatch.Dashboard:
 
 ---
 
-### 8. Stack Outputs
+### 9. Stack Outputs
 
 ```python
 def _create_outputs(self) -> None:

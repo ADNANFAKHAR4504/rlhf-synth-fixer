@@ -310,7 +310,7 @@ class TapStack(Stack):
             self,
             f"CloudEndureRole-{self.environment_suffix}",
             role_name=f"cloudendure-role-{self.environment_suffix}",
-            assumed_by=iam.ServicePrincipal("cloudendure.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             description=f"IAM role for CloudEndure server replication {self.environment_suffix}",
         )
 

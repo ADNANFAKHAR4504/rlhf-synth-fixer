@@ -6,7 +6,42 @@ This analysis documents the infrastructure improvements and corrections made dur
 
 ## Summary
 
-No critical failures were identified in the initial implementation. The code was well-structured and followed AWS CDK best practices. However, minor improvements were made to enhance code quality, testability, and adherence to project standards.
+One critical deployment failure was identified and fixed: an invalid IAM service principal for CloudEndure. Additionally, minor improvements were made to enhance code quality, testability, and adherence to project standards.
+
+---
+
+## Critical Failures
+
+### 1. Invalid CloudEndure IAM Service Principal
+
+**Impact Level**: Critical (Deployment Blocker)
+
+**Initial Implementation Issue**: The CloudEndure IAM role used an invalid service principal `cloudendure.amazonaws.com`, which caused stack deployment to fail with:
+
+```
+Resource handler returned message: "Invalid principal in policy: 
+"SERVICE":"cloudendure.amazonaws.com" (Service: Iam, Status Code: 400)"
+```
+
+**Root Cause**: `cloudendure.amazonaws.com` is not a valid AWS service principal. CloudEndure agents run on EC2 instances and need to assume IAM roles, so the role must be assumable by EC2 instances.
+
+**IDEAL_RESPONSE Fix**: Changed the service principal to `ec2.amazonaws.com`:
+
+```python
+# Before (Invalid)
+assumed_by=iam.ServicePrincipal("cloudendure.amazonaws.com")
+
+# After (Correct)
+assumed_by=iam.ServicePrincipal("ec2.amazonaws.com")
+```
+
+**AWS Documentation Reference**: 
+- CloudEndure agents run on EC2 instances and require IAM roles assumable by EC2
+- Valid service principals: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html#principal-services
+
+**Training Value**: HIGH - This demonstrates the importance of understanding valid AWS service principals and how third-party services (like CloudEndure) interact with AWS IAM.
+
+---
 
 ---
 
@@ -228,7 +263,7 @@ The implementation demonstrates several architectural strengths:
 
 ## Summary
 
-- Total failures: 0 Critical, 0 High, 0 Medium, 6 Low
+- Total failures: 1 Critical, 0 High, 0 Medium, 6 Low
 - Primary knowledge gaps: None significant
 - Training value: The implementation demonstrates strong understanding of AWS CDK patterns, multi-service orchestration, and infrastructure best practices. The minor corrections primarily involve Python-specific CDK patterns and code quality standards rather than architectural or AWS service knowledge gaps.
 
