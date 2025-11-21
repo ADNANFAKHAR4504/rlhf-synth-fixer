@@ -2,9 +2,10 @@
 Database Stack - RDS Aurora MySQL Serverless v2
 """
 
+from typing import Dict, List
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List
 
 
 class DatabaseStackArgs:
@@ -57,7 +58,6 @@ class DatabaseStack(pulumi.ComponentResource):
             cluster_identifier=f"loan-aurora-cluster-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_mode="provisioned",
-            engine_version="8.0.mysql_aurora.3.05.2",
             database_name="loandb",
             master_username="admin",
             manage_master_user_password=True,
