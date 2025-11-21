@@ -137,7 +137,7 @@ resource "aws_network_acl" "database" {
     to_port    = 5432
   }
 
-  # Allow inbound HTTPS for AWS services (Secrets Manager, ECR, etc.)
+  # Allow inbound HTTPS for Secrets Manager and other AWS services
   ingress {
     protocol   = "tcp"
     rule_no    = 110
@@ -145,6 +145,16 @@ resource "aws_network_acl" "database" {
     cidr_block = "0.0.0.0/0"
     from_port  = 443
     to_port    = 443
+  }
+
+  # Allow inbound HTTP for ALB health checks
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 115
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 80
+    to_port    = 80
   }
 
   # Allow inbound ephemeral ports for return traffic

@@ -88,6 +88,11 @@ variable "db_secret_arn" {
   type        = string
 }
 
+variable "db_secret_name" {
+  description = "Name of the Secrets Manager secret containing DB credentials"
+  type        = string
+}
+
 variable "log_retention" {
   description = "CloudWatch log retention in days"
   type        = number

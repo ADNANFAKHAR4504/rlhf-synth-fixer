@@ -1,5 +1,5 @@
 aws_region      = "us-east-1"
-project_name    = "payment-processing"
+project_name    = "payment"
 pr_number       = "pr7054prod"
 vpc_cidr_base   = "10.0"
 container_image = "nginx:latest" # Replace with actual payment app image

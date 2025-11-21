@@ -120,6 +120,7 @@ module "compute" {
   db_username        = var.db_username
   db_password        = var.db_password
   db_secret_arn      = module.database.db_secret_arn
+  db_secret_name     = module.database.db_secret_name
   log_retention      = local.current_env_config.log_retention
   certificate_arn    = var.alb_certificate_arn
   min_capacity       = local.current_env_config.min_capacity

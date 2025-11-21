@@ -83,6 +83,14 @@ resource "aws_iam_role_policy" "ecs_task" {
           "logs:PutLogEvents"
         ]
         Resource = "${aws_cloudwatch_log_group.ecs.arn}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = var.db_secret_arn
       }
     ]
   })
@@ -131,8 +139,8 @@ resource "aws_security_group" "ecs" {
 
   ingress {
     description     = "Traffic from ALB"
-    from_port       = 8080
-    to_port         = 8080
+    from_port       = 80
+    to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -177,7 +185,7 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     interval            = 30
-    path                = "/"
+    path                = "/health"
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
@@ -254,12 +262,101 @@ resource "aws_ecs_task_definition" "main" {
 
   container_definitions = jsonencode([{
     name  = local.container_name
-    image = var.container_image
+    image = var.container_image != "nginx:latest" ? var.container_image : "python:3.11-slim"
 
     portMappings = [{
-      containerPort = 8080
+      containerPort = 80
       protocol      = "tcp"
     }]
+
+    entryPoint = ["/bin/sh", "-c"]
+    command = [
+      <<-SCRIPT
+pip3 install --no-cache-dir boto3 psycopg2-binary && python3 <<'PYEOF'
+import os
+import json
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+import boto3
+import psycopg2
+from datetime import datetime
+
+class AppHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        path = urlparse(self.path).path
+        
+        if path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'healthy',
+                'service': 'payment-app',
+                'timestamp': datetime.now().isoformat()
+            }).encode())
+        elif path == '/db-test':
+            try:
+                secret_name = os.environ.get('DB_SECRET_NAME', '')
+                region = os.environ.get('AWS_REGION', 'us-east-1')
+                db_host = os.environ.get('DB_HOST', '')
+                db_name = os.environ.get('DB_NAME', '')
+                db_user = os.environ.get('DB_USER', '')
+                db_password = os.environ.get('DB_PASSWORD', '')
+                
+                if secret_name and not db_password:
+                    secrets_client = boto3.client('secretsmanager', region_name=region)
+                    secret_value = secrets_client.get_secret_value(SecretId=secret_name)
+                    credentials = json.loads(secret_value['SecretString'])
+                    db_password = credentials.get('password', '')
+                
+                conn = psycopg2.connect(
+                    host=db_host,
+                    database=db_name,
+                    user=db_user,
+                    password=db_password,
+                    connect_timeout=5
+                )
+                cur = conn.cursor()
+                cur.execute("SELECT 1 as test_result;")
+                result = cur.fetchone()[0]
+                cur.close()
+                conn.close()
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'status': 'success',
+                    'message': 'RDS connection successful',
+                    'test_result': result,
+                    'query_time': datetime.now().isoformat(),
+                    'endpoint': db_host
+                }).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'status': 'error',
+                    'message': f'Database connection failed: {str(e)}',
+                    'endpoint': os.environ.get('DB_HOST', 'unknown')
+                }).encode())
+        else:
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'<h1>Payment Processing App</h1><p>Environment: ' + 
+                           os.environ.get('ENVIRONMENT', 'unknown').encode() + b'</p>')
+    
+    def log_message(self, format, *args):
+        pass
+
+if __name__ == '__main__':
+    server = HTTPServer(('0.0.0.0', 80), AppHandler)
+    server.serve_forever()
+PYEOF
+      SCRIPT
+    ]
 
     environment = [
       {
@@ -277,6 +374,10 @@ resource "aws_ecs_task_definition" "main" {
       {
         name  = "DB_USER"
         value = var.db_username
+      },
+      {
+        name  = "DB_SECRET_NAME"
+        value = var.db_secret_name
       },
       {
         name  = "S3_BUCKET"
@@ -353,7 +454,7 @@ resource "aws_ecs_service" "main" {
   load_balancer {
     target_group_arn = aws_lb_target_group.main.arn
     container_name   = local.container_name
-    container_port   = 8080
+    container_port   = 80
   }
 
   deployment_maximum_percent         = 200

@@ -115,8 +115,8 @@ describe('Payment Processing Platform - Terraform Unit Tests', () => {
       expect(devTfvars).toMatch(/pr_number\s*=\s*"pr7054dev"/);
     });
 
-    test('Staging tfvars has pr_number pr7054staging', () => {
-      expect(stagingTfvars).toMatch(/pr_number\s*=\s*"pr7054staging"/);
+    test('Staging tfvars has pr_number pr7054stag', () => {
+      expect(stagingTfvars).toMatch(/pr_number\s*=\s*"pr7054stag"/);
     });
 
     test('Prod tfvars has pr_number pr7054prod', () => {
@@ -339,7 +339,7 @@ describe('Payment Processing Platform - Terraform Unit Tests', () => {
     test('ALB target group has health check', () => {
       expect(computeMain).toMatch(/resource\s+"aws_lb_target_group"\s+"main"\s*{/);
       expect(computeMain).toMatch(/health_check\s*{/);
-      expect(computeMain).toMatch(/path\s*=\s*"\/"/);
+      expect(computeMain).toMatch(/path\s*=\s*"\/health"/);
     });
 
     test('HTTP listener forwards or redirects based on certificate', () => {
