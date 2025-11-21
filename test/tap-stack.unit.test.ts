@@ -12,10 +12,10 @@ describe('TapStack Unit Tests', () => {
       context: {
         environmentSuffix: 'test',
         // Context not strictly needed for creating new HostedZone, but good to keep for consistency if we revert
-        'hosted-zone:account=123456789012:domainName=example.com:region=us-east-1':
+        'hosted-zone:account=123456789012:domainName=test.example.com:region=us-east-1':
           {
             Id: 'Z12345',
-            Name: 'example.com',
+            Name: 'test.example.com',
           },
       },
     });

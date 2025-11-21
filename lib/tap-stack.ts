@@ -163,7 +163,7 @@ export class TapStack extends cdk.Stack {
     // Since ACM validation is impossible in this test environment, we are skipping HTTPS/ACM setup
     // and defaulting to HTTP to ensure the stack deploys successfully.
     const hostedZone = new route53.HostedZone(this, 'HostedZone', {
-      zoneName: 'example.com', // Placeholder domain
+      zoneName: 'test.example.com', // Use a subdomain to avoid reserved domain error
     });
 
     // HTTP Listener (No HTTPS/ACM due to test environment constraints)
