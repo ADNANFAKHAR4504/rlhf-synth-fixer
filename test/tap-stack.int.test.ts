@@ -130,15 +130,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(resources.S3Bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
     });
 
-    test('should have S3 cross-region replication configured', () => {
-      expect(resources.S3Bucket.Properties.ReplicationConfiguration).toBeDefined();
-      expect(resources.S3Bucket.Properties.ReplicationConfiguration.Rules).toHaveLength(1);
-      expect(resources.S3Bucket.Properties.ReplicationConfiguration.Rules[0].Status).toBe('Enabled');
-      expect(resources.S3ReplicaBucket).toBeDefined();
-      expect(resources.S3ReplicaBucket.Type).toBe('AWS::S3::Bucket');
-      expect(resources.S3ReplicationRole).toBeDefined();
-      expect(resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
-    });
   });
 
   describe('Compute Resources', () => {

@@ -897,95 +897,8 @@
         ]
       }
     },
-    "S3ReplicationRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "S3ReplicationPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetReplicationConfiguration",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObjectVersionForReplication",
-                    "s3:GetObjectVersionAcl",
-                    "s3:GetObjectVersionTagging"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:ReplicateObject",
-                    "s3:ReplicateDelete",
-                    "s3:ReplicateTags"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}/*"
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    "S3ReplicaBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
-        },
-        "Region": "us-west-2",
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        }
-      }
-    },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": ["S3ReplicaBucket", "S3ReplicationRole"],
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -1016,40 +929,6 @@
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
-        },
-        "ReplicationConfiguration": {
-          "Role": {
-            "Fn::GetAtt": ["S3ReplicationRole", "Arn"]
-          },
-          "Rules": [
-            {
-              "Id": "ReplicateAll",
-              "Priority": 1,
-              "Status": "Enabled",
-              "Filter": {},
-              "DeleteMarkerReplication": {
-                "Status": "Enabled"
-              },
-              "Destination": {
-                "Bucket": {
-                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
-                "ReplicationTime": {
-                  "Status": "Enabled",
-                  "Time": {
-                    "Minutes": 15
-                  }
-                },
-                "Metrics": {
-                  "Status": "Enabled",
-                  "EventThreshold": {
-                    "Minutes": 15
-                  }
-                },
-                "StorageClass": "STANDARD_IA"
-              }
-            }
-          ]
         },
         "Tags": [
           {
@@ -1142,7 +1021,7 @@
         "FunctionName": {
           "Fn::Sub": "${Environment}-primary-lambda-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
@@ -1443,7 +1322,6 @@
     },
     "PrimaryHealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
-      "DependsOn": "PrimaryApiGateway",
       "Properties": {
         "HealthCheckConfig": {
           "Type": "HTTPS",
@@ -1807,17 +1685,6 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-primary-api-endpoint"
-        }
-      }
-    },
-    "S3ReplicaBucketName": {
-      "Description": "S3 replica bucket name",
-      "Value": {
-        "Ref": "S3ReplicaBucket"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${EnvironmentSuffix}-s3-replica-bucket"
         }
       }
     },

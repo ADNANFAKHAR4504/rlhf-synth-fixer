@@ -3144,7 +3144,6 @@ The solution consists of two stacks:
         "BucketName": {
           "Fn::Sub": "${Environment}-data-replica-${EnvironmentSuffix}-${AWS::AccountId}"
         },
-        "Region": "us-west-2",
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -3167,7 +3166,7 @@ The solution consists of two stacks:
     },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": ["S3ReplicaBucket", "S3ReplicationRole"],
+      "DependsOn": "S3ReplicaBucket",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -3324,7 +3323,7 @@ The solution consists of two stacks:
         "FunctionName": {
           "Fn::Sub": "${Environment}-primary-lambda-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
@@ -3625,7 +3624,6 @@ The solution consists of two stacks:
     },
     "PrimaryHealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
-      "DependsOn": "PrimaryApiGateway",
       "Properties": {
         "HealthCheckConfig": {
           "Type": "HTTPS",
@@ -4031,12 +4029,6 @@ The solution consists of two stacks:
   }
 }```
 
-## File: lib/secondary-stack.json
-
-```json
-{
-  "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Secondary Region (DR) Stack for Multi-Region Disaster Recovery Solution",
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
