@@ -2,6 +2,8 @@
   "platform": "pulumi",
   "language": "py",
   "complexity": "hard",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-21T12:23:41+00:00",
