@@ -75,27 +75,6 @@ All agents MUST use this standardized format:
 | PHASE 3 | Test Coverage Review | Validate 100% test coverage |
 | PHASE 4 | Training Quality Assessment & Code Review | Calculate training_quality score and final compliance check |
 
-### iac-synth-trainer
-
-| Phase | Name | Description |
-|-------|------|-------------|
-| PHASE 0 | Pre-Execution Validation | Review documentation, verify scripts |
-| PHASE 1 | PR Selection | Load PR status, check availability |
-| PHASE 1.1 | Atomic PR Selection | Atomically select next PR (thread-safe) |
-| PHASE 2 | PR Processing Loop | Main processing loop for fixing PRs |
-| PHASE 2.1 | Pre-Fix Analysis | Document root cause, create fix plan |
-| PHASE 2.2 | Worktree Setup | Create isolated worktree, validate location |
-| PHASE 2.3 | Failure Analysis | Analyze GitHub pipeline failures in detail |
-| PHASE 2.4 | Pre-Deployment Validation | Run pre-validate-iac.sh (cost optimization) |
-| PHASE 2.5 | Apply Fixes | Fix issues stage by stage |
-| PHASE 2.6 | Local Validation | Validate all fixes locally |
-| PHASE 2.7 | Quality Gates | Verify all quality gates pass |
-| PHASE 2.8 | Commit & Push | Commit fixes and push to PR branch |
-| PHASE 2.9 | Monitor Pipeline | Wait for ALL GitHub pipeline stages to pass |
-| PHASE 2.10 | Update Status | Mark as fixed/failed with progress tracking |
-| PHASE 2.11 | Cleanup | Remove worktrees after completion |
-| PHASE 3 | Final Summary | Generate final summary report |
-
 ## Migration Guide
 
 ### Old → New Phase Names
@@ -107,23 +86,6 @@ All agents MUST use this standardized format:
 - `Phase 3` → `PHASE 3: QA Training & Validation`
 - `Phase 4` → `PHASE 4: Code Review & Compliance`
 - `Phase 5` → `PHASE 5: PR Creation & Task Completion`
-
-**iac-synth-trainer**:
-- `Phase 0` → `PHASE 0: Pre-Execution Validation`
-- `Phase 1` → `PHASE 1: PR Selection`
-- `Phase 1.5` → `PHASE 1.1: Atomic PR Selection`
-- `Phase 2.0` → `PHASE 2.1: Pre-Fix Analysis`
-- `Phase 2.2` → `PHASE 2.2: Worktree Setup`
-- `Phase 2.4` → `PHASE 2.3: Failure Analysis`
-- `Phase 2.5` → `PHASE 2.4: Pre-Deployment Validation`
-- `Phase 2.6` → `PHASE 2.6: Local Validation`
-- `Phase 2.6.5` → `PHASE 2.7: Quality Gates`
-- `Phase 2.7` → `PHASE 2.8: Commit & Push`
-- `Phase 2.8` → `PHASE 2.9: Monitor Pipeline`
-- `Phase 2.10` → `PHASE 2.10: Update Status`
-- `Phase 2.11` → `PHASE 2.11: Cleanup`
-- `Phase 2.12` → `PHASE 2.11: PR Completion` (Note: consolidated)
-- `Phase 3` → `PHASE 3: Final Summary`
 
 ## Examples
 
@@ -138,7 +100,6 @@ All agents MUST use this standardized format:
 **After**:
 ```markdown
 **AGENT STATUS**: PHASE 1.2 - VALIDATION - Task setup validated
-**SYNTH TRAINER STATUS**: PHASE 2.1 - ANALYSIS COMPLETE - Root cause documented
 ```
 
 ### Phase Header Examples

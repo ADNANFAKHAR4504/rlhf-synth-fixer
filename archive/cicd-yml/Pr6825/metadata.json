@@ -1,0 +1,19 @@
+{
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7029",
+  "team": "2",
+  "startedAt": "2025-11-18T14:15:09.022Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}
