@@ -354,7 +354,7 @@ variable "alb_certificate_arn" {
 ```hcl
 aws_region      = "us-east-1"
 project_name    = "payment"
-pr_number       = "pr7054dev"
+pr_number       = "pr7072dev"
 vpc_cidr_base   = "10.0"
 container_image = "nginx:latest" # Replace with actual payment app image
 
@@ -371,7 +371,7 @@ alb_certificate_arn = ""
 ```hcl
 aws_region      = "us-east-1"
 project_name    = "payment"
-pr_number       = "pr7054prod"
+pr_number       = "pr7072prod"
 vpc_cidr_base   = "10.0"
 container_image = "nginx:latest" # Replace with actual payment app image
 
@@ -388,7 +388,7 @@ alb_certificate_arn = "" # Add your production certificate ARN
 ```hcl
 aws_region      = "us-east-1"
 project_name    = "payment"
-pr_number       = "pr7054stag"
+pr_number       = "pr7072stag"
 vpc_cidr_base   = "10.0"
 container_image = "nginx:latest" # Replace with actual payment app image
 

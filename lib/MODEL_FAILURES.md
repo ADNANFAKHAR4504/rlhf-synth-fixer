@@ -149,13 +149,13 @@ variable "pr_number" {
 2. **Updated all `.tfvars` files**:
 ```terraform
 # dev.tfvars
-pr_number = "pr7054dev"
+pr_number = "pr7072dev"
 
 # staging.tfvars
-pr_number = "pr7054staging"
+pr_number = "pr7072staging"
 
 # prod.tfvars
-pr_number = "pr7054prod"
+pr_number = "pr7072prod"
 ```
 
 3. **Updated resource naming** in `main.tf`:
@@ -180,7 +180,7 @@ common_tags = {
 }
 ```
 
-**Result:** All resources now include the PR number in their names (e.g., `payment-processing-pr7054dev-vpc`, `payment-processing-pr7054dev-cluster`).
+**Result:** All resources now include the PR number in their names (e.g., `payment-processing-pr7072dev-vpc`, `payment-processing-pr7072dev-cluster`).
 
 ---
 
