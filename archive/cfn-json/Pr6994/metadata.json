@@ -1,0 +1,32 @@
+{
+  "po_id": "z5k7f9",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "startedAt": "2025-11-20T20:31:00-08:00",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "S3",
+    "CloudFormation",
+    "VPC Peering",
+    "NAT Gateway",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

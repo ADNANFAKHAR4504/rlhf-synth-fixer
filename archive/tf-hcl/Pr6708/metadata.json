@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "6670",
+  "team": "5",
+  "startedAt": "2025-11-17T11:35:59.493Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "asynchronous payment processing for financial services platform with fraud detection validation and guaranteed transaction ordering",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "VPC",
+    "CloudTrail",
+    "SNS",
+    "IAM",
+    "EventBridge"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

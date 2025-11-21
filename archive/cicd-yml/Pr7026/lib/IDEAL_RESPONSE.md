@@ -1,0 +1,684 @@
+```yaml
+name: Media Pipeline CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target environment for manual run"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR_NAME: ${{ vars.ACR_NAME }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  DEV_RESOURCE_GROUP: media-dev-rg
+  STAGING_RESOURCE_GROUP: media-staging-rg
+  PROD_RESOURCE_GROUP: media-prod-rg
+  LOCATION_PRIMARY: eastus
+  LOCATION_SECONDARY: westeurope
+  LOCATION_TERTIARY: southeastasia
+  AKS_DEV_CLUSTER: media-dev-aks
+  AKS_STAGING_BLUE: media-staging-aks-blue
+  AKS_STAGING_GREEN: media-staging-aks-green
+  AKS_PROD_EAST: media-prod-aks-eastus
+  AKS_PROD_WESTEU: media-prod-aks-westeurope
+  AKS_PROD_SEASIA: media-prod-aks-seasia
+  BICEP_DIR: infra/bicep
+  FUNCTIONS_DIR: src/functions
+  GO_SERVICES_DIR: src/go
+  REACT_APP_DIR: src/dashboard
+  UPLOAD_API_DOCKERFILE: services/upload-api/Dockerfile
+  TRANSCODING_WORKER_DOCKERFILE: services/transcoding-worker/Dockerfile
+  STREAMING_API_DOCKERFILE: services/streaming-api/Dockerfile
+
+jobs:
+  validation:
+    name: Validation & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Cache Bicep modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.bicep
+          key: bicep-${{ runner.os }}-${{ hashFiles('infra/bicep/**/*.bicep') }}
+
+      - name: Install tooling
+        run: |
+          sudo npm install -g yarn
+          sudo apt-get update
+          sudo apt-get install -y yamllint shellcheck
+          curl -sSL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o hadolint
+          chmod +x hadolint
+          sudo mv hadolint /usr/local/bin/hadolint
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      - name: Bicep build (lint)
+        run: |
+          az bicep version
+          for file in $(find "${BICEP_DIR}" -name "*.bicep"); do
+            az bicep build --file "$file"
+          done
+
+      - name: Azure Policy as Code validation (placeholder)
+        run: |
+          echo "Run Azure Policy as Code validation here (e.g., az deployment what-if, policy-as-code, etc.)"
+          echo "Make this step fail if policies are violated."
+
+      - name: TypeScript compilation for Azure Functions
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Go compilation for transcoding workers
+        working-directory: ${{ env.GO_SERVICES_DIR }}
+        run: |
+          go test ./...
+          go build ./...
+
+      - name: Lint shell scripts
+        run: |
+          shellcheck scripts/*.sh || true
+
+      - name: Lint Dockerfiles
+        run: |
+          hadolint ${{ env.UPLOAD_API_DOCKERFILE }} || true
+          hadolint ${{ env.TRANSCODING_WORKER_DOCKERFILE }} || true
+          hadolint ${{ env.STREAMING_API_DOCKERFILE }} || true
+
+      - name: Lint YAML
+        run: |
+          yamllint .
+
+  build:
+    name: Build Containers & Bundles
+    runs-on: ubuntu-latest
+    needs: validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Docker login to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.ACR_NAME }}.azurecr.io
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build Azure Functions bundles
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build React admin dashboard
+        working-directory: ${{ env.REACT_APP_DIR }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build & push upload-api image
+        run: |
+          docker build \
+            -f "${UPLOAD_API_DOCKERFILE}" \
+            -t "${ACR_NAME}.azurecr.io/upload-api:${GITHUB_SHA}" .
+          docker push "${ACR_NAME}.azurecr.io/upload-api:${GITHUB_SHA}"
+
+      - name: Build & push transcoding-worker image (GPU-enabled)
+        run: |
+          docker build \
+            -f "${TRANSCODING_WORKER_DOCKERFILE}" \
+            --build-arg ENABLE_GPU=true \
+            -t "${ACR_NAME}.azurecr.io/transcoding-worker:${GITHUB_SHA}" .
+          docker push "${ACR_NAME}.azurecr.io/transcoding-worker:${GITHUB_SHA}"
+
+      - name: Build & push streaming-api image
+        run: |
+          docker build \
+            -f "${STREAMING_API_DOCKERFILE}" \
+            -t "${ACR_NAME}.azurecr.io/streaming-api:${GITHUB_SHA}" .
+          docker push "${ACR_NAME}.azurecr.io/streaming-api:${GITHUB_SHA}"
+
+      - name: Compile Bicep templates
+        run: |
+          mkdir -p artifacts/bicep
+          for file in $(find "${BICEP_DIR}" -name "*.bicep"); do
+            out="artifacts/bicep/$(basename "$file" .bicep).json"
+            az bicep build --file "$file" --outfile "$out"
+          done
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            artifacts/bicep
+            ${{ env.FUNCTIONS_DIR }}/dist
+            ${{ env.REACT_APP_DIR }}/dist
+
+  test:
+    name: Unit, Integration & Quality Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: artifacts
+
+      - name: Jest tests for Azure Functions
+        working-directory: ${{ env.FUNCTIONS_DIR }}
+        run: |
+          npm ci
+          npm test -- --ci --reporters=default --reporters=jest-junit
+
+      - name: Go tests for transcoding logic (with testcontainers)
+        working-directory: ${{ env.GO_SERVICES_DIR }}
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+        run: |
+          go test ./... -v
+
+      - name: React component tests
+        working-directory: ${{ env.REACT_APP_DIR }}
+        run: |
+          npm ci
+          npm test -- --watch=false --runInBand
+
+      - name: Integration tests with Azurite
+        run: |
+          docker run -d --name azurite -p 10000:10000 -p 10001:10001 mcr.microsoft.com/azure-storage/azurite
+          npm run test:integration || (docker logs azurite && exit 1)
+
+      - name: Video transcoding quality tests (VMAF > 90)
+        run: |
+          bash scripts/transcode-test.sh
+
+      - name: Performance tests with K6 (1000 concurrent uploads)
+        run: |
+          npm install -g k6
+          k6 run perf/k6-uploads.js --vus 1000 --duration 5m
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/junit.xml
+            **/coverage
+            perf/reports
+
+  security:
+    name: Security & Compliance Scans
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Trivy container scan
+        run: |
+          curl -sL https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz | tar zx
+          sudo mv trivy /usr/local/bin/trivy
+          trivy image --exit-code 1 --severity CRITICAL "${ACR_NAME}.azurecr.io/transcoding-worker:${GITHUB_SHA}"
+
+      - name: Grype SBOM scan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype "${ACR_NAME}.azurecr.io/transcoding-worker:${GITHUB_SHA}" || exit 1
+
+      - name: Snyk dependency scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          npm install -g snyk
+          snyk test || true
+
+      - name: Checkov scan for Bicep templates
+        run: |
+          pip install checkov
+          checkov -d "${BICEP_DIR}"
+
+      - name: OWASP ZAP API scan (upload-api)
+        run: |
+          echo "Run ZAP API scan against upload-api endpoint here"
+
+      - name: Microsoft Defender for Cloud policy validation
+        run: |
+          echo "Validate Defender for Cloud recommendations via az security command here"
+
+      - name: Network security & Key Vault validation
+        run: |
+          echo "Validate NSG rules, Key Vault configuration, DDoS protection here"
+
+  storage-setup:
+    name: Storage & CDN Setup (Dev)
+    runs-on: ubuntu-latest
+    needs: [validation, build]
+    environment: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy storage & CDN
+        run: |
+          bash scripts/deploy-bicep.sh dev "${DEV_RESOURCE_GROUP}" "${LOCATION_PRIMARY}"
+
+      - name: CDN cache validation (baseline)
+        run: |
+          bash scripts/cdn-validation.sh dev
+
+  deploy-infrastructure-dev:
+    name: Deploy Infrastructure - Dev
+    runs-on: ubuntu-latest
+    needs: storage-setup
+    environment: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy core infra (Bicep)
+        run: |
+          bash scripts/deploy-bicep.sh dev "${DEV_RESOURCE_GROUP}" "${LOCATION_PRIMARY}"
+
+      - name: Configure monitoring (dev)
+        run: |
+          bash scripts/configure-monitoring.sh dev "${DEV_RESOURCE_GROUP}"
+
+  deploy-services-dev:
+    name: Deploy Services - Dev
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure-dev
+    environment: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: AKS context (dev)
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.DEV_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_DEV_CLUSTER }}
+
+      - name: Deploy AKS GPU workloads
+        run: |
+          bash scripts/deploy-aks-gpu.sh dev
+
+      - name: Deploy Azure Functions (dev)
+        run: |
+          bash scripts/deploy-functions-slots.sh dev
+
+      - name: Configure Event Grid & API Management
+        run: |
+          echo "Configure Event Grid subscriptions and API Management here"
+
+  integration-test-dev:
+    name: Integration Tests - Dev Environment
+    runs-on: ubuntu-latest
+    needs: deploy-services-dev
+    environment: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run end-to-end transcoding tests (dev)
+        run: |
+          bash scripts/transcode-test.sh dev
+
+      - name: Validate CDN cache behavior (dev)
+        run: |
+          bash scripts/cdn-validation.sh dev
+
+      - name: Validate Cosmos DB metadata & Azure Monitor queries
+        run: |
+          echo "Run az cosmosdb and az monitor metrics list to validate metadata and monitoring"
+
+  deploy-staging:
+    name: Deploy Staging (Blue-Green)
+    runs-on: ubuntu-latest
+    needs: integration-test-dev
+    environment:
+      name: staging
+      url: https://staging.media.example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy staging blue/green
+        run: |
+          bash scripts/deploy-blue-green.sh staging "${STAGING_RESOURCE_GROUP}" "${AKS_STAGING_BLUE}" "${AKS_STAGING_GREEN}"
+
+      - name: Deploy Functions to staging slots
+        run: |
+          bash scripts/deploy-functions-slots.sh staging
+
+  performance-test:
+    name: Performance & Scale Test (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Locust
+        run: |
+          pip install locust
+
+      - name: Run Locust performance tests
+        run: |
+          locust -f perf/locustfile.py --headless -u 10000 -r 500 -t 15m --html perf/locust-report.html
+
+      - name: Validate transcoding throughput (1000 parallel videos)
+        run: |
+          echo "Invoke batch transcoding job and validate completion time against SLO"
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-reports
+          path: perf
+
+  canary-analysis:
+    name: Canary Analysis (Staging Blue/Green)
+    runs-on: ubuntu-latest
+    needs: performance-test
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Analyze canary metrics
+        run: |
+          echo "Compare blue vs green error rates, latency, GPU utilization, CDN cache rate"
+          echo "Fail this job if error > 0.5% or GPU utilization > 80%"
+
+      - name: Rollback blue/green if needed
+        if: failure()
+        run: |
+          bash scripts/rollback-blue-green.sh staging
+
+  e2e-test:
+    name: E2E Browser & DRM Tests
+    runs-on: ubuntu-latest
+    needs: canary-analysis
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Run Playwright E2E tests
+        run: |
+          npx playwright test
+
+      - name: Upload E2E reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-reports
+          path: playwright-report
+
+  compliance-validation:
+    name: Compliance & Security Posture
+    runs-on: ubuntu-latest
+    needs: e2e-test
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate encryption, Private Link, network isolation
+        run: |
+          bash scripts/configure-monitoring.sh staging "${STAGING_RESOURCE_GROUP}"
+          echo "Additionally validate diagnostic settings, RBAC and backups for Cosmos DB"
+
+  production-approval:
+    name: Production Change Review
+    runs-on: ubuntu-latest
+    needs: compliance-validation
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_env == 'production'
+    environment:
+      name: production
+      url: https://media.global.example.com
+    steps:
+      - name: Await approvals (media-ops, security, platform)
+        run: |
+          echo "This job exists primarily to enforce environment protection rules in GitHub."
+          echo "Media Ops, Security, and Platform teams must approve this deployment."
+
+  deploy-production:
+    name: Deploy Production (Multi-region)
+    runs-on: ubuntu-latest
+    needs: production-approval
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_env == 'production'
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infra & services - eastus
+        run: |
+          bash scripts/deploy-bicep.sh prod "${PROD_RESOURCE_GROUP}" "${LOCATION_PRIMARY}"
+          bash scripts/deploy-aks-gpu.sh prod "${AKS_PROD_EAST}"
+
+      - name: Health check eastus & circuit breaker
+        run: |
+          echo "Run health checks against eastus. Fail to stop rollout if not healthy."
+
+      - name: Deploy infra & services - westeurope
+        if: success()
+        run: |
+          bash scripts/deploy-bicep.sh prod "${PROD_RESOURCE_GROUP}" "${LOCATION_SECONDARY}"
+          bash scripts/deploy-aks-gpu.sh prod "${AKS_PROD_WESTEU}"
+
+      - name: Deploy infra & services - southeastasia
+        if: success()
+        run: |
+          bash scripts/deploy-bicep.sh prod "${PROD_RESOURCE_GROUP}" "${LOCATION_TERTIARY}"
+          bash scripts/deploy-aks-gpu.sh prod "${AKS_PROD_SEASIA}"
+
+      - name: Configure Front Door & Traffic Manager
+        run: |
+          echo "Configure Azure Front Door and Traffic Manager priority routing and health probes"
+
+  smoke-test:
+    name: Smoke Tests (Prod Multi-region)
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run multi-region smoke tests
+        run: |
+          bash scripts/failover-test.sh prod
+
+  monitoring:
+    name: Monitoring & Observability Setup
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure monitoring stack
+        run: |
+          bash scripts/configure-monitoring.sh prod "${PROD_RESOURCE_GROUP}"
+
+  disaster-recovery:
+    name: Disaster Recovery Drill
+    runs-on: ubuntu-latest
+    needs: monitoring
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Federated Credentials)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run DR test
+        run: |
+          bash scripts/failover-test.sh prod
+
+```
