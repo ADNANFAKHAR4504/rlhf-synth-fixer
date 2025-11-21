@@ -1,4 +1,4 @@
-environment_suffix = "synth101912554v5"
+environment_suffix = "synth101912554v6"
 region             = "ap-southeast-1"
 
 # Database credentials (using environment variables TF_VAR_db_username and TF_VAR_db_password)
@@ -10,7 +10,7 @@ container_port  = 80
 
 # ECS configuration
 desired_task_count = 2
-min_task_count     = 2
+min_task_count     = 3
 max_task_count     = 4
 cpu                = "256"
 memory             = "512"

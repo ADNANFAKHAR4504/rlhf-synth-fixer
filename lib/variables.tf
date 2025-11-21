@@ -1,7 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across deployments"
   type        = string
-  default     = "synth101912554v5"
+  default     = "synth101912554v6"
 }
 
 variable "region" {
@@ -81,6 +81,7 @@ variable "db_password" {
   description = "Master password for database"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "domain_name" {

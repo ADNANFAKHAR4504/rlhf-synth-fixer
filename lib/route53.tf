@@ -1,8 +1,8 @@
 # Route53 Health Check for ALB
 resource "aws_route53_health_check" "alb" {
   fqdn              = aws_lb.main.dns_name
-  port              = 443
-  type              = "HTTPS"
+  port              = 80
+  type              = "HTTP"
   resource_path     = "/health"
   failure_threshold = 3
   request_interval  = 30
