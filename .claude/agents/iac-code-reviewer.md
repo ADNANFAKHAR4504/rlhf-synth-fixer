@@ -51,6 +51,14 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 - Verify latest PROMPT file (lib/PROMPT.md, lib/PROMPT2.md, or lib/PROMPT3.md) exists
 - Verify lib/IDEAL_RESPONSE.md exists
+- **MANDATORY EMOJI CHECK for IDEAL_RESPONSE.md**:
+  ```bash
+  # Check for emojis in IDEAL_RESPONSE.md - if found, fail immediately
+  if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/IDEAL_RESPONSE.md 2>/dev/null; then
+    echo "❌ CRITICAL: Emojis found in IDEAL_RESPONSE.md. Emojis are not allowed."
+    exit 1
+  fi
+  ```
 - Confirm integration tests in test/ folder
 - Return "PR is not ready" if missing
 
@@ -75,6 +83,15 @@ Report: "Using PROMPT file: {FILENAME}" and "Using MODEL_RESPONSE file: {FILENAM
 - On failure, see `docs/references/error-handling.md` Standard Error Response
 
 #### Step 3: PROMPT.md Style Validation
+
+**MANDATORY EMOJI CHECK**:
+```bash
+# Check for emojis in PROMPT files - if found, fail immediately
+if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/PROMPT*.md 2>/dev/null; then
+  echo "❌ CRITICAL: Emojis found in PROMPT.md files. Emojis are not allowed."
+  exit 1
+fi
+```
 
 **Validation**: Run Checkpoint D: PROMPT.md Style Validation
 - See `docs/references/validation-checkpoints.md` for style requirements

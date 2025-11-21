@@ -1114,25 +1114,39 @@ jobs:
             CRITICAL: you MUST validate the latest PROMPT file format, and add a github comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
-            3. Assess whether the content looks human-generated or AI-generated
-            4. Look for signs of AI generation such as:
-                - Emojis or special symbols (icons) used for formatting
+            3. **MANDATORY EMOJI CHECK**: Check for emojis in PROMPT files - if found, fail immediately:
+               ```bash
+               if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/PROMPT*.md 2>/dev/null; then
+                 echo "❌ CRITICAL: Emojis found in PROMPT.md files. Emojis are not allowed."
+                 exit 1
+               fi
+               ```
+            4. Assess whether the content looks human-generated or AI-generated
+            5. Look for signs of AI generation such as:
+                - Emojis or special symbols (icons) used for formatting (already checked above - will fail job)
                 - Table structures
                 - Overly formal or template-like language
                 - Logs are allowed when we have multiple prompt files. 
                 - Perfect formatting that suggests AI assistance
                 - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, fail the job by exiting with code 1.
-            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
-            7. PROMPT2.md and PROMPT3.md are optional, but if they exist, they must also be validated and it can contain Deployment/Test/Error logs as well.
+            6. If  any PROMPT file appears to be AI-generated rather than human-written, fail the job by exiting with code 1.
+            7. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
+            8. PROMPT2.md and PROMPT3.md are optional, but if they exist, they must also be validated and it can contain Deployment/Test/Error logs as well.
 
             CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
             1. Read lib/IDEAL_RESPONSE.md if it exists
-            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
-            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
-            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
+            2. **MANDATORY EMOJI CHECK**: Check for emojis in IDEAL_RESPONSE.md - if found, fail immediately:
+               ```bash
+               if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/IDEAL_RESPONSE.md 2>/dev/null; then
+                 echo "❌ CRITICAL: Emojis found in IDEAL_RESPONSE.md. Emojis are not allowed."
+                 exit 1
+               fi
+               ```
+            3. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
+            4. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
+            5. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
+            6. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
+            7. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
 
             CRITICAL WARNING - FILE CONTEXT:
             - lib/MODEL_RESPONSE.md = Initial model output (MAY contain errors like Maven, multi-stack, etc.) - READ-ONLY, never update
