@@ -24,14 +24,14 @@ This document provides the single source of truth for iteration decisions.
 
 ---
 
-## Decision Matrix
+## Decision Matrix (UPDATED)
 
 | Training Quality Score | Action | Rationale |
 |------------------------|--------|-----------|
 | **9-10** | ✅ Approve PR | Excellent training value |
 | **8** | ✅ Approve PR | Meets threshold |
 | **6-7** | ⚠️ Conditional Iteration | Only if simple improvements possible |
-| **4-5** | ❌ Mark as Error | Insufficient training value |
+| **4-5** | ⚠️ Conditional Iteration (NEW) | Only if fixable gaps identified |
 | **0-3** | ❌ Mark as Error | Critical failure OR model too good |
 
 ---
@@ -47,7 +47,31 @@ Score ≥ 8?
   ↓
 Score ≥ 6?
   YES → Evaluate iteration potential
-  NO → ❌ MARK AS ERROR → END
+  NO → Check if score 4-5 with fixable gaps
+    ↓
+    Score 4-5?
+    ├─ NO → ❌ MARK AS ERROR → END
+    └─ YES → Evaluate iteration for 4-5
+      ↓
+      Check MODEL_FAILURES.md:
+      ↓
+      Are fixes Category A/B (significant/moderate)?
+      ├─ NO (only Category C/D) → ❌ ERROR ("Model already competent") → END
+      └─ YES → Continue
+        ↓
+        Can 2+ significant features be added?
+        ├─ NO → ❌ ERROR ("Cannot improve sufficiently") → END
+        └─ YES → Continue
+          ↓
+          Expected score after iteration ≥ 8?
+          ├─ NO → ❌ ERROR ("Unlikely to reach threshold") → END
+          └─ YES → ⚠️ ITERATE (1/1)
+            ↓
+            After iteration, recalculate score:
+            ↓
+            New score ≥ 8?
+            ├─ YES → ✅ APPROVE PR → END
+            └─ NO → ❌ ERROR ("Still insufficient after iteration") → END
   ↓
 Iteration Evaluation (Score 6-7):
   ↓
@@ -193,31 +217,69 @@ Status: ERROR - "Insufficient training value"
 
 ---
 
-### Score 4-5: Mark as Error (Insufficient)
+### Score 4-5: Conditional Iteration (UPDATED)
 
-**Action**: Mark task as ERROR
+**Previous Behavior**: Mark as ERROR immediately
 
-**Reporting**:
-```markdown
-❌ Training quality: {SCORE}/10 (Insufficient)
-Reason: {PRIMARY_REASON}
-Status: ERROR
+**New Behavior**: Evaluate if iteration can improve score
+
+**Iteration Criteria for Score 4-5** (must meet ALL):
+
+1. **✅ Fixable gap identified**: 
+   - Missing services can be added
+   - Wrong region can be corrected
+   - Architecture improvements possible
+   
+2. **✅ Clear improvement path**: 
+   - Can add 2+ significant features
+   - Expected score increase: +3 to +4 points
+   - Realistic to reach ≥8
+   
+3. **✅ Not "model too good"**: 
+   - MODEL_FAILURES shows Category A/B fixes (not just C/D)
+   - Significant gaps exist, not just minor tweaks
+
+**Decision Tree for Score 4-5**:
+
+```
+Score 4-5 detected
+  ↓
+Check MODEL_FAILURES.md:
+  ↓
+Are fixes Category A/B (significant/moderate)?
+  ├─ NO (only Category C/D) → ❌ ERROR ("Model already competent")
+  └─ YES → Continue
+    ↓
+Can 2+ significant features be added?
+  ├─ NO → ❌ ERROR ("Cannot improve sufficiently")
+  └─ YES → Continue
+    ↓
+Expected score after iteration ≥ 8?
+  ├─ NO → ❌ ERROR ("Unlikely to reach threshold")
+  └─ YES → ⚠️ ITERATE (1/1)
+    ↓
+After iteration, recalculate score:
+  ↓
+New score ≥ 8?
+  ├─ YES → ✅ APPROVE PR
+  └─ NO → ❌ ERROR ("Still insufficient after iteration")
 ```
 
-**Primary Reasons** (choose one):
-- "Model already competent - minimal fixes needed"
-- "Basic implementation with no complexity"
-- "Missing critical requirements"
-- "Wrong platform/language (partially)"
+**Examples**:
 
-**CSV Update**:
-```bash
-./.claude/scripts/task-manager.sh mark-error "${TASK_ID}" \
-    "Training quality ${SCORE}/10 - insufficient training value" \
-    "code-review"
-```
+#### ✅ ITERATE (Score 5, fixable)
+- **Current**: Missing 3 required AWS services (Score 4)
+- **Gap**: Services not implemented
+- **Action**: Add missing services → Expected score: 8-9
+- **Iteration**: YES
 
-**Note**: This is NOT a failure. Score 4-5 often indicates model competence on simple tasks.
+#### ❌ DO NOT ITERATE (Score 5, not fixable)
+- **Current**: All services present, only 2 linting errors
+- **Gap**: Minor fixes only (Category C)
+- **Action**: Cannot add features, only fix linting
+- **Mark as**: ERROR ("Model already competent")
+
+**If iteration criteria NOT met**: Mark as ERROR with reason
 
 ---
 

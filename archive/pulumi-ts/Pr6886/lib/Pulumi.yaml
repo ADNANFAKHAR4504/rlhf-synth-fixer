@@ -1,0 +1,3 @@
+name: multi-environment-infrastructure
+runtime: nodejs
+description: Multi-environment infrastructure management with Pulumi TypeScript

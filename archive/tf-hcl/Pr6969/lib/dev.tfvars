@@ -1,0 +1,14 @@
+environment             = "dev"
+pr_number               = "pr6969"
+aws_region              = "us-east-1"
+vpc_cidr                = "10.0.0.0/16"
+db_instance_class       = "db.t3.micro"
+ec2_instance_type       = "t3.micro"
+backup_retention_period = 0
+rds_cpu_threshold       = 80
+instance_count          = 2
+db_username             = "dbadmin"
+db_password             = ""
+ssh_key_name            = "" # leave empty to skip key pair (CI/dev)
+ami_id                  = "" # leave empty to use module's AMI fallback (Amazon Linux 2)
+alb_internal            = false

@@ -1,0 +1,650 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Secondary Region (DR) Stack for Multi-Region Disaster Recovery Solution",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness",
+      "MinLength": 1,
+      "MaxLength": 20,
+      "Default": "pr6853b"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarms",
+      "Default": "alerts@example.com"
+    }
+  },
+  "Resources": {
+    "SecondaryVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.1.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": "Secondary"
+          }
+        ]
+      }
+    },
+    "SecondaryPublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "10.1.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "SecondaryVPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondaryPublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondarySecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for secondary region resources",
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionLogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "SecondaryTransactionLogBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowReplicationFromPrimary",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role-${EnvironmentSuffix}"
+                }
+              },
+              "Action": [
+                "s3:ReplicateObject",
+                "s3:ReplicateDelete",
+                "s3:ReplicateTags",
+                "s3:GetObjectVersionTagging",
+                "s3:ObjectOwnerOverrideToBucketOwner"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+              }
+            },
+            {
+              "Sid": "AllowReplicationRoleToListBucket",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/s3-replication-role-${EnvironmentSuffix}"
+                }
+              },
+              "Action": [
+                "s3:List*",
+                "s3:GetBucketVersioning",
+                "s3:PutBucketVersioning"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "SecondaryTransactionProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "transaction-processor-role-secondary-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecondaryTransactionProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/transactions-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${SecondaryTransactionLogBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecondaryTransactionQueue",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecondaryTransactionProcessorRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Fn::Sub": "transactions-${EnvironmentSuffix}"
+            },
+            "BUCKET_NAME": {
+              "Ref": "SecondaryTransactionLogBucket"
+            },
+            "QUEUE_URL": {
+              "Ref": "SecondaryTransactionQueue"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport time\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\nsqs = boto3.client('sqs')\n\ntable_name = os.environ['TABLE_NAME']\nbucket_name = os.environ['BUCKET_NAME']\nqueue_url = os.environ['QUEUE_URL']\n\ndef handler(event, context):\n    try:\n        table = dynamodb.Table(table_name)\n        \n        # Parse transaction from event\n        body = json.loads(event.get('body', '{}'))\n        transaction_id = body.get('transactionId', str(time.time()))\n        amount = Decimal(str(body.get('amount', 0)))\n        \n        # Store in DynamoDB (Global Table replica)\n        timestamp = int(time.time() * 1000)\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'amount': amount,\n                'status': 'processed',\n                'region': 'secondary'\n            }\n        )\n        \n        # Log to S3 (replica bucket)\n        log_key = f'transactions/{transaction_id}.json'\n        s3.put_object(\n            Bucket=bucket_name,\n            Key=log_key,\n            Body=json.dumps(body),\n            ServerSideEncryption='AES256'\n        )\n        \n        # Send to queue for further processing\n        sqs.send_message(\n            QueueUrl=queue_url,\n            MessageBody=json.dumps({\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'region': 'secondary'\n            })\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Transaction processed successfully in secondary region',\n                'transactionId': transaction_id,\n                'region': 'secondary'\n            }),\n            'headers': {\n                'Content-Type': 'application/json'\n            }\n        }\n    except Exception as e:\n        print(f'Error processing transaction: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)}),\n            'headers': {\n                'Content-Type': 'application/json'\n            }\n        }\n"
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "SecondarySecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SecondaryPrivateSubnet1"
+            },
+            {
+              "Ref": "SecondaryPrivateSubnet2"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "transaction-queue-secondary-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 300,
+        "MessageRetentionPeriod": 1209600,
+        "KmsMasterKeyId": "alias/aws/sqs",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-queue-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "transaction-api-secondary-${EnvironmentSuffix}"
+        },
+        "Description": "API Gateway for transaction processing in secondary region",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "SecondaryTransactionApiResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "SecondaryTransactionApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "transactions"
+      }
+    },
+    "SecondaryTransactionApiMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "ResourceId": {
+          "Ref": "SecondaryTransactionApiResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SecondaryTransactionProcessorFunction.Arn}/invocations"
+          }
+        }
+      }
+    },
+    "SecondaryTransactionApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "SecondaryTransactionApiMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "SecondaryTransactionApi"
+        },
+        "StageName": "prod"
+      }
+    },
+    "SecondaryLambdaApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecondaryTransactionProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SecondaryTransactionApi}/*/*/*"
+        }
+      }
+    },
+    "SecondaryHealthCheckAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "health-check-alarms-secondary-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Secondary Region Health Check Alarms",
+        "Subscription": [
+          {
+            "Protocol": "email",
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function has errors in secondary region",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecondaryTransactionProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondaryHealthCheckAlarmTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SecondaryVPCId": {
+      "Description": "Secondary VPC ID",
+      "Value": {
+        "Ref": "SecondaryVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryVPC-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryTransactionLogBucketName": {
+      "Description": "S3 Bucket for Transaction Logs (Secondary)",
+      "Value": {
+        "Ref": "SecondaryTransactionLogBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "SecondaryTransactionLogBucket-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "SecondaryTransactionProcessorFunctionArn": {
+      "Description": "Lambda Function ARN (Secondary)",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryTransactionProcessorFunction",
+          "Arn"
+        ]
+      }
+    },
+    "SecondaryTransactionQueueUrl": {
+      "Description": "SQS Queue URL (Secondary)",
+      "Value": {
+        "Ref": "SecondaryTransactionQueue"
+      }
+    },
+    "SecondaryApiEndpoint": {
+      "Description": "API Gateway Endpoint (Secondary)",
+      "Value": {
+        "Fn::Sub": "https://${SecondaryTransactionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/transactions"
+      }
+    }
+  }
+}

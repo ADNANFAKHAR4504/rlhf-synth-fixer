@@ -1,0 +1,16 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and adjust values as needed
+
+environmentSuffix = "prod-001"
+region            = "us-east-1"
+vpc_cidr          = "10.0.0.0/16"
+cluster_version   = "1.28"
+app_namespace     = "trading-app"
+
+tags = {
+  Environment = "production"
+  Project     = "trading-platform"
+  ManagedBy   = "terraform"
+  Team        = "platform-engineering"
+  CostCenter  = "trading-ops"
+}

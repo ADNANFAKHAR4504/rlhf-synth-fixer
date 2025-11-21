@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-20T00:00:00+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "y2j4u0",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "S3",
+    "ECS",
+    "Fargate",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "Cost Explorer"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
