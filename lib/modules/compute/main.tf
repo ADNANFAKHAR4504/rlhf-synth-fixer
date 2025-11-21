@@ -169,7 +169,7 @@ resource "aws_lb" "main" {
 # ALB Target Group
 resource "aws_lb_target_group" "main" {
   name        = "${local.name_prefix}-tg"
-  port        = 8080
+  port        = 80
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
@@ -177,10 +177,11 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     interval            = 30
-    path                = "/health"
+    path                = "/"
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
+    matcher             = "200"
   }
 
   deregistration_delay = var.environment == "prod" ? 300 : 30
