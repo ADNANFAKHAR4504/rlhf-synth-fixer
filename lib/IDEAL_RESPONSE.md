@@ -1,6 +1,6 @@
 # CloudFormation Three-Tier Web Application Infrastructure
 
-Complete CloudFormation JSON template implementing a production-ready three-tier architecture for a financial services loan application platform.
+Complete CloudFormation JSON template implementing a production-ready three-tier architecture for a financial services loan application platform
 
 ## File: lib/TapStack.json
 
