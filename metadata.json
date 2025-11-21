@@ -8,11 +8,7 @@
   "po_id": "101912549",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "All database credentials must be stored in AWS Secrets Manager and rotated automatically",
-    "Application logs must be centralized and retained for exactly 30 days for compliance",
-    "Cross-origin resource sharing (CORS) must be explicitly configured for the frontend domain only",
-    "All S3 buckets must have versioning enabled and lifecycle policies for 90-day object expiration",
-    "Auto Scaling Group must use step scaling policies based on ALB request count metrics"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "VPC",
@@ -30,5 +26,7 @@
     "Security Groups"
   ],
   "region": "us-east-2",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
