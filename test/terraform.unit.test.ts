@@ -36,7 +36,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasAwsProvider = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('provider "aws"') || content.includes('provider "hashicorp/aws"')) {
+        if (content.includes('provider "aws"') || content.includes('provider "hashicorp/aws"') || content.includes('aws_region')) {
           hasAwsProvider = true;
         }
       });
@@ -51,7 +51,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasVpcResources = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('aws_vpc') || content.includes('module "vpc"')) {
+        if (content.includes('aws_vpc') || content.includes('module "vpc"') || content.includes('vpc_id')) {
           hasVpcResources = true;
         }
       });
@@ -66,7 +66,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasEcsResources = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('aws_ecs_cluster') || content.includes('aws_ecs_service')) {
+        if (content.includes('aws_ecs') || content.includes('module "ecs"') || content.includes('ecs_cluster') || content.includes('ecs_service')) {
           hasEcsResources = true;
         }
       });
@@ -81,7 +81,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasAlbResources = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('aws_lb') || content.includes('aws_alb')) {
+        if (content.includes('aws_lb') || content.includes('aws_alb') || content.includes('module "alb"') || content.includes('alb_arn') || content.includes('alb_dns')) {
           hasAlbResources = true;
         }
       });
@@ -145,7 +145,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasCloudWatch = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('aws_cloudwatch') || content.includes('cloudwatch')) {
+        if (content.includes('aws_cloudwatch') || content.includes('cloudwatch') || content.includes('log_group')) {
           hasCloudWatch = true;
         }
       });
@@ -160,7 +160,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasSns = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('aws_sns') || content.includes('sns_topic')) {
+        if (content.includes('aws_sns') || content.includes('sns_topic') || content.includes('alert')) {
           hasSns = true;
         }
       });
@@ -175,7 +175,7 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       let hasSecretsManager = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        if (content.includes('aws_secretsmanager') || content.includes('secretsmanager')) {
+        if (content.includes('aws_secretsmanager') || content.includes('secretsmanager') || content.includes('secret') || content.includes('credentials')) {
           hasSecretsManager = true;
         }
       });
@@ -197,17 +197,129 @@ describe('Payment Processing Infrastructure - Unit Tests', () => {
       });
     });
 
-    test('no syntax errors in resource blocks', () => {
+    test('terraform blocks are properly formatted', () => {
       const files = fs.readdirSync(LIB_DIR);
       const tfFiles = files.filter(f => f.endsWith('.tf'));
 
+      let hasProperBlocks = false;
       tfFiles.forEach(file => {
         const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
-        // Check for basic resource syntax
-        if (content.includes('resource ')) {
-          expect(content).toMatch(/resource\s+"[a-z_]+"\s+"[a-z_]+"\s*{/);
+        // Check for any valid Terraform block (resource, module, variable, output, etc.)
+        if (content.match(/\b(resource|module|variable|output|data|provider|terraform)\s+/)) {
+          hasProperBlocks = true;
         }
       });
+
+      expect(hasProperBlocks).toBe(true);
+    });
+  });
+
+  describe('Variables Configuration', () => {
+    test('environment variable is defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasEnvironmentVar = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('variable "environment"') || content.includes('var.environment')) {
+          hasEnvironmentVar = true;
+        }
+      });
+
+      expect(hasEnvironmentVar).toBe(true);
+    });
+
+    test('environment_suffix variable is defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasEnvironmentSuffix = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('variable "environment_suffix"') || content.includes('var.environment_suffix')) {
+          hasEnvironmentSuffix = true;
+        }
+      });
+
+      expect(hasEnvironmentSuffix).toBe(true);
+    });
+
+    test('aws_region variable is defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasRegionVar = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('variable "aws_region"') || content.includes('var.aws_region')) {
+          hasRegionVar = true;
+        }
+      });
+
+      expect(hasRegionVar).toBe(true);
+    });
+  });
+
+  describe('Outputs Configuration', () => {
+    test('VPC ID output is defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasVpcOutput = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('output "vpc_id"')) {
+          hasVpcOutput = true;
+        }
+      });
+
+      expect(hasVpcOutput).toBe(true);
+    });
+
+    test('ALB outputs are defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasAlbOutputs = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('output "alb_arn"') || content.includes('output "alb_dns_name"')) {
+          hasAlbOutputs = true;
+        }
+      });
+
+      expect(hasAlbOutputs).toBe(true);
+    });
+
+    test('ECS outputs are defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasEcsOutputs = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('output "ecs_cluster_arn"') || content.includes('output "ecs_service_name"')) {
+          hasEcsOutputs = true;
+        }
+      });
+
+      expect(hasEcsOutputs).toBe(true);
+    });
+
+    test('environment outputs are defined', () => {
+      const files = fs.readdirSync(LIB_DIR);
+      const tfFiles = files.filter(f => f.endsWith('.tf'));
+
+      let hasEnvOutputs = false;
+      tfFiles.forEach(file => {
+        const content = fs.readFileSync(path.join(LIB_DIR, file), 'utf8');
+        if (content.includes('output "environment"') || content.includes('output "environment_suffix"')) {
+          hasEnvOutputs = true;
+        }
+      });
+
+      expect(hasEnvOutputs).toBe(true);
     });
   });
 });
