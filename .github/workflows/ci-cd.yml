@@ -716,6 +716,212 @@ jobs:
             --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
             --system-prompt "CRITICAL: You MUST post a GitHub comment on this pull request when your review is complete. This is mandatory and non-negotiable.
 
+            # Step 0: Comprehensive metadata.json Validation (MUST BE FIRST)
+
+            **MANDATORY**: Before proceeding with any review, you MUST thoroughly validate metadata.json and report ALL issues in your PR comment.
+
+            ## 0.1: Read and Validate metadata.json Structure
+
+            ```bash
+            # Read metadata.json
+            if [ ! -f "metadata.json" ]; then
+              echo "❌ CRITICAL: metadata.json not found"
+              exit 1
+            fi
+
+            # Validate JSON structure
+            if ! jq empty metadata.json 2>/dev/null; then
+              echo "❌ CRITICAL: metadata.json is not valid JSON"
+              exit 1
+            fi
+            ```
+
+            ## 0.2: Validate Required Fields
+
+            Check for ALL required fields and report missing ones:
+
+            **Required Fields**:
+            - `platform` (must be: cdk, cdktf, cfn, tf, pulumi, cicd)
+            - `language` (must be: ts, py, js, go, java, hcl, yaml, json, yml)
+            - `complexity` (must be: medium, hard, expert)
+            - `turn_type` (must be: single, multi)
+            - `po_id` (non-empty string)
+            - `team` (non-empty string, typically 1-6, synth, synth-N, stf)
+            - `startedAt` (ISO 8601 timestamp)
+            - `subtask` (must match valid subtask from reference file)
+            - `subject_labels` (must be array, non-empty, must match valid labels for subtask)
+
+            **For Standard IaC Tasks** (platform != \"cicd\"):
+            - `training_quality` (must be present after review, 0-10)
+            - `aws_services` (must be array, required for standard IaC)
+
+            **For CI/CD Pipeline Tasks** (platform == \"cicd\" OR subject_labels contains \"CI/CD Pipeline\"):
+            - `training_quality` (must be present after review, 0-10)
+            - `aws_services` (NOT required for CI/CD tasks)
+
+            ## 0.3: Validate Subtask Against Reference File
+
+            **CRITICAL**: Validate subtask and subject_labels against `.claude/docs/references/iac-subtasks-subject-labels.json`
+
+            ```bash
+            # Read reference file
+            REFERENCE_FILE=\".claude/docs/references/iac-subtasks-subject-labels.json\"
+            if [ ! -f \"$REFERENCE_FILE\" ]; then
+              echo \"⚠️ WARNING: Reference file not found: $REFERENCE_FILE\"
+            else
+              # Extract subtask from metadata.json
+              METADATA_SUBTASK=$(jq -r '.subtask // empty' metadata.json)
+              
+              # Extract subject_labels from metadata.json
+              METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels // []' metadata.json)
+              
+              # Validate subtask exists in reference
+              SUBTASK_EXISTS=$(jq -r --arg subtask \"$METADATA_SUBTASK\" \"
+                .iac_subtasks_and_subject_labels[] | 
+                select(.subtask == \\$subtask) | .subtask
+              \" \"$REFERENCE_FILE\")
+              
+              if [ -z \"$SUBTASK_EXISTS\" ]; then
+                echo \"❌ ERROR: Invalid subtask: $METADATA_SUBTASK\"
+                echo \"Valid subtasks from reference:\"
+                jq -r '.iac_subtasks_and_subject_labels[].subtask' \"$REFERENCE_FILE\"
+              fi
+              
+              # Validate subject_labels match subtask
+              if [ -n \"$SUBTASK_EXISTS\" ]; then
+                VALID_LABELS=$(jq -r --arg subtask \"$METADATA_SUBTASK\" \"
+                  .iac_subtasks_and_subject_labels[] | 
+                  select(.subtask == \\$subtask) | 
+                  .subject_labels[]
+                \" \"$REFERENCE_FILE\")
+                
+                # Check each subject_label
+                echo \"$METADATA_SUBJECT_LABELS\" | jq -r '.[]' | while read -r label; do
+                  if ! echo \"$VALID_LABELS\" | grep -q \"^$label$\"; then
+                    echo \"❌ ERROR: Invalid subject_label '$label' for subtask '$METADATA_SUBTASK'\"
+                    echo \"Valid labels for this subtask:\"
+                    echo \"$VALID_LABELS\"
+                  fi
+                done
+              fi
+            fi
+            ```
+
+            ## 0.4: Validate Field Types
+
+            Check that arrays are actually arrays (not strings):
+
+            ```bash
+            # Check subject_labels is array
+            SUBJECT_LABELS_TYPE=$(jq -r '.subject_labels | type' metadata.json)
+            if [ \"$SUBJECT_LABELS_TYPE\" != \"array\" ]; then
+              echo \"❌ ERROR: subject_labels must be an array, got: $SUBJECT_LABELS_TYPE\"
+            fi
+
+            # Check aws_services is array (if present)
+            if jq -e '.aws_services' metadata.json > /dev/null 2>&1; then
+              AWS_SERVICES_TYPE=$(jq -r '.aws_services | type' metadata.json)
+              if [ \"$AWS_SERVICES_TYPE\" != \"array\" ]; then
+                echo \"❌ ERROR: aws_services must be an array, got: $AWS_SERVICES_TYPE\"
+              fi
+            fi
+            ```
+
+            ## 0.5: Report metadata.json Issues in PR Comment
+
+            **MANDATORY**: Create a dedicated section in your PR comment for metadata.json validation:
+
+            ```markdown
+            ## 📋 metadata.json Validation
+
+            ### ✅ Valid Fields
+            - platform: {value}
+            - language: {value}
+            - ... (list all valid fields)
+
+            ### ❌ Issues Found
+            1. **Missing Required Field**: {field_name} is required but not found
+            2. **Invalid Subtask**: Found \"{invalid_subtask}\" but valid values are: {list}
+            3. **Invalid Subject Label**: \"{invalid_label}\" is not valid for subtask \"{subtask}\". Valid labels: {list}
+            4. **Type Mismatch**: {field_name} should be {expected_type} but got {actual_type}
+            5. **Missing Training Quality**: training_quality field not found (will be added after review)
+
+            ### ⚠️ Warnings
+            - {warning_message}
+            ```
+
+            **If ANY critical issues found** (invalid subtask, invalid subject_labels, missing required fields):
+            - Highlight prominently in PR comment
+            - Continue with review but note these must be fixed
+            - Do NOT fail the job (allow review to complete)
+
+            ## 0.6: Validate Root Directory Files
+
+            **MANDATORY**: Check for unrequired files in root directory and report in PR comment.
+
+            ```bash
+            # Allowed root files
+            ALLOWED_ROOT_FILES=(
+              \"metadata.json\"
+              \"package.json\"
+              \"package-lock.json\"
+              \"cdk.json\"
+              \"cdktf.json\"
+              \"Pulumi.yaml\"
+              \"tap.py\"
+              \"tap.go\"
+            )
+
+            # Get all files in root directory
+            ROOT_FILES=$(find . -maxdepth 1 -type f -not -path \"./.git/*\" | sed 's|^./||' | sort)
+
+            # Check each file
+            UNREQUIRED_FILES=()
+            for file in $ROOT_FILES; do
+              # Skip if in allowed list
+              is_allowed=false
+              for allowed in \"${ALLOWED_ROOT_FILES[@]}\"; do
+                if [ \"$file\" == \"$allowed\" ]; then
+                  is_allowed=true
+                  break
+                fi
+              done
+              
+              # Skip directories and hidden files (except .git)
+              if [[ \"$file\" == .* ]] && [[ \"$file\" != \".git\"* ]]; then
+                continue
+              fi
+              
+              if [ \"$is_allowed\" == false ]; then
+                UNREQUIRED_FILES+=(\"$file\")
+              fi
+            done
+
+            # Report unrequired files
+            if [ ${#UNREQUIRED_FILES[@]} -gt 0 ]; then
+              echo \"⚠️ Found ${#UNREQUIRED_FILES[@]} unrequired file(s) in root directory:\"
+              for file in \"${UNREQUIRED_FILES[@]}\"; do
+                echo \"  - $file\"
+              done
+            fi
+            ```
+
+            **Report in PR Comment**:
+
+            ```markdown
+            ## 📁 Root Directory File Validation
+
+            ### ✅ Allowed Root Files Found
+            - {list allowed files found}
+
+            ### ❌ Unrequired Files in Root Directory
+            The following files should be moved or removed:
+            1. **{filename}** - Should be moved to {suggested_location} or removed
+            2. **{filename}** - Should be moved to {suggested_location} or removed
+
+            **Impact**: Unrequired files in root directory may cause CI/CD failures.
+            ```
+
             # Determine Review Type
 
             First, check the subject_labels in metadata.json to determine the review type:
@@ -787,6 +993,8 @@ jobs:
 
             Post a GitHub comment with the format specified in `.claude/prompts/cicd-pipeline-review.md`.
 
+            **IMPORTANT**: Include metadata.json validation and root directory file validation sections in your comment.
+
             ## Step 6: Output Score
 
             At the very end of your output, on its own line:
@@ -853,6 +1061,8 @@ jobs:
 
             This validation is mandatory and must be completed before any other review activities.
 
+            **IMPORTANT**: Include metadata.json validation and root directory file validation sections in your comment.
+
             Now follow the instructions in .claude/agents/iac-code-reviewer.md
 
             ---
@@ -887,14 +1097,21 @@ jobs:
             ```
 
             **MANDATORY FINAL STEPS**:
-            1. Update metadata.json with training_quality field (primary source)
-            2. Post comprehensive GitHub comment with review findings
-            3. End comment with SCORE:X line where X is 0-10
+            1. Validate metadata.json thoroughly (Step 0)
+            2. Validate root directory files (Step 0.6)
+            3. Update metadata.json with training_quality field (primary source)
+            4. Post comprehensive GitHub comment with review findings including:
+               - metadata.json validation results
+               - Root directory file validation results
+               - Code review findings
+               - Training quality score
+            5. End comment with SCORE:X line where X is 0-10
 
             **What happens if you don't follow this:**
             - Without SCORE line: Score defaults to 0, build FAILS
             - Score > 10: Rejected as false match, score set to 0, build FAILS
             - Without metadata.json update: Fallback to comment parsing, less reliable
+            - Without metadata.json validation: Issues may go unnoticed
 
             After posting the comment with the SCORE line, finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow."
