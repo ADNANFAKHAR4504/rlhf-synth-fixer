@@ -22,25 +22,27 @@ When you run `/task-fix`, the agent will:
 
 1. **PHASE 0 - Pre-Execution Validation**: Review documentation, verify scripts, validate readiness
 2. **PHASE 1 - PR Selection**: Check availability, atomically select next PR (prevents duplicates)
-3. **PHASE 2.1 - Comprehensive Pre-Fix Planning**: 
-   - 2.1.0 Context Gathering (PR details, platform, dependencies)
-   - 2.1.1 Enhanced Root Cause Analysis (with impact matrix and dependencies)
-   - 2.1.2 Comprehensive Fix Planning (sequencing, dependencies, rollback plans)
-   - 2.1.3 Risk Assessment (risk matrix, mitigations, contingency plans)
-   - 2.1.4 Validation Strategy (pre-fix, per-fix, post-fix validation)
-   - 2.1.5 Enhanced Solution Approach (comparison matrix, cost/benefit)
-   - 2.1.6 Planning Review & Approval (self-review checklist)
-4. **PHASE 2.2 - Worktree Setup**: Create isolated worktree, validate location
-5. **PHASE 2.2.5 - Branch Synchronization**: Ensure branch is even with main, merge latest changes, resolve conflicts
-6. **PHASE 2.3 - Failure Analysis**: Analyze GitHub pipeline failures in detail
-7. **PHASE 2.4 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
-8. **PHASE 2.5 - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
-9. **PHASE 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
-10. **PHASE 2.7 - Quality Gates**: Verify all quality gates pass before marking fixed
-11. **PHASE 2.8 - Commit & Push**: Commit fixes and push to PR branch
-12. **PHASE 2.9 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
-13. **PHASE 2.10 - Update Status**: Mark as fixed/failed with detailed progress tracking
-14. **PHASE 2.11 - Cleanup**: Remove worktrees after completion
+3. **PHASE 2.1 - Worktree Setup & Branch Synchronization**: 
+   - 2.1.1 Create isolated worktree, validate location
+   - 2.1.2 Branch synchronization with main (merge, resolve conflicts)
+   - 2.1.3 Extract metadata & platform info (from worktree)
+4. **PHASE 2.2 - Comprehensive Pre-Fix Planning**: 
+   - 2.2.0 Context Gathering (PR details, platform, dependencies - now with worktree access)
+   - 2.2.1 Enhanced Root Cause Analysis (with impact matrix and dependencies)
+   - 2.2.2 Comprehensive Fix Planning (sequencing, dependencies, rollback plans)
+   - 2.2.3 Risk Assessment (risk matrix, mitigations, contingency plans)
+   - 2.2.4 Validation Strategy (pre-fix, per-fix, post-fix validation)
+   - 2.2.5 Enhanced Solution Approach (comparison matrix, cost/benefit)
+   - 2.2.6 Planning Review & Approval (self-review checklist)
+5. **PHASE 2.3 - Failure Analysis**: Analyze GitHub pipeline failures in detail
+6. **PHASE 2.4 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
+7. **PHASE 2.5 - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
+8. **PHASE 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
+9. **PHASE 2.7 - Quality Gates**: Verify all quality gates pass before marking fixed
+10. **PHASE 2.8 - Commit & Push**: Commit fixes and push to PR branch
+11. **PHASE 2.9 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
+12. **PHASE 2.10 - Update Status**: Mark as fixed/failed with detailed progress tracking
+13. **PHASE 2.11 - Cleanup**: Remove worktrees after completion
 
 ## Parallel Execution Support
 
@@ -236,19 +238,46 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 
 ### PHASE 2: PR Fixing Process
 
-#### 2.1 Comprehensive Pre-Fix Planning
+#### 2.1 Worktree Setup & Branch Synchronization
+**Checkpoint PR-B**: PR Worktree Validation
+**Checkpoint PR-B2**: Branch Synchronization
+
+**PHASE 2.1.1 - Create Isolated Worktree**:
+- Create isolated worktree at `worktree/pr-fix-<PR_NUMBER>`
+- Validate worktree location and branch match
+- Pull latest changes from PR branch
+
+**PHASE 2.1.2 - Branch Synchronization**:
+- Check if branch is even with main branch
+- Fetch latest changes from origin/main
+- Merge main into PR branch
+- Resolve any merge conflicts automatically if possible
+- Ensure no merge conflicts remain before proceeding
+- Verify branch is up-to-date with main
+
+**PHASE 2.1.3 - Extract Metadata & Platform Info**:
+- Extract platform and language from metadata.json (now available in worktree)
+- Export PLATFORM and LANGUAGE variables for use in planning
+- Identify task ID and complexity
+
+**Pass criteria**: Worktree created, branch synchronized with main, metadata extracted
+**Fail action**: If conflicts cannot be resolved, mark PR as needs-manual-review and skip
+
+#### 2.2 Comprehensive Pre-Fix Planning
 **Checkpoint PR-C**: Comprehensive Planning Completeness
 **Checkpoint PR-D**: Fix Plan Validation
 **Quality Gate 1**: Pre-Fix Analysis Gate
 
-**PHASE 2.1.0 - Context Gathering**:
-- Gather PR context (branch, title, author, files changed, commits)
-- Identify platform/language specific requirements
-- Check for similar PRs or known patterns from lessons_learnt.md
-- Review dependencies and constraints
-- Assess current codebase state (coverage, existing errors)
+**CRITICAL**: Planning now happens AFTER worktree creation, so it has full access to PR branch code, metadata.json, dependencies, and can analyze actual codebase state.
 
-**PHASE 2.1.1 - Enhanced Root Cause Analysis**:
+**PHASE 2.2.0 - Context Gathering**:
+- Gather PR context (branch, title, author, files changed, commits)
+- Identify platform/language from worktree metadata.json
+- Check for similar PRs or known patterns from lessons_learnt.md
+- Review dependencies and constraints (from worktree package.json/Pipfile/etc.)
+- Assess current codebase state (coverage, existing errors) - can now run actual commands
+
+**PHASE 2.2.1 - Enhanced Root Cause Analysis**:
 - Root cause analysis with evidence:
   - Failure category (Critical/High/Medium/Low)
   - Specific issues with file paths and line numbers
@@ -258,7 +287,7 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 - Dependency analysis (what depends on this fix, what this fix depends on)
 - Time/complexity estimation
 
-**PHASE 2.1.2 - Comprehensive Fix Planning**:
+**PHASE 2.2.2 - Comprehensive Fix Planning**:
 - Fix sequencing with dependencies identified
 - Parallel vs sequential execution plan
 - Specific actions with file paths and line numbers
@@ -268,75 +297,47 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 - Time/complexity estimation
 - Addresses all failed stages
 
-**PHASE 2.1.3 - Risk Assessment**:
+**PHASE 2.2.3 - Risk Assessment**:
 - Risk matrix (probability × impact)
 - Detailed risk analysis with mitigations
 - Contingency plans for each risk
 - Blocker identification and mitigation
 - Success probability assessment
 
-**PHASE 2.1.4 - Validation Strategy**:
+**PHASE 2.2.4 - Validation Strategy**:
 - Pre-fix validation (baseline capture)
 - Per-fix validation (after each change)
 - Post-fix validation (comprehensive final check)
 - Success criteria and metrics
 - Failure handling procedures
 
-**PHASE 2.1.5 - Enhanced Solution Approach**:
+**PHASE 2.2.5 - Enhanced Solution Approach**:
 - Chosen strategy justification
 - Comparison matrix of alternatives
 - Cost/benefit analysis
 - Risk mitigation strategy
 - Success criteria definition
 
-**PHASE 2.1.6 - Planning Review & Approval**:
+**PHASE 2.2.6 - Planning Review & Approval**:
 - Self-review checklist
 - Validation that plan is complete and comprehensive
 - Approval to proceed to worktree setup
 
-**PHASE 2.1.7 - Document Planning**:
+**PHASE 2.2.7 - Document Planning**:
 - Save comprehensive planning to status file
 - Save detailed planning document for reference
 
 **Pass criteria**: All planning phases complete, plan is actionable and comprehensive, planning reviewed and approved
 **Fail action**: Re-analyze, improve planning, re-review before proceeding
 
-#### 2.2 Worktree Setup
-**Checkpoint PR-B**: PR Worktree Validation (PHASE 2.2)
+#### 2.3 Failure Analysis (Detailed)
+**Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3.1)
 
-- Create isolated worktree at `worktree/pr-fix-<PR_NUMBER>`
-- Validate worktree location and branch match
-- Extract metadata and platform info
-- Verify ready for fixes
-
-**Pass criteria**: Worktree at correct location, branch matches, metadata available
-**Fail action**: Remove worktree, recreate, re-validate
-
-#### 2.2.5 Branch Synchronization with Main
-**Checkpoint PR-B2**: Branch Synchronization (PHASE 2.2.5)
-
-**CRITICAL**: Before fixing any task, ensure the PR branch is synchronized with main branch to prevent merge conflicts and ensure fixes are applied on top of latest main.
-
-- Check if branch is even with main branch
-- Fetch latest changes from origin/main
-- Merge main into PR branch (or rebase if preferred)
-- Resolve any merge conflicts automatically if possible
-- Ensure no merge conflicts remain before proceeding
-- Verify branch is up-to-date with main
-
-**Pass criteria**: Branch synchronized with main, no merge conflicts, ready for fixes
-**Fail action**: If conflicts cannot be resolved automatically, mark PR as needs-manual-review and skip to next PR
-
-**Note**: This phase ensures that all fixes are applied on top of the latest main branch, preventing future merge conflicts and ensuring compatibility with latest codebase changes.
-
-#### 2.3 Failure Analysis
 - Fetch GitHub pipeline logs
 - Identify specific failed stages
 - Extract error details and error messages
 - Reference lessons_learnt.md for common patterns
-
-#### 2.3 Pre-Fix Build Validation (Baseline)
-**Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3)
+- Establish baseline (lint errors, build errors, test coverage) - now possible in worktree
 
 - Establish baseline before fixes:
   - Lint baseline (errors/warnings count)
@@ -502,12 +503,12 @@ The agent uses structured validation checkpoints throughout the process to ensur
   - Required scripts verified (pr-manager.sh, pr-status.sh, pre-validate-iac.sh)
   - Agent readiness confirmed
 
-- **Checkpoint PR-B**: PR Worktree Validation (PHASE 2.2)
+- **Checkpoint PR-B**: PR Worktree Validation (PHASE 2.1.1)
   - Worktree location verified (worktree/pr-fix-<PR_NUMBER>)
   - Branch matches PR branch
-  - Metadata available
+  - Worktree ready for operations
 
-- **Checkpoint PR-B2**: Branch Synchronization (PHASE 2.2.5)
+- **Checkpoint PR-B2**: Branch Synchronization (PHASE 2.1.2)
   - Branch checked against main branch
   - Latest changes fetched from origin
   - Main merged into branch (if needed)
@@ -515,7 +516,7 @@ The agent uses structured validation checkpoints throughout the process to ensur
   - Branch is up-to-date with main
   - Working directory is clean
 
-- **Checkpoint PR-C**: Comprehensive Planning Completeness (PHASE 2.1)
+- **Checkpoint PR-C**: Comprehensive Planning Completeness (PHASE 2.2)
   - Context gathered (PR details, platform, dependencies)
   - Root cause documented with evidence and impact matrix
   - Comprehensive fix plan created with sequencing and dependencies
@@ -525,7 +526,7 @@ The agent uses structured validation checkpoints throughout the process to ensur
   - Planning reviewed and approved
   - All planning saved to status file
 
-- **Checkpoint PR-D**: Fix Plan Validation (PHASE 2.1)
+- **Checkpoint PR-D**: Fix Plan Validation (PHASE 2.2)
   - Plan has specific file paths and line numbers
   - Plan includes validation steps for each fix
   - Plan addresses all failed stages
@@ -534,7 +535,7 @@ The agent uses structured validation checkpoints throughout the process to ensur
   - Plan includes rollback strategies
   - Plan includes time/complexity estimates
 
-- **Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3)
+- **Checkpoint PR-D2**: Pre-Fix Build Validation (PHASE 2.3.1)
   - Baseline lint status assessed
   - Baseline build status assessed
   - Baseline synth status assessed (if applicable)
@@ -568,7 +569,7 @@ Each checkpoint must pass before proceeding to the next phase.
 Before marking a PR as fixed, ALL quality gates must pass. These gates ensure fixes meet production standards and will pass GitHub pipeline.
 
 ### Gate 1: Pre-Fix Analysis Gate
-**When**: After PHASE 2.1 (Comprehensive Pre-Fix Planning)
+**When**: After PHASE 2.2 (Comprehensive Pre-Fix Planning)
 **Requirements**:
 - ✅ Context gathered
   - PR details (branch, title, author, files)

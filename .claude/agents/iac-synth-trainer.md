@@ -418,1004 +418,6 @@ For each failed PR, execute this complete workflow:
 
 ---
 
-### PHASE 2.1: Comprehensive Pre-Fix Planning (MANDATORY)
-
-**CRITICAL**: Before applying any fixes, complete comprehensive planning to ensure systematic, risk-aware, and validated fixes.
-
-```bash
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.1: COMPREHENSIVE PRE-FIX PLANNING - PR #${PR_NUMBER}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Update progress
-bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Starting comprehensive planning"
-
-echo "📋 Failure Reason: $FAILURE_REASON"
-echo ""
-echo "🎯 Beginning comprehensive planning phase..."
-```
-
-#### 2.1.0 Context Gathering
-
-**Purpose**: Gather all necessary context before planning fixes to ensure comprehensive understanding.
-
-```bash
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.1.0: CONTEXT GATHERING"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Get PR details
-PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName -q .headRefName)
-PR_TITLE=$(gh pr view $PR_NUMBER --json title -q .title)
-PR_AUTHOR=$(gh pr view $PR_NUMBER --json author -q .author.login)
-PR_CREATED=$(gh pr view $PR_NUMBER --json createdAt -q .createdAt)
-PR_FILES=$(gh pr view $PR_NUMBER --json files -q '.files[] | .path' | wc -l)
-
-echo "📋 PR Context:"
-echo "  - Branch: $PR_BRANCH"
-echo "  - Title: $PR_TITLE"
-echo "  - Author: $PR_AUTHOR"
-echo "  - Created: $PR_CREATED"
-echo "  - Files Changed: $PR_FILES"
-
-# Get files changed in PR
-echo ""
-echo "📁 Files Changed in PR:"
-gh pr view $PR_NUMBER --json files -q '.files[] | "  - \(.path) (\(.additions) additions, \(.deletions) deletions)"' | head -20
-
-# Get commit history
-echo ""
-echo "📜 Recent Commits:"
-gh pr view $PR_NUMBER --json commits -q '.commits[-5:] | .[] | "  - \(.oid[0:7]) \(.messageHeadline)"'
-
-# Check for similar PRs or patterns
-echo ""
-echo "🔍 Checking for similar patterns..."
-# Search lessons_learnt.md for similar issues
-if [ -f ".claude/lessons_learnt.md" ]; then
-  echo "  - Reviewing lessons_learnt.md for similar patterns..."
-  # Extract relevant patterns based on failure type
-  grep -i "$FAILURE_REASON" .claude/lessons_learnt.md | head -5 || echo "    No direct matches found"
-fi
-
-# Identify platform and language (if metadata available)
-if [ -f "metadata.json" ]; then
-  PLATFORM=$(jq -r '.platform' metadata.json 2>/dev/null || echo "unknown")
-  LANGUAGE=$(jq -r '.language' metadata.json 2>/dev/null || echo "unknown")
-  TASK_ID=$(jq -r '.po_id' metadata.json 2>/dev/null || echo "unknown")
-  COMPLEXITY=$(jq -r '.complexity' metadata.json 2>/dev/null || echo "unknown")
-  
-  echo ""
-  echo "🏗️ Project Context:"
-  echo "  - Platform: $PLATFORM"
-  echo "  - Language: $LANGUAGE"
-  echo "  - Task ID: $TASK_ID"
-  echo "  - Complexity: $COMPLEXITY"
-else
-  echo ""
-  echo "⚠️ metadata.json not found - will extract from worktree later"
-fi
-
-# Check dependencies and constraints
-echo ""
-echo "🔗 Dependencies & Constraints:"
-echo "  - Checking package.json/Pipfile for dependencies..."
-if [ -f "package.json" ]; then
-  echo "    - Node.js project detected"
-  DEPENDENCIES=$(jq -r '.dependencies | keys | length' package.json 2>/dev/null || echo "0")
-  DEV_DEPENDENCIES=$(jq -r '.devDependencies | keys | length' package.json 2>/dev/null || echo "0")
-  echo "    - Dependencies: $DEPENDENCIES, Dev Dependencies: $DEV_DEPENDENCIES"
-elif [ -f "Pipfile" ]; then
-  echo "    - Python project detected"
-elif [ -f "go.mod" ]; then
-  echo "    - Go project detected"
-fi
-
-# Assess current codebase state
-echo ""
-echo "📊 Current Codebase State:"
-echo "  - Checking for existing test coverage..."
-if [ -f "coverage/coverage-summary.json" ]; then
-  COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null || echo "unknown")
-  echo "    - Current coverage: ${COVERAGE}%"
-fi
-
-echo ""
-echo "✅ Context gathering complete"
-```
-
-**Context Summary**:
-- ✅ PR details (branch, title, author, files changed)
-- ✅ Commit history
-- ✅ Platform/language identification
-- ✅ Dependencies and constraints
-- ✅ Current codebase state
-- ✅ Similar patterns from lessons_learnt.md
-
-#### 2.1.1 Root Cause Analysis (Enhanced)
-
-**Purpose**: Identify root causes with evidence, impact assessment, and dependency analysis.
-
-Analyze WHY the PR failed by:
-
-1. **Reading GitHub logs** (actual errors, not just failure labels)
-2. **Examining code** in the PR branch
-3. **Checking common patterns** from `.claude/lessons_learnt.md`
-4. **Identifying specific issues** (exact lines, exact resources, exact problems)
-5. **Assessing impact** (severity × frequency matrix)
-6. **Analyzing dependencies** (what depends on this fix, what this fix depends on)
-
-```bash
-# Get detailed error logs from GitHub
-RUN_ID=$(gh pr view $PR_NUMBER --json statusCheckRollup -q '.statusCheckRollup[0].workflowRun.databaseId' 2>/dev/null || echo "")
-
-if [ -n "$RUN_ID" ]; then
-  echo "Fetching detailed logs from GitHub Actions run $RUN_ID..."
-  gh run view $RUN_ID --log > /tmp/pr-${PR_NUMBER}-logs.txt 2>/dev/null || true
-  
-  # Use enhanced error analysis script
-  echo "🔍 Running enhanced error analysis..."
-  bash .claude/scripts/analyze-errors.sh $PR_NUMBER /tmp/pr-${PR_NUMBER}-logs.txt
-  
-  # Load analysis results
-  if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
-    ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
-    echo "✅ Error analysis complete"
-    
-    # Display summary
-    echo ""
-    echo "Error Summary:"
-    echo "$ERROR_SUMMARY" | jq -r '
-      "Total Errors: \(.total_errors)\n",
-      "By Fix Type:",
-      (.by_fix_type[] | "  - \(.fix_type): \(.count)"),
-      "\nCritical Errors: \(.critical_errors | length)",
-      "High Priority: \(.high_priority_errors | length)"
-    '
-  else
-    echo "⚠️ Enhanced analysis not available, using basic grep"
-    grep -i "error\|failed\|failure" /tmp/pr-${PR_NUMBER}-logs.txt | grep -v "grep" | head -30
-  fi
-fi
-```
-
-**Document Root Cause** (use enhanced analysis):
-
-```bash
-# Enhanced root cause analysis using error analysis results
-if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
-  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
-  
-  # Build comprehensive root cause analysis
-  ROOT_CAUSE="
-Root Cause Analysis for PR #${PR_NUMBER}:
-
-## Failure Category: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "Critical" elif .high_priority_errors | length > 0 then "High" else "Medium" end')
-Failure Type: ${FAILURE_REASON}
-
-## Issues Identified
-
-$(echo "$ERROR_SUMMARY" | jq -r '.recommended_fixes[] | 
-"### Issue: \(.fix_type)
-- **Location**: \(.location)
-- **Problem**: \(.likely_cause)
-- **Evidence**: Error analysis matched known pattern
-- **Root Cause**: Common pattern from lessons_learnt.md
-- **Impact**: Blocks deployment/pipeline stage
-"')
-
-## Impact Matrix
-$(echo "$ERROR_SUMMARY" | jq -r '
-  "| Severity | Count | Impact |\n|----------|-------|--------|",
-  "| Critical | \(.critical_errors | length) | Blocks all stages |",
-  "| High     | \(.high_priority_errors | length) | Blocks key stages |",
-  "| Medium   | \(.medium_priority_errors | length // 0) | Affects specific stages |",
-  "| Low      | \(.low_priority_errors | length // 0) | Minor issues |"
-')
-
-## Dependency Analysis
-- **Blocks**: These fixes must be completed before other fixes can proceed
-- **Depends On**: These fixes require other fixes to be completed first
-- **Independent**: These fixes can be done in parallel
-
-## Summary
-- Total issues: $(echo "$ERROR_SUMMARY" | jq -r '.total_errors')
-- Critical: $(echo "$ERROR_SUMMARY" | jq -r '.critical_errors | length')
-- High Priority: $(echo "$ERROR_SUMMARY" | jq -r '.high_priority_errors | length')
-- Primary causes: $(echo "$ERROR_SUMMARY" | jq -r '.by_fix_type[] | .fix_type' | head -3 | tr '\n' ', ' | sed 's/,$//')
-- Fix complexity: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "Complex" elif .high_priority_errors | length > 2 then "Moderate" else "Simple" end')
-- Estimated time: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "30-60 min" elif .high_priority_errors | length > 2 then "15-30 min" else "5-15 min" end')
-"
-else
-  # Fallback to basic template if enhanced analysis not available
-  ROOT_CAUSE="
-Root Cause Analysis for PR #${PR_NUMBER}:
-
-## Failure Category: <Critical/High/Medium/Low>
-Failure Type: ${FAILURE_REASON}
-
-## Issues Identified
-[Manual analysis required - enhanced error analysis not available]
-
-## Summary
-- Analysis: Basic (enhanced analysis unavailable)
-- Fix complexity: Unknown
-"
-fi
-
-echo "📝 Root Cause Analysis:"
-echo "$ROOT_CAUSE"
-```
-
-**Example from Real PR**:
-
-```markdown
-Root Cause Analysis for PR #6323:
-
-## Failure Category: High
-Failure Type: Deploy
-
-## Issues Identified
-
-### Issue 1: Missing environmentSuffix
-- **Location**: lib/storage-stack.ts:45 - S3 bucket 'my-bucket'
-- **Problem**: Bucket name missing environmentSuffix, causing name conflict
-- **Evidence**: GitHub log: "BucketAlreadyExists: The requested bucket name is not available"
-- **Root Cause**: Model didn't include environmentSuffix in resource naming pattern
-- **Impact**: Deployment fails due to bucket name collision
-
-### Issue 2: Retain Policy
-- **Location**: lib/database-stack.ts:78 - RDS instance
-- **Problem**: RemovalPolicy.RETAIN prevents cleanup
-- **Evidence**: Code inspection: `removalPolicy: RemovalPolicy.RETAIN`
-- **Root Cause**: Model used RETAIN instead of DESTROY for test environments
-- **Impact**: Resources persist after PR cleanup, causing quota issues
-
-## Summary
-- Total issues: 0 Critical, 2 High, 0 Medium, 0 Low
-- Primary causes: Resource naming pattern, cleanup policy
-- Fix complexity: Simple
-```
-
-**Template File**: For a reusable template, see `.claude/docs/templates/root-cause-analysis-template.md` (create if needed).
-
-#### 2.1.2 Comprehensive Fix Planning
-
-**Purpose**: Create a comprehensive, sequenced fix plan with dependencies, validation strategy, and rollback plans.
-
-Create a **comprehensive fix plan** with sequencing, dependencies, and validation:
-
-```bash
-# Generate comprehensive fix plan from error analysis
-if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
-  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
-  CLASSIFIED_ERRORS=$(cat /tmp/pr-${PR_NUMBER}-classified-errors.json)
-  
-  # Prioritize fixes
-  PRIORITIZED=$(bash .claude/scripts/prioritize-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE")
-  
-  # Build comprehensive fix plan
-  FIX_PLAN="
-# Comprehensive Fix Plan for PR #${PR_NUMBER}
-
-## Fix Sequencing & Dependencies
-
-$(echo "$PRIORITIZED" | jq -r '.[] | 
-"### Step \(.priority): Fix \(.category) (\(.count) occurrences)
-
-**Priority**: \(.priority) (\(if .priority == 1 then "Critical" elif .priority == 2 then "High" elif .priority == 3 then "Medium" else "Low" end))
-**Files**: \(.files | join(", "))
-**Method**: \(if .can_batch then "Batch apply" else "Sequential apply" end)
-**Template**: \(.category)
-**Dependencies**: \(if .depends_on then .depends_on | join(", ") else "None" end)
-**Blocks**: \(if .blocks then .blocks | join(", ") else "None" end)
-**Can Run Parallel**: \(if .can_parallel then "Yes" else "No" end)
-
-**Actions**:
-1. [Specific action 1]
-2. [Specific action 2]
-3. [Specific action 3]
-
-**Validation After This Fix**:
-- [ ] Run: [specific validation command]
-- [ ] Check: [specific check]
-- [ ] Verify: [specific verification]
-
-**Rollback Plan**:
-- If this fix fails: [rollback steps]
-- Recovery: [recovery steps]
-
-**Estimated Time**: \(.estimated_time // "5-10 min")
-"')
-
-## Execution Order
-
-**Phase 1 - Critical Fixes** (Must complete first):
-$(echo "$PRIORITIZED" | jq -r '.[] | select(.priority == 1) | "- Step \(.priority): \(.category)"')
-
-**Phase 2 - High Priority Fixes** (Can run after Phase 1):
-$(echo "$PRIORITIZED" | jq -r '.[] | select(.priority == 2) | "- Step \(.priority): \(.category)"')
-
-**Phase 3 - Medium/Low Priority Fixes** (Can run in parallel if independent):
-$(echo "$PRIORITIZED" | jq -r '.[] | select(.priority >= 3) | "- Step \(.priority): \(.category)"')
-
-## Validation Strategy
-
-### Pre-Fix Validation (Baseline)
-- [ ] Capture current lint errors count
-- [ ] Capture current build errors count
-- [ ] Capture current test coverage
-- [ ] Document current state
-
-### Per-Fix Validation (After Each Fix)
-- [ ] Run incremental validation (validate-fixes.sh)
-- [ ] Verify fix didn't break existing functionality
-- [ ] Check for new errors introduced
-- [ ] Measure improvement
-
-### Post-Fix Validation (Final)
-- [ ] Run lint: npm run lint (or platform equivalent)
-- [ ] Run build: npm run build (or platform equivalent)
-- [ ] Run synth: npm run synth (if applicable)
-- [ ] Run unit tests: npm run test:unit (100% coverage required)
-- [ ] Deploy: npm run deploy (if applicable)
-- [ ] Run integration tests: npm run test:integration
-
-## Resource Requirements
-
-**Tools Needed**:
-- [ ] Platform-specific linter
-- [ ] Build tools
-- [ ] Testing framework
-- [ ] Deployment tools (if applicable)
-
-**Scripts Needed**:
-- [ ] .claude/scripts/pre-validate-iac.sh
-- [ ] .claude/scripts/validate-fixes.sh
-- [ ] Platform-specific validation scripts
-
-**AWS Resources** (if deployment needed):
-- [ ] AWS credentials configured
-- [ ] Required permissions verified
-- [ ] Region selected
-
-## Expected Outcome
-
-- ✅ All fixes validated successfully
-- ✅ All linters pass (zero errors)
-- ✅ Build succeeds (zero errors)
-- ✅ All tests pass with 100% coverage
-- ✅ Deployment successful (if applicable)
-- ✅ All GitHub pipeline stages will pass
-- ✅ No regressions introduced
-"
-else
-  # Fallback to basic plan if enhanced analysis not available
-  FIX_PLAN="
-# Fix Plan for PR #${PR_NUMBER}
-
-[Manual fix plan required - enhanced error analysis not available]
-
-## Basic Validation Sequence:
-1. Run lint: npm run lint (or platform equivalent)
-2. Run build: npm run build (or platform equivalent)
-3. Run synth: npm run synth (if applicable)
-4. Run unit tests: npm run test:unit
-5. Deploy: npm run deploy (if applicable)
-6. Run integration tests: npm run test:integration
-"
-fi
-
-echo "📋 Comprehensive Fix Plan:"
-echo "$FIX_PLAN"
-```
-
-#### 2.1.3 Risk Assessment
-
-**Purpose**: Identify and mitigate risks before applying fixes to prevent failures and ensure smooth execution.
-
-```bash
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.1.3: RISK ASSESSMENT"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Build risk assessment
-RISK_ASSESSMENT="
-# Risk Assessment for PR #${PR_NUMBER}
-
-## Risk Matrix
-
-| Risk | Probability | Impact | Severity | Mitigation |
-|------|-------------|--------|----------|------------|
-| Fix introduces new errors | Medium | High | High | Incremental validation after each fix |
-| Fix breaks existing functionality | Low | High | Medium | Run full test suite after each fix |
-| Deployment fails | Medium | High | High | Pre-validate before deployment |
-| Test coverage drops below 100% | Low | Medium | Medium | Add tests before fixing code |
-| Merge conflicts with main | Low | Medium | Low | Already handled in branch sync phase |
-| Time exceeds estimate | Medium | Low | Low | Prioritize critical fixes first |
-
-## Detailed Risk Analysis
-
-### Risk 1: Fix Introduces New Errors
-**Probability**: Medium
-**Impact**: High
-**Severity**: High
-**Mitigation**:
-- Run incremental validation after each fix
-- Use validate-fixes.sh script
-- Check for new lint/build errors after each change
-- Run tests after each fix
-
-**Contingency Plan**:
-- If new errors introduced: Revert fix, analyze why, apply corrected fix
-- Document learnings for future fixes
-
-### Risk 2: Fix Breaks Existing Functionality
-**Probability**: Low
-**Impact**: High
-**Severity**: Medium
-**Mitigation**:
-- Run full test suite after each fix
-- Ensure 100% test coverage maintained
-- Run integration tests if applicable
-
-**Contingency Plan**:
-- If functionality breaks: Revert fix, add tests first, then re-apply fix
-- Ensure tests cover the broken functionality
-
-### Risk 3: Deployment Fails
-**Probability**: Medium
-**Impact**: High
-**Severity**: High
-**Mitigation**:
-- Run pre-validate-iac.sh before deployment
-- Fix common errors (environmentSuffix, Retain policies) first
-- Validate resource naming conventions
-
-**Contingency Plan**:
-- If deployment fails: Check logs, identify specific error, apply targeted fix
-- Max 5 deployment attempts per PR
-
-### Risk 4: Test Coverage Drops
-**Probability**: Low
-**Impact**: Medium
-**Severity**: Medium
-**Mitigation**:
-- Add tests before modifying code
-- Ensure 100% coverage maintained throughout
-- Run coverage check after each fix
-
-**Contingency Plan**:
-- If coverage drops: Add missing tests immediately
-- Do not proceed until 100% coverage restored
-
-## Blocker Identification
-
-**Potential Blockers**:
-- [ ] Missing AWS credentials (if deployment needed)
-- [ ] Missing required scripts
-- [ ] Complex merge conflicts
-- [ ] Insufficient test coverage baseline
-- [ ] Platform-specific constraints
-
-**Blocker Mitigation**:
-- AWS credentials: Skip deployment fixes, mark as needs-manual-review
-- Missing scripts: Install/verify scripts in PHASE 0
-- Merge conflicts: Handled in branch sync phase
-- Test coverage: Add tests as part of fix plan
-- Platform constraints: Document and work within constraints
-
-## Success Probability Assessment
-
-**Overall Success Probability**: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "60-70%" elif .high_priority_errors | length > 2 then "75-85%" else "85-95%" end' 2>/dev/null || echo "70-80%")
-
-**Factors Increasing Success**:
-- Clear error messages from GitHub logs
-- Common patterns from lessons_learnt.md
-- Incremental validation approach
-- Comprehensive test coverage
-
-**Factors Decreasing Success**:
-- Complex dependencies between fixes
-- Platform-specific constraints
-- Limited error information
-- Time constraints
-"
-
-echo "⚠️ Risk Assessment:"
-echo "$RISK_ASSESSMENT"
-```
-
-#### 2.1.4 Validation Strategy
-
-**Purpose**: Define comprehensive validation approach at each stage to ensure fixes are correct and don't introduce regressions.
-
-```bash
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.1.4: VALIDATION STRATEGY"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-VALIDATION_STRATEGY="
-# Validation Strategy for PR #${PR_NUMBER}
-
-## Pre-Fix Validation (Baseline)
-
-**Purpose**: Establish baseline to measure improvement
-
-**Actions**:
-1. Capture current lint errors:
-   \`\`\`bash
-   npm run lint 2>&1 | tee /tmp/pr-${PR_NUMBER}-lint-baseline.txt
-   LINT_ERRORS_BASELINE=\$(grep -c \"error\" /tmp/pr-${PR_NUMBER}-lint-baseline.txt || echo \"0\")
-   echo \"Baseline lint errors: \$LINT_ERRORS_BASELINE\"
-   \`\`\`
-
-2. Capture current build errors:
-   \`\`\`bash
-   npm run build 2>&1 | tee /tmp/pr-${PR_NUMBER}-build-baseline.txt
-   BUILD_ERRORS_BASELINE=\$(grep -c \"error\" /tmp/pr-${PR_NUMBER}-build-baseline.txt || echo \"0\")
-   echo \"Baseline build errors: \$BUILD_ERRORS_BASELINE\"
-   \`\`\`
-
-3. Capture current test coverage:
-   \`\`\`bash
-   npm run test:coverage 2>&1 | tee /tmp/pr-${PR_NUMBER}-coverage-baseline.txt
-   COVERAGE_BASELINE=\$(grep -oP 'Lines\\s+:\\s+\\K[0-9.]+' /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || echo \"0\")
-   echo \"Baseline coverage: \$COVERAGE_BASELINE%\"
-   \`\`\`
-
-**Success Criteria**: Baseline captured successfully
-
-## Per-Fix Validation (After Each Fix)
-
-**Purpose**: Ensure each fix is correct and doesn't introduce new issues
-
-**Validation Steps** (after each fix):
-1. **Incremental Validation**:
-   \`\`\`bash
-   bash .claude/scripts/validate-fixes.sh \$FIX_TYPE
-   \`\`\`
-
-2. **Lint Check**:
-   \`\`\`bash
-   npm run lint
-   # Verify: Errors should decrease or stay same, never increase
-   \`\`\`
-
-3. **Build Check**:
-   \`\`\`bash
-   npm run build
-   # Verify: Build succeeds or errors decrease
-   \`\`\`
-
-4. **Test Check**:
-   \`\`\`bash
-   npm run test:unit
-   # Verify: All tests pass, coverage maintained at 100%
-   \`\`\`
-
-**Success Criteria**:
-- ✅ No new errors introduced
-- ✅ Existing errors reduced or eliminated
-- ✅ Test coverage maintained at 100%
-- ✅ All tests pass
-
-**Failure Handling**:
-- If validation fails: Revert fix, analyze why, apply corrected fix
-- Document learnings
-
-## Post-Fix Validation (Final)
-
-**Purpose**: Comprehensive validation before marking PR as fixed
-
-**Validation Sequence**:
-1. **Lint Validation**:
-   \`\`\`bash
-   npm run lint
-   # Must pass with zero errors
-   \`\`\`
-
-2. **Build Validation**:
-   \`\`\`bash
-   npm run build
-   # Must succeed with zero errors
-   \`\`\`
-
-3. **Synth Validation** (if applicable):
-   \`\`\`bash
-   npm run synth
-   # Must succeed
-   \`\`\`
-
-4. **Unit Test Validation**:
-   \`\`\`bash
-   npm run test:unit
-   # Must pass with 100% coverage
-   \`\`\`
-
-5. **Pre-Deployment Validation**:
-   \`\`\`bash
-   bash .claude/scripts/pre-validate-iac.sh
-   # Must pass
-   \`\`\`
-
-6. **Deployment Validation** (if applicable):
-   \`\`\`bash
-   npm run deploy
-   # Must succeed
-   \`\`\`
-
-7. **Integration Test Validation** (if deployed):
-   \`\`\`bash
-   npm run test:integration
-   # Must pass using real AWS outputs
-   \`\`\`
-
-**Success Criteria**:
-- ✅ All validations pass
-- ✅ Zero lint errors
-- ✅ Zero build errors
-- ✅ 100% test coverage (statements, functions, lines)
-- ✅ Deployment successful (if applicable)
-- ✅ All integration tests pass (if applicable)
-
-## Validation Metrics
-
-**Improvement Tracking**:
-- Lint errors: \$LINT_ERRORS_BASELINE → 0 (target)
-- Build errors: \$BUILD_ERRORS_BASELINE → 0 (target)
-- Test coverage: \$COVERAGE_BASELINE% → 100% (target)
-
-**Success Metrics**:
-- Fixes applied: [count]
-- Errors fixed: [count]
-- Tests added: [count]
-- Time taken: [duration]
-"
-
-echo "✅ Validation Strategy:"
-echo "$VALIDATION_STRATEGY"
-```
-
-#### 2.1.5 Enhanced Solution Approach
-
-**Purpose**: Justify the chosen approach with comparison matrix and cost/benefit analysis.
-
-```bash
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.1.5: ENHANCED SOLUTION APPROACH"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-SOLUTION_APPROACH="
-# Enhanced Solution Approach for PR #${PR_NUMBER}
-
-## Chosen Strategy
-
-**Primary Strategy**: [e.g., 'Systematic resource name updates with environmentSuffix']
-
-**Rationale**:
-1. Follows established pattern from lessons_learnt.md
-2. Minimal code changes, lower risk of introducing bugs
-3. Addresses root cause directly rather than symptoms
-4. Can be validated incrementally
-5. Maintains backward compatibility where possible
-
-## Approach Comparison Matrix
-
-| Approach | Pros | Cons | Risk | Time | Selected |
-|----------|------|------|------|------|----------|
-| **Chosen: Systematic Updates** | - Follows patterns<br>- Low risk<br>- Incremental | - May take longer | Low | Medium | ✅ |
-| **Alternative 1: Complete Rewrite** | - Clean slate<br>- Modern patterns | - High risk<br>- Time consuming | High | High | ❌ |
-| **Alternative 2: Quick Fixes** | - Fast<br>- Minimal changes | - May miss root cause<br>- Higher risk | Medium | Low | ❌ |
-| **Alternative 3: Manual Review** | - Human judgment | - Slow<br>- Not scalable | Low | Very High | ❌ |
-
-## Cost/Benefit Analysis
-
-### Chosen Approach
-
-**Costs**:
-- Time: [estimated time]
-- Complexity: [complexity level]
-- Risk: [risk level]
-- Resources: [resources needed]
-
-**Benefits**:
-- Fixes root cause permanently
-- Prevents future similar issues
-- Maintains code quality
-- Follows best practices
-- Can be validated incrementally
-
-**ROI**: [High/Medium/Low] - Benefits significantly outweigh costs
-
-### Alternative Approaches (Rejected)
-
-**Alternative 1: [Name]**
-- Why rejected: [reason]
-- Cost: [cost]
-- Risk: [risk]
-
-**Alternative 2: [Name]**
-- Why rejected: [reason]
-- Cost: [cost]
-- Risk: [risk]
-
-## Risk Mitigation Strategy
-
-**Primary Risks**:
-1. **Risk**: Fix introduces new errors
-   **Mitigation**: Incremental validation after each fix
-   **Contingency**: Revert and re-apply with corrections
-
-2. **Risk**: Fix breaks existing functionality
-   **Mitigation**: Comprehensive test coverage (100%)
-   **Contingency**: Add tests first, then apply fix
-
-3. **Risk**: Deployment fails
-   **Mitigation**: Pre-validate before deployment
-   **Contingency**: Fix common errors first, retry with fixes
-
-## Success Criteria
-
-**Must Have** (Blocking):
-- ✅ All resource names include environmentSuffix
-- ✅ GitHub Deploy stage passes
-- ✅ 100% test coverage maintained
-- ✅ All lint errors resolved
-- ✅ All build errors resolved
-
-**Should Have** (Important):
-- ✅ Code follows best practices
-- ✅ No regressions introduced
-- ✅ Documentation updated if needed
-
-**Nice to Have** (Optional):
-- ✅ Performance improvements
-- ✅ Code simplification
-- ✅ Additional test cases
-
-## Validation of Approach
-
-**How we'll know the approach worked**:
-1. All GitHub pipeline stages pass ✅
-2. Zero lint/build errors ✅
-3. 100% test coverage maintained ✅
-4. Deployment successful ✅
-5. No regressions in existing functionality ✅
-
-**If approach fails**:
-- Fallback to alternative approach
-- Document learnings
-- Update lessons_learnt.md
-"
-
-echo "💡 Enhanced Solution Approach:"
-echo "$SOLUTION_APPROACH"
-```
-
-#### 2.1.6 Planning Review & Approval
-
-**Purpose**: Self-review checklist to ensure planning is complete and comprehensive before proceeding.
-
-```bash
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.1.6: PLANNING REVIEW & APPROVAL"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-echo "🔍 Reviewing planning completeness..."
-
-PLANNING_REVIEW="
-# Planning Review Checklist for PR #${PR_NUMBER}
-
-## Context Gathering Review
-- [ ] PR details gathered (branch, title, author, files)
-- [ ] Commit history reviewed
-- [ ] Platform/language identified
-- [ ] Dependencies and constraints understood
-- [ ] Current codebase state assessed
-- [ ] Similar patterns from lessons_learnt.md reviewed
-
-## Root Cause Analysis Review
-- [ ] Root causes identified with evidence
-- [ ] Impact matrix created (severity × frequency)
-- [ ] Dependency analysis completed
-- [ ] Fix complexity assessed
-- [ ] Time estimate provided
-
-## Fix Planning Review
-- [ ] Fix plan has specific file paths and line numbers
-- [ ] Fix sequencing defined (dependencies identified)
-- [ ] Parallel vs sequential execution planned
-- [ ] Validation strategy for each fix step defined
-- [ ] Rollback plan for each fix created
-- [ ] Resource requirements identified
-- [ ] Time/complexity estimation provided
-
-## Risk Assessment Review
-- [ ] Risk matrix created
-- [ ] All major risks identified
-- [ ] Mitigation strategies defined
-- [ ] Contingency plans created
-- [ ] Blockers identified and mitigation planned
-- [ ] Success probability assessed
-
-## Validation Strategy Review
-- [ ] Pre-fix validation (baseline) defined
-- [ ] Per-fix validation steps defined
-- [ ] Post-fix validation sequence defined
-- [ ] Success criteria clear and measurable
-- [ ] Failure handling defined
-
-## Solution Approach Review
-- [ ] Chosen approach justified
-- [ ] Alternatives considered and compared
-- [ ] Cost/benefit analysis completed
-- [ ] Risk mitigation strategy defined
-- [ ] Success criteria defined
-- [ ] Validation method for approach defined
-
-## Overall Planning Quality Check
-- [ ] Plan is actionable (can be executed step-by-step)
-- [ ] Plan is comprehensive (covers all aspects)
-- [ ] Plan is realistic (time/effort estimates reasonable)
-- [ ] Plan is risk-aware (risks identified and mitigated)
-- [ ] Plan is validated (validation strategy defined)
-
-## Approval to Proceed
-
-**Planning Status**: [ ] Complete | [ ] Needs Improvement
-
-**If Complete**:
-- ✅ All checkboxes checked
-- ✅ Planning is comprehensive
-- ✅ Ready to proceed to worktree setup
-
-**If Needs Improvement**:
-- ⚠️ Identify missing elements
-- ⚠️ Enhance planning
-- ⚠️ Re-review before proceeding
-
-**Approved by**: Agent
-**Date**: $(date +%Y-%m-%d)
-**Ready to Proceed**: [ ] Yes | [ ] No
-"
-
-echo "$PLANNING_REVIEW"
-
-# Self-validation
-echo ""
-echo "✅ Performing self-validation..."
-
-# Check if all critical elements are present
-CRITICAL_ELEMENTS=(
-  "ROOT_CAUSE"
-  "FIX_PLAN"
-  "RISK_ASSESSMENT"
-  "VALIDATION_STRATEGY"
-  "SOLUTION_APPROACH"
-)
-
-ALL_PRESENT=true
-for element in "${CRITICAL_ELEMENTS[@]}"; do
-  if [ -z "${!element}" ]; then
-    echo "⚠️ Missing: $element"
-    ALL_PRESENT=false
-  fi
-done
-
-if [ "$ALL_PRESENT" = true ]; then
-  echo "✅ All critical planning elements present"
-  echo "✅ Planning review complete"
-  echo "✅ APPROVED to proceed to worktree setup"
-else
-  echo "❌ BLOCKED: Missing critical planning elements"
-  echo "❌ Cannot proceed until planning is complete"
-  exit 1
-fi
-```
-
-#### 2.1.7 Document Comprehensive Planning in Status File
-
-```bash
-echo ""
-echo "💾 Saving comprehensive planning to status file..."
-
-# Combine all planning elements
-COMPREHENSIVE_PLANNING="
-# Comprehensive Planning for PR #${PR_NUMBER}
-
-## Context Gathering
-[Context gathered in PHASE 2.1.0]
-
-## Root Cause Analysis
-$ROOT_CAUSE
-
-## Comprehensive Fix Plan
-$FIX_PLAN
-
-## Risk Assessment
-$RISK_ASSESSMENT
-
-## Validation Strategy
-$VALIDATION_STRATEGY
-
-## Enhanced Solution Approach
-$SOLUTION_APPROACH
-
-## Planning Review
-$PLANNING_REVIEW
-"
-
-# Update status file with comprehensive planning
-bash .claude/scripts/pr-manager.sh update-analysis \
-  $PR_NUMBER \
-  "$ROOT_CAUSE" \
-  "$FIX_PLAN" \
-  "$SOLUTION_APPROACH"
-
-# Also save comprehensive planning to a file for reference
-echo "$COMPREHENSIVE_PLANNING" > "/tmp/pr-${PR_NUMBER}-comprehensive-planning.md"
-
-if [ $? -eq 0 ]; then
-  echo "✅ Comprehensive planning documented"
-  echo "  - Saved to synth_pr_status.json"
-  echo "  - Saved to /tmp/pr-${PR_NUMBER}-comprehensive-planning.md"
-else
-  echo "⚠️ Warning: Could not save planning to status file"
-fi
-
-echo ""
-echo "📊 View your comprehensive planning with:"
-echo "   bash .claude/scripts/pr-status.sh pr $PR_NUMBER"
-echo "   cat /tmp/pr-${PR_NUMBER}-comprehensive-planning.md"
-echo ""
-```
-
-**Report Status**:
-```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.1 - COMPREHENSIVE PLANNING COMPLETE - PR #<number>
-**PR**: #<number>
-**PROGRESS**: 2.1/2.11 phases completed
-**NEXT ACTION**: Create isolated worktree for PR branch
-**ISSUES**: NONE
-**BLOCKED**: NO
-**PLANNING**: ✅ Context gathered | ✅ Root cause analyzed | ✅ Fix plan created | ✅ Risk assessed | ✅ Validation strategy defined | ✅ Solution approach justified | ✅ Planning reviewed
-```
-
-**CHECKPOINT PR-C**: Comprehensive Planning Completeness
-- ✅ Context gathered (PR details, platform, dependencies)
-- ✅ Root cause documented with evidence and impact matrix
-- ✅ Comprehensive fix plan created with sequencing and dependencies
-- ✅ Risk assessment completed with mitigation strategies
-- ✅ Validation strategy defined (pre-fix, per-fix, post-fix)
-- ✅ Enhanced solution approach justified with comparison matrix
-- ✅ Planning reviewed and approved
-- ✅ All planning saved to status file
-
-**CHECKPOINT PR-D**: Fix Plan Validation
-- ✅ Plan has specific file paths and line numbers
-- ✅ Plan includes validation steps for each fix
-- ✅ Plan addresses all failed stages
-- ✅ Plan is executable (clear steps)
-- ✅ Plan includes dependencies and sequencing
-- ✅ Plan includes rollback strategies
-- ✅ Plan includes time/complexity estimates
-
-**If checkpoints fail**: Re-analyze, improve documentation, re-validate.
-
-**CHECKPOINT**: Review your analysis before proceeding. Make sure:
-- ✅ Root cause is specific and evidence-based
-- ✅ Fix plan has concrete, actionable steps
-- ✅ Solution approach is justified
-- ✅ Analysis is documented in status file
-
----
-
 #### 2.1 PR Setup
 
 ```bash
@@ -1450,7 +452,11 @@ echo "Author: $PR_AUTHOR"
 **BLOCKED**: NO
 ```
 
-#### 2.2 Create Isolated Worktree
+### PHASE 2.1: Worktree Setup & Branch Synchronization
+
+**CRITICAL**: Create worktree FIRST before planning, as planning requires access to PR branch code, metadata.json, and dependencies.
+
+#### 2.1.1 Create Isolated Worktree
 
 **CHECKPOINT PR-B**: PR Worktree Validation
 
@@ -1459,6 +465,10 @@ echo "Author: $PR_AUTHOR"
 bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Creating worktree"
 
 WORKTREE_DIR="worktree/pr-fix-${PR_NUMBER}"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.1.1: WORKTREE SETUP - PR #${PR_NUMBER}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo "📁 Creating worktree: $WORKTREE_DIR"
 
@@ -1517,25 +527,25 @@ echo "✅ Worktree validation passed"
 **CHECKPOINT PR-B**: PR Worktree Validation
 - ✅ Worktree created at correct location
 - ✅ Branch matches PR branch
-- ✅ Ready for fixes
+- ✅ Ready for branch synchronization
 
 **CHECKPOINT**: Verify you are in the worktree:
 ```bash
 pwd  # Should show: .../worktree/pr-fix-<PR_NUMBER>
 ```
 
-#### 2.2.5 Branch Synchronization with Main
+#### 2.1.2 Branch Synchronization with Main
 
 **CHECKPOINT PR-B2**: Branch Synchronization
 
-**CRITICAL**: Before fixing any task, ensure the PR branch is synchronized with main branch to prevent merge conflicts and ensure fixes are applied on top of latest main.
+**CRITICAL**: Before planning and fixing, ensure the PR branch is synchronized with main branch to prevent merge conflicts and ensure fixes are applied on top of latest main.
 
 ```bash
 # Update progress
 bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Synchronizing with main branch"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.2.5: BRANCH SYNCHRONIZATION - PR #${PR_NUMBER}"
+echo "PHASE 2.1.2: BRANCH SYNCHRONIZATION - PR #${PR_NUMBER}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Ensure we're in the worktree
@@ -1683,22 +693,25 @@ echo "✅ Branch synchronization complete"
 - ✅ Branch is up-to-date with main
 - ✅ Working directory is clean
 
-**Pass criteria**: Branch synchronized with main, no merge conflicts, ready for fixes
+**Pass criteria**: Branch synchronized with main, no merge conflicts, ready for planning
 **Fail action**: If conflicts cannot be resolved automatically, mark PR as needs-manual-review and skip to next PR
 
-**Report Status**:
-```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.2.5 - BRANCH SYNCHRONIZATION COMPLETE - PR #<number>
-**PR**: #<number>
-**PROGRESS**: 2.2.5/2.11 phases completed
-**NEXT ACTION**: Extract metadata and analyze failures
-**BRANCH STATUS**: ✅ Synchronized with main | ✅ No conflicts
-**BLOCKED**: NO
-```
+#### 2.1.3 Extract Metadata & Platform Info
 
-#### 2.3 Extract Metadata & Platform Info
+**CRITICAL**: Extract platform and language information from worktree metadata.json for use in planning.
 
 ```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.1.3: EXTRACT METADATA & PLATFORM INFO"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Ensure we're in worktree
+if [[ ! "$(pwd)" =~ worktree/pr-fix-[^/]+$ ]]; then
+  echo "❌ BLOCKED: Not in worktree directory"
+  exit 1
+fi
+
 echo "📊 Extracting project metadata..."
 
 # Verify metadata.json exists
@@ -1706,22 +719,1120 @@ if [ ! -f "metadata.json" ]; then
   echo "❌ ERROR: metadata.json not found"
   echo "This PR has a Detect Project Files failure"
   FAILURE_TYPE="Detect Project Files"
-  # Will handle in next step
+  # Will handle in planning phase
+  PLATFORM="unknown"
+  LANGUAGE="unknown"
 else
   # Extract platform and language
-  PLATFORM=$(jq -r '.platform' metadata.json)
-  LANGUAGE=$(jq -r '.language' metadata.json)
-  TASK_ID=$(jq -r '.po_id' metadata.json)
-  COMPLEXITY=$(jq -r '.complexity' metadata.json)
+  PLATFORM=$(jq -r '.platform' metadata.json 2>/dev/null || echo "unknown")
+  LANGUAGE=$(jq -r '.language' metadata.json 2>/dev/null || echo "unknown")
+  TASK_ID=$(jq -r '.po_id' metadata.json 2>/dev/null || echo "unknown")
+  COMPLEXITY=$(jq -r '.complexity' metadata.json 2>/dev/null || echo "unknown")
 
   echo "Platform: $PLATFORM"
   echo "Language: $LANGUAGE"
   echo "Task ID: $TASK_ID"
   echo "Complexity: $COMPLEXITY"
+  
+  # Export for use in planning
+  export PLATFORM
+  export LANGUAGE
+  export TASK_ID
+  export COMPLEXITY
 fi
 ```
 
-#### 2.4 Analyze GitHub Pipeline Failures
+### PHASE 2.2: Comprehensive Pre-Fix Planning (MANDATORY)
+
+**CRITICAL**: Now that worktree is created and synchronized, complete comprehensive planning with full context access.
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.2: COMPREHENSIVE PRE-FIX PLANNING - PR #${PR_NUMBER}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Starting comprehensive planning"
+
+# Ensure we're in worktree
+if [[ ! "$(pwd)" =~ worktree/pr-fix-[^/]+$ ]]; then
+  echo "❌ BLOCKED: Not in worktree directory - planning requires worktree access"
+  exit 1
+fi
+
+echo "📋 Failure Reason: $FAILURE_REASON"
+echo "🏗️ Platform: $PLATFORM | Language: $LANGUAGE"
+echo ""
+echo "🎯 Beginning comprehensive planning phase with full context..."
+```
+
+#### 2.2.0 Context Gathering
+
+**Purpose**: Gather all necessary context before planning fixes to ensure comprehensive understanding.
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.1.0: CONTEXT GATHERING"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Get PR details (already have PR_BRANCH, PR_TITLE, PR_AUTHOR from setup)
+PR_CREATED=$(gh pr view $PR_NUMBER --json createdAt -q .createdAt)
+PR_FILES=$(gh pr view $PR_NUMBER --json files -q '.files[] | .path' | wc -l)
+
+echo "📋 PR Context:"
+echo "  - Branch: $PR_BRANCH"
+echo "  - Title: $PR_TITLE"
+echo "  - Author: $PR_AUTHOR"
+echo "  - Created: $PR_CREATED"
+echo "  - Files Changed: $PR_FILES"
+
+# Get files changed in PR
+echo ""
+echo "📁 Files Changed in PR:"
+gh pr view $PR_NUMBER --json files -q '.files[] | "  - \(.path) (\(.additions) additions, \(.deletions) deletions)"' | head -20
+
+# Get commit history
+echo ""
+echo "📜 Recent Commits:"
+gh pr view $PR_NUMBER --json commits -q '.commits[-5:] | .[] | "  - \(.oid[0:7]) \(.messageHeadline)"'
+
+# Check for similar PRs or patterns
+echo ""
+echo "🔍 Checking for similar patterns..."
+# Search lessons_learnt.md for similar issues (from main repo)
+if [ -f "../.claude/lessons_learnt.md" ]; then
+  echo "  - Reviewing lessons_learnt.md for similar patterns..."
+  grep -i "$FAILURE_REASON" ../.claude/lessons_learnt.md | head -5 || echo "    No direct matches found"
+elif [ -f ".claude/lessons_learnt.md" ]; then
+  echo "  - Reviewing lessons_learnt.md for similar patterns..."
+  grep -i "$FAILURE_REASON" .claude/lessons_learnt.md | head -5 || echo "    No direct matches found"
+fi
+
+# Platform and language already extracted in PHASE 2.1.3
+echo ""
+echo "🏗️ Project Context (from metadata.json):"
+echo "  - Platform: $PLATFORM"
+echo "  - Language: $LANGUAGE"
+echo "  - Task ID: $TASK_ID"
+echo "  - Complexity: $COMPLEXITY"
+
+# Check dependencies and constraints (now in worktree, so files exist)
+echo ""
+echo "🔗 Dependencies & Constraints:"
+if [ -f "package.json" ]; then
+  echo "    - Node.js project detected"
+  DEPENDENCIES=$(jq -r '.dependencies | keys | length' package.json 2>/dev/null || echo "0")
+  DEV_DEPENDENCIES=$(jq -r '.devDependencies | keys | length' package.json 2>/dev/null || echo "0")
+  echo "    - Dependencies: $DEPENDENCIES, Dev Dependencies: $DEV_DEPENDENCIES"
+elif [ -f "Pipfile" ]; then
+  echo "    - Python project detected"
+  if [ -f "Pipfile.lock" ]; then
+    echo "    - Pipfile.lock found"
+  fi
+elif [ -f "go.mod" ]; then
+  echo "    - Go project detected"
+elif [ -f "pom.xml" ]; then
+  echo "    - Java/Maven project detected"
+fi
+
+# Assess current codebase state (now in worktree)
+echo ""
+echo "📊 Current Codebase State:"
+echo "  - Checking for existing test coverage..."
+if [ -f "coverage/coverage-summary.json" ]; then
+  COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null || echo "unknown")
+  echo "    - Current coverage: ${COVERAGE}%"
+elif [ -f "coverage/lcov.info" ]; then
+  echo "    - Coverage report found (lcov format)"
+fi
+
+# Check current lint/build state
+echo ""
+echo "  - Checking current lint state..."
+if command -v npm &> /dev/null && [ -f "package.json" ]; then
+  npm run lint 2>&1 | head -20 || echo "    - Lint check failed or not configured"
+fi
+
+echo ""
+echo "✅ Context gathering complete (with full worktree access)"
+```
+
+**Context Summary**:
+- ✅ PR details (branch, title, author, files changed)
+- ✅ Commit history
+- ✅ Platform/language identification
+- ✅ Dependencies and constraints
+- ✅ Current codebase state
+- ✅ Similar patterns from lessons_learnt.md
+
+#### 2.2.1 Root Cause Analysis (Enhanced)
+
+**Purpose**: Identify root causes with evidence, impact assessment, and dependency analysis.
+
+Analyze WHY the PR failed by:
+
+1. **Reading GitHub logs** (actual errors, not just failure labels)
+2. **Examining code** in the PR branch
+3. **Checking common patterns** from `.claude/lessons_learnt.md`
+4. **Identifying specific issues** (exact lines, exact resources, exact problems)
+5. **Assessing impact** (severity × frequency matrix)
+6. **Analyzing dependencies** (what depends on this fix, what this fix depends on)
+
+```bash
+# Get detailed error logs from GitHub
+RUN_ID=$(gh pr view $PR_NUMBER --json statusCheckRollup -q '.statusCheckRollup[0].workflowRun.databaseId' 2>/dev/null || echo "")
+
+if [ -n "$RUN_ID" ]; then
+  echo "Fetching detailed logs from GitHub Actions run $RUN_ID..."
+  gh run view $RUN_ID --log > /tmp/pr-${PR_NUMBER}-logs.txt 2>/dev/null || true
+  
+  # Use enhanced error analysis script
+  echo "🔍 Running enhanced error analysis..."
+  bash .claude/scripts/analyze-errors.sh $PR_NUMBER /tmp/pr-${PR_NUMBER}-logs.txt
+  
+  # Load analysis results
+  if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+    ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+    echo "✅ Error analysis complete"
+    
+    # Display summary
+    echo ""
+    echo "Error Summary:"
+    echo "$ERROR_SUMMARY" | jq -r '
+      "Total Errors: \(.total_errors)\n",
+      "By Fix Type:",
+      (.by_fix_type[] | "  - \(.fix_type): \(.count)"),
+      "\nCritical Errors: \(.critical_errors | length)",
+      "High Priority: \(.high_priority_errors | length)"
+    '
+  else
+    echo "⚠️ Enhanced analysis not available, using basic grep"
+    grep -i "error\|failed\|failure" /tmp/pr-${PR_NUMBER}-logs.txt | grep -v "grep" | head -30
+  fi
+fi
+```
+
+**Document Root Cause** (use enhanced analysis):
+
+```bash
+# Enhanced root cause analysis using error analysis results
+if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+  
+  # Build comprehensive root cause analysis
+  ROOT_CAUSE="
+Root Cause Analysis for PR #${PR_NUMBER}:
+
+## Failure Category: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "Critical" elif .high_priority_errors | length > 0 then "High" else "Medium" end')
+Failure Type: ${FAILURE_REASON}
+
+## Issues Identified
+
+$(echo "$ERROR_SUMMARY" | jq -r '.recommended_fixes[] | 
+"### Issue: \(.fix_type)
+- **Location**: \(.location)
+- **Problem**: \(.likely_cause)
+- **Evidence**: Error analysis matched known pattern
+- **Root Cause**: Common pattern from lessons_learnt.md
+- **Impact**: Blocks deployment/pipeline stage
+"')
+
+## Impact Matrix
+$(echo "$ERROR_SUMMARY" | jq -r '
+  "| Severity | Count | Impact |\n|----------|-------|--------|",
+  "| Critical | \(.critical_errors | length) | Blocks all stages |",
+  "| High     | \(.high_priority_errors | length) | Blocks key stages |",
+  "| Medium   | \(.medium_priority_errors | length // 0) | Affects specific stages |",
+  "| Low      | \(.low_priority_errors | length // 0) | Minor issues |"
+')
+
+## Dependency Analysis
+- **Blocks**: These fixes must be completed before other fixes can proceed
+- **Depends On**: These fixes require other fixes to be completed first
+- **Independent**: These fixes can be done in parallel
+
+## Summary
+- Total issues: $(echo "$ERROR_SUMMARY" | jq -r '.total_errors')
+- Critical: $(echo "$ERROR_SUMMARY" | jq -r '.critical_errors | length')
+- High Priority: $(echo "$ERROR_SUMMARY" | jq -r '.high_priority_errors | length')
+- Primary causes: $(echo "$ERROR_SUMMARY" | jq -r '.by_fix_type[] | .fix_type' | head -3 | tr '\n' ', ' | sed 's/,$//')
+- Fix complexity: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "Complex" elif .high_priority_errors | length > 2 then "Moderate" else "Simple" end')
+- Estimated time: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "30-60 min" elif .high_priority_errors | length > 2 then "15-30 min" else "5-15 min" end')
+"
+else
+  # Fallback to basic template if enhanced analysis not available
+  ROOT_CAUSE="
+Root Cause Analysis for PR #${PR_NUMBER}:
+
+## Failure Category: <Critical/High/Medium/Low>
+Failure Type: ${FAILURE_REASON}
+
+## Issues Identified
+[Manual analysis required - enhanced error analysis not available]
+
+## Summary
+- Analysis: Basic (enhanced analysis unavailable)
+- Fix complexity: Unknown
+"
+fi
+
+echo "📝 Root Cause Analysis:"
+echo "$ROOT_CAUSE"
+```
+
+**Example from Real PR**:
+
+```markdown
+Root Cause Analysis for PR #6323:
+
+## Failure Category: High
+Failure Type: Deploy
+
+## Issues Identified
+
+### Issue 1: Missing environmentSuffix
+- **Location**: lib/storage-stack.ts:45 - S3 bucket 'my-bucket'
+- **Problem**: Bucket name missing environmentSuffix, causing name conflict
+- **Evidence**: GitHub log: "BucketAlreadyExists: The requested bucket name is not available"
+- **Root Cause**: Model didn't include environmentSuffix in resource naming pattern
+- **Impact**: Deployment fails due to bucket name collision
+
+### Issue 2: Retain Policy
+- **Location**: lib/database-stack.ts:78 - RDS instance
+- **Problem**: RemovalPolicy.RETAIN prevents cleanup
+- **Evidence**: Code inspection: `removalPolicy: RemovalPolicy.RETAIN`
+- **Root Cause**: Model used RETAIN instead of DESTROY for test environments
+- **Impact**: Resources persist after PR cleanup, causing quota issues
+
+## Summary
+- Total issues: 0 Critical, 2 High, 0 Medium, 0 Low
+- Primary causes: Resource naming pattern, cleanup policy
+- Fix complexity: Simple
+```
+
+**Template File**: For a reusable template, see `.claude/docs/templates/root-cause-analysis-template.md` (create if needed).
+
+#### 2.2.2 Comprehensive Fix Planning
+
+**Purpose**: Create a comprehensive, sequenced fix plan with dependencies, validation strategy, and rollback plans.
+
+Create a **comprehensive fix plan** with sequencing, dependencies, and validation:
+
+```bash
+# Generate comprehensive fix plan from error analysis
+if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+  CLASSIFIED_ERRORS=$(cat /tmp/pr-${PR_NUMBER}-classified-errors.json)
+  
+  # Prioritize fixes
+  PRIORITIZED=$(bash .claude/scripts/prioritize-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE")
+  
+  # Build comprehensive fix plan
+  FIX_PLAN="
+# Comprehensive Fix Plan for PR #${PR_NUMBER}
+
+## Fix Sequencing & Dependencies
+
+$(echo "$PRIORITIZED" | jq -r '.[] | 
+"### Step \(.priority): Fix \(.category) (\(.count) occurrences)
+
+**Priority**: \(.priority) (\(if .priority == 1 then "Critical" elif .priority == 2 then "High" elif .priority == 3 then "Medium" else "Low" end))
+**Files**: \(.files | join(", "))
+**Method**: \(if .can_batch then "Batch apply" else "Sequential apply" end)
+**Template**: \(.category)
+**Dependencies**: \(if .depends_on then .depends_on | join(", ") else "None" end)
+**Blocks**: \(if .blocks then .blocks | join(", ") else "None" end)
+**Can Run Parallel**: \(if .can_parallel then "Yes" else "No" end)
+
+**Actions**:
+1. [Specific action 1]
+2. [Specific action 2]
+3. [Specific action 3]
+
+**Validation After This Fix**:
+- [ ] Run: [specific validation command]
+- [ ] Check: [specific check]
+- [ ] Verify: [specific verification]
+
+**Rollback Plan**:
+- If this fix fails: [rollback steps]
+- Recovery: [recovery steps]
+
+**Estimated Time**: \(.estimated_time // "5-10 min")
+"')
+
+## Execution Order
+
+**Phase 1 - Critical Fixes** (Must complete first):
+$(echo "$PRIORITIZED" | jq -r '.[] | select(.priority == 1) | "- Step \(.priority): \(.category)"')
+
+**Phase 2 - High Priority Fixes** (Can run after Phase 1):
+$(echo "$PRIORITIZED" | jq -r '.[] | select(.priority == 2) | "- Step \(.priority): \(.category)"')
+
+**Phase 3 - Medium/Low Priority Fixes** (Can run in parallel if independent):
+$(echo "$PRIORITIZED" | jq -r '.[] | select(.priority >= 3) | "- Step \(.priority): \(.category)"')
+
+## Validation Strategy
+
+### Pre-Fix Validation (Baseline)
+- [ ] Capture current lint errors count
+- [ ] Capture current build errors count
+- [ ] Capture current test coverage
+- [ ] Document current state
+
+### Per-Fix Validation (After Each Fix)
+- [ ] Run incremental validation (validate-fixes.sh)
+- [ ] Verify fix didn't break existing functionality
+- [ ] Check for new errors introduced
+- [ ] Measure improvement
+
+### Post-Fix Validation (Final)
+- [ ] Run lint: npm run lint (or platform equivalent)
+- [ ] Run build: npm run build (or platform equivalent)
+- [ ] Run synth: npm run synth (if applicable)
+- [ ] Run unit tests: npm run test:unit (100% coverage required)
+- [ ] Deploy: npm run deploy (if applicable)
+- [ ] Run integration tests: npm run test:integration
+
+## Resource Requirements
+
+**Tools Needed**:
+- [ ] Platform-specific linter
+- [ ] Build tools
+- [ ] Testing framework
+- [ ] Deployment tools (if applicable)
+
+**Scripts Needed**:
+- [ ] .claude/scripts/pre-validate-iac.sh
+- [ ] .claude/scripts/validate-fixes.sh
+- [ ] Platform-specific validation scripts
+
+**AWS Resources** (if deployment needed):
+- [ ] AWS credentials configured
+- [ ] Required permissions verified
+- [ ] Region selected
+
+## Expected Outcome
+
+- ✅ All fixes validated successfully
+- ✅ All linters pass (zero errors)
+- ✅ Build succeeds (zero errors)
+- ✅ All tests pass with 100% coverage
+- ✅ Deployment successful (if applicable)
+- ✅ All GitHub pipeline stages will pass
+- ✅ No regressions introduced
+"
+else
+  # Fallback to basic plan if enhanced analysis not available
+  FIX_PLAN="
+# Fix Plan for PR #${PR_NUMBER}
+
+[Manual fix plan required - enhanced error analysis not available]
+
+## Basic Validation Sequence:
+1. Run lint: npm run lint (or platform equivalent)
+2. Run build: npm run build (or platform equivalent)
+3. Run synth: npm run synth (if applicable)
+4. Run unit tests: npm run test:unit
+5. Deploy: npm run deploy (if applicable)
+6. Run integration tests: npm run test:integration
+"
+fi
+
+echo "📋 Comprehensive Fix Plan:"
+echo "$FIX_PLAN"
+```
+
+#### 2.2.3 Risk Assessment
+
+**Purpose**: Identify and mitigate risks before applying fixes to prevent failures and ensure smooth execution.
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.2.3: RISK ASSESSMENT"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Build risk assessment
+RISK_ASSESSMENT="
+# Risk Assessment for PR #${PR_NUMBER}
+
+## Risk Matrix
+
+| Risk | Probability | Impact | Severity | Mitigation |
+|------|-------------|--------|----------|------------|
+| Fix introduces new errors | Medium | High | High | Incremental validation after each fix |
+| Fix breaks existing functionality | Low | High | Medium | Run full test suite after each fix |
+| Deployment fails | Medium | High | High | Pre-validate before deployment |
+| Test coverage drops below 100% | Low | Medium | Medium | Add tests before fixing code |
+| Merge conflicts with main | Low | Medium | Low | Already handled in branch sync phase |
+| Time exceeds estimate | Medium | Low | Low | Prioritize critical fixes first |
+
+## Detailed Risk Analysis
+
+### Risk 1: Fix Introduces New Errors
+**Probability**: Medium
+**Impact**: High
+**Severity**: High
+**Mitigation**:
+- Run incremental validation after each fix
+- Use validate-fixes.sh script
+- Check for new lint/build errors after each change
+- Run tests after each fix
+
+**Contingency Plan**:
+- If new errors introduced: Revert fix, analyze why, apply corrected fix
+- Document learnings for future fixes
+
+### Risk 2: Fix Breaks Existing Functionality
+**Probability**: Low
+**Impact**: High
+**Severity**: Medium
+**Mitigation**:
+- Run full test suite after each fix
+- Ensure 100% test coverage maintained
+- Run integration tests if applicable
+
+**Contingency Plan**:
+- If functionality breaks: Revert fix, add tests first, then re-apply fix
+- Ensure tests cover the broken functionality
+
+### Risk 3: Deployment Fails
+**Probability**: Medium
+**Impact**: High
+**Severity**: High
+**Mitigation**:
+- Run pre-validate-iac.sh before deployment
+- Fix common errors (environmentSuffix, Retain policies) first
+- Validate resource naming conventions
+
+**Contingency Plan**:
+- If deployment fails: Check logs, identify specific error, apply targeted fix
+- Max 5 deployment attempts per PR
+
+### Risk 4: Test Coverage Drops
+**Probability**: Low
+**Impact**: Medium
+**Severity**: Medium
+**Mitigation**:
+- Add tests before modifying code
+- Ensure 100% coverage maintained throughout
+- Run coverage check after each fix
+
+**Contingency Plan**:
+- If coverage drops: Add missing tests immediately
+- Do not proceed until 100% coverage restored
+
+## Blocker Identification
+
+**Potential Blockers**:
+- [ ] Missing AWS credentials (if deployment needed)
+- [ ] Missing required scripts
+- [ ] Complex merge conflicts
+- [ ] Insufficient test coverage baseline
+- [ ] Platform-specific constraints
+
+**Blocker Mitigation**:
+- AWS credentials: Skip deployment fixes, mark as needs-manual-review
+- Missing scripts: Install/verify scripts in PHASE 0
+- Merge conflicts: Handled in branch sync phase
+- Test coverage: Add tests as part of fix plan
+- Platform constraints: Document and work within constraints
+
+## Success Probability Assessment
+
+**Overall Success Probability**: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "60-70%" elif .high_priority_errors | length > 2 then "75-85%" else "85-95%" end' 2>/dev/null || echo "70-80%")
+
+**Factors Increasing Success**:
+- Clear error messages from GitHub logs
+- Common patterns from lessons_learnt.md
+- Incremental validation approach
+- Comprehensive test coverage
+
+**Factors Decreasing Success**:
+- Complex dependencies between fixes
+- Platform-specific constraints
+- Limited error information
+- Time constraints
+"
+
+echo "⚠️ Risk Assessment:"
+echo "$RISK_ASSESSMENT"
+```
+
+#### 2.2.4 Validation Strategy
+
+**Purpose**: Define comprehensive validation approach at each stage to ensure fixes are correct and don't introduce regressions.
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.2.4: VALIDATION STRATEGY"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Ensure we're in worktree (required for validation commands)
+if [[ ! "$(pwd)" =~ worktree/pr-fix-[^/]+$ ]]; then
+  echo "❌ BLOCKED: Not in worktree directory - validation strategy requires worktree access"
+  exit 1
+fi
+
+VALIDATION_STRATEGY="
+# Validation Strategy for PR #${PR_NUMBER}
+
+**Note**: All validation commands run in worktree context (we're already in worktree/pr-fix-${PR_NUMBER})
+
+## Pre-Fix Validation (Baseline)
+
+**Purpose**: Establish baseline to measure improvement
+
+**Actions** (run in worktree):
+1. Capture current lint errors:
+   \`\`\`bash
+   # Platform-specific lint command
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\")
+       npm run lint 2>&1 | tee /tmp/pr-${PR_NUMBER}-lint-baseline.txt || true
+       ;;
+     \"py\")
+       pipenv run lint 2>&1 | tee /tmp/pr-${PR_NUMBER}-lint-baseline.txt || true
+       ;;
+     \"go\")
+       go vet ./... 2>&1 | tee /tmp/pr-${PR_NUMBER}-lint-baseline.txt || true
+       ;;
+   esac
+   LINT_ERRORS_BASELINE=\$(grep -c \"error\" /tmp/pr-${PR_NUMBER}-lint-baseline.txt || echo \"0\")
+   echo \"Baseline lint errors: \$LINT_ERRORS_BASELINE\"
+   \`\`\`
+
+2. Capture current build errors:
+   \`\`\`bash
+   # Platform-specific build command
+   case \"\$PLATFORM\" in
+     \"cdk\"|\"cdktf\"|\"pulumi\")
+       npm run build 2>&1 | tee /tmp/pr-${PR_NUMBER}-build-baseline.txt || true
+       ;;
+     \"cfn\")
+       # CloudFormation validation
+       aws cloudformation validate-template --template-body file://template.yaml 2>&1 | tee /tmp/pr-${PR_NUMBER}-build-baseline.txt || true
+       ;;
+     \"tf\")
+       terraform validate 2>&1 | tee /tmp/pr-${PR_NUMBER}-build-baseline.txt || true
+       ;;
+   esac
+   BUILD_ERRORS_BASELINE=\$(grep -c \"error\" /tmp/pr-${PR_NUMBER}-build-baseline.txt || echo \"0\")
+   echo \"Baseline build errors: \$BUILD_ERRORS_BASELINE\"
+   \`\`\`
+
+3. Capture current test coverage:
+   \`\`\`bash
+   # Platform-specific coverage command
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\")
+       npm run test:coverage 2>&1 | tee /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || true
+       COVERAGE_BASELINE=\$(grep -oP 'Lines\\s+:\\s+\\K[0-9.]+' /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || echo \"0\")
+       ;;
+     \"py\")
+       pipenv run pytest --cov --cov-report=term 2>&1 | tee /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || true
+       COVERAGE_BASELINE=\$(grep -oP 'TOTAL\\s+\\d+\\s+\\d+\\s+\\K[0-9]+' /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || echo \"0\")
+       ;;
+     \"go\")
+       go test -cover 2>&1 | tee /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || true
+       COVERAGE_BASELINE=\$(grep -oP 'coverage:\\s+\\K[0-9.]+' /tmp/pr-${PR_NUMBER}-coverage-baseline.txt || echo \"0\")
+       ;;
+   esac
+   echo \"Baseline coverage: \$COVERAGE_BASELINE%\"
+   \`\`\`
+
+**Success Criteria**: Baseline captured successfully (now possible since we're in worktree)
+
+## Per-Fix Validation (After Each Fix)
+
+**Purpose**: Ensure each fix is correct and doesn't introduce new issues
+
+**Validation Steps** (after each fix - run in worktree):
+1. **Incremental Validation**:
+   \`\`\`bash
+   bash .claude/scripts/validate-fixes.sh \$FIX_TYPE
+   \`\`\`
+
+2. **Lint Check** (platform-specific):
+   \`\`\`bash
+   # Use platform/language appropriate command
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\") npm run lint ;;
+     \"py\") pipenv run lint ;;
+     \"go\") go vet ./... ;;
+   esac
+   # Verify: Errors should decrease or stay same, never increase
+   \`\`\`
+
+3. **Build Check** (platform-specific):
+   \`\`\`bash
+   # Use platform appropriate command
+   case \"\$PLATFORM\" in
+     \"cdk\"|\"cdktf\"|\"pulumi\") npm run build ;;
+     \"cfn\") aws cloudformation validate-template --template-body file://template.yaml ;;
+     \"tf\") terraform validate ;;
+   esac
+   # Verify: Build succeeds or errors decrease
+   \`\`\`
+
+4. **Test Check** (platform-specific):
+   \`\`\`bash
+   # Use platform/language appropriate command
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\") npm run test:unit ;;
+     \"py\") pipenv run pytest ;;
+     \"go\") go test ./... ;;
+   esac
+   # Verify: All tests pass, coverage maintained at 100%
+   \`\`\`
+
+**Success Criteria**:
+- ✅ No new errors introduced
+- ✅ Existing errors reduced or eliminated
+- ✅ Test coverage maintained at 100%
+- ✅ All tests pass
+
+**Failure Handling**:
+- If validation fails: Revert fix, analyze why, apply corrected fix
+- Document learnings
+
+## Post-Fix Validation (Final)
+
+**Purpose**: Comprehensive validation before marking PR as fixed
+
+**Validation Sequence** (all run in worktree context):
+1. **Lint Validation** (platform-specific):
+   \`\`\`bash
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\") npm run lint ;;
+     \"py\") pipenv run lint ;;
+     \"go\") go vet ./... ;;
+   esac
+   # Must pass with zero errors
+   \`\`\`
+
+2. **Build Validation** (platform-specific):
+   \`\`\`bash
+   case \"\$PLATFORM\" in
+     \"cdk\"|\"cdktf\"|\"pulumi\") npm run build ;;
+     \"cfn\") aws cloudformation validate-template --template-body file://template.yaml ;;
+     \"tf\") terraform validate ;;
+   esac
+   # Must succeed with zero errors
+   \`\`\`
+
+3. **Synth Validation** (if applicable):
+   \`\`\`bash
+   case \"\$PLATFORM\" in
+     \"cdk\"|\"cdktf\") npm run synth ;;
+     \"pulumi\") pulumi preview ;;
+   esac
+   # Must succeed
+   \`\`\`
+
+4. **Unit Test Validation** (platform-specific):
+   \`\`\`bash
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\") npm run test:unit ;;
+     \"py\") pipenv run pytest ;;
+     \"go\") go test ./... ;;
+   esac
+   # Must pass with 100% coverage
+   \`\`\`
+
+5. **Pre-Deployment Validation**:
+   \`\`\`bash
+   bash .claude/scripts/pre-validate-iac.sh
+   # Must pass
+   \`\`\`
+
+6. **Deployment Validation** (if applicable):
+   \`\`\`bash
+   case \"\$PLATFORM\" in
+     \"cdk\"|\"cdktf\"|\"pulumi\") npm run deploy ;;
+     \"cfn\") aws cloudformation deploy --template-file template.yaml --stack-name test-stack ;;
+     \"tf\") terraform apply -auto-approve ;;
+   esac
+   # Must succeed
+   \`\`\`
+
+7. **Integration Test Validation** (if deployed):
+   \`\`\`bash
+   case \"\$LANGUAGE\" in
+     \"ts\"|\"js\") npm run test:integration ;;
+     \"py\") pipenv run pytest tests/integration ;;
+     \"go\") go test ./tests/integration ;;
+   esac
+   # Must pass using real AWS outputs
+   \`\`\`
+
+**Success Criteria**:
+- ✅ All validations pass
+- ✅ Zero lint errors
+- ✅ Zero build errors
+- ✅ 100% test coverage (statements, functions, lines)
+- ✅ Deployment successful (if applicable)
+- ✅ All integration tests pass (if applicable)
+
+## Validation Metrics
+
+**Improvement Tracking**:
+- Lint errors: \$LINT_ERRORS_BASELINE → 0 (target)
+- Build errors: \$BUILD_ERRORS_BASELINE → 0 (target)
+- Test coverage: \$COVERAGE_BASELINE% → 100% (target)
+
+**Success Metrics**:
+- Fixes applied: [count]
+- Errors fixed: [count]
+- Tests added: [count]
+- Time taken: [duration]
+"
+
+echo "✅ Validation Strategy:"
+echo "$VALIDATION_STRATEGY"
+```
+
+#### 2.2.5 Enhanced Solution Approach
+
+**Purpose**: Justify the chosen approach with comparison matrix and cost/benefit analysis.
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.2.5: ENHANCED SOLUTION APPROACH"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+SOLUTION_APPROACH="
+# Enhanced Solution Approach for PR #${PR_NUMBER}
+
+## Chosen Strategy
+
+**Primary Strategy**: [e.g., 'Systematic resource name updates with environmentSuffix']
+
+**Rationale**:
+1. Follows established pattern from lessons_learnt.md
+2. Minimal code changes, lower risk of introducing bugs
+3. Addresses root cause directly rather than symptoms
+4. Can be validated incrementally
+5. Maintains backward compatibility where possible
+
+## Approach Comparison Matrix
+
+| Approach | Pros | Cons | Risk | Time | Selected |
+|----------|------|------|------|------|----------|
+| **Chosen: Systematic Updates** | - Follows patterns<br>- Low risk<br>- Incremental | - May take longer | Low | Medium | ✅ |
+| **Alternative 1: Complete Rewrite** | - Clean slate<br>- Modern patterns | - High risk<br>- Time consuming | High | High | ❌ |
+| **Alternative 2: Quick Fixes** | - Fast<br>- Minimal changes | - May miss root cause<br>- Higher risk | Medium | Low | ❌ |
+| **Alternative 3: Manual Review** | - Human judgment | - Slow<br>- Not scalable | Low | Very High | ❌ |
+
+## Cost/Benefit Analysis
+
+### Chosen Approach
+
+**Costs**:
+- Time: [estimated time]
+- Complexity: [complexity level]
+- Risk: [risk level]
+- Resources: [resources needed]
+
+**Benefits**:
+- Fixes root cause permanently
+- Prevents future similar issues
+- Maintains code quality
+- Follows best practices
+- Can be validated incrementally
+
+**ROI**: [High/Medium/Low] - Benefits significantly outweigh costs
+
+### Alternative Approaches (Rejected)
+
+**Alternative 1: [Name]**
+- Why rejected: [reason]
+- Cost: [cost]
+- Risk: [risk]
+
+**Alternative 2: [Name]**
+- Why rejected: [reason]
+- Cost: [cost]
+- Risk: [risk]
+
+## Risk Mitigation Strategy
+
+**Primary Risks**:
+1. **Risk**: Fix introduces new errors
+   **Mitigation**: Incremental validation after each fix
+   **Contingency**: Revert and re-apply with corrections
+
+2. **Risk**: Fix breaks existing functionality
+   **Mitigation**: Comprehensive test coverage (100%)
+   **Contingency**: Add tests first, then apply fix
+
+3. **Risk**: Deployment fails
+   **Mitigation**: Pre-validate before deployment
+   **Contingency**: Fix common errors first, retry with fixes
+
+## Success Criteria
+
+**Must Have** (Blocking):
+- ✅ All resource names include environmentSuffix
+- ✅ GitHub Deploy stage passes
+- ✅ 100% test coverage maintained
+- ✅ All lint errors resolved
+- ✅ All build errors resolved
+
+**Should Have** (Important):
+- ✅ Code follows best practices
+- ✅ No regressions introduced
+- ✅ Documentation updated if needed
+
+**Nice to Have** (Optional):
+- ✅ Performance improvements
+- ✅ Code simplification
+- ✅ Additional test cases
+
+## Validation of Approach
+
+**How we'll know the approach worked**:
+1. All GitHub pipeline stages pass ✅
+2. Zero lint/build errors ✅
+3. 100% test coverage maintained ✅
+4. Deployment successful ✅
+5. No regressions in existing functionality ✅
+
+**If approach fails**:
+- Fallback to alternative approach
+- Document learnings
+- Update lessons_learnt.md
+"
+
+echo "💡 Enhanced Solution Approach:"
+echo "$SOLUTION_APPROACH"
+```
+
+#### 2.2.6 Planning Review & Approval
+
+**Purpose**: Self-review checklist to ensure planning is complete and comprehensive before proceeding.
+
+```bash
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.2.6: PLANNING REVIEW & APPROVAL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+echo "🔍 Reviewing planning completeness..."
+
+PLANNING_REVIEW="
+# Planning Review Checklist for PR #${PR_NUMBER}
+
+## Context Gathering Review
+- [ ] PR details gathered (branch, title, author, files)
+- [ ] Commit history reviewed
+- [ ] Platform/language identified
+- [ ] Dependencies and constraints understood
+- [ ] Current codebase state assessed
+- [ ] Similar patterns from lessons_learnt.md reviewed
+
+## Root Cause Analysis Review
+- [ ] Root causes identified with evidence
+- [ ] Impact matrix created (severity × frequency)
+- [ ] Dependency analysis completed
+- [ ] Fix complexity assessed
+- [ ] Time estimate provided
+
+## Fix Planning Review
+- [ ] Fix plan has specific file paths and line numbers
+- [ ] Fix sequencing defined (dependencies identified)
+- [ ] Parallel vs sequential execution planned
+- [ ] Validation strategy for each fix step defined
+- [ ] Rollback plan for each fix created
+- [ ] Resource requirements identified
+- [ ] Time/complexity estimation provided
+
+## Risk Assessment Review
+- [ ] Risk matrix created
+- [ ] All major risks identified
+- [ ] Mitigation strategies defined
+- [ ] Contingency plans created
+- [ ] Blockers identified and mitigation planned
+- [ ] Success probability assessed
+
+## Validation Strategy Review
+- [ ] Pre-fix validation (baseline) defined
+- [ ] Per-fix validation steps defined
+- [ ] Post-fix validation sequence defined
+- [ ] Success criteria clear and measurable
+- [ ] Failure handling defined
+
+## Solution Approach Review
+- [ ] Chosen approach justified
+- [ ] Alternatives considered and compared
+- [ ] Cost/benefit analysis completed
+- [ ] Risk mitigation strategy defined
+- [ ] Success criteria defined
+- [ ] Validation method for approach defined
+
+## Overall Planning Quality Check
+- [ ] Plan is actionable (can be executed step-by-step)
+- [ ] Plan is comprehensive (covers all aspects)
+- [ ] Plan is realistic (time/effort estimates reasonable)
+- [ ] Plan is risk-aware (risks identified and mitigated)
+- [ ] Plan is validated (validation strategy defined)
+
+## Approval to Proceed
+
+**Planning Status**: [ ] Complete | [ ] Needs Improvement
+
+**If Complete**:
+- ✅ All checkboxes checked
+- ✅ Planning is comprehensive
+- ✅ Ready to proceed to worktree setup
+
+**If Needs Improvement**:
+- ⚠️ Identify missing elements
+- ⚠️ Enhance planning
+- ⚠️ Re-review before proceeding
+
+**Approved by**: Agent
+**Date**: $(date +%Y-%m-%d)
+**Ready to Proceed**: [ ] Yes | [ ] No
+"
+
+echo "$PLANNING_REVIEW"
+
+# Self-validation
+echo ""
+echo "✅ Performing self-validation..."
+
+# Check if all critical elements are present
+CRITICAL_ELEMENTS=(
+  "ROOT_CAUSE"
+  "FIX_PLAN"
+  "RISK_ASSESSMENT"
+  "VALIDATION_STRATEGY"
+  "SOLUTION_APPROACH"
+)
+
+ALL_PRESENT=true
+for element in "${CRITICAL_ELEMENTS[@]}"; do
+  if [ -z "${!element}" ]; then
+    echo "⚠️ Missing: $element"
+    ALL_PRESENT=false
+  fi
+done
+
+if [ "$ALL_PRESENT" = true ]; then
+  echo "✅ All critical planning elements present"
+  echo "✅ Planning review complete"
+  echo "✅ APPROVED to proceed to worktree setup"
+else
+  echo "❌ BLOCKED: Missing critical planning elements"
+  echo "❌ Cannot proceed until planning is complete"
+  exit 1
+fi
+```
+
+#### 2.2.7 Document Comprehensive Planning in Status File
+
+```bash
+echo ""
+echo "💾 Saving comprehensive planning to status file..."
+
+# Combine all planning elements
+COMPREHENSIVE_PLANNING="
+# Comprehensive Planning for PR #${PR_NUMBER}
+
+## Context Gathering
+[Context gathered in PHASE 2.1.0]
+
+## Root Cause Analysis
+$ROOT_CAUSE
+
+## Comprehensive Fix Plan
+$FIX_PLAN
+
+## Risk Assessment
+$RISK_ASSESSMENT
+
+## Validation Strategy
+$VALIDATION_STRATEGY
+
+## Enhanced Solution Approach
+$SOLUTION_APPROACH
+
+## Planning Review
+$PLANNING_REVIEW
+"
+
+# Update status file with comprehensive planning
+bash .claude/scripts/pr-manager.sh update-analysis \
+  $PR_NUMBER \
+  "$ROOT_CAUSE" \
+  "$FIX_PLAN" \
+  "$SOLUTION_APPROACH"
+
+# Also save comprehensive planning to a file for reference
+echo "$COMPREHENSIVE_PLANNING" > "/tmp/pr-${PR_NUMBER}-comprehensive-planning.md"
+
+if [ $? -eq 0 ]; then
+  echo "✅ Comprehensive planning documented"
+  echo "  - Saved to synth_pr_status.json"
+  echo "  - Saved to /tmp/pr-${PR_NUMBER}-comprehensive-planning.md"
+else
+  echo "⚠️ Warning: Could not save planning to status file"
+fi
+
+echo ""
+echo "📊 View your comprehensive planning with:"
+echo "   bash .claude/scripts/pr-status.sh pr $PR_NUMBER"
+echo "   cat /tmp/pr-${PR_NUMBER}-comprehensive-planning.md"
+echo ""
+```
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.2 - COMPREHENSIVE PLANNING COMPLETE - PR #<number>
+**PR**: #<number>
+**PROGRESS**: 2.2/2.11 phases completed
+**NEXT ACTION**: Analyze GitHub pipeline failures in detail
+**ISSUES**: NONE
+**BLOCKED**: NO
+**PLANNING**: ✅ Context gathered | ✅ Root cause analyzed | ✅ Fix plan created | ✅ Risk assessed | ✅ Validation strategy defined | ✅ Solution approach justified | ✅ Planning reviewed
+```
+
+**CHECKPOINT PR-C**: Comprehensive Planning Completeness
+- ✅ Context gathered (PR details, platform, dependencies)
+- ✅ Root cause documented with evidence and impact matrix
+- ✅ Comprehensive fix plan created with sequencing and dependencies
+- ✅ Risk assessment completed with mitigation strategies
+- ✅ Validation strategy defined (pre-fix, per-fix, post-fix)
+- ✅ Enhanced solution approach justified with comparison matrix
+- ✅ Planning reviewed and approved
+- ✅ All planning saved to status file
+
+**CHECKPOINT PR-D**: Fix Plan Validation
+- ✅ Plan has specific file paths and line numbers
+- ✅ Plan includes validation steps for each fix
+- ✅ Plan addresses all failed stages
+- ✅ Plan is executable (clear steps)
+- ✅ Plan includes dependencies and sequencing
+- ✅ Plan includes rollback strategies
+- ✅ Plan includes time/complexity estimates
+
+**If checkpoints fail**: Re-analyze, improve documentation, re-validate.
+
+**CHECKPOINT**: Review your analysis before proceeding. Make sure:
+- ✅ Root cause is specific and evidence-based
+- ✅ Fix plan has concrete, actionable steps
+- ✅ Solution approach is justified
+- ✅ Analysis is documented in status file
+
+---
+
+### PHASE 2.3: Analyze GitHub Pipeline Failures (Detailed)
 
 **CRITICAL**: Get actual failure details from GitHub Actions, not just failure reasons from JSON.
 
@@ -1783,7 +1894,7 @@ fi
 **FAILED STAGES**: <stage 1>, <stage 2>
 ```
 
-#### 2.4.5 Pre-Fix Build Validation (Baseline Assessment)
+#### 2.3.1 Pre-Fix Build Validation (Baseline Assessment)
 
 **⚠️ CRITICAL**: Validate current state BEFORE applying fixes to establish baseline.
 
