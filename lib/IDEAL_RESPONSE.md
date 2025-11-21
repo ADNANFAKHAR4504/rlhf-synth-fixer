@@ -1068,9 +1068,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt ConfigRecorderStarter.Arn
       RecorderName: !Ref ConfigRecorder
-    DependsOn:
-      - ConfigRecorder
-      - DeliveryChannel
+    DependsOn: DeliveryChannel
 
   ConfigRuleEncryptedVolumes:
     Type: AWS::Config::ConfigRule

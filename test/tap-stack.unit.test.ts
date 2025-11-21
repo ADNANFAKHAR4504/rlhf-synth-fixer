@@ -909,6 +909,10 @@ describe('TapStack - Production-grade Multi-tier AWS Infrastructure Unit Tests',
       validateResourceDependencies('EC2Instance1', ['PrivateSubnet1']);
       validateResourceDependencies('EC2Instance2', ['PrivateSubnet2']);
     });
+
+    test('Config service dependencies are properly established', () => {
+      validateResourceDependencies('StartConfigRecorder', ['DeliveryChannel']);
+    });
   });
 
   // ======================

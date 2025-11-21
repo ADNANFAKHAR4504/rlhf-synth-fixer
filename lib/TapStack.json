@@ -1946,10 +1946,7 @@
                     "Ref": "ConfigRecorder"
                 }
             },
-            "DependsOn": [
-                "ConfigRecorder",
-                "DeliveryChannel"
-            ]
+            "DependsOn": "DeliveryChannel"
         },
         "ConfigRuleEncryptedVolumes": {
             "Type": "AWS::Config::ConfigRule",
