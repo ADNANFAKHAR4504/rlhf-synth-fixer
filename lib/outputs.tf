@@ -121,6 +121,21 @@ output "kms_ebs_alias" {
   description = "KMS key alias for EBS with PR number"
 }
 
+output "cloudwatch_alarm_arns" {
+  value = {
+    alb_5xx_errors = aws_cloudwatch_metric_alarm.alb_5xx_errors.arn
+    rds_cpu        = aws_cloudwatch_metric_alarm.rds_cpu.arn
+    rds_storage    = aws_cloudwatch_metric_alarm.rds_storage.arn
+    asg_unhealthy  = aws_cloudwatch_metric_alarm.asg_unhealthy_instances.arn
+  }
+  description = "ARNs of CloudWatch alarms"
+}
+
+output "sns_topic_arn" {
+  value       = aws_sns_topic.alarms.arn
+  description = "ARN of the SNS topic for alarms"
+}
+
 output "resource_summary" {
   value = {
     name_prefix    = local.name_prefix

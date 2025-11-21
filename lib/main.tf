@@ -58,6 +58,7 @@ resource "aws_security_group" "alb" {
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from internet"
   }
 
   ingress {
@@ -65,6 +66,7 @@ resource "aws_security_group" "alb" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from internet"
   }
 
   egress {
@@ -145,6 +147,7 @@ module "alb" {
   public_subnet_ids          = module.vpc.public_subnet_ids
   security_group_id          = aws_security_group.alb.id
   enable_deletion_protection = var.enable_deletion_protection
+  certificate_arn            = var.certificate_arn
   tags                       = local.common_tags
 }
 

@@ -30,6 +30,12 @@ variable "log_retention_days" {
   default     = 90
 }
 
+variable "certificate_arn" {
+  description = "ARN of the ACM certificate for HTTPS listener (optional)"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

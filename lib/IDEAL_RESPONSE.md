@@ -1868,17 +1868,20 @@ output "asg_name" {
 ```
 
 File: lib/modules/asg/user_data.sh
+
 ```bash
 #!/bin/bash
 # User data script for EC2 instances in ${environment}
+# This script sets up Apache and creates test endpoints for integration testing
 
 set -e
 
 # Update system
 yum update -y
-amazon-linux-extras enable postgresql14
+# Install Apache, jq, and PostgreSQL 15 client (newer version for SCRAM auth)
+amazon-linux-extras enable postgresql15
 yum clean metadata
-yum install -y httpd jq postgresql
+yum install -y httpd jq postgresql15
 
 # Start Apache
 systemctl start httpd
@@ -2158,6 +2161,7 @@ systemctl restart httpd
 # Log completion
 echo "User data script completed successfully for ${environment}" >> /var/log/user-data.log
 ```
+
 File: lib/modules/rds/main.tf
 
 ```hcl

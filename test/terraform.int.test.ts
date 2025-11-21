@@ -510,6 +510,206 @@ describe('Deployed Infrastructure Validation', () => {
       ).toBe('AES256');
     }, TEST_TIMEOUT);
   });
+
+  // --- Monitoring ---
+  describe('Monitoring (CloudWatch)', () => {
+    test('SNS topic exists for alarms', async () => {
+      const snsTopicArn = outputs.sns_topic_arn;
+      expect(snsTopicArn).toBeDefined();
+      expect(snsTopicArn).toMatch(/^arn:aws:sns:/);
+
+      // Verify SNS topic exists
+      const sns = new AWS.SNS({ region: AWS_REGION });
+      const topicName = snsTopicArn.split(':').pop();
+      const result = await awsCall(() =>
+        sns.getTopicAttributes({ TopicArn: snsTopicArn }).promise()
+      );
+
+      expect(result.Attributes).toBeDefined();
+      expect(result.Attributes!.TopicArn).toBe(snsTopicArn);
+    }, TEST_TIMEOUT);
+
+    test('CloudWatch alarms exist for ALB, RDS, and ASG', async () => {
+      let alarmArns = outputs.cloudwatch_alarm_arns;
+      if (typeof alarmArns === 'string') alarmArns = JSON.parse(alarmArns);
+
+      expect(alarmArns).toBeDefined();
+      expect(alarmArns.alb_5xx_errors).toBeDefined();
+      expect(alarmArns.rds_cpu).toBeDefined();
+      expect(alarmArns.rds_storage).toBeDefined();
+      expect(alarmArns.asg_unhealthy).toBeDefined();
+
+      // Query alarms by their ARNs to verify they exist
+      const expectedArns = [
+        alarmArns.alb_5xx_errors,
+        alarmArns.rds_cpu,
+        alarmArns.rds_storage,
+        alarmArns.asg_unhealthy,
+      ];
+
+      for (const expectedArn of expectedArns) {
+        expect(expectedArn).toBeDefined();
+        expect(expectedArn).toMatch(/^arn:aws:cloudwatch:/);
+
+        // Extract alarm name from ARN: arn:aws:cloudwatch:region:account:alarm:name
+        const arnParts = expectedArn.split(':');
+        const alarmName = arnParts[arnParts.length - 1];
+
+        // Query the specific alarm by name
+        const result = await awsCall(() =>
+          cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise()
+        );
+
+        expect(result.MetricAlarms).toBeDefined();
+        expect(result.MetricAlarms!.length).toBeGreaterThan(0);
+        expect(result.MetricAlarms![0].AlarmArn).toBe(expectedArn);
+        expect(result.MetricAlarms![0].AlarmName).toBe(alarmName);
+      }
+    }, TEST_TIMEOUT);
+
+    test('ALB 5XX errors alarm has correct configuration', async () => {
+      let alarmArns = outputs.cloudwatch_alarm_arns;
+      if (typeof alarmArns === 'string') alarmArns = JSON.parse(alarmArns);
+
+      const arnParts = alarmArns.alb_5xx_errors.split(':');
+      const alarmName = arnParts[arnParts.length - 1];
+
+      const result = await awsCall(() =>
+        cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise()
+      );
+
+      const alarm = result.MetricAlarms![0];
+      expect(alarm.MetricName).toBe('HTTPCode_Target_5XX_Count');
+      expect(alarm.Namespace).toBe('AWS/ApplicationELB');
+      expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(alarm.Threshold).toBe(10);
+      expect(alarm.EvaluationPeriods).toBe(2);
+      expect(alarm.Period).toBe(300);
+      expect(alarm.Statistic).toBe('Sum');
+      expect(alarm.AlarmActions).toContain(outputs.sns_topic_arn);
+    }, TEST_TIMEOUT);
+
+    test('RDS CPU alarm has correct configuration', async () => {
+      let alarmArns = outputs.cloudwatch_alarm_arns;
+      if (typeof alarmArns === 'string') alarmArns = JSON.parse(alarmArns);
+
+      const arnParts = alarmArns.rds_cpu.split(':');
+      const alarmName = arnParts[arnParts.length - 1];
+
+      const result = await awsCall(() =>
+        cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise()
+      );
+
+      const alarm = result.MetricAlarms![0];
+      expect(alarm.MetricName).toBe('CPUUtilization');
+      expect(alarm.Namespace).toBe('AWS/RDS');
+      expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(alarm.Threshold).toBe(80);
+      expect(alarm.EvaluationPeriods).toBe(2);
+      expect(alarm.Period).toBe(300);
+      expect(alarm.Statistic).toBe('Average');
+      expect(alarm.AlarmActions).toContain(outputs.sns_topic_arn);
+    }, TEST_TIMEOUT);
+
+    test('RDS storage alarm has correct configuration', async () => {
+      let alarmArns = outputs.cloudwatch_alarm_arns;
+      if (typeof alarmArns === 'string') alarmArns = JSON.parse(alarmArns);
+
+      const arnParts = alarmArns.rds_storage.split(':');
+      const alarmName = arnParts[arnParts.length - 1];
+
+      const result = await awsCall(() =>
+        cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise()
+      );
+
+      const alarm = result.MetricAlarms![0];
+      expect(alarm.MetricName).toBe('FreeStorageSpace');
+      expect(alarm.Namespace).toBe('AWS/RDS');
+      expect(alarm.ComparisonOperator).toBe('LessThanThreshold');
+      expect(alarm.Threshold).toBe(2147483648); // 2GB in bytes
+      expect(alarm.EvaluationPeriods).toBe(1);
+      expect(alarm.Period).toBe(300);
+      expect(alarm.Statistic).toBe('Average');
+      expect(alarm.AlarmActions).toContain(outputs.sns_topic_arn);
+    }, TEST_TIMEOUT);
+
+    test('ASG unhealthy instances alarm has correct configuration', async () => {
+      let alarmArns = outputs.cloudwatch_alarm_arns;
+      if (typeof alarmArns === 'string') alarmArns = JSON.parse(alarmArns);
+
+      const arnParts = alarmArns.asg_unhealthy.split(':');
+      const alarmName = arnParts[arnParts.length - 1];
+
+      const result = await awsCall(() =>
+        cloudwatch.describeAlarms({ AlarmNames: [alarmName] }).promise()
+      );
+
+      const alarm = result.MetricAlarms![0];
+      expect(alarm.MetricName).toBe('GroupInServiceInstances');
+      expect(alarm.Namespace).toBe('AWS/AutoScaling');
+      expect(alarm.ComparisonOperator).toBe('LessThanThreshold');
+      expect(alarm.EvaluationPeriods).toBe(2);
+      expect(alarm.Period).toBe(300);
+      expect(alarm.Statistic).toBe('Average');
+      expect(alarm.AlarmActions).toContain(outputs.sns_topic_arn);
+    }, TEST_TIMEOUT);
+  });
+
+  // --- HTTPS Support ---
+  describe('HTTPS Support', () => {
+    test('ALB security group allows HTTPS (443)', async () => {
+      const vpcId = outputs.vpc_id;
+      expect(vpcId).toBeDefined();
+
+      const result = await awsCall(() =>
+        ec2
+          .describeSecurityGroups({
+            Filters: [
+              { Name: 'vpc-id', Values: [vpcId] },
+              { Name: 'group-name', Values: ['*alb*'] },
+            ],
+          })
+          .promise()
+      );
+
+      const albSg = result.SecurityGroups![0];
+      expect(albSg).toBeDefined();
+      const httpsRule = albSg.IpPermissions!.find((p) => p.FromPort === 443 && p.ToPort === 443);
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule!.IpRanges!.some((r) => r.CidrIp === '0.0.0.0/0')).toBe(true);
+    }, TEST_TIMEOUT);
+
+    test('RDS backup window does not conflict with maintenance window', async () => {
+      const rdsIdentifier = outputs.rds_identifier;
+      expect(rdsIdentifier).toBeDefined();
+
+      const result = await awsCall(() =>
+        rds
+          .describeDBInstances({
+            DBInstanceIdentifier: rdsIdentifier,
+          })
+          .promise()
+      );
+
+      const dbInstance = result.DBInstances![0];
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance.PreferredBackupWindow).toBeDefined();
+      expect(dbInstance.PreferredMaintenanceWindow).toBeDefined();
+
+      // Backup window should be 02:00-03:00
+      expect(dbInstance.PreferredBackupWindow).toMatch(/02:00-03:00/);
+      // Maintenance window should be sun:04:00-sun:05:00
+      expect(dbInstance.PreferredMaintenanceWindow).toMatch(/sun:04:00-sun:05:00/);
+
+      // Verify they don't overlap
+      const backupWindow = dbInstance.PreferredBackupWindow!;
+      const maintenanceWindow = dbInstance.PreferredMaintenanceWindow!;
+
+      // Backup ends at 03:00, maintenance starts at 04:00, so no overlap
+      expect(backupWindow).not.toContain('04:00');
+      expect(backupWindow).not.toContain('05:00');
+    }, TEST_TIMEOUT);
+  });
 });
 
 // =============================================================================

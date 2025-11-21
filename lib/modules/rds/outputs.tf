@@ -13,3 +13,8 @@ output "port" {
   value       = aws_db_instance.main.port
   description = "Database port"
 }
+
+output "db_identifier" {
+  value       = aws_db_instance.main.identifier
+  description = "RDS instance identifier"
+}

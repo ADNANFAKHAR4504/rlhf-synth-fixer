@@ -216,6 +216,10 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(variablesContent).toContain('variable "allowed_ip_addresses"');
       expect(variablesContent).toContain('variable "blocked_ip_addresses"');
     });
+
+    test('should define certificate_arn variable for HTTPS', () => {
+      expect(variablesContent).toContain('variable "certificate_arn"');
+    });
   });
 
   describe('Environment-Specific tfvars Files', () => {
@@ -450,6 +454,18 @@ describe('Terraform Configuration Unit Tests', () => {
     test('should output resource_summary', () => {
       expect(outputsContent).toContain('output "resource_summary"');
     });
+
+    test('should output CloudWatch alarm ARNs', () => {
+      expect(outputsContent).toContain('output "cloudwatch_alarm_arns"');
+      expect(outputsContent).toContain('alb_5xx_errors');
+      expect(outputsContent).toContain('rds_cpu');
+      expect(outputsContent).toContain('rds_storage');
+      expect(outputsContent).toContain('asg_unhealthy');
+    });
+
+    test('should output SNS topic ARN', () => {
+      expect(outputsContent).toContain('output "sns_topic_arn"');
+    });
   });
 
   describe('VPC Module', () => {
@@ -513,8 +529,27 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(albContent).toContain('resource "aws_lb_target_group" "main"');
     });
 
-    test('should create listener', () => {
-      expect(albContent).toMatch(/resource\s+"aws_lb_listener"/);
+    test('should create HTTP listener', () => {
+      expect(albContent).toContain('resource "aws_lb_listener" "http"');
+      expect(albContent).toContain('port              = "80"');
+      expect(albContent).toContain('protocol          = "HTTP"');
+    });
+
+    test('should create HTTPS listener when certificate is provided', () => {
+      expect(albContent).toContain('resource "aws_lb_listener" "https"');
+      expect(albContent).toContain('count = var.certificate_arn != "" ? 1 : 0');
+      expect(albContent).toContain('port              = "443"');
+      expect(albContent).toContain('protocol          = "HTTPS"');
+      expect(albContent).toContain('ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"');
+      expect(albContent).toContain('certificate_arn   = var.certificate_arn');
+    });
+
+    test('HTTP listener should redirect to HTTPS when certificate is provided', () => {
+      expect(albContent).toContain('type = var.certificate_arn != "" ? "redirect" : "forward"');
+      expect(albContent).toContain('dynamic "redirect"');
+      expect(albContent).toContain('port        = "443"');
+      expect(albContent).toContain('protocol    = "HTTPS"');
+      expect(albContent).toContain('status_code = "HTTP_301"');
     });
 
     test('should create S3 bucket for access logs', () => {
@@ -621,6 +656,12 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('should configure backup retention', () => {
       expect(rdsContent).toContain('backup_retention_period');
+    });
+
+    test('should configure backup window to avoid conflict with maintenance window', () => {
+      expect(rdsContent).toContain('backup_window           = "02:00-03:00"');
+      expect(rdsContent).toContain('maintenance_window      = "sun:04:00-sun:05:00"');
+      // Backup window (02:00-03:00) should not overlap with maintenance window (04:00-05:00)
     });
 
     test('should skip final snapshot for non-prod', () => {
@@ -836,6 +877,80 @@ describe('Terraform Configuration Unit Tests', () => {
       const moduleMatches = mainContent.match(/module\s+"[^"]+"\s*{[^}]*environment[^}]*}/gs);
       expect(moduleMatches).toBeTruthy();
       expect(moduleMatches!.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Monitoring Configuration (monitoring.tf)', () => {
+    const monitoringTfPath = path.join(LIB_DIR, 'monitoring.tf');
+    let monitoringContent: string;
+
+    beforeAll(() => {
+      if (fs.existsSync(monitoringTfPath)) {
+        monitoringContent = parseHCLFile(monitoringTfPath);
+      } else {
+        monitoringContent = '';
+      }
+    });
+
+    test('should define SNS topic for alarms', () => {
+      expect(monitoringContent).toContain('resource "aws_sns_topic" "alarms"');
+    });
+
+    test('should define ALB 5XX errors alarm', () => {
+      expect(monitoringContent).toContain('resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors"');
+      expect(monitoringContent).toContain('metric_name         = "HTTPCode_Target_5XX_Count"');
+      expect(monitoringContent).toContain('namespace           = "AWS/ApplicationELB"');
+      expect(monitoringContent).toContain('comparison_operator = "GreaterThanThreshold"');
+      expect(monitoringContent).toContain('threshold           = 10');
+    });
+
+    test('should define RDS CPU alarm', () => {
+      expect(monitoringContent).toContain('resource "aws_cloudwatch_metric_alarm" "rds_cpu"');
+      expect(monitoringContent).toContain('metric_name         = "CPUUtilization"');
+      expect(monitoringContent).toContain('namespace           = "AWS/RDS"');
+      expect(monitoringContent).toContain('threshold           = 80');
+    });
+
+    test('should define RDS storage alarm', () => {
+      expect(monitoringContent).toContain('resource "aws_cloudwatch_metric_alarm" "rds_storage"');
+      expect(monitoringContent).toContain('metric_name         = "FreeStorageSpace"');
+      expect(monitoringContent).toContain('namespace           = "AWS/RDS"');
+      expect(monitoringContent).toContain('comparison_operator = "LessThanThreshold"');
+      expect(monitoringContent).toContain('threshold           = 2147483648'); // 2GB in bytes
+    });
+
+    test('should define ASG unhealthy instances alarm', () => {
+      expect(monitoringContent).toContain('resource "aws_cloudwatch_metric_alarm" "asg_unhealthy_instances"');
+      expect(monitoringContent).toContain('metric_name         = "GroupInServiceInstances"');
+      expect(monitoringContent).toContain('namespace           = "AWS/AutoScaling"');
+      expect(monitoringContent).toContain('comparison_operator = "LessThanThreshold"');
+    });
+
+    test('all alarms should be connected to SNS topic', () => {
+      expect(monitoringContent).toContain('alarm_actions       = [aws_sns_topic.alarms.arn]');
+    });
+
+    test('alarms should have proper evaluation periods', () => {
+      expect(monitoringContent).toMatch(/evaluation_periods\s*=\s*[12]/);
+    });
+
+    test('alarms should have proper periods', () => {
+      expect(monitoringContent).toContain('period              = 300');
+    });
+  });
+
+  describe('ALB Module Variables', () => {
+    const albVariablesPath = path.join(MODULES_DIR, 'alb', 'variables.tf');
+    let albVariablesContent: string;
+
+    beforeAll(() => {
+      albVariablesContent = parseHCLFile(albVariablesPath);
+    });
+
+    test('should define certificate_arn variable', () => {
+      expect(albVariablesContent).toContain('variable "certificate_arn"');
+      expect(albVariablesContent).toContain('description = "ARN of the ACM certificate for HTTPS listener (optional)"');
+      expect(albVariablesContent).toContain('default     = ""');
     });
   });
 });

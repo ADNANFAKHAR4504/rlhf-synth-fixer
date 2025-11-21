@@ -106,3 +106,9 @@ variable "blocked_countries" {
   type        = list(string)
   default     = []
 }
+
+variable "certificate_arn" {
+  description = "ARN of the ACM certificate for HTTPS listener (optional)"
+  type        = string
+  default     = ""
+}
