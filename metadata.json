@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912526",
+  "team": "synth",
+  "startedAt": "2025-11-21T09:20:27.863202",
+  "subtask": "Create a Pulumi Pythonprogram to deploy a new cloud environment for transaction processing. The configuration must: 1. Create a VPC with 2 public and 2 private subnets across 2 availability zones. 2. Deploy an ECS cluster with Fargate compute for running containerized services. 3. Set up RDS Aurora PostgreSQL cluster with one writer and one reader instance. 4. Configure an Application Load Balancer with target groups for ECS services. 5. Implement proper IAM roles for ECS tasks with least-privilege access to RDS and S3. 6. Create S3 buckets for application logs and processed transaction data. 7. Set up CloudWatch Log Groups with 30-day retention for all services. 8. Configure security groups allowing only necessary traffic between components. 9. Output the ALB DNS name, RDS endpoint, and S3 bucket names. Expected output: A Pulumi Pythonprogram that provisions a complete cloud environment ready for deploying transaction processing containers, with proper networking, security, and monitoring configurations in place.",
+  "subject_labels": [
+    "vpc",
+    "ecs",
+    "rds",
+    "alb",
+    "iam",
+    "s3",
+    "cloudwatch",
+    "security-groups"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ELB",
+    "IAM",
+    "S3",
+    "CloudWatch",
+    "Route53",
+    "NAT Gateway"
+  ],
+  "training_quality": 9
+}

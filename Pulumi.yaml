@@ -1,0 +1,13 @@
+name: transaction-processing
+runtime: python
+description: Cloud environment for transaction processing with ECS Fargate and Aurora PostgreSQL
+config:
+  environment_suffix:
+    description: Environment suffix for resource naming
+    default: dev
+  region:
+    description: AWS region to deploy to
+    default: us-east-1
+  db_password:
+    description: Database master password
+    secret: true
