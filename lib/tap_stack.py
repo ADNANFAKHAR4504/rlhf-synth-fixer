@@ -372,6 +372,14 @@ class TapStack(Stack):
         # Stack Outputs
         CfnOutput(
             self,
+            "VPCId",
+            value=vpc.vpc_id,
+            description="VPC ID",
+            export_name=f"vpc-id-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
             "ALBDNSName",
             value=alb.load_balancer_dns_name,
             description="Application Load Balancer DNS Name",
