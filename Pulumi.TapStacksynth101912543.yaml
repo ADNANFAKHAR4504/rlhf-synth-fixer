@@ -1,0 +1,8 @@
+encryptionsalt: v1:SFGPQjUewAY=:v1:z+jaXuyvTABqJRoK:7oD4C4xKGQIF8uwccd3ilS1kjrvmtQ==
+config:
+  aws:defaultTags: '{"tags":{"Environment":"synth101912543","Repository":"synth-101912543","Author":"Arpit Patidar","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-11-21T12:53:52Z","ManagedBy":"pulumi"}}'
+  TapStack:environmentSuffix: synth101912543
+  TapStack:environment: dev
+  TapStack:vpcCidr: 10.0.0.0/16
+  TapStack:enableMultiAZ: "false"
+  aws:region: us-east-1
