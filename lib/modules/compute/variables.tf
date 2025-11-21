@@ -10,6 +10,11 @@ variable "project_name" {
   type        = string
 }
 
+variable "pr_number" {
+  description = "PR number for resource identification"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "VPC ID"
   type        = string
@@ -50,6 +55,11 @@ variable "s3_bucket_arn" {
   type        = string
 }
 
+variable "s3_bucket_name" {
+  description = "Name of the S3 bucket"
+  type        = string
+}
+
 variable "db_endpoint" {
   description = "RDS endpoint"
   type        = string
@@ -67,9 +77,15 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database password"
+  description = "Database password (deprecated - using Secrets Manager)"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "db_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing DB credentials"
+  type        = string
 }
 
 variable "log_retention" {

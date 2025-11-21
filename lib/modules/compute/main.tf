@@ -1,7 +1,7 @@
 # modules/compute/main.tf
 
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix    = "${var.project_name}-${var.pr_number}"
   container_name = "payment-processor"
 }
 
@@ -9,7 +9,7 @@ locals {
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${local.name_prefix}"
   retention_in_days = var.log_retention
-  
+
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-ecs-logs"
   })
@@ -18,7 +18,7 @@ resource "aws_cloudwatch_log_group" "ecs" {
 # ECS Task Execution Role
 resource "aws_iam_role" "ecs_task_execution" {
   name = "${local.name_prefix}-ecs-task-execution-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -29,7 +29,7 @@ resource "aws_iam_role" "ecs_task_execution" {
       }
     }]
   })
-  
+
   tags = var.tags
 }
 
@@ -41,7 +41,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 # ECS Task Role
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name_prefix}-ecs-task-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -52,7 +52,7 @@ resource "aws_iam_role" "ecs_task" {
       }
     }]
   })
-  
+
   tags = var.tags
 }
 
@@ -60,7 +60,7 @@ resource "aws_iam_role" "ecs_task" {
 resource "aws_iam_role_policy" "ecs_task" {
   name = "${local.name_prefix}-ecs-task-policy"
   role = aws_iam_role.ecs_task.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -93,7 +93,7 @@ resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = var.vpc_id
-  
+
   ingress {
     description = "HTTP from Internet"
     from_port   = 80
@@ -101,7 +101,7 @@ resource "aws_security_group" "alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   ingress {
     description = "HTTPS from Internet"
     from_port   = 443
@@ -109,7 +109,7 @@ resource "aws_security_group" "alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -117,7 +117,7 @@ resource "aws_security_group" "alb" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-alb-sg"
   })
@@ -128,7 +128,7 @@ resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = var.vpc_id
-  
+
   ingress {
     description     = "Traffic from ALB"
     from_port       = 8080
@@ -136,7 +136,7 @@ resource "aws_security_group" "ecs" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -144,7 +144,7 @@ resource "aws_security_group" "ecs" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-ecs-sg"
   })
@@ -156,11 +156,11 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = var.public_subnet_ids
-  
+  subnets            = var.public_subnet_ids
+
   enable_deletion_protection = var.environment == "prod"
-  enable_http2              = true
-  
+  enable_http2               = true
+
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-alb"
   })
@@ -173,7 +173,7 @@ resource "aws_lb_target_group" "main" {
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "ip"
-  
+
   health_check {
     enabled             = true
     interval            = 30
@@ -182,9 +182,9 @@ resource "aws_lb_target_group" "main" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
   }
-  
+
   deregistration_delay = var.environment == "prod" ? 300 : 30
-  
+
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-tg"
   })
@@ -195,10 +195,11 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
-    type = var.certificate_arn != "" ? "redirect" : "forward"
-    
+    type             = var.certificate_arn != "" ? "redirect" : "forward"
+    target_group_arn = var.certificate_arn == "" ? aws_lb_target_group.main.arn : null
+
     dynamic "redirect" {
       for_each = var.certificate_arn != "" ? [1] : []
       content {
@@ -207,26 +208,19 @@ resource "aws_lb_listener" "http" {
         status_code = "HTTP_301"
       }
     }
-    
-    dynamic "forward" {
-      for_each = var.certificate_arn == "" ? [1] : []
-      content {
-        target_group_arn = aws_lb_target_group.main.arn
-      }
-    }
   }
 }
 
 # ALB Listener - HTTPS (if certificate provided)
 resource "aws_lb_listener" "https" {
   count = var.certificate_arn != "" ? 1 : 0
-  
+
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
   certificate_arn   = var.certificate_arn
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
@@ -236,12 +230,12 @@ resource "aws_lb_listener" "https" {
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${local.name_prefix}-cluster"
-  
+
   setting {
     name  = "containerInsights"
     value = var.environment == "prod" ? "enabled" : "disabled"
   }
-  
+
   tags = merge(var.tags, {
     Name = "${local.name_prefix}-cluster"
   })
@@ -255,17 +249,17 @@ resource "aws_ecs_task_definition" "main" {
   cpu                      = var.task_cpu
   memory                   = var.task_memory
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn           = aws_iam_role.ecs_task.arn
-  
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
   container_definitions = jsonencode([{
     name  = local.container_name
     image = var.container_image
-    
+
     portMappings = [{
       containerPort = 8080
       protocol      = "tcp"
     }]
-    
+
     environment = [
       {
         name  = "ENVIRONMENT"
@@ -282,16 +276,32 @@ resource "aws_ecs_task_definition" "main" {
       {
         name  = "DB_USER"
         value = var.db_username
+      },
+      {
+        name  = "S3_BUCKET"
+        value = var.s3_bucket_name
+      },
+      {
+        name  = "AWS_REGION"
+        value = data.aws_region.current.name
+      },
+      {
+        name  = "APP_NAME"
+        value = "payment-processing"
+      },
+      {
+        name  = "APP_VERSION"
+        value = "1.0.0"
       }
     ]
-    
+
     secrets = [
       {
-        name  = "DB_PASSWORD"
-        valueFrom = aws_ssm_parameter.db_password.arn
+        name      = "DB_PASSWORD"
+        valueFrom = "${var.db_secret_arn}:password::"
       }
     ]
-    
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -300,36 +310,27 @@ resource "aws_ecs_task_definition" "main" {
         "awslogs-stream-prefix" = "ecs"
       }
     }
-    
+
     essential = true
   }])
-  
+
   tags = var.tags
 }
 
-# Store DB password in SSM Parameter Store
-resource "aws_ssm_parameter" "db_password" {
-  name  = "/${var.project_name}/${var.environment}/db/password"
-  type  = "SecureString"
-  value = var.db_password
-  
-  tags = var.tags
-}
-
-# Grant ECS Task Execution Role access to SSM Parameter
-resource "aws_iam_role_policy" "ecs_task_execution_ssm" {
-  name = "${local.name_prefix}-ecs-task-execution-ssm"
+# Grant ECS Task Execution Role access to Secrets Manager
+resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
+  name = "${local.name_prefix}-ecs-task-execution-secrets"
   role = aws_iam_role.ecs_task_execution.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
       Action = [
-        "ssm:GetParameters",
-        "ssm:GetParameter"
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
       ]
-      Resource = aws_ssm_parameter.db_password.arn
+      Resource = var.db_secret_arn
     }]
   })
 }
@@ -341,24 +342,24 @@ resource "aws_ecs_service" "main" {
   task_definition = aws_ecs_task_definition.main.arn
   desired_count   = var.task_count
   launch_type     = "FARGATE"
-  
+
   network_configuration {
     subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = false
   }
-  
+
   load_balancer {
     target_group_arn = aws_lb_target_group.main.arn
     container_name   = local.container_name
     container_port   = 8080
   }
-  
+
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = var.environment == "prod" ? 100 : 50
-  
+
   depends_on = [aws_lb_listener.http]
-  
+
   tags = var.tags
 }
 
@@ -378,7 +379,7 @@ resource "aws_appautoscaling_policy" "cpu" {
   resource_id        = aws_appautoscaling_target.ecs.resource_id
   scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
@@ -394,7 +395,7 @@ resource "aws_appautoscaling_policy" "memory" {
   resource_id        = aws_appautoscaling_target.ecs.resource_id
   scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
   service_namespace  = aws_appautoscaling_target.ecs.service_namespace
-  
+
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageMemoryUtilization"

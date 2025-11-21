@@ -1,11 +1,12 @@
 aws_region      = "us-east-1"
 project_name    = "payment-processing"
+pr_number       = "pr6969staging"
 vpc_cidr_base   = "10.0"
-container_image = "nginx:latest"  # Replace with actual payment app image
+container_image = "nginx:latest" # Replace with actual payment app image
 
-# Database credentials (use AWS Secrets Manager in production)
+# Database credentials
 db_username = "dbadmin"
-db_password = "StagingPassword456!"  # Change this!
+# db_password is auto-generated and stored in AWS Secrets Manager
 
 # Optional: ACM certificate for HTTPS
 alb_certificate_arn = ""

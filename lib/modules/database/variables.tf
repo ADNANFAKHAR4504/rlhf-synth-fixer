@@ -10,6 +10,11 @@ variable "project_name" {
   type        = string
 }
 
+variable "pr_number" {
+  description = "PR number for resource identification"
+  type        = string
+}
+
 variable "subnet_ids" {
   description = "Subnet IDs for DB subnet group"
   type        = list(string)
@@ -37,13 +42,19 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database master password"
+  description = "Database master password (leave empty to auto-generate)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "app_security_group_id" {
   description = "Security group ID of the application"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the KMS key for encryption"
   type        = string
 }
 

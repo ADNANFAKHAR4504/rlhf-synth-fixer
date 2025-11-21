@@ -15,7 +15,12 @@ output "db_port" {
   value       = aws_db_instance.main.port
 }
 
-output "kms_key_id" {
-  description = "KMS key ID used for encryption"
-  value       = aws_kms_key.rds.id
+output "db_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing DB credentials"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "db_secret_name" {
+  description = "Name of the Secrets Manager secret containing DB credentials"
+  value       = aws_secretsmanager_secret.db_password.name
 }

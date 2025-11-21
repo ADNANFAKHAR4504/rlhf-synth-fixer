@@ -1,9 +1,4 @@
-# modules/network/variables.tf
-
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-}
+# modules/kms/variables.tf
 
 variable "environment" {
   description = "Environment name"
@@ -20,9 +15,15 @@ variable "pr_number" {
   type        = string
 }
 
-variable "azs" {
-  description = "Availability zones"
-  type        = list(string)
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "ecs_task_execution_role_arn" {
+  description = "ARN of the ECS task execution role"
+  type        = string
+  default     = ""
 }
 
 variable "tags" {
