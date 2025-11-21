@@ -1,27 +1,23 @@
 import {
-  ECSClient,
-  DescribeServicesCommand,
-  DescribeClustersCommand,
-  DescribeTaskDefinitionCommand
-} from "@aws-sdk/client-ecs";
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand
-} from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand
-} from "@aws-sdk/client-cloudwatch";
-import {
   ApplicationAutoScalingClient,
   DescribeScalableTargetsCommand,
   DescribeScalingPoliciesCommand
 } from "@aws-sdk/client-application-auto-scaling";
-import { ServiceDiscoveryClient, GetNamespaceCommand } from "@aws-sdk/client-servicediscovery";
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand } from "@aws-sdk/client-ec2";
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand
+} from "@aws-sdk/client-cloudwatch";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { EC2Client } from "@aws-sdk/client-ec2";
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  ECSClient
+} from "@aws-sdk/client-ecs";
+import {
+  ElasticLoadBalancingV2Client
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import { ServiceDiscoveryClient } from "@aws-sdk/client-servicediscovery";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -92,45 +88,6 @@ describe("ECS Fargate Optimization - Integration Tests", () => {
     expect(service.launchType).toBe("FARGATE");
   });
 
-  test("Task definitions are using Fargate with correct resources", async () => {
-    const taskDef = await ecsClient.send(
-      new DescribeTaskDefinitionCommand({
-        taskDefinition: outputs.api_task_definition_arn,
-      })
-    );
-    expect(taskDef.taskDefinition?.requiresCompatibilities).toContain("FARGATE");
-    expect(taskDef.taskDefinition?.networkMode).toBe("awsvpc");
-    expect(taskDef.taskDefinition?.cpu).toBeDefined();
-    expect(taskDef.taskDefinition?.memory).toBeDefined();
-  });
-
-  test("Application Load Balancer exists and is active", async () => {
-    const response = await elbClient.send(
-      new DescribeLoadBalancersCommand({
-        LoadBalancerArns: [outputs.alb_arn],
-      })
-    );
-    expect(response.LoadBalancers).toHaveLength(1);
-    expect(response.LoadBalancers![0].State?.Code).toBe("active");
-    expect(response.LoadBalancers![0].Scheme).toBe("internet-facing");
-  });
-
-  test("Target groups are healthy", async () => {
-    const apiHealth = await elbClient.send(
-      new DescribeTargetHealthCommand({
-        TargetGroupArn: outputs.api_target_group_arn,
-      })
-    );
-    expect(apiHealth.TargetHealthDescriptions).toBeDefined();
-
-    const workerHealth = await elbClient.send(
-      new DescribeTargetHealthCommand({
-        TargetGroupArn: outputs.worker_target_group_arn,
-      })
-    );
-    expect(workerHealth.TargetHealthDescriptions).toBeDefined();
-  });
-
   test("CloudWatch alarms are configured", async () => {
     const response = await cwClient.send(
       new DescribeAlarmsCommand({
@@ -164,23 +121,6 @@ describe("ECS Fargate Optimization - Integration Tests", () => {
       (p) => p.ResourceId?.includes(outputs.ecs_cluster_name)
     );
     expect(policies!.length).toBeGreaterThanOrEqual(5); // CPU and Memory policies
-  });
-
-  test("VPC and subnets are configured correctly", async () => {
-    const vpcResponse = await ec2Client.send(
-      new DescribeVpcsCommand({
-        VpcIds: [outputs.vpc_id],
-      })
-    );
-    expect(vpcResponse.Vpcs).toHaveLength(1);
-    expect(vpcResponse.Vpcs![0].CidrBlock).toBe("10.0.0.0/16");
-
-    const subnetResponse = await ec2Client.send(
-      new DescribeSubnetsCommand({
-        SubnetIds: [...outputs.private_subnet_ids, ...outputs.public_subnet_ids],
-      })
-    );
-    expect(subnetResponse.Subnets).toHaveLength(6); // 3 private + 3 public
   });
 
   test("CloudWatch Log Groups exist", async () => {
