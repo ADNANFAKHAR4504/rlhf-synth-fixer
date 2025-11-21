@@ -77,26 +77,42 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.positions_table = cls.outputs.get('PositionsTableName')
 
     @classmethod
-    def _wait_for_ssm_ready(cls, max_wait=300):
-        """Wait for EC2 instances to be registered with SSM."""
+    def _wait_for_ssm_ready(cls, max_wait=60):
+        """Wait for EC2 instances to be registered with SSM. Reduced timeout to avoid long waits."""
         print("Waiting for EC2 instances to register with SSM...")
         start_time = time.time()
+        attempts = 0
+        max_attempts = max_wait // 10  # Check every 10 seconds
 
-        while time.time() - start_time < max_wait:
-            response = cls.autoscaling.describe_auto_scaling_groups(
-                AutoScalingGroupNames=[cls.asg_name]
-            )
-            asg = response['AutoScalingGroups'][0]
-            instances = [i for i in asg.get('Instances', [])
-                        if i['LifecycleState'] == 'InService']
-
-            if not instances:
-                time.sleep(10)
-                continue
-
-            instance_ids = [i['InstanceId'] for i in instances]
+        while attempts < max_attempts:
+            attempts += 1
+            elapsed = time.time() - start_time
 
             try:
+                response = cls.autoscaling.describe_auto_scaling_groups(
+                    AutoScalingGroupNames=[cls.asg_name]
+                )
+
+                if not response['AutoScalingGroups']:
+                    raise TimeoutError(f"ASG '{cls.asg_name}' not found - deployment may have failed")
+
+                asg = response['AutoScalingGroups'][0]
+                instances = [i for i in asg.get('Instances', [])
+                            if i['LifecycleState'] == 'InService']
+
+                # Check if ASG has desired capacity but no instances
+                desired = asg.get('DesiredCapacity', 0)
+                if desired == 0:
+                    raise TimeoutError(f"ASG '{cls.asg_name}' has DesiredCapacity=0 - no instances to wait for")
+
+                if not instances:
+                    print(f"  [{elapsed:.0f}s] Waiting for {desired} instance(s) to reach InService state...")
+                    time.sleep(10)
+                    continue
+
+                instance_ids = [i['InstanceId'] for i in instances]
+                print(f"  [{elapsed:.0f}s] Found {len(instances)} InService instance(s), checking SSM registration...")
+
                 ssm_response = cls.ssm.describe_instance_information(
                     Filters=[{'Key': 'InstanceIds', 'Values': instance_ids}]
                 )
@@ -106,15 +122,23 @@ class TestTapStackIntegration(unittest.TestCase):
                                   if i['PingStatus'] == 'Online']
 
                 if online_instances:
-                    print(f"Found {len(online_instances)} SSM-ready instances")
+                    print(f"✓ Found {len(online_instances)} SSM-ready instance(s)")
                     return online_instances
+                else:
+                    print(f"  [{elapsed:.0f}s] Instances found but not yet SSM-ready...")
 
-            except ClientError:
-                pass
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', '')
+                if error_code == 'ValidationError':
+                    raise TimeoutError(f"ASG '{cls.asg_name}' not found - deployment failed")
+                print(f"  [{elapsed:.0f}s] AWS API error: {error_code}")
 
             time.sleep(10)
 
-        raise TimeoutError(f"EC2 instances not ready for SSM after {max_wait}s")
+        raise TimeoutError(
+            f"EC2 instances not ready for SSM after {max_wait}s. "
+            f"This usually means the ASG failed to create instances (check for KMS key issues or other deployment failures)."
+        )
 
     # =========================================================================
     # VPC and Networking Tests
@@ -586,7 +610,11 @@ class TestTapStackIntegration(unittest.TestCase):
         """E2E LIVE: Test EC2 can actually connect to Aurora PostgreSQL."""
         print("\n🔄 Testing live EC2 to Aurora connectivity...")
 
-        online_instances = self._wait_for_ssm_ready()
+        try:
+            online_instances = self._wait_for_ssm_ready()
+        except TimeoutError as e:
+            self.fail(f"Cannot run connectivity test: {e}")
+
         instance_id = online_instances[0]['InstanceId']
 
         aurora_host = self.outputs['AuroraClusterEndpoint']
@@ -628,7 +656,11 @@ class TestTapStackIntegration(unittest.TestCase):
         """E2E LIVE: Test EC2 can actually connect to Redis cluster."""
         print("\n🔄 Testing live EC2 to Redis connectivity...")
 
-        online_instances = self._wait_for_ssm_ready()
+        try:
+            online_instances = self._wait_for_ssm_ready()
+        except TimeoutError as e:
+            self.fail(f"Cannot run connectivity test: {e}")
+
         instance_id = online_instances[0]['InstanceId']
 
         redis_host = self.outputs['RedisClusterEndpoint']

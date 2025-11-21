@@ -37,25 +37,31 @@ class TradingPlatformOptimizer:
     Comprehensive resource optimizer for trading and ML platforms
     """
 
-    def __init__(self, region_trading='us-east-1', region_ml='us-west-2'):
+    def __init__(self, region_trading=None, region_ml=None):
         """Initialize AWS clients and configuration"""
 
-        self.region_trading = region_trading
-        self.region_ml = region_ml
+        # Auto-detect current region if not specified
+        session = boto3.Session()
+        current_region = session.region_name or 'us-east-1'  # Fallback to us-east-1 if detection fails
+
+        self.region_trading = region_trading or current_region
+        self.region_ml = region_ml or current_region
+
+        logger.info(f"Initializing optimizer with trading region: {self.region_trading}, ML region: {self.region_ml}")
 
         # Initialize AWS clients for trading region
-        self.ec2_trading = boto3.client('ec2', region_name=region_trading)
-        self.asg_trading = boto3.client('autoscaling', region_name=region_trading)
-        self.rds_trading = boto3.client('rds', region_name=region_trading)
-        self.elasticache_trading = boto3.client('elasticache', region_name=region_trading)
-        self.dynamodb_trading = boto3.client('dynamodb', region_name=region_trading)
-        self.cloudwatch_trading = boto3.client('cloudwatch', region_name=region_trading)
+        self.ec2_trading = boto3.client('ec2', region_name=self.region_trading)
+        self.asg_trading = boto3.client('autoscaling', region_name=self.region_trading)
+        self.rds_trading = boto3.client('rds', region_name=self.region_trading)
+        self.elasticache_trading = boto3.client('elasticache', region_name=self.region_trading)
+        self.dynamodb_trading = boto3.client('dynamodb', region_name=self.region_trading)
+        self.cloudwatch_trading = boto3.client('cloudwatch', region_name=self.region_trading)
         self.ce_trading = boto3.client('ce', region_name='us-east-1')  # Cost Explorer is global
 
         # Initialize AWS clients for ML region
-        self.sagemaker_ml = boto3.client('sagemaker', region_name=region_ml)
-        self.cloudwatch_ml = boto3.client('cloudwatch', region_name=region_ml)
-        self.ec2_ml = boto3.client('ec2', region_name=region_ml)
+        self.sagemaker_ml = boto3.client('sagemaker', region_name=self.region_ml)
+        self.cloudwatch_ml = boto3.client('cloudwatch', region_name=self.region_ml)
+        self.ec2_ml = boto3.client('ec2', region_name=self.region_ml)
 
         # Optimization thresholds
         self.thresholds = {
@@ -1680,9 +1686,8 @@ class TradingPlatformOptimizer:
 
 if __name__ == "__main__":
     # Initialize and run optimizer
-    optimizer = TradingPlatformOptimizer(
-        region_trading='us-east-1',
-        region_ml='us-west-2'
-    )
+    # Regions will be auto-detected from AWS configuration (CLI config, environment variables, or EC2 metadata)
+    # You can override by passing region_trading='us-east-1' and/or region_ml='us-west-2'
+    optimizer = TradingPlatformOptimizer()
 
     results = optimizer.run_full_optimization()

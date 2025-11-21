@@ -53,13 +53,13 @@ class TestTapStack(unittest.TestCase):
     @mark.it("creates public subnets")
     def test_creates_public_subnets(self):
         """Test public subnet creation"""
-        # VPC has 2 AZs × 3 subnet types = 6 total subnets (CDK uses 2 AZs by default in many regions)
+        # VPC has 2 AZs × 3 subnet types = 6 total subnets (CDK uses available AZs per region)
         self.template.resource_count_is("AWS::EC2::Subnet", 6)
 
     @mark.it("creates NAT gateways")
     def test_creates_nat_gateways(self):
         """Test NAT gateway creation"""
-        # 2 NAT gateways (one per AZ, CDK uses 2 AZs by default in many regions)
+        # 2 NAT gateways (one per AZ, actual AZ count depends on region availability)
         self.template.resource_count_is("AWS::EC2::NatGateway", 2)
 
     @mark.it("creates VPN gateway")

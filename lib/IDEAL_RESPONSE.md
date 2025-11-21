@@ -135,6 +135,97 @@ class TapStack(cdk.Stack):
             enable_key_rotation=True,
             pending_window=Duration.days(7),
             removal_policy=RemovalPolicy.DESTROY,
+            policy=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="Enable IAM User Permissions",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.AccountRootPrincipal()],
+                        actions=["kms:*"],
+                        resources=["*"],
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow EC2 service for EBS encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("ec2.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"ec2.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow RDS service for database encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("rds.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"rds.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow ElastiCache service for Redis encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("elasticache.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"elasticache.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow DynamoDB service for table encryption",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.ServicePrincipal("dynamodb.amazonaws.com")],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:DescribeKey",
+                            "kms:CreateGrant",
+                            "kms:RetireGrant",
+                        ],
+                        resources=["*"],
+                        conditions={
+                            "StringEquals": {
+                                "kms:ViaService": f"dynamodb.{self.region}.amazonaws.com"
+                            }
+                        }
+                    ),
+                ]
+            ),
         )
 
         # Create dedicated VPC for trading platform
@@ -415,6 +506,7 @@ class TapStack(cdk.Stack):
                         volume_type=ec2.EbsDeviceVolumeType.IO2,
                         iops=10000,
                         encrypted=True,
+                        # Use default AWS managed key for EBS instead of custom key
                         delete_on_termination=True,
                     ),
                 ),
@@ -1056,25 +1148,31 @@ class TradingPlatformOptimizer:
     Comprehensive resource optimizer for trading and ML platforms
     """
 
-    def __init__(self, region_trading='us-east-1', region_ml='us-west-2'):
+    def __init__(self, region_trading=None, region_ml=None):
         """Initialize AWS clients and configuration"""
 
-        self.region_trading = region_trading
-        self.region_ml = region_ml
+        # Auto-detect current region if not specified
+        session = boto3.Session()
+        current_region = session.region_name or 'us-east-1'  # Fallback to us-east-1 if detection fails
+
+        self.region_trading = region_trading or current_region
+        self.region_ml = region_ml or current_region
+
+        logger.info(f"Initializing optimizer with trading region: {self.region_trading}, ML region: {self.region_ml}")
 
         # Initialize AWS clients for trading region
-        self.ec2_trading = boto3.client('ec2', region_name=region_trading)
-        self.asg_trading = boto3.client('autoscaling', region_name=region_trading)
-        self.rds_trading = boto3.client('rds', region_name=region_trading)
-        self.elasticache_trading = boto3.client('elasticache', region_name=region_trading)
-        self.dynamodb_trading = boto3.client('dynamodb', region_name=region_trading)
-        self.cloudwatch_trading = boto3.client('cloudwatch', region_name=region_trading)
+        self.ec2_trading = boto3.client('ec2', region_name=self.region_trading)
+        self.asg_trading = boto3.client('autoscaling', region_name=self.region_trading)
+        self.rds_trading = boto3.client('rds', region_name=self.region_trading)
+        self.elasticache_trading = boto3.client('elasticache', region_name=self.region_trading)
+        self.dynamodb_trading = boto3.client('dynamodb', region_name=self.region_trading)
+        self.cloudwatch_trading = boto3.client('cloudwatch', region_name=self.region_trading)
         self.ce_trading = boto3.client('ce', region_name='us-east-1')  # Cost Explorer is global
 
         # Initialize AWS clients for ML region
-        self.sagemaker_ml = boto3.client('sagemaker', region_name=region_ml)
-        self.cloudwatch_ml = boto3.client('cloudwatch', region_name=region_ml)
-        self.ec2_ml = boto3.client('ec2', region_name=region_ml)
+        self.sagemaker_ml = boto3.client('sagemaker', region_name=self.region_ml)
+        self.cloudwatch_ml = boto3.client('cloudwatch', region_name=self.region_ml)
+        self.ec2_ml = boto3.client('ec2', region_name=self.region_ml)
 
         # Optimization thresholds
         self.thresholds = {
@@ -2699,15 +2797,13 @@ class TradingPlatformOptimizer:
 
 if __name__ == "__main__":
     # Initialize and run optimizer
-    optimizer = TradingPlatformOptimizer(
-        region_trading='us-east-1',
-        region_ml='us-west-2'
-    )
+    # Regions will be auto-detected from AWS configuration (CLI config, environment variables, or EC2 metadata)
+    # You can override by passing region_trading='us-east-1' and/or region_ml='us-west-2'
+    optimizer = TradingPlatformOptimizer()
 
     results = optimizer.run_full_optimization()
 
 ```
-
 
 ### File Structure and Key Components
 
@@ -2717,12 +2813,12 @@ if __name__ == "__main__":
 
 class TradingPlatformOptimizer:
     """Comprehensive resource optimizer for trading and ML platforms"""
-    
+
     def __init__(self, region_trading='us-east-1', region_ml='us-west-2'):
         # Initialize AWS clients for both regions
         # Configure optimization thresholds
         # Setup cost data and sizing maps
-        
+
     # Core Analysis Methods
     def analyze_aurora_cluster(self, cluster_id: str) -> Dict
     def analyze_ec2_autoscaling(self, asg_name: str) -> Dict
@@ -2730,11 +2826,11 @@ class TradingPlatformOptimizer:
     def analyze_dynamodb_tables(self, table_names: List[str]) -> Dict
     def analyze_ml_platform(self) -> Dict
     def check_sla_compliance(self) -> Dict
-    
+
     # Report Generation
     def generate_excel_report(self, analysis_results: Dict, output_file: str) -> str
     def generate_jupyter_notebook(self, ml_analysis: Dict, output_file: str) -> str
-    
+
     # Main Orchestration
     def run_full_optimization(self) -> Dict
 ```
@@ -2742,6 +2838,7 @@ class TradingPlatformOptimizer:
 ### Optimization Thresholds
 
 **Aurora PostgreSQL:**
+
 - CPU Low: 20% (downsize candidate)
 - CPU High: 70% (upsize candidate)
 - Connections Low: 100 (connection pooling review)
@@ -2749,23 +2846,27 @@ class TradingPlatformOptimizer:
 - Cache Hit Ratio: 95% minimum
 
 **EC2 Auto Scaling:**
+
 - CPU P95 Low: 30% (downsize candidate)
 - CPU P95 High: 75% (upsize candidate)
 - Network Low: 1MB/sec (optimization review)
 - Capacity Utilization: 70% threshold
 
 **ElastiCache Redis:**
+
 - Hit Rate High: 95% (excellent performance)
 - CPU Low: 20% (downsize candidate)
 - Memory Low: 30% (downsize candidate)
 - Swap Threshold: 100MB (immediate action)
 
 **DynamoDB:**
+
 - Consumed Ratio Low: 20% (on-demand candidate)
 - Throttle Threshold: 1% (capacity increase)
 - Retention: 30-day analysis window
 
 **SLA Thresholds:**
+
 - Error Rate: 1% maximum
 - Latency P95: 15ms maximum
 - Queue Depth: 1000 maximum
@@ -2773,6 +2874,7 @@ class TradingPlatformOptimizer:
 ### Optimization Logic
 
 **1. Aurora Cluster Analysis (30-day metrics):**
+
 - CPU utilization patterns (P95, mean, std dev)
 - Connection count analysis
 - Read/Write latency tracking
@@ -2781,24 +2883,28 @@ class TradingPlatformOptimizer:
 - Replica lag monitoring
 
 Recommendations:
+
 - Instance downsize when CPU P95 < 20%
 - Reader count reduction when average CPU < 30%
 - Connection pooling optimization for low utilization
 - Memory increase for cache hit ratio < 95%
 
 **2. EC2 Auto Scaling Analysis:**
+
 - CPU utilization (P95 across fleet)
 - Network throughput patterns
 - Desired vs actual instance count
 - Placement group efficiency
 
 Recommendations:
+
 - Instance type downsize when CPU P95 < 30%
 - ASG capacity reduction when avg instances < 70% of desired
 - Network optimization review for low throughput
 - Step scaling policy adjustments
 
 **3. Redis Cluster Analysis:**
+
 - Cache hit rate calculation
 - CPU and memory utilization
 - Swap usage monitoring
@@ -2806,29 +2912,34 @@ Recommendations:
 - Shard distribution analysis
 
 Recommendations:
+
 - Node type downsize when hit rate > 95% and resources < 30%
 - Shard count reduction for very low CPU (<15%)
 - Replica reduction when hit rate > 98%
 - Immediate memory increase for swap > 100MB
 
 **4. DynamoDB Analysis:**
+
 - Read/Write capacity consumption
 - Throttle event tracking
 - GSI utilization patterns
 - Stream processing metrics
 
 Recommendations:
+
 - On-demand conversion when utilization < 20% for 30+ days
 - Cost comparison (provisioned vs on-demand)
 - Auto-scaling threshold adjustments
 
 **5. ML Platform Analysis (us-west-2):**
+
 - SageMaker endpoint utilization
 - GPU usage patterns (15% baseline)
 - Invocations per hour tracking
 - Training job analysis
 
 Recommendations:
+
 - GPU instance downsize (P3 to G4dn)
 - Spot instance migration for training
 - Traffic replay testing framework
@@ -2837,6 +2948,7 @@ Recommendations:
 ### Cost Calculation
 
 **Instance Savings:**
+
 ```python
 def _calculate_instance_savings(current_type, new_type):
     current_hourly = hourly_costs.get(current_type)
@@ -2846,6 +2958,7 @@ def _calculate_instance_savings(current_type, new_type):
 ```
 
 **Total Savings Aggregation:**
+
 - Aurora: Instance downsizing + reader reduction
 - EC2: Instance type changes + capacity reduction
 - Redis: Node type + shard/replica optimization
@@ -2890,6 +3003,7 @@ def _calculate_instance_savings(current_type, new_type):
    - Risk mitigation strategies
 
 **Visualization Features:**
+
 - Area charts for 90-day performance trends
 - Bar charts for cost comparisons
 - Color-coded risk indicators
@@ -2950,18 +3064,19 @@ def _calculate_instance_savings(current_type, new_type):
 ### SLA Compliance Checking
 
 **Real-time Monitoring:**
+
 ```python
 def check_sla_compliance():
     # Check error rate (1-hour window)
     error_rate = get_metric('OrderErrorRate')
     if error_rate > 0.01:  # 1%
         violations.append('error_rate')
-    
+
     # Check latency P95 (1-hour window)
     latency_p95 = get_metric('OrderLatencyP95')
     if latency_p95 > 15:  # ms
         violations.append('latency_p95')
-    
+
     return {
         'compliant': len(violations) == 0,
         'violations': violations,
@@ -2970,6 +3085,7 @@ def check_sla_compliance():
 ```
 
 **Safety Mechanisms:**
+
 - Blocks optimization when SLA violations detected
 - Requires manual override for risky changes
 - Logs all violations with severity levels
@@ -3012,6 +3128,7 @@ def check_sla_compliance():
 ### Unit Tests (95 tests, all passing)
 
 **lib/tap_stack.py (54 tests, 100% coverage):**
+
 - VPC creation and configuration
 - Aurora cluster with readers
 - EC2 Auto Scaling Group setup
@@ -3023,6 +3140,7 @@ def check_sla_compliance():
 - Environment suffix handling
 
 **lib/optimize.py (41 tests, 89% coverage):**
+
 - Aurora cluster analysis
 - EC2 ASG optimization
 - Redis cluster tuning
@@ -3038,6 +3156,7 @@ def check_sla_compliance():
 ### Integration Tests (38 tests)
 
 **Live Connectivity Tests:**
+
 - VPC connectivity validation
 - Aurora cluster reachability
 - Redis cluster access
