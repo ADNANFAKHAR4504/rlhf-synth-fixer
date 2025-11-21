@@ -99,7 +99,9 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       const albDns = outputs.LoadBalancerDNS;
       expect(albDns).toBeDefined();
       expect(typeof albDns).toBe('string');
+      // ALB DNS format: <name>-<id>.<region>.elb.amazonaws.com
       expect(albDns).toMatch(/\.elb\.amazonaws\.com$/);
+      expect(albDns).toMatch(/^[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
     });
 
     test('VPCId should be a valid VPC ID format', () => {
@@ -155,8 +157,9 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       const albDns = outputs.LoadBalancerDNS;
       expect(albDns).toBeDefined();
 
-      // Verify DNS name format
+      // Verify DNS name format (ALB format: <name>-<id>.<region>.elb.amazonaws.com)
       expect(albDns).toMatch(/\.elb\.amazonaws\.com$/);
+      expect(albDns).toMatch(/^[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
     }, 30000);
 
     test('should respond to health check endpoint', async () => {
@@ -186,7 +189,9 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       if (!hasOutputs) return;
 
       const albDns = outputs.LoadBalancerDNS;
-      expect(albDns).toMatch(/^[a-z0-9-]+\.elb\.amazonaws\.com$/);
+      // ALB DNS format: <name>-<id>.<region>.elb.amazonaws.com
+      // Example: payment-alb-pr6983-1087742936.us-east-1.elb.amazonaws.com
+      expect(albDns).toMatch(/^[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
     });
   });
 
