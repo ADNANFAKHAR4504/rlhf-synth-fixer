@@ -2,7 +2,7 @@
 
 This implementation provides a complete, production-ready CloudFormation template for a secure financial data processing pipeline with comprehensive encryption, VPC isolation, and compliance features.
 
-## File: lib/template.json
+## File: lib/TapStack.json
 
 ````json
 {

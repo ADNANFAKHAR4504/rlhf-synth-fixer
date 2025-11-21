@@ -282,16 +282,22 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
       }
     });
 
-    test('should only have Gateway endpoints (no Interface endpoints to avoid limits)', () => {
+    test('should have all required VPC endpoints (S3, DynamoDB, Secrets Manager)', () => {
       const allEndpoints = Object.keys(template.Resources).filter(key => 
         template.Resources[key].Type === 'AWS::EC2::VPCEndpoint'
       );
-      expect(allEndpoints.length).toBe(2); // Only S3 and DynamoDB
+      expect(allEndpoints.length).toBe(3); // S3, DynamoDB, and Secrets Manager
       
-      // All should be Gateway type
-      allEndpoints.forEach(key => {
-        expect(template.Resources[key].Properties.VpcEndpointType).toBe('Gateway');
-      });
+      // Count Gateway and Interface endpoints
+      const gatewayEndpoints = allEndpoints.filter(key => 
+        template.Resources[key].Properties.VpcEndpointType === 'Gateway'
+      );
+      const interfaceEndpoints = allEndpoints.filter(key => 
+        template.Resources[key].Properties.VpcEndpointType === 'Interface'
+      );
+      
+      expect(gatewayEndpoints.length).toBe(2); // S3 and DynamoDB
+      expect(interfaceEndpoints.length).toBe(1); // Secrets Manager
     });
   });
 
@@ -395,15 +401,60 @@ describe('CloudFormation Template - Secure Financial Data Processing Pipeline', 
     });
   });
 
-  describe('Data Security - No Secrets Manager', () => {
-    test('should NOT have Secrets Manager resources (DynamoDB auth not needed)', () => {
+  describe('Secrets Manager - Credential Rotation', () => {
+    test('should have Secrets Manager secret with KMS encryption', () => {
       const secrets = Object.keys(template.Resources).filter(key => 
         template.Resources[key].Type === 'AWS::SecretsManager::Secret'
       );
-      expect(secrets.length).toBe(0);
+      expect(secrets.length).toBeGreaterThanOrEqual(1);
+      
+      // Verify KMS encryption
+      const secretKey = secrets[0];
+      expect(template.Resources[secretKey].Properties.KmsKeyId).toBeDefined();
     });
 
-    test('should use DynamoDB for data storage (no RDS passwords needed)', () => {
+    test('should have 30-day automatic rotation schedule', () => {
+      const rotationSchedules = Object.keys(template.Resources).filter(key => 
+        template.Resources[key].Type === 'AWS::SecretsManager::RotationSchedule'
+      );
+      expect(rotationSchedules.length).toBeGreaterThanOrEqual(1);
+      
+      // Verify 30-day rotation
+      const scheduleKey = rotationSchedules[0];
+      const schedule = template.Resources[scheduleKey].Properties;
+      expect(schedule.RotationRules.AutomaticallyAfterDays).toBe(30);
+    });
+
+    test('should have DependsOn fix for rotation schedule', () => {
+      const rotationSchedules = Object.keys(template.Resources).filter(key => 
+        template.Resources[key].Type === 'AWS::SecretsManager::RotationSchedule'
+      );
+      
+      if (rotationSchedules.length > 0) {
+        const scheduleKey = rotationSchedules[0];
+        const dependsOn = template.Resources[scheduleKey].DependsOn;
+        expect(dependsOn).toBeDefined();
+        expect(Array.isArray(dependsOn)).toBe(true);
+        expect(dependsOn).toContain('SecretRotationPermission');
+      }
+    });
+
+    test('should have rotation Lambda function in VPC', () => {
+      const rotationFunctions = Object.keys(template.Resources).filter(key => 
+        key.includes('SecretRotation') && 
+        template.Resources[key].Type === 'AWS::Lambda::Function'
+      );
+      expect(rotationFunctions.length).toBeGreaterThanOrEqual(1);
+      
+      // Verify VPC configuration
+      const functionKey = rotationFunctions[0];
+      const vpcConfig = template.Resources[functionKey].Properties.VpcConfig;
+      expect(vpcConfig).toBeDefined();
+      expect(vpcConfig.SubnetIds).toBeDefined();
+      expect(vpcConfig.SecurityGroupIds).toBeDefined();
+    });
+
+    test('should use DynamoDB for data storage (complementary to secrets)', () => {
       const dynamoTables = Object.keys(template.Resources).filter(key => 
         template.Resources[key].Type === 'AWS::DynamoDB::Table'
       );
