@@ -54,7 +54,7 @@
   "Mappings": {
     "RegionMap": {
       "us-east-1": {
-        "AmazonLinux2AMI": "ami-0c02fb55b8a541da7"
+        "AmazonLinux2AMI": "ami-0453ec754f44f9a4a"
       }
     }
   },
