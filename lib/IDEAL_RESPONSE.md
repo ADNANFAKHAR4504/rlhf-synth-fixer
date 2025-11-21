@@ -9,13 +9,19 @@ This implementation provides a complete, production-ready CloudFormation templat
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Secure Financial Data Processing Pipeline with comprehensive encryption, VPC isolation, and compliance features",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming to ensure uniqueness",
       "MinLength": 1,
       "MaxLength": 20,
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "logRetentionDays": {
+      "Type": "Number",
+      "Description": "CloudWatch Logs retention period in days",
+      "Default": 90,
+      "AllowedValues": [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
     }
   },
   "Resources": {
@@ -95,13 +101,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "encryption-key-${environmentSuffix}"
+              "Fn::Sub": "encryption-key-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -119,7 +125,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/financial-pipeline-${environmentSuffix}"
+          "Fn::Sub": "alias/financial-pipeline-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "EncryptionKey"
@@ -136,13 +142,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-${environmentSuffix}"
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -171,13 +177,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-1-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -206,13 +212,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-2-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -241,13 +247,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-3-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -267,13 +273,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-route-table-${environmentSuffix}"
+              "Fn::Sub": "private-route-table-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -336,13 +342,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "lambda-sg-${environmentSuffix}"
+              "Fn::Sub": "lambda-sg-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -374,13 +380,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-endpoint-sg-${environmentSuffix}"
+              "Fn::Sub": "vpc-endpoint-sg-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -457,7 +463,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "transaction-data-${environmentSuffix}"
+          "Fn::Sub": "transaction-data-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -519,13 +525,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-bucket-${environmentSuffix}"
+              "Fn::Sub": "transaction-bucket-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -543,7 +549,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "transactions-${environmentSuffix}"
+          "Fn::Sub": "transactions-${EnvironmentSuffix}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
@@ -583,13 +589,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-table-${environmentSuffix}"
+              "Fn::Sub": "transaction-table-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -607,7 +613,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "lambda-execution-role-${environmentSuffix}"
+          "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -685,7 +691,7 @@ This implementation provides a complete, production-ready CloudFormation templat
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/transaction-processor-${environmentSuffix}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/transaction-processor-${EnvironmentSuffix}:*"
                   }
                 }
               ]
@@ -696,13 +702,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "lambda-execution-role-${environmentSuffix}"
+              "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -716,9 +722,11 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/transaction-processor-${environmentSuffix}"
+          "Fn::Sub": "/aws/lambda/transaction-processor-${EnvironmentSuffix}"
         },
-        "RetentionInDays": 90,
+        "RetentionInDays": {
+          "Ref": "logRetentionDays"
+        },
         "KmsKeyId": {
           "Fn::GetAtt": [
             "EncryptionKey",
@@ -732,7 +740,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "DependsOn": "LambdaLogGroup",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "transaction-processor-${environmentSuffix}"
+          "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -788,13 +796,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-processor-${environmentSuffix}"
+              "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -808,7 +816,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "lambda-errors-${environmentSuffix}"
+          "Fn::Sub": "lambda-errors-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when Lambda function errors exceed threshold",
         "MetricName": "Errors",
@@ -833,7 +841,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "apigateway-role-${environmentSuffix}"
+          "Fn::Sub": "apigateway-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -861,7 +869,7 @@ This implementation provides a complete, production-ready CloudFormation templat
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/transaction-api-${environmentSuffix}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/transaction-api-${EnvironmentSuffix}:*"
                   }
                 },
                 {
@@ -884,13 +892,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "apigateway-role-${environmentSuffix}"
+              "Fn::Sub": "apigateway-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -904,9 +912,11 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/apigateway/transaction-api-${environmentSuffix}"
+          "Fn::Sub": "/aws/apigateway/transaction-api-${EnvironmentSuffix}"
         },
-        "RetentionInDays": 90,
+        "RetentionInDays": {
+          "Ref": "logRetentionDays"
+        },
         "KmsKeyId": {
           "Fn::GetAtt": [
             "EncryptionKey",
@@ -919,7 +929,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::ApiGateway::RestApi",
       "Properties": {
         "Name": {
-          "Fn::Sub": "transaction-api-${environmentSuffix}"
+          "Fn::Sub": "transaction-api-${EnvironmentSuffix}"
         },
         "Description": "Secure API for financial transaction processing",
         "EndpointConfiguration": {
@@ -931,13 +941,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-api-${environmentSuffix}"
+              "Fn::Sub": "transaction-api-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -951,7 +961,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::ApiGateway::RequestValidator",
       "Properties": {
         "Name": {
-          "Fn::Sub": "request-validator-${environmentSuffix}"
+          "Fn::Sub": "request-validator-${EnvironmentSuffix}"
         },
         "RestApiId": {
           "Ref": "TransactionAPI"
@@ -1035,7 +1045,9 @@ This implementation provides a complete, production-ready CloudFormation templat
         "DeploymentId": {
           "Ref": "APIGatewayDeployment"
         },
-        "StageName": "prod",
+        "StageName": {
+          "Fn::Sub": "prod-${EnvironmentSuffix}"
+        },
         "MethodSettings": [
           {
             "ResourcePath": "/*",
@@ -1058,7 +1070,7 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1072,7 +1084,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::ApiGateway::ApiKey",
       "Properties": {
         "Name": {
-          "Fn::Sub": "transaction-api-key-${environmentSuffix}"
+          "Fn::Sub": "transaction-api-key-${EnvironmentSuffix}"
         },
         "Description": "API key for transaction processing API",
         "Enabled": true
@@ -1083,7 +1095,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "DependsOn": "APIGatewayStage",
       "Properties": {
         "UsagePlanName": {
-          "Fn::Sub": "transaction-usage-plan-${environmentSuffix}"
+          "Fn::Sub": "transaction-usage-plan-${EnvironmentSuffix}"
         },
         "Description": "Usage plan for transaction API",
         "ApiStages": [
@@ -1091,7 +1103,9 @@ This implementation provides a complete, production-ready CloudFormation templat
             "ApiId": {
               "Ref": "TransactionAPI"
             },
-            "Stage": "prod"
+            "Stage": {
+              "Fn::Sub": "prod-${EnvironmentSuffix}"
+            }
           }
         ],
         "Quota": {
@@ -1120,7 +1134,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "api-errors-${environmentSuffix}"
+          "Fn::Sub": "api-errors-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when API Gateway 4XX/5XX errors exceed threshold",
         "MetricName": "5XXError",
@@ -1134,7 +1148,7 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Name": "ApiName",
             "Value": {
-              "Fn::Sub": "transaction-api-${environmentSuffix}"
+              "Fn::Sub": "transaction-api-${EnvironmentSuffix}"
             }
           }
         ],
@@ -1145,7 +1159,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "rds-credentials-${environmentSuffix}"
+          "Fn::Sub": "rds-credentials-${EnvironmentSuffix}"
         },
         "Description": "RDS database credentials with automatic rotation",
         "KmsKeyId": {
@@ -1161,13 +1175,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "database-secret-${environmentSuffix}"
+              "Fn::Sub": "database-secret-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1203,7 +1217,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "secret-rotation-role-${environmentSuffix}"
+          "Fn::Sub": "secret-rotation-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1266,7 +1280,7 @@ This implementation provides a complete, production-ready CloudFormation templat
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/secret-rotation-${environmentSuffix}:*"
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/secret-rotation-${EnvironmentSuffix}:*"
                   }
                 }
               ]
@@ -1277,13 +1291,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "secret-rotation-role-${environmentSuffix}"
+              "Fn::Sub": "secret-rotation-role-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1297,9 +1311,11 @@ This implementation provides a complete, production-ready CloudFormation templat
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/secret-rotation-${environmentSuffix}"
+          "Fn::Sub": "/aws/lambda/secret-rotation-${EnvironmentSuffix}"
         },
-        "RetentionInDays": 90,
+        "RetentionInDays": {
+          "Ref": "logRetentionDays"
+        },
         "KmsKeyId": {
           "Fn::GetAtt": [
             "EncryptionKey",
@@ -1313,7 +1329,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       "DependsOn": "SecretRotationLogGroup",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "secret-rotation-${environmentSuffix}"
+          "Fn::Sub": "secret-rotation-${EnvironmentSuffix}"
         },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
@@ -1356,13 +1372,13 @@ This implementation provides a complete, production-ready CloudFormation templat
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "secret-rotation-${environmentSuffix}"
+              "Fn::Sub": "secret-rotation-${EnvironmentSuffix}"
             }
           },
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "environmentSuffix"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
@@ -1391,7 +1407,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "EncryptionKey-${environmentSuffix}"
+          "Fn::Sub": "EncryptionKey-${EnvironmentSuffix}"
         }
       }
     },
@@ -1405,7 +1421,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "EncryptionKeyArn-${environmentSuffix}"
+          "Fn::Sub": "EncryptionKeyArn-${EnvironmentSuffix}"
         }
       }
     },
@@ -1416,7 +1432,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "VPC-${environmentSuffix}"
+          "Fn::Sub": "VPC-${EnvironmentSuffix}"
         }
       }
     },
@@ -1427,7 +1443,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "TransactionBucket-${environmentSuffix}"
+          "Fn::Sub": "TransactionBucket-${EnvironmentSuffix}"
         }
       }
     },
@@ -1438,7 +1454,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "TransactionTable-${environmentSuffix}"
+          "Fn::Sub": "TransactionTable-${EnvironmentSuffix}"
         }
       }
     },
@@ -1452,18 +1468,18 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "TransactionProcessorFunction-${environmentSuffix}"
+          "Fn::Sub": "TransactionProcessorFunction-${EnvironmentSuffix}"
         }
       }
     },
     "APIEndpoint": {
       "Description": "API Gateway endpoint URL",
       "Value": {
-        "Fn::Sub": "https://${TransactionAPI}.execute-api.${AWS::Region}.amazonaws.com/prod"
+        "Fn::Sub": "https://${TransactionAPI}.execute-api.${AWS::Region}.amazonaws.com/prod-${EnvironmentSuffix}"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "APIEndpoint-${environmentSuffix}"
+          "Fn::Sub": "APIEndpoint-${EnvironmentSuffix}"
         }
       }
     },
@@ -1480,7 +1496,7 @@ This implementation provides a complete, production-ready CloudFormation templat
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "DatabaseSecret-${environmentSuffix}"
+          "Fn::Sub": "DatabaseSecret-${EnvironmentSuffix}"
         }
       }
     }
@@ -1524,7 +1540,7 @@ This CloudFormation template implements a comprehensive secure financial data pr
 - **Log Retention**: CloudWatch logs retained for 90 days minimum
 - **Automatic Rotation**: Database credentials rotated every 30 days
 - **Destroyability**: No Retain deletion policies or deletion protection flags
-- **Resource Naming**: All resources include environmentSuffix parameter
+- **Resource Naming**: All resources include EnvironmentSuffix parameter
 
 ### High Availability Design
 
@@ -1550,14 +1566,19 @@ This CloudFormation template implements a comprehensive secure financial data pr
 
 ### Deployment Parameters
 
-**Required Parameter:**
-- `environmentSuffix`: String (1-20 chars, lowercase alphanumeric + hyphens)
+**Required Parameters:**
+- `EnvironmentSuffix`: String (1-20 chars, lowercase alphanumeric + hyphens)
   - Used in all resource names for uniqueness
-  - Examples: "dev", "staging", "prod", "test-123"
+  - Examples: "dev", "staging", "prod", "test-123", "pr6991"
+
+**Optional Parameters:**
+- `logRetentionDays`: Number (default: 90)
+  - CloudWatch Logs retention period in days
+  - Allowed values: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653
 
 **Region:** us-east-2 (as specified in requirements)
 
-### Stack Outputs (8 Exports)
+### Stack Outputs (9 Exports)
 
 1. `EncryptionKeyId`: KMS Key ID for encryption operations
 2. `EncryptionKeyArn`: KMS Key ARN for IAM policies
@@ -1565,8 +1586,9 @@ This CloudFormation template implements a comprehensive secure financial data pr
 4. `TransactionBucketName`: S3 bucket name for transaction data
 5. `TransactionTableName`: DynamoDB table name for transaction records
 6. `TransactionProcessorFunctionArn`: Lambda function ARN for processing
-7. `APIEndpoint`: API Gateway URL for transaction submissions
-8. `DatabaseSecretArn`: Secrets Manager ARN for database credentials
+7. `APIEndpoint`: API Gateway URL for transaction submissions (includes environment suffix)
+8. `APIKey`: API Key ID for authentication
+9. `DatabaseSecretArn`: Secrets Manager ARN for database credentials
 
 ### Testing
 
@@ -1583,18 +1605,21 @@ This CloudFormation template implements a comprehensive secure financial data pr
 
 1. **Added DependsOn for SecretRotationSchedule**: Ensures Lambda::Permission is created before rotation schedule (fixes deployment failure)
 2. **Fixed S3 lifecycle property name**: Changed `NoncurrentVersionExpirations` to `NoncurrentVersionExpiration` (lint fix)
+3. **Parameterized API Gateway Stage Name**: Changed from hardcoded "prod" to "prod-${EnvironmentSuffix}" for multi-deployment support
+4. **Fixed Parameter Naming**: Changed `environmentSuffix` to `EnvironmentSuffix` (PascalCase per CloudFormation convention)
+5. **Added logRetentionDays Parameter**: Made CloudWatch Logs retention configurable (default: 90 days)
 
 ### Deployment Instructions
 
 ```bash
 # Validate template syntax
-aws cloudformation validate-template --template-body file://lib/template.json
+aws cloudformation validate-template --template-body file://lib/TapStack.json
 
 # Deploy stack
 aws cloudformation create-stack \
   --stack-name financial-pipeline-dev \
-  --template-body file://lib/template.json \
-  --parameters ParameterKey=environmentSuffix,ParameterValue=dev \
+  --template-body file://lib/TapStack.json \
+  --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-2
 
