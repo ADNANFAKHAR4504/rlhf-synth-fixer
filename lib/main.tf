@@ -22,11 +22,11 @@ resource "random_password" "db_password" {
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name        = "payment-app/${var.environment}/db-password"
+  name        = "payment-app/${var.environment}/db-pass"
   description = "Database password for ${var.environment} environment"
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-db-password"
+    Name = "${local.name_prefix}-db-pass"
   })
 }
 
