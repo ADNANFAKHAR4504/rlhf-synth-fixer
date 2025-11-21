@@ -460,41 +460,6 @@
         }
       }
     },
-    "SelfSignedCertificate": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": {
-          "Fn::Sub": "*.${AWS::Region}.elb.amazonaws.com"
-        },
-        "ValidationMethod": "DNS",
-        "DomainValidationOptions": [
-          {
-            "DomainName": {
-              "Fn::Sub": "*.${AWS::Region}.elb.amazonaws.com"
-            },
-            "HostedZoneId": {
-              "Ref": "AWS::NoValue"
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-cert-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
