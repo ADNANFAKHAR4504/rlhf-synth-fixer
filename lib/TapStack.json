@@ -1502,7 +1502,7 @@
       "Type": "AWS::Route53::HealthCheck",
       "Properties": {
         "HealthCheckConfig": {
-          "Type": "HTTPS_STR_MATCH",
+          "Type": "HTTP_STR_MATCH",
           "ResourcePath": "/health",
           "FullyQualifiedDomainName": {
             "Fn::GetAtt": [
@@ -1510,7 +1510,7 @@
               "DNSName"
             ]
           },
-          "Port": 443,
+          "Port": 80,
           "RequestInterval": 30,
           "FailureThreshold": 3,
           "MeasureLatency": true,

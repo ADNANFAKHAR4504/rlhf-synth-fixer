@@ -89,9 +89,9 @@ The corrected CloudFormation template is located at `lib/TapStack.json` (1658 li
 - Access logs enabled to S3
 
 **Route53 Health Check**:
-- Type: HTTPS_STR_MATCH
+- Type: HTTP_STR_MATCH
 - Resource path: /health
-- Port: 443
+- Port: 80 (matches ALB HTTP listener)
 - RequestInterval: 30 seconds
 - FailureThreshold: 3 (90 seconds to failover)
 - SearchString: "Healthy"

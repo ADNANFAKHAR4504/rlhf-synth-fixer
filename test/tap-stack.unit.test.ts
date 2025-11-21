@@ -414,7 +414,8 @@ describe('Payment Processing Infrastructure - CloudFormation Template', () => {
       expect(template.Resources.Route53HealthCheck).toBeDefined();
       const hc = template.Resources.Route53HealthCheck;
       expect(hc.Type).toBe('AWS::Route53::HealthCheck');
-      expect(hc.Properties.HealthCheckConfig.Type).toBe('HTTPS_STR_MATCH');
+      expect(hc.Properties.HealthCheckConfig.Type).toBe('HTTP_STR_MATCH');
+      expect(hc.Properties.HealthCheckConfig.Port).toBe(80);
       expect(hc.Properties.HealthCheckConfig.RequestInterval).toBe(30);
       expect(hc.Properties.HealthCheckConfig.FailureThreshold).toBe(3);
     });
