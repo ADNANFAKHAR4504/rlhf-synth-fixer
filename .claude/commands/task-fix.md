@@ -24,15 +24,16 @@ When you run `/task-fix`, the agent will:
 2. **PHASE 1 - PR Selection**: Check availability, atomically select next PR (prevents duplicates)
 3. **PHASE 2.1 - Pre-Fix Analysis**: Document root cause, fix plan, and solution approach
 4. **PHASE 2.2 - Worktree Setup**: Create isolated worktree, validate location
-5. **PHASE 2.3 - Failure Analysis**: Analyze GitHub pipeline failures in detail
-6. **PHASE 2.4 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
-7. **PHASE 2.5 - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
-8. **PHASE 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
-9. **PHASE 2.7 - Quality Gates**: Verify all quality gates pass before marking fixed
-10. **PHASE 2.8 - Commit & Push**: Commit fixes and push to PR branch
-11. **PHASE 2.9 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
-12. **PHASE 2.10 - Update Status**: Mark as fixed/failed with detailed progress tracking
-13. **PHASE 2.11 - Cleanup**: Remove worktrees after completion
+5. **PHASE 2.2.5 - Branch Synchronization**: Ensure branch is even with main, merge latest changes, resolve conflicts
+6. **PHASE 2.3 - Failure Analysis**: Analyze GitHub pipeline failures in detail
+7. **PHASE 2.4 - Pre-Deployment Validation**: Run pre-validate-iac.sh before deployment (cost optimization)
+8. **PHASE 2.5 - Apply Fixes**: Fix issues stage by stage (Detect → Lint → Build → Deploy → Test)
+9. **PHASE 2.6 - Local Validation**: Validate all fixes locally (lint, build, test, deploy)
+10. **PHASE 2.7 - Quality Gates**: Verify all quality gates pass before marking fixed
+11. **PHASE 2.8 - Commit & Push**: Commit fixes and push to PR branch
+12. **PHASE 2.9 - Monitor Pipeline**: Wait for ALL GitHub pipeline stages to pass
+13. **PHASE 2.10 - Update Status**: Mark as fixed/failed with detailed progress tracking
+14. **PHASE 2.11 - Cleanup**: Remove worktrees after completion
 
 ## Parallel Execution Support
 
@@ -263,6 +264,23 @@ The PR fixer agent follows a structured workflow with validation checkpoints and
 **Pass criteria**: Worktree at correct location, branch matches, metadata available
 **Fail action**: Remove worktree, recreate, re-validate
 
+#### 2.2.5 Branch Synchronization with Main
+**Checkpoint PR-B2**: Branch Synchronization (PHASE 2.2.5)
+
+**CRITICAL**: Before fixing any task, ensure the PR branch is synchronized with main branch to prevent merge conflicts and ensure fixes are applied on top of latest main.
+
+- Check if branch is even with main branch
+- Fetch latest changes from origin/main
+- Merge main into PR branch (or rebase if preferred)
+- Resolve any merge conflicts automatically if possible
+- Ensure no merge conflicts remain before proceeding
+- Verify branch is up-to-date with main
+
+**Pass criteria**: Branch synchronized with main, no merge conflicts, ready for fixes
+**Fail action**: If conflicts cannot be resolved automatically, mark PR as needs-manual-review and skip to next PR
+
+**Note**: This phase ensures that all fixes are applied on top of the latest main branch, preventing future merge conflicts and ensuring compatibility with latest codebase changes.
+
 #### 2.3 Failure Analysis
 - Fetch GitHub pipeline logs
 - Identify specific failed stages
@@ -440,6 +458,14 @@ The agent uses structured validation checkpoints throughout the process to ensur
   - Worktree location verified (worktree/pr-fix-<PR_NUMBER>)
   - Branch matches PR branch
   - Metadata available
+
+- **Checkpoint PR-B2**: Branch Synchronization (PHASE 2.2.5)
+  - Branch checked against main branch
+  - Latest changes fetched from origin
+  - Main merged into branch (if needed)
+  - No merge conflicts (or conflicts auto-resolved)
+  - Branch is up-to-date with main
+  - Working directory is clean
 
 - **Checkpoint PR-C**: Failure Analysis Completeness (PHASE 2.1)
   - Root cause documented with evidence

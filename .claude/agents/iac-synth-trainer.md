@@ -826,6 +826,178 @@ echo "✅ Worktree validation passed"
 pwd  # Should show: .../worktree/pr-fix-<PR_NUMBER>
 ```
 
+#### 2.2.5 Branch Synchronization with Main
+
+**CHECKPOINT PR-B2**: Branch Synchronization
+
+**CRITICAL**: Before fixing any task, ensure the PR branch is synchronized with main branch to prevent merge conflicts and ensure fixes are applied on top of latest main.
+
+```bash
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Synchronizing with main branch"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.2.5: BRANCH SYNCHRONIZATION - PR #${PR_NUMBER}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Ensure we're in the worktree
+if [[ ! "$(pwd)" =~ worktree/pr-fix-[^/]+$ ]]; then
+  echo "❌ BLOCKED: Not in worktree directory"
+  exit 1
+fi
+
+# Fetch latest from origin
+echo "📥 Fetching latest changes from origin..."
+git fetch origin main
+git fetch origin $PR_BRANCH
+
+# Check current branch status
+CURRENT_BRANCH=$(git branch --show-current)
+echo "Current branch: $CURRENT_BRANCH"
+
+# Check if branch is even with main
+MAIN_COMMIT=$(git rev-parse origin/main)
+BRANCH_COMMIT=$(git rev-parse HEAD)
+MERGE_BASE=$(git merge-base origin/main HEAD)
+
+echo "Main commit: $MAIN_COMMIT"
+echo "Branch commit: $BRANCH_COMMIT"
+echo "Merge base: $MERGE_BASE"
+
+# Check if branch is behind main
+if [ "$MERGE_BASE" != "$MAIN_COMMIT" ]; then
+  echo "⚠️ Branch is not up-to-date with main"
+  echo "Main has new commits that need to be merged"
+  
+  # Check if branch has diverged
+  if [ "$MERGE_BASE" != "$BRANCH_COMMIT" ]; then
+    echo "Branch has diverged from main - merge required"
+  fi
+  
+  # Attempt to merge main into branch
+  echo "🔄 Merging main into PR branch..."
+  
+  # Try merge with strategy
+  if git merge origin/main --no-edit --no-ff; then
+    echo "✅ Successfully merged main into branch"
+  else
+    echo "⚠️ Merge conflict detected"
+    
+    # Check for conflicts
+    if [ -n "$(git diff --check)" ] || [ -n "$(git ls-files -u)" ]; then
+      echo "🔍 Analyzing merge conflicts..."
+      
+      # List conflicted files
+      CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
+      echo "Conflicted files:"
+      echo "$CONFLICTED_FILES"
+      
+      # Try to auto-resolve common conflicts
+      echo "🔧 Attempting to auto-resolve conflicts..."
+      
+      # Strategy 1: Accept main for common files (package.json, etc.)
+      for file in $CONFLICTED_FILES; do
+        if [[ "$file" == "package.json" ]] || [[ "$file" == "package-lock.json" ]] || [[ "$file" == "yarn.lock" ]] || [[ "$file" == "Pipfile.lock" ]]; then
+          echo "Auto-resolving $file by accepting main version..."
+          git checkout --theirs "$file" 2>/dev/null || true
+          git add "$file" 2>/dev/null || true
+        fi
+      done
+      
+      # Strategy 2: Accept ours for project-specific files
+      for file in $CONFLICTED_FILES; do
+        if [[ "$file" =~ ^lib/ ]] || [[ "$file" =~ ^test/ ]] || [[ "$file" =~ ^tests/ ]] || [[ "$file" == "metadata.json" ]]; then
+          echo "Keeping branch version for $file..."
+          git checkout --ours "$file" 2>/dev/null || true
+          git add "$file" 2>/dev/null || true
+        fi
+      done
+      
+      # Check if conflicts are resolved
+      if [ -z "$(git ls-files -u)" ]; then
+        echo "✅ Conflicts auto-resolved"
+        git commit --no-edit || true
+        echo "✅ Merge completed successfully"
+      else
+        echo "❌ BLOCKED: Cannot auto-resolve merge conflicts"
+        echo "Remaining conflicted files:"
+        git diff --name-only --diff-filter=U
+        
+        # Abort merge and mark PR as needs manual review
+        git merge --abort
+        echo "❌ Marking PR as needs-manual-review due to unresolved conflicts"
+        bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER failed "Merge conflicts require manual resolution"
+        
+        # Add GitHub comment
+        gh pr comment $PR_NUMBER --body "🤖 **Auto-fix blocked**: This PR has merge conflicts with main branch that require manual resolution. Please resolve conflicts and try again.
+        
+**Conflicted files:**
+\`\`\`
+$(git diff --name-only --diff-filter=U 2>/dev/null || echo "Unable to list conflicts")
+\`\`\`
+
+**Action required**: Merge main branch into this PR branch and resolve conflicts manually." || true
+        
+        # Exit worktree and continue to next PR
+        cd ../..
+        continue
+      fi
+    else
+      # No conflicts, commit the merge
+      git commit --no-edit || true
+      echo "✅ Merge completed successfully"
+    fi
+  fi
+else
+  echo "✅ Branch is already up-to-date with main"
+fi
+
+# Final verification
+echo "🔍 Verifying branch synchronization..."
+git fetch origin main
+MAIN_COMMIT=$(git rev-parse origin/main)
+MERGE_BASE=$(git merge-base origin/main HEAD)
+
+if [ "$MERGE_BASE" = "$MAIN_COMMIT" ]; then
+  echo "✅ Branch is synchronized with main"
+else
+  echo "⚠️ Warning: Branch may still be behind main"
+  echo "Main commit: $MAIN_COMMIT"
+  echo "Merge base: $MERGE_BASE"
+fi
+
+# Ensure working directory is clean
+if [ -n "$(git status --porcelain)" ]; then
+  echo "⚠️ Warning: Working directory has uncommitted changes after merge"
+  git status --short
+else
+  echo "✅ Working directory is clean"
+fi
+
+echo "✅ Branch synchronization complete"
+```
+
+**CHECKPOINT PR-B2**: Branch Synchronization
+- ✅ Branch checked against main
+- ✅ Latest changes fetched from origin
+- ✅ Main merged into branch (if needed)
+- ✅ No merge conflicts (or conflicts resolved)
+- ✅ Branch is up-to-date with main
+- ✅ Working directory is clean
+
+**Pass criteria**: Branch synchronized with main, no merge conflicts, ready for fixes
+**Fail action**: If conflicts cannot be resolved automatically, mark PR as needs-manual-review and skip to next PR
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.2.5 - BRANCH SYNCHRONIZATION COMPLETE - PR #<number>
+**PR**: #<number>
+**PROGRESS**: 2.2.5/2.11 phases completed
+**NEXT ACTION**: Extract metadata and analyze failures
+**BRANCH STATUS**: ✅ Synchronized with main | ✅ No conflicts
+**BLOCKED**: NO
+```
+
 #### 2.3 Extract Metadata & Platform Info
 
 ```bash
