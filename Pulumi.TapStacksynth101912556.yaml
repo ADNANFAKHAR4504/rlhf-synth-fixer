@@ -1,3 +1,0 @@
-encryptionsalt: v1:MzCa8wOSMDU=:v1:TQNAzF8burqQsZz3:0yOtxj+tKDjmhrnTl3UeAWp/RsMIAA==
-config:
-  aws:defaultTags: '{"tags":{"Environment":"synth101912556","Repository":"synth-101912556","Author":"Arpit Patidar","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-11-21T02:07:35Z","ManagedBy":"pulumi"}}'
