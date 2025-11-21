@@ -87,7 +87,7 @@ class TapStack(Stack):
             "Allow PostgreSQL traffic from ECS tasks",
         )
 
-        # RDS Aurora PostgreSQL Serverless v2 cluster
+        # RDS Aurora PostgreSQL cluster
         db_cluster = rds.DatabaseCluster(
             self,
             f"aurora-cluster-{environment_suffix}",
@@ -99,21 +99,16 @@ class TapStack(Stack):
                 username="dbadmin",
                 secret_name=f"db-credentials-{environment_suffix}",
             ),
-            writer=rds.ClusterInstance.serverless_v2(
-                f"writer-{environment_suffix}",
-                scale_with_writer=True,
+            instance_props=rds.InstanceProps(
+                instance_type=ec2.InstanceType.of(
+                    ec2.InstanceClass.BURSTABLE3,
+                    ec2.InstanceSize.MEDIUM
+                ),
+                vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+                vpc=vpc,
+                security_groups=[rds_security_group],
             ),
-            readers=[
-                rds.ClusterInstance.serverless_v2(
-                    f"reader-{environment_suffix}",
-                    scale_with_writer=True,
-                )
-            ],
-            serverless_v2_min_capacity=0.5,
-            serverless_v2_max_capacity=1,
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            security_groups=[rds_security_group],
+            instances=2,  # 1 writer + 1 reader
             backup=rds.BackupProps(
                 retention=Duration.days(1),  # Minimum retention for fast cleanup
             ),
@@ -290,6 +285,8 @@ class TapStack(Stack):
             cluster=cluster,
             task_definition=task_definition,
             desired_count=2,
+            min_healthy_percent=100,
+            max_healthy_percent=200,
             assign_public_ip=False,
             security_groups=[ecs_security_group],
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
@@ -306,6 +303,8 @@ class TapStack(Stack):
             cluster=cluster,
             task_definition=task_definition,
             desired_count=1,
+            min_healthy_percent=100,
+            max_healthy_percent=200,
             assign_public_ip=False,
             security_groups=[ecs_security_group],
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
