@@ -26,6 +26,7 @@ class TestDatabaseModule(unittest.TestCase):
                 pulumi.Output.from_input("subnet-2")
             ],
             security_group_id=pulumi.Output.from_input("sg-12345"),
+            db_password=pulumi.Output.secret("TestPassword123!"),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -53,6 +54,7 @@ class TestDatabaseModule(unittest.TestCase):
                 pulumi.Output.from_input("subnet-2")
             ],
             security_group_id=pulumi.Output.from_input("sg-12345"),
+            db_password=pulumi.Output.secret("TestPassword123!"),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -77,6 +79,7 @@ class TestDatabaseModule(unittest.TestCase):
                 pulumi.Output.from_input("subnet-2")
             ],
             security_group_id=pulumi.Output.from_input("sg-12345"),
+            db_password=pulumi.Output.secret("TestPassword123!"),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -101,6 +104,7 @@ class TestDatabaseModule(unittest.TestCase):
                 pulumi.Output.from_input("subnet-2")
             ],
             security_group_id=pulumi.Output.from_input("sg-12345"),
+            db_password=pulumi.Output.secret("TestPassword123!"),
             environment="prod",
             tags={"Environment": "prod"}
         )
@@ -126,6 +130,7 @@ class TestDatabaseModule(unittest.TestCase):
                 pulumi.Output.from_input("subnet-2")
             ],
             security_group_id=pulumi.Output.from_input("sg-12345"),
+            db_password=pulumi.Output.secret("TestPassword123!"),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -159,6 +164,7 @@ class MyMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:rds/cluster:Cluster":
             outputs["id"] = f"cluster-{args.name}"
             outputs["endpoint"] = "payment-db.cluster-xyz.us-east-1.rds.amazonaws.com"
+            outputs["reader_endpoint"] = "payment-db.cluster-ro-xyz.us-east-1.rds.amazonaws.com"
         elif args.typ == "aws:rds/clusterInstance:ClusterInstance":
             outputs["id"] = f"instance-{args.name}"
 

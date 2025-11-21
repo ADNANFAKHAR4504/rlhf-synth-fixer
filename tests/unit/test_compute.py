@@ -5,6 +5,14 @@ import unittest
 import pulumi
 
 
+# Create a mock log group class
+class MockLogGroup:
+    """Mock CloudWatch log group for testing"""
+    def __init__(self):
+        self.name = "/ecs/transaction-processing-test"
+        self.arn = "arn:aws:logs:us-east-1:123456789012:log-group:/ecs/transaction-processing-test"
+
+
 class TestComputeModule(unittest.TestCase):
     """Test cases for ECS Fargate cluster and services"""
 
@@ -33,6 +41,7 @@ class TestComputeModule(unittest.TestCase):
             database_endpoint=pulumi.Output.from_input("db.example.com"),
             cache_endpoint=pulumi.Output.from_input("cache.example.com"),
             queue_url=pulumi.Output.from_input("https://sqs.us-east-1.amazonaws.com/123/queue"),
+            log_group=MockLogGroup(),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -67,6 +76,7 @@ class TestComputeModule(unittest.TestCase):
             database_endpoint=pulumi.Output.from_input("db.example.com"),
             cache_endpoint=pulumi.Output.from_input("cache.example.com"),
             queue_url=pulumi.Output.from_input("https://sqs.us-east-1.amazonaws.com/123/queue"),
+            log_group=MockLogGroup(),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -99,6 +109,7 @@ class TestComputeModule(unittest.TestCase):
             database_endpoint=pulumi.Output.from_input("db.example.com"),
             cache_endpoint=pulumi.Output.from_input("cache.example.com"),
             queue_url=pulumi.Output.from_input("https://sqs.us-east-1.amazonaws.com/123/queue"),
+            log_group=MockLogGroup(),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -131,6 +142,7 @@ class TestComputeModule(unittest.TestCase):
             database_endpoint=pulumi.Output.from_input("db.example.com"),
             cache_endpoint=pulumi.Output.from_input("cache.example.com"),
             queue_url=pulumi.Output.from_input("https://sqs.us-east-1.amazonaws.com/123/queue"),
+            log_group=MockLogGroup(),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -164,6 +176,7 @@ class TestComputeModule(unittest.TestCase):
             database_endpoint=pulumi.Output.from_input("db.example.com"),
             cache_endpoint=pulumi.Output.from_input("cache.example.com"),
             queue_url=pulumi.Output.from_input("https://sqs.us-east-1.amazonaws.com/123/queue"),
+            log_group=MockLogGroup(),
             environment="dev",
             tags={"Environment": "test"}
         )
@@ -206,6 +219,8 @@ class MyMocks(pulumi.runtime.Mocks):
         elif args.typ == "aws:iam/policy:Policy":
             outputs["id"] = f"policy-{args.name}"
             outputs["arn"] = f"arn:aws:iam::123456789012:policy/{args.name}"
+        elif args.typ == "aws:iam/rolePolicy:RolePolicy":
+            outputs["id"] = f"role-policy-{args.name}"
         elif args.typ == "aws:ecs/taskDefinition:TaskDefinition":
             outputs["id"] = f"task-{args.name}"
             outputs["arn"] = f"arn:aws:ecs:us-east-1:123456789012:task-definition/{args.name}:1"
@@ -221,6 +236,8 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["id"] = f"policy-{args.name}"
         elif args.typ == "aws:cloudwatch/logGroup:LogGroup":
             outputs["id"] = f"log-group-{args.name}"
+            outputs["name"] = args.inputs.get("name", args.name)
+            outputs["arn"] = f"arn:aws:logs:us-east-1:123456789012:log-group:{args.name}"
 
         return [outputs.get("id", args.name), outputs]
 

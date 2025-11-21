@@ -6,14 +6,14 @@ import os
 from typing import Optional
 
 # Import modular components
-from .vpc import create_vpc
-from .security import create_security_groups
-from .database import create_database
-from .cache import create_cache
-from .messaging import create_messaging_resources
-from .compute import create_ecs_cluster
-from .monitoring import create_monitoring
-from .storage import create_storage_buckets
+from vpc import create_vpc
+from security import create_security_groups
+from database import create_database
+from cache import create_cache
+from messaging import create_messaging_resources
+from compute import create_ecs_cluster
+from monitoring import create_monitoring
+from storage import create_storage_buckets
 
 # Get configuration using Pulumi Config (not environment variables)
 config = pulumi.Config()
