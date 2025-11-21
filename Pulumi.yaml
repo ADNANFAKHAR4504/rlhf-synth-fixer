@@ -1,4 +1,4 @@
-name: transaction-processing
+name: TapStack
 runtime: python
 description: Cloud environment for transaction processing with ECS Fargate and Aurora PostgreSQL
 config:
