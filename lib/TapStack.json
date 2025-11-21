@@ -222,33 +222,6 @@
       }
     },
 
-    "NATGateway1EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Application", "Value": {"Ref": "ApplicationName"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
-        ]
-      }
-    },
-
-    "NATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NATGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
-        "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Application", "Value": {"Ref": "ApplicationName"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
-        ]
-      }
-    },
 
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
@@ -310,14 +283,6 @@
       }
     },
 
-    "PrivateRoute1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NATGateway1"}
-      }
-    },
 
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
