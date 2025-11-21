@@ -1,6 +1,0 @@
-encryptionsalt: v1:PQV3TwQ3FEM=:v1:yXdOtxtOYbZrD0l3:n95N1U+m+UEFVHCNTvy2x09BitRkBA==
-config:
-  transaction-processing:environment_suffix: synth101912526v2
-  transaction-processing:db_password:
-    secure: v1:+0vMM43JnA036OzG:Dqh5hAjwdUbpsd5qePumREbHbWNXnjyM4+YWH9+iPx8=
-  aws:region: us-east-1

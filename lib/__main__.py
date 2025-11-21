@@ -13,7 +13,10 @@ environment_suffix: str = (
     or pulumi.get_stack()
 )
 region: str = config.get("region") or "us-east-1"
-db_password = config.require_secret("db_password")
+
+# Get db_password from environment variable or config
+db_password_env = os.environ.get('TF_VAR_db_password', 'TempPassword123!')
+db_password = config.get_secret("db_password") or db_password_env
 
 # Get AWS account ID for unique bucket names
 sts = boto3.client('sts')
