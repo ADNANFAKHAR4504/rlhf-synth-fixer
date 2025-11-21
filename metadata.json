@@ -23,5 +23,6 @@
     "CloudWatch",
     "EC2"
   ],
+  "region": "us-east-1",
   "training_quality": 10
 }
