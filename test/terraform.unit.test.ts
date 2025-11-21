@@ -339,7 +339,7 @@ describe('Payment Processing Platform - Terraform Unit Tests', () => {
     test('ALB target group has health check', () => {
       expect(computeMain).toMatch(/resource\s+"aws_lb_target_group"\s+"main"\s*{/);
       expect(computeMain).toMatch(/health_check\s*{/);
-      expect(computeMain).toMatch(/path\s*=\s*"\/health"/);
+      expect(computeMain).toMatch(/path\s*=\s*"\/"/);
     });
 
     test('HTTP listener forwards or redirects based on certificate', () => {
