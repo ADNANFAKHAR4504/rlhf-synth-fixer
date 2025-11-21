@@ -48,7 +48,8 @@
           "SSEEnabled": true
         }
       },
-      "DeletionPolicy": "Retain"
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
     },
     "CriticalAlertsTopic": {
       "Type": "AWS::SNS::Topic",
@@ -277,7 +278,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 100,
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
@@ -322,7 +322,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 100,
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [

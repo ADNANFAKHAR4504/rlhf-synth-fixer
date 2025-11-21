@@ -53,7 +53,8 @@
           "SSEEnabled": true
         }
       },
-      "DeletionPolicy": "Retain"
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
     },
     "CriticalAlertsTopic": {
       "Type": "AWS::SNS::Topic",
@@ -282,7 +283,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 100,
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
@@ -327,7 +327,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 100,
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
@@ -481,9 +480,9 @@ This CloudFormation template implements a complete serverless cryptocurrency ale
 - **AlertIngestionFunction**: Receives incoming cryptocurrency alerts and stores them in DynamoDB
 - **AlertProcessingFunction**: Processes stored alerts and sends SNS notifications for critical alerts (>$1000)
 - Both functions use ARM64 architecture (Graviton2) for cost optimization
-- Reserved concurrent executions set to 100 for each function
 - Python 3.11 runtime with inline code
 - Dead letter queues configured for error handling
+- Functions use unreserved concurrent executions pool (no ReservedConcurrentExecutions specified to avoid account limit issues)
 
 ### DynamoDB Table
 - **AlertsTable**: Stores alert history with AlertId (partition key) and Timestamp (sort key)
@@ -491,6 +490,7 @@ This CloudFormation template implements a complete serverless cryptocurrency ale
 - Encryption at rest enabled (SSE)
 - Pay-per-request billing mode for variable workloads
 - DeletionPolicy set to Retain to preserve data
+- UpdateReplacePolicy set to Retain to protect resource during stack updates
 
 ### SNS Topic
 - **CriticalAlertsTopic**: Sends email notifications for alerts above $1000
@@ -530,9 +530,8 @@ All resources follow the naming convention with EnvironmentSuffix parameter for 
 ## Key Features
 1. Serverless architecture with no VPC requirements
 2. Cost-optimized with ARM64 Lambda functions
-3. Highly available with reserved concurrency of 100
-4. Error handling with dead letter queues and retry logic
-5. Security with least-privilege IAM roles and encryption at rest
-6. Monitoring with CloudWatch Logs (3-day retention)
-7. Event-driven with SNS notifications for critical alerts
-8. Scalable with DynamoDB on-demand billing
+3. Error handling with dead letter queues and retry logic
+4. Security with least-privilege IAM roles and encryption at rest
+5. Monitoring with CloudWatch Logs (3-day retention)
+6. Event-driven with SNS notifications for critical alerts
+7. Scalable with DynamoDB on-demand billing

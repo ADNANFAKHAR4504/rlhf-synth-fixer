@@ -334,11 +334,11 @@ describe('Serverless Cryptocurrency Alert System - CloudFormation Template', () 
       expect(processingFunction.Properties.Runtime).toBe('python3.11');
     });
 
-    test('Lambda functions should have reserved concurrent executions of 100', () => {
+    test('Lambda functions should not have reserved concurrent executions (using unreserved pool)', () => {
       const ingestionFunction = template.Resources.AlertIngestionFunction;
       const processingFunction = template.Resources.AlertProcessingFunction;
-      expect(ingestionFunction.Properties.ReservedConcurrentExecutions).toBe(100);
-      expect(processingFunction.Properties.ReservedConcurrentExecutions).toBe(100);
+      expect(ingestionFunction.Properties.ReservedConcurrentExecutions).toBeUndefined();
+      expect(processingFunction.Properties.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('Lambda functions should have dead letter queue configured', () => {
