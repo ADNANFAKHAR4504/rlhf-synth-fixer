@@ -209,25 +209,30 @@ class TestTapStackIntegration:
         assert zone['Config']['PrivateZone'] is True
 
 
-    def test_cloudwatch_alarms_exist(self, cloudwatch_client):
+    def test_cloudwatch_alarms_exist(self, cloudwatch_client, environment_suffix):
         """Test that CloudWatch alarms are created and in OK or ALARM state."""
-        response = cloudwatch_client.describe_alarms()
+        # Use pagination to get all alarms
+        all_alarms = []
+        paginator = cloudwatch_client.get_paginator('describe_alarms')
+        for page in paginator.paginate():
+            all_alarms.extend(page['MetricAlarms'])
 
-        alarms = response['MetricAlarms']
+        # Filter alarms for this environment only
+        env_alarms = [a for a in all_alarms if environment_suffix in a['AlarmName']]
 
         # Check for replication lag alarm
         replication_alarms = [
-            a for a in alarms
+            a for a in env_alarms
             if "replication" in a["AlarmName"].lower() or "replica" in a["AlarmName"].lower()
         ]
         assert len(replication_alarms) > 0, "No replication lag alarms found"
 
         # Check for CPU alarms
-        cpu_alarms = [a for a in alarms if 'cpu' in a['AlarmName'].lower()]
+        cpu_alarms = [a for a in env_alarms if 'cpu' in a['AlarmName'].lower()]
         assert len(cpu_alarms) >= 2, "Expected at least 2 CPU alarms (primary and replica)"
 
         # Verify alarms are in valid state
-        for alarm in alarms:
+        for alarm in env_alarms:
             assert alarm['StateValue'] in ['OK', 'ALARM', 'INSUFFICIENT_DATA'], \
                 f"Alarm {alarm['AlarmName']} in unexpected state: {alarm['StateValue']}"
 
