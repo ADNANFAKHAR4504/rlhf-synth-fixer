@@ -29,14 +29,14 @@ describe('TapStack CloudFormation Template - Credit Scoring Application', () => 
       expect(template.Outputs).toBeDefined();
     });
 
-    test('should have exactly 42 resources', () => {
+    test('should have exactly 43 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(42);
+      expect(resourceCount).toBe(43);
     });
 
-    test('should have exactly 4 parameters', () => {
+    test('should have exactly 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(3);
     });
 
     test('should have exactly 8 outputs', () => {
@@ -66,12 +66,12 @@ describe('TapStack CloudFormation Template - Credit Scoring Application', () => 
       expect(template.Parameters.DatabaseMasterUsername.NoEcho).toBe(true);
     });
 
-    test('should have DatabaseMasterPassword parameter', () => {
-      expect(template.Parameters.DatabaseMasterPassword).toBeDefined();
-      expect(template.Parameters.DatabaseMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DatabaseMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DatabaseMasterPassword.MinLength).toBe(8);
-      expect(template.Parameters.DatabaseMasterPassword.Default).toBeDefined();
+    test('should have DatabaseMasterPasswordSecret resource', () => {
+      expect(template.Resources.DatabaseMasterPasswordSecret).toBeDefined();
+      expect(template.Resources.DatabaseMasterPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(template.Resources.DatabaseMasterPasswordSecret.Properties.GenerateSecretString).toBeDefined();
+      expect(template.Resources.DatabaseMasterPasswordSecret.Properties.GenerateSecretString.PasswordLength).toBe(32);
+      expect(template.Resources.DatabaseMasterPasswordSecret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
     });
   });
 
@@ -567,7 +567,8 @@ describe('TapStack CloudFormation Template - Credit Scoring Application', () => 
           'AWS::EC2::EIP', 'AWS::KMS::Key', 'AWS::RDS::DBSubnetGroup',
           'AWS::RDS::DBCluster', 'AWS::RDS::DBInstance', 'AWS::Logs::LogGroup',
           'AWS::Lambda::Function', 'AWS::IAM::Role', 'AWS::S3::Bucket',
-          'AWS::ElasticLoadBalancingV2::LoadBalancer', 'AWS::ElasticLoadBalancingV2::TargetGroup'
+          'AWS::ElasticLoadBalancingV2::LoadBalancer', 'AWS::ElasticLoadBalancingV2::TargetGroup',
+          'AWS::SecretsManager::Secret'
         ];
 
         if (taggableTypes.includes(resource.Type)) {

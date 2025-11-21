@@ -18,16 +18,40 @@
       "Description": "Master username for Aurora database",
       "Default": "dbadmin",
       "NoEcho": true
-    },
-    "DatabaseMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true,
-      "MinLength": 8,
-      "Default": "TempPassword123!"
     }
   },
   "Resources": {
+    "DatabaseMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": { "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}" },
+        "Description": "Master password for Aurora database cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "CostCenter",
+            "Value": "FinTech"
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "Sensitive"
+          }
+        ]
+      }
+    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -533,7 +557,7 @@
         "EngineVersion": "15.8",
         "DatabaseName": "creditscoring",
         "MasterUsername": { "Ref": "DatabaseMasterUsername" },
-        "MasterUserPassword": { "Ref": "DatabaseMasterPassword" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:${DatabaseMasterPasswordSecret}:SecretString:password}}" },
         "DBClusterIdentifier": { "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}" },
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
         "VpcSecurityGroupIds": [{ "Ref": "AuroraSecurityGroup" }],
