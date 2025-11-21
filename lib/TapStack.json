@@ -897,8 +897,104 @@
         ]
       }
     },
+    "S3ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}}
+        ]
+      }
+    },
+    "S3ReplicaBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "Region": "us-west-2",
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-s3-replica-bucket-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Type", "Value": "Replica"}
+        ]
+      }
+    },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
+      "DependsOn": "S3ReplicaBucket",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${Environment}-data-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -930,6 +1026,35 @@
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
         },
+        "ReplicationConfiguration": {
+          "Role": {"Fn::GetAtt": ["S3ReplicationRole", "Arn"]},
+          "Rules": [
+            {
+              "Id": "ReplicateAllObjects",
+              "Status": "Enabled",
+              "Priority": 1,
+              "Filter": {},
+              "DeleteMarkerReplication": {"Status": "Enabled"},
+              "Destination": {
+                "Bucket": {
+                  "Fn::Sub": "arn:aws:s3:::${Environment}-data-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "ReplicationTime": {
+                  "Status": "Enabled",
+                  "Time": {
+                    "Minutes": 15
+                  }
+                },
+                "Metrics": {
+                  "Status": "Enabled",
+                  "EventThreshold": {
+                    "Minutes": 15
+                  }
+                }
+              }
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -952,6 +1077,63 @@
         ]
       }
     },
+    "ApiAuthorizerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "api-authorizer-role-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}}
+        ]
+      }
+    },
+    "ApiAuthorizerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "${Environment}-api-authorizer-${EnvironmentSuffix}"},
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["ApiAuthorizerRole", "Arn"]},
+        "Code": {
+          "ZipFile": |
+            import json
+            def lambda_handler(event, context):
+                # Simple API key validation
+                token = event.get('headers', {}).get('Authorization', '')
+
+                # In production, validate against actual API keys or JWT tokens
+                if token and token.startswith('Bearer '):
+                    return {
+                        'isAuthorized': True,
+                        'context': {
+                            'user': 'authenticated-user'
+                        }
+                    }
+                return {
+                    'isAuthorized': False
+                }
+        },
+        "Timeout": 30,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "${Environment}-api-authorizer-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}}
+        ]
+      }
+    },
     "PrimaryApiGateway": {
       "Type": "AWS::ApiGatewayV2::Api",
       "Properties": {
@@ -970,6 +1152,31 @@
           "Project": {
             "Ref": "Project"
           }
+        }
+      }
+    },
+    "PrimaryApiAuthorizer": {
+      "Type": "AWS::ApiGatewayV2::Authorizer",
+      "Properties": {
+        "ApiId": {"Ref": "PrimaryApiGateway"},
+        "AuthorizerType": "REQUEST",
+        "AuthorizerUri": {
+          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiAuthorizerFunction.Arn}/invocations"
+        },
+        "AuthorizerPayloadFormatVersion": "2.0",
+        "EnableSimpleResponses": true,
+        "IdentitySource": ["$request.header.Authorization"],
+        "Name": {"Fn::Sub": "${Environment}-api-authorizer-${EnvironmentSuffix}"}
+      }
+    },
+    "ApiAuthorizerPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "ApiAuthorizerFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${PrimaryApiGateway}/*"
         }
       }
     },
@@ -1012,6 +1219,20 @@
         "RouteKey": "ANY /{proxy+}",
         "Target": {
           "Fn::Sub": "integrations/${PrimaryApiIntegration}"
+        },
+        "AuthorizationType": "CUSTOM",
+        "AuthorizerId": {"Ref": "PrimaryApiAuthorizer"}
+      }
+    },
+    "HealthCheckRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "PrimaryApiGateway"
+        },
+        "RouteKey": "GET /health",
+        "Target": {
+          "Fn::Sub": "integrations/${PrimaryApiIntegration}"
         }
       }
     },
@@ -1027,7 +1248,7 @@
           "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
         },
         "Code": {
-          "ZipFile": "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'Primary region handler', region: process.env.AWS_REGION }) }; };"
+          "ZipFile": "exports.handler = async (event) => { const path = event.rawPath || event.path || ''; if (path === '/health') { return { statusCode: 200, body: JSON.stringify({ status: 'healthy', region: process.env.AWS_REGION, timestamp: new Date().toISOString() }) }; } return { statusCode: 200, body: JSON.stringify({ message: 'Primary region handler', region: process.env.AWS_REGION, path: path }) }; };"
         },
         "Environment": {
           "Variables": {
@@ -1635,6 +1856,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${EnvironmentSuffix}-s3-bucket"
+        }
+      }
+    },
+    "S3ReplicaBucketName": {
+      "Description": "S3 replica bucket name for disaster recovery",
+      "Value": {
+        "Ref": "S3ReplicaBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${EnvironmentSuffix}-s3-replica-bucket"
         }
       }
     },
