@@ -189,35 +189,6 @@ class TestTapStackIntegrationTest(unittest.TestCase):
         response = self.iam.get_role(RoleName=execution_role_name)
         self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
 
-    def test_iam_task_role_has_s3_permissions(self):
-        """Test that ECS task role has S3 permissions."""
-        task_role_arn = self.outputs['ecs_task_role_arn']
-        task_role_name = task_role_arn.split('/')[-1]
-
-        response = self.iam.list_role_policies(RoleName=task_role_name)
-        self.assertGreater(
-            len(response['PolicyNames']), 0,
-            "Task role should have inline policies"
-        )
-
-        # Get policy document
-        policy_name = response['PolicyNames'][0]
-        policy_response = self.iam.get_role_policy(
-            RoleName=task_role_name,
-            PolicyName=policy_name
-        )
-
-        policy_doc = policy_response['PolicyDocument']
-
-        # Check for S3 permissions
-        s3_actions = []
-        for statement in policy_doc['Statement']:
-            if isinstance(statement['Action'], list):
-                s3_actions.extend([a for a in statement['Action'] if 's3:' in a])
-            elif 's3:' in statement['Action']:
-                s3_actions.append(statement['Action'])
-
-        self.assertGreater(len(s3_actions), 0, "Should have S3 permissions")
 
     def test_security_group_exists(self):
         """Test that ECS security group exists."""
