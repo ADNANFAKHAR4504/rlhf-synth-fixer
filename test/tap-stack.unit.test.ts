@@ -71,12 +71,20 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('should have VPCId parameter', () => {
       expect(template.Parameters.VPCId).toBeDefined();
-      expect(template.Parameters.VPCId.Type).toBe('AWS::EC2::VPC::Id');
+      expect(template.Parameters.VPCId.Type).toBe('String');
+      expect(template.Parameters.VPCId.Default).toBe('');
     });
 
     test('should have PrivateSubnetIds parameter', () => {
       expect(template.Parameters.PrivateSubnetIds).toBeDefined();
-      expect(template.Parameters.PrivateSubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
+      expect(template.Parameters.PrivateSubnetIds.Type).toBe('CommaDelimitedList');
+      expect(template.Parameters.PrivateSubnetIds.Default).toBe('');
+    });
+
+    test('should have DBPassword parameter with default', () => {
+      expect(template.Parameters.DBPassword).toBeDefined();
+      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
+      expect(template.Parameters.DBPassword.Default).toBeDefined();
     });
   });
 
@@ -87,6 +95,13 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Conditions.IsProduction['Fn::Equals'][0]).toEqual({ Ref: 'EnvironmentName' });
       expect(template.Conditions.IsProduction['Fn::Equals'][1]).toBe('prod');
     });
+
+    test('should have CreateVPC condition', () => {
+      expect(template.Conditions.CreateVPC).toBeDefined();
+      expect(template.Conditions.CreateVPC['Fn::Equals']).toBeDefined();
+      expect(template.Conditions.CreateVPC['Fn::Equals'][0]).toEqual({ Ref: 'VPCId' });
+      expect(template.Conditions.CreateVPC['Fn::Equals'][1]).toBe('');
+    });
   });
 
   describe('RDS Resources', () => {
@@ -94,7 +109,9 @@ describe('CloudFormation Template Unit Tests', () => {
       const resource = template.Resources.DBSubnetGroup;
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::RDS::DBSubnetGroup');
-      expect(resource.Properties.SubnetIds).toEqual({ Ref: 'PrivateSubnetIds' });
+      // SubnetIds now uses Fn::If to conditionally use created or existing subnets
+      expect(resource.Properties.SubnetIds['Fn::If']).toBeDefined();
+      expect(resource.Properties.SubnetIds['Fn::If'][0]).toBe('CreateVPC');
     });
 
     test('DBSubnetGroup name should include environmentSuffix', () => {
@@ -179,7 +196,9 @@ describe('CloudFormation Template Unit Tests', () => {
       const resource = template.Resources.DBSecurityGroup;
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(resource.Properties.VpcId).toEqual({ Ref: 'VPCId' });
+      // VpcId now uses Fn::If to conditionally use created or existing VPC
+      expect(resource.Properties.VpcId['Fn::If']).toBeDefined();
+      expect(resource.Properties.VpcId['Fn::If'][0]).toBe('CreateVPC');
     });
 
     test('DBSecurityGroup name should include environmentSuffix', () => {
@@ -202,7 +221,9 @@ describe('CloudFormation Template Unit Tests', () => {
       const resource = template.Resources.LambdaSecurityGroup;
       expect(resource).toBeDefined();
       expect(resource.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(resource.Properties.VpcId).toEqual({ Ref: 'VPCId' });
+      // VpcId now uses Fn::If to conditionally use created or existing VPC
+      expect(resource.Properties.VpcId['Fn::If']).toBeDefined();
+      expect(resource.Properties.VpcId['Fn::If'][0]).toBe('CreateVPC');
     });
 
     test('LambdaSecurityGroup name should include environmentSuffix', () => {
@@ -301,7 +322,9 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(resource.Properties.VpcConfig.SecurityGroupIds).toContainEqual({
         Ref: 'LambdaSecurityGroup'
       });
-      expect(resource.Properties.VpcConfig.SubnetIds).toEqual({ Ref: 'PrivateSubnetIds' });
+      // SubnetIds now uses Fn::If to conditionally use created or existing subnets
+      expect(resource.Properties.VpcConfig.SubnetIds['Fn::If']).toBeDefined();
+      expect(resource.Properties.VpcConfig.SubnetIds['Fn::If'][0]).toBe('CreateVPC');
     });
 
     test('TransactionProcessorFunction should have DB endpoint in environment', () => {
