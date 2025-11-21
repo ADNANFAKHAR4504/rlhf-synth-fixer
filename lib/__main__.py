@@ -1,6 +1,6 @@
 """Pulumi program entry point for infrastructure migration."""
 import pulumi
-from lib.tap_stack import TapStack
+from tap_stack import TapStack
 
 # Create the infrastructure stack
 stack = TapStack("migration-stack")

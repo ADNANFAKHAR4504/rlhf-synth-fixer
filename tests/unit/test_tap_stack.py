@@ -5,10 +5,33 @@ Comprehensive unit tests for the TapStack Pulumi component.
 Tests all infrastructure components with 100% coverage.
 """
 
+import os
 import unittest
 from unittest.mock import patch, MagicMock, Mock
 import pulumi
 import json
+
+# Set Pulumi to test mode BEFORE importing pulumi resources
+os.environ['PULUMI_TEST_MODE'] = 'true'
+
+
+class MyMocks(pulumi.runtime.Mocks):
+    """Mock Pulumi runtime for testing."""
+
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        """Create mock resource outputs."""
+        outputs = args.inputs.copy()
+        # Add default outputs for common resource types
+        if 'id' not in outputs:
+            outputs['id'] = f"{args.typ.split(':')[-1]}-{args.name}"
+        if 'arn' not in outputs and 'aws' in args.typ:
+            resource_type = args.typ.split('/')[-1].split(':')[0] if '/' in args.typ else args.typ.split(':')[-1]
+            outputs['arn'] = f"arn:aws:{resource_type}::123456789012:{outputs['id']}"
+        return [args.name, outputs]
+
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        """Mock function calls."""
+        return {}
 
 
 def async_test_helper(func):
@@ -22,15 +45,13 @@ def async_test_helper(func):
 class TestTapStack(unittest.TestCase):
     """Comprehensive test cases for TapStack infrastructure."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Set up test class."""
-        pulumi.runtime.settings._set_test_mode_enabled(True)
+    def setUp(self):
+        """Set up test fixtures."""
+        pulumi.runtime.set_mocks(MyMocks(), project='test-project', stack='test-stack', preview=False)
 
-    @classmethod
-    def tearDownClass(cls):
-        """Tear down test class."""
-        pulumi.runtime.settings._set_test_mode_enabled(False)
+    def tearDown(self):
+        """Clean up after tests."""
+        pulumi.runtime.set_mocks(None)
 
     @async_test_helper
     def test_stack_initialization_with_config(self):
