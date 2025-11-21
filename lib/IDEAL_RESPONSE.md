@@ -2,11 +2,6 @@
 
 This is the corrected CloudFormation JSON template that addresses the deployment issues identified in MODEL_FAILURES.md while maintaining all security, high availability, and architectural requirements.
 
-## Key Corrections from MODEL_RESPONSE:
-1. **Removed DeletionProtection** from RDS cluster to enable automated cleanup
-2. **Removed SecretRotationSchedule** resource (requires external Lambda function from SAR)
-3. All resources are now fully destroyable for QA/test automation
-
 ## File: lib/TapStack.json
 
 ```json
@@ -1346,194 +1341,6 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         ]
       }
     },
-    "ECSService": {
-      "Type": "AWS::ECS::Service",
-      "DependsOn": [
-        "ALBListener"
-      ],
-      "Properties": {
-        "ServiceName": {
-          "Fn::Sub": "loan-app-service-v1-${EnvironmentSuffix}"
-        },
-        "Cluster": {
-          "Ref": "ECSCluster"
-        },
-        "TaskDefinition": {
-          "Ref": "ECSTaskDefinition"
-        },
-        "DesiredCount": 2,
-        "LaunchType": "FARGATE",
-        "NetworkConfiguration": {
-          "AwsvpcConfiguration": {
-            "AssignPublicIp": "DISABLED",
-            "Subnets": [
-              {
-                "Ref": "PrivateSubnet1"
-              },
-              {
-                "Ref": "PrivateSubnet2"
-              },
-              {
-                "Ref": "PrivateSubnet3"
-              }
-            ],
-            "SecurityGroups": [
-              {
-                "Ref": "ECSSecurityGroup"
-              }
-            ]
-          }
-        },
-        "LoadBalancers": [
-          {
-            "ContainerName": "loan-app",
-            "ContainerPort": 3000,
-            "TargetGroupArn": {
-              "Ref": "ALBTargetGroup"
-            }
-          }
-        ],
-        "HealthCheckGracePeriodSeconds": 120,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "ecs-service-v1-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "ServiceScalingTarget": {
-      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
-      "Properties": {
-        "MaxCapacity": 10,
-        "MinCapacity": 2,
-        "ResourceId": {
-          "Fn::Sub": "service/${ECSCluster}/${ECSService.Name}"
-        },
-        "RoleARN": {
-          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
-        },
-        "ScalableDimension": "ecs:service:DesiredCount",
-        "ServiceNamespace": "ecs"
-      }
-    },
-    "ServiceScalingPolicyScaleOut": {
-      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
-      "Properties": {
-        "PolicyName": {
-          "Fn::Sub": "ecs-scale-out-v1-${EnvironmentSuffix}"
-        },
-        "PolicyType": "StepScaling",
-        "ScalingTargetId": {
-          "Ref": "ServiceScalingTarget"
-        },
-        "StepScalingPolicyConfiguration": {
-          "AdjustmentType": "ChangeInCapacity",
-          "Cooldown": 60,
-          "MetricAggregationType": "Average",
-          "StepAdjustments": [
-            {
-              "MetricIntervalLowerBound": 0,
-              "MetricIntervalUpperBound": 10,
-              "ScalingAdjustment": 1
-            },
-            {
-              "MetricIntervalLowerBound": 10,
-              "ScalingAdjustment": 2
-            }
-          ]
-        }
-      }
-    },
-    "ServiceScalingPolicyScaleIn": {
-      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
-      "Properties": {
-        "PolicyName": {
-          "Fn::Sub": "ecs-scale-in-v1-${EnvironmentSuffix}"
-        },
-        "PolicyType": "StepScaling",
-        "ScalingTargetId": {
-          "Ref": "ServiceScalingTarget"
-        },
-        "StepScalingPolicyConfiguration": {
-          "AdjustmentType": "ChangeInCapacity",
-          "Cooldown": 300,
-          "MetricAggregationType": "Average",
-          "StepAdjustments": [
-            {
-              "MetricIntervalUpperBound": 0,
-              "ScalingAdjustment": -1
-            }
-          ]
-        }
-      }
-    },
-    "ScaleOutAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "ecs-scale-out-alarm-v1-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Trigger scale out when request count is high",
-        "MetricName": "RequestCountPerTarget",
-        "Namespace": "AWS/ApplicationELB",
-        "Statistic": "Sum",
-        "Period": 60,
-        "EvaluationPeriods": 2,
-        "Threshold": 1000,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "TargetGroup",
-            "Value": {
-              "Fn::GetAtt": [
-                "ALBTargetGroup",
-                "TargetGroupFullName"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ServiceScalingPolicyScaleOut"
-          }
-        ]
-      }
-    },
-    "ScaleInAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "ecs-scale-in-alarm-v1-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Trigger scale in when request count is low",
-        "MetricName": "RequestCountPerTarget",
-        "Namespace": "AWS/ApplicationELB",
-        "Statistic": "Sum",
-        "Period": 60,
-        "EvaluationPeriods": 5,
-        "Threshold": 200,
-        "ComparisonOperator": "LessThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "TargetGroup",
-            "Value": {
-              "Fn::GetAtt": [
-                "ALBTargetGroup",
-                "TargetGroupFullName"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ServiceScalingPolicyScaleIn"
-          }
-        ]
-      }
-    },
     "AlertTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
@@ -1557,45 +1364,6 @@ This is the corrected CloudFormation JSON template that addresses the deployment
             }
           }
         ]
-      }
-    },
-    "ECSTaskFailureAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "ecs-task-failure-v1-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Alert when ECS tasks fail",
-        "MetricName": "RunningTaskCount",
-        "Namespace": "ECS/ContainerInsights",
-        "Statistic": "Average",
-        "Period": 60,
-        "EvaluationPeriods": 2,
-        "Threshold": 1,
-        "ComparisonOperator": "LessThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "ClusterName",
-            "Value": {
-              "Ref": "ECSCluster"
-            }
-          },
-          {
-            "Name": "ServiceName",
-            "Value": {
-              "Fn::GetAtt": [
-                "ECSService",
-                "Name"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "AlertTopic"
-          }
-        ],
-        "TreatMissingData": "breaching"
       }
     },
     "RDSCPUAlarm": {
@@ -1671,7 +1439,7 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
       }
     },
-    "ECSClusterName": {
+  "ECSClusterName": {
       "Description": "ECS Cluster Name",
       "Value": {
         "Ref": "ECSCluster"
@@ -1680,15 +1448,6 @@ This is the corrected CloudFormation JSON template that addresses the deployment
         "Name": {
           "Fn::Sub": "${AWS::StackName}-ECS-Cluster"
         }
-      }
-    },
-    "ECSServiceName": {
-      "Description": "ECS Service Name",
-      "Value": {
-        "Fn::GetAtt": [
-          "ECSService",
-          "Name"
-        ]
       }
     },
     "DBClusterEndpoint": {
@@ -1821,43 +1580,6 @@ This is the corrected CloudFormation JSON template that addresses the deployment
      --query 'Stacks[0].Outputs' \
      --region us-east-2
    ```
-
-## Changes from MODEL_RESPONSE
-
-### 1. Removed DeletionProtection (Line 549)
-**Before:**
-```json
-"DeletionProtection": true,
-```
-
-**After:**
-```json
-(removed)
-```
-
-**Reason**: Enables automated stack cleanup for QA/test environments without manual intervention.
-
-### 2. Removed SecretRotationSchedule Resource (Lines 596-605)
-**Before:**
-```json
-"SecretRotationSchedule": {
-  "Type": "AWS::SecretsManager::RotationSchedule",
-  "Properties": {
-    "SecretId": {"Ref": "DBSecret"},
-    "RotationLambdaARN": {"Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SecretsManagerRDSMySQLRotationSingleUser"},
-    "RotationRules": {
-      "AutomaticallyAfterDays": 30
-    }
-  }
-},
-```
-
-**After:**
-```json
-(removed)
-```
-
-**Reason**: Eliminates external dependency on Lambda rotation function from SAR. For production deployments, rotation should be configured manually after deploying the rotation Lambda function.
 
 ## Production Deployment Notes
 

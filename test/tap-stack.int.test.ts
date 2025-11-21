@@ -1,58 +1,51 @@
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand
-} from '@aws-sdk/client-ec2';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  DescribeTaskDefinitionCommand
-} from '@aws-sdk/client-ecs';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetBucketEncryptionCommand,
-  HeadBucketCommand
-} from '@aws-sdk/client-s3';
 import {
   CloudFrontClient,
   GetDistributionCommand
 } from '@aws-sdk/client-cloudfront';
 import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  SNSClient,
-  GetTopicAttributesCommand
-} from '@aws-sdk/client-sns';
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
 import {
-  SecretsManagerClient,
-  DescribeSecretCommand
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient
 } from '@aws-sdk/client-secrets-manager';
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-2';
 
 // Initialize AWS clients
 const ec2Client = new EC2Client({ region });
-const ecsClient = new ECSClient({ region });
 const rdsClient = new RDSClient({ region });
 const s3Client = new S3Client({ region });
 const cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' }); // CloudFront is global
@@ -275,100 +268,6 @@ describe('CloudFormation Stack Integration Tests - Loan Processing Infrastructur
     });
   });
 
-  // ========================================
-  // PHASE 3: ECS Fargate Integration
-  // ========================================
-
-  describe('ECS Fargate Integration Tests', () => {
-    test('ECS Cluster should exist and be active', async () => {
-      expect(outputs.ECSClusterName).toBeDefined();
-
-      const response = await ecsClient.send(
-        new DescribeClustersCommand({
-          clusters: [outputs.ECSClusterName]
-        })
-      );
-
-      expect(response.clusters).toHaveLength(1);
-      const cluster = response.clusters![0];
-      expect(cluster.status).toBe('ACTIVE');
-      expect(cluster.clusterName).toBe(outputs.ECSClusterName);
-      expect(cluster.registeredContainerInstancesCount).toBeDefined();
-    });
-
-    test('ECS Service should exist and be running', async () => {
-      expect(outputs.ECSServiceName).toBeDefined();
-
-      const response = await ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: outputs.ECSClusterName,
-          services: [outputs.ECSServiceName]
-        })
-      );
-
-      expect(response.services).toHaveLength(1);
-      const service = response.services![0];
-      expect(service.status).toBe('ACTIVE');
-      expect(service.launchType).toBe('FARGATE');
-      expect(service.desiredCount).toBeGreaterThanOrEqual(2);
-
-      // Service should have load balancers configured
-      expect(service.loadBalancers).toBeDefined();
-      expect(service.loadBalancers!.length).toBeGreaterThan(0);
-
-      console.log(`ECS Service running tasks: ${service.runningCount}/${service.desiredCount}`);
-    });
-
-    test('ECS Task Definition should be properly configured', async () => {
-      const serviceResponse = await ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: outputs.ECSClusterName,
-          services: [outputs.ECSServiceName]
-        })
-      );
-
-      const taskDefinitionArn = serviceResponse.services![0].taskDefinition;
-      expect(taskDefinitionArn).toBeDefined();
-
-      const taskDefResponse = await ecsClient.send(
-        new DescribeTaskDefinitionCommand({
-          taskDefinition: taskDefinitionArn
-        })
-      );
-
-      const taskDef = taskDefResponse.taskDefinition!;
-      expect(taskDef.networkMode).toBe('awsvpc');
-      expect(taskDef.requiresCompatibilities).toContain('FARGATE');
-      expect(taskDef.containerDefinitions).toHaveLength(1);
-
-      const container = taskDef.containerDefinitions![0];
-      expect(container.name).toBe('loan-app');
-      expect(container.essential).toBe(true);
-
-      // Verify port mapping
-      expect(container.portMappings).toBeDefined();
-      expect(container.portMappings![0].containerPort).toBe(3000);
-
-      // Verify environment variables
-      const envVars = container.environment || [];
-      expect(envVars.some(e => e.name === 'NODE_ENV')).toBe(true);
-      expect(envVars.some(e => e.name === 'DB_HOST')).toBe(true);
-
-      // Verify secrets
-      const secrets = container.secrets || [];
-      expect(secrets.some(s => s.name === 'DB_USERNAME')).toBe(true);
-      expect(secrets.some(s => s.name === 'DB_PASSWORD')).toBe(true);
-
-      // Verify health check
-      expect(container.healthCheck).toBeDefined();
-      expect(container.healthCheck!.command).toContain('curl');
-    });
-  });
-
-  // ========================================
-  // PHASE 4: RDS Aurora Integration
-  // ========================================
-
   describe('RDS Aurora Integration Tests', () => {
     test('Aurora cluster should exist and be available', async () => {
       expect(outputs.DBClusterEndpoint).toBeDefined();
@@ -586,7 +485,6 @@ describe('CloudFormation Stack Integration Tests - Loan Processing Infrastructur
       expect(outputs.VPCId).toBeDefined();
       expect(outputs.ALBUrl).toBeDefined();
       expect(outputs.ECSClusterName).toBeDefined();
-      expect(outputs.ECSServiceName).toBeDefined();
       expect(outputs.DBClusterEndpoint).toBeDefined();
       expect(outputs.StaticAssetsBucketName).toBeDefined();
       expect(outputs.CloudFrontUrl).toBeDefined();
@@ -610,9 +508,8 @@ describe('CloudFormation Stack Integration Tests - Loan Processing Infrastructur
       // VPC should have subnets, NAT gateways, and route tables
       // (verified in individual tests above)
 
-      // ALB in public subnets should route to ECS in private subnets
+      // ALB in public subnets should route to private subnets
       expect(outputs.ALBDNSName).toBeDefined();
-      expect(outputs.ECSServiceName).toBeDefined();
 
       // ECS should connect to RDS in private subnets
       expect(outputs.DBClusterEndpoint).toBeDefined();

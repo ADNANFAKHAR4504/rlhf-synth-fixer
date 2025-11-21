@@ -72,7 +72,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -85,7 +85,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "igw-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "igw-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -122,7 +122,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-1-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "public-subnet-1-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -148,7 +148,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-2-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "public-subnet-2-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -174,7 +174,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-3-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "public-subnet-3-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -199,7 +199,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-1-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-1-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -224,7 +224,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-2-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-2-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -249,7 +249,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-3-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-3-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -264,7 +264,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-eip-1-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "nat-eip-1-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -279,7 +279,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-eip-2-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "nat-eip-2-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -294,7 +294,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-eip-3-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "nat-eip-3-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -316,7 +316,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-gateway-1-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "nat-gateway-1-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -338,7 +338,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-gateway-2-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "nat-gateway-2-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -360,7 +360,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-gateway-3-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "nat-gateway-3-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -376,7 +376,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-rt-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "public-rt-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -438,7 +438,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-1-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-rt-1-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -477,7 +477,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-2-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-rt-2-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -516,7 +516,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-3-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-rt-3-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -550,7 +550,7 @@
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
         "GroupName": {
-          "Fn::Sub": "alb-sg-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "alb-sg-v0-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -579,7 +579,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-sg-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "alb-sg-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -590,7 +590,7 @@
       "Properties": {
         "GroupDescription": "Security group for ECS tasks",
         "GroupName": {
-          "Fn::Sub": "ecs-sg-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "ecs-sg-v0-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -615,7 +615,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-sg-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "ecs-sg-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -626,7 +626,7 @@
       "Properties": {
         "GroupDescription": "Security group for RDS Aurora cluster",
         "GroupName": {
-          "Fn::Sub": "rds-sg-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "rds-sg-v0-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -651,7 +651,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rds-sg-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "rds-sg-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -662,7 +662,7 @@
       "Properties": {
         "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
         "DBSubnetGroupName": {
-          "Fn::Sub": "db-subnet-group-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "db-subnet-group-v0-${EnvironmentSuffix}"
         },
         "SubnetIds": [
           {
@@ -679,7 +679,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "db-subnet-group-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "db-subnet-group-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -689,7 +689,7 @@
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
         "Name": {
-          "Fn::Sub": "aurora-credentials-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "aurora-credentials-v0-${EnvironmentSuffix}"
         },
         "Description": "Aurora MySQL database credentials",
         "GenerateSecretString": {
@@ -704,7 +704,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aurora-secret-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "aurora-secret-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -716,7 +716,7 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DBClusterIdentifier": {
-          "Fn::Sub": "aurora-cluster-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "aurora-cluster-v0-${EnvironmentSuffix}"
         },
         "MasterUsername": {
           "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
@@ -746,7 +746,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aurora-cluster-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "aurora-cluster-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -760,7 +760,7 @@
           "Ref": "DBCluster"
         },
         "DBInstanceIdentifier": {
-          "Fn::Sub": "aurora-instance-1-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "aurora-instance-1-v0-${EnvironmentSuffix}"
         },
         "DBInstanceClass": "db.t3.medium",
         "PubliclyAccessible": false,
@@ -776,7 +776,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aurora-instance-1-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "aurora-instance-1-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -790,7 +790,7 @@
           "Ref": "DBCluster"
         },
         "DBInstanceIdentifier": {
-          "Fn::Sub": "aurora-instance-2-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "aurora-instance-2-v0-${EnvironmentSuffix}"
         },
         "DBInstanceClass": "db.t3.medium",
         "PubliclyAccessible": false,
@@ -806,7 +806,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aurora-instance-2-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "aurora-instance-2-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -816,7 +816,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "loan-app-static-assets-v1-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "loan-app-static-assets-v0-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -868,7 +868,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "static-assets-bucket-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "static-assets-bucket-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -879,7 +879,7 @@
       "Properties": {
         "CloudFrontOriginAccessIdentityConfig": {
           "Comment": {
-            "Fn::Sub": "OAI for loan app static assets -v1-${EnvironmentSuffix}"
+            "Fn::Sub": "OAI for loan app static assets -v0-${EnvironmentSuffix}"
           }
         }
       }
@@ -917,7 +917,7 @@
         "DistributionConfig": {
           "Enabled": true,
           "Comment": {
-            "Fn::Sub": "CDN for loan app static assets -v1-${EnvironmentSuffix}"
+            "Fn::Sub": "CDN for loan app static assets -v0-${EnvironmentSuffix}"
           },
           "DefaultRootObject": "index.html",
           "Origins": [
@@ -968,7 +968,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "cloudfront-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "cloudfront-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -978,7 +978,7 @@
       "Type": "AWS::ECS::Cluster",
       "Properties": {
         "ClusterName": {
-          "Fn::Sub": "loan-app-cluster-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "loan-app-cluster-v0-${EnvironmentSuffix}"
         },
         "ClusterSettings": [
           {
@@ -990,7 +990,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-cluster-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "ecs-cluster-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1000,7 +1000,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ecs-task-execution-role-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "ecs-task-execution-role-v0-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1040,7 +1040,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-execution-role-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "ecs-task-execution-role-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1050,7 +1050,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ecs-task-role-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "ecs-task-role-v0-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1114,7 +1114,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-role-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "ecs-task-role-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1124,7 +1124,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/ecs/loan-app-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "/ecs/loan-app-v0-${EnvironmentSuffix}"
         },
         "RetentionInDays": 30
       }
@@ -1133,7 +1133,7 @@
       "Type": "AWS::ECS::TaskDefinition",
       "Properties": {
         "Family": {
-          "Fn::Sub": "loan-app-task-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "loan-app-task-v0-${EnvironmentSuffix}"
         },
         "NetworkMode": "awsvpc",
         "RequiresCompatibilities": [
@@ -1237,7 +1237,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-def-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "ecs-task-def-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1247,7 +1247,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "loan-app-alb-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "loan-app-alb-v0-${EnvironmentSuffix}"
         },
         "Type": "application",
         "Scheme": "internet-facing",
@@ -1272,7 +1272,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "alb-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1282,7 +1282,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "loan-app-tg-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "loan-app-tg-v0-${EnvironmentSuffix}"
         },
         "Port": 3000,
         "Protocol": "HTTP",
@@ -1310,7 +1310,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-target-group-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "alb-target-group-v0-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1334,199 +1334,11 @@
         ]
       }
     },
-    "ECSService": {
-      "Type": "AWS::ECS::Service",
-      "DependsOn": [
-        "ALBListener"
-      ],
-      "Properties": {
-        "ServiceName": {
-          "Fn::Sub": "loan-app-service-v1-${EnvironmentSuffix}"
-        },
-        "Cluster": {
-          "Ref": "ECSCluster"
-        },
-        "TaskDefinition": {
-          "Ref": "ECSTaskDefinition"
-        },
-        "DesiredCount": 2,
-        "LaunchType": "FARGATE",
-        "NetworkConfiguration": {
-          "AwsvpcConfiguration": {
-            "AssignPublicIp": "DISABLED",
-            "Subnets": [
-              {
-                "Ref": "PrivateSubnet1"
-              },
-              {
-                "Ref": "PrivateSubnet2"
-              },
-              {
-                "Ref": "PrivateSubnet3"
-              }
-            ],
-            "SecurityGroups": [
-              {
-                "Ref": "ECSSecurityGroup"
-              }
-            ]
-          }
-        },
-        "LoadBalancers": [
-          {
-            "ContainerName": "loan-app",
-            "ContainerPort": 3000,
-            "TargetGroupArn": {
-              "Ref": "ALBTargetGroup"
-            }
-          }
-        ],
-        "HealthCheckGracePeriodSeconds": 120,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "ecs-service-v1-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "ServiceScalingTarget": {
-      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
-      "Properties": {
-        "MaxCapacity": 10,
-        "MinCapacity": 2,
-        "ResourceId": {
-          "Fn::Sub": "service/${ECSCluster}/${ECSService.Name}"
-        },
-        "RoleARN": {
-          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
-        },
-        "ScalableDimension": "ecs:service:DesiredCount",
-        "ServiceNamespace": "ecs"
-      }
-    },
-    "ServiceScalingPolicyScaleOut": {
-      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
-      "Properties": {
-        "PolicyName": {
-          "Fn::Sub": "ecs-scale-out-v1-${EnvironmentSuffix}"
-        },
-        "PolicyType": "StepScaling",
-        "ScalingTargetId": {
-          "Ref": "ServiceScalingTarget"
-        },
-        "StepScalingPolicyConfiguration": {
-          "AdjustmentType": "ChangeInCapacity",
-          "Cooldown": 60,
-          "MetricAggregationType": "Average",
-          "StepAdjustments": [
-            {
-              "MetricIntervalLowerBound": 0,
-              "MetricIntervalUpperBound": 10,
-              "ScalingAdjustment": 1
-            },
-            {
-              "MetricIntervalLowerBound": 10,
-              "ScalingAdjustment": 2
-            }
-          ]
-        }
-      }
-    },
-    "ServiceScalingPolicyScaleIn": {
-      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
-      "Properties": {
-        "PolicyName": {
-          "Fn::Sub": "ecs-scale-in-v1-${EnvironmentSuffix}"
-        },
-        "PolicyType": "StepScaling",
-        "ScalingTargetId": {
-          "Ref": "ServiceScalingTarget"
-        },
-        "StepScalingPolicyConfiguration": {
-          "AdjustmentType": "ChangeInCapacity",
-          "Cooldown": 300,
-          "MetricAggregationType": "Average",
-          "StepAdjustments": [
-            {
-              "MetricIntervalUpperBound": 0,
-              "ScalingAdjustment": -1
-            }
-          ]
-        }
-      }
-    },
-    "ScaleOutAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "ecs-scale-out-alarm-v1-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Trigger scale out when request count is high",
-        "MetricName": "RequestCountPerTarget",
-        "Namespace": "AWS/ApplicationELB",
-        "Statistic": "Sum",
-        "Period": 60,
-        "EvaluationPeriods": 2,
-        "Threshold": 1000,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "TargetGroup",
-            "Value": {
-              "Fn::GetAtt": [
-                "ALBTargetGroup",
-                "TargetGroupFullName"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ServiceScalingPolicyScaleOut"
-          }
-        ]
-      }
-    },
-    "ScaleInAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "ecs-scale-in-alarm-v1-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Trigger scale in when request count is low",
-        "MetricName": "RequestCountPerTarget",
-        "Namespace": "AWS/ApplicationELB",
-        "Statistic": "Sum",
-        "Period": 60,
-        "EvaluationPeriods": 5,
-        "Threshold": 200,
-        "ComparisonOperator": "LessThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "TargetGroup",
-            "Value": {
-              "Fn::GetAtt": [
-                "ALBTargetGroup",
-                "TargetGroupFullName"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "ServiceScalingPolicyScaleIn"
-          }
-        ]
-      }
-    },
     "AlertTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "loan-app-alerts-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "loan-app-alerts-v0-${EnvironmentSuffix}"
         },
         "DisplayName": "Loan App Critical Alerts",
         "Subscription": [
@@ -1541,56 +1353,17 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "sns-topic-v1-${EnvironmentSuffix}"
+              "Fn::Sub": "sns-topic-v0-${EnvironmentSuffix}"
             }
           }
         ]
-      }
-    },
-    "ECSTaskFailureAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "ecs-task-failure-v1-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Alert when ECS tasks fail",
-        "MetricName": "RunningTaskCount",
-        "Namespace": "ECS/ContainerInsights",
-        "Statistic": "Average",
-        "Period": 60,
-        "EvaluationPeriods": 2,
-        "Threshold": 1,
-        "ComparisonOperator": "LessThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "ClusterName",
-            "Value": {
-              "Ref": "ECSCluster"
-            }
-          },
-          {
-            "Name": "ServiceName",
-            "Value": {
-              "Fn::GetAtt": [
-                "ECSService",
-                "Name"
-              ]
-            }
-          }
-        ],
-        "AlarmActions": [
-          {
-            "Ref": "AlertTopic"
-          }
-        ],
-        "TreatMissingData": "breaching"
       }
     },
     "RDSCPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "rds-cpu-high-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "rds-cpu-high-v0-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when RDS CPU exceeds 80%",
         "MetricName": "CPUUtilization",
@@ -1619,7 +1392,7 @@
       "Type": "AWS::CloudWatch::Dashboard",
       "Properties": {
         "DashboardName": {
-          "Fn::Sub": "loan-app-dashboard-v1-${EnvironmentSuffix}"
+          "Fn::Sub": "loan-app-dashboard-v0-${EnvironmentSuffix}"
         },
         "DashboardBody": {
           "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/ApplicationELB\",\"RequestCount\",{\"stat\":\"Sum\",\"label\":\"Total Requests\"}],[\"AWS/ApplicationELB\",\"TargetResponseTime\",{\"stat\":\"Average\",\"label\":\"Response Time\"}],[\"AWS/ApplicationELB\",\"HealthyHostCount\",{\"stat\":\"Average\",\"label\":\"Healthy Targets\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"ALB Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"ECS/ContainerInsights\",\"CpuUtilized\",{\"stat\":\"Average\",\"label\":\"CPU\"}],[\"ECS/ContainerInsights\",\"MemoryUtilized\",{\"stat\":\"Average\",\"label\":\"Memory\"}],[\"ECS/ContainerInsights\",\"RunningTaskCount\",{\"stat\":\"Average\",\"label\":\"Task Count\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"ECS Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"Connections\"}],[\"AWS/RDS\",\"CPUUtilization\",{\"stat\":\"Average\",\"label\":\"CPU %\"}],[\"AWS/RDS\",\"FreeableMemory\",{\"stat\":\"Average\",\"label\":\"Free Memory\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"RDS Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}}]}"
@@ -1668,15 +1441,6 @@
         "Name": {
           "Fn::Sub": "${AWS::StackName}-ECS-Cluster"
         }
-      }
-    },
-    "ECSServiceName": {
-      "Description": "ECS Service Name",
-      "Value": {
-        "Fn::GetAtt": [
-          "ECSService",
-          "Name"
-        ]
       }
     },
     "DBClusterEndpoint": {
