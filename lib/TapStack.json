@@ -1232,9 +1232,7 @@
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "DependsOn": [
-        "EBSKMSKey",
-        "EBSKMSKeyAlias",
-        "InstanceProfile"
+        "EBSKMSKeyAlias"
       ],
       "Properties": {
         "LaunchTemplateName": {
