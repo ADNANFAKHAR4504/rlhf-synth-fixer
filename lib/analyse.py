@@ -978,6 +978,7 @@ class SecurityGroupAnalyzer:
                 findings_table.append([
                     f.severity.upper(),
                     f.finding_type,
+                    f.security_group_id,
                     f.security_group_name[:20],
                     f.rule_details.get('risk_description', 'N/A')[:40],
                     f"{f.risk_score:.1f}/10" + exception_mark
@@ -985,7 +986,7 @@ class SecurityGroupAnalyzer:
 
             print("\n" + tabulate(
                 findings_table,
-                headers=["Severity", "Finding Type", "Security Group", "Risk Description", "Risk Score"],
+                headers=["Severity", "Finding Type", "SG ID", "Security Group", "Risk Description", "Risk Score"],
                 tablefmt="grid"
             ))
 
@@ -1107,6 +1108,7 @@ class SecurityGroupAnalyzer:
             <tr>
                 <th>Severity</th>
                 <th>Finding Type</th>
+                <th>SG ID</th>
                 <th>Security Group</th>
                 <th>Risk Description</th>
                 <th>Remediation</th>
@@ -1145,6 +1147,7 @@ class SecurityGroupAnalyzer:
                     <tr class="{row_class}">
                         <td>{f.severity.upper()}</td>
                         <td>{f.finding_type}</td>
+                        <td>{f.security_group_id}</td>
                         <td>{f.security_group_name}</td>
                         <td>{f.rule_details.get('risk_description', 'N/A')}</td>
                         <td>{f.remediation_steps[:100]}...</td>
