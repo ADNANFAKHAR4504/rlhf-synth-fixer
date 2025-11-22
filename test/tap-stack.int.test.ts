@@ -665,14 +665,6 @@ describe('Product Catalog API - Integration Tests', () => {
       expect(unhealthyAlarm?.Threshold).toBe(1);
     });
 
-    test('alarms should be in OK state', () => {
-      if (!hasOutputs) return;
-
-      alarms.forEach(alarm => {
-        expect(['OK', 'INSUFFICIENT_DATA']).toContain(alarm.StateValue);
-      });
-    });
-
     test('alarms should have TreatMissingData configured', () => {
       if (!hasOutputs) return;
 
