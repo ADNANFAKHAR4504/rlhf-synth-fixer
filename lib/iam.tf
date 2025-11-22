@@ -77,11 +77,7 @@ resource "aws_iam_role" "cross_account_access" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = [
-            aws_organizations_organizational_unit.security.arn,
-            aws_organizations_organizational_unit.production.arn,
-            aws_organizations_organizational_unit.development.arn
-          ]
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action = "sts:AssumeRole"
         Condition = {

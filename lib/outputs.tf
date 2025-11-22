@@ -1,27 +1,30 @@
-output "organization_id" {
-  description = "AWS Organization ID"
-  value       = aws_organizations_organization.main.id
-}
-
-output "organization_arn" {
-  description = "AWS Organization ARN"
-  value       = aws_organizations_organization.main.arn
-}
-
-output "security_ou_id" {
-  description = "Security OU ID"
-  value       = aws_organizations_organizational_unit.security.id
-}
-
-output "production_ou_id" {
-  description = "Production OU ID"
-  value       = aws_organizations_organizational_unit.production.id
-}
-
-output "development_ou_id" {
-  description = "Development OU ID"
-  value       = aws_organizations_organizational_unit.development.id
-}
+# Organization outputs - COMMENTED OUT
+# These outputs have been disabled because AWS Organizations resources are commented out
+#
+# output "organization_id" {
+#   description = "AWS Organization ID"
+#   value       = aws_organizations_organization.main.id
+# }
+#
+# output "organization_arn" {
+#   description = "AWS Organization ARN"
+#   value       = aws_organizations_organization.main.arn
+# }
+#
+# output "security_ou_id" {
+#   description = "Security OU ID"
+#   value       = aws_organizations_organizational_unit.security.id
+# }
+#
+# output "production_ou_id" {
+#   description = "Production OU ID"
+#   value       = aws_organizations_organizational_unit.production.id
+# }
+#
+# output "development_ou_id" {
+#   description = "Development OU ID"
+#   value       = aws_organizations_organizational_unit.development.id
+# }
 
 output "primary_kms_key_id" {
   description = "Primary KMS Key ID"
@@ -83,10 +86,10 @@ output "iam_activity_log_group_name" {
   value       = aws_cloudwatch_log_group.iam_activity.name
 }
 
-output "organizations_activity_log_group_name" {
-  description = "Organizations Activity CloudWatch Log Group Name"
-  value       = aws_cloudwatch_log_group.organizations_activity.name
-}
+# output "organizations_activity_log_group_name" {
+#   description = "Organizations Activity CloudWatch Log Group Name"
+#   value       = aws_cloudwatch_log_group.organizations_activity.name
+# }
 
 output "config_activity_log_group_name" {
   description = "Config Activity CloudWatch Log Group Name"
