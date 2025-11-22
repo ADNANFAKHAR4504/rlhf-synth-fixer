@@ -1,9 +1,12 @@
 import os
+from dataclasses import dataclass
+from typing import Optional
 from aws_cdk import (
     Stack,
     CfnOutput,
     RemovalPolicy,
     Duration,
+    Environment,
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_elasticloadbalancingv2 as elbv2,
@@ -22,32 +25,54 @@ from aws_cdk import (
 from constructs import Construct
 
 
+@dataclass
+class TapStackProps:
+    """
+    Properties for TapStack configuration.
+
+    Attributes:
+        environment_suffix: Suffix to distinguish between environments (e.g., 'dev', 'prod', 'PR6845')
+        primary_region: Primary AWS region for multi-region deployment
+        secondary_region: Secondary AWS region for disaster recovery
+        log_retention_days: Number of days to retain logs in CloudWatch
+        domain_name: Optional domain name for Route53 configuration
+        env: CDK Environment configuration (account and region)
+    """
+    environment_suffix: str
+    primary_region: str = "us-east-1"
+    secondary_region: str = "us-west-2"
+    log_retention_days: int = 7
+    domain_name: Optional[str] = None
+    env: Optional[Environment] = None
+
+
 class TapStack(Stack):
     def __init__(
         self,
         scope: Construct,
         construct_id: str,
-        environment_suffix: str,
-        primary_region: str = "us-east-1",
-        secondary_region: str = "us-west-2",
-        log_retention_days: int = 7,
-        domain_name: str = None,
+        props: TapStackProps,
         **kwargs
     ) -> None:
+        # Extract env from props if provided, otherwise use kwargs
+        if props.env and 'env' not in kwargs:
+            kwargs['env'] = props.env
+
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = environment_suffix
-        self.primary_region = primary_region
-        self.secondary_region = secondary_region
-        self.log_retention_days = log_retention_days
+        # Set properties from props object
+        self.environment_suffix = props.environment_suffix
+        self.primary_region = props.primary_region
+        self.secondary_region = props.secondary_region
+        self.log_retention_days = props.log_retention_days
         # FIXED: Make domain name configurable via parameter or environment variable
-        self.domain_name = domain_name or os.environ.get(
+        self.domain_name = props.domain_name or os.environ.get(
             "DOMAIN_NAME",
-            f"trading-{environment_suffix}.example.com"
+            f"trading-{props.environment_suffix}.example.com"
         )
 
         # Determine if this is primary or secondary region
-        self.is_primary = self.region == primary_region
+        self.is_primary = self.region == self.primary_region
 
         # Create VPC with 3 AZs
         self.vpc = self._create_vpc()
@@ -767,69 +792,188 @@ class TapStack(Stack):
         )
 
     def _create_outputs(self) -> None:
-        """Create CloudFormation outputs"""
-        # ALB DNS name
+        """Create CloudFormation outputs - all outputs exposed at stack level"""
+        region_type = "primary" if self.is_primary else "secondary"
+
+        # VPC Outputs
         CfnOutput(
             self,
-            f"ALBEndpoint-v1-{self.environment_suffix}",
-            value=self.alb.load_balancer_dns_name,
-            description=f"ALB DNS endpoint for {self.region}",
-            export_name=f"TradingALBEndpoint-v1-{self.region}-{self.environment_suffix}",
+            "VpcId",
+            value=self.vpc.vpc_id,
+            description=f"VPC ID for {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-vpc-id-{region_type}",
         )
 
-        # Aurora cluster endpoint
+        # ECS Cluster Outputs
+        CfnOutput(
+            self,
+            "EcsClusterName",
+            value=self.cluster.cluster_name,
+            description=f"ECS Cluster name in {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-cluster-name-{region_type}",
+        )
+
+        CfnOutput(
+            self,
+            "EcsClusterArn",
+            value=self.cluster.cluster_arn,
+            description=f"ECS Cluster ARN in {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-cluster-arn-{region_type}",
+        )
+
+        CfnOutput(
+            self,
+            "EcsServiceName",
+            value=self.ecs_service.service_name,
+            description=f"ECS Service name in {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-service-name-{region_type}",
+        )
+
+        # ALB Outputs
+        CfnOutput(
+            self,
+            "AlbDnsName",
+            value=self.alb.load_balancer_dns_name,
+            description=f"ALB DNS endpoint for {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-alb-dns-{region_type}",
+        )
+
+        CfnOutput(
+            self,
+            "AlbArn",
+            value=self.alb.load_balancer_arn,
+            description=f"ALB ARN for {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-alb-arn-{region_type}",
+        )
+
+        # Aurora Database Outputs
         if hasattr(self, "aurora_cluster"):
             CfnOutput(
                 self,
-                f"AuroraClusterEndpoint-v1-{self.environment_suffix}",
+                "AuroraClusterEndpoint",
                 value=self.aurora_cluster.cluster_endpoint.hostname,
-                description="Aurora cluster endpoint",
-                export_name=f"AuroraEndpoint-v1-{self.region}-{self.environment_suffix}",
+                description=f"Aurora cluster writer endpoint in {region_type} region ({self.region})",
+                export_name=f"{self.environment_suffix}-trading-aurora-endpoint-{region_type}",
             )
 
-        # DynamoDB table name (both regions)
+            CfnOutput(
+                self,
+                "AuroraClusterReadEndpoint",
+                value=self.aurora_cluster.cluster_read_endpoint.hostname,
+                description=f"Aurora cluster reader endpoint in {region_type} region ({self.region})",
+                export_name=f"{self.environment_suffix}-trading-aurora-read-endpoint-{region_type}",
+            )
+
+            CfnOutput(
+                self,
+                "AuroraClusterIdentifier",
+                value=self.aurora_cluster.cluster_identifier,
+                description=f"Aurora cluster identifier in {region_type} region ({self.region})",
+                export_name=f"{self.environment_suffix}-trading-aurora-id-{region_type}",
+            )
+
+        # Global Cluster Output (Primary only)
+        if self.is_primary and hasattr(self, "global_cluster"):
+            CfnOutput(
+                self,
+                "AuroraGlobalClusterIdentifier",
+                value=self.global_cluster.ref,
+                description="Aurora Global Database cluster identifier",
+                export_name=f"{self.environment_suffix}-trading-aurora-global-id",
+            )
+
+        # DynamoDB Table Outputs
         if hasattr(self, "dynamodb_table"):
             CfnOutput(
                 self,
-                f"DynamoDBTableName-v1-{self.environment_suffix}",
+                "DynamoDbTableName",
                 value=self.dynamodb_table.table_name,
-                description="DynamoDB Global Table name",
-                export_name=f"DynamoDBTable-v1-{self.region}-{self.environment_suffix}",
+                description=f"DynamoDB Global Table name in {region_type} region ({self.region})",
+                export_name=f"{self.environment_suffix}-trading-dynamodb-name-{region_type}",
             )
 
-        # S3 bucket name
+            CfnOutput(
+                self,
+                "DynamoDbTableArn",
+                value=self.dynamodb_table.table_arn,
+                description=f"DynamoDB Global Table ARN in {region_type} region ({self.region})",
+                export_name=f"{self.environment_suffix}-trading-dynamodb-arn-{region_type}",
+            )
+
+        # S3 Bucket Outputs
         CfnOutput(
             self,
-            f"S3BucketName-v1-{self.environment_suffix}",
+            "S3BucketName",
             value=self.s3_bucket.bucket_name,
-            description=f"S3 bucket for {self.region}",
-            export_name=f"S3Bucket-v1-{self.region}-{self.environment_suffix}",
+            description=f"S3 bucket name for {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-s3-name-{region_type}",
         )
 
-        # Route 53 hosted zone ID (both regions)
+        CfnOutput(
+            self,
+            "S3BucketArn",
+            value=self.s3_bucket.bucket_arn,
+            description=f"S3 bucket ARN for {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-s3-arn-{region_type}",
+        )
+
+        # EventBridge Outputs
+        CfnOutput(
+            self,
+            "EventBusName",
+            value=self.event_bus.event_bus_name,
+            description=f"EventBridge bus name in {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-eventbus-name-{region_type}",
+        )
+
+        CfnOutput(
+            self,
+            "EventBusArn",
+            value=self.event_bus.event_bus_arn,
+            description=f"EventBridge bus ARN in {region_type} region ({self.region})",
+            export_name=f"{self.environment_suffix}-trading-eventbus-arn-{region_type}",
+        )
+
+        # Route 53 Outputs (if not using example.com domain)
         if hasattr(self, "hosted_zone"):
             CfnOutput(
                 self,
-                f"HostedZoneId-v1-{self.environment_suffix}",
+                "HostedZoneId",
                 value=self.hosted_zone.hosted_zone_id,
-                description="Route 53 Hosted Zone ID",
-                export_name=f"HostedZoneId-v1-{self.region}-{self.environment_suffix}",
+                description=f"Route 53 Hosted Zone ID",
+                export_name=f"{self.environment_suffix}-trading-hostedzone-id",
             )
 
-        # Domain name
+            CfnOutput(
+                self,
+                "HostedZoneName",
+                value=self.hosted_zone.zone_name,
+                description=f"Route 53 Hosted Zone Name",
+                export_name=f"{self.environment_suffix}-trading-hostedzone-name",
+            )
+
+        # Domain Name Output
         CfnOutput(
             self,
-            f"DomainName-v1-{self.environment_suffix}",
+            "DomainName",
             value=self.domain_name,
             description="Domain name for the trading platform",
-            export_name=f"DomainName-v1-{self.region}-{self.environment_suffix}",
+            export_name=f"{self.environment_suffix}-trading-domain-name",
         )
 
-        # ECS cluster name
+        # Region Information
         CfnOutput(
             self,
-            f"ECSClusterName-v1-{self.environment_suffix}",
-            value=self.cluster.cluster_name,
-            description=f"ECS Cluster name in {self.region}",
-            export_name=f"ECSCluster-v1-{self.region}-{self.environment_suffix}",
+            "DeploymentRegion",
+            value=self.region,
+            description=f"AWS region for this {region_type} stack",
+            export_name=f"{self.environment_suffix}-trading-region-{region_type}",
+        )
+
+        CfnOutput(
+            self,
+            "RegionType",
+            value=region_type,
+            description="Region type (primary or secondary)",
+            export_name=f"{self.environment_suffix}-trading-region-type-{region_type}",
         )
