@@ -502,7 +502,9 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
     test('ASG should use Launch Template', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
-      expect(asg.Properties.LaunchTemplate.Version).toEqual('$Latest');
+      expect(asg.Properties.LaunchTemplate.Version).toEqual({
+        'Fn::GetAtt': ['LaunchTemplate', 'LatestVersionNumber']
+      });
     });
 
     test('ASG should be attached to Target Group', () => {
