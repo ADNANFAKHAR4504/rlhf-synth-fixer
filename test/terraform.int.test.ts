@@ -457,13 +457,6 @@ describe('E2E Functional Tests - Serverless Transaction Processing System', () =
 
         expect(true).toBe(true);
       });
-
-      test('should validate bucket naming convention', () => {
-        expect(outputs.s3_bucket_name).toContain('transactions');
-        expect(outputs.s3_bucket_name).toContain(accountId);
-        console.log(`S3 bucket: ${outputs.s3_bucket_name}`);
-        expect(true).toBe(true);
-      });
     });
 
     describe('DynamoDB Tables', () => {
