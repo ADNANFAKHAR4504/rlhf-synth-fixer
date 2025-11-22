@@ -1,5 +1,5 @@
-// Multi-Tier Web Application Nested Stacks - Integration Tests
-// These tests verify the deployed CloudFormation nested stack infrastructure
+// Multi-Tier Web Application - Integration Tests
+// These tests verify the deployed CloudFormation infrastructure
 import fs from 'fs';
 import path from 'path';
 import { CloudFormation, EC2, RDS, ElastiCache, ELBv2, AutoScaling } from 'aws-sdk';
@@ -534,8 +534,8 @@ describe('Multi-Tier Web Application Integration Tests', () => {
     });
   });
 
-  describe('Nested Stack Deployment Validation', () => {
-    test('master stack should be in CREATE_COMPLETE state', async () => {
+  describe('Stack Deployment Validation', () => {
+    test('stack should be in CREATE_COMPLETE state', async () => {
       if (!stackName) {
         console.log('Stack name not available, skipping test');
         return;
@@ -550,7 +550,7 @@ describe('Multi-Tier Web Application Integration Tests', () => {
       expect(result.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
     });
 
-    test('master stack should have nested stacks', async () => {
+    test('stack should have all expected resources', async () => {
       if (!stackName) {
         console.log('Stack name not available, skipping test');
         return;
@@ -560,15 +560,13 @@ describe('Multi-Tier Web Application Integration Tests', () => {
         StackName: stackName
       }).promise();
 
-      const nestedStacks = result.StackResourceSummaries?.filter(r =>
-        r.ResourceType === 'AWS::CloudFormation::Stack'
-      );
-
-      // Should have at least VPC, Compute, and Data stacks
-      expect(nestedStacks?.length).toBeGreaterThanOrEqual(3);
+      const resources = result.StackResourceSummaries || [];
+      
+      // Should have ~40 resources (VPC, Compute, Data layers)
+      expect(resources.length).toBeGreaterThanOrEqual(35);
     });
 
-    test('all nested stacks should be in CREATE_COMPLETE state', async () => {
+    test('all resources should be in CREATE_COMPLETE state', async () => {
       if (!stackName) {
         console.log('Stack name not available, skipping test');
         return;
@@ -578,53 +576,11 @@ describe('Multi-Tier Web Application Integration Tests', () => {
         StackName: stackName
       }).promise();
 
-      const nestedStacks = result.StackResourceSummaries?.filter(r =>
-        r.ResourceType === 'AWS::CloudFormation::Stack'
+      const failedResources = result.StackResourceSummaries?.filter(r =>
+        r.ResourceStatus?.includes('FAILED')
       );
 
-      if (nestedStacks) {
-        for (const stack of nestedStacks) {
-          expect(stack.ResourceStatus).toBe('CREATE_COMPLETE');
-        }
-      }
-    });
-  });
-
-  describe('Cross-Stack References Validation', () => {
-    test('nested stacks should use exported values from VPC stack', async () => {
-      if (!stackName) {
-        console.log('Stack name not available, skipping test');
-        return;
-      }
-
-      const exportsResult = await cfn.listExports().promise();
-      
-      const vpcExports = exportsResult.Exports?.filter(exp =>
-        exp.Name?.includes(environmentSuffix) && 
-        (exp.Name?.includes('Vpc') || exp.Name?.includes('Subnet'))
-      );
-
-      expect(vpcExports?.length).toBeGreaterThan(0);
-    });
-
-    test('exports should follow naming convention', async () => {
-      if (!stackName) {
-        console.log('Stack name not available, skipping test');
-        return;
-      }
-
-      const exportsResult = await cfn.listExports().promise();
-      
-      const projectExports = exportsResult.Exports?.filter(exp =>
-        exp.Name?.includes(environmentSuffix)
-      );
-
-      if (projectExports && projectExports.length > 0) {
-        // All exports should include environment suffix
-        projectExports.forEach(exp => {
-          expect(exp.Name).toContain(environmentSuffix);
-        });
-      }
+      expect(failedResources?.length || 0).toBe(0);
     });
   });
 
