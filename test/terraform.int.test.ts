@@ -1,17 +1,18 @@
-import { 
-  EC2Client, 
-  DescribeVpcsCommand, 
-  DescribeSubnetsCommand, 
-  DescribeInternetGatewaysCommand,
+import {
+  DescribeFlowLogsCommand,
   DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
+  DescribeInternetGatewaysCommand,
   DescribeNetworkAclsCommand,
   DescribeRouteTablesCommand,
-  DescribeTransitGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
   DescribeTransitGatewayAttachmentsCommand,
-  DescribeFlowLogsCommand
+  DescribeTransitGatewaysCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client
 } from "@aws-sdk/client-ec2";
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketPolicyCommand } from "@aws-sdk/client-s3";
+import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -82,8 +83,8 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
   describe("Output Structure Validation", () => {
     it("should have essential infrastructure outputs", () => {
       const requiredOutputs = [
-        "vpc_id", "vpc_cidr_block", "public_subnet_ids", "private_app_subnet_ids", 
-        "private_db_subnet_ids", "nat_instance_id", "transit_gateway_id", 
+        "vpc_id", "vpc_cidr_block", "public_subnet_ids", "private_app_subnet_ids",
+        "private_db_subnet_ids", "nat_instance_id", "transit_gateway_id",
         "transit_gateway_attachment_id", "vpc_flow_logs_s3_bucket"
       ];
 
@@ -147,9 +148,23 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe("available");
       expect(vpc.CidrBlock).toBe("10.0.0.0/16");
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
-      
+
+      // Check DNS attributes separately
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsSupport'
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+
       expect(isValidCidr(outputs.vpc_cidr_block)).toBe(true);
       expect(vpc.CidrBlock).toBe(outputs.vpc_cidr_block);
     });
@@ -264,7 +279,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
     it("validates availability zone distribution", async () => {
       const ec2Client = new EC2Client({ region });
-      
+
       const allSubnetIds = [
         ...parseArray(outputs.public_subnet_ids),
         ...parseArray(outputs.private_app_subnet_ids),
@@ -277,7 +292,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       const response = await ec2Client.send(command);
       const azs = response.Subnets!.map(subnet => subnet.AvailabilityZone);
-      
+
       expect(azs.length).toBe(6);
       expect(azs.filter(az => az === azs[0]).length).toBe(3);
       expect(azs.filter(az => az === azs[1]).length).toBe(3);
@@ -308,10 +323,10 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       expect(instance.State?.Name).toBe("running");
       expect(instance.InstanceType).toBe("t3.micro");
       expect(instance.SourceDestCheck).toBe(false);
-      
+
       expect(isValidIpAddress(outputs.nat_instance_private_ip)).toBe(true);
       expect(instance.PrivateIpAddress).toBe(outputs.nat_instance_private_ip);
-      
+
       expect(isValidIpAddress(outputs.nat_instance_public_ip)).toBe(true);
       expect(instance.PublicIpAddress).toBe(outputs.nat_instance_public_ip);
 
@@ -333,18 +348,18 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       const sg = response.SecurityGroups![0];
       expect(sg.VpcId).toBe(outputs.vpc_id);
-      
-      const httpRule = sg.IpPermissions?.find(rule => 
+
+      const httpRule = sg.IpPermissions?.find(rule =>
         rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === "tcp"
       );
       expect(httpRule).toBeDefined();
-      
-      const httpsRule = sg.IpPermissions?.find(rule => 
+
+      const httpsRule = sg.IpPermissions?.find(rule =>
         rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === "tcp"
       );
       expect(httpsRule).toBeDefined();
-      
-      const sshRule = sg.IpPermissions?.find(rule => 
+
+      const sshRule = sg.IpPermissions?.find(rule =>
         rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
       );
       expect(sshRule).toBeDefined();
@@ -357,7 +372,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       const response = await ec2Client.send(instanceCommand);
       const instance = response.Reservations![0].Instances![0];
-      
+
       expect(instance.PublicIpAddress).toBeDefined();
       expect(instance.PublicIpAddress).toBe(outputs.nat_instance_public_ip);
       expect(instance.NetworkInterfaces![0].Association?.PublicIp).toBe(outputs.nat_instance_public_ip);
@@ -397,21 +412,21 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
     it("validates public route table has correct routes", async () => {
       const routeTableIds = parseObject(outputs.route_table_ids);
-      
+
       const command = new DescribeRouteTablesCommand({
         RouteTableIds: [routeTableIds.public]
       });
 
       const response = await ec2Client.send(command);
       const routeTable = response.RouteTables![0];
-      
-      const internetRoute = routeTable.Routes?.find(route => 
+
+      const internetRoute = routeTable.Routes?.find(route =>
         route.DestinationCidrBlock === "0.0.0.0/0" && route.GatewayId?.startsWith("igw-")
       );
       expect(internetRoute).toBeDefined();
       expect(internetRoute?.GatewayId).toBe(outputs.internet_gateway_id);
-      
-      const tgwRoute = routeTable.Routes?.find(route => 
+
+      const tgwRoute = routeTable.Routes?.find(route =>
         route.DestinationCidrBlock === "10.100.0.0/16" && route.TransitGatewayId?.startsWith("tgw-")
       );
       expect(tgwRoute).toBeDefined();
@@ -420,7 +435,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
     it("validates private route tables have NAT instance routes", async () => {
       const routeTableIds = parseObject(outputs.route_table_ids);
-      
+
       for (const rtType of ["application", "database"]) {
         const command = new DescribeRouteTablesCommand({
           RouteTableIds: [routeTableIds[rtType]]
@@ -428,13 +443,13 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
         const response = await ec2Client.send(command);
         const routeTable = response.RouteTables![0];
-        
-        const natRoute = routeTable.Routes?.find(route => 
+
+        const natRoute = routeTable.Routes?.find(route =>
           route.DestinationCidrBlock === "0.0.0.0/0" && route.NetworkInterfaceId
         );
         expect(natRoute).toBeDefined();
-        
-        const tgwRoute = routeTable.Routes?.find(route => 
+
+        const tgwRoute = routeTable.Routes?.find(route =>
           route.DestinationCidrBlock === "10.100.0.0/16" && route.TransitGatewayId?.startsWith("tgw-")
         );
         expect(tgwRoute).toBeDefined();
@@ -459,9 +474,9 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
         const response = await ec2Client.send(command);
         const routeTable = response.RouteTables![0];
-        
+
         const associatedSubnets = routeTable.Associations?.map(assoc => assoc.SubnetId).filter(Boolean);
-        
+
         (subnetIds as string[]).forEach(subnetId => {
           expect(associatedSubnets).toContain(subnetId);
         });
@@ -502,7 +517,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
     it("validates Network ACL rules block specified CIDR ranges", async () => {
       const naclIds = parseObject(outputs.network_acl_ids);
-      
+
       for (const naclId of Object.values(naclIds)) {
         const command = new DescribeNetworkAclsCommand({
           NetworkAclIds: [naclId as string]
@@ -510,27 +525,27 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
         const response = await ec2Client.send(command);
         const nacl = response.NetworkAcls![0];
-        
+
         const blockedCidrs = ["192.168.0.0/16", "172.16.0.0/12"];
-        
+
         blockedCidrs.forEach(cidr => {
-          const ingressDenyRule = nacl.Entries?.find(entry => 
+          const ingressDenyRule = nacl.Entries?.find(entry =>
             !entry.Egress && entry.RuleAction === "deny" && entry.CidrBlock === cidr
           );
           expect(ingressDenyRule).toBeDefined();
-          
-          const egressDenyRule = nacl.Entries?.find(entry => 
+
+          const egressDenyRule = nacl.Entries?.find(entry =>
             entry.Egress && entry.RuleAction === "deny" && entry.CidrBlock === cidr
           );
           expect(egressDenyRule).toBeDefined();
         });
-        
-        const ingressAllowRule = nacl.Entries?.find(entry => 
+
+        const ingressAllowRule = nacl.Entries?.find(entry =>
           !entry.Egress && entry.RuleAction === "allow" && entry.CidrBlock === "0.0.0.0/0"
         );
         expect(ingressAllowRule).toBeDefined();
-        
-        const egressAllowRule = nacl.Entries?.find(entry => 
+
+        const egressAllowRule = nacl.Entries?.find(entry =>
           entry.Egress && entry.RuleAction === "allow" && entry.CidrBlock === "0.0.0.0/0"
         );
         expect(egressAllowRule).toBeDefined();
@@ -554,9 +569,9 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
         const response = await ec2Client.send(command);
         const nacl = response.NetworkAcls![0];
-        
+
         const associatedSubnets = nacl.Associations?.map(assoc => assoc.SubnetId);
-        
+
         (subnetIds as string[]).forEach(subnetId => {
           expect(associatedSubnets).toContain(subnetId);
         });
@@ -591,13 +606,13 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
     it("validates S3 bucket encryption configuration", async () => {
       const bucketName = outputs.vpc_flow_logs_s3_bucket;
-      
+
       try {
         const command = new GetBucketEncryptionCommand({
           Bucket: bucketName
         });
         const response = await s3Client.send(command);
-        
+
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
         expect(response.ServerSideEncryptionConfiguration?.Rules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
@@ -623,7 +638,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       expect(flowLog.TrafficType).toBe("ALL");
       expect(flowLog.LogDestinationType).toBe("s3");
       expect(flowLog.ResourceId).toBe(outputs.vpc_id);
-      
+
       const expectedS3Arn = `arn:aws:s3:::${outputs.vpc_flow_logs_s3_bucket}`;
       expect(flowLog.LogDestination).toBe(expectedS3Arn);
     });
@@ -683,7 +698,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       const tgwRouteTableId = outputs.transit_gateway_route_table_id;
       expect(tgwRouteTableId).toMatch(/^tgw-rtb-/);
-      
+
       expect(tgwRouteTableId).toBeDefined();
       expect(tgwRouteTableId.trim().length).toBeGreaterThan(0);
     });
@@ -705,24 +720,24 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       for (const { command, accessor } of resourceChecks) {
         const response = await ec2Client.send(command);
-        const resources = accessor === "Reservations" 
+        const resources = accessor === "Reservations"
           ? (response as any)[accessor][0].Instances
           : (response as any)[accessor];
 
         resources.forEach((resource: any) => {
           const tags = resource.Tags || [];
           const tagNames = tags.map((tag: any) => tag.Key);
-          
+
           expect(tagNames).toContain("Environment");
           expect(tagNames).toContain("Project");
           expect(tagNames).toContain("ManagedBy");
-          
+
           const envTag = tags.find((tag: any) => tag.Key === "Environment");
           expect(envTag?.Value).toBe("Production");
-          
+
           const projectTag = tags.find((tag: any) => tag.Key === "Project");
           expect(projectTag?.Value).toBe("PaymentPlatform");
-          
+
           const managedByTag = tags.find((tag: any) => tag.Key === "ManagedBy");
           expect(managedByTag?.Value).toBe("Terraform");
         });
@@ -748,7 +763,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       });
 
       const response = await ec2Client.send(command);
-      
+
       response.Subnets!.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
@@ -761,7 +776,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       const response = await ec2Client.send(instanceCommand);
       const instance = response.Reservations![0].Instances![0];
-      
+
       const publicSubnets = parseArray(outputs.public_subnet_ids);
       expect(publicSubnets).toContain(instance.SubnetId);
     });
@@ -773,7 +788,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
 
       const response = await ec2Client.send(command);
       const flowLog = response.FlowLogs![0];
-      
+
       expect(flowLog.TrafficType).toBe("ALL");
       expect(flowLog.FlowLogStatus).toBe("ACTIVE");
     });
@@ -781,13 +796,13 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
     it("validates consistent CIDR block usage", () => {
       expect(outputs.vpc_cidr_block).toBe("10.0.0.0/16");
       expect(integrationSummary.vpc_cidr).toBe("10.0.0.0/16");
-      
+
       const expectedSubnetCidrs = [
         "10.0.1.0/24", "10.0.2.0/24",      // Public
         "10.0.11.0/24", "10.0.12.0/24",    // Private App
         "10.0.21.0/24", "10.0.22.0/24"     // Private DB
       ];
-      
+
       expectedSubnetCidrs.forEach(cidr => {
         expect(isValidCidr(cidr)).toBe(true);
       });
