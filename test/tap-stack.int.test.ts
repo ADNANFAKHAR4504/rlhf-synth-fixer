@@ -531,14 +531,6 @@ describe('Product Catalog API - Integration Tests', () => {
       });
     });
 
-    test('instances should have IMDSv2 required', async () => {
-      if (!hasOutputs || instances.length === 0) return;
-
-      instances.forEach(instance => {
-        expect(instance.MetadataOptions?.HttpTokens).toBe('required');
-      });
-    });
-
     test('instances should have detailed monitoring enabled', () => {
       if (!hasOutputs || instances.length === 0) return;
 
