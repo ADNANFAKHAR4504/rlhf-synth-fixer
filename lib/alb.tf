@@ -1,5 +1,5 @@
 resource "aws_lb" "main" {
-  name               = "alb-${var.environment_suffix}"
+  name               = "alb-v1-${var.environment_suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -9,12 +9,12 @@ resource "aws_lb" "main" {
   enable_http2               = true
 
   tags = {
-    Name = "alb-${var.environment_suffix}"
+    Name = "alb-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_lb_target_group" "blue" {
-  name        = "tg-blue-${var.environment_suffix}"
+  name        = "tg-blue-v1-${var.environment_suffix}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -34,12 +34,12 @@ resource "aws_lb_target_group" "blue" {
   deregistration_delay = 30
 
   tags = {
-    Name = "tg-blue-${var.environment_suffix}"
+    Name = "tg-blue-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_lb_target_group" "green" {
-  name        = "tg-green-${var.environment_suffix}"
+  name        = "tg-green-v1-${var.environment_suffix}"
   port        = var.container_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -59,7 +59,7 @@ resource "aws_lb_target_group" "green" {
   deregistration_delay = 30
 
   tags = {
-    Name = "tg-green-${var.environment_suffix}"
+    Name = "tg-green-v1-${var.environment_suffix}"
   }
 }
 

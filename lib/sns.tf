@@ -1,10 +1,10 @@
 resource "aws_sns_topic" "pipeline_approval" {
-  name              = "pipeline-approval-${var.environment_suffix}"
+  name              = "pipeline-approval-v1-${var.environment_suffix}"
   display_name      = "Pipeline Approval Notifications"
   kms_master_key_id = aws_kms_key.artifacts.id
 
   tags = {
-    Name = "pipeline-approval-${var.environment_suffix}"
+    Name = "pipeline-approval-v1-${var.environment_suffix}"
   }
 }
 

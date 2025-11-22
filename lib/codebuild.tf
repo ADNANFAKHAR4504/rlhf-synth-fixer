@@ -1,5 +1,5 @@
 resource "aws_codebuild_project" "app" {
-  name          = "payment-gateway-build-${var.environment_suffix}"
+  name          = "payment-gateway-build-v1-${var.environment_suffix}"
   description   = "Build Docker images for payment gateway"
   service_role  = aws_iam_role.codebuild.arn
   build_timeout = 30
@@ -54,6 +54,6 @@ resource "aws_codebuild_project" "app" {
   }
 
   tags = {
-    Name = "codebuild-${var.environment_suffix}"
+    Name = "codebuild-v1-${var.environment_suffix}"
   }
 }

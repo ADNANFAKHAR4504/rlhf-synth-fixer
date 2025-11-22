@@ -1,5 +1,5 @@
 resource "aws_ecs_cluster" "main" {
-  name = "ecs-cluster-${var.environment_suffix}"
+  name = "ecs-cluster-v1-${var.environment_suffix}"
 
   setting {
     name  = "containerInsights"
@@ -7,12 +7,12 @@ resource "aws_ecs_cluster" "main" {
   }
 
   tags = {
-    Name = "ecs-cluster-${var.environment_suffix}"
+    Name = "ecs-cluster-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_ecs_task_definition" "app" {
-  family                   = "payment-gateway-${var.environment_suffix}"
+  family                   = "payment-gateway-v1-${var.environment_suffix}"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.ecs_task_cpu
@@ -64,12 +64,12 @@ resource "aws_ecs_task_definition" "app" {
   ])
 
   tags = {
-    Name = "task-definition-${var.environment_suffix}"
+    Name = "task-definition-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_ecs_service" "app" {
-  name                               = "payment-gateway-service-${var.environment_suffix}"
+  name                               = "payment-gateway-service-v1-${var.environment_suffix}"
   cluster                            = aws_ecs_cluster.main.id
   task_definition                    = aws_ecs_task_definition.app.arn
   desired_count                      = var.ecs_desired_count
@@ -110,6 +110,6 @@ resource "aws_ecs_service" "app" {
   }
 
   tags = {
-    Name = "ecs-service-${var.environment_suffix}"
+    Name = "ecs-service-v1-${var.environment_suffix}"
   }
 }

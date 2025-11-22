@@ -1,14 +1,14 @@
 resource "aws_codecommit_repository" "app" {
-  repository_name = "${var.codecommit_repository_name}-${var.environment_suffix}"
+  repository_name = "${var.codecommit_repository_name}-v1-${var.environment_suffix}"
   description     = "Repository for payment gateway application"
 
   tags = {
-    Name = "codecommit-${var.environment_suffix}"
+    Name = "codecommit-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_codecommit_approval_rule_template" "main_branch_protection" {
-  name        = "main-branch-protection-${var.environment_suffix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  name        = "main-branch-protection-v1-${var.environment_suffix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
   description = "Require approval for main branch changes"
 
   lifecycle {

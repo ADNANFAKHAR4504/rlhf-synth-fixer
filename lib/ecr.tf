@@ -1,5 +1,5 @@
 resource "aws_ecr_repository" "app" {
-  name                 = "payment-gateway-${var.environment_suffix}"
+  name                 = "payment-gateway-v1-${var.environment_suffix}"
   image_tag_mutability = "MUTABLE"
 
   encryption_configuration {
@@ -12,7 +12,7 @@ resource "aws_ecr_repository" "app" {
   }
 
   tags = {
-    Name = "payment-gateway-ecr-${var.environment_suffix}"
+    Name = "payment-gateway-ecr-v1-${var.environment_suffix}"
   }
 }
 

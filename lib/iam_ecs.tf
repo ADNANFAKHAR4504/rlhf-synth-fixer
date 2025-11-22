@@ -1,5 +1,5 @@
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "ecs-task-execution-role-${var.environment_suffix}"
+  name = "ecs-task-execution-role-v1-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -15,7 +15,7 @@ resource "aws_iam_role" "ecs_task_execution" {
   })
 
   tags = {
-    Name = "ecs-task-execution-role-${var.environment_suffix}"
+    Name = "ecs-task-execution-role-v1-${var.environment_suffix}"
   }
 }
 
@@ -25,7 +25,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 }
 
 resource "aws_iam_role_policy" "ecs_task_execution_kms" {
-  name = "ecs-task-execution-kms-${var.environment_suffix}"
+  name = "ecs-task-execution-kms-v1-${var.environment_suffix}"
   role = aws_iam_role.ecs_task_execution.id
 
   policy = jsonencode({
@@ -47,7 +47,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_kms" {
 }
 
 resource "aws_iam_role" "ecs_task" {
-  name = "ecs-task-role-${var.environment_suffix}"
+  name = "ecs-task-role-v1-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -63,12 +63,12 @@ resource "aws_iam_role" "ecs_task" {
   })
 
   tags = {
-    Name = "ecs-task-role-${var.environment_suffix}"
+    Name = "ecs-task-role-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_iam_role_policy" "ecs_task" {
-  name = "ecs-task-policy-${var.environment_suffix}"
+  name = "ecs-task-policy-v1-${var.environment_suffix}"
   role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({

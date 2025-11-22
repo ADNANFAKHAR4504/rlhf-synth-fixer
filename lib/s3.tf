@@ -1,8 +1,8 @@
 resource "aws_s3_bucket" "artifacts" {
-  bucket = "pipeline-artifacts-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+  bucket = "pipeline-artifacts-v1-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name = "pipeline-artifacts-${var.environment_suffix}"
+    Name = "pipeline-artifacts-v1-${var.environment_suffix}"
   }
 }
 

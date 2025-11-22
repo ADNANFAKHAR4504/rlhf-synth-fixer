@@ -1,5 +1,5 @@
 resource "aws_wafv2_web_acl" "main" {
-  name  = "alb-waf-${var.environment_suffix}"
+  name  = "alb-waf-v1-${var.environment_suffix}"
   scope = "REGIONAL"
 
   default_action {
@@ -79,7 +79,7 @@ resource "aws_wafv2_web_acl" "main" {
   }
 
   tags = {
-    Name = "waf-${var.environment_suffix}"
+    Name = "waf-v1-${var.environment_suffix}"
   }
 }
 

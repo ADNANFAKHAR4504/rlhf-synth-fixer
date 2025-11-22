@@ -1,5 +1,5 @@
 resource "aws_codepipeline" "app" {
-  name     = "payment-gateway-pipeline-${var.environment_suffix}"
+  name     = "payment-gateway-pipeline-v1-${var.environment_suffix}"
   role_arn = aws_iam_role.codepipeline.arn
 
   artifact_store {
@@ -86,12 +86,12 @@ resource "aws_codepipeline" "app" {
   }
 
   tags = {
-    Name = "codepipeline-${var.environment_suffix}"
+    Name = "codepipeline-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_cloudwatch_event_rule" "codecommit_change" {
-  name        = "codecommit-change-${var.environment_suffix}"
+  name        = "codecommit-change-v1-${var.environment_suffix}"
   description = "Trigger pipeline on CodeCommit changes"
 
   event_pattern = jsonencode({
@@ -105,7 +105,7 @@ resource "aws_cloudwatch_event_rule" "codecommit_change" {
   })
 
   tags = {
-    Name = "codecommit-event-${var.environment_suffix}"
+    Name = "codecommit-event-v1-${var.environment_suffix}"
   }
 }
 
@@ -116,7 +116,7 @@ resource "aws_cloudwatch_event_target" "pipeline" {
 }
 
 resource "aws_iam_role" "events" {
-  name = "events-role-${var.environment_suffix}"
+  name = "events-role-v1-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -132,12 +132,12 @@ resource "aws_iam_role" "events" {
   })
 
   tags = {
-    Name = "events-role-${var.environment_suffix}"
+    Name = "events-role-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_iam_role_policy" "events" {
-  name = "events-policy-${var.environment_suffix}"
+  name = "events-policy-v1-${var.environment_suffix}"
   role = aws_iam_role.events.id
 
   policy = jsonencode({

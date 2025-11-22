@@ -1,5 +1,5 @@
 resource "aws_iam_role" "codebuild" {
-  name = "codebuild-role-${var.environment_suffix}"
+  name = "codebuild-role-v1-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -15,12 +15,12 @@ resource "aws_iam_role" "codebuild" {
   })
 
   tags = {
-    Name = "codebuild-role-${var.environment_suffix}"
+    Name = "codebuild-role-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_iam_role_policy" "codebuild" {
-  name = "codebuild-policy-${var.environment_suffix}"
+  name = "codebuild-policy-v1-${var.environment_suffix}"
   role = aws_iam_role.codebuild.id
 
   policy = jsonencode({

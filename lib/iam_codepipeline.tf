@@ -1,5 +1,5 @@
 resource "aws_iam_role" "codepipeline" {
-  name = "codepipeline-role-${var.environment_suffix}"
+  name = "codepipeline-role-v1-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -15,12 +15,12 @@ resource "aws_iam_role" "codepipeline" {
   })
 
   tags = {
-    Name = "codepipeline-role-${var.environment_suffix}"
+    Name = "codepipeline-role-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_iam_role_policy" "codepipeline" {
-  name = "codepipeline-policy-${var.environment_suffix}"
+  name = "codepipeline-policy-v1-${var.environment_suffix}"
   role = aws_iam_role.codepipeline.id
 
   policy = jsonencode({

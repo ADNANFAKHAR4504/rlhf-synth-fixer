@@ -82,12 +82,12 @@ resource "aws_kms_key" "artifacts" {
   })
 
   tags = {
-    Name = "artifacts-kms-${var.environment_suffix}"
+    Name = "artifacts-kms-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_kms_alias" "artifacts" {
-  name          = "alias/artifacts-${var.environment_suffix}"
+  name          = "alias/artifacts-v1-${var.environment_suffix}"
   target_key_id = aws_kms_key.artifacts.key_id
 }
 
@@ -128,11 +128,11 @@ resource "aws_kms_key" "ecr" {
   })
 
   tags = {
-    Name = "ecr-kms-${var.environment_suffix}"
+    Name = "ecr-kms-v1-${var.environment_suffix}"
   }
 }
 
 resource "aws_kms_alias" "ecr" {
-  name          = "alias/ecr-${var.environment_suffix}"
+  name          = "alias/ecr-v1-${var.environment_suffix}"
   target_key_id = aws_kms_key.ecr.key_id
 }

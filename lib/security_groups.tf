@@ -1,5 +1,5 @@
 resource "aws_security_group" "alb" {
-  name_prefix = "alb-sg-${var.environment_suffix}-"
+  name_prefix = "alb-sg-v1-${var.environment_suffix}-"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -28,7 +28,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "alb-sg-${var.environment_suffix}"
+    Name = "alb-sg-v1-${var.environment_suffix}"
   }
 
   lifecycle {
@@ -37,7 +37,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ecs_tasks" {
-  name_prefix = "ecs-tasks-sg-${var.environment_suffix}-"
+  name_prefix = "ecs-tasks-sg-v1-${var.environment_suffix}-"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
 
@@ -58,7 +58,7 @@ resource "aws_security_group" "ecs_tasks" {
   }
 
   tags = {
-    Name = "ecs-tasks-sg-${var.environment_suffix}"
+    Name = "ecs-tasks-sg-v1-${var.environment_suffix}"
   }
 
   lifecycle {
