@@ -27,7 +27,7 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
   server_side_encryption {
-    enabled     = true
+    enabled = true
   }
 
   point_in_time_recovery {

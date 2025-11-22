@@ -20,7 +20,7 @@ resource "aws_s3_bucket" "webhook_payloads" {
 }
 
 resource "aws_s3_bucket_public_access_block" "webhook_payloads" {
-  bucket = aws_s3_bucket.webhook_payloads.id
+  bucket                  = aws_s3_bucket.webhook_payloads.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -74,7 +74,7 @@ resource "aws_s3_bucket" "failed_messages" {
 }
 
 resource "aws_s3_bucket_public_access_block" "failed_messages" {
-  bucket = aws_s3_bucket.failed_messages.id
+  bucket                  = aws_s3_bucket.failed_messages.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true

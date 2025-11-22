@@ -27,8 +27,8 @@ variable "lambda_configs" {
     timeout     = number
   }))
   default = {
-    webhook_receiver = { memory_size = 512, timeout = 60 }
-    payload_validator = { memory_size = 256, timeout = 30 }
+    webhook_receiver      = { memory_size = 512, timeout = 60 }
+    payload_validator     = { memory_size = 256, timeout = 30 }
     transaction_processor = { memory_size = 1024, timeout = 120 }
   }
 }

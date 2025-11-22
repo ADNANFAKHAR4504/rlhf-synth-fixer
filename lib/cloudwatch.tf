@@ -1,19 +1,19 @@
 resource "aws_cloudwatch_log_group" "webhook_receiver_logs" {
   name              = "/aws/lambda/${aws_lambda_function.webhook_receiver.function_name}"
   retention_in_days = 7
-  tags = local.common_tags
+  tags              = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "payload_validator_logs" {
   name              = "/aws/lambda/${aws_lambda_function.payload_validator.function_name}"
   retention_in_days = 7
-  tags = local.common_tags
+  tags              = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "transaction_processor_logs" {
   name              = "/aws/lambda/${aws_lambda_function.transaction_processor.function_name}"
   retention_in_days = 7
-  tags = local.common_tags
+  tags              = local.common_tags
 }
 
 # Metric-math alarm for Lambda error percentage > 1%
@@ -82,8 +82,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_validator" {
       metric_name = "Errors"
       namespace   = "AWS/Lambda"
       stat        = "Sum"
-      dimensions = { FunctionName = aws_lambda_function.payload_validator.function_name }
-      period = 60
+      dimensions  = { FunctionName = aws_lambda_function.payload_validator.function_name }
+      period      = 60
     }
   }
 
@@ -95,8 +95,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_validator" {
       metric_name = "Invocations"
       namespace   = "AWS/Lambda"
       stat        = "Sum"
-      dimensions = { FunctionName = aws_lambda_function.payload_validator.function_name }
-      period = 60
+      dimensions  = { FunctionName = aws_lambda_function.payload_validator.function_name }
+      period      = 60
     }
   }
 
@@ -126,8 +126,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_processor" {
       metric_name = "Errors"
       namespace   = "AWS/Lambda"
       stat        = "Sum"
-      dimensions = { FunctionName = aws_lambda_function.transaction_processor.function_name }
-      period = 60
+      dimensions  = { FunctionName = aws_lambda_function.transaction_processor.function_name }
+      period      = 60
     }
   }
 
@@ -139,8 +139,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_processor" {
       metric_name = "Invocations"
       namespace   = "AWS/Lambda"
       stat        = "Sum"
-      dimensions = { FunctionName = aws_lambda_function.transaction_processor.function_name }
-      period = 60
+      dimensions  = { FunctionName = aws_lambda_function.transaction_processor.function_name }
+      period      = 60
     }
   }
 
@@ -168,7 +168,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
     QueueName = aws_sqs_queue.webhook_dlq.name
   }
 
-  tags = local.common_tags
+  tags          = local.common_tags
   alarm_actions = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
 }
 

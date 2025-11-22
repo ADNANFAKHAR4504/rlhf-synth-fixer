@@ -17,24 +17,24 @@ data "archive_file" "transaction_processor_zip" {
 }
 
 resource "aws_lambda_function" "webhook_receiver" {
-  function_name = "${var.project}-${var.environment}-webhook-receiver-${local.suffix}"
-  filename      = data.archive_file.webhook_receiver_zip.output_path
+  function_name    = "${var.project}-${var.environment}-webhook-receiver-${local.suffix}"
+  filename         = data.archive_file.webhook_receiver_zip.output_path
   source_code_hash = data.archive_file.webhook_receiver_zip.output_base64sha256
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  architectures = ["arm64"]
-  role          = aws_iam_role.lambda_role.arn
-  memory_size   = var.lambda_configs.webhook_receiver.memory_size
-  timeout       = var.lambda_configs.webhook_receiver.timeout
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  architectures    = ["arm64"]
+  role             = aws_iam_role.lambda_role.arn
+  memory_size      = var.lambda_configs.webhook_receiver.memory_size
+  timeout          = var.lambda_configs.webhook_receiver.timeout
 
   tracing_config { mode = "Active" }
 
   environment {
     variables = {
       PROCESSING_QUEUE_URL = aws_sqs_queue.webhook_processing_queue.id
-      PAYLOAD_BUCKET        = aws_s3_bucket.webhook_payloads.id
+      PAYLOAD_BUCKET       = aws_s3_bucket.webhook_payloads.id
       # Pass SSM parameter names; Lambdas will fetch values at runtime
-      API_KEY_PARAM         = "${var.ssm_prefix}/api_key"
+      API_KEY_PARAM = "${var.ssm_prefix}/api_key"
     }
   }
 
@@ -42,22 +42,22 @@ resource "aws_lambda_function" "webhook_receiver" {
 }
 
 resource "aws_lambda_function" "payload_validator" {
-  function_name = "${var.project}-${var.environment}-payload-validator-${local.suffix}"
-  filename      = data.archive_file.payload_validator_zip.output_path
+  function_name    = "${var.project}-${var.environment}-payload-validator-${local.suffix}"
+  filename         = data.archive_file.payload_validator_zip.output_path
   source_code_hash = data.archive_file.payload_validator_zip.output_base64sha256
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  architectures = ["arm64"]
-  role          = aws_iam_role.lambda_role.arn
-  memory_size   = var.lambda_configs.payload_validator.memory_size
-  timeout       = var.lambda_configs.payload_validator.timeout
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  architectures    = ["arm64"]
+  role             = aws_iam_role.lambda_role.arn
+  memory_size      = var.lambda_configs.payload_validator.memory_size
+  timeout          = var.lambda_configs.payload_validator.timeout
 
   tracing_config { mode = "Active" }
 
   environment {
     variables = {
-      VALIDATED_QUEUE_URL = aws_sqs_queue.validated_queue.id
-      DLQ_URL             = aws_sqs_queue.webhook_dlq.id
+      VALIDATED_QUEUE_URL    = aws_sqs_queue.validated_queue.id
+      DLQ_URL                = aws_sqs_queue.webhook_dlq.id
       VALIDATION_RULES_PARAM = "${var.ssm_prefix}/validation_rules"
     }
   }
@@ -66,22 +66,22 @@ resource "aws_lambda_function" "payload_validator" {
 }
 
 resource "aws_lambda_function" "transaction_processor" {
-  function_name = "${var.project}-${var.environment}-transaction-processor-${local.suffix}"
-  filename      = data.archive_file.transaction_processor_zip.output_path
+  function_name    = "${var.project}-${var.environment}-transaction-processor-${local.suffix}"
+  filename         = data.archive_file.transaction_processor_zip.output_path
   source_code_hash = data.archive_file.transaction_processor_zip.output_base64sha256
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  architectures = ["arm64"]
-  role          = aws_iam_role.lambda_role.arn
-  memory_size   = var.lambda_configs.transaction_processor.memory_size
-  timeout       = var.lambda_configs.transaction_processor.timeout
+  handler          = "index.handler"
+  runtime          = "python3.11"
+  architectures    = ["arm64"]
+  role             = aws_iam_role.lambda_role.arn
+  memory_size      = var.lambda_configs.transaction_processor.memory_size
+  timeout          = var.lambda_configs.transaction_processor.timeout
 
   tracing_config { mode = "Active" }
 
   environment {
     variables = {
-      TRANSACTIONS_TABLE = aws_dynamodb_table.transactions.name
-      ARCHIVE_BUCKET     = aws_s3_bucket.failed_messages.id
+      TRANSACTIONS_TABLE   = aws_dynamodb_table.transactions.name
+      ARCHIVE_BUCKET       = aws_s3_bucket.failed_messages.id
       DB_CREDENTIALS_PARAM = "${var.ssm_prefix}/db_credentials"
     }
   }

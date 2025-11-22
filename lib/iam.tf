@@ -5,8 +5,8 @@ resource "aws_iam_role" "lambda_role" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
         Principal = { Service = "lambda.amazonaws.com" }
       }
     ]
@@ -73,18 +73,18 @@ resource "aws_iam_policy" "lambda_common_policy" {
         ]
       },
       {
-        Effect = "Allow",
-        Action = ["ssm:GetParameter*"],
+        Effect   = "Allow",
+        Action   = ["ssm:GetParameter*"],
         Resource = "arn:aws:ssm:${var.aws_region}:*:parameter${var.ssm_prefix}/*"
       },
       {
-        Effect = "Allow",
-        Action = ["kms:Decrypt"],
+        Effect   = "Allow",
+        Action   = ["kms:Decrypt"],
         Resource = "arn:aws:kms:*:*:key/*"
       },
       {
-        Effect = "Allow",
-        Action = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
+        Effect   = "Allow",
+        Action   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
         Resource = "*"
       }
     ]

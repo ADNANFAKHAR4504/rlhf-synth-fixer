@@ -21,11 +21,11 @@ resource "aws_api_gateway_request_validator" "webhook_validator" {
 }
 
 resource "aws_api_gateway_method" "webhook_post" {
-  rest_api_id      = aws_api_gateway_rest_api.webhook_api.id
-  resource_id      = aws_api_gateway_resource.webhook.id
-  http_method      = "POST"
-  authorization    = "NONE"
-  api_key_required = true
+  rest_api_id          = aws_api_gateway_rest_api.webhook_api.id
+  resource_id          = aws_api_gateway_resource.webhook.id
+  http_method          = "POST"
+  authorization        = "NONE"
+  api_key_required     = true
   request_validator_id = aws_api_gateway_request_validator.webhook_validator.id
 }
 
@@ -35,12 +35,12 @@ resource "aws_api_gateway_integration" "webhook_lambda" {
   http_method = aws_api_gateway_method.webhook_post.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.webhook_receiver.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.webhook_receiver.invoke_arn
 }
 
 resource "aws_api_gateway_deployment" "webhook_deployment" {
-  depends_on = [aws_api_gateway_integration.webhook_lambda]
+  depends_on  = [aws_api_gateway_integration.webhook_lambda]
   rest_api_id = aws_api_gateway_rest_api.webhook_api.id
   stage_name  = var.environment
 
@@ -48,17 +48,17 @@ resource "aws_api_gateway_deployment" "webhook_deployment" {
 }
 
 resource "aws_api_gateway_stage" "webhook_stage" {
-  deployment_id = aws_api_gateway_deployment.webhook_deployment.id
-  rest_api_id   = aws_api_gateway_rest_api.webhook_api.id
-  stage_name    = var.environment
+  deployment_id        = aws_api_gateway_deployment.webhook_deployment.id
+  rest_api_id          = aws_api_gateway_rest_api.webhook_api.id
+  stage_name           = var.environment
   xray_tracing_enabled = true
 
   tags = local.common_tags
 }
 
 resource "aws_api_gateway_api_key" "webhook_key" {
-  name      = "${var.project}-${var.environment}-api-key-${local.suffix}"
-  enabled   = true
+  name    = "${var.project}-${var.environment}-api-key-${local.suffix}"
+  enabled = true
 
   tags = local.common_tags
 }
