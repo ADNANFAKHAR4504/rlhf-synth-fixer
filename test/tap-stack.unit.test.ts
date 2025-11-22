@@ -62,11 +62,8 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.DBUsername.MaxLength).toBe(16);
     });
 
-    test('should have DBPassword parameter', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-      expect(template.Parameters.DBPassword.Type).toBe('String');
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBPassword.MinLength).toBe(8);
+    test('should NOT have DBPassword parameter (auto-generated via Secrets Manager)', () => {
+      expect(template.Parameters.DBPassword).toBeUndefined();
     });
 
     test('should have VPCId parameter', () => {
@@ -79,14 +76,6 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.PrivateSubnetIds).toBeDefined();
       expect(template.Parameters.PrivateSubnetIds.Type).toBe('CommaDelimitedList');
       expect(template.Parameters.PrivateSubnetIds.Default).toBe('');
-    });
-
-    test('should have DBPassword parameter with NoEcho (no default for security)', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBPassword.Default).toBeUndefined();
-      expect(template.Parameters.DBPassword.MinLength).toBe(8);
-      expect(template.Parameters.DBPassword.MaxLength).toBe(41);
     });
 
     test('should have LambdaReservedConcurrency parameter', () => {
@@ -408,10 +397,12 @@ describe('CloudFormation Template Unit Tests', () => {
       });
     });
 
-    test('DBSecret should have correct structure', () => {
+    test('DBSecret should auto-generate secure password', () => {
       const resource = template.Resources.DBSecret;
-      expect(resource.Properties.SecretString).toBeDefined();
-      expect(typeof resource.Properties.SecretString).toBe('object');
+      expect(resource.Properties.GenerateSecretString).toBeDefined();
+      expect(resource.Properties.GenerateSecretString.SecretStringTemplate).toBeDefined();
+      expect(resource.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+      expect(resource.Properties.GenerateSecretString.PasswordLength).toBe(32);
     });
   });
 
