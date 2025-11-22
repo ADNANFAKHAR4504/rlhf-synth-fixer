@@ -14,7 +14,8 @@
     "Logs",
     "SecretsManager",
     "SNS",
-    "CloudWatch"
+    "CloudWatch",
+    "DynamoDB"
   ],
   "startedAt": "2025-11-20T17:02:10+05:30",
   "po_id": "m1d2p4",
