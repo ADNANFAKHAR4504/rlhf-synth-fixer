@@ -375,7 +375,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       expect(response.Name).toContain(`rds-credentials-${environmentSuffix}`);
     }, 30000);
 
-    test('DB Secret should contain correct credential structure', async () => {
+    test('DB Secret should contain correct credential structure with auto-generated password', async () => {
       const secretArn = stackOutputs.DBSecretArn;
 
       const command = new GetSecretValueCommand({
@@ -386,12 +386,16 @@ describe('CloudFormation Stack Integration Tests', () => {
       expect(response.SecretString).toBeDefined();
 
       const credentials = JSON.parse(response.SecretString || '{}');
+
+      // Verify auto-generated password and base credentials
       expect(credentials.username).toBeDefined();
       expect(credentials.password).toBeDefined();
+      expect(credentials.password.length).toBeGreaterThanOrEqual(32); // Auto-generated 32-char password
       expect(credentials.engine).toBe('mysql');
-      expect(credentials.host).toBe(stackOutputs.RDSClusterEndpoint);
-      expect(credentials.port).toBe(3306);
       expect(credentials.dbname).toBe('transactions');
+
+      // Note: host and port are NOT stored in secret with GenerateSecretString
+      // Applications should use RDS endpoint from stack outputs or environment variables
     }, 30000);
   });
 
