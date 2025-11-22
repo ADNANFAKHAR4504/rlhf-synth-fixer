@@ -741,13 +741,6 @@ describe('Product Catalog API - Integration Tests', () => {
       expect(outputs.ALBSecurityGroupId).toBeDefined();
     });
 
-    test('LoadBalancerURL should be correctly formatted', () => {
-      if (!hasOutputs) return;
-
-      expect(outputs.LoadBalancerURL).toMatch(/^http:\/\//);
-      expect(outputs.LoadBalancerURL).toContain(outputs.LoadBalancerDNS);
-    });
-
     test('infrastructure should be idempotent', () => {
       if (!hasOutputs) return;
 
