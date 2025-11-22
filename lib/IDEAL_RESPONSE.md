@@ -2,20 +2,19 @@
 
 ## Overview
 
-This CloudFormation template creates a fully self-contained, highly available web application infrastructure for a product catalog API. The solution deploys across three availability zones with auto-scaling, load balancing, and comprehensive monitoring - all with a single `EnvironmentSuffix` parameter for easy multi-environment deployment.
+This CloudFormation template creates a highly available web application infrastructure for a product catalog API that integrates with existing VPC infrastructure. The solution deploys across three availability zones with auto-scaling, load balancing, SSL termination, and comprehensive monitoring.
 
 ## Architecture
 
 ### High-Level Design
 
 The infrastructure consists of:
-- **VPC and Networking**: Custom VPC with public and private subnets across 3 AZs, Internet Gateway, and NAT Gateway
 - **KMS Encryption**: Dedicated KMS key for EBS volume encryption with Auto Scaling service role permissions
-- **Application Load Balancer**: Internet-facing ALB distributing traffic to EC2 instances across 3 AZs
-- **Auto Scaling Group**: 2-8 EC2 instances (t3.medium) with Amazon Linux 2 and encrypted EBS volumes
+- **Application Load Balancer**: Internet-facing ALB with SSL termination distributing traffic across 3 AZs
+- **Auto Scaling Group**: 2-8 EC2 instances (t3.medium) with encrypted EBS volumes
 - **CloudWatch Monitoring**: CPU-based auto-scaling with alarms for high/low CPU and unhealthy hosts
-- **IAM Security**: Instance profiles with Parameter Store, CloudWatch Logs, and KMS access
-- **Security Groups**: Least-privilege network isolation
+- **IAM Security**: Instance profiles with Parameter Store, CloudWatch Logs, and least-privilege KMS access
+- **Security Groups**: Least-privilege network isolation with explicit egress rules
 
 ### Architecture Pattern
 
@@ -27,13 +26,14 @@ The infrastructure consists of:
 
 ### Key Design Decisions
 
-1. **Self-Contained Template**: Creates its own VPC and networking to enable automated deployment without external dependencies
-2. **HTTP Only**: Uses HTTP listener only (no HTTPS) since SSL certificate requires manual DNS validation that blocks automated testing
-3. **Single NAT Gateway**: Cost optimization for dev/test environments while maintaining private subnet internet access
-4. **Dynamic AMI Resolution**: Uses SSM Parameter Store to automatically get latest Amazon Linux 2 AMI
+1. **Integration with Existing VPC**: Uses parameters to integrate with existing VPC infrastructure
+2. **SSL Termination**: HTTPS listener with SSL certificate for secure API traffic
+3. **HTTP to HTTPS Redirect**: Automatic redirect from port 80 to 443 for security
+4. **AMI Parameter**: Flexible AMI selection through parameter
 5. **IMDSv2 Enforcement**: Required for all EC2 instances for enhanced security
 6. **Explicit Egress Rules**: All security groups have explicit egress rules following least privilege
-7. **KMS Encryption with Auto Scaling Support**: Creates dedicated KMS key with explicit permissions for AWSServiceRoleForAutoScaling to resolve account-level encryption conflicts
+7. **KMS Encryption with Auto Scaling Support**: Creates dedicated KMS key with explicit permissions for AWSServiceRoleForAutoScaling
+8. **Least Privilege KMS**: EC2 instances have only necessary KMS permissions (Decrypt, GenerateDataKey, CreateGrant)
 
 ## Complete Source Code
 
@@ -981,15 +981,15 @@ aws cloudformation wait stack-delete-complete \
 
 ## Resource Summary
 
-- **Total Resources**: 36
-- **VPC and Networking**: 18 resources (VPC, IGW, 6 subnets, NAT, route tables, associations)
-- **Security Groups**: 2 resources (ALB SG, EC2 SG)
-- **Load Balancing**: 3 resources (ALB, Target Group, HTTP Listener)
+- **Total Resources**: 18
+- **KMS**: 2 resources (KMS Key, KMS Alias)
+- **Security Groups**: 3 resources (ALB SG, ALB SG Egress, EC2 SG)
+- **Load Balancing**: 4 resources (ALB, Target Group, HTTP Listener, HTTPS Listener)
 - **IAM**: 2 resources (Role, Instance Profile)
 - **Compute**: 2 resources (Launch Template, Auto Scaling Group)
 - **Scaling**: 2 resources (Scale-Up Policy, Scale-Down Policy)
 - **Monitoring**: 3 resources (High CPU Alarm, Low CPU Alarm, Unhealthy Host Alarm)
-- **Outputs**: 7 exports
+- **Outputs**: 8 exports
 
 ## Deployment Time
 

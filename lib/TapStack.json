@@ -8,458 +8,32 @@
       "Default": "dev",
       "AllowedPattern": "^[a-zA-Z0-9]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "ID of the existing VPC to deploy resources into"
+    },
+    "PublicSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of existing public subnet IDs for ALB deployment (comma-separated)"
+    },
+    "PrivateSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of existing private subnet IDs for EC2 instances (comma-separated)"
+    },
+    "AmiId": {
+      "Type": "AWS::EC2::Image::Id",
+      "Description": "AMI ID for EC2 instances",
+      "Default": "ami-0c02fb55731490381"
+    },
+    "SSLCertificateArn": {
+      "Type": "String",
+      "Description": "ARN of the SSL certificate for HTTPS listener",
+      "AllowedPattern": "^arn:aws:acm:.*",
+      "ConstraintDescription": "Must be a valid ACM certificate ARN"
     }
   },
   "Resources": {
-    "VPC": {
-      "Type": "AWS::EC2::VPC",
-      "Properties": {
-        "CidrBlock": "10.0.0.0/16",
-        "EnableDnsSupport": true,
-        "EnableDnsHostnames": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-vpc-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "InternetGateway": {
-      "Type": "AWS::EC2::InternetGateway",
-      "Properties": {
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-igw-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "AttachGateway": {
-      "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "InternetGatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-    "PublicSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-public-subnet-1-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PublicSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-public-subnet-2-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PublicSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-public-subnet-3-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PrivateSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-private-subnet-1-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PrivateSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-private-subnet-2-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PrivateSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.13.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-private-subnet-3-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PublicRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-public-rt-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PublicRoute": {
-      "Type": "AWS::EC2::Route",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-    "PublicSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "PublicSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "PublicSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet3"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "NATGateway1EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-nat-eip-1-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "NATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway1EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-nat-1-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PrivateRouteTable1": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-private-rt-1-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
-      }
-    },
-    "PrivateRoute1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway1"
-        }
-      }
-    },
-    "PrivateSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrivateSubnet1"
-        },
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        }
-      }
-    },
-    "PrivateSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrivateSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        }
-      }
-    },
-    "PrivateSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PrivateSubnet3"
-        },
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        }
-      }
-    },
     "EBSKMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -551,7 +125,7 @@
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
-          "Ref": "VPC"
+          "Ref": "VpcId"
         },
         "SecurityGroupIngress": [
           {
@@ -607,7 +181,7 @@
       "Properties": {
         "GroupDescription": "Security group for EC2 instances",
         "VpcId": {
-          "Ref": "VPC"
+          "Ref": "VpcId"
         },
         "SecurityGroupIngress": [
           {
@@ -663,17 +237,9 @@
         "Type": "application",
         "Scheme": "internet-facing",
         "IpAddressType": "ipv4",
-        "Subnets": [
-          {
-            "Ref": "PublicSubnet1"
-          },
-          {
-            "Ref": "PublicSubnet2"
-          },
-          {
-            "Ref": "PublicSubnet3"
-          }
-        ],
+        "Subnets": {
+          "Ref": "PublicSubnetIds"
+        },
         "SecurityGroups": [
           {
             "Ref": "ALBSecurityGroup"
@@ -714,7 +280,7 @@
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": {
-          "Ref": "VPC"
+          "Ref": "VpcId"
         },
         "HealthCheckEnabled": true,
         "HealthCheckPath": "/api/v1/health",
@@ -765,6 +331,33 @@
         },
         "Port": 80,
         "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "redirect",
+            "RedirectConfig": {
+              "Protocol": "HTTPS",
+              "Port": "443",
+              "StatusCode": "HTTP_301"
+            }
+          }
+        ]
+      }
+    },
+    "HTTPSListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": 443,
+        "Protocol": "HTTPS",
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "SSLCertificateArn"
+            }
+          }
+        ],
         "DefaultActions": [
           {
             "Type": "forward",
@@ -850,8 +443,17 @@
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": "kms:*",
-                  "Resource": "*"
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey",
+                    "kms:CreateGrant"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "EBSKMSKey",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -889,7 +491,9 @@
           "Fn::Sub": "product-api-lt-${EnvironmentSuffix}"
         },
         "LaunchTemplateData": {
-          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+          "ImageId": {
+            "Ref": "AmiId"
+          },
           "InstanceType": "t3.medium",
           "IamInstanceProfile": {
             "Arn": {
@@ -979,7 +583,7 @@
     },
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "DependsOn": "HTTPListener",
+      "DependsOn": "HTTPSListener",
       "Properties": {
         "AutoScalingGroupName": {
           "Fn::Sub": "product-api-asg-${EnvironmentSuffix}"
@@ -998,17 +602,9 @@
         "MinSize": "2",
         "MaxSize": "8",
         "DesiredCapacity": "2",
-        "VPCZoneIdentifier": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          },
-          {
-            "Ref": "PrivateSubnet3"
-          }
-        ],
+        "VPCZoneIdentifier": {
+          "Ref": "PrivateSubnetIds"
+        },
         "TargetGroupARNs": [
           {
             "Ref": "TargetGroup"
@@ -1171,17 +767,6 @@
     }
   },
   "Outputs": {
-    "VpcId": {
-      "Description": "VPC ID",
-      "Value": {
-        "Ref": "VPC"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "product-api-vpc-id-${EnvironmentSuffix}"
-        }
-      }
-    },
     "LoadBalancerDNS": {
       "Description": "DNS name of the Application Load Balancer",
       "Value": {
@@ -1199,7 +784,12 @@
     "LoadBalancerURL": {
       "Description": "Full URL of the Application Load Balancer",
       "Value": {
-        "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+        "Fn::Sub": "https://${ApplicationLoadBalancer.DNSName}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "product-api-alb-url-${EnvironmentSuffix}"
+        }
       }
     },
     "TargetGroupArn": {

@@ -35,8 +35,15 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const paramKeys = Object.keys(template.Parameters);
+      expect(paramKeys).toContain('EnvironmentSuffix');
+      expect(paramKeys).toContain('VpcId');
+      expect(paramKeys).toContain('PublicSubnetIds');
+      expect(paramKeys).toContain('PrivateSubnetIds');
+      expect(paramKeys).toContain('AmiId');
+      expect(paramKeys).toContain('SSLCertificateArn');
+      expect(paramKeys.length).toBe(6);
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -48,149 +55,49 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(param.ConstraintDescription).toBeDefined();
     });
 
-    test('should only have EnvironmentSuffix parameter for automated deployment', () => {
-      const paramCount = Object.keys(template.Parameters).length;
-      expect(paramCount).toBe(1);
+    test('VpcId parameter should be of correct type', () => {
+      expect(template.Parameters.VpcId).toBeDefined();
+      expect(template.Parameters.VpcId.Type).toBe('AWS::EC2::VPC::Id');
+    });
+
+    test('SubnetIds parameters should be lists', () => {
+      expect(template.Parameters.PublicSubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
+      expect(template.Parameters.PrivateSubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
+    });
+
+    test('SSLCertificateArn should have ACM ARN pattern', () => {
+      expect(template.Parameters.SSLCertificateArn.AllowedPattern).toBe('^arn:aws:acm:.*');
     });
   });
 
   describe('VPC and Networking', () => {
-    test('should create VPC resource', () => {
-      expect(template.Resources.VPC).toBeDefined();
-      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+    test('should reference VPC parameter instead of creating VPC', () => {
+      expect(template.Resources.VPC).toBeUndefined();
+      // Check that resources reference the VPC parameter
+      const albSg = template.Resources.ALBSecurityGroup;
+      expect(albSg.Properties.VpcId).toEqual({ Ref: 'VpcId' });
     });
 
-    test('VPC should have correct CIDR and DNS settings', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.Properties.EnableDnsSupport).toBe(true);
-      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
-    });
-
-    test('VPC should have environment suffix in name', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Properties.Tags).toContainEqual({
-        Key: 'Name',
-        Value: { 'Fn::Sub': 'product-api-vpc-${EnvironmentSuffix}' }
-      });
-    });
-
-    test('should create Internet Gateway', () => {
-      expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
-    });
-
-    test('should attach Internet Gateway to VPC', () => {
-      expect(template.Resources.AttachGateway).toBeDefined();
-      expect(template.Resources.AttachGateway.Type).toBe('AWS::EC2::VPCGatewayAttachment');
-      expect(template.Resources.AttachGateway.Properties.VpcId).toEqual({ Ref: 'VPC' });
-      expect(template.Resources.AttachGateway.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
-    });
-
-    test('should create 3 public subnets across 3 AZs', () => {
-      expect(template.Resources.PublicSubnet1).toBeDefined();
-      expect(template.Resources.PublicSubnet2).toBeDefined();
-      expect(template.Resources.PublicSubnet3).toBeDefined();
-
-      const subnet1 = template.Resources.PublicSubnet1;
-      const subnet2 = template.Resources.PublicSubnet2;
-      const subnet3 = template.Resources.PublicSubnet3;
-
-      expect(subnet1.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet2.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet3.Type).toBe('AWS::EC2::Subnet');
-
-      expect(subnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
-      expect(subnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
-      expect(subnet3.Properties.CidrBlock).toBe('10.0.3.0/24');
-
-      expect(subnet1.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(subnet2.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(subnet3.Properties.MapPublicIpOnLaunch).toBe(true);
-    });
-
-    test('should create 3 private subnets across 3 AZs', () => {
-      expect(template.Resources.PrivateSubnet1).toBeDefined();
-      expect(template.Resources.PrivateSubnet2).toBeDefined();
-      expect(template.Resources.PrivateSubnet3).toBeDefined();
-
-      const subnet1 = template.Resources.PrivateSubnet1;
-      const subnet2 = template.Resources.PrivateSubnet2;
-      const subnet3 = template.Resources.PrivateSubnet3;
-
-      expect(subnet1.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet2.Type).toBe('AWS::EC2::Subnet');
-      expect(subnet3.Type).toBe('AWS::EC2::Subnet');
-
-      expect(subnet1.Properties.CidrBlock).toBe('10.0.11.0/24');
-      expect(subnet2.Properties.CidrBlock).toBe('10.0.12.0/24');
-      expect(subnet3.Properties.CidrBlock).toBe('10.0.13.0/24');
-    });
-
-    test('should create NAT Gateway with EIP', () => {
-      expect(template.Resources.NATGateway1EIP).toBeDefined();
-      expect(template.Resources.NATGateway1).toBeDefined();
-
-      const eip = template.Resources.NATGateway1EIP;
-      const nat = template.Resources.NATGateway1;
-
-      expect(eip.Type).toBe('AWS::EC2::EIP');
-      expect(eip.Properties.Domain).toBe('vpc');
-      expect(eip.DependsOn).toBe('AttachGateway');
-
-      expect(nat.Type).toBe('AWS::EC2::NatGateway');
-      expect(nat.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
-    });
-
-    test('should create public route table with internet route', () => {
-      expect(template.Resources.PublicRouteTable).toBeDefined();
-      expect(template.Resources.PublicRoute).toBeDefined();
-
-      const routeTable = template.Resources.PublicRouteTable;
-      const route = template.Resources.PublicRoute;
-
-      expect(routeTable.Type).toBe('AWS::EC2::RouteTable');
-      expect(route.Type).toBe('AWS::EC2::Route');
-      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(route.Properties.GatewayId).toEqual({ Ref: 'InternetGateway' });
-      expect(route.DependsOn).toBe('AttachGateway');
-    });
-
-    test('should create private route table with NAT route', () => {
-      expect(template.Resources.PrivateRouteTable1).toBeDefined();
-      expect(template.Resources.PrivateRoute1).toBeDefined();
-
-      const routeTable = template.Resources.PrivateRouteTable1;
-      const route = template.Resources.PrivateRoute1;
-
-      expect(routeTable.Type).toBe('AWS::EC2::RouteTable');
-      expect(route.Type).toBe('AWS::EC2::Route');
-      expect(route.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(route.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
-    });
-
-    test('should associate public subnets with public route table', () => {
-      expect(template.Resources.PublicSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PublicSubnet2RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PublicSubnet3RouteTableAssociation).toBeDefined();
-
-      const assoc1 = template.Resources.PublicSubnet1RouteTableAssociation;
-      expect(assoc1.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
-      expect(assoc1.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
-      expect(assoc1.Properties.RouteTableId).toEqual({ Ref: 'PublicRouteTable' });
-    });
-
-    test('should associate private subnets with private route table', () => {
-      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet3RouteTableAssociation).toBeDefined();
-
-      const assoc1 = template.Resources.PrivateSubnet1RouteTableAssociation;
-      expect(assoc1.Type).toBe('AWS::EC2::SubnetRouteTableAssociation');
-      expect(assoc1.Properties.SubnetId).toEqual({ Ref: 'PrivateSubnet1' });
-      expect(assoc1.Properties.RouteTableId).toEqual({ Ref: 'PrivateRouteTable1' });
+    test('should reference subnet parameters instead of creating subnets', () => {
+      // No subnet resources should be created
+      const resources = Object.keys(template.Resources);
+      const subnetResources = resources.filter(r => 
+        template.Resources[r].Type === 'AWS::EC2::Subnet'
+      );
+      expect(subnetResources.length).toBe(0);
+      
+      // ALB should reference PublicSubnetIds parameter
+      const alb = template.Resources.ApplicationLoadBalancer;
+      expect(alb.Properties.Subnets).toEqual({ Ref: 'PublicSubnetIds' });
+      
+      // ASG should reference PrivateSubnetIds parameter
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.VPCZoneIdentifier).toEqual({ Ref: 'PrivateSubnetIds' });
     });
   });
+
+  /* VPC and Networking tests removed - now using external VPC via parameters */
+
 
   describe('Security Groups', () => {
     test('should create ALB security group', () => {
@@ -292,12 +199,9 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(alb.Properties.Type).toBe('application');
     });
 
-    test('ALB should use all 3 public subnets', () => {
+    test('ALB should use public subnet parameter', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Subnets).toHaveLength(3);
-      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet1' });
-      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
-      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet3' });
+      expect(alb.Properties.Subnets).toEqual({ Ref: 'PublicSubnetIds' });
     });
 
     test('ALB should use ALB security group', () => {
@@ -323,13 +227,10 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(alb.Properties.Name).toEqual({ 'Fn::Sub': 'product-api-alb-${EnvironmentSuffix}' });
     });
 
-    test('ALB should reference public subnets', () => {
+    test('ALB should reference public subnet parameter', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
       expect(alb.Properties.Subnets).toBeDefined();
-      expect(alb.Properties.Subnets).toHaveLength(3);
-      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet1' });
-      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
-      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet3' });
+      expect(alb.Properties.Subnets).toEqual({ Ref: 'PublicSubnetIds' });
     });
   });
 
@@ -392,16 +293,32 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
   });
 
   describe('ALB Listeners', () => {
-    test('should create HTTP listener', () => {
+    test('should create HTTP listener for redirect', () => {
       expect(template.Resources.HTTPListener).toBeDefined();
       expect(template.Resources.HTTPListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
     });
 
-    test('HTTP listener should forward to target group', () => {
+    test('HTTP listener should redirect to HTTPS', () => {
       const listener = template.Resources.HTTPListener;
       expect(listener.Properties.Port).toBe(80);
       expect(listener.Properties.Protocol).toBe('HTTP');
       expect(listener.Properties.DefaultActions).toHaveLength(1);
+      expect(listener.Properties.DefaultActions[0].Type).toBe('redirect');
+      expect(listener.Properties.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
+      expect(listener.Properties.DefaultActions[0].RedirectConfig.Port).toBe('443');
+    });
+
+    test('should create HTTPS listener', () => {
+      expect(template.Resources.HTTPSListener).toBeDefined();
+      expect(template.Resources.HTTPSListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+    });
+
+    test('HTTPS listener should forward to target group', () => {
+      const listener = template.Resources.HTTPSListener;
+      expect(listener.Properties.Port).toBe(443);
+      expect(listener.Properties.Protocol).toBe('HTTPS');
+      expect(listener.Properties.Certificates).toHaveLength(1);
+      expect(listener.Properties.Certificates[0].CertificateArn).toEqual({ Ref: 'SSLCertificateArn' });
       expect(listener.Properties.DefaultActions[0].Type).toBe('forward');
       expect(listener.Properties.DefaultActions[0].TargetGroupArn).toEqual({ Ref: 'TargetGroup' });
     });
@@ -455,6 +372,21 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(statement.Action).toContain('logs:PutLogEvents');
     });
 
+    test('EC2 role should have least-privilege KMS policy', () => {
+      const role = template.Resources.EC2Role;
+      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'KMSAccess');
+      expect(policy).toBeDefined();
+      
+      const statement = policy.PolicyDocument.Statement[0];
+      expect(statement.Action).toContain('kms:Decrypt');
+      expect(statement.Action).toContain('kms:GenerateDataKey');
+      expect(statement.Action).toContain('kms:CreateGrant');
+      expect(statement.Action).not.toContain('kms:*');
+      
+      // Should be scoped to specific KMS key
+      expect(statement.Resource).toEqual({ 'Fn::GetAtt': ['EBSKMSKey', 'Arn'] });
+    });
+
     test('should create EC2 instance profile', () => {
       expect(template.Resources.EC2InstanceProfile).toBeDefined();
       expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
@@ -485,11 +417,9 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(lt.Properties.LaunchTemplateData.InstanceType).toBe('t3.medium');
     });
 
-    test('Launch Template should use Amazon Linux 2 AMI from SSM', () => {
+    test('Launch Template should use AMI from parameter', () => {
       const lt = template.Resources.LaunchTemplate;
-      expect(lt.Properties.LaunchTemplateData.ImageId).toBe(
-        '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
-      );
+      expect(lt.Properties.LaunchTemplateData.ImageId).toEqual({ Ref: 'AmiId' });
     });
 
     test('Launch Template should use EC2 instance profile', () => {
@@ -561,12 +491,10 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(asg.Properties.DesiredCapacity).toBe('2');
     });
 
-    test('ASG should use all 3 private subnets', () => {
+    test('ASG should use private subnet parameter', () => {
       const asg = template.Resources.AutoScalingGroup;
-      expect(asg.Properties.VPCZoneIdentifier).toHaveLength(3);
-      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
-      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
-      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet3' });
+      expect(asg.Properties.VPCZoneIdentifier).toBeDefined();
+      expect(asg.Properties.VPCZoneIdentifier).toEqual({ Ref: 'PrivateSubnetIds' });
     });
 
     test('ASG should use Launch Template', () => {
@@ -597,9 +525,9 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(asg.Properties.MetricsCollection[0].Metrics).toContain('GroupTotalInstances');
     });
 
-    test('ASG should depend on HTTP listener', () => {
+    test('ASG should depend on HTTPS listener', () => {
       const asg = template.Resources.AutoScalingGroup;
-      expect(asg.DependsOn).toBe('HTTPListener');
+      expect(asg.DependsOn).toBe('HTTPSListener');
     });
 
     test('ASG should propagate tags to instances', () => {
@@ -696,24 +624,19 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'VpcId',
         'LoadBalancerDNS',
         'LoadBalancerURL',
         'TargetGroupArn',
         'AutoScalingGroupName',
         'EC2SecurityGroupId',
-        'ALBSecurityGroupId'
+        'ALBSecurityGroupId',
+        'EBSKMSKeyId',
+        'EBSKMSKeyArn'
       ];
 
       expectedOutputs.forEach(outputName => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
-    });
-
-    test('VPC ID output should be correct', () => {
-      const output = template.Outputs.VpcId;
-      expect(output.Description).toContain('VPC');
-      expect(output.Value).toEqual({ Ref: 'VPC' });
     });
 
     test('LoadBalancer DNS output should be correct', () => {
@@ -728,7 +651,7 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       const output = template.Outputs.LoadBalancerURL;
       expect(output.Description).toContain('Full URL');
       expect(output.Value).toEqual({
-        'Fn::Sub': 'http://${ApplicationLoadBalancer.DNSName}'
+        'Fn::Sub': 'https://${ApplicationLoadBalancer.DNSName}'
       });
     });
 
@@ -739,27 +662,21 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
     });
 
     test('outputs should have exports for cross-stack references', () => {
-      const vpcOutput = template.Outputs.VpcId;
+      // VpcId output was removed as we use external VPC
       const albOutput = template.Outputs.LoadBalancerDNS;
+      const tgOutput = template.Outputs.TargetGroupArn;
 
-      expect(vpcOutput.Export).toBeDefined();
-      expect(vpcOutput.Export.Name).toEqual({
-        'Fn::Sub': 'product-api-vpc-id-${EnvironmentSuffix}'
-      });
-
+      expect(albOutput).toBeDefined();
       expect(albOutput.Export).toBeDefined();
+      
+      expect(tgOutput).toBeDefined();
+      expect(tgOutput.Export).toBeDefined();
     });
   });
 
   describe('Resource Naming Convention', () => {
     test('all resources should follow naming convention with environment suffix', () => {
       const resourcesWithNames = [
-        'VPC',
-        'InternetGateway',
-        'PublicSubnet1',
-        'PrivateSubnet1',
-        'NATGateway1EIP',
-        'NATGateway1',
         'ALBSecurityGroup',
         'EC2SecurityGroup',
         'ApplicationLoadBalancer',
@@ -767,17 +684,37 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
         'EC2Role',
         'EC2InstanceProfile',
         'LaunchTemplate',
-        'AutoScalingGroup'
+        'AutoScalingGroup',
+        'EBSKMSKey',
+        'EBSKMSKeyAlias'
       ];
 
       resourcesWithNames.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        if (resource.Properties.Tags) {
+        if (!resource) return; // Skip if resource doesn't exist
+        
+        if (resource.Properties?.Tags) {
           const nameTag = resource.Properties.Tags.find((t: any) => t.Key === 'Name');
           if (nameTag) {
             expect(nameTag.Value).toHaveProperty('Fn::Sub');
             expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
           }
+        }
+        
+        // Check specific name properties
+        if (resource.Properties?.Name) {
+          expect(resource.Properties.Name).toHaveProperty('Fn::Sub');
+          expect(resource.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        }
+        
+        if (resource.Properties?.RoleName) {
+          expect(resource.Properties.RoleName).toHaveProperty('Fn::Sub');
+          expect(resource.Properties.RoleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        }
+        
+        if (resource.Properties?.LaunchTemplateName) {
+          expect(resource.Properties.LaunchTemplateName).toHaveProperty('Fn::Sub');
+          expect(resource.Properties.LaunchTemplateName['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
       });
     });
@@ -788,7 +725,7 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
         return resource.Properties && resource.Properties.Tags;
       });
 
-      expect(taggableResources.length).toBeGreaterThan(10);
+      expect(taggableResources.length).toBeGreaterThan(5); // Reduced after removing VPC resources
 
       taggableResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
@@ -808,21 +745,21 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
   describe('Resource Count Validation', () => {
     test('should have expected number of resources for complete infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(38);
+      expect(resourceCount).toBe(18); // Reduced from 38 after removing VPC resources
     });
 
-    test('should have exactly 1 VPC', () => {
+    test('should not have VPC resources', () => {
       const vpcs = Object.keys(template.Resources).filter(key =>
         template.Resources[key].Type === 'AWS::EC2::VPC'
       );
-      expect(vpcs).toHaveLength(1);
+      expect(vpcs).toHaveLength(0);
     });
 
-    test('should have exactly 6 subnets (3 public + 3 private)', () => {
+    test('should not have subnet resources', () => {
       const subnets = Object.keys(template.Resources).filter(key =>
         template.Resources[key].Type === 'AWS::EC2::Subnet'
       );
-      expect(subnets).toHaveLength(6);
+      expect(subnets).toHaveLength(0);
     });
 
     test('should have exactly 2 security groups', () => {
