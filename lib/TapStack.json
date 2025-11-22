@@ -240,9 +240,6 @@
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
-        },
         "DBSubnetGroupDescription": "Subnet group for Aurora ServerlessV2 cluster",
         "SubnetIds": {
           "Fn::If": [
@@ -282,9 +279,6 @@
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "db-security-group-${EnvironmentSuffix}"
-        },
         "GroupDescription": "Security group for RDS Aurora cluster",
         "VpcId": {
           "Fn::If": [
@@ -327,9 +321,6 @@
     "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "lambda-security-group-${EnvironmentSuffix}"
-        },
         "GroupDescription": "Security group for Lambda functions",
         "VpcId": {
           "Fn::If": [
