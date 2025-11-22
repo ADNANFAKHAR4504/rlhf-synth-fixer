@@ -13,7 +13,7 @@
   "aws_services": [
     "VPC",
     "EC2",
-    "IAM", 
+    "IAM",
     "S3",
     "Transit Gateway",
     "VPC Flow Logs",
