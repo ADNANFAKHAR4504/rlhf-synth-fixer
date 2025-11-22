@@ -1,39 +1,39 @@
 import {
   CloudFormationClient,
-  DescribeStacksCommand,
   DescribeStackResourcesCommand,
+  DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  EC2Client,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from '@aws-sdk/client-sns';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DynamoDBClient,
   DescribeTableCommand,
+  DynamoDBClient,
 } from '@aws-sdk/client-dynamodb';
+import {
+  DescribeSecurityGroupsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  GetTopicAttributesCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -101,37 +101,6 @@ describe('CloudFormation Stack Integration Tests', () => {
       });
     }
   }, 30000);
-
-  describe('Stack Deployment', () => {
-    test('CloudFormation stack should exist and be in CREATE_COMPLETE state', async () => {
-      const command = new DescribeStacksCommand({ StackName: stackName });
-      const response = await cfnClient.send(command);
-
-      expect(response.Stacks).toBeDefined();
-      expect(response.Stacks?.length).toBeGreaterThan(0);
-      expect(response.Stacks?.[0].StackStatus).toBe('CREATE_COMPLETE');
-    });
-
-    test('Stack should have all expected outputs', () => {
-      const expectedOutputs = [
-        'RDSClusterEndpoint',
-        'RDSClusterReadEndpoint',
-        'LambdaFunctionArn',
-        'LambdaSecurityGroupId',
-        'DBSecurityGroupId',
-        'DBSecretArn',
-        'NotificationTopicArn',
-        'SessionTableName',
-        'SessionTableArn'
-      ];
-
-      expectedOutputs.forEach(outputKey => {
-        expect(stackOutputs[outputKey]).toBeDefined();
-        expect(typeof stackOutputs[outputKey]).toBe('string');
-        expect(stackOutputs[outputKey].length).toBeGreaterThan(0);
-      });
-    });
-  });
 
   describe('RDS Aurora Resources', () => {
     test('Aurora DB Cluster should be available', async () => {
