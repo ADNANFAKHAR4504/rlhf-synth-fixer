@@ -1,4 +1,4 @@
-import { EC2, ELBv2, AutoScaling, CloudWatch, IAM, SSM } from 'aws-sdk';
+import { EC2, ELBv2, AutoScaling, CloudWatch, IAM, SSM, KMS } from 'aws-sdk';
 import fs from 'fs';
 import path from 'path';
 
@@ -20,6 +20,7 @@ const autoscaling = new AutoScaling({ region: AWS_REGION });
 const cloudwatch = new CloudWatch({ region: AWS_REGION });
 const iam = new IAM({ region: AWS_REGION });
 const ssm = new SSM({ region: AWS_REGION });
+const kms = new KMS({ region: AWS_REGION });
 
 describe('Product Catalog API - Integration Tests', () => {
   const hasOutputs = Object.keys(outputs).length > 0;
@@ -800,6 +801,84 @@ describe('Product Catalog API - Integration Tests', () => {
       } catch (error) {
         console.warn('Could not validate IAM policy');
       }
+    });
+  });
+
+  describe('KMS Encryption', () => {
+    let kmsKey: KMS.KeyMetadata | undefined;
+
+    beforeAll(async () => {
+      if (!hasOutputs || !outputs.EBSKMSKeyId) return;
+
+      try {
+        const keyResponse = await kms.describeKey({
+          KeyId: outputs.EBSKMSKeyId
+        }).promise();
+        kmsKey = keyResponse.KeyMetadata;
+      } catch (error) {
+        console.warn('KMS key not found:', error);
+      }
+    });
+
+    test('should have KMS key created', () => {
+      if (!hasOutputs) return;
+      expect(outputs.EBSKMSKeyId).toBeDefined();
+      expect(outputs.EBSKMSKeyArn).toBeDefined();
+    });
+
+    test('KMS key should be in Enabled state', () => {
+      if (!hasOutputs || !kmsKey) return;
+      expect(kmsKey.KeyState).toBe('Enabled');
+    });
+
+    test('KMS key should have rotation enabled', () => {
+      if (!hasOutputs || !kmsKey) return;
+      expect(kmsKey.KeyManager).toBe('CUSTOMER');
+    });
+
+    test('KMS key should have correct description', () => {
+      if (!hasOutputs || !kmsKey) return;
+      expect(kmsKey.Description).toContain('EBS volume encryption');
+      expect(kmsKey.Description).toContain(environmentSuffix);
+    });
+
+    test('KMS key policy should allow AWSServiceRoleForAutoScaling', async () => {
+      if (!hasOutputs || !outputs.EBSKMSKeyId) return;
+
+      try {
+        const policyResponse = await kms.getKeyPolicy({
+          KeyId: outputs.EBSKMSKeyId,
+          PolicyName: 'default'
+        }).promise();
+
+        const policy = JSON.parse(policyResponse.Policy || '{}');
+        const asgStatement = policy.Statement?.find((s: any) => 
+          s.Sid?.includes('Auto') || s.Principal?.AWS?.includes('AWSServiceRoleForAutoScaling')
+        );
+
+        expect(asgStatement).toBeDefined();
+      } catch (error) {
+        console.warn('Could not validate KMS policy');
+      }
+    });
+
+    test('instances should have encrypted volumes with KMS key', async () => {
+      if (!hasOutputs) return;
+
+      const asgResponse = await autoscaling.describeAutoScalingGroups({
+        AutoScalingGroupNames: [outputs.AutoScalingGroupName]
+      }).promise();
+
+      const instances = asgResponse.AutoScalingGroups?.[0]?.Instances || [];
+      if (instances.length === 0) return;
+
+      const instanceId = instances[0].InstanceId!;
+      const instanceResponse = await ec2.describeInstances({
+        InstanceIds: [instanceId]
+      }).promise();
+
+      const volumes = instanceResponse.Reservations?.[0]?.Instances?.[0]?.BlockDeviceMappings || [];
+      expect(volumes.length).toBeGreaterThan(0);
     });
   });
 

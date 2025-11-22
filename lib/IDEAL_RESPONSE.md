@@ -10,10 +10,11 @@ This CloudFormation template creates a fully self-contained, highly available we
 
 The infrastructure consists of:
 - **VPC and Networking**: Custom VPC with public and private subnets across 3 AZs, Internet Gateway, and NAT Gateway
+- **KMS Encryption**: Dedicated KMS key for EBS volume encryption with Auto Scaling service role permissions
 - **Application Load Balancer**: Internet-facing ALB distributing traffic to EC2 instances across 3 AZs
-- **Auto Scaling Group**: 2-8 EC2 instances (t3.medium) with Amazon Linux 2
+- **Auto Scaling Group**: 2-8 EC2 instances (t3.medium) with Amazon Linux 2 and encrypted EBS volumes
 - **CloudWatch Monitoring**: CPU-based auto-scaling with alarms for high/low CPU and unhealthy hosts
-- **IAM Security**: Instance profiles with Parameter Store and CloudWatch Logs access
+- **IAM Security**: Instance profiles with Parameter Store, CloudWatch Logs, and KMS access
 - **Security Groups**: Least-privilege network isolation
 
 ### Architecture Pattern
@@ -32,6 +33,7 @@ The infrastructure consists of:
 4. **Dynamic AMI Resolution**: Uses SSM Parameter Store to automatically get latest Amazon Linux 2 AMI
 5. **IMDSv2 Enforcement**: Required for all EC2 instances for enhanced security
 6. **Explicit Egress Rules**: All security groups have explicit egress rules following least privilege
+7. **KMS Encryption with Auto Scaling Support**: Creates dedicated KMS key with explicit permissions for AWSServiceRoleForAutoScaling to resolve account-level encryption conflicts
 
 ## Complete Source Code
 

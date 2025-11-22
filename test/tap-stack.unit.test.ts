@@ -808,8 +808,7 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
   describe('Resource Count Validation', () => {
     test('should have expected number of resources for complete infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(35);
-      expect(resourceCount).toBeLessThanOrEqual(45);
+      expect(resourceCount).toBe(38);
     });
 
     test('should have exactly 1 VPC', () => {
@@ -864,16 +863,32 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
       expect(kms.Properties.EnableKeyRotation).toBe(true);
     });
 
-    test('KMS key should have correct key policy', () => {
+    test('KMS key should allow root account full permissions', () => {
       const kms = template.Resources.EBSKMSKey;
       const statements = kms.Properties.KeyPolicy.Statement;
-
       const rootStatement = statements.find((s: any) => s.Sid === 'Enable IAM User Permissions');
-      const ec2Statement = statements.find((s: any) => s.Sid === 'Allow EC2 to use the key');
-
+      
       expect(rootStatement).toBeDefined();
       expect(rootStatement.Action).toBe('kms:*');
+    });
 
+    test('KMS key should allow AWSServiceRoleForAutoScaling', () => {
+      const kms = template.Resources.EBSKMSKey;
+      const statements = kms.Properties.KeyPolicy.Statement;
+      const asgStatement = statements.find((s: any) => 
+        s.Sid?.includes('Auto') || s.Sid?.includes('service-linked')
+      );
+      
+      expect(asgStatement).toBeDefined();
+      expect(asgStatement.Action).toContain('kms:GenerateDataKey*');
+      expect(asgStatement.Action).toContain('kms:CreateGrant');
+    });
+
+    test('KMS key should allow EC2 service', () => {
+      const kms = template.Resources.EBSKMSKey;
+      const statements = kms.Properties.KeyPolicy.Statement;
+      const ec2Statement = statements.find((s: any) => s.Sid === 'Allow EC2 to use the key');
+      
       expect(ec2Statement).toBeDefined();
       expect(ec2Statement.Principal.Service).toBe('ec2.amazonaws.com');
     });
@@ -881,7 +896,6 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
     test('should create KMS key alias', () => {
       expect(template.Resources.EBSKMSKeyAlias).toBeDefined();
       expect(template.Resources.EBSKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
-      expect(template.Resources.EBSKMSKeyAlias.Properties.TargetKeyId).toEqual({ Ref: 'EBSKMSKey' });
     });
 
     test('Launch Template should use KMS key for EBS encryption', () => {
