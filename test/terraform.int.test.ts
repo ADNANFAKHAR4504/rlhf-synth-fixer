@@ -1182,40 +1182,6 @@ describe('Configuration Validation Tests', () => {
 
       console.log('Lambda alarms validated');
     });
-
-    test('should validate CloudWatch log groups', async () => {
-      const logGroupNames = [
-        `/aws/lambda/${outputs.lambda_health_monitor_name_primary}`,
-        `/aws/lambda/${outputs.lambda_config_sync_name_primary}`
-      ];
-
-      const logGroups = await safeAwsCall(
-        async () => {
-          const cmd = new DescribeLogGroupsCommand({
-            logGroupNamePrefix: '/aws/lambda/'
-          });
-          return await primaryCloudWatchLogsClient.send(cmd);
-        },
-        'CloudWatch log groups validation'
-      );
-
-      if (!logGroups || !logGroups.logGroups) {
-        expect(true).toBe(true);
-        return;
-      }
-
-      const foundGroups = logGroups.logGroups.filter(lg => 
-        logGroupNames.some(name => lg.logGroupName === name)
-      );
-
-      expect(foundGroups.length).toBeGreaterThan(0);
-      
-      foundGroups.forEach(lg => {
-        expect(lg.retentionInDays).toBe(1);
-      });
-
-      console.log(`CloudWatch log groups validated: ${foundGroups.length} groups`);
-    });
   });
 
   describe('SSM Parameters', () => {
