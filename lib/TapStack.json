@@ -41,10 +41,9 @@
     "DBPassword": {
       "Type": "String",
       "NoEcho": true,
-      "Default": "ChangeMe123!",
       "MinLength": 8,
       "MaxLength": 41,
-      "Description": "Database master password (8-41 characters). Default provided for CI/CD testing."
+      "Description": "Database master password (8-41 characters). REQUIRED: Must be provided via parameter override or environment variable."
     },
     "VPCId": {
       "Type": "String",
@@ -58,10 +57,10 @@
     },
     "LambdaReservedConcurrency": {
       "Type": "Number",
-      "Default": 10,
+      "Default": 100,
       "MinValue": 1,
       "MaxValue": 1000,
-      "Description": "Reserved concurrent executions for Lambda function. Default 10 for CI/CD, use 100 for production."
+      "Description": "Reserved concurrent executions for Lambda function to prevent runaway scaling. Default 100 for production. Override to 10 for CI/CD testing environments with limited concurrency."
     }
   },
   "Conditions": {

@@ -31,7 +31,8 @@ This CloudFormation template provides an optimized infrastructure solution for f
 2. **Lambda Function for Transaction Processing**
    - Runtime: Python 3.11
    - Memory: 3GB (3008 MB) for optimal performance
-   - **ReservedConcurrentExecutions**: Configurable (default 10 for CI/CD, 100 for production)
+   - **ReservedConcurrentExecutions**: 100 (default, prevents runaway scaling)
+   - Configurable: Override to 10 for CI/CD testing with limited concurrency
    - **DeletionPolicy: Delete** (clean removal)
    - **Explicit DependsOn**: AuroraDBCluster, AuroraDBInstance
    - VPC deployment in private subnets
@@ -118,10 +119,9 @@ This CloudFormation template provides an optimized infrastructure solution for f
   "DBPassword": {
     "Type": "String",
     "NoEcho": true,
-    "Default": "ChangeMe123!",
     "MinLength": 8,
     "MaxLength": 41,
-    "Description": "Database master password. Default provided for CI/CD testing."
+    "Description": "Database master password (8-41 characters). REQUIRED: Must be provided via parameter override or environment variable."
   },
   "VPCId": {
     "Type": "String",
@@ -135,10 +135,10 @@ This CloudFormation template provides an optimized infrastructure solution for f
   },
   "LambdaReservedConcurrency": {
     "Type": "Number",
-    "Default": 10,
+    "Default": 100,
     "MinValue": 1,
     "MaxValue": 1000,
-    "Description": "Reserved concurrent executions for Lambda. Default 10 for CI/CD, use 100 for production."
+    "Description": "Reserved concurrent executions for Lambda function to prevent runaway scaling. Default 100 for production. Override to 10 for CI/CD testing environments with limited concurrency."
   }
 }
 ```
@@ -262,10 +262,12 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentSuffix=dev \
+    DBPassword=${DB_PASSWORD} \
+    LambdaReservedConcurrency=10 \
   --region us-east-1
 ```
 
-**Result**: Creates VPC (10.0.0.0/16), 3 subnets, and all application resources. Uses default password and 10 reserved Lambda executions.
+**Result**: Creates VPC (10.0.0.0/16), 3 subnets, and all application resources. DBPassword must be provided. Lambda concurrency overridden to 10 for CI/CD testing.
 
 #### Development Environment (With Existing VPC)
 
@@ -284,7 +286,7 @@ aws cloudformation deploy \
   --region us-east-1
 ```
 
-#### Production Environment (With Existing VPC + High Concurrency)
+#### Production Environment (With Existing VPC)
 
 ```bash
 aws cloudformation deploy \
@@ -298,9 +300,10 @@ aws cloudformation deploy \
     DBPassword=YourSecurePassword123! \
     VPCId=vpc-xxxxxxxxx \
     PrivateSubnetIds=subnet-xxxxx,subnet-yyyyy,subnet-zzzzz \
-    LambdaReservedConcurrency=100 \
   --region us-east-1
 ```
+
+**Note**: Uses default LambdaReservedConcurrency=100 (for production scale and runaway prevention).
 
 ### Deployment Time Optimization
 
@@ -526,11 +529,15 @@ Recommended alarms:
 
 ### Common Deployment Issues
 
-1. **Issue**: "Parameters: [PrivateSubnetIds, DBPassword, VPCId] must have values"
-   - **Solution**: Template now has defaults for all parameters. No action needed for CI/CD deployments.
+1. **Issue**: "Parameters: [DBPassword] must have values"
+   - **Solution**: DBPassword is required for security (no default). Pass via parameter override or environment variable:
+     ```bash
+     --parameter-overrides DBPassword=${DB_PASSWORD}
+     ```
+     For CI/CD, set DB_PASSWORD in GitHub Secrets or environment variables.
 
 2. **Issue**: "ReservedConcurrentExecutions decreases account's UnreservedConcurrentExecution below minimum"
-   - **Solution**: Template now defaults to 10 reserved executions (safe for CI/CD). Override with `LambdaReservedConcurrency=100` for production.
+   - **Solution**: Template defaults to 100 reserved executions (production scale). For CI/CD testing with limited concurrency, override with `LambdaReservedConcurrency=10`.
 
 3. **Issue**: "Resource of type 'AWS::RDS::DBSubnetGroup' with identifier 'db-subnet-group-pr7078' already exists"
    - **Solution**: Template now uses auto-generated names for DBSubnetGroup and security groups. Retry deployment without manual cleanup.

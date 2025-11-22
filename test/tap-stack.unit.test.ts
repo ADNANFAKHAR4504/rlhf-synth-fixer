@@ -81,16 +81,18 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.PrivateSubnetIds.Default).toBe('');
     });
 
-    test('should have DBPassword parameter with default', () => {
+    test('should have DBPassword parameter with NoEcho (no default for security)', () => {
       expect(template.Parameters.DBPassword).toBeDefined();
       expect(template.Parameters.DBPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBPassword.Default).toBeDefined();
+      expect(template.Parameters.DBPassword.Default).toBeUndefined();
+      expect(template.Parameters.DBPassword.MinLength).toBe(8);
+      expect(template.Parameters.DBPassword.MaxLength).toBe(41);
     });
 
     test('should have LambdaReservedConcurrency parameter', () => {
       expect(template.Parameters.LambdaReservedConcurrency).toBeDefined();
       expect(template.Parameters.LambdaReservedConcurrency.Type).toBe('Number');
-      expect(template.Parameters.LambdaReservedConcurrency.Default).toBe(10);
+      expect(template.Parameters.LambdaReservedConcurrency.Default).toBe(100);
       expect(template.Parameters.LambdaReservedConcurrency.MinValue).toBe(1);
       expect(template.Parameters.LambdaReservedConcurrency.MaxValue).toBe(1000);
     });

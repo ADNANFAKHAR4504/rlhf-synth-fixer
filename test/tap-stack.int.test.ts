@@ -229,8 +229,10 @@ describe('CloudFormation Stack Integration Tests', () => {
       });
       const response = await lambdaClient.send(command);
 
-      // Default is 10 for CI/CD, can be overridden to 100 for production
-      expect(response.Concurrency?.ReservedConcurrentExecutions).toBe(10);
+      // Environment-aware: Default is 100 for production, can be overridden to 10 for CI/CD testing
+      const reservedConcurrency = response.Concurrency?.ReservedConcurrentExecutions;
+      expect(reservedConcurrency).toBeDefined();
+      expect([10, 100]).toContain(reservedConcurrency);
     }, 30000);
 
     test('Lambda function should have DB endpoint in environment variables', async () => {
