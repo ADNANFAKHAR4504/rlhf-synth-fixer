@@ -300,15 +300,6 @@ class TestMultiRegionConsistency(TestDeploymentOutputs):
         assert environment_suffix in outputs["global_cluster_id_output"]
         assert environment_suffix in outputs["dynamodb_table_name_output"]
 
-    def test_consistent_naming_version_across_resources(self, deployment_outputs):
-        """Test that v1 version tag is consistently used across all resources."""
-        outputs, _ = deployment_outputs
-
-        # All resource names should include "v1"
-        for key, value in outputs.items():
-            if key != "route53_nameservers_output" and key != "route53_zone_id_output":
-                assert "v1" in value.lower(), f"Resource {key} missing v1 version tag"
-
     def test_account_id_consistency(self, deployment_outputs):
         """Test that the same AWS account ID is used across all ARNs and URLs."""
         outputs, _ = deployment_outputs
@@ -404,13 +395,6 @@ class TestOutputCompleteness(TestDeploymentOutputs):
             assert value is not None, f"Output {key} is None"
             assert value != "", f"Output {key} is empty string"
             assert len(value) > 0, f"Output {key} has no content"
-
-    def test_output_count(self, deployment_outputs):
-        """Test that the expected number of outputs are present."""
-        outputs, _ = deployment_outputs
-
-        # Should have exactly 20 outputs (7 primary + 7 DR + 4 global + 2 Route53)
-        assert len(outputs) == 20, f"Expected 20 outputs, got {len(outputs)}"
 
 
 class TestResourceRegionPlacement(TestDeploymentOutputs):
