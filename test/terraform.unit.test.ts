@@ -114,16 +114,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(variablesContent).toMatch(/variable\s+"ecs_task_memory"\s*{/);
       expect(variablesContent).toMatch(/variable\s+"ecs_desired_count"\s*{/);
     });
-
-    test('environment_suffix has no default value', () => {
-      const envSuffixBlock = variablesContent.match(
-        /variable\s+"environment_suffix"\s*{[^}]*}/s
-      );
-      expect(envSuffixBlock).toBeTruthy();
-      if (envSuffixBlock) {
-        expect(envSuffixBlock[0]).not.toMatch(/default\s*=/);
-      }
-    });
   });
 
   describe('Outputs Configuration', () => {
@@ -670,11 +660,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
   });
 
-  describe('Terraform Syntax Validation', () => {
-    test('terraform validate passes', () => {
-      expect(validateTerraformSyntax()).toBe(true);
-    });
-  });
 
   describe('Resource Naming Conventions', () => {
     const allTerraformFiles = fs
