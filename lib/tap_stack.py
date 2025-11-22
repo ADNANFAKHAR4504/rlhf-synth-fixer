@@ -138,17 +138,17 @@ class TapStack(Stack):
         # NAT gateways require EIPs which may hit account limits
         vpc = ec2.Vpc(
             self,
-            f"TradingVPC-v1-{self.environment_suffix}",
+            f"TradingVPC-v2-{self.environment_suffix}",
             max_azs=3,
             nat_gateways=0,  # Disable NAT gateways to avoid EIP limit
             subnet_configuration=[
                 ec2.SubnetConfiguration(
-                    name=f"Public-v1-{self.environment_suffix}",
+                    name=f"Public-v2-{self.environment_suffix}",
                     subnet_type=ec2.SubnetType.PUBLIC,
                     cidr_mask=24,
                 ),
                 ec2.SubnetConfiguration(
-                    name=f"Private-v1-{self.environment_suffix}",
+                    name=f"Private-v2-{self.environment_suffix}",
                     subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
                     cidr_mask=24,
                 ),
@@ -160,7 +160,7 @@ class TapStack(Stack):
         """Create security group for ALB"""
         sg = ec2.SecurityGroup(
             self,
-            f"ALBSecurityGroup-v1-{self.environment_suffix}",
+            f"ALBSecurityGroup-v2-{self.environment_suffix}",
             vpc=self.vpc,
             description="Security group for Application Load Balancer",
             allow_all_outbound=True,
@@ -181,7 +181,7 @@ class TapStack(Stack):
         """Create security group for ECS tasks"""
         sg = ec2.SecurityGroup(
             self,
-            f"ECSSecurityGroup-v1-{self.environment_suffix}",
+            f"ECSSecurityGroup-v2-{self.environment_suffix}",
             vpc=self.vpc,
             description="Security group for ECS Fargate tasks",
             allow_all_outbound=True,
@@ -197,7 +197,7 @@ class TapStack(Stack):
         """Create security group for Aurora database"""
         sg = ec2.SecurityGroup(
             self,
-            f"DatabaseSecurityGroup-v1-{self.environment_suffix}",
+            f"DatabaseSecurityGroup-v2-{self.environment_suffix}",
             vpc=self.vpc,
             description="Security group for Aurora database",
             allow_all_outbound=True,
@@ -213,9 +213,9 @@ class TapStack(Stack):
         """Create ECS cluster"""
         cluster = ecs.Cluster(
             self,
-            f"TradingCluster-v1-{self.environment_suffix}",
+            f"TradingCluster-v2-{self.environment_suffix}",
             vpc=self.vpc,
-            cluster_name=f"trading-cluster-v1-{self.environment_suffix}",
+            cluster_name=f"trading-cluster-v2-{self.environment_suffix}",
             container_insights=True,
         )
         return cluster
@@ -224,7 +224,7 @@ class TapStack(Stack):
         """Create Fargate task definition"""
         task_definition = ecs.FargateTaskDefinition(
             self,
-            f"TradingTaskDef-v1-{self.environment_suffix}",
+            f"TradingTaskDef-v2-{self.environment_suffix}",
             memory_limit_mib=2048,
             cpu=1024,
         )
@@ -243,10 +243,10 @@ class TapStack(Stack):
             self.log_retention_days, logs.RetentionDays.ONE_WEEK
         )
         container = task_definition.add_container(
-            f"TradingContainer-v1-{self.environment_suffix}",
+            f"TradingContainer-v2-{self.environment_suffix}",
             image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
             logging=ecs.LogDrivers.aws_logs(
-                stream_prefix=f"trading-v1-{self.environment_suffix}",
+                stream_prefix=f"trading-v2-{self.environment_suffix}",
                 log_retention=retention,
             ),
             environment={
@@ -266,7 +266,7 @@ class TapStack(Stack):
         # FIXED: Use public subnets with public IP since we removed NAT gateways
         service = ecs.FargateService(
             self,
-            f"TradingService-v1-{self.environment_suffix}",
+            f"TradingService-v2-{self.environment_suffix}",
             cluster=self.cluster,
             task_definition=self.task_definition,
             desired_count=2,
@@ -282,10 +282,10 @@ class TapStack(Stack):
         """Create Application Load Balancer"""
         alb = elbv2.ApplicationLoadBalancer(
             self,
-            f"TradingALB-v1-{self.environment_suffix}",
+            f"TradingALB-v2-{self.environment_suffix}",
             vpc=self.vpc,
             internet_facing=True,
-            load_balancer_name=f"trading-alb-v1-{self.environment_suffix}",
+            load_balancer_name=f"trading-alb-v2-{self.environment_suffix}",
             security_group=self.alb_sg,
             deletion_protection=False,
         )
@@ -293,7 +293,7 @@ class TapStack(Stack):
         # Create target group
         target_group = elbv2.ApplicationTargetGroup(
             self,
-            f"TradingTargetGroup-v1-{self.environment_suffix}",
+            f"TradingTargetGroup-v2-{self.environment_suffix}",
             vpc=self.vpc,
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
@@ -313,7 +313,7 @@ class TapStack(Stack):
 
         # Create listener
         listener = alb.add_listener(
-            f"TradingListener-v1-{self.environment_suffix}",
+            f"TradingListener-v2-{self.environment_suffix}",
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             default_target_groups=[target_group],
@@ -326,8 +326,8 @@ class TapStack(Stack):
         # FIXED: Create CfnGlobalCluster for proper Aurora Global Database
         global_cluster = rds.CfnGlobalCluster(
             self,
-            f"AuroraGlobalDB-v1-{self.environment_suffix}",
-            global_cluster_identifier=f"trading-global-v1-{self.environment_suffix}",
+            f"AuroraGlobalDB-v2-{self.environment_suffix}",
+            global_cluster_identifier=f"trading-global-v2-{self.environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
             deletion_protection=False,
@@ -340,7 +340,7 @@ class TapStack(Stack):
         # Create subnet group with explicit subnets
         db_subnet_group = rds.SubnetGroup(
             self,
-            f"AuroraSubnetGroup-v1-{self.environment_suffix}",
+            f"AuroraSubnetGroup-v2-{self.environment_suffix}",
             description="Subnet group for Aurora Global Database",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(
@@ -352,7 +352,7 @@ class TapStack(Stack):
         # Create parameter group for global database
         parameter_group = rds.ParameterGroup(
             self,
-            f"AuroraParameterGroup-v1-{self.environment_suffix}",
+            f"AuroraParameterGroup-v2-{self.environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
                 version=rds.AuroraPostgresEngineVersion.VER_14_6
             ),
@@ -362,7 +362,7 @@ class TapStack(Stack):
         # Create Aurora Global Database cluster (primary)
         cluster = rds.DatabaseCluster(
             self,
-            f"AuroraGlobalCluster-v1-{self.environment_suffix}",
+            f"AuroraGlobalCluster-v2-{self.environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
                 version=rds.AuroraPostgresEngineVersion.VER_14_6
             ),
@@ -403,7 +403,7 @@ class TapStack(Stack):
         # Create subnet group
         db_subnet_group = rds.SubnetGroup(
             self,
-            f"AuroraSubnetGroup-v1-{self.environment_suffix}",
+            f"AuroraSubnetGroup-v2-{self.environment_suffix}",
             description="Subnet group for Aurora Global Database secondary",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(
@@ -416,7 +416,7 @@ class TapStack(Stack):
         # KMS keys are region-specific, so secondary cluster needs its own key
         kms_key = kms.Key(
             self,
-            f"AuroraSecondaryKMSKey-v1-{self.environment_suffix}",
+            f"AuroraSecondaryKMSKey-v2-{self.environment_suffix}",
             description=f"KMS key for Aurora secondary cluster in {self.region}",
             enable_key_rotation=True,
             removal_policy=RemovalPolicy.DESTROY,
@@ -424,14 +424,14 @@ class TapStack(Stack):
 
         # FIXED: Create secondary cluster and attach to global cluster
         # Import the global cluster identifier from primary region
-        global_cluster_id = f"trading-global-v1-{self.environment_suffix}"
+        global_cluster_id = f"trading-global-v2-{self.environment_suffix}"
 
         # FIXED: For cross-region replication, we cannot specify credentials or default_database_name
         # These are inherited from the primary cluster in the global database
         # However, we MUST specify a KMS key for encrypted cross-region replication
         cluster = rds.DatabaseCluster(
             self,
-            f"AuroraSecondaryCluster-v1-{self.environment_suffix}",
+            f"AuroraSecondaryCluster-v2-{self.environment_suffix}",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
                 version=rds.AuroraPostgresEngineVersion.VER_14_6
             ),
@@ -483,7 +483,7 @@ class TapStack(Stack):
             )
             alarm = cloudwatch.Alarm(
                 self,
-                f"ReplicationLagAlarm-v1-{self.environment_suffix}",
+                f"ReplicationLagAlarm-v2-{self.environment_suffix}",
                 metric=metric,
                 threshold=60000,  # 60 seconds in milliseconds
                 evaluation_periods=2,
@@ -496,8 +496,8 @@ class TapStack(Stack):
         """Create DynamoDB Global Table"""
         table = dynamodb.Table(
             self,
-            f"SessionTable-v1-{self.environment_suffix}",
-            table_name=f"trading-sessions-v1-{self.environment_suffix}",
+            f"SessionTable-v2-{self.environment_suffix}",
+            table_name=f"trading-sessions-v2-{self.environment_suffix}",
             partition_key=dynamodb.Attribute(
                 name="sessionId",
                 type=dynamodb.AttributeType.STRING,
@@ -514,8 +514,8 @@ class TapStack(Stack):
         # FIXED: Import the global table that was created in primary region
         table = dynamodb.Table.from_table_name(
             self,
-            f"ImportedSessionTable-v1-{self.environment_suffix}",
-            table_name=f"trading-sessions-v1-{self.environment_suffix}",
+            f"ImportedSessionTable-v2-{self.environment_suffix}",
+            table_name=f"trading-sessions-v2-{self.environment_suffix}",
         )
         return table
 
@@ -524,8 +524,8 @@ class TapStack(Stack):
         # Create bucket
         bucket = s3.Bucket(
             self,
-            f"TradingBucket-v1-{self.environment_suffix}",
-            bucket_name=f"trading-data-v1-{self.region}-{self.environment_suffix}",
+            f"TradingBucket-v2-{self.environment_suffix}",
+            bucket_name=f"trading-data-v2-{self.region}-{self.environment_suffix}",
             versioned=True,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
@@ -540,7 +540,7 @@ class TapStack(Stack):
             # Create replication role
             replication_role = iam.Role(
                 self,
-                f"S3ReplicationRole-v1-{self.environment_suffix}",
+                f"S3ReplicationRole-v2-{self.environment_suffix}",
                 assumed_by=iam.ServicePrincipal("s3.amazonaws.com"),
                 description="Role for S3 cross-region replication",
             )
@@ -578,7 +578,7 @@ class TapStack(Stack):
                         "s3:ReplicateTags",
                     ],
                     resources=[
-                        f"arn:aws:s3:::trading-data-v1-{self.secondary_region}-{self.environment_suffix}/*"
+                        f"arn:aws:s3:::trading-data-v2-{self.secondary_region}-{self.environment_suffix}/*"
                     ],
                 )
             )
@@ -589,14 +589,14 @@ class TapStack(Stack):
                 role=replication_role.role_arn,
                 rules=[
                     s3.CfnBucket.ReplicationRuleProperty(
-                        id=f"ReplicateAll-v1-{self.environment_suffix}",
+                        id=f"ReplicateAll-v2-{self.environment_suffix}",
                         status="Enabled",
                         priority=1,
                         filter=s3.CfnBucket.ReplicationRuleFilterProperty(
                             prefix="",
                         ),
                         destination=s3.CfnBucket.ReplicationDestinationProperty(
-                            bucket=f"arn:aws:s3:::trading-data-v1-{self.secondary_region}-{self.environment_suffix}",
+                            bucket=f"arn:aws:s3:::trading-data-v2-{self.secondary_region}-{self.environment_suffix}",
                             # FIXED: Enable Replication Time Control (RTC)
                             replication_time=s3.CfnBucket.ReplicationTimeProperty(
                                 status="Enabled",
@@ -625,14 +625,14 @@ class TapStack(Stack):
         # Create custom event bus
         event_bus = events.EventBus(
             self,
-            f"TradingEventBus-v1-{self.environment_suffix}",
-            event_bus_name=f"trading-events-v1-{self.environment_suffix}",
+            f"TradingEventBus-v2-{self.environment_suffix}",
+            event_bus_name=f"trading-events-v2-{self.environment_suffix}",
         )
 
         # Create rule for trading events
         rule = events.Rule(
             self,
-            f"TradingEventsRule-v1-{self.environment_suffix}",
+            f"TradingEventsRule-v2-{self.environment_suffix}",
             event_bus=event_bus,
             event_pattern=events.EventPattern(
                 source=["trading.platform"],
@@ -646,12 +646,12 @@ class TapStack(Stack):
             # Create cross-region event bus target to secondary region
             secondary_bus_arn = (
                 f"arn:aws:events:{self.secondary_region}:{self.account}:"
-                f"event-bus/trading-events-v1-{self.environment_suffix}"
+                f"event-bus/trading-events-v2-{self.environment_suffix}"
             )
             cross_region_target = event_targets.EventBus(
                 events.EventBus.from_event_bus_arn(
                     self,
-                    f"SecondaryEventBus-v1-{self.environment_suffix}",
+                    f"SecondaryEventBus-v2-{self.environment_suffix}",
                     event_bus_arn=secondary_bus_arn,
                 )
             )
@@ -667,7 +667,7 @@ class TapStack(Stack):
         # FIXED: Use configurable domain name
         hosted_zone = route53.PublicHostedZone(
             self,
-            f"TradingHostedZone-v1-{self.environment_suffix}",
+            f"TradingHostedZone-v2-{self.environment_suffix}",
             zone_name=self.domain_name,
             comment="Hosted zone for multi-region trading platform",
         )
@@ -679,7 +679,7 @@ class TapStack(Stack):
         # This avoids context provider lookups during synth
         hosted_zone = route53.HostedZone.from_hosted_zone_attributes(
             self,
-            f"ImportedHostedZone-v1-{self.environment_suffix}",
+            f"ImportedHostedZone-v2-{self.environment_suffix}",
             hosted_zone_id=hosted_zone_id,
             zone_name=self.domain_name,
         )
@@ -692,7 +692,7 @@ class TapStack(Stack):
         # FIXED: Changed path from /health to / to match amazon-ecs-sample container
         primary_health_check = route53.CfnHealthCheck(
             self,
-            f"PrimaryHealthCheck-v1-{self.environment_suffix}",
+            f"PrimaryHealthCheck-v2-{self.environment_suffix}",
             health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
                 type="HTTP",
                 resource_path="/",
@@ -704,7 +704,7 @@ class TapStack(Stack):
             health_check_tags=[
                 route53.CfnHealthCheck.HealthCheckTagProperty(
                     key="Name",
-                    value=f"primary-alb-health-v1-{self.environment_suffix}",
+                    value=f"primary-alb-health-v2-{self.environment_suffix}",
                 )
             ],
         )
@@ -712,14 +712,14 @@ class TapStack(Stack):
         # Create weighted record for primary region
         route53.ARecord(
             self,
-            f"PrimaryWeightedRecord-v1-{self.environment_suffix}",
+            f"PrimaryWeightedRecord-v2-{self.environment_suffix}",
             zone=self.hosted_zone,
             record_name=f"api.{self.domain_name}",
             target=route53.RecordTarget.from_alias(
                 targets.LoadBalancerTarget(self.alb)
             ),
             weight=100,  # 100% traffic to primary initially
-            set_identifier=f"Primary-v1-{self.environment_suffix}",
+            set_identifier=f"Primary-v2-{self.environment_suffix}",
         )
 
     def _create_route53_secondary_records(self) -> None:
@@ -728,7 +728,7 @@ class TapStack(Stack):
         # FIXED: Changed path from /health to / to match amazon-ecs-sample container
         secondary_health_check = route53.CfnHealthCheck(
             self,
-            f"SecondaryHealthCheck-v1-{self.environment_suffix}",
+            f"SecondaryHealthCheck-v2-{self.environment_suffix}",
             health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
                 type="HTTP",
                 resource_path="/",
@@ -740,7 +740,7 @@ class TapStack(Stack):
             health_check_tags=[
                 route53.CfnHealthCheck.HealthCheckTagProperty(
                     key="Name",
-                    value=f"secondary-alb-health-v1-{self.environment_suffix}",
+                    value=f"secondary-alb-health-v2-{self.environment_suffix}",
                 )
             ],
         )
@@ -748,14 +748,14 @@ class TapStack(Stack):
         # FIXED: Create weighted record for secondary region with weight=0
         route53.ARecord(
             self,
-            f"SecondaryWeightedRecord-v1-{self.environment_suffix}",
+            f"SecondaryWeightedRecord-v2-{self.environment_suffix}",
             zone=self.hosted_zone,
             record_name=f"api.{self.domain_name}",
             target=route53.RecordTarget.from_alias(
                 targets.LoadBalancerTarget(self.alb)
             ),
             weight=0,  # 0% traffic to secondary initially (failover only)
-            set_identifier=f"Secondary-v1-{self.environment_suffix}",
+            set_identifier=f"Secondary-v2-{self.environment_suffix}",
         )
 
     def _create_log_groups(self) -> None:
@@ -776,8 +776,8 @@ class TapStack(Stack):
         # Application logs
         logs.LogGroup(
             self,
-            f"ApplicationLogGroup-v1-{self.environment_suffix}",
-            log_group_name=f"/aws/trading/application-v1-{self.environment_suffix}",
+            f"ApplicationLogGroup-v2-{self.environment_suffix}",
+            log_group_name=f"/aws/trading/application-v2-{self.environment_suffix}",
             retention=retention,
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -785,8 +785,8 @@ class TapStack(Stack):
         # Infrastructure logs
         logs.LogGroup(
             self,
-            f"InfrastructureLogGroup-v1-{self.environment_suffix}",
-            log_group_name=f"/aws/trading/infrastructure-v1-{self.environment_suffix}",
+            f"InfrastructureLogGroup-v2-{self.environment_suffix}",
+            log_group_name=f"/aws/trading/infrastructure-v2-{self.environment_suffix}",
             retention=retention,
             removal_policy=RemovalPolicy.DESTROY,
         )
