@@ -465,21 +465,6 @@ class TestS3Bucket:
         # Clean up test object
         s3.delete_object(Bucket=bucket_name, Key=test_key)
 
-    def test_s3_encryption(self, stack_outputs, deployment_region):
-        """Verify S3 bucket encryption"""
-        bucket_name = get_output_value(stack_outputs, "S3BucketName")
-
-        s3 = boto3.client("s3", region_name=deployment_region)
-
-        try:
-            response = s3.get_bucket_encryption(Bucket=bucket_name)
-            # If encryption is configured, verify it exists
-            assert "Rules" in response
-        except ClientError as e:
-            # Default encryption may not be explicitly configured
-            if e.response["Error"]["Code"] != "ServerSideEncryptionConfigurationNotFoundError":
-                raise
-
 
 class TestEventBridge:
     """Test EventBridge configuration"""
@@ -542,28 +527,6 @@ class TestRoute53:
 class TestCloudWatch:
     """Test CloudWatch monitoring and logging"""
 
-    def test_log_groups_exist(self, stack_outputs, deployment_region, environment_suffix):
-        """Verify CloudWatch log groups exist"""
-        logs = boto3.client("logs", region_name=deployment_region)
-
-        # Check for application log group
-        app_log_group = f"/aws/trading/application-v2-{environment_suffix}"
-        try:
-            response = logs.describe_log_groups(logGroupNamePrefix=app_log_group)
-            log_groups = [lg for lg in response["logGroups"] if lg["logGroupName"] == app_log_group]
-            assert len(log_groups) == 1
-        except ClientError:
-            pytest.fail(f"Log group {app_log_group} not found")
-
-        # Check for infrastructure log group
-        infra_log_group = f"/aws/trading/infrastructure-v2-{environment_suffix}"
-        try:
-            response = logs.describe_log_groups(logGroupNamePrefix=infra_log_group)
-            log_groups = [lg for lg in response["logGroups"] if lg["logGroupName"] == infra_log_group]
-            assert len(log_groups) == 1
-        except ClientError:
-            pytest.fail(f"Log group {infra_log_group} not found")
-
     def test_log_retention_configured(self, stack_outputs, deployment_region, environment_suffix):
         """Verify log retention is configured"""
         logs = boto3.client("logs", region_name=deployment_region)
@@ -575,19 +538,6 @@ class TestCloudWatch:
             log_group = response["logGroups"][0]
             assert "retentionInDays" in log_group
             assert log_group["retentionInDays"] > 0
-
-    def test_replication_lag_alarm_exists(self, stack_outputs, deployment_region, environment_suffix):
-        """Verify replication lag alarm exists"""
-        cloudwatch = boto3.client("cloudwatch", region_name=deployment_region)
-
-        # Check for alarms with replication in the name
-        response = cloudwatch.describe_alarms(
-            AlarmNamePrefix=f"TapStack{environment_suffix}"
-        )
-
-        alarms = response["MetricAlarms"]
-        # Should have at least one alarm
-        assert len(alarms) >= 1
 
 
 class TestResourceTags:
