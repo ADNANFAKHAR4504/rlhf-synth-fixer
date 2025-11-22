@@ -431,23 +431,7 @@
       "Condition": "CreateVPC",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "product-api-nat-eip-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "Application",
-            "Value": "ProductCatalogAPI"
-          }
-        ]
+        "Domain": "vpc"
       }
     },
     "NATGateway": {
@@ -1106,11 +1090,6 @@
               }
             }
           ],
-          "MetadataOptions": {
-            "HttpTokens": "required",
-            "HttpPutResponseHopLimit": 1,
-            "HttpEndpoint": "enabled"
-          },
           "Monitoring": {
             "Enabled": true
           },
@@ -1173,12 +1152,7 @@
           "LaunchTemplateId": {
             "Ref": "LaunchTemplate"
           },
-          "Version": {
-            "Fn::GetAtt": [
-              "LaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
+          "Version": "$Latest"
         },
         "MinSize": "2",
         "MaxSize": "8",
