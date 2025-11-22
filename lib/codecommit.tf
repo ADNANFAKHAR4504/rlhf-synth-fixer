@@ -8,8 +8,12 @@ resource "aws_codecommit_repository" "app" {
 }
 
 resource "aws_codecommit_approval_rule_template" "main_branch_protection" {
-  name        = "main-branch-protection-${var.environment_suffix}"
+  name        = "main-branch-protection-${var.environment_suffix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
   description = "Require approval for main branch changes"
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 
   content = jsonencode({
     Version               = "2018-11-08"
