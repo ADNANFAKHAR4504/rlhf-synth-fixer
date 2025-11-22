@@ -1056,6 +1056,8 @@ class DrRegionStack(TerraformStack):
             cluster_identifier=f"dr-aurora-v1-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="14.6",
+            master_username="dbadmin",
+            master_password=db_password.result,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[aurora_sg.id],
             skip_final_snapshot=True,
