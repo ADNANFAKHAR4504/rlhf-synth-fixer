@@ -83,11 +83,11 @@ resource "aws_config_config_rule" "iam_password_policy" {
   }
 
   input_parameters = jsonencode({
-    RequireUppercaseCharacters = true
-    RequireLowercaseCharacters = true
-    RequireSymbols             = true
-    RequireNumbers             = true
-    MinimumPasswordLength      = 14
+    RequireUppercaseCharacters = "true"
+    RequireLowercaseCharacters = "true"
+    RequireSymbols             = "true"
+    RequireNumbers             = "true"
+    MinimumPasswordLength      = "14"
   })
 
   depends_on = [aws_config_configuration_recorder.main]

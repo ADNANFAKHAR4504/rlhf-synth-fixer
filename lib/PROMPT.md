@@ -10,48 +10,35 @@ Create a multi-account security infrastructure using **Terraform with HCL** that
 
 ### Core Requirements
 
-1. **AWS Organizations Structure**
-   - Create AWS Organizations with 3 organizational units: Security, Production, and Development
-   - Set up proper account hierarchy for security isolation
-   - Enable all organization-level security features
-
-2. **Cross-Account IAM Roles**
+1. **Cross-Account IAM Roles**
    - Deploy cross-account IAM roles for security audit access
    - Enforce MFA for all AssumeRole operations
    - Implement least-privilege access patterns
    - No wildcard permissions except for read-only actions
 
-3. **KMS Multi-Region Key Management**
+2. **KMS Multi-Region Key Management**
    - Implement KMS customer-managed keys with multi-region support
    - Configure automatic annual key rotation
    - Use AES-256 encryption standard
    - Deploy primary keys in us-east-1 and replica keys in eu-west-1
 
-4. **Service Control Policies (SCPs)**
-   - Create SCPs to enforce encryption for S3 buckets
-   - Enforce encryption for EBS volumes
-   - Enforce encryption for RDS databases
-   - Prevent disabling of CloudWatch Logs across all accounts
-   - Apply policies across all OUs and accounts
-
-5. **IAM Security Policies**
+3. **IAM Security Policies**
    - Restrict root user actions across all accounts
    - Enforce mandatory resource tagging compliance
    - Implement least-privilege access patterns throughout
    - Create security audit role with read-only access but no modification permissions
 
-6. **CloudWatch Logging**
+4. **CloudWatch Logging**
    - Set up CloudWatch Logs for all IAM activity
    - Configure 90-day retention period for audit logs
-   - Ensure logs cannot be disabled via SCP enforcement
 
-7. **AWS Config Compliance**
+5. **AWS Config Compliance**
    - Enable AWS Config rules for security compliance monitoring
    - Monitor encryption settings for S3, EBS, and RDS
    - Track compliance with organizational security standards
    - Use correct IAM managed policy: service-role/AWS_ConfigRole
 
-8. **State File Encryption**
+6. **State File Encryption**
    - All Terraform state files must be encrypted using KMS customer-managed keys
    - Configure S3 backend with encryption enabled
    - Implement DynamoDB state locking
@@ -66,10 +53,8 @@ If time permits, consider adding:
 ### Technical Requirements
 
 - All infrastructure defined using **Terraform with HCL**
-- Use **AWS Organizations** for multi-account management
 - Use **IAM** for cross-account roles and policies
 - Use **KMS** for encryption key management with multi-region support
-- Use **Service Control Policies** for organization-wide policy enforcement
 - Use **CloudWatch Logs** for audit trail
 - Use **AWS Config** for compliance monitoring
 - Deploy to **us-east-1** (primary) and **eu-west-1** (secondary) regions
@@ -81,7 +66,6 @@ If time permits, consider adding:
 
 - All KMS keys must use AES-256 encryption with automatic annual rotation enabled
 - Cross-account IAM roles must enforce MFA for all AssumeRole operations (require_mfa = true in assume role policy)
-- Service Control Policies must prevent disabling of CloudWatch Logs in any account
 - No IAM policy can contain Resource: '*' except for read-only actions (s3:List*, s3:Get*, ec2:Describe*, etc.)
 - Security audit role must have read-only access to all accounts but no modification permissions (no Put*, Create*, Delete*, Update* actions)
 
@@ -98,7 +82,7 @@ If time permits, consider adding:
 
 ## Success Criteria
 
-- **Functionality**: All 8 mandatory requirements implemented and deployable
+- **Functionality**: All 6 mandatory requirements implemented and deployable
 - **Security**: Zero-trust architecture with MFA enforcement, encryption at rest, least-privilege IAM
 - **Compliance**: PCI-DSS compliant with audit trails, mandatory encryption, and access controls
 - **Multi-Region**: KMS keys replicated between us-east-1 and eu-west-1
@@ -109,10 +93,8 @@ If time permits, consider adding:
 ## What to deliver
 
 - Complete Terraform HCL implementation with all required resources
-- AWS Organizations with 3 OUs (Security, Production, Development)
 - Cross-account IAM roles with MFA enforcement
 - KMS multi-region keys with automatic rotation
-- Service Control Policies for encryption enforcement
 - IAM policies for root restriction and tagging compliance
 - CloudWatch Logs configuration with 90-day retention
 - AWS Config rules for compliance monitoring
