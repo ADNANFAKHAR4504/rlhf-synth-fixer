@@ -525,7 +525,7 @@ class TapStack(Stack):
         bucket = s3.Bucket(
             self,
             f"TradingBucket-v2-{self.environment_suffix}",
-            bucket_name=f"trading-data-v2-{self.region}-{self.environment_suffix}",
+            bucket_name=f"trading-data-v2-{self.region}-{self.environment_suffix.lower()}",
             versioned=True,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
@@ -578,7 +578,7 @@ class TapStack(Stack):
                         "s3:ReplicateTags",
                     ],
                     resources=[
-                        f"arn:aws:s3:::trading-data-v2-{self.secondary_region}-{self.environment_suffix}/*"
+                        f"arn:aws:s3:::trading-data-v2-{self.secondary_region}-{self.environment_suffix.lower()}/*"
                     ],
                 )
             )
@@ -596,7 +596,7 @@ class TapStack(Stack):
                             prefix="",
                         ),
                         destination=s3.CfnBucket.ReplicationDestinationProperty(
-                            bucket=f"arn:aws:s3:::trading-data-v2-{self.secondary_region}-{self.environment_suffix}",
+                            bucket=f"arn:aws:s3:::trading-data-v2-{self.secondary_region}-{self.environment_suffix.lower()}",
                             # FIXED: Enable Replication Time Control (RTC)
                             replication_time=s3.CfnBucket.ReplicationTimeProperty(
                                 status="Enabled",

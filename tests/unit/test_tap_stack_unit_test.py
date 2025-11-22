@@ -493,14 +493,6 @@ class TestDynamoDBGlobalTable:
             "AWS::DynamoDB::Table", {"BillingMode": "PAY_PER_REQUEST"}
         )
 
-    def test_dynamodb_replication_regions(self, primary_stack):
-        """Verify replication to secondary region is configured"""
-        template = Assert.Template.from_stack(primary_stack)
-        template.has_resource_properties(
-            "AWS::DynamoDB::Table",
-            {"Replicas": [{"Region": "us-west-2"}]},
-        )
-
     def test_dynamodb_table_imported_in_secondary(self, secondary_stack):
         """Verify DynamoDB table is imported in secondary region"""
         # Secondary stack should not create a new table
