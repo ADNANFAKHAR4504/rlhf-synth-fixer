@@ -218,14 +218,18 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
     });
 
     // API Gateway CloudWatch role (account-level, created once per account/region)
-    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
-      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
-        ),
-      ],
-    });
+    const apiGatewayCloudWatchRole = new iam.Role(
+      this,
+      'ApiGatewayCloudWatchRole',
+      {
+        assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+          ),
+        ],
+      }
+    );
 
     // Set the account-level CloudWatch role for API Gateway
     const cfnAccount = new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
