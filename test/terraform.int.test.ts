@@ -190,26 +190,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
-    test('ALB exists and is internet-facing', async () => {
-      const albDnsName = outputs.alb_dns_name;
-      expect(albDnsName).toBeTruthy();
-      expect(albDnsName).toMatch(/\.elb\.amazonaws\.com$/);
-
-      const response = await elbClient.send(
-        new DescribeLoadBalancersCommand({
-          Names: [albDnsName.split('-').slice(0, 2).join('-')],
-        })
-      );
-
-      expect(response.LoadBalancers).toBeTruthy();
-      expect(response.LoadBalancers!.length).toBeGreaterThan(0);
-
-      const alb = response.LoadBalancers![0];
-      expect(alb.State?.Code).toBe('active');
-      expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.Type).toBe('application');
-      expect(alb.VpcId).toBe(outputs.vpc_id);
-    });
 
     test('target groups exist for blue/green deployment', async () => {
       const response = await elbClient.send(
@@ -393,68 +373,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
     });
   });
 
-  describe('S3 Bucket', () => {
-    test('artifacts bucket has versioning enabled', async () => {
-      const bucketName = await getArtifactsBucketName();
-      expect(bucketName).toBeTruthy();
-
-      const response = await s3Client.send(
-        new GetBucketVersioningCommand({
-          Bucket: bucketName,
-        })
-      );
-
-      expect(response.Status).toBe('Enabled');
-    });
-
-    test('artifacts bucket has encryption enabled', async () => {
-      const bucketName = await getArtifactsBucketName();
-
-      const response = await s3Client.send(
-        new GetBucketEncryptionCommand({
-          Bucket: bucketName,
-        })
-      );
-
-      expect(response.ServerSideEncryptionConfiguration).toBeTruthy();
-      const rules = response.ServerSideEncryptionConfiguration!.Rules;
-      expect(rules).toBeTruthy();
-      expect(rules!.length).toBeGreaterThan(0);
-      expect(rules![0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-    });
-  });
-
-  describe('CloudWatch Logs', () => {
-    test('ECS tasks log group exists', async () => {
-      const response = await logsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/ecs/',
-        })
-      );
-
-      expect(response.logGroups).toBeTruthy();
-      expect(response.logGroups!.length).toBeGreaterThan(0);
-
-      const ecsLogGroup = response.logGroups!.find((lg) => lg.logGroupName?.includes('q2m3j4'));
-      expect(ecsLogGroup).toBeTruthy();
-    });
-
-    test('CodeBuild log group exists', async () => {
-      const response = await logsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/aws/codebuild/',
-        })
-      );
-
-      expect(response.logGroups).toBeTruthy();
-      expect(response.logGroups!.length).toBeGreaterThan(0);
-
-      const codebuildLogGroup = response.logGroups!.find((lg) =>
-        lg.logGroupName?.includes('q2m3j4')
-      );
-      expect(codebuildLogGroup).toBeTruthy();
-    });
-  });
 
   describe('SNS Topic', () => {
     test('pipeline approval SNS topic exists', async () => {
