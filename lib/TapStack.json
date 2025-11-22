@@ -38,13 +38,6 @@
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     },
-    "DBPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41,
-      "Description": "Database master password (8-41 characters). REQUIRED: Must be provided via parameter override or environment variable."
-    },
     "VPCId": {
       "Type": "String",
       "Default": "",
@@ -367,7 +360,7 @@
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
@@ -725,9 +718,14 @@
         "Name": {
           "Fn::Sub": "rds-credentials-${EnvironmentSuffix}"
         },
-        "Description": "RDS Aurora database credentials",
-        "SecretString": {
-          "Fn::Sub": "{\"username\":\"${DBUsername}\",\"password\":\"${DBPassword}\",\"engine\":\"mysql\",\"host\":\"${AuroraDBCluster.Endpoint.Address}\",\"port\":3306,\"dbname\":\"transactions\"}"
+        "Description": "RDS Aurora database credentials with auto-generated password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DBUsername}\",\"engine\":\"mysql\",\"dbname\":\"transactions\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
         },
         "Tags": [
           {
