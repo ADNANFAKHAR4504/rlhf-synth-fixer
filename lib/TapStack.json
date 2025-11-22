@@ -460,6 +460,74 @@
         }
       }
     },
+    "EBSKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for EBS volume encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EC2 to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:ReEncrypt*"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "product-api-ebs-kms-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Application",
+            "Value": "ProductCatalogAPI"
+          }
+        ]
+      }
+    },
+    "EBSKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/product-api-ebs-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EBSKMSKey"
+        }
+      }
+    },
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -818,6 +886,23 @@
               "Ref": "EC2SecurityGroup"
             }
           ],
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeSize": 8,
+                "VolumeType": "gp3",
+                "DeleteOnTermination": true,
+                "Encrypted": true,
+                "KmsKeyId": {
+                  "Fn::GetAtt": [
+                    "EBSKMSKey",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ],
           "MetadataOptions": {
             "HttpTokens": "required",
             "HttpPutResponseHopLimit": 1,
@@ -1140,6 +1225,31 @@
       "Export": {
         "Name": {
           "Fn::Sub": "product-api-alb-sg-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EBSKMSKeyId": {
+      "Description": "KMS Key ID for EBS encryption",
+      "Value": {
+        "Ref": "EBSKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "product-api-ebs-kms-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EBSKMSKeyArn": {
+      "Description": "KMS Key ARN for EBS encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "EBSKMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "product-api-ebs-kms-arn-${EnvironmentSuffix}"
         }
       }
     }

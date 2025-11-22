@@ -809,7 +809,7 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
     test('should have expected number of resources for complete infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
       expect(resourceCount).toBeGreaterThanOrEqual(35);
-      expect(resourceCount).toBeLessThanOrEqual(40);
+      expect(resourceCount).toBeLessThanOrEqual(45);
     });
 
     test('should have exactly 1 VPC', () => {
@@ -850,6 +850,48 @@ describe('Product Catalog API CloudFormation Template - Unit Tests', () => {
 
       expect(albs).toHaveLength(1);
       expect(tgs).toHaveLength(1);
+    });
+  });
+
+  describe('KMS Encryption', () => {
+    test('should create KMS key for EBS encryption', () => {
+      expect(template.Resources.EBSKMSKey).toBeDefined();
+      expect(template.Resources.EBSKMSKey.Type).toBe('AWS::KMS::Key');
+    });
+
+    test('KMS key should have rotation enabled', () => {
+      const kms = template.Resources.EBSKMSKey;
+      expect(kms.Properties.EnableKeyRotation).toBe(true);
+    });
+
+    test('KMS key should have correct key policy', () => {
+      const kms = template.Resources.EBSKMSKey;
+      const statements = kms.Properties.KeyPolicy.Statement;
+
+      const rootStatement = statements.find((s: any) => s.Sid === 'Enable IAM User Permissions');
+      const ec2Statement = statements.find((s: any) => s.Sid === 'Allow EC2 to use the key');
+
+      expect(rootStatement).toBeDefined();
+      expect(rootStatement.Action).toBe('kms:*');
+
+      expect(ec2Statement).toBeDefined();
+      expect(ec2Statement.Principal.Service).toBe('ec2.amazonaws.com');
+    });
+
+    test('should create KMS key alias', () => {
+      expect(template.Resources.EBSKMSKeyAlias).toBeDefined();
+      expect(template.Resources.EBSKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
+      expect(template.Resources.EBSKMSKeyAlias.Properties.TargetKeyId).toEqual({ Ref: 'EBSKMSKey' });
+    });
+
+    test('Launch Template should use KMS key for EBS encryption', () => {
+      const lt = template.Resources.LaunchTemplate;
+      const bdm = lt.Properties.LaunchTemplateData.BlockDeviceMappings;
+
+      expect(bdm).toBeDefined();
+      expect(bdm).toHaveLength(1);
+      expect(bdm[0].Ebs.Encrypted).toBe(true);
+      expect(bdm[0].Ebs.KmsKeyId).toEqual({ 'Fn::GetAtt': ['EBSKMSKey', 'Arn'] });
     });
   });
 
