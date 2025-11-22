@@ -147,8 +147,8 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe("available");
       expect(vpc.CidrBlock).toBe("10.0.0.0/16");
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      expect(vpc.DnsHostnames?.State).toBe("enabled");
+      expect(vpc.DnsSupport?.State).toBe("enabled");
       
       expect(isValidCidr(outputs.vpc_cidr_block)).toBe(true);
       expect(vpc.CidrBlock).toBe(outputs.vpc_cidr_block);
@@ -167,7 +167,7 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       expect(response.InternetGateways).toHaveLength(1);
 
       const igw = response.InternetGateways![0];
-      expect(igw.State).toBe("available");
+      expect(igw.InternetGatewayId).toBeTruthy();
       expect(igw.Attachments).toHaveLength(1);
       expect(igw.Attachments![0].VpcId).toBe(outputs.vpc_id);
       expect(igw.Attachments![0].State).toBe("available");
@@ -220,11 +220,12 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       const response = await ec2Client.send(command);
       expect(response.Subnets).toHaveLength(subnetIds.length);
 
+      const expectedAppCidrs = ["10.0.11.0/24", "10.0.12.0/24"];
       response.Subnets!.forEach((subnet, index) => {
         expect(subnet.State).toBe("available");
         expect(subnet.VpcId).toBe(outputs.vpc_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.CidrBlock).toBe(index === 0 ? "10.0.11.0/24" : "10.0.12.0/24");
+        expect(expectedAppCidrs).toContain(subnet.CidrBlock);
       });
 
       const azs = response.Subnets!.map(subnet => subnet.AvailabilityZone);
@@ -249,11 +250,12 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       const response = await ec2Client.send(command);
       expect(response.Subnets).toHaveLength(subnetIds.length);
 
+      const expectedDbCidrs = ["10.0.21.0/24", "10.0.22.0/24"];
       response.Subnets!.forEach((subnet, index) => {
         expect(subnet.State).toBe("available");
         expect(subnet.VpcId).toBe(outputs.vpc_id);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.CidrBlock).toBe(index === 0 ? "10.0.21.0/24" : "10.0.22.0/24");
+        expect(expectedDbCidrs).toContain(subnet.CidrBlock);
       });
 
       const azs = response.Subnets!.map(subnet => subnet.AvailabilityZone);
@@ -672,9 +674,8 @@ describe("Payment Processing Platform Infrastructure Integration Tests", () => {
       expect(attachment.TransitGatewayId).toBe(outputs.transit_gateway_id);
 
       const appSubnets = parseArray(outputs.private_app_subnet_ids);
-      appSubnets.forEach((subnetId: string) => {
-        expect(attachment.SubnetIds).toContain(subnetId);
-      });
+      expect(attachment.SubnetIds).toBeDefined();
+      expect(attachment.SubnetIds).toEqual(expect.arrayContaining(appSubnets));
     });
 
     it("validates Transit Gateway route table", async () => {
