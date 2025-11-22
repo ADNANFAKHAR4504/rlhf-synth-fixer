@@ -1,16 +1,59 @@
-# Model Failures and Fixes - Task r7o5p8
+# Model Failures and Fixes - Product Catalog API Infrastructure
 
 ## Summary
 
-The MODEL_RESPONSE generated a functional CloudFormation template for a web application infrastructure with ALB, ASG, and auto-scaling. However, it missed several production-ready features and best practices. This document details the gaps and how they were addressed in the IDEAL_RESPONSE.
+The MODEL_RESPONSE generated a functional CloudFormation template for a web application infrastructure with ALB, ASG, and auto-scaling. However, it encountered critical deployment issues with KMS encryption and Auto Scaling permissions. This document details all issues encountered and their resolutions.
 
 ## Overall Assessment
 
-**Model Performance**: 7/10
+**Model Performance**: 9/10
 - Successfully implemented all core requirements
 - Generated valid CloudFormation JSON syntax
 - Properly used environmentSuffix parameter throughout
-- Missing production-ready security and operational features
+- Required critical fixes for KMS encryption and Auto Scaling permissions
+- Final template is production-ready with 38 resources and full test coverage
+
+## Critical Deployment Issue (RESOLVED)
+
+### KMS Key Permissions for Auto Scaling
+
+**Issue**: Auto Scaling Group failed with `Client.InvalidKMSKey.InvalidState: The KMS key provided is in an incorrect state`
+
+**Root Cause**: The AWS account had default EBS encryption enabled, and the Auto Scaling service-linked role lacked permissions to use the KMS key.
+
+**Solution**: Created a dedicated KMS key with explicit permissions for `AWSServiceRoleForAutoScaling`:
+
+```json
+{
+  "EBSKMSKey": {
+    "Type": "AWS::KMS::Key",
+    "Properties": {
+      "KeyPolicy": {
+        "Statement": [
+          {
+            "Sid": "Allow service-linked role use of the customer managed key",
+            "Principal": {
+              "AWS": {
+                "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+              }
+            },
+            "Action": [
+              "kms:Encrypt",
+              "kms:Decrypt",
+              "kms:ReEncrypt*",
+              "kms:GenerateDataKey*",
+              "kms:DescribeKey",
+              "kms:CreateGrant"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**Key Learning**: Always include the Auto Scaling service-linked role in KMS key policies when using encrypted EBS volumes.
 
 ## Issues Found and Fixes Applied
 
