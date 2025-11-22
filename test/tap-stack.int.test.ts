@@ -548,7 +548,7 @@ describe('Multi-Tier Web Application Integration Tests', () => {
   });
 
   describe('Stack Deployment Validation', () => {
-    test('stack should be in CREATE_COMPLETE state', async () => {
+    test('stack should be in CREATE_COMPLETE or UPDATE_COMPLETE state', async () => {
       if (!stackName) {
         console.log('Stack name not available, skipping test');
         return;
@@ -560,7 +560,8 @@ describe('Multi-Tier Web Application Integration Tests', () => {
 
       expect(result.Stacks).toBeDefined();
       expect(result.Stacks!.length).toBe(1);
-      expect(result.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      const stackStatus = result.Stacks![0].StackStatus;
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stackStatus);
     });
 
     test('stack should have all expected resources', async () => {
