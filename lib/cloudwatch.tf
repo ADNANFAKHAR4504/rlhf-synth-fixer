@@ -58,7 +58,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate" {
 
   metric_query {
     id          = "e1"
-    expression  = "100 * m1 / MAX(m2, 1)"
+    expression  = "IF(m2 > 0, 100 * m1 / m2, 0)"
     label       = "ErrorPercent"
     return_data = true
   }
@@ -102,7 +102,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_validator" {
 
   metric_query {
     id          = "e1"
-    expression  = "100 * m1 / MAX(m2, 1)"
+    expression  = "IF(m2 > 0, 100 * m1 / m2, 0)"
     label       = "ErrorPercent"
     return_data = true
   }
@@ -146,7 +146,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_processor" {
 
   metric_query {
     id          = "e1"
-    expression  = "100 * m1 / MAX(m2, 1)"
+    expression  = "IF(m2 > 0, 100 * m1 / m2, 0)"
     label       = "ErrorPercent"
     return_data = true
   }

@@ -35,6 +35,10 @@ output "processing_queue_url" {
   value = aws_sqs_queue.webhook_processing_queue.id
 }
 
+output "validated_queue_url" {
+  value = aws_sqs_queue.validated_queue.id
+}
+
 output "dlq_url" {
   value = aws_sqs_queue.webhook_dlq.id
 }

@@ -1,208 +1,356 @@
-// tests/unit/unit-tests.ts
-// Simple presence + sanity checks for ../lib/tap_stack.tf
-// No Terraform or CDKTF commands are executed.
-
-import fs from 'fs';
 import path from 'path';
+import fs from 'fs';
 
-// Inline minimal versions of the removed `lib/meta.ts` helpers so the
-// unit test remains self-contained and does not depend on lib/meta.
-function add(a: number, b: number): number {
-  return a + b;
+const libDir = path.resolve(__dirname, '..', 'lib');
+
+type BlockKind = 'resource' | 'data' | 'output';
+interface TerraformBlock {
+  type: string;
+  name: string;
+  body: string;
 }
 
-function isEven(n: number): boolean {
-  if (!Number.isFinite(n)) throw new TypeError('non-finite');
-  return n % 2 === 0;
+function listTerraformFiles(dir: string = libDir): string[] {
+  if (!fs.existsSync(dir)) throw new Error(`Directory not found: ${dir}`);
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.tf'))
+    .map((f) => path.join(dir, f))
+    .sort();
 }
 
-function formatName(parts: Array<string | null | undefined>): string {
-  return parts
-    .filter(Boolean)
-    .map((p) => String(p).trim())
-    .filter(Boolean)
-    .join('-');
-}
-
-function getTimestamp(prefix?: string): string {
-  const t = new Date().toISOString().replace(/[:.]/g, '');
-  return prefix ? `${prefix}-${t}` : t;
-}
-
-function computeTier(v: number): string {
-  if (!Number.isFinite(v) || v < 0) throw new RangeError('value');
-  if (v < 10) return 'low';
-  if (v < 100) return 'med';
-  return 'high';
-}
-
-// --- Inline helpers so the unit test is fully self-contained (no external test helpers) ---
-function listTfFiles(dir = path.resolve(__dirname, '..', 'lib')): string[] {
-  const files = fs.readdirSync(dir);
-  return files.filter((f) => f.endsWith('.tf')).map((f) => path.join(dir, f));
-}
-
-function readFile(filePath: string) {
+function readTerraformFile(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8');
 }
 
-function containsProviderAws(content: string) {
-  return /\bprovider\s+"aws"\s*\{/.test(content);
+function extractBlocks(content: string, keyword: BlockKind = 'resource'): TerraformBlock[] {
+  const blocks: TerraformBlock[] = [];
+  const hasTwoNames = keyword !== 'output';
+  const re = hasTwoNames
+    ? new RegExp(`${keyword}\\s+"([^"]+)"\\s+"([^"]+)"\\s*\\{`, 'g')
+    : new RegExp(`${keyword}\\s+"([^"]+)"\\s*\\{`, 'g');
+
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(content))) {
+    const start = match.index + match[0].length;
+    let depth = 1;
+    let i = start;
+
+    while (i < content.length && depth > 0) {
+      const ch = content[i];
+      if (ch === '{') depth += 1;
+      if (ch === '}') depth -= 1;
+      i += 1;
+    }
+
+    if (depth !== 0) {
+      const name = hasTwoNames ? `${match[1]}.${match[2]}` : match[1];
+      throw new Error(`Unbalanced braces for ${keyword} ${name}`);
+    }
+
+    const body = content.slice(start, i - 1).trim();
+    const type = hasTwoNames ? match[1] : keyword;
+    const name = hasTwoNames ? match[2] : match[1];
+    blocks.push({ type, name, body });
+  }
+
+  return blocks;
 }
 
-function declaresVariable(content: string, variableName: string) {
-  // escape any regex meta-chars in the variable name then build a RegExp
-  const esc = variableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`variable\\s+"${esc}"\\s*\\{`);
-  return re.test(content);
+function findBlock(blocks: TerraformBlock[], type: string, name: string) {
+  return blocks.find((b) => b.type === type && b.name === name);
 }
 
-function findStandardIaTransitionDays(content: string) {
-  const transitions: number[] = [];
+function getAttribute(body: string, attribute: string): string | undefined {
+  const esc = attribute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`\\b${esc}\\s*=\\s*([^\\n#]+)`).exec(body);
+  return match ? match[1].trim() : undefined;
+}
+
+function parseTransitions(body: string, storageClass = 'STANDARD_IA'): number[] {
+  const results: number[] = [];
   const re = /transition\s*\{([\s\S]*?)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content))) {
-    const block = m[1];
-    if (/storage_class\s*=\s*"STANDARD_IA"/.test(block)) {
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(body))) {
+    const block = match[1];
+    if (new RegExp(`storage_class\\s*=\\s*"${storageClass}"`).test(block)) {
       const daysMatch = /days\s*=\s*(\d+)/.exec(block);
-      if (daysMatch) transitions.push(parseInt(daysMatch[1], 10));
+      if (daysMatch) results.push(parseInt(daysMatch[1], 10));
     }
   }
-  return transitions;
+  return results;
 }
 
-function s3LifecycleHasMinDays(content: string, minDays = 30) {
-  const days = findStandardIaTransitionDays(content);
-  if (days.length === 0) return false;
-  return days.every((d) => d >= minDays);
+function blockUsesVariables(body: string, variables: string[]): boolean {
+  return variables.every((variable) => new RegExp(variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(body));
 }
 
-function fileHasTag(content: string, tagKey: string) {
-  return new RegExp(tagKey).test(content);
+function namingHasParts(value: string | undefined, parts: string[]): boolean {
+  if (!value) return false;
+  return parts.every((part) => value.includes(part));
 }
 
-function lambdaEnvHasParamPattern(content: string) {
-  return /_PARAM\s*=/.test(content) || /ssm_prefix/.test(content);
+function hasTag(body: string, tagKey: string): boolean {
+  return new RegExp(tagKey.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')).test(body);
 }
 
-function analyzeLibTf(dir = path.resolve(__dirname, '..', 'lib')) {
-  const files = listTfFiles(dir).map((p) => ({ path: p, content: readFile(p) }));
-  return {
-    totalFiles: files.length,
-    providerDeclared: files.some((f) => containsProviderAws(f.content)),
-    hasAwsRegionVar: files.some((f) => declaresVariable(f.content, 'aws_region')),
-    s3LifecycleOk: files
-      .filter((f) => /aws_s3_bucket_lifecycle_configuration/.test(f.content))
-      .every((f) => s3LifecycleHasMinDays(f.content, 30)),
-    tagPresent: files.some((f) => fileHasTag(f.content, 'iac-rlhf-amazon')),
-    lambdaEnvParam: files.some((f) => lambdaEnvHasParamPattern(f.content)),
-  };
-}
+const tfFiles = listTerraformFiles(libDir);
+const fileContents = tfFiles.map((file) => ({ file, content: readTerraformFile(file) }));
+const allResources = fileContents.flatMap((file) => extractBlocks(file.content, 'resource'));
+const allOutputs = fileContents.flatMap((file) => extractBlocks(file.content, 'output'));
+const allDataSources = fileContents.flatMap((file) => extractBlocks(file.content, 'data'));
 
-describe('Terraform lib/ file checks', () => {
-  test('lib contains .tf files and listTfFiles works', () => {
-    const files = listTfFiles(path.resolve(__dirname, '..', 'lib'));
-    expect(Array.isArray(files)).toBe(true);
-    expect(files.length).toBeGreaterThan(0);
+describe('Terraform library validation', () => {
+  test('lists terraform files and guards invalid directories', () => {
+    expect(tfFiles.length).toBeGreaterThan(0);
+    expect(() => listTerraformFiles(path.join(libDir, 'missing-dir'))).toThrow('Directory not found');
+    // default path uses __dirname inside lib/terraformMeta.ts
+    expect(listTerraformFiles().length).toBeGreaterThan(0);
   });
 
-  test('analyzeLibTf returns expected shape and types', () => {
-    const res = analyzeLibTf(path.resolve(__dirname, '..', 'lib'));
-    expect(res).toHaveProperty('totalFiles');
-    expect(typeof res.totalFiles).toBe('number');
-    expect(res).toHaveProperty('providerDeclared');
-    expect(res).toHaveProperty('hasAwsRegionVar');
-    expect(res).toHaveProperty('s3LifecycleOk');
-    expect(res).toHaveProperty('tagPresent');
-    expect(res).toHaveProperty('lambdaEnvParam');
+  test('extractBlocks parses resources and detects unbalanced braces', () => {
+    const sample = 'resource "aws_example" "one" { name = "ok" }';
+    const parsed = extractBlocks(sample);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].type).toBe('aws_example');
+    expect(() => extractBlocks('resource "aws_example" "broken" { name = "x" ')).toThrow(
+      /Unbalanced braces/,
+    );
   });
 
-  test('provider declaration appears only in provider.tf if present', () => {
-    const libDir = path.resolve(__dirname, '..', 'lib');
-    const providerPath = path.join(libDir, 'provider.tf');
-    const providerContent = fs.existsSync(providerPath) ? fs.readFileSync(providerPath, 'utf8') : '';
-    // provider.tf should contain provider aws declaration
-    if (providerContent) {
-      expect(containsProviderAws(providerContent)).toBe(true);
-    }
-
-    // ensure other .tf files do not contain additional provider aws declarations
-    const files = listTfFiles(libDir).filter((p) => !p.endsWith('provider.tf'));
-    for (const f of files) {
-      const c = readFile(f);
-      expect(containsProviderAws(c)).toBe(false);
-    }
+  test('helpers cover attribute parsing and variable usage paths', () => {
+    const bucket = findBlock(allResources, 'aws_s3_bucket', 'webhook_payloads');
+    expect(getAttribute(bucket!.body, 'bucket')).toBeDefined();
+    expect(getAttribute(bucket!.body, 'does_not_exist')).toBeUndefined();
+    expect(blockUsesVariables(bucket!.body, ['var.project', 'var.environment'])).toBe(true);
+    expect(blockUsesVariables(bucket!.body, ['nonexistent_variable'])).toBe(false);
+    expect(namingHasParts(undefined, ['anything'])).toBe(false);
+    expect(parseTransitions('transition { storage_class = "GLACIER" days = 10 }')).toEqual([]);
   });
 
-  test('aws_region variable is declared somewhere in lib', () => {
-    const libDir = path.resolve(__dirname, '..', 'lib');
-    const files = listTfFiles(libDir);
-    const found = files.some((p) => declaresVariable(readFile(p), 'aws_region'));
-    expect(found).toBe(true);
+  test('variables and locals are defined with expected keys', () => {
+    const variablesFile = fileContents.find(({ file }) => file.endsWith('variables.tf'))!.content;
+    expect(variablesFile).toMatch(/variable\s+"aws_region"/);
+    expect(variablesFile).toMatch(/variable\s+"environment"/);
+    expect(variablesFile).toMatch(/lambda_configs/);
+
+    const localsFile = fileContents.find(({ file }) => file.endsWith('locals.tf'))!.content;
+    expect(localsFile).toMatch(/name_prefix/);
+    expect(hasTag(localsFile, 'iac-rlhf-amazon')).toBe(true);
+    expect(localsFile).toMatch(/CreatedBy\s*=\s*"iac-automation"/);
   });
 
-  test('S3 lifecycle STANDARD_IA transitions meet minimum 30 days', () => {
-    const s3Path = path.resolve(__dirname, '..', 'lib', 's3.tf');
-    const content = fs.readFileSync(s3Path, 'utf8');
-    const days = findStandardIaTransitionDays(content);
-    // expecting at least one STANDARD_IA transition day present and >=30
-    expect(days.length).toBeGreaterThan(0);
-    for (const d of days) expect(d).toBeGreaterThanOrEqual(30);
-    // also assert the helper convenience function
-    expect(s3LifecycleHasMinDays(content, 30)).toBe(true);
+  describe('S3 buckets', () => {
+    const payloadBucket = findBlock(allResources, 'aws_s3_bucket', 'webhook_payloads');
+    const payloadLifecycle = findBlock(
+      allResources,
+      'aws_s3_bucket_lifecycle_configuration',
+      'webhook_payloads',
+    );
+    const failedBucket = findBlock(allResources, 'aws_s3_bucket', 'failed_messages');
+    const failedLifecycle = findBlock(
+      allResources,
+      'aws_s3_bucket_lifecycle_configuration',
+      'failed_messages',
+    );
+
+    test('exist with naming, encryption, and versioning', () => {
+      expect(payloadBucket).toBeDefined();
+      const bucketName = getAttribute(payloadBucket!.body, 'bucket');
+      expect(namingHasParts(bucketName, ['${var.project}', '${var.environment}', '${local.suffix}'])).toBe(
+        true,
+      );
+      expect(payloadBucket!.body).toMatch(/versioning\s*{\s*enabled\s*=\s*true/);
+      expect(payloadBucket!.body).toMatch(/server_side_encryption_configuration/);
+      expect(failedBucket).toBeDefined();
+      expect(failedBucket!.body).toMatch(/server_side_encryption_configuration/);
+      expect(failedBucket!.body).toMatch(/versioning\s*{\s*enabled\s*=\s*true/);
+    });
+
+    test('enforce lifecycle transitions and public access blocks', () => {
+      const iaDays = parseTransitions(payloadLifecycle!.body, 'STANDARD_IA');
+      expect(iaDays.length).toBeGreaterThan(0);
+      expect(iaDays.every((d) => d >= 30)).toBe(true);
+      const failedDays = parseTransitions(failedLifecycle!.body, 'STANDARD_IA');
+      expect(failedDays.every((d) => d >= 30)).toBe(true);
+
+      const payloadAccess = findBlock(allResources, 'aws_s3_bucket_public_access_block', 'webhook_payloads');
+      expect(payloadAccess!.body).toMatch(/block_public_acls\s*=\s*true/);
+      const failedAccess = findBlock(allResources, 'aws_s3_bucket_public_access_block', 'failed_messages');
+      expect(failedAccess!.body).toMatch(/restrict_public_buckets\s*=\s*true/);
+    });
   });
 
-  test('locals.tf includes expected tag key iac-rlhf-amazon', () => {
-    const localsPath = path.resolve(__dirname, '..', 'lib', 'locals.tf');
-    const content = fs.readFileSync(localsPath, 'utf8');
-    expect(fileHasTag(content, 'iac-rlhf-amazon')).toBe(true);
+  describe('SQS queues', () => {
+    test('define processing, validated, and DLQ queues with redrive policies', () => {
+      const dlq = findBlock(allResources, 'aws_sqs_queue', 'webhook_dlq');
+      const processing = findBlock(allResources, 'aws_sqs_queue', 'webhook_processing_queue');
+      const validated = findBlock(allResources, 'aws_sqs_queue', 'validated_queue');
+
+      expect(dlq).toBeDefined();
+      expect(processing!.body).toMatch(/visibility_timeout_seconds\s*=\s*300/);
+      expect(validated!.body).toMatch(/visibility_timeout_seconds\s*=\s*300/);
+      expect(processing!.body).toMatch(/deadLetterTargetArn\s*=\s*aws_sqs_queue\.webhook_dlq\.arn/);
+      expect(validated!.body).toMatch(/deadLetterTargetArn\s*=\s*aws_sqs_queue\.webhook_dlq\.arn/);
+    });
   });
 
-  test('lambda functions environment variables include PARAM naming (SSM param pattern)', () => {
-    const lambdaPath = path.resolve(__dirname, '..', 'lib', 'lambda.tf');
-    const content = fs.readFileSync(lambdaPath, 'utf8');
-    expect(lambdaEnvHasParamPattern(content)).toBe(true);
+  describe('DynamoDB', () => {
+    test('transactions table uses pay-per-request, encryption, PITR, and GSI', () => {
+      const table = findBlock(allResources, 'aws_dynamodb_table', 'transactions');
+      expect(table).toBeDefined();
+      expect(table!.body).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
+      expect(table!.body).toMatch(/server_side_encryption\s*{\s*enabled\s*=\s*true/);
+      expect(table!.body).toMatch(/point_in_time_recovery\s*{\s*enabled\s*=\s*true/);
+      expect(table!.body).toMatch(/global_secondary_index/);
+      expect(table!.body).toMatch(/customer-index/);
+    });
   });
 
-  // some negative/edge case tests to exercise helper branches
-  test('s3LifecycleHasMinDays returns false for small-days content', () => {
-    const bad = `resource "aws_s3_bucket_lifecycle_configuration" "bad" { rule { transition { days = 7 storage_class = "STANDARD_IA" }}}`;
-    expect(findStandardIaTransitionDays(bad)).toEqual([7]);
-    expect(s3LifecycleHasMinDays(bad, 30)).toBe(false);
+  describe('Lambda functions and event sources', () => {
+    const webhook = findBlock(allResources, 'aws_lambda_function', 'webhook_receiver');
+    const validator = findBlock(allResources, 'aws_lambda_function', 'payload_validator');
+    const processor = findBlock(allResources, 'aws_lambda_function', 'transaction_processor');
+
+    test('functions exist with correct runtime, handlers, and tracing', () => {
+      for (const fn of [webhook, validator, processor]) {
+        expect(fn).toBeDefined();
+        expect(fn!.body).toMatch(/runtime\s*=\s*"python3\.11"/);
+        expect(fn!.body).toMatch(/handler\s*=\s*"index\.handler"/);
+        expect(fn!.body).toMatch(/architectures\s*=\s*\["arm64"\]/);
+        expect(fn!.body).toMatch(/tracing_config\s*{\s*mode\s*=\s*"Active"/);
+      }
+    });
+
+    test('environment variables reference SSM parameters and dependent resources', () => {
+      expect(blockUsesVariables(webhook!.body, ['var.ssm_prefix'])).toBe(true);
+      expect(webhook!.body).toMatch(/API_KEY_PARAM\s*=\s*"\$\{var\.ssm_prefix\}\/api_key"/);
+      expect(validator!.body).toMatch(/VALIDATION_RULES_PARAM\s*=\s*"\$\{var\.ssm_prefix\}\/validation_rules"/);
+      expect(processor!.body).toMatch(/DB_CREDENTIALS_PARAM\s*=\s*"\$\{var\.ssm_prefix\}\/db_credentials"/);
+      expect(webhook!.body).toMatch(/PROCESSING_QUEUE_URL\s*=\s*aws_sqs_queue\.webhook_processing_queue\.id/);
+      expect(processor!.body).toMatch(/TRANSACTIONS_TABLE\s*=\s*aws_dynamodb_table\.transactions\.name/);
+    });
+
+    test('SQS event source mappings are configured for validator and processor', () => {
+      const validatorMapping = findBlock(allResources, 'aws_lambda_event_source_mapping', 'validator_sqs');
+      const processorMapping = findBlock(allResources, 'aws_lambda_event_source_mapping', 'processor_sqs');
+      expect(validatorMapping!.body).toMatch(/event_source_arn\s*=\s*aws_sqs_queue\.webhook_processing_queue\.arn/);
+      expect(processorMapping!.body).toMatch(/event_source_arn\s*=\s*aws_sqs_queue\.validated_queue\.arn/);
+    });
   });
 
-  // -------------------------------------------------
-  // Tests for lib/meta.ts to ensure coverage for lib/**/*.ts
-  // -------------------------------------------------
-  test('meta.add and isEven behave correctly', () => {
-    expect(add(2, 3)).toBe(5);
-    expect(add(-1, 1)).toBe(0);
-    expect(isEven(2)).toBe(true);
-    expect(isEven(3)).toBe(false);
+  describe('IAM', () => {
+    test('Lambda role and policy grant least-privilege access to dependencies', () => {
+      const role = findBlock(allResources, 'aws_iam_role', 'lambda_role');
+      const policy = findBlock(allResources, 'aws_iam_policy', 'lambda_common_policy');
+      expect(role).toBeDefined();
+      expect(role!.body).toMatch(/lambda\.amazonaws\.com/);
+      expect(policy).toBeDefined();
+      expect(policy!.body).toMatch(/logs:CreateLogGroup/);
+      expect(policy!.body).toMatch(/sqs:SendMessage/);
+      expect(policy!.body).toMatch(/dynamodb:PutItem/);
+      expect(policy!.body).toMatch(/ssm:GetParameter/);
+      expect(policy!.body).toMatch(/arn:aws:ssm:\${var.aws_region}:\*:parameter\${var.ssm_prefix}\/\*/);
+      expect(policy!.body).toMatch(/xray:PutTraceSegments/);
+    });
   });
 
-  test('isEven throws for non-finite values', () => {
-    expect(() => isEven(Number.POSITIVE_INFINITY)).toThrow(TypeError);
+  describe('API Gateway', () => {
+    test('REST API, resource, method, integration, and stage exist', () => {
+      const api = findBlock(allResources, 'aws_api_gateway_rest_api', 'webhook_api');
+      const resource = findBlock(allResources, 'aws_api_gateway_resource', 'webhook');
+      const method = findBlock(allResources, 'aws_api_gateway_method', 'webhook_post');
+      const integration = findBlock(allResources, 'aws_api_gateway_integration', 'webhook_lambda');
+      const stage = findBlock(allResources, 'aws_api_gateway_stage', 'webhook_stage');
+
+      expect(api).toBeDefined();
+      expect(resource).toBeDefined();
+      expect(method!.body).toMatch(/http_method\s*=\s*"POST"/);
+      expect(method!.body).toMatch(/api_key_required\s*=\s*true/);
+      expect(integration!.body).toMatch(/type\s*=\s*"AWS_PROXY"/);
+      expect(stage!.body).toMatch(/stage_name\s*=\s*var\.environment/);
+      expect(stage!.body).toMatch(/xray_tracing_enabled\s*=\s*true/);
+    });
+
+    test('usage plan and API key configuration present with throttling', () => {
+      const usagePlan = findBlock(allResources, 'aws_api_gateway_usage_plan', 'webhook_plan');
+      const apiKey = findBlock(allResources, 'aws_api_gateway_api_key', 'webhook_key');
+      expect(apiKey).toBeDefined();
+      expect(usagePlan!.body).toMatch(/throttle_settings/);
+      expect(usagePlan!.body).toMatch(/burst_limit\s*=\s*2000/);
+      expect(usagePlan!.body).toMatch(/rate_limit\s*=\s*1000/);
+    });
   });
 
-  test('formatName joins parts and strips empty', () => {
-    expect(formatName(['a', null, ' b '])).toBe('a-b');
-    expect(formatName([undefined, 'x'])).toBe('x');
+  describe('CloudWatch', () => {
+    test('log groups created per lambda with retention policy', () => {
+      const logGroups = ['webhook_receiver_logs', 'payload_validator_logs', 'transaction_processor_logs'].map(
+        (name) => findBlock(allResources, 'aws_cloudwatch_log_group', name),
+      );
+      for (const group of logGroups) {
+        expect(group).toBeDefined();
+        expect(group!.body).toMatch(/retention_in_days\s*=\s*7/);
+      }
+    });
+
+    test('alarms monitor error rates and DLQ depth', () => {
+      const errorAlarm = findBlock(allResources, 'aws_cloudwatch_metric_alarm', 'lambda_error_rate');
+      const validatorAlarm = findBlock(allResources, 'aws_cloudwatch_metric_alarm', 'lambda_error_rate_validator');
+      const processorAlarm = findBlock(allResources, 'aws_cloudwatch_metric_alarm', 'lambda_error_rate_processor');
+      const dlqAlarm = findBlock(allResources, 'aws_cloudwatch_metric_alarm', 'dlq_messages');
+      expect(errorAlarm).toBeDefined();
+      expect(validatorAlarm).toBeDefined();
+      expect(processorAlarm).toBeDefined();
+      expect(dlqAlarm!.body).toMatch(/QueueName\s*=\s*aws_sqs_queue\.webhook_dlq\.name/);
+    });
   });
 
-  test('getTimestamp returns string and prefix works', () => {
-    const ts = getTimestamp();
-    expect(typeof ts).toBe('string');
-    const p = getTimestamp('pref');
-    expect(p.startsWith('pref-')).toBe(true);
+  describe('SNS and outputs', () => {
+    test('alerts topic and subscriptions are present', () => {
+      const topic = findBlock(allResources, 'aws_sns_topic', 'alerts');
+      expect(topic).toBeDefined();
+      const subscription = findBlock(allResources, 'aws_sns_topic_subscription', 'emails');
+      expect(subscription!.body).toMatch(/topic_arn\s*=\s*aws_sns_topic\.alerts\.arn/);
+    });
+
+    test('outputs expose key resource identifiers', () => {
+      const outputNames = [
+        'api_endpoint',
+        'api_key_id',
+        'webhook_receiver_arn',
+        'payload_validator_arn',
+        'transaction_processor_arn',
+        'dynamodb_table_name',
+        'webhook_payloads_bucket',
+        'failed_messages_bucket',
+        'processing_queue_url',
+        'validated_queue_url',
+        'dlq_url',
+        'random_suffix',
+      ];
+      for (const name of outputNames) {
+        expect(findBlock(allOutputs, 'output', name)).toBeDefined();
+      }
+      const endpoint = findBlock(allOutputs, 'output', 'api_endpoint');
+      expect(endpoint!.body).toMatch(/aws_api_gateway_rest_api\.webhook_api\.id/);
+      expect(endpoint!.body).toMatch(/var\.aws_region/);
+    });
   });
 
-  test('computeTier boundaries and errors', () => {
-    expect(computeTier(0)).toBe('low');
-    expect(computeTier(9)).toBe('low');
-    expect(computeTier(10)).toBe('med');
-    expect(computeTier(99)).toBe('med');
-    expect(computeTier(100)).toBe('high');
-    expect(() => computeTier(-1)).toThrow(RangeError);
+  describe('Random strings and data sources', () => {
+    test('random suffix resource is defined with predictable settings', () => {
+      const random = findBlock(allResources, 'random_string', 'suffix');
+      expect(random!.body).toMatch(/length\s*=\s*6/);
+      expect(random!.body).toMatch(/upper\s*=\s*false/);
+      expect(random!.body).toMatch(/special\s*=\s*false/);
+    });
+
+    test('data sources include caller identity and DynamoDB KMS alias', () => {
+      const caller = findBlock(allDataSources, 'aws_caller_identity', 'current');
+      const kms = findBlock(allDataSources, 'aws_kms_alias', 'dynamodb');
+      expect(caller).toBeDefined();
+      expect(kms!.body).toMatch(/alias\/aws\/dynamodb/);
+    });
   });
 });

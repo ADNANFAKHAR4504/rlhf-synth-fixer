@@ -1,17 +1,10 @@
-## Ideal response — lib/ directory
+## Ideal response — lib/ directory (Terraform)
 
-This document describes the important files under `lib/` for the webhook-processing Terraform module and includes the current content for each source file. 
-
-Notes:
-- The module is designed to be run without hard-coded account/region values. Provide `aws_region` and `environment` via `-var` or `TF_VAR_*` environment variables.
-- Resource names include a random suffix and a timestamp to avoid collisions across accounts/regions.
-- Lambdas fetch sensitive configuration from SSM at runtime (SSM parameter names passed as environment variables).
+Reference copy of the Terraform sources under `lib/` for the webhook-processing stack. Variables are supplied at deploy time (no hardcoded region/environment). Resource names use the random suffix only; no timestamp component is present.
 
 ---
 
-### Files included (descriptions and contents)
-
-- `api_gateway.tf`
+### api_gateway.tf
 
 ```terraform
 resource "aws_api_gateway_rest_api" "webhook_api" {
@@ -107,7 +100,7 @@ resource "aws_api_gateway_usage_plan_key" "webhook_plan_key" {
 }
 ```
 
-- `cloudwatch.tf`
+### cloudwatch.tf
 
 ```terraform
 resource "aws_cloudwatch_log_group" "webhook_receiver_logs" {
@@ -170,7 +163,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate" {
 
   metric_query {
     id          = "e1"
-    expression  = "100 * m1 / MAX(m2, 1)"
+    expression  = "IF(m2 > 0, 100 * m1 / m2, 0)"
     label       = "ErrorPercent"
     return_data = true
   }
@@ -214,7 +207,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_validator" {
 
   metric_query {
     id          = "e1"
-    expression  = "100 * m1 / MAX(m2, 1)"
+    expression  = "IF(m2 > 0, 100 * m1 / m2, 0)"
     label       = "ErrorPercent"
     return_data = true
   }
@@ -258,7 +251,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate_processor" {
 
   metric_query {
     id          = "e1"
-    expression  = "100 * m1 / MAX(m2, 1)"
+    expression  = "IF(m2 > 0, 100 * m1 / m2, 0)"
     label       = "ErrorPercent"
     return_data = true
   }
@@ -283,14 +276,24 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   tags = local.common_tags
   alarm_actions = length(var.notification_emails) > 0 ? [aws_sns_topic.alerts.arn] : []
 }
-
-
 ```
-- `dynamodb.tf`
+
+### data_sources.tf
+
+```terraform
+data "aws_caller_identity" "current" {}
+
+# Resolve AWS-managed DynamoDB KMS alias (aws/dynamodb) in target account/region
+data "aws_kms_alias" "dynamodb" {
+  name = "alias/aws/dynamodb"
+}
+```
+
+### dynamodb.tf
 
 ```terraform
 resource "aws_dynamodb_table" "transactions" {
-  name         = "${var.project}-${var.environment}-transactions-${local.suffix}-${local.timestamp}"
+  name         = "${var.project}-${var.environment}-transactions-${local.suffix}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "transaction_id"
   range_key    = "timestamp"
@@ -319,7 +322,6 @@ resource "aws_dynamodb_table" "transactions" {
 
   server_side_encryption {
     enabled     = true
-    kms_key_arn = data.aws_kms_alias.dynamodb.target_key_arn
   }
 
   point_in_time_recovery {
@@ -332,440 +334,13 @@ resource "aws_dynamodb_table" "transactions" {
     prevent_destroy = false
   }
 }
-
 ```
 
-- `lambda.tf`
-
-```terraform
-
-data "archive_file" "webhook_receiver_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambdas/webhook_receiver"
-  output_path = "${path.module}/lambdas/webhook_receiver.zip"
-}
-
-data "archive_file" "payload_validator_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambdas/payload_validator"
-  output_path = "${path.module}/lambdas/payload_validator.zip"
-}
-
-data "archive_file" "transaction_processor_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambdas/transaction_processor"
-  output_path = "${path.module}/lambdas/transaction_processor.zip"
-}
-
-resource "aws_lambda_function" "webhook_receiver" {
-  function_name = "${var.project}-${var.environment}-webhook-receiver-${local.suffix}-${local.timestamp}"
-  filename      = data.archive_file.webhook_receiver_zip.output_path
-  source_code_hash = data.archive_file.webhook_receiver_zip.output_base64sha256
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  architectures = ["arm64"]
-  role          = aws_iam_role.lambda_role.arn
-  memory_size   = var.lambda_configs.webhook_receiver.memory_size
-  timeout       = var.lambda_configs.webhook_receiver.timeout
-
-  tracing_config { mode = "Active" }
-
-  environment {
-    variables = {
-      PROCESSING_QUEUE_URL = aws_sqs_queue.webhook_processing_queue.id
-      PAYLOAD_BUCKET        = aws_s3_bucket.webhook_payloads.id
-      # Pass SSM parameter names; Lambdas will fetch values at runtime
-      API_KEY_PARAM         = "${var.ssm_prefix}/api_key"
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_lambda_function" "payload_validator" {
-  function_name = "${var.project}-${var.environment}-payload-validator-${local.suffix}-${local.timestamp}"
-  filename      = data.archive_file.payload_validator_zip.output_path
-  source_code_hash = data.archive_file.payload_validator_zip.output_base64sha256
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  architectures = ["arm64"]
-  role          = aws_iam_role.lambda_role.arn
-  memory_size   = var.lambda_configs.payload_validator.memory_size
-  timeout       = var.lambda_configs.payload_validator.timeout
-
-  tracing_config { mode = "Active" }
-
-  environment {
-    variables = {
-      VALIDATED_QUEUE_URL = aws_sqs_queue.validated_queue.id
-      DLQ_URL             = aws_sqs_queue.webhook_dlq.id
-      VALIDATION_RULES_PARAM = "${var.ssm_prefix}/validation_rules"
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_lambda_function" "transaction_processor" {
-  function_name = "${var.project}-${var.environment}-transaction-processor-${local.suffix}-${local.timestamp}"
-  filename      = data.archive_file.transaction_processor_zip.output_path
-  source_code_hash = data.archive_file.transaction_processor_zip.output_base64sha256
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  architectures = ["arm64"]
-  role          = aws_iam_role.lambda_role.arn
-  memory_size   = var.lambda_configs.transaction_processor.memory_size
-  timeout       = var.lambda_configs.transaction_processor.timeout
-
-  tracing_config { mode = "Active" }
-
-  environment {
-    variables = {
-      TRANSACTIONS_TABLE = aws_dynamodb_table.transactions.name
-      ARCHIVE_BUCKET     = aws_s3_bucket.failed_messages.id
-      DB_CREDENTIALS_PARAM = "${var.ssm_prefix}/db_credentials"
-    }
-  }
-
-  tags = local.common_tags
-}
-
-# Permissions and event source mappings
-resource "aws_lambda_permission" "api_gateway_invoke" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.webhook_receiver.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.webhook_api.execution_arn}/*/*"
-}
-
-resource "aws_lambda_event_source_mapping" "validator_sqs" {
-  event_source_arn = aws_sqs_queue.webhook_processing_queue.arn
-  function_name    = aws_lambda_function.payload_validator.arn
-  batch_size       = 10
-}
-
-resource "aws_lambda_event_source_mapping" "processor_sqs" {
-  event_source_arn = aws_sqs_queue.validated_queue.arn
-  function_name    = aws_lambda_function.transaction_processor.arn
-  batch_size       = 10
-}
-
-```
-
-- `outputs.tf`
-
-```terraform
-
-output "api_endpoint" {
-  description = "Public API Gateway endpoint for the webhook POST"
-  value       = format("https://%s.execute-api.%s.amazonaws.com/%s/webhook", aws_api_gateway_rest_api.webhook_api.id, var.aws_region, aws_api_gateway_stage.webhook_stage.stage_name)
-}
-
-output "api_key_id" {
-  value = aws_api_gateway_api_key.webhook_key.id
-}
-
-output "webhook_receiver_arn" {
-  value = aws_lambda_function.webhook_receiver.arn
-}
-
-output "payload_validator_arn" {
-  value = aws_lambda_function.payload_validator.arn
-}
-
-output "transaction_processor_arn" {
-  value = aws_lambda_function.transaction_processor.arn
-}
-
-output "dynamodb_table_name" {
-  value = aws_dynamodb_table.transactions.name
-}
-
-output "webhook_payloads_bucket" {
-  value = aws_s3_bucket.webhook_payloads.id
-}
-
-output "failed_messages_bucket" {
-  value = aws_s3_bucket.failed_messages.id
-}
-
-output "processing_queue_url" {
-  value = aws_sqs_queue.webhook_processing_queue.id
-}
-
-output "dlq_url" {
-  value = aws_sqs_queue.webhook_dlq.id
-}
-
-output "random_suffix" {
-  value = random_string.suffix.result
-}
-
-```
-
-- `provider.tf`
-
-```terraform
-terraform {
-  required_version = ">= 1.5"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.4"
-    }
-  }
-}
-
-```
-
-- `locals.tf`
-
-```terraform
-locals {
-  # stable unique suffix per deployment
-  suffix     = random_string.suffix.result
-  # Use Go reference time layout for formatdate (2006-01-02T15:04:05Z07:00)
-  # to produce a compact YYYYMMDDHHMMSS timestamp
-  timestamp  = formatdate("20060102150405", timestamp())
-
-  name_prefix = join("-", [var.project, var.environment, local.suffix, local.timestamp])
-
-  common_tags = merge({
-    Environment       = var.environment
-    Project           = var.project
-    CostCenter        = var.cost_center
-    CreatedBy         = "iac-automation"
-    iac-rlhf-amazon   = "true"
-  }, {})
-}
-
-```
-
-- `random.tf` 
-
-```terraform
-resource "random_string" "suffix" {
-  length  = 6
-  upper   = false
-  special = false
-}
-
-```
-
-- `data_sources.tf` 
-
-
-```terraform
-data "aws_caller_identity" "current" {}
-
-# Resolve AWS-managed DynamoDB KMS alias (aws/dynamodb) in target account/region
-data "aws_kms_alias" "dynamodb" {
-  name = "alias/aws/dynamodb"
-}
-
-```
-
-- `s3.tf`
-
-```terraform
-resource "aws_s3_bucket" "webhook_payloads" {
-  bucket = lower("${var.project}-${var.environment}-webhook-payloads-${local.suffix}-${local.timestamp}")
-  acl    = "private"
-
-  force_destroy = true # allow destroy when cleaning up/failing
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_public_access_block" "webhook_payloads" {
-  bucket = aws_s3_bucket.webhook_payloads.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "webhook_payloads" {
-  bucket = aws_s3_bucket.webhook_payloads.id
-
-  rule {
-    id     = "archive-old-payloads"
-    status = "Enabled"
-    filter { prefix = "" }
-
-    transition {
-      days          = 30
-      storage_class = "STANDARD_IA"
-    }
-
-    transition {
-      days          = 90
-      storage_class = "GLACIER"
-    }
-
-    expiration {
-      days = 365
-    }
-  }
-}
-
-# failed messages bucket
-resource "aws_s3_bucket" "failed_messages" {
-  bucket = lower("${var.project}-${var.environment}-failed-messages-${local.suffix}-${local.timestamp}")
-  acl    = "private"
-
-  force_destroy = true
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_public_access_block" "failed_messages" {
-  bucket = aws_s3_bucket.failed_messages.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "failed_messages" {
-  bucket = aws_s3_bucket.failed_messages.id
-
-  rule {
-    id     = "cleanup-failed-messages"
-    status = "Enabled"
-    filter { prefix = "" }
-
-    transition {
-      # AWS requires STANDARD_IA transitions to be >= 30 days
-      days          = 30
-      storage_class = "STANDARD_IA"
-    }
-
-    expiration {
-      days = 90
-    }
-  }
-}
- 
-```
-
-- `sns.tf`
-
-```terraform
-
-resource "aws_sns_topic" "alerts" {
-  name = "${var.project}-${var.environment}-alerts-${local.suffix}"
-  tags = local.common_tags
-}
-
-resource "aws_sns_topic_subscription" "emails" {
-  for_each = { for addr in var.notification_emails : addr => addr }
-
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = each.value
-}
-
-```
-
-- `sqs.tf`
-
-```terraform
-resource "aws_sqs_queue" "webhook_dlq" {
-  name                      = "${var.project}-${var.environment}-webhook-dlq-${local.suffix}-${local.timestamp}"
-  message_retention_seconds = 1209600
-
-  tags = local.common_tags
-}
-
-resource "aws_sqs_queue" "webhook_processing_queue" {
-  name                       = "${var.project}-${var.environment}-webhook-processing-${local.suffix}-${local.timestamp}"
-  visibility_timeout_seconds = 300
-  message_retention_seconds  = 1209600
-  receive_wait_time_seconds  = 20
-
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.webhook_dlq.arn
-    maxReceiveCount     = 3
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_sqs_queue" "validated_queue" {
-  name                       = "${var.project}-${var.environment}-validated-${local.suffix}-${local.timestamp}"
-  visibility_timeout_seconds = 300
-  message_retention_seconds  = 1209600
-  receive_wait_time_seconds  = 20
-
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.webhook_dlq.arn
-    maxReceiveCount     = 3
-  })
-
-  tags = local.common_tags
-}
-
-```
-
-- `terraform.tfvars`
-
-```terraform
-
-## Terraform variables for local runs (do NOT commit secrets)
-
-# AWS region used by the aws provider
-aws_region = "us-east-1"
-
-# Environment suffix used in names and tags (dev/staging/prod)
-environment = "dev"
-
-# Optional: list of notification emails (leave empty to skip subscription creation)
-# notification_emails = []
-
-# Optional: SSM parameter prefix (adjust if you store params under a different path)
-# ssm_prefix = "/webhook-processor"
-
-```
-
-- `iam.tf` 
+### iam.tf
 
 ```terraform
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.project}-${var.environment}-lambda-role-${local.suffix}-${local.timestamp}"
+  name = "${var.project}-${var.environment}-lambda-role-${local.suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -863,13 +438,401 @@ resource "aws_iam_role_policy_attachment" "lambda_attach" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = aws_iam_policy.lambda_common_policy.arn
 }
-
 ```
 
-- `variables.tf`
+### lambda.tf
 
 ```terraform
+data "archive_file" "webhook_receiver_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambdas/webhook_receiver"
+  output_path = "${path.module}/lambdas/webhook_receiver.zip"
+}
 
+data "archive_file" "payload_validator_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambdas/payload_validator"
+  output_path = "${path.module}/lambdas/payload_validator.zip"
+}
+
+data "archive_file" "transaction_processor_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambdas/transaction_processor"
+  output_path = "${path.module}/lambdas/transaction_processor.zip"
+}
+
+resource "aws_lambda_function" "webhook_receiver" {
+  function_name = "${var.project}-${var.environment}-webhook-receiver-${local.suffix}"
+  filename      = data.archive_file.webhook_receiver_zip.output_path
+  source_code_hash = data.archive_file.webhook_receiver_zip.output_base64sha256
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  architectures = ["arm64"]
+  role          = aws_iam_role.lambda_role.arn
+  memory_size   = var.lambda_configs.webhook_receiver.memory_size
+  timeout       = var.lambda_configs.webhook_receiver.timeout
+
+  tracing_config { mode = "Active" }
+
+  environment {
+    variables = {
+      PROCESSING_QUEUE_URL = aws_sqs_queue.webhook_processing_queue.id
+      PAYLOAD_BUCKET        = aws_s3_bucket.webhook_payloads.id
+      # Pass SSM parameter names; Lambdas will fetch values at runtime
+      API_KEY_PARAM         = "${var.ssm_prefix}/api_key"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "payload_validator" {
+  function_name = "${var.project}-${var.environment}-payload-validator-${local.suffix}"
+  filename      = data.archive_file.payload_validator_zip.output_path
+  source_code_hash = data.archive_file.payload_validator_zip.output_base64sha256
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  architectures = ["arm64"]
+  role          = aws_iam_role.lambda_role.arn
+  memory_size   = var.lambda_configs.payload_validator.memory_size
+  timeout       = var.lambda_configs.payload_validator.timeout
+
+  tracing_config { mode = "Active" }
+
+  environment {
+    variables = {
+      VALIDATED_QUEUE_URL = aws_sqs_queue.validated_queue.id
+      DLQ_URL             = aws_sqs_queue.webhook_dlq.id
+      VALIDATION_RULES_PARAM = "${var.ssm_prefix}/validation_rules"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "transaction_processor" {
+  function_name = "${var.project}-${var.environment}-transaction-processor-${local.suffix}"
+  filename      = data.archive_file.transaction_processor_zip.output_path
+  source_code_hash = data.archive_file.transaction_processor_zip.output_base64sha256
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  architectures = ["arm64"]
+  role          = aws_iam_role.lambda_role.arn
+  memory_size   = var.lambda_configs.transaction_processor.memory_size
+  timeout       = var.lambda_configs.transaction_processor.timeout
+
+  tracing_config { mode = "Active" }
+
+  environment {
+    variables = {
+      TRANSACTIONS_TABLE = aws_dynamodb_table.transactions.name
+      ARCHIVE_BUCKET     = aws_s3_bucket.failed_messages.id
+      DB_CREDENTIALS_PARAM = "${var.ssm_prefix}/db_credentials"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Permissions and event source mappings
+resource "aws_lambda_permission" "api_gateway_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.webhook_receiver.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.webhook_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_event_source_mapping" "validator_sqs" {
+  event_source_arn = aws_sqs_queue.webhook_processing_queue.arn
+  function_name    = aws_lambda_function.payload_validator.arn
+  batch_size       = 10
+}
+
+resource "aws_lambda_event_source_mapping" "processor_sqs" {
+  event_source_arn = aws_sqs_queue.validated_queue.arn
+  function_name    = aws_lambda_function.transaction_processor.arn
+  batch_size       = 10
+}
+```
+
+### locals.tf
+
+```terraform
+locals {
+  # stable unique suffix per deployment
+  suffix     = random_string.suffix.result
+
+  name_prefix = join("-", [var.project, var.environment, local.suffix])
+
+  common_tags = merge({
+    Environment       = var.environment
+    Project           = var.project
+    CostCenter        = var.cost_center
+    CreatedBy         = "iac-automation"
+    iac-rlhf-amazon   = "true"
+  }, {})
+}
+```
+
+### outputs.tf
+
+```terraform
+output "api_endpoint" {
+  description = "Public API Gateway endpoint for the webhook POST"
+  value       = format("https://%s.execute-api.%s.amazonaws.com/%s/webhook", aws_api_gateway_rest_api.webhook_api.id, var.aws_region, aws_api_gateway_stage.webhook_stage.stage_name)
+}
+
+output "api_key_id" {
+  value = aws_api_gateway_api_key.webhook_key.id
+}
+
+output "webhook_receiver_arn" {
+  value = aws_lambda_function.webhook_receiver.arn
+}
+
+output "payload_validator_arn" {
+  value = aws_lambda_function.payload_validator.arn
+}
+
+output "transaction_processor_arn" {
+  value = aws_lambda_function.transaction_processor.arn
+}
+
+output "dynamodb_table_name" {
+  value = aws_dynamodb_table.transactions.name
+}
+
+output "webhook_payloads_bucket" {
+  value = aws_s3_bucket.webhook_payloads.id
+}
+
+output "failed_messages_bucket" {
+  value = aws_s3_bucket.failed_messages.id
+}
+
+output "processing_queue_url" {
+  value = aws_sqs_queue.webhook_processing_queue.id
+}
+
+output "validated_queue_url" {
+  value = aws_sqs_queue.validated_queue.id
+}
+
+output "dlq_url" {
+  value = aws_sqs_queue.webhook_dlq.id
+}
+
+output "random_suffix" {
+  value = random_string.suffix.result
+}
+```
+
+### provider.tf
+
+```terraform
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
+  }
+}
+
+provider "aws" {
+  # region must be supplied by caller via variable or TF_VAR_aws_region
+  region = var.aws_region
+}
+
+provider "random" {}
+```
+
+### random.tf
+
+```terraform
+resource "random_string" "suffix" {
+  length  = 6
+  upper   = false
+  special = false
+}
+```
+
+### s3.tf
+
+```terraform
+resource "aws_s3_bucket" "webhook_payloads" {
+  bucket = lower("${var.project}-${var.environment}-webhook-payloads-${local.suffix}")
+  acl    = "private"
+
+  force_destroy = true # allow destroy when cleaning up/failing
+
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "webhook_payloads" {
+  bucket = aws_s3_bucket.webhook_payloads.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "webhook_payloads" {
+  bucket = aws_s3_bucket.webhook_payloads.id
+
+  rule {
+    id     = "archive-old-payloads"
+    status = "Enabled"
+    filter { prefix = "" }
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 365
+    }
+  }
+}
+
+# failed messages bucket
+resource "aws_s3_bucket" "failed_messages" {
+  bucket = lower("${var.project}-${var.environment}-failed-messages-${local.suffix}")
+  acl    = "private"
+
+  force_destroy = true
+
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "failed_messages" {
+  bucket = aws_s3_bucket.failed_messages.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "failed_messages" {
+  bucket = aws_s3_bucket.failed_messages.id
+
+  rule {
+    id     = "cleanup-failed-messages"
+    status = "Enabled"
+    filter { prefix = "" }
+
+    transition {
+      # AWS requires STANDARD_IA transitions to be >= 30 days
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    expiration {
+      days = 90
+    }
+  }
+}
+```
+
+### sns.tf
+
+```terraform
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project}-${var.environment}-alerts-${local.suffix}"
+  tags = local.common_tags
+}
+
+resource "aws_sns_topic_subscription" "emails" {
+  for_each = { for addr in var.notification_emails : addr => addr }
+
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+```
+
+### sqs.tf
+
+```terraform
+resource "aws_sqs_queue" "webhook_dlq" {
+  name                      = "${var.project}-${var.environment}-webhook-dlq-${local.suffix}"
+  message_retention_seconds = 1209600
+
+  tags = local.common_tags
+}
+
+resource "aws_sqs_queue" "webhook_processing_queue" {
+  name                       = "${var.project}-${var.environment}-webhook-processing-${local.suffix}"
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 1209600
+  receive_wait_time_seconds  = 20
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.webhook_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_sqs_queue" "validated_queue" {
+  name                       = "${var.project}-${var.environment}-validated-${local.suffix}"
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 1209600
+  receive_wait_time_seconds  = 20
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.webhook_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = local.common_tags
+}
+```
+
+### variables.tf
+
+```terraform
 variable "aws_region" {
   description = "AWS region to deploy into. Provide via -var or TF_VAR_aws_region environment variable. No hardcoded defaults to ensure cross-account/region executability."
   type        = string
@@ -916,5 +879,4 @@ variable "notification_emails" {
   type        = list(string)
   default     = []
 }
-
 ```

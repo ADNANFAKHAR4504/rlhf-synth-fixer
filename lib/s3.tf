@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "webhook_payloads" {
-  bucket = lower("${var.project}-${var.environment}-webhook-payloads-${local.suffix}-${local.timestamp}")
+  bucket = lower("${var.project}-${var.environment}-webhook-payloads-${local.suffix}")
   acl    = "private"
 
   force_destroy = true # allow destroy when cleaning up/failing
@@ -53,7 +53,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "webhook_payloads" {
 
 # failed messages bucket
 resource "aws_s3_bucket" "failed_messages" {
-  bucket = lower("${var.project}-${var.environment}-failed-messages-${local.suffix}-${local.timestamp}")
+  bucket = lower("${var.project}-${var.environment}-failed-messages-${local.suffix}")
   acl    = "private"
 
   force_destroy = true

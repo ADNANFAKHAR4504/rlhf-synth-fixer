@@ -17,7 +17,7 @@ data "archive_file" "transaction_processor_zip" {
 }
 
 resource "aws_lambda_function" "webhook_receiver" {
-  function_name = "${var.project}-${var.environment}-webhook-receiver-${local.suffix}-${local.timestamp}"
+  function_name = "${var.project}-${var.environment}-webhook-receiver-${local.suffix}"
   filename      = data.archive_file.webhook_receiver_zip.output_path
   source_code_hash = data.archive_file.webhook_receiver_zip.output_base64sha256
   handler       = "index.handler"
@@ -42,7 +42,7 @@ resource "aws_lambda_function" "webhook_receiver" {
 }
 
 resource "aws_lambda_function" "payload_validator" {
-  function_name = "${var.project}-${var.environment}-payload-validator-${local.suffix}-${local.timestamp}"
+  function_name = "${var.project}-${var.environment}-payload-validator-${local.suffix}"
   filename      = data.archive_file.payload_validator_zip.output_path
   source_code_hash = data.archive_file.payload_validator_zip.output_base64sha256
   handler       = "index.handler"
@@ -66,7 +66,7 @@ resource "aws_lambda_function" "payload_validator" {
 }
 
 resource "aws_lambda_function" "transaction_processor" {
-  function_name = "${var.project}-${var.environment}-transaction-processor-${local.suffix}-${local.timestamp}"
+  function_name = "${var.project}-${var.environment}-transaction-processor-${local.suffix}"
   filename      = data.archive_file.transaction_processor_zip.output_path
   source_code_hash = data.archive_file.transaction_processor_zip.output_base64sha256
   handler       = "index.handler"

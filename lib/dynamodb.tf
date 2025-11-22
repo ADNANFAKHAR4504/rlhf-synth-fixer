@@ -1,5 +1,5 @@
 resource "aws_dynamodb_table" "transactions" {
-  name         = "${var.project}-${var.environment}-transactions-${local.suffix}-${local.timestamp}"
+  name         = "${var.project}-${var.environment}-transactions-${local.suffix}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "transaction_id"
   range_key    = "timestamp"
@@ -28,7 +28,6 @@ resource "aws_dynamodb_table" "transactions" {
 
   server_side_encryption {
     enabled     = true
-    kms_key_arn = data.aws_kms_alias.dynamodb.target_key_arn
   }
 
   point_in_time_recovery {
