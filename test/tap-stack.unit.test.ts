@@ -1,7 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 // We'll require the stack dynamically after ensuring CI/env vars are unset
 let ServerlessInfrastructureStack: any;
+let TapStack: any;
 
 // Provide a typed global so editors/TS don't show a red-squiggle at the
 // `globalThis.__AWS_MOCKS__` assignment below.
@@ -16,6 +17,16 @@ declare global {
   } | undefined;
 }
 
+const sanitizeName = (input: string): string =>
+  input
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 63);
+
+const FIXED_NOW = 1_700_000_000_000;
+
 // Create shared send mocks so instances created inside the handler use them
 const sendMockSSM = jest.fn();
 const sendMockDynamo = jest.fn();
@@ -29,21 +40,32 @@ const sendMockDynamo = jest.fn();
 // Import the handler after installing global mocks
 const { handler } = require('../lib/lambda-handler/index.js');
 
-// Mock NodejsFunction globally so tests never attempt Docker bundling.
-// Note: we intentionally don't mock 'aws-cdk-lib/aws-lambda-nodejs' here to
-// avoid interfering with real lambda.Function behavior. The bundler path is
-// mocked only inside the dedicated bundler test using jest.isolateModules.
-
 // Preserve and set CI and USE_NODEJS_BUNDLER to explicit '0' to avoid bundling
 const ORIGINAL_USE_NODEJS_BUNDLER = process.env.USE_NODEJS_BUNDLER;
 const ORIGINAL_CI = process.env.CI;
 process.env.USE_NODEJS_BUNDLER = process.env.USE_NODEJS_BUNDLER || '0';
 process.env.CI = process.env.CI || '0';
 
-// Load stack after adjusting env to avoid bundling during module initialization
+// Load stacks after adjusting env to avoid bundling during module initialization
 beforeAll(() => {
-  ServerlessInfrastructureStack = require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
+  ServerlessInfrastructureStack =
+    require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
+  TapStack = require('../lib/tap-stack').TapStack;
 });
+
+const createStackTemplate = (envSuffix = 'qa-env', id = 'TapStackTest') => {
+  const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+  const app = new cdk.App();
+  const stack = new ServerlessInfrastructureStack(app, id, {
+    stackName: id,
+    envSuffix,
+    env: { region: 'us-east-1' },
+  });
+  const template = Template.fromStack(stack);
+  nowSpy.mockRestore();
+  const suffix = sanitizeName(`${envSuffix}-${String(FIXED_NOW).slice(-6)}`);
+  return { template, suffix, stack };
+};
 
 describe('ServerlessInfrastructureStack and Lambda handler', () => {
   const uniqueSuffix = `test-${Date.now().toString().slice(-6)}`;
@@ -63,7 +85,8 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
   // Restore any env that should be present after these tests finish
   afterAll(() => {
-    if (ORIGINAL_USE_NODEJS_BUNDLER === undefined) delete process.env.USE_NODEJS_BUNDLER;
+    if (ORIGINAL_USE_NODEJS_BUNDLER === undefined)
+      delete process.env.USE_NODEJS_BUNDLER;
     else process.env.USE_NODEJS_BUNDLER = ORIGINAL_USE_NODEJS_BUNDLER;
     if (ORIGINAL_CI === undefined) delete process.env.CI;
     else process.env.CI = ORIGINAL_CI;
@@ -72,7 +95,9 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
   describe('Api url fallback branches', () => {
     test('uses unknown when RestApi.url is undefined', () => {
       const apigateway = require('aws-cdk-lib/aws-apigateway');
-      const spy = jest.spyOn(apigateway.RestApi.prototype, 'url', 'get').mockReturnValue(undefined);
+      const spy = jest
+        .spyOn(apigateway.RestApi.prototype, 'url', 'get')
+        .mockReturnValue(undefined);
 
       const a = new cdk.App();
       const s = new ServerlessInfrastructureStack(a, 'StackApiUrlUndefined');
@@ -80,7 +105,8 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
       const json = t.toJSON();
       // ApiUrl output should use the fallback 'unknown'
       expect(json.Outputs).toBeDefined();
-      const apiUrlOutput = json.Outputs && json.Outputs.ApiUrl && json.Outputs.ApiUrl.Value;
+      const apiUrlOutput =
+        json.Outputs && json.Outputs.ApiUrl && json.Outputs.ApiUrl.Value;
       expect(apiUrlOutput).toBe('unknown');
 
       spy.mockRestore();
@@ -88,13 +114,16 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('uses actual url when RestApi.url is present', () => {
       const apigateway = require('aws-cdk-lib/aws-apigateway');
-      const spy = jest.spyOn(apigateway.RestApi.prototype, 'url', 'get').mockReturnValue('https://example.test/');
+      const spy = jest
+        .spyOn(apigateway.RestApi.prototype, 'url', 'get')
+        .mockReturnValue('https://example.test/');
 
       const a = new cdk.App();
       const s = new ServerlessInfrastructureStack(a, 'StackApiUrlPresent');
       const t = Template.fromStack(s);
       const json = t.toJSON();
-      const apiUrlOutput = json.Outputs && json.Outputs.ApiUrl && json.Outputs.ApiUrl.Value;
+      const apiUrlOutput =
+        json.Outputs && json.Outputs.ApiUrl && json.Outputs.ApiUrl.Value;
       expect(apiUrlOutput).toBe('https://example.test/');
 
       spy.mockRestore();
@@ -104,7 +133,9 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
   test('synthesizes expected resources', () => {
     const json = template.toJSON();
     expect(json).toHaveProperty('Resources');
-    const resources = Object.values(json.Resources || {}).map((r: any) => r.Type);
+    const resources = Object.values(json.Resources || {}).map(
+      (r: any) => r.Type
+    );
     // DynamoDB table
     expect(resources).toContain('AWS::DynamoDB::Table');
     // S3 bucket
@@ -112,7 +143,9 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
     // SQS queue (DLQ)
     expect(resources).toContain('AWS::SQS::Queue');
     // Lambda function
-    expect(resources.filter((t: string) => t === 'AWS::Lambda::Function').length).toBeGreaterThanOrEqual(1);
+    expect(
+      resources.filter((t: string) => t === 'AWS::Lambda::Function').length
+    ).toBeGreaterThanOrEqual(1);
     // API Gateway
     expect(resources).toContain('AWS::ApiGateway::RestApi');
     // SSM Parameter
@@ -125,8 +158,160 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
     expect(outputs).toHaveProperty('LogsBucketName');
   });
 
-  describe('Lambda handler behavior', () => {
+  describe('resource configuration and naming', () => {
+    test('sanitizes names when composing suffixes and aliases', () => {
+      const envSuffix = 'QA Env!!';
+      const stackId = 'MyTestStack';
+      const expectedSuffix = sanitizeName(
+        `${envSuffix}-${String(FIXED_NOW).slice(-6)}`
+      );
+      const expectedStackPrefix = sanitizeName(stackId);
+      const { template: templatedStack } = createStackTemplate(
+        envSuffix,
+        stackId
+      );
 
+      templatedStack.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: `api-logs-${expectedSuffix}`,
+      });
+      templatedStack.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: `lambda-dlq-${expectedSuffix}`,
+      });
+      templatedStack.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: `alias/${expectedStackPrefix}-key-${expectedSuffix}`,
+      });
+    });
+
+    test('enables encryption and lifecycle policies on storage resources', () => {
+      const { template: secureTemplate } = createStackTemplate('secure-env');
+
+      secureTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: Match.objectLike({
+          SSEEnabled: true,
+          SSEType: 'KMS',
+        }),
+        BillingMode: 'PAY_PER_REQUEST',
+        AttributeDefinitions: Match.arrayWith([
+          Match.objectLike({ AttributeName: 'id', AttributeType: 'S' }),
+        ]),
+      });
+
+      secureTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: Match.objectLike({
+          ServerSideEncryptionConfiguration: Match.arrayWith([
+            Match.objectLike({
+              ServerSideEncryptionByDefault: Match.objectLike({
+                SSEAlgorithm: 'aws:kms',
+              }),
+            }),
+          ]),
+        }),
+        LifecycleConfiguration: Match.objectLike({
+          Rules: Match.arrayWith([
+            Match.objectLike({ ExpirationInDays: 30, Status: 'Enabled' }),
+          ]),
+        }),
+        PublicAccessBlockConfiguration: Match.objectLike({
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        }),
+      });
+
+      secureTemplate.hasResourceProperties('AWS::SQS::Queue', {
+        MessageRetentionPeriod: 14 * 24 * 60 * 60,
+      });
+    });
+
+    test('wires lambda with DLQ, tracing, and environment variables', () => {
+      const { template: lambdaTemplate } = createStackTemplate('lambda-env');
+      const functions = lambdaTemplate.findResources('AWS::Lambda::Function');
+      const appFunction = Object.values(functions).find(
+        (fn: any) =>
+          fn.Properties &&
+          fn.Properties.Environment &&
+          fn.Properties.Environment.Variables &&
+          fn.Properties.Environment.Variables.TABLE_NAME
+      ) as any;
+      expect(appFunction).toBeDefined();
+      expect(appFunction.Properties.Runtime).toBe('nodejs18.x');
+      expect(appFunction.Properties.MemorySize).toBe(256);
+      expect(appFunction.Properties.Timeout).toBe(30);
+      expect(appFunction.Properties.Environment.Variables).toEqual(
+        expect.objectContaining({
+          TABLE_NAME: expect.any(Object),
+          CONFIG_PARAMETER_NAME: expect.any(Object),
+          ENV: 'lambda-env',
+        })
+      );
+      expect(appFunction.Properties.TracingConfig).toEqual({ Mode: 'Active' });
+      expect(appFunction.Properties.DeadLetterConfig?.TargetArn).toBeDefined();
+    });
+
+    test('attaches managed policies and kms grants to lambda role', () => {
+      const { template: policyTemplate } = createStackTemplate('policy-check');
+      const roles = policyTemplate.findResources('AWS::IAM::Role');
+      const lambdaRole = Object.values(roles).find(
+        (role: any) =>
+          role.Properties &&
+          typeof role.Properties.RoleName === 'string' &&
+          role.Properties.RoleName.includes('lambda-execution-role')
+      ) as any;
+      expect(lambdaRole).toBeDefined();
+      const managedPoliciesJson = JSON.stringify(
+        lambdaRole.Properties.ManagedPolicyArns || []
+      );
+      expect(managedPoliciesJson).toContain('AWSLambdaBasicExecutionRole');
+      expect(managedPoliciesJson).toContain('AWSXRayDaemonWriteAccess');
+
+      const policies = policyTemplate.findResources('AWS::IAM::Policy');
+      const rolePolicy = Object.values(policies).find(
+        (p: any) =>
+          p.Properties &&
+          p.Properties.PolicyDocument &&
+          JSON.stringify(p.Properties.PolicyDocument).includes('dynamodb:PutItem')
+      );
+      expect(rolePolicy).toBeDefined();
+    });
+
+    test('configures API Gateway logging, tracing, and alarms', () => {
+      const { template: apiTemplate } = createStackTemplate('api-audit');
+      const stage = Object.values(
+        apiTemplate.findResources('AWS::ApiGateway::Stage')
+      )[0] as any;
+      expect(stage.Properties.TracingEnabled).toBe(true);
+      expect(stage.Properties.MethodSettings[0]).toMatchObject({
+        LoggingLevel: 'INFO',
+        DataTraceEnabled: true,
+      });
+      expect(stage.Properties.AccessLogSetting?.DestinationArn).toBeDefined();
+
+      const alarms = Object.values(
+        apiTemplate.findResources('AWS::CloudWatch::Alarm')
+      );
+      expect(alarms.length).toBeGreaterThanOrEqual(3);
+      const alarmWithSnsAction = alarms.find(
+        (alarm: any) =>
+          alarm.Properties &&
+          Array.isArray(alarm.Properties.AlarmActions) &&
+          alarm.Properties.AlarmActions.length > 0
+      );
+      expect(alarmWithSnsAction).toBeDefined();
+    });
+
+    test('stores configuration in SSM with environment context', () => {
+      const { template: configTemplate, suffix } =
+        createStackTemplate('config-env');
+      configTemplate.hasResourceProperties('AWS::SSM::Parameter', {
+        Name: `/application/config-${suffix}`,
+        Value: Match.stringLikeRegexp('"environment":"config-env"'),
+        Tier: 'Standard',
+      });
+    });
+  });
+
+  describe('Lambda handler behavior', () => {
     beforeEach(() => {
       jest.clearAllMocks();
       // ensure lambda reads from a known parameter name in tests
@@ -135,10 +320,14 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('writes item to DynamoDB and returns 201 on valid input', async () => {
       // Arrange: SSM returns config, DynamoDB put succeeds
-      sendMockSSM.mockResolvedValueOnce({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } });
+      sendMockSSM.mockResolvedValueOnce({
+        Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) },
+      });
       sendMockDynamo.mockResolvedValueOnce({});
 
-      const event = { body: JSON.stringify({ id: 'abc-123', payload: { foo: 'bar' } }) };
+      const event = {
+        body: JSON.stringify({ id: 'abc-123', payload: { foo: 'bar' } }),
+      };
       const res = await handler(event);
       expect(res.statusCode).toBe(201);
       const body = JSON.parse(res.body);
@@ -178,7 +367,9 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 
     test('returns 500 when DynamoDB put fails', async () => {
       // SSM returns config, DynamoDB put fails
-      sendMockSSM.mockResolvedValueOnce({ Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) } });
+      sendMockSSM.mockResolvedValueOnce({
+        Parameter: { Value: JSON.stringify({ apiVersion: '1.0' }) },
+      });
       sendMockDynamo.mockRejectedValueOnce(new Error('Dynamo failed'));
 
       const event = { body: JSON.stringify({ id: 'fail-1', payload: {} }) };
@@ -205,7 +396,9 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
 describe('stack env selection branches', () => {
   test('uses envSuffix prop when provided', () => {
     const a = new cdk.App();
-    const s = new ServerlessInfrastructureStack(a, 'StackWithProp', { envSuffix: 'propenv' });
+    const s = new ServerlessInfrastructureStack(a, 'StackWithProp', {
+      envSuffix: 'propenv',
+    });
     const t = Template.fromStack(s);
     const json = t.toJSON();
     // Expect exports with prop-based suffix
@@ -294,7 +487,8 @@ describe('bundling selection branch (non-bundler)', () => {
       process.env.CI = '0';
 
       // Require the stack fresh so it reads the env flags during initialization
-      const { ServerlessInfrastructureStack: NonBundledStack } = require('../lib/serverless-infrastructure-stack');
+      const { ServerlessInfrastructureStack: NonBundledStack } =
+        require('../lib/serverless-infrastructure-stack');
       const a = new cdk.App();
       const s = new NonBundledStack(a, 'StackWithCodeAsset');
       const t = Template.fromStack(s);
@@ -306,7 +500,8 @@ describe('bundling selection branch (non-bundler)', () => {
       delete process.env.CI;
       jest.resetModules();
       // Re-load original ServerlessInfrastructureStack for other tests
-      ServerlessInfrastructureStack = require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
+      ServerlessInfrastructureStack =
+        require('../lib/serverless-infrastructure-stack').ServerlessInfrastructureStack;
     });
   });
 });
@@ -334,5 +529,45 @@ describe('SNS subscription and alarms branches', () => {
     // There may still be a Topic resource, but no Subscription should be present
     const hasSubscription = resources.includes('AWS::SNS::Subscription');
     expect(hasSubscription).toBe(false);
+  });
+});
+
+describe('TapStack composition', () => {
+  test('passes environmentSuffix and env to child stack', () => {
+    const app = new cdk.App();
+    const tapStack = new TapStack(app, 'ParentTap', {
+      environmentSuffix: 'qa',
+      env: { account: '123456789012', region: 'us-west-2' },
+    });
+    const child = tapStack.node.findChild(
+      'ServerlessInfrastructureStackqa'
+    ) as any;
+    expect(child).toBeDefined();
+    expect(child.stackName).toBe('ServerlessInfrastructureStackqa');
+    expect(child.region).toBe('us-west-2');
+  });
+
+  test('uses context environmentSuffix when prop is omitted', () => {
+    const app = new cdk.App({ context: { environmentSuffix: 'ctx' } });
+    const tapStack = new TapStack(app, 'ContextTap', {
+      env: { region: 'eu-central-1' },
+    });
+    const child = tapStack.node.findChild(
+      'ServerlessInfrastructureStackctx'
+    ) as any;
+    expect(child).toBeDefined();
+    expect(child.region).toBe('eu-central-1');
+  });
+
+  test('still creates child stack when no environmentSuffix is provided', () => {
+    const app = new cdk.App();
+    const tapStack = new TapStack(app, 'DefaultTap');
+    const child = tapStack.node
+      .findAll()
+      .find((node: any) =>
+        typeof node.stackName === 'string' &&
+        node.stackName.startsWith('ServerlessInfrastructureStack')
+      );
+    expect(child).toBeDefined();
   });
 });

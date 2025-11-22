@@ -136,7 +136,6 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         deadLetterQueue: deadLetterQueue,
         deadLetterQueueEnabled: true,
         tracing: lambda.Tracing.ACTIVE,
-        reservedConcurrentExecutions: 10,
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
         bundling: {
@@ -169,7 +168,6 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         deadLetterQueue: deadLetterQueue,
         deadLetterQueueEnabled: true,
         tracing: lambda.Tracing.ACTIVE,
-        reservedConcurrentExecutions: 10,
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
       });
@@ -219,6 +217,21 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // API Gateway CloudWatch role (account-level, created once per account/region)
+    const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        ),
+      ],
+    });
+
+    // Set the account-level CloudWatch role for API Gateway
+    const cfnAccount = new apigateway.CfnAccount(this, 'ApiGatewayAccount', {
+      cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
+    });
+
     // API Gateway
     const api = new apigateway.RestApi(this, 'ApplicationApi', {
       restApiName: `application-api-${resourceSuffix}`,
@@ -237,6 +250,9 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
         allowMethods: apigateway.Cors.ALL_METHODS,
       },
     });
+
+    // Ensure API Gateway account configuration is created before the API
+    api.node.addDependency(cfnAccount);
 
     const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction, {
       proxy: true,
@@ -281,6 +297,46 @@ export class ServerlessInfrastructureStack extends cdk.Stack {
       value: logsBucket.bucketName,
       description: 'S3 bucket for API logs',
       exportName: `logs-bucket-name-${resourceSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: lambdaFunction.functionName,
+      description: 'Lambda function name',
+      exportName: `lambda-function-name-${resourceSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: lambdaFunction.functionArn,
+      description: 'Lambda function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'DeadLetterQueueUrl', {
+      value: deadLetterQueue.queueUrl,
+      description: 'Dead-letter queue URL',
+      exportName: `dlq-url-${resourceSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ConfigParameterName', {
+      value: configParameter.parameterName,
+      description: 'SSM Parameter Store parameter name',
+      exportName: `config-param-name-${resourceSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'KmsKeyId', {
+      value: kmsKey.keyId,
+      description: 'KMS key ID for encryption',
+      exportName: `kms-key-id-${resourceSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'AlarmTopicArn', {
+      value: alarmTopic.topicArn,
+      description: 'SNS topic ARN for alarms',
+      exportName: `alarm-topic-arn-${resourceSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'AWS region',
     });
   }
 }
