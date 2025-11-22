@@ -458,34 +458,6 @@ describe('E2E Functional Tests - Serverless Transaction Processing System', () =
         expect(true).toBe(true);
       });
 
-      test('should have Lambda notification triggers', async () => {
-        const notif = await safeAwsCall(
-          async () => {
-            const cmd = new GetBucketNotificationConfigurationCommand({ Bucket: outputs.s3_bucket_name });
-            return await s3Client.send(cmd);
-          },
-          'Get notifications'
-        );
-
-        if (!notif) {
-          expect(true).toBe(true);
-          return;
-        }
-
-        const csvTrigger = notif.LambdaFunctionConfigurations?.find(
-          n => n.Filter?.Key?.FilterRules?.some(r => r.Value === '.csv')
-        );
-        const jsonTrigger = notif.LambdaFunctionConfigurations?.find(
-          n => n.Filter?.Key?.FilterRules?.some(r => r.Value === '.json')
-        );
-
-        if (csvTrigger && jsonTrigger) {
-          console.log(`S3 notifications: CSV and JSON triggers configured`);
-        }
-
-        expect(true).toBe(true);
-      });
-
       test('should validate bucket naming convention', () => {
         expect(outputs.s3_bucket_name).toContain('transactions');
         expect(outputs.s3_bucket_name).toContain(accountId);
