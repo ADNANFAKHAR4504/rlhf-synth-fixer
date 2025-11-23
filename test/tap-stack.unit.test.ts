@@ -31,6 +31,8 @@ const FIXED_NOW = 1_700_000_000_000;
 const sendMockSSM = jest.fn();
 const sendMockDynamo = jest.fn();
 
+const ORIGINAL_GLOBAL_MOCKS = (globalThis as any).__AWS_MOCKS__;
+
 // Inject mocks via globalThis to avoid dynamic import issues in Jest
 (globalThis as any).__AWS_MOCKS__ = {
   ssmClient: { send: (...args: any[]) => sendMockSSM(...args) },
@@ -379,6 +381,38 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
       expect(body.error).toMatch(/Internal Server Error/);
     });
 
+    test('falls back to empty config when SSM returns no value', async () => {
+      sendMockSSM.mockResolvedValueOnce({});
+      sendMockDynamo.mockResolvedValueOnce({});
+
+      const event = { body: JSON.stringify({ id: 'no-param' }) };
+      const res = await handler(event);
+      expect(res.statusCode).toBe(201);
+      const body = JSON.parse(res.body);
+      expect(body.item.configVersion).toBe('unknown');
+      expect(body.item.payload).toBeNull();
+    });
+
+    test('accepts already-parsed object bodies', async () => {
+      delete process.env.CONFIG_PARAMETER_NAME;
+      sendMockDynamo.mockResolvedValueOnce({});
+
+      const event = { body: { id: 'object-body' } };
+      const res = await handler(event);
+      expect(res.statusCode).toBe(201);
+      const body = JSON.parse(res.body);
+      expect(body.item.id).toBe('object-body');
+      expect(body.item.payload).toBeNull();
+    });
+
+    test('returns 400 when body is missing entirely', async () => {
+      delete process.env.CONFIG_PARAMETER_NAME;
+      const res = await handler({});
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.body);
+      expect(body.error).toMatch(/Missing required field/);
+    });
+
     test('when CONFIG_PARAMETER_NAME is not set, configVersion is unknown', async () => {
       delete process.env.CONFIG_PARAMETER_NAME;
       // Dynamo put succeeds
@@ -390,6 +424,33 @@ describe('ServerlessInfrastructureStack and Lambda handler', () => {
       const body = JSON.parse(res.body);
       expect(body.item.configVersion).toBe('unknown');
     });
+  });
+});
+
+describe('lambda handler without injected AWS mocks', () => {
+  beforeEach(() => {
+    delete (globalThis as any).__AWS_MOCKS__;
+    delete process.env.CONFIG_PARAMETER_NAME;
+    jest.resetModules();
+  });
+
+  afterEach(() => {
+    jest.resetModules();
+    if (ORIGINAL_GLOBAL_MOCKS === undefined)
+      delete (globalThis as any).__AWS_MOCKS__;
+    else (globalThis as any).__AWS_MOCKS__ = ORIGINAL_GLOBAL_MOCKS;
+  });
+
+  test('falls back to real AWS SDK clients when no mocks are provided', async () => {
+    let isolatedHandler;
+    jest.isolateModules(() => {
+      // Import after removing mocks so handler initializes real clients
+      isolatedHandler = require('../lib/lambda-handler/index.js').handler;
+    });
+
+    const response = await isolatedHandler({ body: 'not-json' });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error).toMatch(/Invalid JSON/);
   });
 });
 
