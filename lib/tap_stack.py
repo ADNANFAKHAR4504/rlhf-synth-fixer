@@ -715,7 +715,7 @@ artifacts:
                         "interval": 30,
                         "matcher": "200"
                     },
-                    deregistration_delay=30,
+                    deregistration_delay="30",
                     tags={"Environment": env, "Service": service, "Color": "blue"}
                 )
 
@@ -737,7 +737,7 @@ artifacts:
                         "interval": 30,
                         "matcher": "200"
                     },
-                    deregistration_delay=30,
+                    deregistration_delay="30",
                     tags={"Environment": env, "Service": service, "Color": "green"}
                 )
 
@@ -1342,7 +1342,7 @@ def lambda_handler(event, context):
 
         TerraformOutput(
             self,
-            "artifacts_bucket",
+            "artifacts_bucket_name",
             value=artifacts_bucket.bucket,
             description="S3 bucket for pipeline artifacts"
         )
