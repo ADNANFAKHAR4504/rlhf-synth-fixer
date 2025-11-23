@@ -394,96 +394,99 @@ resource "aws_iam_role" "lambda_role" {
     ]
   })
 
-  inline_policy {
-    name = "fraud-detection-lambda-policy"
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [
-        {
-          Effect = "Allow"
-          Action = [
-            "logs:CreateLogStream",
-            "logs:PutLogEvents"
-          ]
-          Resource = [
-            "${aws_cloudwatch_log_group.validation_lambda_logs.arn}:*",
-            "${aws_cloudwatch_log_group.fraud_scoring_lambda_logs.arn}:*",
-            "${aws_cloudwatch_log_group.notification_lambda_logs.arn}:*",
-            "${aws_cloudwatch_log_group.authorizer_lambda_logs.arn}:*"
-          ]
-        },
-        {
-          Effect = "Allow"
-          Action = [
-            "dynamodb:GetItem",
-            "dynamodb:PutItem",
-            "dynamodb:UpdateItem",
-            "dynamodb:Query"
-          ]
-          Resource = aws_dynamodb_table.transactions.arn
-        },
-        {
-          Effect = "Allow"
-          Action = [
-            "s3:PutObject",
-            "s3:GetObject"
-          ]
-          Resource = "${aws_s3_bucket.transaction_archive.arn}/*"
-        },
-        {
-          Effect = "Allow"
-          Action = [
-            "kms:Decrypt",
-            "kms:GenerateDataKey"
-          ]
-          Resource = [
-            aws_kms_key.lambda_key.arn,
-            aws_kms_key.dynamodb_key.arn,
-            aws_kms_key.s3_key.arn,
-            aws_kms_key.sqs_key.arn
-          ]
-        },
-        {
-          Effect = "Allow"
-          Action = [
-            "sqs:SendMessage",
-            "sqs:ReceiveMessage",
-            "sqs:DeleteMessage",
-            "sqs:GetQueueAttributes"
-          ]
-          Resource = aws_sqs_queue.notification_queue.arn
-        },
-        {
-          Effect   = "Allow"
-          Action   = "events:PutEvents"
-          Resource = aws_cloudwatch_event_rule.high_risk_transaction.arn
-        },
-        {
-          Effect = "Allow"
-          Action = [
-            "ec2:CreateNetworkInterface",
-            "ec2:DescribeNetworkInterfaces",
-            "ec2:DeleteNetworkInterface"
-          ]
-          Resource = "*"
-        },
-        {
-          Effect   = "Deny"
-          Action   = "*"
-          Resource = "*"
-          Condition = {
-            StringNotEquals = {
-              "aws:SourceVpc" = aws_vpc.fraud_detection_vpc.id
-            }
-          }
-        }
-      ]
-    })
-  }
-
   tags = {
     Name = "fraud-detection-lambda-role-${var.environment_suffix}"
   }
+}
+
+# Inline policy for Lambda role (using separate resource)
+resource "aws_iam_role_policy" "lambda_inline_policy" {
+  name = "fraud-detection-lambda-policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "${aws_cloudwatch_log_group.validation_lambda_logs.arn}:*",
+          "${aws_cloudwatch_log_group.fraud_scoring_lambda_logs.arn}:*",
+          "${aws_cloudwatch_log_group.notification_lambda_logs.arn}:*",
+          "${aws_cloudwatch_log_group.authorizer_lambda_logs.arn}:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:Query"
+        ]
+        Resource = aws_dynamodb_table.transactions.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = "${aws_s3_bucket.transaction_archive.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = [
+          aws_kms_key.lambda_key.arn,
+          aws_kms_key.dynamodb_key.arn,
+          aws_kms_key.s3_key.arn,
+          aws_kms_key.sqs_key.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = aws_sqs_queue.notification_queue.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = "events:PutEvents"
+        Resource = aws_cloudwatch_event_rule.high_risk_transaction.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect   = "Deny"
+        Action   = "*"
+        Resource = "*"
+        Condition = {
+          StringNotEquals = {
+            "aws:SourceVpc" = aws_vpc.fraud_detection_vpc.id
+          }
+        }
+      }
+    ]
+  })
 }
 
 # Security group for Lambda functions
@@ -534,7 +537,8 @@ resource "aws_lambda_function" "token_authorizer" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.authorizer_lambda_logs
+    aws_cloudwatch_log_group.authorizer_lambda_logs,
+    aws_iam_role_policy.lambda_inline_policy
   ]
 }
 
@@ -567,7 +571,8 @@ resource "aws_lambda_function" "transaction_validation" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.validation_lambda_logs
+    aws_cloudwatch_log_group.validation_lambda_logs,
+    aws_iam_role_policy.lambda_inline_policy
   ]
 }
 
@@ -602,7 +607,8 @@ resource "aws_lambda_function" "fraud_scoring" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.fraud_scoring_lambda_logs
+    aws_cloudwatch_log_group.fraud_scoring_lambda_logs,
+    aws_iam_role_policy.lambda_inline_policy
   ]
 }
 
@@ -636,7 +642,8 @@ resource "aws_lambda_function" "notification_processing" {
   }
 
   depends_on = [
-    aws_cloudwatch_log_group.notification_lambda_logs
+    aws_cloudwatch_log_group.notification_lambda_logs,
+    aws_iam_role_policy.lambda_inline_policy
   ]
 }
 
