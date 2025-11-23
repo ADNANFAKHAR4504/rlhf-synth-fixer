@@ -96,11 +96,42 @@ locals {
     "ap-southeast-1" = aws_security_group.lambda_ap_southeast_1
   }
 
-  # For for_each resources, we need direct references
-  db_subnet_group_main            = aws_db_subnet_group.main
-  rds_cluster_main                = aws_rds_cluster.main
-  rds_monitoring_main             = aws_iam_role.rds_monitoring
-  s3_bucket_transaction_logs_main = aws_s3_bucket.transaction_logs
+  # Regional resource mappings for easy reference
+  db_subnet_groups = {
+    "us-east-1"      = aws_db_subnet_group.us_east_1
+    "eu-west-1"      = aws_db_subnet_group.eu_west_1
+    "ap-southeast-1" = aws_db_subnet_group.ap_southeast_1
+  }
+
+  rds_clusters = {
+    "us-east-1"      = aws_rds_cluster.us_east_1
+    "eu-west-1"      = aws_rds_cluster.eu_west_1
+    "ap-southeast-1" = aws_rds_cluster.ap_southeast_1
+  }
+
+  rds_monitoring_roles = {
+    "us-east-1"      = aws_iam_role.rds_monitoring_us_east_1
+    "eu-west-1"      = aws_iam_role.rds_monitoring_eu_west_1
+    "ap-southeast-1" = aws_iam_role.rds_monitoring_ap_southeast_1
+  }
+
+  s3_transaction_logs = {
+    "us-east-1"      = aws_s3_bucket.transaction_logs_us_east_1
+    "eu-west-1"      = aws_s3_bucket.transaction_logs_eu_west_1
+    "ap-southeast-1" = aws_s3_bucket.transaction_logs_ap_southeast_1
+  }
+
+  api_gateways = {
+    "us-east-1"      = aws_api_gateway_rest_api.us_east_1
+    "eu-west-1"      = aws_api_gateway_rest_api.eu_west_1
+    "ap-southeast-1" = aws_api_gateway_rest_api.ap_southeast_1
+  }
+
+  lambda_functions = {
+    "us-east-1"      = aws_lambda_function.payment_validator_us_east_1
+    "eu-west-1"      = aws_lambda_function.payment_validator_eu_west_1
+    "ap-southeast-1" = aws_lambda_function.payment_validator_ap_southeast_1
+  }
 }
 
 # Data sources for current account and availability zones
@@ -316,190 +347,403 @@ resource "aws_internet_gateway" "ap_southeast_1" {
 }
 
 
-# Public subnets (3 per region, one per AZ)
-resource "aws_subnet" "public" {
+# Public subnets - us-east-1
+resource "aws_subnet" "public_us_east_1" {
+  provider = aws.us-east-1
   for_each = {
-    for subnet in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key        = "${region}-public-${az_index}"
-          region     = region
-          az_index   = az_index
-          cidr_block = cidrsubnet(var.vpc_cidrs[region], 8, az_index)
-        }
-      ]
-    ]) : subnet.key => subnet
+    for i in range(var.az_count) : i => {
+      az_index = i
+      cidr_block = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, i)
+    }
   }
 
-  provider                = aws.us-east-1
-  vpc_id                  = local.vpcs[each.value.region].id
+  vpc_id                  = aws_vpc.us_east_1.id
   cidr_block              = each.value.cidr_block
-  availability_zone       = local.az_data_sources[each.value.region].names[each.value.az_index]
+  availability_zone       = data.aws_availability_zones.us_east_1.names[each.value.az_index]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.value.region}-public-${each.value.az_index}"
+    Name   = "${local.environment}-us-east-1-public-${each.value.az_index}"
     Type   = "public"
-    Region = each.value.region
+    Region = "us-east-1"
   })
 }
 
-# Private subnets (3 per region, one per AZ)
-resource "aws_subnet" "private" {
+# Public subnets - eu-west-1
+resource "aws_subnet" "public_eu_west_1" {
+  provider = aws.eu-west-1
   for_each = {
-    for subnet in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key        = "${region}-private-${az_index}"
-          region     = region
-          az_index   = az_index
-          cidr_block = cidrsubnet(var.vpc_cidrs[region], 8, az_index + 100)
-        }
-      ]
-    ]) : subnet.key => subnet
+    for i in range(var.az_count) : i => {
+      az_index = i
+      cidr_block = cidrsubnet(var.vpc_cidrs["eu-west-1"], 8, i)
+    }
   }
 
-  provider          = aws.us-east-1
-  vpc_id            = local.vpcs[each.value.region].id
+  vpc_id                  = aws_vpc.eu_west_1.id
+  cidr_block              = each.value.cidr_block
+  availability_zone       = data.aws_availability_zones.eu_west_1.names[each.value.az_index]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-public-${each.value.az_index}"
+    Type   = "public"
+    Region = "eu-west-1"
+  })
+}
+
+# Public subnets - ap-southeast-1
+resource "aws_subnet" "public_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => {
+      az_index = i
+      cidr_block = cidrsubnet(var.vpc_cidrs["ap-southeast-1"], 8, i)
+    }
+  }
+
+  vpc_id                  = aws_vpc.ap_southeast_1.id
+  cidr_block              = each.value.cidr_block
+  availability_zone       = data.aws_availability_zones.ap_southeast_1.names[each.value.az_index]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-public-${each.value.az_index}"
+    Type   = "public"
+    Region = "ap-southeast-1"
+  })
+}
+
+# Private subnets - us-east-1
+resource "aws_subnet" "private_us_east_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => {
+      az_index = i
+      cidr_block = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, i + 100)
+    }
+  }
+
+  vpc_id            = aws_vpc.us_east_1.id
   cidr_block        = each.value.cidr_block
-  availability_zone = local.az_data_sources[each.value.region].names[each.value.az_index]
+  availability_zone = data.aws_availability_zones.us_east_1.names[each.value.az_index]
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.value.region}-private-${each.value.az_index}"
+    Name   = "${local.environment}-us-east-1-private-${each.value.az_index}"
     Type   = "private"
-    Region = each.value.region
+    Region = "us-east-1"
   })
 }
 
-# Elastic IPs for NAT Gateways (one per AZ for HA)
-resource "aws_eip" "nat" {
+# Private subnets - eu-west-1
+resource "aws_subnet" "private_eu_west_1" {
+  provider = aws.eu-west-1
   for_each = {
-    for item in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key      = "${region}-${az_index}"
-          region   = region
-          az_index = az_index
-        }
-      ]
-    ]) : item.key => item
+    for i in range(var.az_count) : i => {
+      az_index = i
+      cidr_block = cidrsubnet(var.vpc_cidrs["eu-west-1"], 8, i + 100)
+    }
   }
 
-  provider = aws.us-east-1
-  domain   = "vpc"
+  vpc_id            = aws_vpc.eu_west_1.id
+  cidr_block        = each.value.cidr_block
+  availability_zone = data.aws_availability_zones.eu_west_1.names[each.value.az_index]
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.value.region}-nat-eip-${each.value.az_index}"
-    Region = each.value.region
+    Name   = "${local.environment}-eu-west-1-private-${each.value.az_index}"
+    Type   = "private"
+    Region = "eu-west-1"
   })
 }
 
-# NAT Gateways (one per AZ for HA)
-resource "aws_nat_gateway" "main" {
+# Private subnets - ap-southeast-1
+resource "aws_subnet" "private_ap_southeast_1" {
+  provider = aws.ap-southeast-1
   for_each = {
-    for item in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key      = "${region}-${az_index}"
-          region   = region
-          az_index = az_index
-        }
-      ]
-    ]) : item.key => item
+    for i in range(var.az_count) : i => {
+      az_index = i
+      cidr_block = cidrsubnet(var.vpc_cidrs["ap-southeast-1"], 8, i + 100)
+    }
   }
 
-  provider      = aws.us-east-1
-  allocation_id = aws_eip.nat[each.key].id
-  subnet_id     = aws_subnet.public["${each.value.region}-public-${each.value.az_index}"].id
+  vpc_id            = aws_vpc.ap_southeast_1.id
+  cidr_block        = each.value.cidr_block
+  availability_zone = data.aws_availability_zones.ap_southeast_1.names[each.value.az_index]
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.value.region}-nat-${each.value.az_index}"
-    Region = each.value.region
+    Name   = "${local.environment}-ap-southeast-1-private-${each.value.az_index}"
+    Type   = "private"
+    Region = "ap-southeast-1"
   })
 }
 
-# Route table for public subnets
-resource "aws_route_table" "public" {
-  for_each = toset(var.regions)
+# Elastic IPs for NAT Gateways - us-east-1
+resource "aws_eip" "nat_us_east_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-us-east-1-nat-eip-${each.value}"
+    Region = "us-east-1"
+  })
+}
+
+# Elastic IPs for NAT Gateways - eu-west-1
+resource "aws_eip" "nat_eu_west_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-nat-eip-${each.value}"
+    Region = "eu-west-1"
+  })
+}
+
+# Elastic IPs for NAT Gateways - ap-southeast-1
+resource "aws_eip" "nat_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-nat-eip-${each.value}"
+    Region = "ap-southeast-1"
+  })
+}
+
+# NAT Gateways - us-east-1
+resource "aws_nat_gateway" "us_east_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  allocation_id = aws_eip.nat_us_east_1[each.value].id
+  subnet_id     = aws_subnet.public_us_east_1[each.value].id
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-us-east-1-nat-${each.value}"
+    Region = "us-east-1"
+  })
+}
+
+# NAT Gateways - eu-west-1
+resource "aws_nat_gateway" "eu_west_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  allocation_id = aws_eip.nat_eu_west_1[each.value].id
+  subnet_id     = aws_subnet.public_eu_west_1[each.value].id
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-nat-${each.value}"
+    Region = "eu-west-1"
+  })
+}
+
+# NAT Gateways - ap-southeast-1
+resource "aws_nat_gateway" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  allocation_id = aws_eip.nat_ap_southeast_1[each.value].id
+  subnet_id     = aws_subnet.public_ap_southeast_1[each.value].id
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-nat-${each.value}"
+    Region = "ap-southeast-1"
+  })
+}
+
+# Route table for public subnets - us-east-1
+resource "aws_route_table" "public_us_east_1" {
   provider = aws.us-east-1
 
-  vpc_id = local.vpcs[each.key].id
+  vpc_id = aws_vpc.us_east_1.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = local.igw_main[each.key].id
+    gateway_id = aws_internet_gateway.us_east_1.id
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-public-rt"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-public-rt"
+    Region = "us-east-1"
   })
 }
 
-# Route tables for private subnets (one per AZ for independent NAT routing)
-resource "aws_route_table" "private" {
-  for_each = {
-    for item in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key      = "${region}-${az_index}"
-          region   = region
-          az_index = az_index
-        }
-      ]
-    ]) : item.key => item
+# Route table for public subnets - eu-west-1
+resource "aws_route_table" "public_eu_west_1" {
+  provider = aws.eu-west-1
+
+  vpc_id = aws_vpc.eu_west_1.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.eu_west_1.id
   }
 
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-public-rt"
+    Region = "eu-west-1"
+  })
+}
+
+# Route table for public subnets - ap-southeast-1
+resource "aws_route_table" "public_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  vpc_id = aws_vpc.ap_southeast_1.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.ap_southeast_1.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-public-rt"
+    Region = "ap-southeast-1"
+  })
+}
+
+# Route tables for private subnets - us-east-1
+resource "aws_route_table" "private_us_east_1" {
   provider = aws.us-east-1
-  vpc_id   = local.vpcs[each.value.region].id
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  vpc_id = aws_vpc.us_east_1.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[each.key].id
+    nat_gateway_id = aws_nat_gateway.us_east_1[each.value].id
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.value.region}-private-rt-${each.value.az_index}"
-    Region = each.value.region
+    Name   = "${local.environment}-us-east-1-private-rt-${each.value}"
+    Region = "us-east-1"
   })
 }
 
-# Route table associations for public subnets
-resource "aws_route_table_association" "public" {
+# Route tables for private subnets - eu-west-1
+resource "aws_route_table" "private_eu_west_1" {
+  provider = aws.eu-west-1
   for_each = {
-    for subnet in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key      = "${region}-public-${az_index}"
-          region   = region
-          az_index = az_index
-        }
-      ]
-    ]) : subnet.key => subnet
+    for i in range(var.az_count) : i => i
   }
 
-  provider       = aws.us-east-1
-  subnet_id      = aws_subnet.public[each.key].id
-  route_table_id = aws_route_table.public[each.value.region].id
+  vpc_id = aws_vpc.eu_west_1.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.eu_west_1[each.value].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-private-rt-${each.value}"
+    Region = "eu-west-1"
+  })
 }
 
-# Route table associations for private subnets
-resource "aws_route_table_association" "private" {
+# Route tables for private subnets - ap-southeast-1
+resource "aws_route_table" "private_ap_southeast_1" {
+  provider = aws.ap-southeast-1
   for_each = {
-    for subnet in flatten([
-      for region in var.regions : [
-        for az_index in range(var.az_count) : {
-          key      = "${region}-private-${az_index}"
-          region   = region
-          az_index = az_index
-        }
-      ]
-    ]) : subnet.key => subnet
+    for i in range(var.az_count) : i => i
   }
 
-  provider       = aws.us-east-1
-  subnet_id      = aws_subnet.private[each.key].id
-  route_table_id = aws_route_table.private["${each.value.region}-${each.value.az_index}"].id
+  vpc_id = aws_vpc.ap_southeast_1.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.ap_southeast_1[each.value].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-private-rt-${each.value}"
+    Region = "ap-southeast-1"
+  })
+}
+
+# Route table associations for public subnets - us-east-1
+resource "aws_route_table_association" "public_us_east_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  subnet_id      = aws_subnet.public_us_east_1[each.value].id
+  route_table_id = aws_route_table.public_us_east_1.id
+}
+
+# Route table associations for public subnets - eu-west-1
+resource "aws_route_table_association" "public_eu_west_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  subnet_id      = aws_subnet.public_eu_west_1[each.value].id
+  route_table_id = aws_route_table.public_eu_west_1.id
+}
+
+# Route table associations for public subnets - ap-southeast-1
+resource "aws_route_table_association" "public_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  subnet_id      = aws_subnet.public_ap_southeast_1[each.value].id
+  route_table_id = aws_route_table.public_ap_southeast_1.id
+}
+
+# Route table associations for private subnets - us-east-1
+resource "aws_route_table_association" "private_us_east_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  subnet_id      = aws_subnet.private_us_east_1[each.value].id
+  route_table_id = aws_route_table.private_us_east_1[each.value].id
+}
+
+# Route table associations for private subnets - eu-west-1
+resource "aws_route_table_association" "private_eu_west_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  subnet_id      = aws_subnet.private_eu_west_1[each.value].id
+  route_table_id = aws_route_table.private_eu_west_1[each.value].id
+}
+
+# Route table associations for private subnets - ap-southeast-1
+resource "aws_route_table_association" "private_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  subnet_id      = aws_subnet.private_ap_southeast_1[each.value].id
+  route_table_id = aws_route_table.private_ap_southeast_1[each.value].id
 }
 
 # Security groups for RDS - Individual regional resources
@@ -787,39 +1031,69 @@ resource "aws_secretsmanager_secret_version" "rds_master_ap_southeast_1" {
   })
 }
 
-# DB subnet group for RDS
-resource "aws_db_subnet_group" "main" {
-  for_each = toset(var.regions)
+# DB subnet group for RDS - us-east-1
+resource "aws_db_subnet_group" "us_east_1" {
   provider = aws.us-east-1
 
-  name = "${local.environment}-${each.key}-db-subnet-group"
+  name = "${local.environment}-us-east-1-db-subnet-group"
   subnet_ids = [
     for az_index in range(var.az_count) :
-    aws_subnet.private["${each.key}-private-${az_index}"].id
+    aws_subnet.private_us_east_1[az_index].id
   ]
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-db-subnet-group"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-db-subnet-group"
+    Region = "us-east-1"
   })
 }
 
-# RDS Aurora cluster per region
-resource "aws_rds_cluster" "main" {
-  for_each = toset(var.regions)
+# DB subnet group for RDS - eu-west-1
+resource "aws_db_subnet_group" "eu_west_1" {
+  provider = aws.eu-west-1
+
+  name = "${local.environment}-eu-west-1-db-subnet-group"
+  subnet_ids = [
+    for az_index in range(var.az_count) :
+    aws_subnet.private_eu_west_1[az_index].id
+  ]
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-db-subnet-group"
+    Region = "eu-west-1"
+  })
+}
+
+# DB subnet group for RDS - ap-southeast-1
+resource "aws_db_subnet_group" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  name = "${local.environment}-ap-southeast-1-db-subnet-group"
+  subnet_ids = [
+    for az_index in range(var.az_count) :
+    aws_subnet.private_ap_southeast_1[az_index].id
+  ]
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-db-subnet-group"
+    Region = "ap-southeast-1"
+  })
+}
+
+# RDS Aurora cluster - us-east-1
+resource "aws_rds_cluster" "us_east_1" {
   provider = aws.us-east-1
 
-  cluster_identifier              = "${local.environment}-${each.key}-aurora-cluster"
+  cluster_identifier              = "${local.environment}-us-east-1-aurora-cluster"
   engine                          = "aurora-mysql"
   engine_version                  = "8.0.mysql_aurora.3.02.0"
   database_name                   = "payment_db"
   master_username                 = "admin"
   manage_master_user_password     = true
-  master_user_secret_kms_key_id   = local.kms_main[each.key].arn
-  db_subnet_group_name            = local.db_subnet_group_main[each.key].name
-  vpc_security_group_ids          = [local.rds_security_groups[each.key].id]
+  master_user_secret_kms_key_id   = aws_kms_key.us_east_1.arn
+  db_subnet_group_name            = aws_db_subnet_group.us_east_1.name
+  vpc_security_group_ids          = [aws_security_group.rds_us_east_1.id]
   storage_encrypted               = true
-  kms_key_id                      = local.kms_main[each.key].arn
+  kms_key_id                      = aws_kms_key.us_east_1.arn
   backup_retention_period         = 7
   preferred_backup_window         = "03:00-04:00"
   preferred_maintenance_window    = "sun:04:00-sun:05:00"
@@ -828,47 +1102,138 @@ resource "aws_rds_cluster" "main" {
   deletion_protection             = false # Explicitly set to false as required
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-aurora-cluster"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-aurora-cluster"
+    Region = "us-east-1"
   })
 }
 
-# RDS Aurora cluster instances
-resource "aws_rds_cluster_instance" "main" {
-  for_each = {
-    for instance in flatten([
-      for region in var.regions : [
-        for i in range(2) : { # 2 instances per cluster for HA
-          key    = "${region}-${i}"
-          region = region
-          index  = i
-        }
-      ]
-    ]) : instance.key => instance
-  }
+# RDS Aurora cluster - eu-west-1
+resource "aws_rds_cluster" "eu_west_1" {
+  provider = aws.eu-west-1
 
-  provider                     = aws.us-east-1
-  identifier                   = "${local.environment}-${each.value.region}-aurora-instance-${each.value.index}"
-  cluster_identifier           = local.rds_cluster_main[each.value.region].id
-  instance_class               = var.rds_instance_class[local.environment]
-  engine                       = local.rds_cluster_main[each.value.region].engine
-  engine_version               = local.rds_cluster_main[each.value.region].engine_version
-  performance_insights_enabled = true
-  monitoring_interval          = 60
-  monitoring_role_arn          = local.rds_monitoring_main[each.value.region].arn
+  cluster_identifier              = "${local.environment}-eu-west-1-aurora-cluster"
+  engine                          = "aurora-mysql"
+  engine_version                  = "8.0.mysql_aurora.3.02.0"
+  database_name                   = "payment_db"
+  master_username                 = "admin"
+  manage_master_user_password     = true
+  master_user_secret_kms_key_id   = aws_kms_key.eu_west_1.arn
+  db_subnet_group_name            = aws_db_subnet_group.eu_west_1.name
+  vpc_security_group_ids          = [aws_security_group.rds_eu_west_1.id]
+  storage_encrypted               = true
+  kms_key_id                      = aws_kms_key.eu_west_1.arn
+  backup_retention_period         = 7
+  preferred_backup_window         = "03:00-04:00"
+  preferred_maintenance_window    = "sun:04:00-sun:05:00"
+  enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
+  skip_final_snapshot             = true
+  deletion_protection             = false # Explicitly set to false as required
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.value.region}-aurora-instance-${each.value.index}"
-    Region = each.value.region
+    Name   = "${local.environment}-eu-west-1-aurora-cluster"
+    Region = "eu-west-1"
   })
 }
 
-# IAM role for RDS enhanced monitoring
-resource "aws_iam_role" "rds_monitoring" {
-  for_each = toset(var.regions)
+# RDS Aurora cluster - ap-southeast-1
+resource "aws_rds_cluster" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  cluster_identifier              = "${local.environment}-ap-southeast-1-aurora-cluster"
+  engine                          = "aurora-mysql"
+  engine_version                  = "8.0.mysql_aurora.3.02.0"
+  database_name                   = "payment_db"
+  master_username                 = "admin"
+  manage_master_user_password     = true
+  master_user_secret_kms_key_id   = aws_kms_key.ap_southeast_1.arn
+  db_subnet_group_name            = aws_db_subnet_group.ap_southeast_1.name
+  vpc_security_group_ids          = [aws_security_group.rds_ap_southeast_1.id]
+  storage_encrypted               = true
+  kms_key_id                      = aws_kms_key.ap_southeast_1.arn
+  backup_retention_period         = 7
+  preferred_backup_window         = "03:00-04:00"
+  preferred_maintenance_window    = "sun:04:00-sun:05:00"
+  enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
+  skip_final_snapshot             = true
+  deletion_protection             = false # Explicitly set to false as required
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-aurora-cluster"
+    Region = "ap-southeast-1"
+  })
+}
+
+# RDS Aurora cluster instances - us-east-1
+resource "aws_rds_cluster_instance" "us_east_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(2) : i => i # 2 instances per cluster for HA
+  }
+
+  identifier                   = "${local.environment}-us-east-1-aurora-instance-${each.value}"
+  cluster_identifier           = aws_rds_cluster.us_east_1.id
+  instance_class               = var.rds_instance_class[local.environment]
+  engine                       = aws_rds_cluster.us_east_1.engine
+  engine_version               = aws_rds_cluster.us_east_1.engine_version
+  performance_insights_enabled = true
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_monitoring_us_east_1.arn
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-us-east-1-aurora-instance-${each.value}"
+    Region = "us-east-1"
+  })
+}
+
+# RDS Aurora cluster instances - eu-west-1
+resource "aws_rds_cluster_instance" "eu_west_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(2) : i => i # 2 instances per cluster for HA
+  }
+
+  identifier                   = "${local.environment}-eu-west-1-aurora-instance-${each.value}"
+  cluster_identifier           = aws_rds_cluster.eu_west_1.id
+  instance_class               = var.rds_instance_class[local.environment]
+  engine                       = aws_rds_cluster.eu_west_1.engine
+  engine_version               = aws_rds_cluster.eu_west_1.engine_version
+  performance_insights_enabled = true
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_monitoring_eu_west_1.arn
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-aurora-instance-${each.value}"
+    Region = "eu-west-1"
+  })
+}
+
+# RDS Aurora cluster instances - ap-southeast-1
+resource "aws_rds_cluster_instance" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(2) : i => i # 2 instances per cluster for HA
+  }
+
+  identifier                   = "${local.environment}-ap-southeast-1-aurora-instance-${each.value}"
+  cluster_identifier           = aws_rds_cluster.ap_southeast_1.id
+  instance_class               = var.rds_instance_class[local.environment]
+  engine                       = aws_rds_cluster.ap_southeast_1.engine
+  engine_version               = aws_rds_cluster.ap_southeast_1.engine_version
+  performance_insights_enabled = true
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_monitoring_ap_southeast_1.arn
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-aurora-instance-${each.value}"
+    Region = "ap-southeast-1"
+  })
+}
+
+# IAM role for RDS enhanced monitoring - us-east-1
+resource "aws_iam_role" "rds_monitoring_us_east_1" {
   provider = aws.us-east-1
 
-  name = "${local.environment}-${each.key}-rds-monitoring-role"
+  name = "${local.environment}-us-east-1-rds-monitoring-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -882,62 +1247,187 @@ resource "aws_iam_role" "rds_monitoring" {
   })
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-rds-monitoring-role"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-rds-monitoring-role"
+    Region = "us-east-1"
   })
 }
 
-resource "aws_iam_role_policy_attachment" "rds_monitoring" {
-  for_each = toset(var.regions)
+# IAM role for RDS enhanced monitoring - eu-west-1
+resource "aws_iam_role" "rds_monitoring_eu_west_1" {
+  provider = aws.eu-west-1
+
+  name = "${local.environment}-eu-west-1-rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "monitoring.rds.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-rds-monitoring-role"
+    Region = "eu-west-1"
+  })
+}
+
+# IAM role for RDS enhanced monitoring - ap-southeast-1
+resource "aws_iam_role" "rds_monitoring_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  name = "${local.environment}-ap-southeast-1-rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "monitoring.rds.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-rds-monitoring-role"
+    Region = "ap-southeast-1"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring_us_east_1" {
   provider = aws.us-east-1
 
-  role       = local.rds_monitoring_main[each.key].name
+  role       = aws_iam_role.rds_monitoring_us_east_1.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
-# S3 buckets for transaction logs
-resource "aws_s3_bucket" "transaction_logs" {
-  for_each = toset(var.regions)
+resource "aws_iam_role_policy_attachment" "rds_monitoring_eu_west_1" {
+  provider = aws.eu-west-1
+
+  role       = aws_iam_role.rds_monitoring_eu_west_1.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  role       = aws_iam_role.rds_monitoring_ap_southeast_1.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+# S3 buckets for transaction logs - us-east-1
+resource "aws_s3_bucket" "transaction_logs_us_east_1" {
   provider = aws.us-east-1
 
-  bucket = "${local.environment}-${each.key}-transaction-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.environment}-us-east-1-transaction-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-transaction-logs"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-transaction-logs"
+    Region = "us-east-1"
   })
 }
 
-resource "aws_s3_bucket_versioning" "transaction_logs" {
-  for_each = toset(var.regions)
+# S3 buckets for transaction logs - eu-west-1
+resource "aws_s3_bucket" "transaction_logs_eu_west_1" {
+  provider = aws.eu-west-1
+
+  bucket = "${local.environment}-eu-west-1-transaction-logs-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-transaction-logs"
+    Region = "eu-west-1"
+  })
+}
+
+# S3 buckets for transaction logs - ap-southeast-1
+resource "aws_s3_bucket" "transaction_logs_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  bucket = "${local.environment}-ap-southeast-1-transaction-logs-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-transaction-logs"
+    Region = "ap-southeast-1"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "transaction_logs_us_east_1" {
   provider = aws.us-east-1
 
-  bucket = local.s3_bucket_transaction_logs_main[each.key].id
+  bucket = aws_s3_bucket.transaction_logs_us_east_1.id
 
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs" {
-  for_each = toset(var.regions)
+resource "aws_s3_bucket_versioning" "transaction_logs_eu_west_1" {
+  provider = aws.eu-west-1
+
+  bucket = aws_s3_bucket.transaction_logs_eu_west_1.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "transaction_logs_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  bucket = aws_s3_bucket.transaction_logs_ap_southeast_1.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs_us_east_1" {
   provider = aws.us-east-1
 
-  bucket = local.s3_bucket_transaction_logs_main[each.key].id
+  bucket = aws_s3_bucket.transaction_logs_us_east_1.id
 
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
-      kms_master_key_id = local.kms_main[each.key].arn
+      kms_master_key_id = aws_kms_key.us_east_1.arn
     }
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "transaction_logs" {
-  for_each = toset(var.regions)
+resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs_eu_west_1" {
+  provider = aws.eu-west-1
+
+  bucket = aws_s3_bucket.transaction_logs_eu_west_1.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.eu_west_1.arn
+    }
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  bucket = aws_s3_bucket.transaction_logs_ap_southeast_1.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.ap_southeast_1.arn
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "transaction_logs_us_east_1" {
   provider = aws.us-east-1
 
-  bucket = aws_s3_bucket.transaction_logs[each.key].id
+  bucket = aws_s3_bucket.transaction_logs_us_east_1.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -945,11 +1435,32 @@ resource "aws_s3_bucket_public_access_block" "transaction_logs" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs" {
-  for_each = toset(var.regions)
+resource "aws_s3_bucket_public_access_block" "transaction_logs_eu_west_1" {
+  provider = aws.eu-west-1
+
+  bucket = aws_s3_bucket.transaction_logs_eu_west_1.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "transaction_logs_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  bucket = aws_s3_bucket.transaction_logs_ap_southeast_1.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs_us_east_1" {
   provider = aws.us-east-1
 
-  bucket = aws_s3_bucket.transaction_logs[each.key].id
+  bucket = aws_s3_bucket.transaction_logs_us_east_1.id
 
   rule {
     id     = "transition-to-glacier"
@@ -966,12 +1477,51 @@ resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs" {
   }
 }
 
-# IAM role for Lambda functions
-resource "aws_iam_role" "lambda" {
-  for_each = toset(var.regions)
+resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs_eu_west_1" {
+  provider = aws.eu-west-1
+
+  bucket = aws_s3_bucket.transaction_logs_eu_west_1.id
+
+  rule {
+    id     = "transition-to-glacier"
+    status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER_IR" # Glacier Instant Retrieval
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "transaction_logs_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  bucket = aws_s3_bucket.transaction_logs_ap_southeast_1.id
+
+  rule {
+    id     = "transition-to-glacier"
+    status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER_IR" # Glacier Instant Retrieval
+    }
+  }
+}
+
+# IAM role for Lambda functions - us-east-1
+resource "aws_iam_role" "lambda_us_east_1" {
   provider = aws.us-east-1
 
-  name = "${local.environment}-${each.key}-lambda-role"
+  name = "${local.environment}-us-east-1-lambda-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -985,18 +1535,63 @@ resource "aws_iam_role" "lambda" {
   })
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-lambda-role"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-lambda-role"
+    Region = "us-east-1"
   })
 }
 
-# Lambda execution policy with least privilege
-resource "aws_iam_role_policy" "lambda" {
-  for_each = toset(var.regions)
+# IAM role for Lambda functions - eu-west-1
+resource "aws_iam_role" "lambda_eu_west_1" {
+  provider = aws.eu-west-1
+
+  name = "${local.environment}-eu-west-1-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-lambda-role"
+    Region = "eu-west-1"
+  })
+}
+
+# IAM role for Lambda functions - ap-southeast-1
+resource "aws_iam_role" "lambda_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  name = "${local.environment}-ap-southeast-1-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-lambda-role"
+    Region = "ap-southeast-1"
+  })
+}
+
+# Lambda execution policy with least privilege - us-east-1
+resource "aws_iam_role_policy" "lambda_us_east_1" {
   provider = aws.us-east-1
 
-  name = "${local.environment}-${each.key}-lambda-policy"
-  role = aws_iam_role.lambda[each.key].id
+  name = "${local.environment}-us-east-1-lambda-policy"
+  role = aws_iam_role.lambda_us_east_1.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1008,7 +1603,7 @@ resource "aws_iam_role_policy" "lambda" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${each.key}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -1027,7 +1622,7 @@ resource "aws_iam_role_policy" "lambda" {
           "s3:PutObject",
           "s3:PutObjectAcl"
         ]
-        Resource = "${aws_s3_bucket.transaction_logs[each.key].arn}/*"
+        Resource = "${aws_s3_bucket.transaction_logs_us_east_1.arn}/*"
       },
       {
         Effect = "Allow"
@@ -1035,20 +1630,119 @@ resource "aws_iam_role_policy" "lambda" {
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = local.kms_main[each.key].arn
+        Resource = aws_kms_key.us_east_1.arn
       }
     ]
   })
 }
 
-# Lambda function for payment validation
-resource "aws_lambda_function" "payment_validator" {
-  for_each = toset(var.regions)
+# Lambda execution policy with least privilege - eu-west-1
+resource "aws_iam_role_policy" "lambda_eu_west_1" {
+  provider = aws.eu-west-1
+
+  name = "${local.environment}-eu-west-1-lambda-policy"
+  role = aws_iam_role.lambda_eu_west_1.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:eu-west-1:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${aws_s3_bucket.transaction_logs_eu_west_1.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.eu_west_1.arn
+      }
+    ]
+  })
+}
+
+# Lambda execution policy with least privilege - ap-southeast-1
+resource "aws_iam_role_policy" "lambda_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  name = "${local.environment}-ap-southeast-1-lambda-policy"
+  role = aws_iam_role.lambda_ap_southeast_1.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:ap-southeast-1:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${aws_s3_bucket.transaction_logs_ap_southeast_1.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.ap_southeast_1.arn
+      }
+    ]
+  })
+}
+
+# Lambda function for payment validation - us-east-1
+resource "aws_lambda_function" "payment_validator_us_east_1" {
   provider = aws.us-east-1
 
   filename                       = "lambda_payload.zip"
-  function_name                  = "${local.environment}-${each.key}-payment-validator"
-  role                           = aws_iam_role.lambda[each.key].arn
+  function_name                  = "${local.environment}-us-east-1-payment-validator"
+  role                           = aws_iam_role.lambda_us_east_1.arn
   handler                        = "index.handler"
   source_code_hash               = filebase64sha256("lambda_payload.zip")
   runtime                        = "python3.9"
@@ -1059,177 +1753,477 @@ resource "aws_lambda_function" "payment_validator" {
   vpc_config {
     subnet_ids = [
       for az_index in range(var.az_count) :
-      aws_subnet.private["${each.key}-private-${az_index}"].id
+      aws_subnet.private_us_east_1[az_index].id
     ]
-    security_group_ids = [local.lambda_security_groups[each.key].id]
+    security_group_ids = [aws_security_group.lambda_us_east_1.id]
   }
 
   environment {
     variables = {
       ENVIRONMENT = local.environment
-      REGION      = each.key
-      S3_BUCKET   = aws_s3_bucket.transaction_logs[each.key].id
-      DB_ENDPOINT = aws_rds_cluster.main[each.key].endpoint
-      KMS_KEY_ID  = local.kms_main[each.key].id
+      REGION      = "us-east-1"
+      S3_BUCKET   = aws_s3_bucket.transaction_logs_us_east_1.id
+      DB_ENDPOINT = aws_rds_cluster.us_east_1.endpoint
+      KMS_KEY_ID  = aws_kms_key.us_east_1.id
     }
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-payment-validator"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-payment-validator"
+    Region = "us-east-1"
+  })
+}
+
+# Lambda function for payment validation - eu-west-1
+resource "aws_lambda_function" "payment_validator_eu_west_1" {
+  provider = aws.eu-west-1
+
+  filename                       = "lambda_payload.zip"
+  function_name                  = "${local.environment}-eu-west-1-payment-validator"
+  role                           = aws_iam_role.lambda_eu_west_1.arn
+  handler                        = "index.handler"
+  source_code_hash               = filebase64sha256("lambda_payload.zip")
+  runtime                        = "python3.9"
+  timeout                        = 30
+  memory_size                    = var.lambda_memory_size[local.environment]
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions[local.environment]
+
+  vpc_config {
+    subnet_ids = [
+      for az_index in range(var.az_count) :
+      aws_subnet.private_eu_west_1[az_index].id
+    ]
+    security_group_ids = [aws_security_group.lambda_eu_west_1.id]
+  }
+
+  environment {
+    variables = {
+      ENVIRONMENT = local.environment
+      REGION      = "eu-west-1"
+      S3_BUCKET   = aws_s3_bucket.transaction_logs_eu_west_1.id
+      DB_ENDPOINT = aws_rds_cluster.eu_west_1.endpoint
+      KMS_KEY_ID  = aws_kms_key.eu_west_1.id
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-payment-validator"
+    Region = "eu-west-1"
+  })
+}
+
+# Lambda function for payment validation - ap-southeast-1
+resource "aws_lambda_function" "payment_validator_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  filename                       = "lambda_payload.zip"
+  function_name                  = "${local.environment}-ap-southeast-1-payment-validator"
+  role                           = aws_iam_role.lambda_ap_southeast_1.arn
+  handler                        = "index.handler"
+  source_code_hash               = filebase64sha256("lambda_payload.zip")
+  runtime                        = "python3.9"
+  timeout                        = 30
+  memory_size                    = var.lambda_memory_size[local.environment]
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions[local.environment]
+
+  vpc_config {
+    subnet_ids = [
+      for az_index in range(var.az_count) :
+      aws_subnet.private_ap_southeast_1[az_index].id
+    ]
+    security_group_ids = [aws_security_group.lambda_ap_southeast_1.id]
+  }
+
+  environment {
+    variables = {
+      ENVIRONMENT = local.environment
+      REGION      = "ap-southeast-1"
+      S3_BUCKET   = aws_s3_bucket.transaction_logs_ap_southeast_1.id
+      DB_ENDPOINT = aws_rds_cluster.ap_southeast_1.endpoint
+      KMS_KEY_ID  = aws_kms_key.ap_southeast_1.id
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-payment-validator"
+    Region = "ap-southeast-1"
   })
 }
 
 # Note: Create a dummy lambda_payload.zip file with minimal Python code before running
 # Example: echo "def handler(event, context): return {'statusCode': 200}" > index.py && zip lambda_payload.zip index.py
 
-# API Gateway REST API
-resource "aws_api_gateway_rest_api" "main" {
-  for_each = toset(var.regions)
+# API Gateway REST API - us-east-1
+resource "aws_api_gateway_rest_api" "us_east_1" {
   provider = aws.us-east-1
 
-  name        = "${local.environment}-${each.key}-payment-api"
-  description = "Payment processing API for ${each.key}"
+  name        = "${local.environment}-us-east-1-payment-api"
+  description = "Payment processing API for us-east-1"
 
   endpoint_configuration {
     types = ["REGIONAL"]
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-payment-api"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-payment-api"
+    Region = "us-east-1"
   })
 }
 
-# API Gateway resource
-resource "aws_api_gateway_resource" "payment" {
-  for_each = toset(var.regions)
+# API Gateway REST API - eu-west-1
+resource "aws_api_gateway_rest_api" "eu_west_1" {
+  provider = aws.eu-west-1
+
+  name        = "${local.environment}-eu-west-1-payment-api"
+  description = "Payment processing API for eu-west-1"
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-payment-api"
+    Region = "eu-west-1"
+  })
+}
+
+# API Gateway REST API - ap-southeast-1
+resource "aws_api_gateway_rest_api" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  name        = "${local.environment}-ap-southeast-1-payment-api"
+  description = "Payment processing API for ap-southeast-1"
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-payment-api"
+    Region = "ap-southeast-1"
+  })
+}
+
+# API Gateway resource - us-east-1
+resource "aws_api_gateway_resource" "payment_us_east_1" {
   provider = aws.us-east-1
 
-  rest_api_id = aws_api_gateway_rest_api.main[each.key].id
-  parent_id   = aws_api_gateway_rest_api.main[each.key].root_resource_id
+  rest_api_id = aws_api_gateway_rest_api.us_east_1.id
+  parent_id   = aws_api_gateway_rest_api.us_east_1.root_resource_id
   path_part   = "payment"
 }
 
-# API Gateway method
-resource "aws_api_gateway_method" "payment_post" {
-  for_each = toset(var.regions)
+# API Gateway resource - eu-west-1
+resource "aws_api_gateway_resource" "payment_eu_west_1" {
+  provider = aws.eu-west-1
+
+  rest_api_id = aws_api_gateway_rest_api.eu_west_1.id
+  parent_id   = aws_api_gateway_rest_api.eu_west_1.root_resource_id
+  path_part   = "payment"
+}
+
+# API Gateway resource - ap-southeast-1
+resource "aws_api_gateway_resource" "payment_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  rest_api_id = aws_api_gateway_rest_api.ap_southeast_1.id
+  parent_id   = aws_api_gateway_rest_api.ap_southeast_1.root_resource_id
+  path_part   = "payment"
+}
+
+# API Gateway method - us-east-1
+resource "aws_api_gateway_method" "payment_post_us_east_1" {
   provider = aws.us-east-1
 
-  rest_api_id   = aws_api_gateway_rest_api.main[each.key].id
-  resource_id   = aws_api_gateway_resource.payment[each.key].id
+  rest_api_id   = aws_api_gateway_rest_api.us_east_1.id
+  resource_id   = aws_api_gateway_resource.payment_us_east_1.id
   http_method   = "POST"
   authorization = "NONE"
 }
 
-# API Gateway Lambda integration
-resource "aws_api_gateway_integration" "lambda" {
-  for_each = toset(var.regions)
+# API Gateway method - eu-west-1
+resource "aws_api_gateway_method" "payment_post_eu_west_1" {
+  provider = aws.eu-west-1
+
+  rest_api_id   = aws_api_gateway_rest_api.eu_west_1.id
+  resource_id   = aws_api_gateway_resource.payment_eu_west_1.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+# API Gateway method - ap-southeast-1
+resource "aws_api_gateway_method" "payment_post_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  rest_api_id   = aws_api_gateway_rest_api.ap_southeast_1.id
+  resource_id   = aws_api_gateway_resource.payment_ap_southeast_1.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+# API Gateway Lambda integration - us-east-1
+resource "aws_api_gateway_integration" "lambda_us_east_1" {
   provider = aws.us-east-1
 
-  rest_api_id = aws_api_gateway_rest_api.main[each.key].id
-  resource_id = aws_api_gateway_resource.payment[each.key].id
-  http_method = aws_api_gateway_method.payment_post[each.key].http_method
+  rest_api_id = aws_api_gateway_rest_api.us_east_1.id
+  resource_id = aws_api_gateway_resource.payment_us_east_1.id
+  http_method = aws_api_gateway_method.payment_post_us_east_1.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.payment_validator[each.key].invoke_arn
+  uri                     = aws_lambda_function.payment_validator_us_east_1.invoke_arn
 }
 
-# Lambda permission for API Gateway
-resource "aws_lambda_permission" "api_gateway" {
-  for_each = toset(var.regions)
+# API Gateway Lambda integration - eu-west-1
+resource "aws_api_gateway_integration" "lambda_eu_west_1" {
+  provider = aws.eu-west-1
+
+  rest_api_id = aws_api_gateway_rest_api.eu_west_1.id
+  resource_id = aws_api_gateway_resource.payment_eu_west_1.id
+  http_method = aws_api_gateway_method.payment_post_eu_west_1.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.payment_validator_eu_west_1.invoke_arn
+}
+
+# API Gateway Lambda integration - ap-southeast-1
+resource "aws_api_gateway_integration" "lambda_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  rest_api_id = aws_api_gateway_rest_api.ap_southeast_1.id
+  resource_id = aws_api_gateway_resource.payment_ap_southeast_1.id
+  http_method = aws_api_gateway_method.payment_post_ap_southeast_1.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.payment_validator_ap_southeast_1.invoke_arn
+}
+
+# Lambda permission for API Gateway - us-east-1
+resource "aws_lambda_permission" "api_gateway_us_east_1" {
   provider = aws.us-east-1
 
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.payment_validator[each.key].function_name
+  function_name = aws_lambda_function.payment_validator_us_east_1.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.main[each.key].execution_arn}/*/*"
+  source_arn    = "${aws_api_gateway_rest_api.us_east_1.execution_arn}/*/*"
 }
 
-# API Gateway deployment
-resource "aws_api_gateway_deployment" "main" {
-  for_each = toset(var.regions)
+# Lambda permission for API Gateway - eu-west-1
+resource "aws_lambda_permission" "api_gateway_eu_west_1" {
+  provider = aws.eu-west-1
+
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.payment_validator_eu_west_1.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.eu_west_1.execution_arn}/*/*"
+}
+
+# Lambda permission for API Gateway - ap-southeast-1
+resource "aws_lambda_permission" "api_gateway_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.payment_validator_ap_southeast_1.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.ap_southeast_1.execution_arn}/*/*"
+}
+
+# API Gateway deployment - us-east-1
+resource "aws_api_gateway_deployment" "us_east_1" {
   provider = aws.us-east-1
 
   depends_on = [
-    aws_api_gateway_integration.lambda
+    aws_api_gateway_integration.lambda_us_east_1
   ]
 
-  rest_api_id = aws_api_gateway_rest_api.main[each.key].id
+  rest_api_id = aws_api_gateway_rest_api.us_east_1.id
   stage_name  = local.environment
 }
 
-# VPC Peering connections between all region pairs
-resource "aws_vpc_peering_connection" "peers" {
-  for_each = {
-    for pair in local.region_pairs : pair.key => pair
-  }
+# API Gateway deployment - eu-west-1
+resource "aws_api_gateway_deployment" "eu_west_1" {
+  provider = aws.eu-west-1
 
+  depends_on = [
+    aws_api_gateway_integration.lambda_eu_west_1
+  ]
+
+  rest_api_id = aws_api_gateway_rest_api.eu_west_1.id
+  stage_name  = local.environment
+}
+
+# API Gateway deployment - ap-southeast-1
+resource "aws_api_gateway_deployment" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  depends_on = [
+    aws_api_gateway_integration.lambda_ap_southeast_1
+  ]
+
+  rest_api_id = aws_api_gateway_rest_api.ap_southeast_1.id
+  stage_name  = local.environment
+}
+
+# VPC Peering connection: us-east-1 to eu-west-1
+resource "aws_vpc_peering_connection" "us_east_1_to_eu_west_1" {
   provider = aws.us-east-1
 
-  vpc_id      = local.vpc_main[each.value.region1].id
-  peer_vpc_id = local.vpc_main[each.value.region2].id
-  peer_region = each.value.region2
+  vpc_id      = aws_vpc.us_east_1.id
+  peer_vpc_id = aws_vpc.eu_west_1.id
+  peer_region = "eu-west-1"
   auto_accept = false
 
   tags = merge(local.common_tags, {
-    Name = "${local.environment}-peering-${each.value.region1}-to-${each.value.region2}"
+    Name = "${local.environment}-peering-us-east-1-to-eu-west-1"
   })
 }
 
-# Accept VPC peering connections
-resource "aws_vpc_peering_connection_accepter" "peers" {
-  for_each = {
-    for pair in local.region_pairs : pair.key => pair
-  }
-
+# VPC Peering connection: us-east-1 to ap-southeast-1
+resource "aws_vpc_peering_connection" "us_east_1_to_ap_southeast_1" {
   provider = aws.us-east-1
 
-  vpc_peering_connection_id = aws_vpc_peering_connection.peers[each.key].id
+  vpc_id      = aws_vpc.us_east_1.id
+  peer_vpc_id = aws_vpc.ap_southeast_1.id
+  peer_region = "ap-southeast-1"
+  auto_accept = false
+
+  tags = merge(local.common_tags, {
+    Name = "${local.environment}-peering-us-east-1-to-ap-southeast-1"
+  })
+}
+
+# VPC Peering connection: eu-west-1 to ap-southeast-1
+resource "aws_vpc_peering_connection" "eu_west_1_to_ap_southeast_1" {
+  provider = aws.eu-west-1
+
+  vpc_id      = aws_vpc.eu_west_1.id
+  peer_vpc_id = aws_vpc.ap_southeast_1.id
+  peer_region = "ap-southeast-1"
+  auto_accept = false
+
+  tags = merge(local.common_tags, {
+    Name = "${local.environment}-peering-eu-west-1-to-ap-southeast-1"
+  })
+}
+
+# Accept VPC peering connection: us-east-1 to eu-west-1 (accept in eu-west-1)
+resource "aws_vpc_peering_connection_accepter" "us_east_1_to_eu_west_1" {
+  provider = aws.eu-west-1
+
+  vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_eu_west_1.id
   auto_accept               = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.environment}-peering-accepter-${each.value.region1}-to-${each.value.region2}"
+    Name = "${local.environment}-peering-accepter-us-east-1-to-eu-west-1"
   })
 }
 
-# Routes for VPC peering in private route tables
-resource "aws_route" "peering" {
-  for_each = {
-    for route in flatten([
-      for pair in local.region_pairs : [
-        for az_index in range(var.az_count) : [
-          {
-            key                       = "${pair.region1}-${az_index}-to-${pair.region2}"
-            route_table_id            = aws_route_table.private["${pair.region1}-${az_index}"].id
-            destination_cidr_block    = var.vpc_cidrs[pair.region2]
-            vpc_peering_connection_id = aws_vpc_peering_connection.peers[pair.key].id
-          },
-          {
-            key                       = "${pair.region2}-${az_index}-to-${pair.region1}"
-            route_table_id            = aws_route_table.private["${pair.region2}-${az_index}"].id
-            destination_cidr_block    = var.vpc_cidrs[pair.region1]
-            vpc_peering_connection_id = aws_vpc_peering_connection.peers[pair.key].id
-          }
-        ]
-      ]
-    ]) : route.key => route
-  }
+# Accept VPC peering connection: us-east-1 to ap-southeast-1 (accept in ap-southeast-1)
+resource "aws_vpc_peering_connection_accepter" "us_east_1_to_ap_southeast_1" {
+  provider = aws.ap-southeast-1
 
-  provider                  = aws.us-east-1
-  route_table_id            = each.value.route_table_id
-  destination_cidr_block    = each.value.destination_cidr_block
-  vpc_peering_connection_id = each.value.vpc_peering_connection_id
+  vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_ap_southeast_1.id
+  auto_accept               = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.environment}-peering-accepter-us-east-1-to-ap-southeast-1"
+  })
 }
 
-# CloudWatch Dashboard for monitoring
-resource "aws_cloudwatch_dashboard" "main" {
-  for_each = toset(var.regions)
+# Accept VPC peering connection: eu-west-1 to ap-southeast-1 (accept in ap-southeast-1)
+resource "aws_vpc_peering_connection_accepter" "eu_west_1_to_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  vpc_peering_connection_id = aws_vpc_peering_connection.eu_west_1_to_ap_southeast_1.id
+  auto_accept               = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.environment}-peering-accepter-eu-west-1-to-ap-southeast-1"
+  })
+}
+
+# Routes for VPC peering - us-east-1 to eu-west-1
+resource "aws_route" "us_east_1_to_eu_west_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  route_table_id            = aws_route_table.private_us_east_1[each.value].id
+  destination_cidr_block    = var.vpc_cidrs["eu-west-1"]
+  vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_eu_west_1.id
+}
+
+# Routes for VPC peering - eu-west-1 to us-east-1
+resource "aws_route" "eu_west_1_to_us_east_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  route_table_id            = aws_route_table.private_eu_west_1[each.value].id
+  destination_cidr_block    = var.vpc_cidrs["us-east-1"]
+  vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_eu_west_1.id
+}
+
+# Routes for VPC peering - us-east-1 to ap-southeast-1
+resource "aws_route" "us_east_1_to_ap_southeast_1" {
+  provider = aws.us-east-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  route_table_id            = aws_route_table.private_us_east_1[each.value].id
+  destination_cidr_block    = var.vpc_cidrs["ap-southeast-1"]
+  vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_ap_southeast_1.id
+}
+
+# Routes for VPC peering - ap-southeast-1 to us-east-1
+resource "aws_route" "ap_southeast_1_to_us_east_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  route_table_id            = aws_route_table.private_ap_southeast_1[each.value].id
+  destination_cidr_block    = var.vpc_cidrs["us-east-1"]
+  vpc_peering_connection_id = aws_vpc_peering_connection.us_east_1_to_ap_southeast_1.id
+}
+
+# Routes for VPC peering - eu-west-1 to ap-southeast-1
+resource "aws_route" "eu_west_1_to_ap_southeast_1" {
+  provider = aws.eu-west-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  route_table_id            = aws_route_table.private_eu_west_1[each.value].id
+  destination_cidr_block    = var.vpc_cidrs["ap-southeast-1"]
+  vpc_peering_connection_id = aws_vpc_peering_connection.eu_west_1_to_ap_southeast_1.id
+}
+
+# Routes for VPC peering - ap-southeast-1 to eu-west-1
+resource "aws_route" "ap_southeast_1_to_eu_west_1" {
+  provider = aws.ap-southeast-1
+  for_each = {
+    for i in range(var.az_count) : i => i
+  }
+
+  route_table_id            = aws_route_table.private_ap_southeast_1[each.value].id
+  destination_cidr_block    = var.vpc_cidrs["eu-west-1"]
+  vpc_peering_connection_id = aws_vpc_peering_connection.eu_west_1_to_ap_southeast_1.id
+}
+
+# CloudWatch Dashboard for monitoring - us-east-1
+resource "aws_cloudwatch_dashboard" "us_east_1" {
   provider = aws.us-east-1
 
-  dashboard_name = "${local.environment}-${each.key}-payment-dashboard"
+  dashboard_name = "${local.environment}-us-east-1-payment-dashboard"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -1244,7 +2238,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           period = 300
           stat   = "Average"
-          region = each.key
+          region = "us-east-1"
           title  = "RDS Metrics"
         }
       },
@@ -1259,7 +2253,91 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           period = 300
           stat   = "Average"
-          region = each.key
+          region = "us-east-1"
+          title  = "Lambda Metrics"
+        }
+      }
+    ]
+  })
+}
+
+# CloudWatch Dashboard for monitoring - eu-west-1
+resource "aws_cloudwatch_dashboard" "eu_west_1" {
+  provider = aws.eu-west-1
+
+  dashboard_name = "${local.environment}-eu-west-1-payment-dashboard"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/RDS", "CPUUtilization", { stat = "Average", label = "RDS CPU" }],
+            [".", "DatabaseConnections", { stat = "Average", label = "DB Connections" }],
+            [".", "AuroraReplicaLag", { stat = "Average", label = "Replica Lag" }],
+            [".", "DiskQueueDepth", { stat = "Average", label = "Disk Queue" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = "eu-west-1"
+          title  = "RDS Metrics"
+        }
+      },
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Invocations", { stat = "Sum", label = "Lambda Invocations" }],
+            [".", "Errors", { stat = "Sum", label = "Lambda Errors" }],
+            [".", "Duration", { stat = "Average", label = "Lambda Duration" }],
+            [".", "ConcurrentExecutions", { stat = "Maximum", label = "Concurrent Executions" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = "eu-west-1"
+          title  = "Lambda Metrics"
+        }
+      }
+    ]
+  })
+}
+
+# CloudWatch Dashboard for monitoring - ap-southeast-1
+resource "aws_cloudwatch_dashboard" "ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  dashboard_name = "${local.environment}-ap-southeast-1-payment-dashboard"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/RDS", "CPUUtilization", { stat = "Average", label = "RDS CPU" }],
+            [".", "DatabaseConnections", { stat = "Average", label = "DB Connections" }],
+            [".", "AuroraReplicaLag", { stat = "Average", label = "Replica Lag" }],
+            [".", "DiskQueueDepth", { stat = "Average", label = "Disk Queue" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = "ap-southeast-1"
+          title  = "RDS Metrics"
+        }
+      },
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Invocations", { stat = "Sum", label = "Lambda Invocations" }],
+            [".", "Errors", { stat = "Sum", label = "Lambda Errors" }],
+            [".", "Duration", { stat = "Average", label = "Lambda Duration" }],
+            [".", "ConcurrentExecutions", { stat = "Maximum", label = "Concurrent Executions" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = "ap-southeast-1"
           title  = "Lambda Metrics"
         }
       }
@@ -1271,16 +2349,18 @@ resource "aws_cloudwatch_dashboard" "main" {
 output "api_gateway_endpoints" {
   description = "API Gateway endpoints by region"
   value = {
-    for region in var.regions : region => {
-      url = "https://${aws_api_gateway_rest_api.main[region].id}.execute-api.${region}.amazonaws.com/${local.environment}"
-    }
+    "us-east-1"      = "https://${local.api_gateways["us-east-1"].id}.execute-api.us-east-1.amazonaws.com/${local.environment}"
+    "eu-west-1"      = "https://${local.api_gateways["eu-west-1"].id}.execute-api.eu-west-1.amazonaws.com/${local.environment}"
+    "ap-southeast-1" = "https://${local.api_gateways["ap-southeast-1"].id}.execute-api.ap-southeast-1.amazonaws.com/${local.environment}"
   }
 }
 
 output "rds_cluster_endpoints" {
   description = "RDS cluster writer endpoints by region"
   value = {
-    for region in var.regions : region => aws_rds_cluster.main[region].endpoint
+    "us-east-1"      = local.rds_clusters["us-east-1"].endpoint
+    "eu-west-1"      = local.rds_clusters["eu-west-1"].endpoint
+    "ap-southeast-1" = local.rds_clusters["ap-southeast-1"].endpoint
   }
   sensitive = true
 }
@@ -1288,29 +2368,36 @@ output "rds_cluster_endpoints" {
 output "s3_bucket_names" {
   description = "S3 transaction log bucket names by region"
   value = {
-    for region in var.regions : region => aws_s3_bucket.transaction_logs[region].id
+    "us-east-1"      = local.s3_transaction_logs["us-east-1"].id
+    "eu-west-1"      = local.s3_transaction_logs["eu-west-1"].id
+    "ap-southeast-1" = local.s3_transaction_logs["ap-southeast-1"].id
   }
 }
 
 output "kms_key_arns" {
   description = "KMS key ARNs by region"
   value = {
-    for region in var.regions : region => local.kms_main[region].arn
+    "us-east-1"      = local.kms_main["us-east-1"].arn
+    "eu-west-1"      = local.kms_main["eu-west-1"].arn
+    "ap-southeast-1" = local.kms_main["ap-southeast-1"].arn
   }
 }
 
 output "vpc_ids" {
   description = "VPC IDs by region"
   value = {
-    for region in var.regions : region => local.vpc_main[region].id
+    "us-east-1"      = local.vpc_main["us-east-1"].id
+    "eu-west-1"      = local.vpc_main["eu-west-1"].id
+    "ap-southeast-1" = local.vpc_main["ap-southeast-1"].id
   }
 }
 
 output "vpc_peering_connections" {
   description = "VPC peering connection IDs"
   value = {
-    for pair in local.region_pairs :
-    "${pair.region1}-to-${pair.region2}" => aws_vpc_peering_connection.peers[pair.key].id
+    "us-east-1-to-eu-west-1"           = aws_vpc_peering_connection.us_east_1_to_eu_west_1.id
+    "us-east-1-to-ap-southeast-1"      = aws_vpc_peering_connection.us_east_1_to_ap_southeast_1.id
+    "eu-west-1-to-ap-southeast-1"      = aws_vpc_peering_connection.eu_west_1_to_ap_southeast_1.id
   }
 }
 
