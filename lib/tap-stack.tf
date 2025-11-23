@@ -467,6 +467,15 @@ resource "aws_iam_policy" "lambda_policy" {
         Resource = aws_cloudwatch_event_rule.high_risk_transaction.arn
       },
       {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      },
+      {
         Effect   = "Deny"
         Action   = "*"
         Resource = "*"
