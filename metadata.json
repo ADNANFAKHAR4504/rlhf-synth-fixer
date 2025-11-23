@@ -1,0 +1,26 @@
+{
+  "po_id": "v8o3w5",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-24T00:39:33+05:30",
+  "aws_services": [
+    "Aurora (RDS)",
+    "DynamoDB",
+    "Lambda",
+    "Route 53",
+    "EventBridge",
+    "AWS Backup",
+    "CloudWatch",
+    "IAM",
+    "Systems Manager",
+    "VPC"
+  ],
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "training_quality": 10
+}
