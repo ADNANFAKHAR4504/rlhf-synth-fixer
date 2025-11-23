@@ -447,6 +447,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    # TASK_ID is already set from step 1
    # Set absolute paths
    TASK_JSON_FILE="$MAIN_REPO_ROOT/.claude/task-${TASK_ID}.json"
+   WORKTREE_DIR="$MAIN_REPO_ROOT/worktree/synth-${TASK_ID}"
    
    # Verify file exists before proceeding
    if [ ! -f "$TASK_JSON_FILE" ]; then
@@ -454,21 +455,36 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
        exit 1
    fi
    
-   # Change to worktree directory
-   cd worktree/synth-${TASK_ID}
+   # Verify worktree directory exists (should have been created in step 1)
+   if [ ! -d "$WORKTREE_DIR" ]; then
+       echo "❌ ERROR: Worktree directory not found: $WORKTREE_DIR"
+       echo "   Worktree creation may have failed in step 1"
+       echo "   Checking git worktree list..."
+       git worktree list
+       exit 1
+   fi
    
-   # Create metadata.json and PROMPT.md inside the worktree
-   # Pass the file path directly (script handles file input at line 121-123)
-   if ! "$MAIN_REPO_ROOT/.claude/scripts/create-task-files.sh" "$TASK_JSON_FILE" "."; then
+   # Verify it's actually a git worktree
+   if [ ! -f "$WORKTREE_DIR/.git" ] && [ ! -d "$WORKTREE_DIR/.git" ]; then
+       echo "❌ ERROR: Directory exists but is not a git worktree: $WORKTREE_DIR"
+       exit 1
+   fi
+   
+   # CRITICAL: Run script from MAIN_REPO_ROOT so it can find .claude/docs/references/
+   # The script needs access to .claude/docs/references/iac-subtasks-subject-labels.json
+   # Pass absolute path to worktree as output directory
+   if ! (cd "$MAIN_REPO_ROOT" && "$MAIN_REPO_ROOT/.claude/scripts/create-task-files.sh" "$TASK_JSON_FILE" "$WORKTREE_DIR"); then
        echo "❌ ERROR: Failed to create metadata.json and PROMPT.md"
        echo "   Cleaning up worktree..."
-       cd "$MAIN_REPO_ROOT"
        git worktree remove "worktree/synth-${TASK_ID}" --force 2>/dev/null || true
        rm -f "$TASK_JSON_FILE"
        exit 1
    fi
    
    echo "✅ Created metadata.json and PROMPT.md in worktree"
+   
+   # Change to worktree directory AFTER files are created
+   cd "$WORKTREE_DIR"
    
    # Clean up temporary task JSON file
    rm -f "$TASK_JSON_FILE"
