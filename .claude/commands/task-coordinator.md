@@ -356,7 +356,19 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    if [ -z "$TASK_JSON_FILE" ] || [ ! -f "$TASK_JSON_FILE" ]; then
        echo "❌ ERROR: No task JSON file found in .claude/"
        echo "   iac-task-selector should have created .claude/task-{task_id}.json"
+       echo "   Files present: $(ls -1 .claude/task-*.json 2>/dev/null | wc -l)"
        exit 1
+   fi
+   
+   # Verify the file is recent (created within last 5 minutes)
+   # This catches stale files from failed previous runs
+   if command -v stat >/dev/null 2>&1; then
+       FILE_AGE=$(($(date +%s) - $(stat -f %m "$TASK_JSON_FILE" 2>/dev/null || stat -c %Y "$TASK_JSON_FILE" 2>/dev/null)))
+       if [ "$FILE_AGE" -gt 300 ]; then
+           echo "⚠️  WARNING: Task JSON file is old (${FILE_AGE}s), might be stale"
+           echo "   File: $TASK_JSON_FILE"
+           echo "   Consider cleaning up and running iac-task-selector again"
+       fi
    fi
    
    # Extract TASK_ID from filename
@@ -380,6 +392,16 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
        exit 1
    fi
    
+   # Validate JSON is well-formed (optional but recommended)
+   if command -v python3 >/dev/null 2>&1; then
+       if ! echo "$TASK_JSON" | python3 -c "import sys, json; json.loads(sys.stdin.read())" 2>/dev/null; then
+           echo "❌ ERROR: JSON syntax is invalid in task file: $TASK_JSON_FILE"
+           echo "   This indicates a problem with task-manager.sh CSV parsing"
+           rm -f "$TASK_JSON_FILE"
+           exit 1
+       fi
+   fi
+   
    # Verify TASK_ID matches what's in the JSON file (safety check)
    JSON_TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    if [ "$JSON_TASK_ID" != "$TASK_ID" ]; then
@@ -389,6 +411,13 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
        echo "   File: $TASK_JSON_FILE"
        rm -f "$TASK_JSON_FILE"
        exit 1
+   fi
+   
+   # Check for redacted service names (data quality warning)
+   if echo "$TASK_JSON" | grep -qE '\(CORE: \)|\(OPTIONAL: \)'; then
+       echo "⚠️  WARNING: Detected redacted service names in task description"
+       echo "   This may cause incomplete infrastructure generation"
+       echo "   The infrastructure generator will need to infer missing services"
    fi
    
    echo "📋 Task ID: $TASK_ID (validated)"

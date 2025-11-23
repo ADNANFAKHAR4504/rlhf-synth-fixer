@@ -56,6 +56,9 @@ If `.claude/tasks.csv` is present:
    # Verify selection was successful
    if [ $? -ne 0 ] || [ -z "$TASK_JSON" ]; then
        echo "❌ ERROR: Task selection failed"
+       echo "   Exit code: $?"
+       echo "   JSON length: ${#TASK_JSON}"
+       echo "   CSV status: $([ -f .claude/tasks.csv ] && echo 'exists' || echo 'missing')"
        exit 1
    fi
    
@@ -106,7 +109,30 @@ If `.claude/tasks.csv` is present:
        exit 1
    fi
    
+   # CRITICAL: Validate JSON is well-formed
+   if ! python3 -c "import json; json.load(open('$TASK_JSON_FILE'))" 2>/dev/null; then
+       echo "❌ ERROR: Generated JSON is malformed"
+       echo "   File: $TASK_JSON_FILE"
+       echo "   Content preview: $(head -c 200 $TASK_JSON_FILE)"
+       rm -f "$TASK_JSON_FILE"
+       # Rollback task status to pending
+       if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON validation error" 2>/dev/null; then
+           echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
+           echo "   Task $TASK_ID may remain in 'in_progress' state"
+       fi
+       exit 1
+   fi
+   
+   # Check for redacted service names (common data quality issue)
+   if echo "$TASK_JSON" | grep -q '(CORE: )\\|(OPTIONAL: )'; then
+       echo "⚠️  WARNING: Detected redacted service names in task description"
+       echo "   This may cause incomplete infrastructure generation"
+       echo "   Affected fields: problem, environment, or constraints"
+       echo "   Task will proceed but may require manual service identification"
+   fi
+   
    echo "✅ Stored task data in $TASK_JSON_FILE"
+   echo "✅ JSON validation passed"
    echo "📋 Task ID: $TASK_ID"
    echo "🔄 Ready for handoff to task-coordinator"
    echo ""
