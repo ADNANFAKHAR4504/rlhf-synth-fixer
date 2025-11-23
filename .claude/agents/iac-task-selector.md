@@ -47,10 +47,14 @@ If `.claude/tasks.csv` is present:
 
 1. **Select and update task atomically** (REQUIRED - thread-safe for parallel execution):
    ```bash
-   # Select next pending task and mark as in_progress atomically
-   # This is thread-safe and can be run from multiple agents simultaneously
-   echo "🔍 Selecting next available task..."
-   TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
+   # Check if task ID was pre-assigned (for parallel execution)
+   if [ -n "${CLAUDE_TASK_ID:-}" ]; then
+       echo "🔍 Using pre-assigned task: $CLAUDE_TASK_ID"
+       TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update "$CLAUDE_TASK_ID")
+   else
+       echo "🔍 Selecting next available task..."
+       TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
+   fi
    
    # Verify selection was successful
    if [ $? -ne 0 ] || [ -z "$TASK_JSON" ]; then

@@ -285,8 +285,30 @@ get_task() {
     grep "^$task_id," "$CSV_FILE" | head -1
 }
 
+# Get task JSON by task_id
+get_task_json() {
+    local task_id="$1"
+    [ ! -f "$CSV_FILE" ] && { log_error "CSV not found"; exit 1; }
+    
+    # Parse CSV and find the task
+    parse_csv | awk -F'\t' -v target_id="$task_id" '{
+        task_id=$1; status=$2; platform=$3; language=$4; difficulty=$5; problem=$6
+        
+        if (task_id == target_id) {
+            # Output as JSON
+            printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\"}\n",
+                   task_id, (status == "" ? "pending" : status), platform, difficulty, substr(problem, 1, 100), language
+            exit
+        }
+    }'
+}
+
 # Atomic select and update with file locking
+# Usage: select_and_update [task_id]
+# If task_id provided, uses that task (must be pending)
+# If not provided, auto-selects next pending task
 select_and_update() {
+    local specified_task_id="${1:-}"
     local task_json
     local task_id
     local exit_code=0
@@ -300,15 +322,42 @@ select_and_update() {
     # Ensure lock is released on exit
     trap "release_lock" EXIT INT TERM
     
-    # Critical section - select and update atomically
-    task_json=$(select_task) || exit_code=$?
-    
-    if [ $exit_code -ne 0 ]; then
-        release_lock
-        exit $exit_code
+    # If task_id specified, use it; otherwise auto-select
+    if [ -n "$specified_task_id" ]; then
+        # Use specified task
+        log_info "Using specified task: $specified_task_id"
+        
+        # Get task JSON
+        task_json=$(get_task_json "$specified_task_id") || exit_code=$?
+        
+        if [ $exit_code -ne 0 ] || [ -z "$task_json" ]; then
+            release_lock
+            log_error "Task $specified_task_id not found"
+            exit 1
+        fi
+        
+        # Verify task is pending
+        local current_status
+        current_status=$(echo "$task_json" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+        
+        if [ "$current_status" != "pending" ] && [ -n "$current_status" ]; then
+            release_lock
+            log_error "Task $specified_task_id is not pending (current status: $current_status)"
+            exit 1
+        fi
+        
+        task_id="$specified_task_id"
+    else
+        # Auto-select next pending task
+        task_json=$(select_task) || exit_code=$?
+        
+        if [ $exit_code -ne 0 ]; then
+            release_lock
+            exit $exit_code
+        fi
+        
+        task_id=$(echo "$task_json" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
     fi
-    
-    task_id=$(echo "$task_json" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
     
     # Set flag to indicate lock is already held (avoid nested locking)
     export LOCK_HELD=1
@@ -499,7 +548,14 @@ case "${1:-help}" in
     update) shift; update_status "$@" ;;
     status) check_status ;;
     get) get_task "$2" ;;
-    select-and-update) select_and_update ;;
+    select-and-update) 
+        # Accept optional task_id as second argument
+        if [ -n "${2:-}" ]; then
+            select_and_update "$2"
+        else
+            select_and_update
+        fi
+        ;;
     mark-done) mark_done "$2" "$3" ;;
     mark-error) mark_error "$2" "$3" "$4" ;;
     *)
@@ -511,7 +567,9 @@ Usage: ./scripts/task-manager.sh <command> [args]
 
 Commands:
     select                          Select next pending hard/medium task
-    select-and-update               Select and mark in_progress (atomic, locked)
+    select-and-update [task_id]     Select and mark in_progress (atomic, locked)
+                                    If task_id provided, uses that task (must be pending)
+                                    If not provided, auto-selects next pending task
     update <id> [status] [notes]    Update task status (locked)
     mark-done <id> <pr_number>      Mark task as done with PR number (locked)
     mark-error <id> <error_msg> [step]  Mark task as error (locked)
@@ -525,9 +583,12 @@ Environment:
     LOCK_TIMEOUT    Lock timeout in seconds (default: 120)
 
 Examples:
-    # Atomic select and update (recommended for parallel workflows)
+    # Atomic select and update (auto-select - recommended for parallel workflows)
     TASK=$(./scripts/task-manager.sh select-and-update)
     TASK_ID=$(echo "$TASK" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+    
+    # Use specific task (for parallel execution with pre-selected tasks)
+    TASK=$(./scripts/task-manager.sh select-and-update "abc123")
     
     # Mark task as done (thread-safe)
     ./scripts/task-manager.sh mark-done $TASK_ID 1234
