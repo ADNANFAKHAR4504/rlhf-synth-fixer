@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 // We'll require the stack dynamically after ensuring CI/env vars are unset
 let ServerlessInfrastructureStack: any;
 let TapStack: any;
@@ -448,7 +448,7 @@ describe('lambda handler without injected AWS mocks', () => {
       isolatedHandler = require('../lib/lambda-handler/index.js').handler;
     });
 
-    const response = await isolatedHandler({ body: 'not-json' });
+    const response = await isolatedHandler!({ body: 'not-json' });
     expect(response.statusCode).toBe(400);
     expect(JSON.parse(response.body).error).toMatch(/Invalid JSON/);
   });
