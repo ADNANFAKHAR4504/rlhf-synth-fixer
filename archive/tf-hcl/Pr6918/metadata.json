@@ -1,0 +1,43 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "q2m3j4",
+  "team": "synth",
+  "startedAt": "2025-11-20T00:14:38+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NATGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "EIP",
+    "KMS",
+    "S3",
+    "ECR",
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "ALB",
+    "TargetGroup",
+    "WAF",
+    "ECS",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
