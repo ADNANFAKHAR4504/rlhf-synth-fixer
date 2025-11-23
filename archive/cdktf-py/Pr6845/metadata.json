@@ -4,7 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "o3d3h2",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-19T12:52:20+05:30",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
