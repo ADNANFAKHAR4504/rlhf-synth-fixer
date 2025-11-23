@@ -1,22 +1,30 @@
 resource "aws_s3_bucket" "webhook_payloads" {
   bucket = lower("${var.project}-${var.environment}-webhook-payloads-${local.suffix}")
-  acl    = "private"
 
   force_destroy = true # allow destroy when cleaning up/failing
 
-  versioning {
-    enabled = true
-  }
+  tags = local.common_tags
+}
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
+resource "aws_s3_bucket_acl" "webhook_payloads" {
+  bucket = aws_s3_bucket.webhook_payloads.id
+  acl    = "private"
+}
+
+resource "aws_s3_bucket_versioning" "webhook_payloads" {
+  bucket = aws_s3_bucket.webhook_payloads.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "webhook_payloads" {
+  bucket = aws_s3_bucket.webhook_payloads.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
-
-  tags = local.common_tags
 }
 
 resource "aws_s3_bucket_public_access_block" "webhook_payloads" {
@@ -54,23 +62,31 @@ resource "aws_s3_bucket_lifecycle_configuration" "webhook_payloads" {
 # failed messages bucket
 resource "aws_s3_bucket" "failed_messages" {
   bucket = lower("${var.project}-${var.environment}-failed-messages-${local.suffix}")
-  acl    = "private"
 
   force_destroy = true
 
-  versioning {
-    enabled = true
-  }
+  tags = local.common_tags
+}
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
+resource "aws_s3_bucket_acl" "failed_messages" {
+  bucket = aws_s3_bucket.failed_messages.id
+  acl    = "private"
+}
+
+resource "aws_s3_bucket_versioning" "failed_messages" {
+  bucket = aws_s3_bucket.failed_messages.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "failed_messages" {
+  bucket = aws_s3_bucket.failed_messages.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
-
-  tags = local.common_tags
 }
 
 resource "aws_s3_bucket_public_access_block" "failed_messages" {

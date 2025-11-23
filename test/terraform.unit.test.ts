@@ -1,5 +1,5 @@
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
 
 const libDir = path.resolve(__dirname, '..', 'lib');
 
@@ -161,11 +161,23 @@ describe('Terraform library validation', () => {
       expect(namingHasParts(bucketName, ['${var.project}', '${var.environment}', '${local.suffix}'])).toBe(
         true,
       );
-      expect(payloadBucket!.body).toMatch(/versioning\s*{\s*enabled\s*=\s*true/);
-      expect(payloadBucket!.body).toMatch(/server_side_encryption_configuration/);
       expect(failedBucket).toBeDefined();
-      expect(failedBucket!.body).toMatch(/server_side_encryption_configuration/);
-      expect(failedBucket!.body).toMatch(/versioning\s*{\s*enabled\s*=\s*true/);
+
+      // Check for separate versioning resources
+      const payloadVersioning = findBlock(allResources, 'aws_s3_bucket_versioning', 'webhook_payloads');
+      const failedVersioning = findBlock(allResources, 'aws_s3_bucket_versioning', 'failed_messages');
+      expect(payloadVersioning).toBeDefined();
+      expect(payloadVersioning!.body).toMatch(/status\s*=\s*"Enabled"/);
+      expect(failedVersioning).toBeDefined();
+      expect(failedVersioning!.body).toMatch(/status\s*=\s*"Enabled"/);
+
+      // Check for separate encryption resources
+      const payloadEncryption = findBlock(allResources, 'aws_s3_bucket_server_side_encryption_configuration', 'webhook_payloads');
+      const failedEncryption = findBlock(allResources, 'aws_s3_bucket_server_side_encryption_configuration', 'failed_messages');
+      expect(payloadEncryption).toBeDefined();
+      expect(payloadEncryption!.body).toMatch(/sse_algorithm\s*=\s*"AES256"/);
+      expect(failedEncryption).toBeDefined();
+      expect(failedEncryption!.body).toMatch(/sse_algorithm\s*=\s*"AES256"/);
     });
 
     test('enforce lifecycle transitions and public access blocks', () => {

@@ -29,7 +29,9 @@ resource "aws_iam_policy" "lambda_common_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ],
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:*:log-group:/aws/lambda/${var.project}-${var.environment}-*"
+        ]
       },
       {
         Effect = "Allow",
@@ -80,7 +82,7 @@ resource "aws_iam_policy" "lambda_common_policy" {
       {
         Effect   = "Allow",
         Action   = ["kms:Decrypt"],
-        Resource = "arn:aws:kms:*:*:key/*"
+        Resource = [data.aws_kms_alias.dynamodb.target_key_arn]
       },
       {
         Effect   = "Allow",

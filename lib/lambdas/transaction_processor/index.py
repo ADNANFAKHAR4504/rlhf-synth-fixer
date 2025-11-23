@@ -39,7 +39,8 @@ def handler(event, context):
         body = json.loads(r['body'])
         item = {
             'transaction_id': body.get('transaction_id'),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': body.get('timestamp') or datetime.utcnow().isoformat(),
+            'customer_id': body.get('customer_id', 'unknown'),
             'raw': json.dumps(body)
         }
         # Example use of db_creds: not used to write to DynamoDB but shown as realistic binding
