@@ -17,7 +17,7 @@ from cdktf_cdktf_provider_aws.ecr_lifecycle_policy import EcrLifecyclePolicy
 from cdktf_cdktf_provider_aws.codecommit_repository import CodecommitRepository
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import S3BucketLifecycleConfiguration, S3BucketLifecycleConfigurationRule, S3BucketLifecycleConfigurationRuleExpiration
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning, S3BucketVersioningVersioningConfiguration
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA, S3BucketVersioningVersioningConfiguration
 from cdktf_cdktf_provider_aws.ecs_cluster import EcsCluster
 from cdktf_cdktf_provider_aws.ecs_task_definition import EcsTaskDefinition, EcsTaskDefinitionRuntimePlatform
 from cdktf_cdktf_provider_aws.ecs_service import EcsService, EcsServiceNetworkConfiguration, EcsServiceLoadBalancer, EcsServiceDeploymentController
@@ -33,6 +33,7 @@ from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
 from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 import json
 
 
@@ -74,6 +75,9 @@ class TapStack(TerraformStack):
 
         # Add S3 state locking using escape hatch
         self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # Get current AWS account ID
+        current = DataAwsCallerIdentity(self, "current")
 
         # Microservices to build
         microservices = ["api-service", "auth-service", "notification-service"]
@@ -291,7 +295,7 @@ class TapStack(TerraformStack):
             tags={"Name": f"cicd-artifacts-{environment_suffix}"}
         )
 
-        S3BucketVersioning(
+        S3BucketVersioningA(
             self,
             "artifacts_bucket_versioning",
             bucket=artifacts_bucket.id,
@@ -305,13 +309,13 @@ class TapStack(TerraformStack):
             self,
             "artifacts_lifecycle",
             bucket=artifacts_bucket.id,
-            rule=[S3BucketLifecycleConfigurationRule(
-                id="delete_old_artifacts",
-                status="Enabled",
-                expiration=S3BucketLifecycleConfigurationRuleExpiration(
-                    days=30
-                )
-            )]
+            rule=[{
+                "id": "delete_old_artifacts",
+                "status": "Enabled",
+                "expiration": [{
+                    "days": 30
+                }]
+            }]
         )
 
         # ============================================================
@@ -578,7 +582,7 @@ class TapStack(TerraformStack):
                     privileged_mode=True,
                     environment_variable=[
                         {"name": "AWS_DEFAULT_REGION", "value": aws_region},
-                        {"name": "AWS_ACCOUNT_ID", "value": Fn.data_aws_caller_identity_current("current").account_id},
+                        {"name": "AWS_ACCOUNT_ID", "value": current.account_id},
                         {"name": "IMAGE_REPO_NAME", "value": ecr_repos[service].name},
                         {"name": "IMAGE_TAG", "value": "latest"},
                         {"name": "SERVICE_NAME", "value": service}
