@@ -344,6 +344,9 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 
 1. **Extract task ID and check for existing directory**:
    ```bash
+   # Clean up any stale task JSON files older than 1 hour (from failed previous runs)
+   find .claude/task-*.json -type f -mmin +60 -delete 2>/dev/null || true
+   
    # Extract task_id from iac-task-selector's JSON file (should exist)
    # Find the task JSON file created by iac-task-selector
    TASK_JSON_FILES=(.claude/task-*.json)
@@ -355,10 +358,19 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    
    # Extract TASK_ID from the JSON file
    TASK_JSON=$(cat "${TASK_JSON_FILES[0]}")
+   
+   # Validate JSON is not empty and contains task_id
+   if [ -z "$TASK_JSON" ] || ! echo "$TASK_JSON" | grep -q '"task_id"'; then
+       echo "❌ ERROR: Invalid or empty JSON in task file: ${TASK_JSON_FILES[0]}"
+       rm -f "${TASK_JSON_FILES[0]}"
+       exit 1
+   fi
+   
    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    
    if [ -z "$TASK_ID" ]; then
        echo "❌ ERROR: Could not extract task_id from JSON file"
+       rm -f "${TASK_JSON_FILES[0]}"
        exit 1
    fi
    
@@ -386,6 +398,8 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
            echo "   - Branch synth-${TASK_ID} already exists"
            echo "   - Permission issues"
            echo "   - Git repository corruption"
+           echo "   Cleaning up temporary task JSON file..."
+           rm -f ".claude/task-${TASK_ID}.json"
            exit 1
        fi
        echo "✅ Created git worktree: $WORKTREE_DIR"

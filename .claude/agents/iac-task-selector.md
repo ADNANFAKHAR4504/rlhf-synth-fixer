@@ -78,11 +78,18 @@ If `.claude/tasks.csv` is present:
    # Store TASK_JSON in a temporary file for task-coordinator to use
    # This ensures task-coordinator can create metadata.json and PROMPT.md after worktree creation
    TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
-   echo "$TASK_JSON" > "$TASK_JSON_FILE"
+   
+   if ! echo "$TASK_JSON" > "$TASK_JSON_FILE"; then
+       echo "❌ ERROR: Failed to create task JSON file: $TASK_JSON_FILE"
+       echo "   Check .claude/ directory permissions"
+       exit 1
+   fi
    
    echo "✅ Stored task data in $TASK_JSON_FILE"
    echo "📋 Task ID: $TASK_ID"
    echo "🔄 Ready for handoff to task-coordinator"
+   echo ""
+   echo "⚠️  Note: Temporary file will be cleaned up by task-coordinator"
    ```
 
 **Benefits of task-manager.sh:**
@@ -135,8 +142,13 @@ If `.claude/tasks.csv` is not present:
 
 ## Error Recovery
 - If any step fails, report specific BLOCKED status with resolution steps
+- **Clean up temporary task JSON file** if handoff to task-coordinator fails:
+  ```bash
+  rm -f ".claude/task-${TASK_ID}.json" 2>/dev/null || true
+  ```
 - Maintain clean worktree state - cleanup on failures
 - Provide clear handoff status to coordinator for next agent
+- **Note**: Task status remains `in_progress` in CSV - manual intervention may be needed to reset to `pending` if task-coordinator never starts
 
 ## Debugging Parallel Execution Issues
 

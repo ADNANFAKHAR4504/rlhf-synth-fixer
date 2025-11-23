@@ -106,6 +106,7 @@ build
 .claude/tasks.csv.backup
 .claude/*.csv.backup
 .claude/tasks.csv.lock/
+.claude/task-*.json
 .claude/open_pr_status.json
 .claude/synth_pr_status.json
 .claude/synth_pr_status.json.backup
