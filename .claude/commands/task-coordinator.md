@@ -444,28 +444,34 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    # Store main repo root path before changing directories
    MAIN_REPO_ROOT="$(pwd)"
    
-   # TASK_ID and TASK_JSON are already set from step 1
-   # Set absolute path for cleanup
-   TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
-   TASK_JSON_FILE_ABS="$MAIN_REPO_ROOT/$TASK_JSON_FILE"
+   # TASK_ID is already set from step 1
+   # Set absolute paths
+   TASK_JSON_FILE="$MAIN_REPO_ROOT/.claude/task-${TASK_ID}.json"
+   
+   # Verify file exists before proceeding
+   if [ ! -f "$TASK_JSON_FILE" ]; then
+       echo "❌ ERROR: Task JSON file not found: $TASK_JSON_FILE"
+       exit 1
+   fi
    
    # Change to worktree directory
    cd worktree/synth-${TASK_ID}
    
    # Create metadata.json and PROMPT.md inside the worktree
-   if ! ./.claude/scripts/create-task-files.sh "$TASK_JSON" "."; then
+   # Pass the file path directly (script handles file input at line 121-123)
+   if ! "$MAIN_REPO_ROOT/.claude/scripts/create-task-files.sh" "$TASK_JSON_FILE" "."; then
        echo "❌ ERROR: Failed to create metadata.json and PROMPT.md"
        echo "   Cleaning up worktree..."
        cd "$MAIN_REPO_ROOT"
-       git worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
-       rm -f "$TASK_JSON_FILE_ABS"
+       git worktree remove "worktree/synth-${TASK_ID}" --force 2>/dev/null || true
+       rm -f "$TASK_JSON_FILE"
        exit 1
    fi
    
    echo "✅ Created metadata.json and PROMPT.md in worktree"
    
-   # Clean up temporary task JSON file (using absolute path)
-   rm -f "$TASK_JSON_FILE_ABS"
+   # Clean up temporary task JSON file
+   rm -f "$TASK_JSON_FILE"
    echo "✅ Cleaned up temporary task JSON file"
    ```
 
