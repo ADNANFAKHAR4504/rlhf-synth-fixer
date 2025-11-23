@@ -62,6 +62,16 @@ If `.claude/tasks.csv` is present:
    # Extract task_id once (used throughout this workflow)
    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    
+   # Validate TASK_ID was successfully extracted
+   if [ -z "$TASK_ID" ]; then
+       echo "❌ ERROR: Could not extract task_id from JSON"
+       echo "   JSON content: $TASK_JSON"
+       exit 1
+   fi
+   
+   # Export TASK_ID for task-coordinator to use (prevents race condition with glob)
+   export SELECTED_TASK_ID="$TASK_ID"
+   
    # Display selected task info (optional - for logging)
    echo "✅ Selected and locked task: $TASK_ID"
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
@@ -75,6 +85,15 @@ If `.claude/tasks.csv` is present:
 
 3. **Store task JSON for task-coordinator**:
    ```bash
+   # Validate .claude directory exists
+   if [ ! -d ".claude" ]; then
+       echo "❌ ERROR: .claude directory not found"
+       echo "   This should exist in the repository root"
+       # Rollback task status to pending
+       ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: .claude directory missing" 2>/dev/null || true
+       exit 1
+   fi
+   
    # Store TASK_JSON in a temporary file for task-coordinator to use
    # This ensures task-coordinator can create metadata.json and PROMPT.md after worktree creation
    TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
@@ -82,12 +101,15 @@ If `.claude/tasks.csv` is present:
    if ! echo "$TASK_JSON" > "$TASK_JSON_FILE"; then
        echo "❌ ERROR: Failed to create task JSON file: $TASK_JSON_FILE"
        echo "   Check .claude/ directory permissions"
+       # Rollback task status to pending
+       ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON file creation error" 2>/dev/null || true
        exit 1
    fi
    
    echo "✅ Stored task data in $TASK_JSON_FILE"
    echo "📋 Task ID: $TASK_ID"
    echo "🔄 Ready for handoff to task-coordinator"
+   echo "🔑 SELECTED_TASK_ID environment variable set: $SELECTED_TASK_ID"
    echo ""
    echo "⚠️  Note: Temporary file will be cleaned up by task-coordinator"
    ```
@@ -103,12 +125,14 @@ If `.claude/tasks.csv` is present:
 - **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
 4. **Hand off to task-coordinator for worktree setup**:
+   - **CRITICAL**: The `SELECTED_TASK_ID` environment variable is set and must be passed to task-coordinator
    - The task-coordinator will:
-     1. Create git worktree: `git worktree add worktree/synth-{task_id} -b synth-{task_id}`
-     2. Read task data from `.claude/task-{task_id}.json`
-     3. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
-     4. Clean up temporary task JSON file
-     5. Verify worktree setup with `verify-worktree.sh`
+     1. Verify `SELECTED_TASK_ID` environment variable is set (prevents race condition with glob)
+     2. Read task data from `.claude/task-${SELECTED_TASK_ID}.json` (specific file, not glob)
+     3. Create git worktree: `git worktree add worktree/synth-${SELECTED_TASK_ID} -b synth-${SELECTED_TASK_ID}`
+     4. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
+     5. Clean up temporary task JSON file
+     6. Verify worktree setup with `verify-worktree.sh`
    - **CRITICAL**: Do NOT create the worktree directory or files before handoff - git worktree add requires an empty/non-existent directory
 
 ### Option 2: Direct Task Input
@@ -142,13 +166,14 @@ If `.claude/tasks.csv` is not present:
 
 ## Error Recovery
 - If any step fails, report specific BLOCKED status with resolution steps
+- **Automatic rollback**: If JSON file creation fails, task status is automatically rolled back to `pending` in CSV
 - **Clean up temporary task JSON file** if handoff to task-coordinator fails:
   ```bash
   rm -f ".claude/task-${TASK_ID}.json" 2>/dev/null || true
   ```
 - Maintain clean worktree state - cleanup on failures
 - Provide clear handoff status to coordinator for next agent
-- **Note**: Task status remains `in_progress` in CSV - manual intervention may be needed to reset to `pending` if task-coordinator never starts
+- **Note**: If task-coordinator never starts after JSON file creation, task remains `in_progress` - manual intervention may be needed to reset to `pending`
 
 ## Debugging Parallel Execution Issues
 

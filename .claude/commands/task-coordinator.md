@@ -185,7 +185,8 @@ bash .claude/scripts/preflight-checks.sh
 
 1. **Verify worktree location**:
    ```bash
-   pwd  # Should end with: /worktree/synth-{task_id}
+   TASK_ID=$(jq -r '.po_id' metadata.json)
+   pwd  # Should end with: /worktree/synth-${TASK_ID}
    ```
 
 2. **Validate training quality**:
@@ -347,34 +348,60 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    # Clean up any stale task JSON files older than 1 hour (from failed previous runs)
    find .claude/task-*.json -type f -mmin +60 -delete 2>/dev/null || true
    
-   # Extract task_id from iac-task-selector's JSON file (should exist)
-   # Find the task JSON file created by iac-task-selector
-   TASK_JSON_FILES=(.claude/task-*.json)
-   if [ ! -f "${TASK_JSON_FILES[0]}" ]; then
-       echo "❌ ERROR: No task JSON file found in .claude/"
-       echo "   iac-task-selector should have created .claude/task-{task_id}.json"
+   # CRITICAL: Use SELECTED_TASK_ID from iac-task-selector to prevent race condition
+   # This ensures we read the correct file even when multiple agents are running
+   if [ -z "${SELECTED_TASK_ID:-}" ]; then
+       echo "❌ ERROR: SELECTED_TASK_ID environment variable not set"
+       echo "   iac-task-selector should have set this before handoff"
+       echo "   Falling back to glob pattern (may cause race condition in parallel execution)"
+       
+       # Fallback: Try to find task JSON file (for backward compatibility)
+       TASK_JSON_FILES=(.claude/task-*.json)
+       if [ ! -f "${TASK_JSON_FILES[0]}" ]; then
+           echo "❌ ERROR: No task JSON file found in .claude/"
+           echo "   iac-task-selector should have created .claude/task-{task_id}.json"
+           exit 1
+       fi
+       
+       # Extract TASK_ID from filename as fallback
+       TASK_ID=$(basename "${TASK_JSON_FILES[0]}" | sed 's/task-//;s/.json//')
+       echo "⚠️  WARNING: Using fallback method - extracted TASK_ID: $TASK_ID"
+   else
+       TASK_ID="$SELECTED_TASK_ID"
+       echo "✅ Using SELECTED_TASK_ID from environment: $TASK_ID"
+   fi
+   
+   # Read the specific task JSON file (not glob)
+   TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
+   
+   if [ ! -f "$TASK_JSON_FILE" ]; then
+       echo "❌ ERROR: Task JSON file not found: $TASK_JSON_FILE"
+       echo "   Expected file for task ID: $TASK_ID"
        exit 1
    fi
    
-   # Extract TASK_ID from the JSON file
-   TASK_JSON=$(cat "${TASK_JSON_FILES[0]}")
+   # Extract TASK_JSON from the file
+   TASK_JSON=$(cat "$TASK_JSON_FILE")
    
    # Validate JSON is not empty and contains task_id
    if [ -z "$TASK_JSON" ] || ! echo "$TASK_JSON" | grep -q '"task_id"'; then
-       echo "❌ ERROR: Invalid or empty JSON in task file: ${TASK_JSON_FILES[0]}"
-       rm -f "${TASK_JSON_FILES[0]}"
+       echo "❌ ERROR: Invalid or empty JSON in task file: $TASK_JSON_FILE"
+       rm -f "$TASK_JSON_FILE"
        exit 1
    fi
    
-   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-   
-   if [ -z "$TASK_ID" ]; then
-       echo "❌ ERROR: Could not extract task_id from JSON file"
-       rm -f "${TASK_JSON_FILES[0]}"
+   # Verify TASK_ID matches what's in the JSON file (safety check)
+   JSON_TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   if [ "$JSON_TASK_ID" != "$TASK_ID" ]; then
+       echo "❌ ERROR: Task ID mismatch"
+       echo "   Expected: $TASK_ID"
+       echo "   Found in JSON: $JSON_TASK_ID"
+       echo "   File: $TASK_JSON_FILE"
+       rm -f "$TASK_JSON_FILE"
        exit 1
    fi
    
-   echo "📋 Task ID: $TASK_ID"
+   echo "📋 Task ID: $TASK_ID (validated)"
    
    # Check if directory already exists (should not, but handle gracefully)
    WORKTREE_DIR="worktree/synth-${TASK_ID}"
@@ -453,8 +480,8 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 4. **Validate worktree setup** (AUTOMATED):
 
    The `verify-worktree.sh` script automatically checks:
-   - ✅ Location matches pattern: `*/worktree/synth-{task_id}`
-   - ✅ Branch matches directory name
+   - ✅ Location matches pattern: `*/worktree/synth-${TASK_ID}`
+   - ✅ Branch matches directory name (synth-${TASK_ID})
    - ✅ metadata.json exists (created in step 2)
    - ✅ Not on main/master branch
    - ✅ Exports environment variables ($WORKTREE_DIR, $TASK_ID, $TASK_BRANCH)
@@ -462,12 +489,13 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    **Manual verification (only if automated script fails)**:
    ```bash
    # Verify location
-   pwd  # Must end with: /worktree/synth-{task_id}
+   pwd  # Must end with: /worktree/synth-${TASK_ID}
 
    # Verify branch
    CURRENT_BRANCH=$(git branch --show-current)
-   if [ "$CURRENT_BRANCH" != "synth-{task_id}" ]; then
-     echo "❌ ERROR: Wrong branch. Expected synth-{task_id}, got $CURRENT_BRANCH"
+   EXPECTED_BRANCH="synth-${TASK_ID}"
+   if [ "$CURRENT_BRANCH" != "$EXPECTED_BRANCH" ]; then
+     echo "❌ ERROR: Wrong branch. Expected $EXPECTED_BRANCH, got $CURRENT_BRANCH"
      exit 1
    fi
 
@@ -492,7 +520,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - This project is AWS-only
 
 7. **Working Directory Context**:
-   - Now in: `worktree/synth-{task_id}/`
+   - Now in: `worktree/synth-${TASK_ID}/`
    - All file paths relative to this directory
    - All sub-agents work in this directory
    - Do not return to main repo until PHASE 5
