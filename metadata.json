@@ -3,7 +3,7 @@
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
-  "team": "synth"  
+  "team": "synth",  
   "region": "us-east-1",
   "subtask" : "Security, Compliance, and Governance",
   "subject_labels" : [
@@ -24,5 +24,5 @@
     "IAM",
     "KMS",
     "SSM"
-  ],
+  ]
 }
