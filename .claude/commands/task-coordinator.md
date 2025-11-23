@@ -628,8 +628,35 @@ echo "us-east-1" > lib/AWS_REGION  # or specified region
 
 8. **Install dependencies**:
 ```bash
-# Python: pipenv install --dev --ignore-pipfile
+# Python: Use smart pipenv installation (same logic as scripts/setup.sh)
+if [ -f "Pipfile" ]; then
+    echo "🐍 Ensuring pipenv environment..."
+    
+    if ! command -v pipenv &>/dev/null; then
+        echo "📦 Installing pipenv..."
+        pip install pipenv
+    fi
+    
+    # Rebuild venv if cache mismatched interpreter version
+    if [ -d ".venv" ] && [ ! -f ".venv/bin/python" ]; then
+        echo "⚠️ Cached venv invalid — removing and recreating..."
+        rm -rf .venv
+    fi
+    
+    if [ -d ".venv" ]; then
+        echo "✅ .venv exists — using cached environment"
+        pipenv sync --dev || pipenv install --dev
+    else
+        echo "📦 Creating new pipenv environment..."
+        pipenv install --dev
+    fi
+fi
+
 # Not Python: npm ci
+if [ -f "package.json" ]; then
+    npm ci
+fi
+
 # If fails, report BLOCKED with error details
 ```
 
