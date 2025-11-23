@@ -1,6 +1,6 @@
 ---
 name: iac-task-selector
-description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Creates metadata.json and PROMPT.md. Worktree setup is handled by task-coordinator.
+description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Passes task data to task-coordinator for worktree setup and file creation.
 color: yellow
 model: sonnet
 ---
@@ -73,26 +73,16 @@ If `.claude/tasks.csv` is present:
    ./.claude/scripts/task-manager.sh status
    ```
 
-3. **Create metadata.json and PROMPT.md**:
+3. **Store task JSON for task-coordinator**:
    ```bash
-   # Use JSON directly - TASK_JSON contains all fields needed by create-task-files.sh
-   # Extract task_id for directory path (if not already extracted in step 1)
-   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   # Store TASK_JSON in a temporary file for task-coordinator to use
+   # This ensures task-coordinator can create metadata.json and PROMPT.md after worktree creation
+   TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
+   echo "$TASK_JSON" > "$TASK_JSON_FILE"
    
-   # Create worktree directory structure if it doesn't exist
-   # Note: The actual git worktree will be created by task-coordinator,
-   # but we need the directory to exist to create files in it
-   WORKTREE_DIR="worktree/synth-${TASK_ID}"
-   mkdir -p "$WORKTREE_DIR"
-   
-   # Create metadata.json and PROMPT.md in the worktree directory
-   # The task-coordinator will create the git worktree at this location later
-   if ! ./.claude/scripts/create-task-files.sh "$TASK_JSON" "$WORKTREE_DIR"; then
-       echo "❌ ERROR: Failed to create metadata.json and PROMPT.md"
-       exit 1
-   fi
-   
-   echo "✅ Created metadata.json and PROMPT.md in $WORKTREE_DIR"
+   echo "✅ Stored task data in $TASK_JSON_FILE"
+   echo "📋 Task ID: $TASK_ID"
+   echo "🔄 Ready for handoff to task-coordinator"
    ```
 
 **Benefits of task-manager.sh:**
@@ -106,13 +96,13 @@ If `.claude/tasks.csv` is present:
 - **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
 4. **Hand off to task-coordinator for worktree setup**:
-   - The task-coordinator will create the git worktree using EXACT format: `worktree/synth-{task_id}`
-   - The directory structure already exists (created in step 3) with metadata.json and PROMPT.md
    - The task-coordinator will:
      1. Create git worktree: `git worktree add worktree/synth-{task_id} -b synth-{task_id}`
-     2. Copy metadata.json and PROMPT.md into the worktree (if not already there)
-     3. Verify worktree setup with `verify-worktree.sh`
-   - Validation will fail if naming is incorrect
+     2. Read task data from `.claude/task-{task_id}.json`
+     3. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
+     4. Clean up temporary task JSON file
+     5. Verify worktree setup with `verify-worktree.sh`
+   - **CRITICAL**: Do NOT create the worktree directory or files before handoff - git worktree add requires an empty/non-existent directory
 
 ### Option 2: Direct Task Input
 If `.claude/tasks.csv` is not present:

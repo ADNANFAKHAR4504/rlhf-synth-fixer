@@ -342,10 +342,27 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 
 **CRITICAL: Strict worktree structure enforcement**
 
-1. **Create git worktree** (EXACT naming):
+1. **Check for existing directory and create git worktree** (EXACT naming):
    ```bash
-   # REQUIRED format - do not deviate:
-   git worktree add worktree/synth-{task_id} -b synth-{task_id}
+   # Check if directory already exists (should not, but handle gracefully)
+   WORKTREE_DIR="worktree/synth-{task_id}"
+   
+   if [ -d "$WORKTREE_DIR" ]; then
+       # Check if it's already a git worktree
+       if [ -f "$WORKTREE_DIR/.git" ] || [ -d "$WORKTREE_DIR/.git" ]; then
+           echo "⚠️  Worktree directory already exists and appears to be a git worktree"
+           echo "   Skipping worktree creation, using existing worktree"
+       else
+           echo "❌ ERROR: Directory $WORKTREE_DIR exists but is not a git worktree"
+           echo "   This should not happen - iac-task-selector should not create directories"
+           echo "   Please remove the directory manually and retry"
+           exit 1
+       fi
+   else
+       # REQUIRED format - do not deviate:
+       git worktree add "$WORKTREE_DIR" -b synth-{task_id}
+       echo "✅ Created git worktree: $WORKTREE_DIR"
+   fi
    ```
 
    **Naming Rules**:
@@ -354,22 +371,50 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
    - ✅ CORRECT: `worktree/synth-{task_id}`
 
-2. **Immediately change directory and verify**:
+2. **Load task data and create metadata.json/PROMPT.md**:
    ```bash
+   # Read task JSON created by iac-task-selector
+   TASK_JSON_FILE=".claude/task-{task_id}.json"
+   
+   if [ ! -f "$TASK_JSON_FILE" ]; then
+       echo "❌ ERROR: Task JSON file not found: $TASK_JSON_FILE"
+       echo "   iac-task-selector should have created this file"
+       exit 1
+   fi
+   
+   TASK_JSON=$(cat "$TASK_JSON_FILE")
+   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   
+   # Change to worktree directory
    cd worktree/synth-{task_id}
+   
+   # Create metadata.json and PROMPT.md inside the worktree
+   if ! ./.claude/scripts/create-task-files.sh "$TASK_JSON" "."; then
+       echo "❌ ERROR: Failed to create metadata.json and PROMPT.md"
+       exit 1
+   fi
+   
+   echo "✅ Created metadata.json and PROMPT.md in worktree"
+   
+   # Clean up temporary task JSON file
+   rm -f "../../$TASK_JSON_FILE"
+   echo "✅ Cleaned up temporary task JSON file"
+   ```
 
+3. **Verify worktree setup**:
+   ```bash
    # MANDATORY: Run automated verification
    bash .claude/scripts/verify-worktree.sh || exit 1
    ```
 
    **From this point forward, ALL commands run from this directory unless explicitly stated.**
 
-3. **Validate worktree setup** (AUTOMATED):
+4. **Validate worktree setup** (AUTOMATED):
 
    The `verify-worktree.sh` script automatically checks:
    - ✅ Location matches pattern: `*/worktree/synth-{task_id}`
    - ✅ Branch matches directory name
-   - ✅ metadata.json exists
+   - ✅ metadata.json exists (created in step 2)
    - ✅ Not on main/master branch
    - ✅ Exports environment variables ($WORKTREE_DIR, $TASK_ID, $TASK_BRANCH)
 
@@ -396,45 +441,57 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 
    **If validation fails, STOP immediately and report BLOCKED.**
 
-4. **Read platform enforcement**:
+5. **Read platform enforcement**:
    - Must read `.claude/platform_enforcement.md`
    - Transform task to use platform+language declared in that file
    - Override platform+language from task description if different
 
-5. **Multi-cloud check**:
+6. **Multi-cloud check**:
    - If multi-cloud task, notify user and STOP
    - This project is AWS-only
 
-6. **Working Directory Context**:
+7. **Working Directory Context**:
    - Now in: `worktree/synth-{task_id}/`
    - All file paths relative to this directory
    - All sub-agents work in this directory
    - Do not return to main repo until PHASE 5
 
-7. **Generate metadata.json** (CRITICAL - all fields required):
+8. **Verify metadata.json** (CRITICAL - should already exist from step 2):
 
-If `metadata.json` not present:
-- Extract platform and language from selected task
-- **CRITICAL**: Platform and language from CSV are MANDATORY constraints (see shared-validations.md)
-- Validate `cli/create-task.ts` exists before mimicking actions
-- If missing, use fallback platform detection logic
-- Determine platform (cdk, cdktf, cfn, tf, pulumi) from task
-- Determine language (ts, py, yaml, json, hcl, go) from task
-- **CRITICAL**: Normalize "python" → "py"
-- Prefer TypeScript for tests (unless project is Python-based)
-- **CRITICAL**: Set `complexity` = EXACT value from CSV `difficulty` column (NOT "difficulty")
-  - Valid: "medium", "hard", "expert" (must match CSV exactly)
-- Set `team` = value from `.claude/settings.local.json` if present, otherwise default to "synth" (REQUIRED)
-- Set `turn_type` = "single" (REQUIRED)
-- Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
-- **Extract from .claude/tasks.csv** (REQUIRED):
-  - `subtask` from subtask column
-  - `subject_labels` from subject_labels column (parse as JSON array)
-- Do not add more fields than shown in example
-- Validate `templates/` directory exists with required platform template
-- If missing, report BLOCKED with specific template needed
-- Copy appropriate template from `templates/` matching platform-language from CSV
-- Set `po_id` = task_id value
+```bash
+# Verify metadata.json exists (created in step 2)
+if [ ! -f "metadata.json" ]; then
+    echo "❌ ERROR: metadata.json not found - step 2 should have created it"
+    echo "   This indicates a failure in the file creation process"
+    exit 1
+fi
+
+# Validate required fields are present
+REQUIRED_FIELDS=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")
+MISSING_FIELDS=()
+
+for field in "${REQUIRED_FIELDS[@]}"; do
+    if ! grep -q "\"$field\":" metadata.json; then
+        MISSING_FIELDS+=("$field")
+    fi
+done
+
+if [ ${#MISSING_FIELDS[@]} -gt 0 ]; then
+    echo "❌ ERROR: Missing required fields in metadata.json: ${MISSING_FIELDS[*]}"
+    exit 1
+fi
+
+echo "✅ metadata.json validated - all required fields present"
+```
+
+**Note**: `metadata.json` is created automatically in step 2 using `create-task-files.sh` which:
+- Extracts platform and language from CSV task data (MANDATORY constraints)
+- Sets `complexity` = EXACT value from CSV `difficulty` column
+- Sets `team` from `.claude/settings.local.json` or defaults to "synth"
+- Sets `turn_type` = "single"
+- Sets `startedAt` = current timestamp
+- Extracts `subtask` and `subject_labels` from CSV
+- Sets `po_id` = task_id
 
 Example metadata.json:
 ```json
