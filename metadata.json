@@ -3,7 +3,9 @@
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
-  "team": "synth",  
+  "team": "synth",
+  "startedAt": "2025-11-24T02:19:00-05:00",
+  "turn_type: "single",
   "region": "us-east-1",
   "subtask" : "Security, Compliance, and Governance",
   "subject_labels" : [
