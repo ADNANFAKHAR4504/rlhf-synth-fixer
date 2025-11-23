@@ -85,8 +85,7 @@ describe("Terraform single-file stack: tap-stack.tf", () => {
   // IAM
   test("declares IAM role and policy", () => {
     expect(content).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role"/);
-    expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"lambda_policy"/);
-    expect(content).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"lambda_policy_attachment"/);
+    expect(content).toMatch(/resource\s+"aws_iam_role_policy"\s+"lambda_inline_policy"/);
   });
 
   // Lambda Functions
