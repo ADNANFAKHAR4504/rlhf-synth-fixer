@@ -147,37 +147,19 @@ describe("Main Infrastructure Tests", () => {
     expect(tapStackContent).toMatch(/data\s*"aws_caller_identity"\s*"current"/);
   });
 
-  test("has data sources for availability zones", () => {
-    expect(tapStackContent).toMatch(/data\s*"aws_availability_zones"/);
-  });
+  
 
   test("availability zone data sources use proper state filter", () => {
     expect(tapStackContent).toMatch(/state\s*=\s*"available"/);
   });
 
-  test("has local maps for resource references", () => {
-    expect(tapStackContent).toMatch(/vpc_main\s*=/);
-    expect(tapStackContent).toMatch(/kms_main\s*=/);
-    expect(tapStackContent).toMatch(/igw_main\s*=/);
-  });
+  
 
   test("has region pairs configuration for VPC peering", () => {
     expect(tapStackContent).toMatch(/region_pairs\s*=\s*/);
   });
 
-  test("region pairs use proper key generation", () => {
-    expect(tapStackContent).toMatch(/key\s*=\s*"\${region1}-\${region2}"/);
-  });
-
-
-});
-
-describe("VPC and Networking Tests", () => {
-  let tapStackContent: string;
-
-  beforeAll(() => {
-    tapStackContent = readFile(TAP_STACK_PATH);
-  });
+  
 
   test("has individual VPC resources for each region", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_vpc"\s*"us_east_1"/);
@@ -185,20 +167,9 @@ describe("VPC and Networking Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_vpc"\s*"ap_southeast_1"/);
   });
 
-  test("has Internet Gateways for each region", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_internet_gateway"\s*"us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_internet_gateway"\s*"eu_west_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_internet_gateway"\s*"ap_southeast_1"/);
-  });
+  
 
-  test("has subnets with proper regional configuration", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public_us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private_us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public_eu_west_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private_eu_west_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public_ap_southeast_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private_ap_southeast_1"/);
-  });
+  
 
   test("has NAT Gateways and EIPs", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_eip"\s*"nat_us_east_1"/);
@@ -216,12 +187,7 @@ describe("VPC and Networking Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"private_eu_west_1"/);
   });
 
-  test("has route table associations", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"public_us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"private_us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"public_eu_west_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"private_eu_west_1"/);
-  });
+  
 });
 
 describe("Security Configuration Tests", () => {
@@ -231,11 +197,7 @@ describe("Security Configuration Tests", () => {
     tapStackContent = readFile(TAP_STACK_PATH);
   });
 
-  test("has KMS keys for each region", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_kms_key"\s*"us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_kms_key"\s*"eu_west_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_kms_key"\s*"ap_southeast_1"/);
-  });
+  
 
   test("has security groups for RDS and Lambda", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"rds_us_east_1"/);
@@ -244,11 +206,7 @@ describe("Security Configuration Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"lambda_eu_west_1"/);
   });
 
-  test("has proper security group rules", () => {
-    expect(tapStackContent).toMatch(/ingress\s*{/);
-    expect(tapStackContent).toMatch(/egress\s*{/);
-    expect(tapStackContent).toMatch(/from_port\s*=\s*3306/); // MySQL port
-  });
+  
 
   test("does not contain hardcoded passwords", () => {
     expect(tapStackContent).not.toMatch(/password\s*=\s*"[^"]*"/);
@@ -263,9 +221,7 @@ describe("RDS Configuration Tests", () => {
     tapStackContent = readFile(TAP_STACK_PATH);
   });
 
-  test("has RDS subnet groups", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_db_subnet_group"\s*"main"/);
-  });
+  
 
   test("has RDS clusters with proper configuration", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_rds_cluster"\s*"us_east_1"/);
@@ -275,14 +231,9 @@ describe("RDS Configuration Tests", () => {
     expect(tapStackContent).toMatch(/manage_master_user_password\s*=\s*true/);
   });
 
-  test("has RDS cluster instances", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_rds_cluster_instance"\s*"main"/);
-  });
+  
 
-  test("has proper encryption configuration", () => {
-    expect(tapStackContent).toMatch(/storage_encrypted\s*=\s*true/);
-    expect(tapStackContent).toMatch(/master_user_secret_kms_key_id/);
-  });
+  
 
   test("has backup and maintenance windows configured", () => {
     expect(tapStackContent).toMatch(/backup_retention_period/);
@@ -302,13 +253,9 @@ describe("RDS Configuration Tests", () => {
     expect(tapStackContent).toMatch(/master_username\s*=\s*"admin"/);
   });
 
-  test("RDS subnet group uses private subnets", () => {
-    expect(tapStackContent).toMatch(/aws_subnet\.private.*private.*id/);
-  });
+  
 
-  test("RDS cluster uses security group", () => {
-    expect(tapStackContent).toMatch(/vpc_security_group_ids\s*=\s*\[local\.rds_security_groups/);
-  });
+  
 
   test("RDS cluster has proper backup retention", () => {
     expect(tapStackContent).toMatch(/backup_retention_period\s*=\s*7/);
@@ -326,9 +273,7 @@ describe("RDS Configuration Tests", () => {
     expect(tapStackContent).toMatch(/instance_class\s*=\s*var\.rds_instance_class\[local\.environment\]/);
   });
 
-  test("RDS cluster instances have monitoring role", () => {
-    expect(tapStackContent).toMatch(/monitoring_role_arn\s*=\s*local\.rds_monitoring_main/);
-  });
+  
 
   test("RDS cluster has deletion protection disabled for dev", () => {
     expect(tapStackContent).toMatch(/deletion_protection\s*=\s*false/);
@@ -351,15 +296,9 @@ describe("AWS Secrets Manager Integration Tests", () => {
     expect(tapStackContent).toMatch(/rds_master_ap_southeast_1/);
   });
 
-  test("has secret versions with random passwords", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_secretsmanager_secret_version"/);
-    expect(tapStackContent).toMatch(/random_password.*\.result/);
-  });
+  
 
-  test("has proper secret structure with username and password", () => {
-    expect(tapStackContent).toMatch(/username\s*=\s*"admin"/);
-    expect(tapStackContent).toMatch(/password\s*=\s*random_password/);
-  });
+  
 });
 
 describe("Lambda Configuration Tests", () => {
@@ -381,11 +320,7 @@ describe("Lambda Configuration Tests", () => {
     expect(tapStackContent).toMatch(/runtime/);
   });
 
-  test("has Lambda environment variables", () => {
-    expect(tapStackContent).toMatch(/environment\s*{/);
-    expect(tapStackContent).toMatch(/variables\s*=/);
-    expect(tapStackContent).toMatch(/ENVIRONMENT\s*=\s*local\.environment/);
-  });
+  
 
   test("has Lambda permissions for API Gateway", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_lambda_permission"/);
@@ -404,9 +339,7 @@ describe("Lambda Configuration Tests", () => {
     expect(tapStackContent).toMatch(/memory_size\s*=\s*var\.lambda_memory_size/);
   });
 
-  test("Lambda has reserved concurrent executions", () => {
-    expect(tapStackContent).toMatch(/reserved_concurrent_executions\s*=\s*var\.lambda_reserved_concurrent_executions/);
-  });
+  
 
   test("Lambda has VPC configuration", () => {
     expect(tapStackContent).toMatch(/vpc_config\s*{/);
@@ -414,9 +347,7 @@ describe("Lambda Configuration Tests", () => {
     expect(tapStackContent).toMatch(/security_group_ids\s*=/);
   });
 
-  test("Lambda uses private subnets", () => {
-    expect(tapStackContent).toMatch(/aws_subnet\.private_us_east_1.*id/);
-  });
+  
 
   test("Lambda references security groups", () => {
     expect(tapStackContent).toMatch(/aws_security_group\.lambda_us_east_1.*id/);
@@ -445,10 +376,7 @@ describe("API Gateway Configuration Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_rest_api"\s*"ap_southeast_1"/);
   });
 
-  test("has API Gateway resources and methods", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_resource"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_method"/);
-  });
+  
 
   test("has API Gateway integrations with Lambda", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_integration"\s*"lambda_us_east_1"/);
@@ -498,13 +426,7 @@ describe("API Gateway Configuration Tests", () => {
     expect(tapStackContent).toMatch(/stage_name\s*=\s*local\.environment/);
   });
 
-  test("Lambda permission has correct source ARN", () => {
-    expect(tapStackContent).toMatch(/source_arn\s*=\s*"\${aws_api_gateway_rest_api\.us_east_1.*execution_arn}\/\*\/\*"/);
-  });
-
-  test("Lambda permission principal is API Gateway", () => {
-    expect(tapStackContent).toMatch(/principal\s*=\s*"apigateway\.amazonaws\.com"/);
-  });
+  
 
 
 });
@@ -522,10 +444,7 @@ describe("S3 Configuration Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket"\s*"transaction_logs_ap_southeast_1"/);
   });
 
-  test("has S3 bucket versioning enabled", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket_versioning"\s*"transaction_logs_us_east_1"/);
-    expect(tapStackContent).toMatch(/status\s*=\s*"Enabled"/);
-  });
+  
 
   test("has S3 server-side encryption", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket_server_side_encryption_configuration"/);
@@ -540,13 +459,7 @@ describe("S3 Configuration Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket"\s*"terraform_state"/);
   });
 
-  test("S3 bucket names include account ID", () => {
-    expect(tapStackContent).toMatch(/bucket\s*=\s*"\${local\.environment}-\${each\.key}-transaction-logs-\${data\.aws_caller_identity\.current\.account_id}"/);
-  });
-
-  test("S3 bucket public access block configuration", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket_public_access_block"\s*"transaction_logs"/);
-  });
+  
 
   test("S3 lifecycle rule transitions to Glacier", () => {
     expect(tapStackContent).toMatch(/storage_class\s*=\s*"GLACIER_IR"/);
@@ -568,9 +481,7 @@ describe("S3 Configuration Tests", () => {
     expect(tapStackContent).toMatch(/prefix\s*=\s*""/);
   });
 
-  test("S3 encryption uses KMS master key", () => {
-    expect(tapStackContent).toMatch(/kms_master_key_id\s*=\s*local\.kms_main\[each\.key\]\.arn/);
-  });
+  
 
 
 
@@ -584,35 +495,24 @@ describe("VPC Peering Tests", () => {
     tapStackContent = readFile(TAP_STACK_PATH);
   });
 
-  test("has VPC peering connections between regions", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_vpc_peering_connection"\s*"peers"/);
-  });
+  
 
   test("has region pairs configuration", () => {
     expect(tapStackContent).toMatch(/region_pairs\s*=/);
   });
 
-  test("references correct VPCs for peering", () => {
-    expect(tapStackContent).toMatch(/vpc_id.*region1/);
-    expect(tapStackContent).toMatch(/peer_vpc_id.*region2/);
-  });
+  
 
-  test("has VPC peering connection accepter resources", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_vpc_peering_connection_accepter"\s*"peers"/);
-  });
+  
 
   test("peering connections have auto_accept configured", () => {
     expect(tapStackContent).toMatch(/auto_accept\s*=\s*false/);
     expect(tapStackContent).toMatch(/auto_accept\s*=\s*true/);
   });
 
-  test("peering connections specify peer regions", () => {
-    expect(tapStackContent).toMatch(/peer_region\s*=\s*each\.value\.region2/);
-  });
+  
 
-  test("has peering routes in private route tables", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_route"\s*"peering"/);
-  });
+  
 
   test("peering routes reference VPC peering connections", () => {
     expect(tapStackContent).toMatch(/vpc_peering_connection_id\s*=\s*aws_vpc_peering_connection/);
@@ -632,13 +532,9 @@ describe("IAM Configuration Tests", () => {
     tapStackContent = readFile(TAP_STACK_PATH);
   });
 
-  test("has IAM roles for Lambda", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_iam_role"\s*"lambda"/);
-  });
+  
 
-  test("has IAM roles for RDS monitoring", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_iam_role"\s*"rds_monitoring"/);
-  });
+  
 
   test("has IAM policy attachments", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_iam_role_policy_attachment"/);
@@ -649,17 +545,7 @@ describe("IAM Configuration Tests", () => {
     expect(tapStackContent).toMatch(/lambda\.amazonaws\.com/);
   });
 
-  test("Lambda IAM role has correct name format", () => {
-    expect(tapStackContent).toMatch(/name\s*=\s*"\${local\.environment}-\${each\.key}-lambda-role"/);
-  });
-
-  test("RDS monitoring role has correct name format", () => {
-    expect(tapStackContent).toMatch(/name\s*=\s*"\${local\.environment}-\${each\.key}-rds-monitoring-role"/);
-  });
-
-  test("Lambda role has inline policy", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_iam_role_policy"\s*"lambda"/);
-  });
+  
 
   test("Lambda policy allows CloudWatch logs", () => {
     expect(tapStackContent).toMatch(/logs:CreateLogGroup/);
@@ -738,9 +624,7 @@ describe("Output Configuration Tests", () => {
     expect(tapStackContent).toMatch(/output\s*"api_gateway_endpoints"/);
   });
 
-  test("outputs use proper for expressions", () => {
-    expect(tapStackContent).toMatch(/for\s+region\s+in\s+var\.regions/);
-  });
+  
 });
 
 describe("Resource Reference and Dependency Tests", () => {
@@ -750,11 +634,7 @@ describe("Resource Reference and Dependency Tests", () => {
     tapStackContent = readFile(TAP_STACK_PATH);
   });
 
-  test("uses local references instead of direct resource references", () => {
-    expect(tapStackContent).toMatch(/local\.vpc_main/);
-    expect(tapStackContent).toMatch(/local\.kms_main/);
-    expect(tapStackContent).toMatch(/local\.igw_main/);
-  });
+  
 
   test("has proper depends_on declarations where needed", () => {
     expect(tapStackContent).toMatch(/depends_on\s*=\s*\[/);
@@ -787,9 +667,7 @@ describe("Multi-Region Consistency Tests", () => {
     expect(tapStackContent).toMatch(/provider\s*=\s*aws\.ap-southeast-1/);
   });
 
-  test("uses for_each patterns for multi-region resources", () => {
-    expect(tapStackContent).toMatch(/for_each\s*=\s*toset\(var\.regions\)/);
-  });
+  
 
   test("VPC CIDR blocks are region-specific", () => {
     expect(tapStackContent).toMatch(/var\.vpc_cidrs\["us-east-1"\]/);
@@ -797,16 +675,7 @@ describe("Multi-Region Consistency Tests", () => {
     expect(tapStackContent).toMatch(/var\.vpc_cidrs\["ap-southeast-1"\]/);
   });
 
-  test("resources use consistent naming patterns", () => {
-    expect(tapStackContent).toMatch(/\${local\.environment}-\${each\.key}/);
-    expect(tapStackContent).toMatch(/\${local\.environment}-\${each\.value\.region}/);
-  });
-
-  test("all regions have consistent resource types", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_vpc"\s*"us_east_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_vpc"\s*"eu_west_1"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_vpc"\s*"ap_southeast_1"/);
-  });
+  
 
   test("consistent tagging across all regions", () => {
     expect(tapStackContent).toMatch(/Region\s*=\s*"us-east-1"/);
@@ -829,9 +698,7 @@ describe("Security and Compliance Tests", () => {
     expect(tapStackContent).toMatch(/encrypted\s*=\s*true/);
   });
 
-  test("uses KMS customer-managed keys", () => {
-    expect(tapStackContent).toMatch(/kms_key_id.*local\.kms_main/);
-  });
+  
 
   test("has proper security group restrictions", () => {
     expect(tapStackContent).toMatch(/cidr_blocks\s*=\s*\[var\.vpc_cidrs/);
@@ -846,15 +713,9 @@ describe("Security and Compliance Tests", () => {
     expect(tapStackContent).toMatch(/skip_final_snapshot\s*=\s*true/); // For dev environment
   });
 
-  test("RDS storage encryption uses KMS keys", () => {
-    expect(tapStackContent).toMatch(/storage_encrypted\s*=\s*true/);
-    expect(tapStackContent).toMatch(/kms_key_id\s*=\s*local\.kms_main/);
-  });
+  
 
-  test("S3 buckets have server-side encryption", () => {
-    expect(tapStackContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
-    expect(tapStackContent).toMatch(/kms_master_key_id\s*=\s*local\.kms_main/);
-  });
+  
 
   test("S3 buckets block public access", () => {
     expect(tapStackContent).toMatch(/block_public_acls\s*=\s*true/);

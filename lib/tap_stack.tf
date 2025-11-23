@@ -75,7 +75,7 @@ locals {
     "eu-west-1"      = aws_vpc.eu_west_1
     "ap-southeast-1" = aws_vpc.ap_southeast_1
   }
-  
+
   igws = {
     "us-east-1"      = aws_internet_gateway.us_east_1
     "eu-west-1"      = aws_internet_gateway.eu_west_1
@@ -352,7 +352,7 @@ resource "aws_subnet" "public_us_east_1" {
   provider = aws.us-east-1
   for_each = {
     for i in range(var.az_count) : i => {
-      az_index = i
+      az_index   = i
       cidr_block = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, i)
     }
   }
@@ -374,7 +374,7 @@ resource "aws_subnet" "public_eu_west_1" {
   provider = aws.eu-west-1
   for_each = {
     for i in range(var.az_count) : i => {
-      az_index = i
+      az_index   = i
       cidr_block = cidrsubnet(var.vpc_cidrs["eu-west-1"], 8, i)
     }
   }
@@ -396,7 +396,7 @@ resource "aws_subnet" "public_ap_southeast_1" {
   provider = aws.ap-southeast-1
   for_each = {
     for i in range(var.az_count) : i => {
-      az_index = i
+      az_index   = i
       cidr_block = cidrsubnet(var.vpc_cidrs["ap-southeast-1"], 8, i)
     }
   }
@@ -418,7 +418,7 @@ resource "aws_subnet" "private_us_east_1" {
   provider = aws.us-east-1
   for_each = {
     for i in range(var.az_count) : i => {
-      az_index = i
+      az_index   = i
       cidr_block = cidrsubnet(var.vpc_cidrs["us-east-1"], 8, i + 100)
     }
   }
@@ -439,7 +439,7 @@ resource "aws_subnet" "private_eu_west_1" {
   provider = aws.eu-west-1
   for_each = {
     for i in range(var.az_count) : i => {
-      az_index = i
+      az_index   = i
       cidr_block = cidrsubnet(var.vpc_cidrs["eu-west-1"], 8, i + 100)
     }
   }
@@ -460,7 +460,7 @@ resource "aws_subnet" "private_ap_southeast_1" {
   provider = aws.ap-southeast-1
   for_each = {
     for i in range(var.az_count) : i => {
-      az_index = i
+      az_index   = i
       cidr_block = cidrsubnet(var.vpc_cidrs["ap-southeast-1"], 8, i + 100)
     }
   }
@@ -2395,9 +2395,9 @@ output "vpc_ids" {
 output "vpc_peering_connections" {
   description = "VPC peering connection IDs"
   value = {
-    "us-east-1-to-eu-west-1"           = aws_vpc_peering_connection.us_east_1_to_eu_west_1.id
-    "us-east-1-to-ap-southeast-1"      = aws_vpc_peering_connection.us_east_1_to_ap_southeast_1.id
-    "eu-west-1-to-ap-southeast-1"      = aws_vpc_peering_connection.eu_west_1_to_ap_southeast_1.id
+    "us-east-1-to-eu-west-1"      = aws_vpc_peering_connection.us_east_1_to_eu_west_1.id
+    "us-east-1-to-ap-southeast-1" = aws_vpc_peering_connection.us_east_1_to_ap_southeast_1.id
+    "eu-west-1-to-ap-southeast-1" = aws_vpc_peering_connection.eu_west_1_to_ap_southeast_1.id
   }
 }
 
