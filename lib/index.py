@@ -1,2 +1,2 @@
-ÿþdef handler(event, context):
+def handler(event, context):
     return {'statusCode': 200, 'body': 'Payment validation successful'}

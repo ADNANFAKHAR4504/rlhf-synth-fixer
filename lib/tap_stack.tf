@@ -3,7 +3,7 @@
 # Supports workspaces: dev, staging, prod
 # Works with provider.tf and variables.tf files
 
-# Locals for computed values
+# Consolidated locals for computed values
 locals {
   environment = var.environment_suffix
 
@@ -60,6 +60,40 @@ locals {
     "us-east-1"      = aws_kms_key.us_east_1
     "eu-west-1"      = aws_kms_key.eu_west_1
     "ap-southeast-1" = aws_kms_key.ap_southeast_1
+  }
+
+  # Consolidated KMS key lookup (from multiple locals blocks)
+  kms_keys = {
+    "us-east-1"      = aws_kms_key.us_east_1
+    "eu-west-1"      = aws_kms_key.eu_west_1
+    "ap-southeast-1" = aws_kms_key.ap_southeast_1
+  }
+
+  # VPC lookup for for_each resources (from multiple locals blocks)
+  vpcs = {
+    "us-east-1"      = aws_vpc.us_east_1
+    "eu-west-1"      = aws_vpc.eu_west_1
+    "ap-southeast-1" = aws_vpc.ap_southeast_1
+  }
+  
+  igws = {
+    "us-east-1"      = aws_internet_gateway.us_east_1
+    "eu-west-1"      = aws_internet_gateway.eu_west_1
+    "ap-southeast-1" = aws_internet_gateway.ap_southeast_1
+  }
+
+  # RDS security groups mapping (from multiple locals blocks)
+  rds_security_groups = {
+    "us-east-1"      = aws_security_group.rds_us_east_1
+    "eu-west-1"      = aws_security_group.rds_eu_west_1
+    "ap-southeast-1" = aws_security_group.rds_ap_southeast_1
+  }
+
+  # Lambda security groups mapping
+  lambda_security_groups = {
+    "us-east-1"      = aws_security_group.lambda_us_east_1
+    "eu-west-1"      = aws_security_group.lambda_eu_west_1
+    "ap-southeast-1" = aws_security_group.lambda_ap_southeast_1
   }
 
   # For for_each resources, we need direct references
@@ -207,14 +241,7 @@ resource "aws_kms_alias" "ap_southeast_1" {
   target_key_id = aws_kms_key.ap_southeast_1.key_id
 }
 
-# KMS key lookup for for_each resources
-locals {
-  kms_keys = {
-    "us-east-1"      = aws_kms_key.us_east_1
-    "eu-west-1"      = aws_kms_key.eu_west_1
-    "ap-southeast-1" = aws_kms_key.ap_southeast_1
-  }
-} # VPC resources per region (separate resources for proper provider assignment)
+# VPC resources per region (separate resources for proper provider assignment)
 resource "aws_vpc" "us_east_1" {
   provider = aws.us-east-1
 
@@ -288,19 +315,6 @@ resource "aws_internet_gateway" "ap_southeast_1" {
   })
 }
 
-# VPC lookup for for_each resources
-locals {
-  vpcs = {
-    "us-east-1"      = aws_vpc.us_east_1
-    "eu-west-1"      = aws_vpc.eu_west_1
-    "ap-southeast-1" = aws_vpc.ap_southeast_1
-  }
-  igws = {
-    "us-east-1"      = aws_internet_gateway.us_east_1
-    "eu-west-1"      = aws_internet_gateway.eu_west_1
-    "ap-southeast-1" = aws_internet_gateway.ap_southeast_1
-  }
-}
 
 # Public subnets (3 per region, one per AZ)
 resource "aws_subnet" "public" {
@@ -627,22 +641,13 @@ resource "aws_security_group" "rds_ap_southeast_1" {
   })
 }
 
-# Create a local map for backwards compatibility
-locals {
-  rds_security_groups = {
-    "us-east-1"      = aws_security_group.rds_us_east_1
-    "eu-west-1"      = aws_security_group.rds_eu_west_1
-    "ap-southeast-1" = aws_security_group.rds_ap_southeast_1
-  }
-}
 
-# Security group for Lambda
-resource "aws_security_group" "lambda" {
-  for_each = toset(var.regions)
+# Security groups for Lambda (per region for correct provider assignment)
+resource "aws_security_group" "lambda_us_east_1" {
   provider = aws.us-east-1
 
-  name_prefix = "${local.environment}-${each.key}-lambda-sg"
-  vpc_id      = local.vpc_main[each.key].id
+  name_prefix = "${local.environment}-us-east-1-lambda-sg"
+  vpc_id      = aws_vpc.us_east_1.id
   description = "Security group for Lambda functions"
 
   egress {
@@ -654,8 +659,50 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "${local.environment}-${each.key}-lambda-sg"
-    Region = each.key
+    Name   = "${local.environment}-us-east-1-lambda-sg"
+    Region = "us-east-1"
+  })
+}
+
+resource "aws_security_group" "lambda_eu_west_1" {
+  provider = aws.eu-west-1
+
+  name_prefix = "${local.environment}-eu-west-1-lambda-sg"
+  vpc_id      = aws_vpc.eu_west_1.id
+  description = "Security group for Lambda functions"
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-eu-west-1-lambda-sg"
+    Region = "eu-west-1"
+  })
+}
+
+resource "aws_security_group" "lambda_ap_southeast_1" {
+  provider = aws.ap-southeast-1
+
+  name_prefix = "${local.environment}-ap-southeast-1-lambda-sg"
+  vpc_id      = aws_vpc.ap_southeast_1.id
+  description = "Security group for Lambda functions"
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name   = "${local.environment}-ap-southeast-1-lambda-sg"
+    Region = "ap-southeast-1"
   })
 }
 
@@ -1014,7 +1061,7 @@ resource "aws_lambda_function" "payment_validator" {
       for az_index in range(var.az_count) :
       aws_subnet.private["${each.key}-private-${az_index}"].id
     ]
-    security_group_ids = [aws_security_group.lambda[each.key].id]
+    security_group_ids = [local.lambda_security_groups[each.key].id]
   }
 
   environment {
