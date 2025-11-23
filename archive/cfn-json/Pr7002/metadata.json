@@ -4,7 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "r7o5p8",
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "team": "synth-2",
   "startedAt": "2025-11-20T19:18:52+05:30",
   "subtask": "Application Deployment",
@@ -18,5 +18,10 @@
     "ElasticLoadBalancingV2",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
