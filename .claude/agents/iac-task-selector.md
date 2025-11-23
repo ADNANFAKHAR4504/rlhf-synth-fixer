@@ -102,7 +102,10 @@ If `.claude/tasks.csv` is present:
        echo "❌ ERROR: Failed to create task JSON file: $TASK_JSON_FILE"
        echo "   Check .claude/ directory permissions"
        # Rollback task status to pending
-       ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON file creation error" 2>/dev/null || true
+       if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON file creation error" 2>/dev/null; then
+           echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
+           echo "   Task $TASK_ID may remain in 'in_progress' state"
+       fi
        exit 1
    fi
    
