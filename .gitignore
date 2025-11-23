@@ -111,6 +111,10 @@ build
 .claude/synth_pr_status.json
 .claude/synth_pr_status.json.backup
 .claude/synth_pr_status.json.lock/
+# Temporary files created during workflow execution
+.claude/temp-*.sh
+.claude/temp-*.md
+.claude/temp-*
 .sherlock/data
 .sherlock/reports
 
