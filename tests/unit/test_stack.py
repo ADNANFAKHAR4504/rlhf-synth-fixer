@@ -404,7 +404,10 @@ class TestCryptoPriceProcessingStack(unittest.TestCase):
         dynamodb_tables = resources.get('aws_dynamodb_table', {})
 
         table = list(dynamodb_tables.values())[0]
-        pitr = table.get('point_in_time_recovery', [{}])[0]
+        pitr = table.get('point_in_time_recovery', {})
+        # CDKTF can synthesize point_in_time_recovery as either a dict or a list of dicts
+        if isinstance(pitr, list):
+            pitr = pitr[0] if pitr else {}
         self.assertTrue(pitr.get('enabled', False))
 
 

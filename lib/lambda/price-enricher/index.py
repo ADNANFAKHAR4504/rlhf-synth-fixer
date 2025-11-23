@@ -116,7 +116,7 @@ def calculate_moving_average(symbol, current_timestamp, periods=5):
 
     except Exception as e:
         logger.error("Error calculating moving average: %s", str(e))
-        return Decimal('0')
+        raise
 
 
 def calculate_volatility(symbol, current_timestamp, periods=10):
@@ -156,4 +156,4 @@ def calculate_volatility(symbol, current_timestamp, periods=10):
 
     except Exception as e:
         logger.error("Error calculating volatility: %s", str(e))
-        return Decimal('0')
+        raise

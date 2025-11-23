@@ -273,9 +273,10 @@ class TestPriceEnricher(unittest.TestCase):
         """Test moving average exception handling."""
         self.mock_table.query.side_effect = Exception("Query error")
 
-        result = enricher_module.calculate_moving_average('BTC', 1234567890000, periods=5)
+        with self.assertRaises(Exception) as cm:
+            enricher_module.calculate_moving_average('BTC', 1234567890000, periods=5)
 
-        self.assertEqual(result, Decimal('0'))
+        self.assertIn("Query error", str(cm.exception))
 
     def test_calculate_volatility_sufficient_data(self):
         """Test volatility calculation with sufficient data."""
@@ -336,9 +337,10 @@ class TestPriceEnricher(unittest.TestCase):
         """Test volatility exception handling."""
         self.mock_table.query.side_effect = Exception("Query error")
 
-        result = enricher_module.calculate_volatility('BTC', 1234567890000, periods=10)
+        with self.assertRaises(Exception) as cm:
+            enricher_module.calculate_volatility('BTC', 1234567890000, periods=10)
 
-        self.assertEqual(result, Decimal('0'))
+        self.assertIn("Query error", str(cm.exception))
 
     def test_update_item_includes_all_enrichment_fields(self):
         """Test that update_item includes all enrichment fields."""

@@ -26,6 +26,10 @@ sys.path.insert(0, temp_dir_webhook)
 # Mock boto3 before importing the lambda module
 sys.modules['boto3'] = MagicMock()
 
+# Remove any cached 'index' module to avoid conflicts with enricher tests
+if 'index' in sys.modules:
+    del sys.modules['index']
+
 # Now import the lambda handler
 import index as webhook_module
 
@@ -333,8 +337,11 @@ class TestWebhookProcessor(unittest.TestCase):
         }
         context = {}
 
-        with self.assertRaises(Exception):
-            webhook_module.lambda_handler(event, context)
+        response = webhook_module.lambda_handler(event, context)
+
+        self.assertEqual(response['statusCode'], 400)
+        body = json.loads(response['body'])
+        self.assertIn('error', body)
 
     def test_lambda_handler_preserves_exchange_name(self):
         """Test that exchange name is preserved correctly."""
