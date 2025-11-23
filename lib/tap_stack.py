@@ -89,7 +89,8 @@ class TapStack(TerraformStack):
         common_tags = {
             "Environment": environment_suffix,
             "Application": "payment-processing",
-            "CostCenter": "payments"
+            "CostCenter": "payments",
+            "ManagedBy": "CDKTF"
         }
 
         # ========================================
