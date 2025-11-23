@@ -1,6 +1,6 @@
 ---
 name: iac-task-selector
-description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
+description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Creates metadata.json and PROMPT.md. Worktree setup is handled by task-coordinator.
 color: yellow
 model: sonnet
 ---
@@ -49,7 +49,7 @@ If `.claude/tasks.csv` is present:
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
-   # OPTIMIZED: Returns complete JSON with all fields needed, eliminating redundant CSV reads
+   # Returns complete JSON with all fields needed, eliminating redundant CSV reads
    echo "🔍 Selecting next available task..."
    TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
    
@@ -59,26 +59,11 @@ If `.claude/tasks.csv` is present:
        exit 1
    fi
    
-   # OPTIMIZED: Extract all fields in single pass using AWK (much faster than multiple grep/cut)
-   # Simple and reliable: parse JSON by splitting on quotes and tracking key-value pairs
-   eval $(echo "$TASK_JSON" | awk -F'"' '{
-       for (i=1; i<=NF; i++) {
-           if ($i == "task_id" && $(i+1) ~ /^:/) TASK_ID=$(i+2)
-           if ($i == "subtask" && $(i+1) ~ /^:/) SUBTASK=$(i+2)
-           if ($i == "platform" && $(i+1) ~ /^:/) PLATFORM=$(i+2)
-           if ($i == "language" && $(i+1) ~ /^:/) LANGUAGE=$(i+2)
-           if ($i == "difficulty" && $(i+1) ~ /^:/) DIFFICULTY=$(i+2)
-       }
-   } END {
-       print "TASK_ID=" TASK_ID
-       print "SUBTASK=" SUBTASK
-       print "PLATFORM=" PLATFORM
-       print "LANGUAGE=" LANGUAGE
-       print "DIFFICULTY=" DIFFICULTY
-   }')
+   # Extract task_id for display/logging (simple grep, no complex parsing needed)
+   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    
-   echo "✅ Selected and locked task: $TASK_ID ($PLATFORM-$LANGUAGE, $DIFFICULTY)"
-   echo "📋 Subtask: $SUBTASK"
+   # Display selected task info (optional - for logging)
+   echo "✅ Selected and locked task: $TASK_ID"
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
    # NOTE: No verification step needed - select-and-update is atomic and guaranteed to update status
    ```
@@ -90,9 +75,12 @@ If `.claude/tasks.csv` is present:
 
 3. **Create metadata.json and PROMPT.md**:
    ```bash
-   # OPTIMIZED: Use JSON directly instead of calling get command (eliminates redundant CSV read)
-   # The TASK_JSON already contains all fields needed by create-task-files.sh
-   # Use the optimized script to generate both files
+   # Use JSON directly - TASK_JSON contains all fields needed by create-task-files.sh
+   # Extract task_id for directory path
+   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   
+   # Create metadata.json and PROMPT.md in the worktree directory
+   # Note: Worktree will be created by task-coordinator, but we create files in the expected location
    ./.claude/scripts/create-task-files.sh "$TASK_JSON" worktree/synth-${TASK_ID}
    ```
 
@@ -106,9 +94,10 @@ If `.claude/tasks.csv` is present:
 - **Better error handling** - clear colored output and exit codes
 - **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
-6. **Follow instructions in `task-coordinator` to set up the worktree**:
-   - Use EXACT format: `worktree/synth-{task_id}`
+4. **Hand off to task-coordinator for worktree setup**:
+   - The task-coordinator will create the worktree using EXACT format: `worktree/synth-{task_id}`
    - Validation will fail if naming is incorrect
+   - This agent only creates metadata.json and PROMPT.md files
 
 ### Option 2: Direct Task Input
 If `.claude/tasks.csv` is not present:
@@ -148,8 +137,9 @@ If you suspect duplicate task selection in parallel execution:
 
 3. **Check which tasks are currently in_progress**:
    ```bash
-   # List all in_progress tasks
-   awk -F',' 'NR>1 && tolower($2) == "in_progress" {print $1, $5}' .claude/tasks.csv
+   # Use task-manager.sh status to safely check task distribution
+   # This avoids direct CSV reads and respects locking
+   ./.claude/scripts/task-manager.sh status | grep -i "in_progress" || echo "No in_progress tasks"
    ```
 
 4. **Test lock mechanism**:
@@ -165,9 +155,10 @@ If you suspect duplicate task selection in parallel execution:
 
 5. **Verify this agent is NOT using deprecated methods**:
    - Confirm you executed `select-and-update` (not just `select`)
-   - Confirm you did NOT read .claude/tasks.csv directly
+   - Confirm you did NOT read .claude/tasks.csv directly (including in debugging commands)
    - Confirm you did NOT call find-next-task.py
-   - Confirm you used JSON directly instead of calling `get` command
+   - Confirm you used TASK_JSON directly instead of calling `get` command
+   - Confirm you did NOT use AWK or other tools to parse CSV directly
 
 **If duplicate selection still occurs**, capture these details and report:
 - Which task ID was selected by multiple agents
