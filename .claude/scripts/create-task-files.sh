@@ -258,7 +258,7 @@ get_subject_labels_for_subtask() {
             }
         }
         
-        # Continue collecting if we're in the array
+        # Continue collecting if we are in the array
         if (collecting && bracket_depth > 0) {
             # Check each character in this line
             line_added = 0
@@ -275,7 +275,7 @@ get_subject_labels_for_subtask() {
                     }
                 }
             }
-            # If bracket didn't close, add entire line
+            # If bracket did not close, add entire line
             if (bracket_depth > 0) {
                 result = result $0
             }
@@ -317,18 +317,18 @@ is_valid_subtask() {
     grep -q "\"subtask\"[[:space:]]*:[[:space:]]*\"$subtask\"" "$ref_file" 2>/dev/null
 }
 
-# Normalize subtask: check if it's valid, if not try to map from subject label
+# Normalize subtask: check if it is valid, if not try to map from subject label
 SUBTASK="$SUBTASK_RAW"
 if [ -n "$SUBTASK" ]; then
     if ! is_valid_subtask "$SUBTASK" "$REFERENCE_FILE"; then
-        # Try to find if it's actually a subject label
+        # Try to find if it is actually a subject label
         MAPPED_SUBTASK=$(get_subtask_from_label "$SUBTASK" "$REFERENCE_FILE")
         if [ -n "$MAPPED_SUBTASK" ]; then
             log_info "Normalized subtask: '$SUBTASK' -> '$MAPPED_SUBTASK'"
             SUBTASK="$MAPPED_SUBTASK"
         else
             log_error "Invalid subtask: '$SUBTASK'. Valid subtasks are defined in $REFERENCE_FILE"
-            # Don't exit - allow it but warn
+            # Do not exit - allow it but warn
         fi
     fi
 fi
@@ -369,7 +369,7 @@ fi
 # Normalize platform to match CLI tool format (must be lowercase abbreviated form)
 case "$PLATFORM" in
     cloudformation) PLATFORM="cfn" ;;
-    # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
+    cdk|cdktf|pulumi|tf|cfn) : ;;  # remain as-is (already lowercase)
 esac
 
 # Normalize language to match CLI tool format (must be lowercase abbreviated form)
@@ -552,8 +552,20 @@ REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
 # Read team value from settings.local.json
 # If team is mentioned in settings, use that value (e.g., synth-2, synth-1)
 # Otherwise, default to "synth"
-SETTINGS_FILE=".claude/settings.local.json"
-if [ -f "$SETTINGS_FILE" ]; then
+# Check multiple locations: current dir (main repo), parent dirs (worktree context), or relative to script
+SETTINGS_FILE=""
+if [ -f ".claude/settings.local.json" ]; then
+    # In main repo root
+    SETTINGS_FILE=".claude/settings.local.json"
+elif [ -f "../../.claude/settings.local.json" ]; then
+    # In worktree (two levels up)
+    SETTINGS_FILE="../../.claude/settings.local.json"
+elif [ -f "../.claude/settings.local.json" ]; then
+    # One level up
+    SETTINGS_FILE="../.claude/settings.local.json"
+fi
+
+if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
     TEAM=$(json_val "$(cat "$SETTINGS_FILE")" "team")
     [ -z "$TEAM" ] && TEAM="synth"
 else

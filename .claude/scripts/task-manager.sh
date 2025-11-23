@@ -148,6 +148,8 @@ select_task() {
     # This combines parse_csv and selection into one pass, eliminating pipe overhead
     local result
     result=$(awk -F',' '
+    BEGIN { found = 0 }
+
     function parse_csv_line(line,    fields, n, i, current, in_quote) {
         n = 0
         current = ""
@@ -244,12 +246,13 @@ select_task() {
             # Output as complete JSON with all fields and exit immediately (early exit optimization)
             printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"subtask\":\"%s\",\"background\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\",\"environment\":\"%s\",\"constraints\":\"%s\",\"subject_labels\":%s}\n",
                    task_id, (status == "" ? "pending" : status), platform, difficulty, subtask, background, problem, language, environment, constraints, subject_labels
+            found = 1
             exit 0
         }
     }
     END {
-        # No match found
-        if (NR > 1) {
+        # No match found - only execute if no task was found
+        if (!found && NR > 1) {
             print "{\"error\":\"No pending tasks found with hard/medium/expert difficulty\"}" > "/dev/stderr"
             exit 1
         }
