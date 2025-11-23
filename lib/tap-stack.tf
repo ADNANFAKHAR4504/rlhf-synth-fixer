@@ -541,7 +541,10 @@ resource "aws_lambda_function" "token_authorizer" {
     Name = "fraud-detection-token-authorizer-${var.environment_suffix}"
   }
 
-  depends_on = [aws_cloudwatch_log_group.authorizer_lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.authorizer_lambda_logs,
+    aws_iam_role_policy_attachment.lambda_policy_attachment
+  ]
 }
 
 resource "aws_lambda_function" "transaction_validation" {
@@ -572,7 +575,10 @@ resource "aws_lambda_function" "transaction_validation" {
     Name = "fraud-detection-transaction-validation-${var.environment_suffix}"
   }
 
-  depends_on = [aws_cloudwatch_log_group.validation_lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.validation_lambda_logs,
+    aws_iam_role_policy_attachment.lambda_policy_attachment
+  ]
 }
 
 resource "aws_lambda_function" "fraud_scoring" {
@@ -605,7 +611,10 @@ resource "aws_lambda_function" "fraud_scoring" {
     Name = "fraud-detection-scoring-${var.environment_suffix}"
   }
 
-  depends_on = [aws_cloudwatch_log_group.fraud_scoring_lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.fraud_scoring_lambda_logs,
+    aws_iam_role_policy_attachment.lambda_policy_attachment
+  ]
 }
 
 resource "aws_lambda_function" "notification_processing" {
@@ -637,7 +646,10 @@ resource "aws_lambda_function" "notification_processing" {
     Name = "fraud-detection-notification-${var.environment_suffix}"
   }
 
-  depends_on = [aws_cloudwatch_log_group.notification_lambda_logs]
+  depends_on = [
+    aws_cloudwatch_log_group.notification_lambda_logs,
+    aws_iam_role_policy_attachment.lambda_policy_attachment
+  ]
 }
 
 # API Gateway
