@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the event"
+    },
+    "object": {
+      "type": "string",
+      "enum": ["event"]
+    },
+    "api_version": {
+      "type": "string"
+    },
+    "created": {
+      "type": "integer",
+      "description": "Time at which the event was created"
+    },
+    "type": {
+      "type": "string",
+      "description": "Description of the event"
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "object": {
+          "type": "object"
+        }
+      },
+      "required": ["object"]
+    },
+    "livemode": {
+      "type": "boolean"
+    },
+    "pending_webhooks": {
+      "type": "integer"
+    },
+    "request": {
+      "type": ["object", "null"],
+      "properties": {
+        "id": {
+          "type": ["string", "null"]
+        },
+        "idempotency_key": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  },
+  "required": ["id", "object", "type", "data"]
+}

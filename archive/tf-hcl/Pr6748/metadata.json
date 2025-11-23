@@ -1,0 +1,43 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912237",
+  "team": "4",
+  "startedAt": "2025-11-17T17:23:27.576Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "training_quality": 10,
+  "background": "Secure data analytics infrastructure for a financial services company in us-east-1, implemented in Terraform with strong focus on PCI-DSS, defense-in-depth, centralized logging, immutable audit trails, and automated security remediation.",
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "Transit Gateway",
+    "Route Tables",
+    "Network ACLs",
+    "Security Groups",
+    "VPC Flow Logs",
+    "VPC Endpoints",
+    "S3",
+    "CloudTrail",
+    "CloudWatch Logs",
+    "IAM",
+    "KMS",
+    "GuardDuty",
+    "Security Hub",
+    "AWS Config",
+    "SNS",
+    "EventBridge",
+    "Lambda",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

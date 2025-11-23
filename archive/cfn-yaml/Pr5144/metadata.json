@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "6545483050",
+  "team": "synth",
+  "startedAt": "2025-10-27T22:37:23+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "RDS",
+    "SecretsManager",
+    "ElastiCache",
+    "VPC",
+    "SecurityGroups"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

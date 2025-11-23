@@ -1,0 +1,4 @@
+name: TapStack
+runtime: python
+description: Production-ready VPC infrastructure for financial services trading platform
+main: tap.py

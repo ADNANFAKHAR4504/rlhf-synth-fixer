@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350234",
+  "team": "4",
+  "startedAt": "2025-10-28T13:40:43.171Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "VPC, EC2, RDS, S3 Bucket, CloudWatch, IAM",
+  "training_quality": 9,
+  "background": "This task involves creating a production-ready, highly available web application infrastructure in AWS us-west-2 region using Terraform. The infrastructure spans 2 Availability Zones and includes VPC with public/private subnets, dual NAT Gateways for high availability, EC2 instances with Apache web server, RDS Multi-AZ MySQL database, S3 bucket with encryption and versioning, comprehensive CloudWatch monitoring with 6 alarms, and IAM roles following least privilege principle. The solution has been validated with 134 automated tests (101 unit tests + 33 integration tests) achieving 100% pass rate with no mocking. All security best practices are implemented including encryption at rest, network segmentation, private database placement, and public access blocks on S3.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

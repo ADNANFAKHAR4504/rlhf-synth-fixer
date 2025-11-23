@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5039",
+  "team": "stf",
+  "startedAt": "2025-10-24T14:41:48.877Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": "VPC, Lambda, DynamoDB, S3, Kinesis, Redis",
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  },
+  "training_quality": 10,
+  "aws_services_implemented": [
+    "VPC",
+    "Lambda",
+    "DynamoDB",
+    "Kinesis",
+    "ElastiCache",
+    "Aurora",
+    "API Gateway",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

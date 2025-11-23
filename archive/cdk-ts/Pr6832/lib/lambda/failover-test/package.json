@@ -1,0 +1,12 @@
+{
+  "name": "failover-test",
+  "version": "1.0.0",
+  "description": "Lambda function for testing failover readiness",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.900.0",
+    "@aws-sdk/client-dynamodb": "^3.900.0",
+    "@aws-sdk/client-rds-data": "^3.900.0",
+    "@aws-sdk/lib-dynamodb": "^3.900.0"
+  }
+}

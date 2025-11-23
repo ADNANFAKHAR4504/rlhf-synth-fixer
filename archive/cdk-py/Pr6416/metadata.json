@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-13T00:07:18+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "0b9sw0",
+  "aws_services": [
+    "API Gateway",
+    "CloudWatch",
+    "DynamoDB",
+    "KMS",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "WAF",
+    "X-Ray"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

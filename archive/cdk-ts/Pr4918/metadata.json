@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000593",
+  "team": "1",
+  "startedAt": "2025-10-21T07:01:00.572Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "ECR",
+    "ECS",
+    "Fargate",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Secrets Manager",
+    "EventBridge",
+    "CloudFormation"
+  ],
+  "training_quality": 9,
+  "background": "Building a CI/CD Pipeline for Payment Processing App",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

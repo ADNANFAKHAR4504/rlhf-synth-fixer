@@ -4,8 +4,12 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.Tags;
 import software.constructs.Construct;
 
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 /**
@@ -155,6 +159,22 @@ public final class Main {
         if (environmentSuffix == null) {
             environmentSuffix = "dev";
         }
+
+        // Get environment variables for tagging
+        String repositoryName = System.getenv().getOrDefault("REPOSITORY", "unknown");
+        String commitAuthor = System.getenv().getOrDefault("COMMIT_AUTHOR", "unknown");
+        String prNumber = System.getenv().getOrDefault("PR_NUMBER", "unknown");
+        String team = System.getenv().getOrDefault("TEAM", "unknown");
+        String createdAt = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT);
+
+        // Apply tags to all stacks in this app
+        Tags.of(app).add("Environment", environmentSuffix);
+        Tags.of(app).add("Repository", repositoryName);
+        Tags.of(app).add("Author", commitAuthor);
+        Tags.of(app).add("PRNumber", prNumber);
+        Tags.of(app).add("Team", team);
+        Tags.of(app).add("CreatedAt", createdAt);
+
 
         // Create the main TAP stack
         new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()

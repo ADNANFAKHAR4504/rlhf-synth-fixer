@@ -4,7 +4,7 @@ Orchestrates the complete Infrastructure as Code development lifecycle by coordi
 
 ## ⚠️ CRITICAL: CSV Data Integrity
 
-**BEFORE modifying tasks.csv:**
+**BEFORE modifying .claude/tasks.csv:**
 1. READ "CSV File Corruption Prevention" in `.claude/lessons_learnt.md`
 2. READ complete guide in `.claude/docs/policies/csv_safety_guide.md`
 3. RUN safety check: `./.claude/scripts/check-csv-safety.sh`
@@ -15,7 +15,7 @@ ALL CSV operations MUST:
 3. Validate row counts before and after
 4. Restore from backup if ANY validation fails
 
-**Failure to follow these rules will corrupt tasks.csv and lose all task data!**
+**Failure to follow these rules will corrupt .claude/tasks.csv and lose all task data!**
 
 ## ⚠️ CRITICAL: Commit Message Requirements
 
@@ -25,17 +25,21 @@ ALL CSV operations MUST:
 - ✅ CORRECT: `feat(synth-{task_id}): add infrastructure for healthcare`
 - ❌ WRONG: `feat(synth-{task_id}): Add infrastructure for healthcare`
 
-The CI/CD pipeline validates commits using `commitlint` and will **FAIL** if subject starts with uppercase. See Phase 5 for detailed instructions.
+The CI/CD pipeline validates commits using `commitlint` and will **FAIL** if subject starts with uppercase. See PHASE 5 for detailed instructions.
 
 ## Workflow
 
 Execute these phases in sequence to deliver production-ready IaC:
 
-### Phase 1: Task Selection
+### PHASE 1: Task Selection & Setup
+
+**Agent**: `task-coordinator`
+
+### PHASE 1.1: Task Selection
 
 **Agent**: `iac-task-selector`
 
-### Phase 1.5: Validate Task Selection and Setup
+### PHASE 1.2: Task Validation & Setup
 
 **Goal**: Ensure selected task and metadata.json match CLI tool expectations.
 
@@ -68,11 +72,11 @@ Do NOT summarize or paraphrase requirements
 **CHECKPOINT**:
 ```
 If all pass:
-- Report: "✅ Phase 1.5: Task setup validated - ready for code generation"
-- Proceed to Phase 2 (iac-infra-generator)
+- Report: "✅ PHASE 1.2: Task setup validated - ready for code generation"
+- Proceed to PHASE 2 (iac-infra-generator)
 
 If any fail:
-- Report: "❌ Phase 1.5: Validation FAILED"
+- Report: "❌ PHASE 1.2: Validation FAILED"
 - List specific issues
 - Fix metadata.json or task setup
 - Re-validate before proceeding
@@ -93,15 +97,15 @@ Provide:
 Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 ```
 
-### Phase 2: Code Generation
+### PHASE 2: Code Generation
 
 **Agent**: `iac-infra-generator`
 
-### Phase 3: QA Training & Validation
+### PHASE 3: QA Training & Validation
 
 **Agent**: `iac-infra-qa-trainer`
 
-### Phase 4: Code Review & Compliance
+### PHASE 4: Code Review & Compliance
 
 **Agent**: `iac-code-reviewer`
 
@@ -115,19 +119,60 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Decision Authority**: iac-code-reviewer recommends, task-coordinator enforces
 
-### Phase 5: PR Creation & Task Completion
+### PHASE 5: PR Creation & Task Completion
 
 **Agent**: `task-coordinator` (orchestrates final steps)
 
 **Prerequisites**:
-- Phase 4 (code-reviewer) reports "Ready"
+- PHASE 4 (code-reviewer) reports "Ready"
+- **ALL pre-submission requirements met** (see below)
 - GitHub CLI (`gh`) installed and authenticated
 - Git remote origin accessible
 - User has write permissions
 
+**MANDATORY Pre-Submission Requirements**:
+
+Run the pre-submission validation script:
+```bash
+bash .claude/scripts/pre-submission-check.sh
+```
+
+This validates **ALL** critical requirements:
+1. ✅ Build successful (lint + build + synth)
+2. ✅ No lint issues
+3. ✅ No synth issues  
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ Integration tests passing
+7. ✅ All files in allowed directories
+8. ✅ All documentation present
+9. ✅ Training quality ≥ 8
+
+**If ANY requirement fails**:
+- **BLOCK PR creation immediately**
+- Report specific failures
+- Do NOT proceed until all pass
+- Reference: `.claude/docs/references/pre-submission-checklist.md`
+
 **Pre-flight Checks**:
 
-**Validation**: Run Checkpoint K: PR Prerequisites
+**Validation**: Run Checkpoint K: File Location Compliance
+- See `.claude/docs/references/validation-checkpoints.md` for file location rules
+- See `.claude/docs/references/cicd-file-restrictions.md` for complete restrictions
+
+```bash
+# Check what files will be in the PR
+git diff --name-only origin/main...HEAD
+
+# Manually verify all files are in allowed locations:
+# - bin/, lib/, test/, tests/ folders
+# - metadata.json, cdk.json, cdktf.json, Pulumi.yaml, tap.py, tap.go, package.json, package-lock.json at root
+# NO files in .github/, scripts/, docs/, or other locations
+```
+
+**If violations found**: STOP, fix file locations, do NOT proceed
+
+**Validation**: Run Checkpoint L: PR Prerequisites
 - See `.claude/docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
@@ -161,7 +206,7 @@ fi
 echo "✅ Training quality validated: $TRAINING_QUALITY/10"
 ```
 
-If fails: Return to Phase 4, improve implementation, re-validate
+If fails: Return to PHASE 4, improve implementation, re-validate
 
 3. **Stage changes**:
    ```bash
@@ -207,6 +252,7 @@ Task ID: ${TASK_ID}"
 6. **Create PR**:
    ```bash
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
+   SYNTH_GROUP=$(jq -r '.synth_group' ../../.claude/settings.local.json)
 
    gh pr create \
      --title "synth-${TASK_ID} {SUBTASK}" \
@@ -237,9 +283,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 - [x] Code in ideal response and tapstack are the same" \
      --base main \
      --head ${BRANCH_NAME} \
-     --label "synth" \
-     --label "automated" \
-     --label "complexity-${COMPLEXITY}"
+     --label "${SYNTH_GROUP}"
    ```
 
 7. **Capture PR number**:
@@ -260,8 +304,8 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    ```bash
    cd ../..  # Return to main repo
 
-   if [ ! -f "tasks.csv" ]; then
-     echo "❌ ERROR: tasks.csv not found at $(pwd)"
+   if [ ! -f ".claude/tasks.csv" ]; then
+     echo "❌ ERROR: .claude/tasks.csv not found at $(pwd)"
      exit 1
    fi
 
@@ -269,7 +313,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    ./.claude/scripts/task-manager.sh mark-done "${TASK_ID}" "${PR_NUMBER}"
 
    if [ $? -ne 0 ]; then
-     echo "❌ Failed to update tasks.csv"
+     echo "❌ Failed to update .claude/tasks.csv"
      exit 1
    fi
    ```
@@ -310,14 +354,26 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
    - ✅ CORRECT: `worktree/synth-{task_id}`
 
-2. **Immediately change directory**:
+2. **Immediately change directory and verify**:
    ```bash
    cd worktree/synth-{task_id}
+
+   # MANDATORY: Run automated verification
+   bash .claude/scripts/verify-worktree.sh || exit 1
    ```
 
    **From this point forward, ALL commands run from this directory unless explicitly stated.**
 
-3. **Validate worktree setup**:
+3. **Validate worktree setup** (AUTOMATED):
+
+   The `verify-worktree.sh` script automatically checks:
+   - ✅ Location matches pattern: `*/worktree/synth-{task_id}`
+   - ✅ Branch matches directory name
+   - ✅ metadata.json exists
+   - ✅ Not on main/master branch
+   - ✅ Exports environment variables ($WORKTREE_DIR, $TASK_ID, $TASK_BRANCH)
+
+   **Manual verification (only if automated script fails)**:
    ```bash
    # Verify location
    pwd  # Must end with: /worktree/synth-{task_id}
@@ -353,7 +409,7 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    - Now in: `worktree/synth-{task_id}/`
    - All file paths relative to this directory
    - All sub-agents work in this directory
-   - Do not return to main repo until Phase 5
+   - Do not return to main repo until PHASE 5
 
 7. **Generate metadata.json** (CRITICAL - all fields required):
 
@@ -368,10 +424,10 @@ If `metadata.json` not present:
 - Prefer TypeScript for tests (unless project is Python-based)
 - **CRITICAL**: Set `complexity` = EXACT value from CSV `difficulty` column (NOT "difficulty")
   - Valid: "medium", "hard", "expert" (must match CSV exactly)
-- Set `team` = "synth" (REQUIRED)
+- Set `team` = value from `.claude/settings.local.json` if present, otherwise default to "synth" (REQUIRED)
 - Set `turn_type` = "single" (REQUIRED)
 - Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
-- **Extract from tasks.csv** (REQUIRED):
+- **Extract from .claude/tasks.csv** (REQUIRED):
   - `subtask` from subtask column
   - `subject_labels` from subject_labels column (parse as JSON array)
 - Do not add more fields than shown in example
@@ -391,9 +447,12 @@ Example metadata.json:
   "team": "synth",
   "startedAt": "2025-08-12T13:19:10-05:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["CI/CD Pipeline", "Security Configuration"]
+  "subject_labels": ["CI/CD Pipeline", "Security Configuration"],
+  "aws_services": [],
 }
 ```
+
+**CRITICAL**: `aws_services` must be initialized as an empty array `[]`. It will be populated by iac-code-reviewer based on implemented services.
 
 **Validate immediately**:
 ```bash
@@ -462,7 +521,7 @@ echo "us-east-1" > lib/AWS_REGION  # or specified region
 
 If unable to finish task: set task status in CSV as "error" and put error info in trainr_notes column.
 
-### Error Handling for PR Creation Failures
+### Error Handling for PR Creation Failures (ENHANCED)
 
 If PR creation fails:
 
@@ -470,23 +529,55 @@ If PR creation fails:
    ```bash
    ERROR_MESSAGE="<detailed error>"
    ERROR_STEP="<step: commit/push/pr-create/csv-update>"
+   ERROR_TYPE="<auth|network|git|permission|other>"
    ```
 
-2. **Update CSV with error**:
+2. **Classify error type**:
+   ```bash
+   # Transient errors (should retry)
+   TRANSIENT_ERRORS=("network" "timeout" "rate limit" "temporary" "connection")
+   
+   # Permanent errors (should not retry)
+   PERMANENT_ERRORS=("permission denied" "invalid" "not found" "conflict" "already exists")
+   ```
+
+3. **Retry logic for transient errors**:
+   ```bash
+   MAX_RETRIES=3
+   RETRY_DELAY=5  # seconds
+   
+   # Use retry-operation.sh script
+   if echo "$ERROR_MESSAGE" | grep -qiE "$(IFS='|'; echo "${TRANSIENT_ERRORS[*]}")"; then
+     echo "⚠️ Transient error detected, attempting retry..."
+     if bash .claude/scripts/retry-operation.sh \
+       "retry_${ERROR_STEP}_operation" \
+       "$MAX_RETRIES" \
+       "$RETRY_DELAY"; then
+       echo "✅ Retry succeeded!"
+       # Continue with normal flow
+       exit 0
+     fi
+   fi
+   ```
+
+4. **Update CSV with error** (only if all retries failed):
    ```bash
    cd ../../  # Return to main repo if needed
 
    # Thread-safe error marking (uses file locking)
-   ./.claude/scripts/task-manager.sh mark-error "${TASK_ID}" "${ERROR_MESSAGE}" "${ERROR_STEP}"
+   ./.claude/scripts/task-manager.sh mark-error "${TASK_ID}" \
+     "${ERROR_MESSAGE} (after ${MAX_RETRIES} retries)" \
+     "${ERROR_STEP}"
    ```
 
-3. **Report with recovery options**:
+5. **Report with recovery options**:
    ```
    ❌ Task ${TASK_ID} failed at ${ERROR_STEP}
    Error: ${ERROR_MESSAGE}
-
+   Retries attempted: ${attempt}/${MAX_RETRIES}
+   
    Recovery:
-   - Auth issues: Run 'gh auth login' and retry Phase 5
+   - Auth issues: Run 'gh auth login' and retry PHASE 5
    - Network issues: Check connectivity and retry
    - Permission issues: Verify repository write access
    - Git issues: Check branch state and remote status
@@ -502,13 +593,15 @@ Always report in each log: taskId and deployment region (default: us-east-1).
 All subagents MUST report using this format:
 
 ```markdown
-**AGENT STATUS**: [PHASE] - [STATUS] - [CURRENT_STEP]
+**AGENT STATUS**: PHASE X.Y - [STATUS] - [CURRENT_STEP]
 **TASK**: [Specific task being worked on]
-**PROGRESS**: [X/Y] steps completed
+**PROGRESS**: [X.Y/Z] phases completed
 **NEXT ACTION**: [Next planned action]
 **ISSUES**: [Blocking issues or NONE]
 **BLOCKED**: [YES/NO - If YES, explain and resolution needed]
 ```
+
+**Note**: Use standardized phase names (e.g., `PHASE 1.2`, `PHASE 2`, `PHASE 3`) as defined in `.claude/docs/references/phase-naming-convention.md`.
 
 **Required Updates**:
 - Start of execution

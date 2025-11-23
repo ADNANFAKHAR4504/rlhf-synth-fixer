@@ -42,14 +42,24 @@ if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
   export CURRENT_ACCOUNT_ID=${CURRENT_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
 
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-1..."
-  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-1 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
-  
+  # Define all target regions
+  REGIONS=("us-east-1" "us-west-2" "ap-southeast-2" "eu-central-1" "eu-central-2" "eu-west-2")
 
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-west-2..."
-  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-west-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
-  echo "✅ both regions bootstrapped successfully"
+  echo "🏗️ Bootstrapping Account: $CURRENT_ACCOUNT_ID"
+  echo "Regions: ${REGIONS[*]}"
 
+  for REGION in "${REGIONS[@]}"; do
+    if aws cloudformation describe-stacks --stack-name CDKToolkit --region "$REGION" >/dev/null 2>&1; then
+      echo "✅ CDKToolkit exists in $REGION — skipping bootstrap."
+    else
+      echo "🚀 Bootstrapping $REGION..."
+      npx cdk bootstrap aws://$CURRENT_ACCOUNT_ID/$REGION \
+        --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess \
+        --require-approval never
+    fi
+  done
+
+  echo "✅ All target regions checked and bootstrapped where needed."
   # npm run cdk:bootstrap
 
 elif [ "$PLATFORM" = "pulumi" ]; then
@@ -112,7 +122,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   echo "Running Terraform plan..."
   # If task_sub_category indicates multi-env mgmt, read deploy_env from metadata.json
   # and pass it as -var-file to terraform plan via TF_CLI_ARGS_plan
-  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+  if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
     DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
     if [ -n "$DEPLOY_ENV_FILE" ]; then
       export TF_CLI_ARGS_plan="-var-file=${DEPLOY_ENV_FILE} ${TF_CLI_ARGS_plan:-}"

@@ -1,0 +1,37 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "f3sjmn",
+  "team": "synth",
+  "startedAt": "2025-11-03T09:27:52Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "SecurityHub",
+    "Inspector2",
+    "DevOpsGuru",
+    "ComputeOptimizer",
+    "Health",
+    "Config",
+    "CostExplorer",
+    "AuditManager",
+    "EC2"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

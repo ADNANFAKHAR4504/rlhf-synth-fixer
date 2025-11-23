@@ -13,19 +13,26 @@ fi
 
 PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
 LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+TEAM=$(jq -r '.team // "unknown"' metadata.json)
 
-echo "Project: platform=$PLATFORM, language=$LANGUAGE"
+echo "Project: platform=$PLATFORM, language=$LANGUAGE, team=$TEAM"
 
 # Set default environment variables if not provided
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
+export PR_NUMBER=${PR_NUMBER:-"unknown"}
+export TEAM=${TEAM}
 export AWS_REGION=${AWS_REGION:-us-east-1}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
 export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
 export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
+
+# Export Terraform variables for tagging
+export TF_VAR_pr_number=${PR_NUMBER:-"unknown"}
+export TF_VAR_team=${TEAM}
 
 # Ensure non-interactive Terraform by providing defaults if not set by CI secrets
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
@@ -54,6 +61,36 @@ echo "=== Bootstrap Phase ==="
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
+
+  # Check if stack is in failed state and needs cleanup
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Attempting to delete..."
+
+    # Try CDK destroy first
+    npm run cdk:destroy -- --force || true
+
+    # If stack still exists and in DELETE_FAILED, force delete with AWS CLI
+    STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
+
+    if [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+      echo "⚠️ Stack still in DELETE_FAILED state. Force deleting with AWS CLI..."
+      # Get stuck resources and continue-update-rollback to unstick
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" \
+        --resources-to-skip "TapVpcRestrictDefaultSecurityGroupCustomResource2332DAD5" 2>/dev/null || true
+      sleep 5
+      # Now try delete again
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+    fi
+
+    echo "✅ Stack cleanup completed"
+    sleep 10
+  fi
+
   npm run cdk:deploy
 
 elif [ "$PLATFORM" = "cdktf" ]; then
@@ -86,11 +123,143 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  npm run cfn:deploy-yaml
+
+  # Check stack status and handle stuck states
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+  echo "Current stack status: $STACK_STATUS"
+
+  # Handle various stuck or failed states
+  if [[ "$STACK_STATUS" =~ ^(CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|DELETE_IN_PROGRESS)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Waiting for operation to complete..."
+
+    # Wait with timeout (max 10 minutes)
+    WAIT_COUNT=0
+    MAX_WAIT=60  # 60 * 10 seconds = 10 minutes
+
+    while [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+      sleep 10
+      STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+      echo "  Status: $STACK_STATUS (waited $((WAIT_COUNT * 10))s)"
+      WAIT_COUNT=$((WAIT_COUNT + 1))
+    done
+
+    # Check if still in progress after timeout
+    if [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]]; then
+      echo "⚠️ Stack still in progress after timeout. Attempting to cancel and delete..."
+      aws cloudformation cancel-update-stack --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 30
+
+      # Force delete
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+      STACK_STATUS="DOES_NOT_EXIST"
+    fi
+  fi
+
+  # Handle failed states that need cleanup
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
+
+    # Try to continue rollback if stuck
+    if [[ "$STACK_STATUS" =~ (ROLLBACK|UPDATE_ROLLBACK) ]]; then
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 10
+    fi
+
+    aws cloudformation delete-stack --stack-name "$STACK_NAME"
+    echo "⏳ Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+      echo "❌ Stack deletion failed or timed out"
+      exit 1
+    }
+    echo "✅ Stack deleted successfully"
+  fi
+
+  # Deploy with error capture
+  if ! npm run cfn:deploy-yaml; then
+    echo ""
+    echo "❌ CloudFormation deployment failed. Fetching stack events..."
+    echo ""
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+      --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' \
+      --output table 2>/dev/null || echo "Could not fetch stack events"
+    echo ""
+    echo "💡 Check the CloudFormation template in lib/TapStack.yml for issues"
+    exit 1
+  fi
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-  npm run cfn:deploy-json
+
+  # Check stack status and handle stuck states
+  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
+  STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+
+  echo "Current stack status: $STACK_STATUS"
+
+  # Handle various stuck or failed states
+  if [[ "$STACK_STATUS" =~ ^(CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|DELETE_IN_PROGRESS)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Waiting for operation to complete..."
+
+    # Wait with timeout (max 10 minutes)
+    WAIT_COUNT=0
+    MAX_WAIT=60  # 60 * 10 seconds = 10 minutes
+
+    while [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+      sleep 10
+      STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+      echo "  Status: $STACK_STATUS (waited $((WAIT_COUNT * 10))s)"
+      WAIT_COUNT=$((WAIT_COUNT + 1))
+    done
+
+    # Check if still in progress after timeout
+    if [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]]; then
+      echo "⚠️ Stack still in progress after timeout. Attempting to cancel and delete..."
+      aws cloudformation cancel-update-stack --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 30
+
+      # Force delete
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+      STACK_STATUS="DOES_NOT_EXIST"
+    fi
+  fi
+
+  # Handle failed states that need cleanup
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
+
+    # Try to continue rollback if stuck
+    if [[ "$STACK_STATUS" =~ (ROLLBACK|UPDATE_ROLLBACK) ]]; then
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 10
+    fi
+
+    aws cloudformation delete-stack --stack-name "$STACK_NAME"
+    echo "⏳ Waiting for stack deletion to complete..."
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
+      echo "❌ Stack deletion failed or timed out"
+      exit 1
+    }
+    echo "✅ Stack deleted successfully"
+  fi
+
+  # Deploy with error capture
+  if ! npm run cfn:deploy-json; then
+    echo ""
+    echo "❌ CloudFormation deployment failed. Fetching stack events..."
+    echo ""
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+      --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' \
+      --output table 2>/dev/null || echo "Could not fetch stack events"
+    echo ""
+    echo "💡 Check the CloudFormation template in lib/TapStack.json for issues"
+    exit 1
+  fi
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
@@ -107,7 +276,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Determine var-file to use based on metadata.json
   VAR_FILE=""
-  if [ "$(jq -r '.task_sub_category // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
+  if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
     DEPLOY_ENV_FILE=$(jq -r '.task_config.deploy_env // ""' ../metadata.json)
     if [ -n "$DEPLOY_ENV_FILE" ]; then
       VAR_FILE="-var-file=${DEPLOY_ENV_FILE}"
@@ -169,13 +338,22 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔧 Go Pulumi project detected"
     pulumi login "$PULUMI_BACKEND_URL"
     cd lib
+
+    # Ensure Go dependencies are up to date
+    echo "📦 Running go mod tidy..."
+    cd ..
+    go mod tidy
+    cd lib
+
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
-    
+
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
-    
+
+    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
+
     echo "Deploying infrastructure ..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
       echo "⚠️ Deployment failed, attempting lock recovery..."
@@ -196,6 +374,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+
+    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
     
     echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then

@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-29T05:49:06.306Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SQS",
+    "EventBridge",
+    "SSM Parameter Store",
+    "CloudWatch",
+    "X-Ray",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "background": "Serverless event processing pipeline for fintech real-time transaction analysis handling millions of events daily with sub-second latency. Infrastructure includes API Gateway REST API with Lambda authorizers and 10,000 req/sec throttling, three Lambda functions (event ingestion, processing, storage) using ARM-based Graviton2 processors with reserved concurrency, DynamoDB tables with composite primary keys and GSI for state storage, SQS queues with DLQ for reliable message delivery, EventBridge rules with content-based filtering for event orchestration, SSM Parameter Store for cross-function configuration, CloudWatch Logs with 7-day retention and custom metrics, and X-Ray distributed tracing across all components. System maintains strict data consistency and audit trails with point-in-time recovery, server-side encryption on all storage resources, and least-privilege IAM policies.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,383 @@
+```yaml
+# cloudbuild.yaml - HIPAA-compliant multi-environment pipeline (dev/staging/prod)
+# NOTE:
+# - Manual approval for PROD is expected to be configured at the Cloud Build trigger level
+#   (approvalRequired: true) before running this build for _ENVIRONMENT=prod.
+# - Org-level log sinks should route Cloud Logging to the SIEM project ${_SIEM_PROJECT_ID}.
+
+timeout: 7200s
+
+substitutions:
+  _ARTIFACT_REGISTRY: "us-central1-docker.pkg.dev/my-project/hipaa-registry"
+  _ENVIRONMENT: "dev"                        # dev | staging | prod (override in trigger)
+  _GKE_CLUSTER: "hipaa-analytics-gke"
+  _DATAPROC_REGION: "us-central1"
+  _BIGQUERY_DATASET: "hipaa_analytics"
+  _KMS_KEYRING: "hipaa-keyring"
+  _VPC_SC_PERIMETER: "hipaa-perimeter"
+  _COMPLIANCE_BUCKET: "my-hipaa-compliance-bucket"
+  _SECURITY_PROJECT_ID: "my-security-project"
+  _SIEM_PROJECT_ID: "my-siem-project"
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
+  # Logs should be routed to SIEM project via org-level log sink using _SIEM_PROJECT_ID.
+  volumes:
+    - name: docker-cache
+      path: /workspace/.cache/kaniko
+
+# Secrets for DB passwords, API keys, service accounts, etc.
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/db-password/versions/latest
+      env: DB_PASSWORD
+    - versionName: projects/$PROJECT_ID/secrets/api-key/versions/latest
+      env: API_KEY
+    - versionName: projects/$PROJECT_ID/secrets/service-account-key/versions/latest
+      env: SERVICE_ACCOUNT_KEY
+
+steps:
+  # 1) Environment validation (VPC-SC, KMS, org policies, audit logging)
+  - id: "env-validation-hipaa"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/validate-env-hipaa.sh \
+          "${_VPC_SC_PERIMETER}" \
+          "${_KMS_KEYRING}" \
+          "${_SIEM_PROJECT_ID}" \
+          "${_ENVIRONMENT}"
+    env:
+      - "CLOUDSDK_CORE_PROJECT=$PROJECT_ID"
+
+  # 2) Python linting (PySpark + API services) - pylint
+  - id: "lint-python-pylint"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/pylint:latest"
+    args:
+      - "pylint"
+      - "pyspark_jobs"
+      - "api_services"
+
+  # 3) Type checking - mypy
+  - id: "type-check-mypy"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/mypy:latest"
+    args:
+      - "mypy"
+      - "pyspark_jobs"
+      - "api_services"
+
+  # 4) Security linting - bandit
+  - id: "security-lint-bandit"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/bandit:latest"
+    args:
+      - "-r"
+      - "pyspark_jobs"
+      - "api_services"
+
+  # 5) Terraform validation + HIPAA-specific Checkov
+  - id: "terraform-validate-hipaa"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/terraform:1.6"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/terraform-validate-hipaa.sh "${_ENVIRONMENT}"
+    env:
+      - "TF_IN_AUTOMATION=1"
+
+  # 6) Dependency vulnerability scanning (Python packages) - safety
+  - id: "dependency-scan-safety"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/safety:latest"
+    args:
+      - "check"
+      - "--full-report"
+      - "-r"
+      - "requirements.txt"
+
+  # 7) Build PySpark wheels for Dataproc jobs
+  - id: "build-pyspark-wheels"
+    name: "python:3.11-slim"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/build-pyspark-wheels.sh
+
+  # 8) Build API containers with HIPAA-hardened base images via Kaniko
+  - id: "build-api-containers-kaniko"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/kaniko:latest"
+    args:
+      - "--destination=${_ARTIFACT_REGISTRY}/api/order-service:${_ENVIRONMENT}-$SHORT_SHA"
+      - "--destination=${_ARTIFACT_REGISTRY}/api/patient-service:${_ENVIRONMENT}-$SHORT_SHA"
+      - "--destination=${_ARTIFACT_REGISTRY}/api/report-service:${_ENVIRONMENT}-$SHORT_SHA"
+      - "--context=."
+      - "--dockerfile=deploy/api/Dockerfile"
+      - "--cache=true"
+      - "--cache-dir=/workspace/.cache/kaniko"
+      - "--build-arg=BASE_IMAGE=${_ARTIFACT_REGISTRY}/base-images/python-alpine:3.11-hipaa"
+    volumes:
+      - name: docker-cache
+        path: /workspace/.cache/kaniko
+
+  # 9) Container signing using Cosign + KMS
+  - id: "sign-api-containers-cosign"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/cosign:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/sign-containers-hipaa.sh \
+          "${_ARTIFACT_REGISTRY}" \
+          "${_KMS_KEYRING}" \
+          "${_ENVIRONMENT}" \
+          "$SHORT_SHA"
+    secretEnv:
+      - SERVICE_ACCOUNT_KEY
+
+  # 10) Unit testing (pytest) with coverage > 85%
+  - id: "unit-tests-pytest"
+    name: "python:3.11-slim"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -r requirements.txt
+        pytest tests/unit \
+          --cov=pyspark_jobs --cov=api_services \
+          --cov-fail-under=85
+
+  # 11) Data quality testing with Great Expectations on test BigQuery dataset
+  - id: "data-quality-great-expectations"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/great-expectations:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/run-data-quality-tests.sh \
+          "${_BIGQUERY_DATASET}" \
+          "${_ENVIRONMENT}"
+
+  # 12) Integration tests: deploy test Dataproc cluster with VPC-SC, run sample jobs, validate BQ ML
+  - id: "integration-tests-dataproc-bq-ml"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/deploy-dataproc-hipaa.sh \
+          "${_DATAPROC_REGION}" \
+          "${_ENVIRONMENT}"
+        ./scripts/run-pyspark-job.sh \
+          "${_DATAPROC_REGION}" \
+          "${_BIGQUERY_DATASET}" \
+          "${_ENVIRONMENT}"
+
+  # 13) PHI detection testing (ensure no PHI in logs or outputs) using Presidio
+  - id: "phi-detection-logs"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/presidio:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/run-phi-detection.sh \
+          "${_ENVIRONMENT}" \
+          "${_SIEM_PROJECT_ID}"
+    env:
+      - "CLOUDSDK_CORE_PROJECT=$PROJECT_ID"
+
+  # 14) Container security scanning with Trivy (block on any vuln)
+  - id: "container-security-trivy"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/trivy:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/scan-containers-trivy.sh \
+          "${_ARTIFACT_REGISTRY}" \
+          "${_ENVIRONMENT}" \
+          "$SHORT_SHA"
+
+  # 15) SAST scanning using Semgrep with healthcare-specific rulesets
+  - id: "sast-semgrep"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/semgrep:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/run-semgrep-hipaa.sh
+
+  # 16) Infrastructure compliance with Prowler HIPAA checks
+  - id: "infra-compliance-prowler"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/prowler:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/run-prowler-hipaa.sh \
+          "${_ENVIRONMENT}"
+
+  # 17) Encryption validation (CMEK at rest, TLS 1.3 in transit, KMS rotation)
+  - id: "encryption-validation"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/validate-encryption.sh \
+          "${_KMS_KEYRING}" \
+          "${_ENVIRONMENT}"
+
+  # 18) Access control validation (least privilege IAM, VPC-SC egress)
+  - id: "access-control-validation"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/validate-access-controls.sh \
+          "${_VPC_SC_PERIMETER}" \
+          "${_ENVIRONMENT}" \
+          "${_SECURITY_PROJECT_ID}"
+
+  # 19) Audit log validation (logs flowing to SIEM / dedicated project)
+  - id: "audit-log-validation"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/validate-audit-logs.sh \
+          "${_SIEM_PROJECT_ID}" \
+          "${_ENVIRONMENT}"
+
+  # 20) Terraform apply for infrastructure (multi-env)
+  - id: "terraform-apply"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/terraform:1.6"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/terraform-apply-hipaa.sh "${_ENVIRONMENT}"
+    env:
+      - "TF_IN_AUTOMATION=1"
+
+  # 21) GKE deployment – API services (restricted PSS, network policies, Workload Identity)
+  - id: "deploy-gke-hipaa"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/kubectl:1.28"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/deploy-gke-hipaa.sh \
+          "${_GKE_CLUSTER}" \
+          "${_ENVIRONMENT}" \
+          "${_ARTIFACT_REGISTRY}" \
+          "$SHORT_SHA"
+    env:
+      - "KUBECONFIG=/workspace/kubeconfig"
+
+  # 22) Dataproc production/target cluster creation (no public IPs, VPC-SC, CMEK)
+  - id: "deploy-dataproc-hipaa"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/deploy-dataproc-hipaa.sh \
+          "${_DATAPROC_REGION}" \
+          "${_ENVIRONMENT}"
+
+  # 23) PySpark job submission to HIPAA bucket + BigQuery with column-level encryption
+  - id: "run-pyspark-jobs"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/run-pyspark-job.sh \
+          "${_DATAPROC_REGION}" \
+          "${_BIGQUERY_DATASET}" \
+          "${_ENVIRONMENT}"
+
+  # 24) Data access audit configuration (Data Catalog policy tags, DLP, BQ audit logs)
+  - id: "data-access-audit-config"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/data-access-audit-config.sh \
+          "${_BIGQUERY_DATASET}" \
+          "${_ENVIRONMENT}"
+
+  # 25) Vertex AI deployment (models, endpoints, Workbench – no public IPs, VPC peering)
+  - id: "vertex-ai-deployment"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/deploy-vertex-hipaa.sh \
+          "${_ENVIRONMENT}"
+
+  # 26) Backup verification (BQ backups, Dataproc HDFS snapshots, GCS versioning + restore)
+  - id: "backup-verification"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/test-backup-restore.sh \
+          "${_BIGQUERY_DATASET}" \
+          "${_ENVIRONMENT}"
+
+  # 27) Penetration testing / DAST with ZAP against staging/prod APIs (OWASP API Top 10)
+  - id: "dast-zap-api-security"
+    name: "${_ARTIFACT_REGISTRY}/hipaa-tools/zap:latest"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/run-zap-dast.sh \
+          "${_ENVIRONMENT}"
+
+  # 28) Monitoring configuration (Cloud Monitoring dashboards, alerts, exfil metrics)
+  - id: "configure-monitoring-hipaa"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/configure-monitoring.sh \
+          "${_ENVIRONMENT}" \
+          "${_SECURITY_PROJECT_ID}"
+
+  # 29) Generate HIPAA compliance report and upload to _COMPLIANCE_BUCKET
+  - id: "generate-compliance-report"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/generate-compliance-report.sh \
+          "gs://${_COMPLIANCE_BUCKET}/reports/${BUILD_ID}" \
+          "${_ENVIRONMENT}"
+
+  # 30) Notification step – success/failure (no PHI in logs) via Pub/Sub
+  - id: "notify-security-team"
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        ./scripts/notify-security-team.sh \
+          "projects/${_SECURITY_PROJECT_ID}/topics/hipaa-deployments" \
+          "${_ENVIRONMENT}" \
+          "${BUILD_ID}" \
+          "${STATUS}"
+
+
+```

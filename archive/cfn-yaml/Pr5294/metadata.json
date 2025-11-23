@@ -1,0 +1,42 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "350046",
+  "team": "5",
+  "startedAt": "2025-10-16T17:24:14.128Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Fargate",
+    "ALB",
+    "ECR",
+    "S3",
+    "CloudWatch",
+    "Lambda",
+    "CodePipeline",
+    "CodeBuild",
+    "SecretsManager",
+    "SNS",
+    "IAM",
+    "EventBridge",
+    "CloudTrail",
+    "Config",
+    "WAF",
+    "SQS"
+  ],
+  "background": "CI/CD Pipeline with ECS Fargate for Web Application with comprehensive security, monitoring, and compliance features",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mithilesh-turing",
+  "dockerS3Location": ""
+}

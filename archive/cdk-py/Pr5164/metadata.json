@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-27T22:05:24.286569+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Cloud Environment Setup",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "po_id": "5775837238",
+  "training_quality": 10,
+  "aws_services": [
+    "KMS",
+    "CloudTrail",
+    "Config",
+    "VPC",
+    "CloudWatch",
+    "S3",
+    "Lambda",
+    "Secrets Manager",
+    "SNS",
+    "SQS",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

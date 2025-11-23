@@ -5,8 +5,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$PROJECT_ROOT"
+CLAUDE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$CLAUDE_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 # Colors
 GREEN='\033[0;32m'
@@ -20,9 +21,9 @@ log_warn() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 
 # Test configuration
 NUM_AGENTS=${1:-3}
-TEST_CSV="tasks.csv.test"
-TEST_BACKUP="tasks.csv.backup.test"
-TEST_LOCK="tasks.csv.lock.test"
+TEST_CSV=".claude/tasks.csv.test"
+TEST_BACKUP=".claude/tasks.csv.backup.test"
+TEST_LOCK=".claude/tasks.csv.lock.test"
 
 log_info "Parallel Locking Test - Starting $NUM_AGENTS agents"
 

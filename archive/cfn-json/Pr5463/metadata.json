@@ -1,0 +1,27 @@
+{
+  "platform": "cloudformation",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-30T13:47:01+00:00",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "po_id": "101000776",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,51 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349062",
+  "team": "3",
+  "startedAt": "2025-10-28T06:20:02.543Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ProdVPC",
+    "InternetGateway",
+    "AttachGateway",
+    "PublicSubnet1",
+    "PublicSubnet2",
+    "PublicRouteTable",
+    "PublicRoute",
+    "SubnetRouteTableAssociation1",
+    "SubnetRouteTableAssociation2",
+    "WebSecurityGroup",
+    "S3KMSKey",
+    "S3KMSKeyAlias",
+    "S3Bucket",
+    "S3BucketPolicy",
+    "CloudTrail",
+    "EC2Role",
+    "EC2InstanceProfile",
+    "Instance1",
+    "Instance2",
+    "ElasticIP",
+    "EIPAssociation",
+    "LaunchTemplate",
+    "AutoScalingGroup",
+    "ScaleOutPolicy",
+    "ScaleInPolicy",
+    "ScaleOutAlarm",
+    "ScaleInAlarm",
+    "PatchingAssociation"
+  ],
+  "training_quality": 9,
+  "background": "Migrate production to a new AWS account by deploying a brand-new, self-contained stack in us-east-1 using a single TapStack.yml. Build a VPC named 'ProdVPC' with two public subnets across AZs and an Internet Gateway; launch two Amazon Linux 2 EC2 instances in separate public subnets (attach an Elastic IP to one) and enable SSH/HTTP via a security group. Add an IAM role for EC2 with least-privilege read-only access to a versioned, KMS-encrypted S3 bucket that also receives CloudTrail logs. Provide an EC2 Launch Template and an Auto Scaling Group (min 2, max 4) with CPU-based CloudWatch alarms for scale in/out. Include parameters (KeyName, SSHLocation, CreateEIP), daily SSM patching via AWS-RunPatchBaseline, KMS key and alias, outputs for key resources, and consistent 'prod-' naming and tags.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

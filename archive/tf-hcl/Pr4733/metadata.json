@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-17T11:27:08.809Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudFront",
+    "Route 53",
+    "WAF",
+    "CloudWatch",
+    "X-Ray",
+    "Secrets Manager"
+  ],
+  "training_quality": 9,
+  "background": "Financial services API infrastructure handling 500,000 daily transactions with GDPR compliance requirements. Multi-region deployment across us-east-1 and us-west-2 with custom JWT authorization using Python 3.10 Lambda functions. Architecture includes API Gateway REST APIs with custom authorizers, Lambda functions for transaction processing, DynamoDB Global Tables for multi-region data replication, CloudFront for edge optimization, WAF for security (SQL injection, XSS, rate limiting), comprehensive monitoring with CloudWatch dashboards and alarms, X-Ray distributed tracing, Secrets Manager for credential storage, and optional Route 53 latency-based routing. Key features: encryption at rest with KMS, 90-day log retention, least-privilege IAM policies, automated failover between regions, and full observability stack.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

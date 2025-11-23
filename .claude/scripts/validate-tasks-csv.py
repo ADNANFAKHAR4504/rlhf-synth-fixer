@@ -2,12 +2,12 @@
 """
 CSV Validation and Recovery Tool
 
-This script validates the integrity of tasks.csv and can recover from backup if needed.
+This script validates the integrity of .claude/tasks.csv and can recover from backup if needed.
 
 Usage:
-    python3 scripts/validate-tasks-csv.py                    # Validate only
-    python3 scripts/validate-tasks-csv.py --restore          # Restore from backup
-    python3 scripts/validate-tasks-csv.py --create-backup    # Create backup
+    python3 .claude/scripts/validate-tasks-csv.py                    # Validate only
+    python3 .claude/scripts/validate-tasks-csv.py --restore          # Restore from backup
+    python3 .claude/scripts/validate-tasks-csv.py --create-backup    # Create backup
 """
 
 import csv
@@ -19,10 +19,10 @@ from pathlib import Path
 
 
 def get_csv_path():
-    """Get the path to tasks.csv (should be in repo root)"""
+    """Get the path to tasks.csv (located in .claude folder)"""
     script_dir = Path(__file__).parent
-    repo_root = script_dir.parent.parent
-    return repo_root / "tasks.csv"
+    claude_dir = script_dir.parent
+    return claude_dir / "tasks.csv"
 
 
 def get_backup_path():
@@ -138,13 +138,13 @@ def restore_from_backup(csv_path, backup_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate and manage tasks.csv file",
+        description="Validate and manage .claude/tasks.csv file",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument('--restore', action='store_true',
-                       help='Restore tasks.csv from backup')
+                       help='Restore .claude/tasks.csv from backup')
     parser.add_argument('--create-backup', action='store_true',
-                       help='Create a new backup of tasks.csv')
+                       help='Create a new backup of .claude/tasks.csv')
     
     args = parser.parse_args()
     
@@ -162,7 +162,7 @@ def main():
         sys.exit(0 if restore_from_backup(csv_path, backup_path) else 1)
     
     # Default: validate
-    print("Validating tasks.csv...")
+    print("Validating .claude/tasks.csv...")
     is_valid, error, stats = validate_csv(csv_path)
     
     if is_valid:

@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349206",
+  "team": "6",
+  "startedAt": "2025-10-27T17:29:16.903Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "This task is aimed at automating AWS infrastructure provisioning using Python and Boto3 to establish a reproducible and manageable cloud environment setup.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "EC2",
+    "Auto Scaling",
+    "Launch Template",
+    "S3",
+    "IAM Role",
+    "IAM Policy",
+    "IAM Instance Profile",
+    "Security Group",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "Systems Manager (SSM)",
+    "KMS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

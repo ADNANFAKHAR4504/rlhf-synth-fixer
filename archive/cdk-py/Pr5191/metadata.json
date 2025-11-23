@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-28T03:40:13+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Security Configuration as Code"
+  ],
+  "po_id": "5886432376",
+  "aws_services": [
+    "Amazon Kinesis Data Streams",
+    "Amazon RDS",
+    "Amazon ElastiCache",
+    "Amazon S3",
+    "AWS KMS",
+    "Amazon VPC",
+    "AWS Lambda",
+    "Amazon SQS",
+    "AWS Secrets Manager",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "AWS IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

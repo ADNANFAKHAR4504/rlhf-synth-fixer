@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "v42e7j",
+  "team": "synth",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure",
+    "Transaction Processing"
+  ],
+  "startedAt": "2025-11-14T20:54:00Z",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "SNS",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "EventSourceMapping"
+  ],
+  "training_quality": 10
+}

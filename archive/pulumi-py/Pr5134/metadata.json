@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-27T22:00:23+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "9916941433",
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "Kinesis",
+    "KMS",
+    "SecretsManager",
+    "IAM",
+    "CloudWatch",
+    "ECR"
+  ],
+  "region": "eu-central-1",
+  "turn_type": "single",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

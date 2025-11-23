@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T13:14:38+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "po_id": "z45hp3",
+  "aws_services": [
+    "ACM",
+    "ALB",
+    "CloudWatch",
+    "ECS",
+    "IAM",
+    "KMS",
+    "RDS",
+    "S3",
+    "Secrets Manager",
+    "Security Groups",
+    "VPC"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "completedAt": "2025-11-17T08:35:26+0530",
+  "dockerS3Location": ""
+}

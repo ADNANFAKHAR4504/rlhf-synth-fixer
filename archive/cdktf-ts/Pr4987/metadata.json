@@ -1,0 +1,21 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "2F1940",
+  "team": "1",
+  "startedAt": "2025-10-21T19:37:04.334Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": "Aurora Database, Route 53, Application Load Balancer, Auto Scaling Group, Systems Manager, CloudWatch, VPC, Security Groups, IAM",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "akshat-jain355",
+  "dockerS3Location": ""
+}

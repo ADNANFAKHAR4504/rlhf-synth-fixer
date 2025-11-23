@@ -1,0 +1,973 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TapStack - Secure and compliant AWS infrastructure with complete foundational components (us-east-1 only)'
+
+Metadata:
+  cfn-lint:
+    config:
+      regions: [us-east-1]
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'prod'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod, pr6124)'
+    AllowedPattern: '^[a-z0-9-]{2,20}$'
+    ConstraintDescription: 'Use 2-20 chars: lowercase letters, digits, and hyphens'
+
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for VPC'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+
+  PublicSubnet1Cidr:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: 'CIDR block for public subnet 1'
+
+  PublicSubnet2Cidr:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: 'CIDR block for public subnet 2'
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: '10.0.11.0/24'
+    Description: 'CIDR block for private subnet 1'
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: '10.0.12.0/24'
+    Description: 'CIDR block for private subnet 2'
+
+  KnownIpCidr:
+    Type: String
+    Default: '203.0.113.0/24'
+    Description: 'Known IP CIDR block for restricted access'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+
+  DbUsername:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'Database master username'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    Description: 'EC2 instance type for Auto Scaling Group'
+    AllowedValues: ['t3.micro','t3.small','t3.medium']
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI ID'
+
+Conditions:
+  IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
+
+Resources:
+  ######################################
+  # KMS Customer Managed Key + Alias
+  ######################################
+  MasterKmsKey:
+    Condition: IsUsEast1
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: !Sub 'Master KMS key for TapStack-${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowServicesUseKey
+            Effect: Allow
+            Principal:
+              Service:
+                - 'cloudtrail.amazonaws.com'
+                - 's3.amazonaws.com'
+                - 'rds.amazonaws.com'
+                - 'logs.amazonaws.com'
+            Action: ['kms:Decrypt','kms:GenerateDataKey','kms:CreateGrant','kms:DescribeKey']
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService:
+                  - 's3.us-east-1.amazonaws.com'
+                  - 'rds.us-east-1.amazonaws.com'
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-KMS-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+
+  MasterKmsKeyAlias:
+    Condition: IsUsEast1
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: !Sub 'alias/tapstack-${EnvironmentSuffix}'
+      TargetKeyId: !Ref MasterKmsKey
+
+  ######################################
+  # VPC and Networking
+  ######################################
+  TapVpc:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-VPC-${EnvironmentSuffix}' }
+
+  InternetGateway:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-IGW-${EnvironmentSuffix}' }
+
+  AttachGateway:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref TapVpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-PublicSubnet1-${EnvironmentSuffix}' }
+
+  PublicSubnet2:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-PublicSubnet2-${EnvironmentSuffix}' }
+
+  PrivateSubnet1:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-PrivateSubnet1-${EnvironmentSuffix}' }
+
+  PrivateSubnet2:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-PrivateSubnet2-${EnvironmentSuffix}' }
+
+  NatGateway1Eip:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::EIP'
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-NatGateway1-EIP-${EnvironmentSuffix}' }
+
+  NatGateway1:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatGateway1Eip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-NatGateway1-${EnvironmentSuffix}' }
+
+  PublicRouteTable:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref TapVpc
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-PublicRouteTable-${EnvironmentSuffix}' }
+
+  PrivateRouteTable:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref TapVpc
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-PrivateRouteTable-${EnvironmentSuffix}' }
+
+  PublicRoute:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+
+  PublicSubnet1RouteTableAssociation:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnet1RouteTableAssociation:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  ######################################
+  # Security Groups
+  ######################################
+  WebSecurityGroup:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref TapVpc
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: '0.0.0.0/0' }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' }
+        - { IpProtocol: tcp, FromPort: 22,  ToPort: 22,  CidrIp: !Ref KnownIpCidr }
+      SecurityGroupEgress:
+        - { IpProtocol: -1, CidrIp: '0.0.0.0/0' }
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-WebSG-${EnvironmentSuffix}' }
+
+  DatabaseSecurityGroup:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref TapVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-DatabaseSG-${EnvironmentSuffix}' }
+
+  ######################################
+  # S3 Buckets + Policies (short, unique names)
+  ######################################
+  LoggingBucket:
+    Condition: IsUsEast1
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName:
+        !Sub
+          - 'ts-logs-${Env}-${Acct}-${Reg}-${Sfx}'
+          - {
+              Env: !Ref EnvironmentSuffix,
+              Acct: !Ref 'AWS::AccountId',
+              Reg: !Ref 'AWS::Region',
+              Sfx: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+            }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref MasterKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - { Id: DeleteOldLogs, Status: Enabled, ExpirationInDays: 90 }
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-LoggingBucket-${EnvironmentSuffix}' }
+
+  LoggingBucketPolicy:
+    Condition: IsUsEast1
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3ServerAccessLogsPolicy
+            Effect: Allow
+            Principal: { Service: 'logging.s3.amazonaws.com' }
+            Action: 's3:PutObject'
+            Resource: !Sub '${LoggingBucket.Arn}/*'
+
+          - Sid: AWSConfigGetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt LoggingBucket.Arn
+
+          - Sid: AWSConfigWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${LoggingBucket.Arn}/config/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: 'bucket-owner-full-control'
+
+          - Sid: EnforceTLSAndSSE
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${LoggingBucket.Arn}'
+              - !Sub '${LoggingBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': false }
+
+  CloudTrailBucket:
+    Condition: IsUsEast1
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName:
+        !Sub
+          - 'ts-ct-${Env}-${Acct}-${Reg}-${Sfx}'
+          - {
+              Env: !Ref EnvironmentSuffix,
+              Acct: !Ref 'AWS::AccountId',
+              Reg: !Ref 'AWS::Region',
+              Sfx: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+            }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref MasterKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: 'cloudtrail-bucket-logs/'
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-CloudTrailBucket-${EnvironmentSuffix}' }
+
+  CloudTrailBucketPolicy:
+    Condition: IsUsEast1
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal: { Service: 'cloudtrail.amazonaws.com' }
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal: { Service: 'cloudtrail.amazonaws.com' }
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' }
+          - Sid: EnforceTLSAndSSE
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${CloudTrailBucket.Arn}'
+              - !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': false }
+
+  DataBucket:
+    Condition: IsUsEast1
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName:
+        !Sub
+          - 'ts-data-${Env}-${Acct}-${Reg}-${Sfx}'
+          - {
+              Env: !Ref EnvironmentSuffix,
+              Acct: !Ref 'AWS::AccountId',
+              Reg: !Ref 'AWS::Region',
+              Sfx: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]]
+            }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref MasterKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: 'data-bucket-logs/'
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-DataBucket-${EnvironmentSuffix}' }
+
+  DataBucketPolicy:
+    Condition: IsUsEast1
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${DataBucket.Arn}'
+              - !Sub '${DataBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': false }
+
+  ######################################
+  # IAM Roles / Instance Profile
+  ######################################
+  Ec2InstanceRole:
+    Condition: IsUsEast1
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub 'TapStack-Ec2Role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: 'ec2.amazonaws.com' }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Policies:
+        - PolicyName: S3AccessLeastPrivilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DataBucketObjectRW
+                Effect: Allow
+                Action: ['s3:GetObject','s3:PutObject']
+                Resource: !Sub '${DataBucket.Arn}/*'
+              - Sid: DataBucketList
+                Effect: Allow
+                Action: 's3:ListBucket'
+                Resource: !GetAtt DataBucket.Arn
+              - Sid: KMSDataAccess
+                Effect: Allow
+                Action: ['kms:Decrypt','kms:GenerateDataKey']
+                Resource: !GetAtt MasterKmsKey.Arn
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-Ec2Role-${EnvironmentSuffix}' }
+
+  Ec2InstanceProfile:
+    Condition: IsUsEast1
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      InstanceProfileName: !Sub 'TapStack-Ec2Profile-${EnvironmentSuffix}'
+      Roles: [!Ref Ec2InstanceRole]
+
+  ######################################
+  # AWS Config Role
+  ######################################
+  ConfigRole:
+    Condition: IsUsEast1
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub 'TapStack-ConfigRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: 'config.amazonaws.com' }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      Policies:
+        - PolicyName: ConfigDeliveryS3Kms
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: GetBucketAclForDelivery
+                Effect: Allow
+                Action: ['s3:GetBucketAcl']
+                Resource: !GetAtt LoggingBucket.Arn
+              - Sid: PutConfigToLoggingBucket
+                Effect: Allow
+                Action: ['s3:PutObject']
+                Resource: !Sub '${LoggingBucket.Arn}/config/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': 'bucket-owner-full-control'
+              - Sid: KmsForConfig
+                Effect: Allow
+                Action: ['kms:Decrypt','kms:GenerateDataKey']
+                Resource: !GetAtt MasterKmsKey.Arn
+
+  #####################################################################
+  # AWS Config - CORRECT ORDER: Recorder FIRST, then Delivery Channel
+  #####################################################################
+  ConfigRecorder:
+    Condition: IsUsEast1
+    Type: 'AWS::Config::ConfigurationRecorder'
+    DependsOn: LoggingBucketPolicy
+    Properties:
+      Name: !Sub 'TapStack-ConfigRecorder-${EnvironmentSuffix}'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Condition: IsUsEast1
+    Type: 'AWS::Config::DeliveryChannel'
+    Properties:
+      Name: !Sub 'TapStack-ConfigDeliveryChannel-${EnvironmentSuffix}'
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: 'config'
+      S3KmsKeyArn: !GetAtt MasterKmsKey.Arn
+
+  ######################################
+  # CloudTrail (Multi-Region)
+  ######################################
+  CloudTrail:
+    Condition: IsUsEast1
+    Type: 'AWS::CloudTrail::Trail'
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub 'TapStack-CloudTrail-${EnvironmentSuffix}'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values: [!Sub '${DataBucket.Arn}/']
+      KMSKeyId: !Ref MasterKmsKey
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-CloudTrail-${EnvironmentSuffix}' }
+
+  ######################################
+  # Secrets Manager for DB password
+  ######################################
+  DbSecret:
+    Condition: IsUsEast1
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Sub 'tapstack-db-secret-${EnvironmentSuffix}'
+      Description: !Sub 'RDS master credentials for TapStack-${EnvironmentSuffix}'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DbUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 20
+        ExcludeCharacters: "\"@/\\'"
+
+  ######################################
+  # RDS (Private, Encrypted)
+  ######################################
+  DbSubnetGroup:
+    Condition: IsUsEast1
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupName: !Sub 'tapstack-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-DbSubnetGroup-${EnvironmentSuffix}' }
+
+  RdsDatabase:
+    Condition: IsUsEast1
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: !Sub 'tapstack-db-${EnvironmentSuffix}'
+      AllocatedStorage: '20'
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'mysql'
+      EngineVersion: '8.0.43'
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}::password}}'
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: true
+      StorageEncrypted: true
+      KmsKeyId: !Ref MasterKmsKey
+      EnableCloudwatchLogsExports: ['error','general','slowquery']
+      PubliclyAccessible: false
+      DeletionProtection: false
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-RDS-${EnvironmentSuffix}' }
+
+  ######################################
+  # API Gateway + Stage Logging + WAF
+  ######################################
+  ApiLogsGroup:
+    Condition: IsUsEast1
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/tapstack-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  ApiGateway:
+    Condition: IsUsEast1
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: !Sub 'TapStack-API-${EnvironmentSuffix}'
+      Description: 'TapStack API Gateway'
+      EndpointConfiguration: { Types: ['REGIONAL'] }
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-API-${EnvironmentSuffix}' }
+
+  ApiGatewayCloudWatchRole:
+    Condition: IsUsEast1
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-APIGW-LogsRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: apigateway.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+  ApiGatewayAccount:
+    Condition: IsUsEast1
+    Type: 'AWS::ApiGateway::Account'
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
+  ApiGatewayResource:
+    Condition: IsUsEast1
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'health'
+
+  ApiGatewayMethod:
+    Condition: IsUsEast1
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: 'GET'
+      AuthorizationType: 'NONE'
+      Integration:
+        Type: 'MOCK'
+        RequestTemplates: { application/json: '{"statusCode": 200}' }
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates: { application/json: '{"message": "OK"}' }
+      MethodResponses:
+        - StatusCode: 200
+
+  ApiGatewayDeployment:
+    Condition: IsUsEast1
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: [ApiGatewayMethod, ApiGatewayAccount]
+    Properties:
+      RestApiId: !Ref ApiGateway
+      Description: !Sub 'TapStack API deployment ${EnvironmentSuffix}'
+
+  ApiGatewayStage:
+    Condition: IsUsEast1
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      StageName: 'prod'
+      RestApiId: !Ref ApiGateway
+      DeploymentId: !Ref ApiGatewayDeployment
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiLogsGroup.Arn
+        Format: '{ "requestId":"$context.requestId", "ip":"$context.identity.sourceIp", "caller":"$context.identity.caller", "user":"$context.identity.user", "requestTime":"$context.requestTime", "httpMethod":"$context.httpMethod", "resourcePath":"$context.resourcePath", "status":"$context.status", "protocol":"$context.protocol", "responseLength":"$context.responseLength" }'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: 'INFO'
+
+  WafWebAcl:
+    Condition: IsUsEast1
+    Type: 'AWS::WAFv2::WebACL'
+    Properties:
+      Name: !Sub 'TapStack-WAF-${EnvironmentSuffix}'
+      Scope: 'REGIONAL'
+      DefaultAction: { Allow: {} }
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement: { RateBasedStatement: { Limit: 2000, AggregateKeyType: 'IP' } }
+          Action: { Block: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'RateLimitRule'
+        - Name: CommonRuleSet
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement: { VendorName: 'AWS', Name: 'AWSManagedRulesCommonRuleSet' }
+          OverrideAction: { None: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'CommonRuleSetMetric'
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub 'TapStack-WAF-${EnvironmentSuffix}'
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-WAF-${EnvironmentSuffix}' }
+
+  WafApiGatewayAssociation:
+    Condition: IsUsEast1
+    Type: 'AWS::WAFv2::WebACLAssociation'
+    DependsOn: [ApiGatewayStage]
+    Properties:
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod'
+      WebACLArn: !GetAtt WafWebAcl.Arn
+
+  ######################################
+  # Launch Template + Auto Scaling
+  ######################################
+  LaunchTemplate:
+    Condition: IsUsEast1
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: !Sub 'TapStack-LaunchTemplate-${EnvironmentSuffix}'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile: { Arn: !GetAtt Ec2InstanceProfile.Arn }
+        SecurityGroupIds: [!Ref WebSecurityGroup]
+        TagSpecifications:
+          - ResourceType: 'instance'
+            Tags:
+              - { Key: Name, Value: !Sub 'TapStack-Instance-${EnvironmentSuffix}' }
+              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+            amazon-linux-extras install -y nginx1
+            systemctl start nginx
+            systemctl enable nginx
+
+  AutoScalingGroup:
+    Condition: IsUsEast1
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      AutoScalingGroupName: !Sub 'TapStack-ASG-${EnvironmentSuffix}'
+      VPCZoneIdentifier: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      HealthCheckType: 'EC2'
+      HealthCheckGracePeriod: 300
+      Tags:
+        - { Key: Name, Value: !Sub 'TapStack-ASG-Instance-${EnvironmentSuffix}', PropagateAtLaunch: true }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix, PropagateAtLaunch: true }
+
+  ScaleUpPolicy:
+    Condition: IsUsEast1
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: 'ChangeInCapacity'
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: '60'
+      ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Condition: IsUsEast1
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: 'ChangeInCapacity'
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: '300'
+      ScalingAdjustment: -1
+
+  ######################################
+  # CloudWatch Alarms (CPU)
+  ######################################
+  HighCpuAlarm:
+    Condition: IsUsEast1
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub 'TapStack-HighCPU-${EnvironmentSuffix}'
+      AlarmDescription: 'Trigger scaling when CPU exceeds 70%'
+      MetricName: 'CPUUtilization'
+      Namespace: 'AWS/EC2'
+      Statistic: 'Average'
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      ComparisonOperator: 'GreaterThanThreshold'
+      Dimensions: [{ Name: 'AutoScalingGroupName', Value: !Ref AutoScalingGroup }]
+      AlarmActions: [!Ref ScaleUpPolicy]
+
+  LowCpuAlarm:
+    Condition: IsUsEast1
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub 'TapStack-LowCPU-${EnvironmentSuffix}'
+      AlarmDescription: 'Trigger scale down when CPU is below 20%'
+      MetricName: 'CPUUtilization'
+      Namespace: 'AWS/EC2'
+      Statistic: 'Average'
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: 'LessThanThreshold'
+      Dimensions: [{ Name: 'AutoScalingGroupName', Value: !Ref AutoScalingGroup }]
+      AlarmActions: [!Ref ScaleDownPolicy]
+
+Outputs:
+  VpcId:
+    Condition: IsUsEast1
+    Description: 'VPC ID'
+    Value: !Ref TapVpc
+    Export: { Name: !Sub 'TapStack-VPC-${EnvironmentSuffix}' }
+
+  KmsKeyId:
+    Condition: IsUsEast1
+    Description: 'KMS Key ID'
+    Value: !Ref MasterKmsKey
+    Export: { Name: !Sub 'TapStack-KMS-${EnvironmentSuffix}' }
+
+  KmsKeyArn:
+    Condition: IsUsEast1
+    Description: 'KMS Key ARN'
+    Value: !GetAtt MasterKmsKey.Arn
+    Export: { Name: !Sub 'TapStack-KMS-ARN-${EnvironmentSuffix}' }
+
+  DataBucketName:
+    Condition: IsUsEast1
+    Description: 'Data Bucket Name'
+    Value: !Ref DataBucket
+    Export: { Name: !Sub 'TapStack-DataBucket-${EnvironmentSuffix}' }
+
+  DataBucketArn:
+    Condition: IsUsEast1
+    Description: 'Data Bucket ARN'
+    Value: !GetAtt DataBucket.Arn
+    Export: { Name: !Sub 'TapStack-DataBucket-ARN-${EnvironmentSuffix}' }
+
+  CloudTrailBucketName:
+    Condition: IsUsEast1
+    Description: 'CloudTrail Bucket Name'
+    Value: !Ref CloudTrailBucket
+    Export: { Name: !Sub 'TapStack-CloudTrailBucket-${EnvironmentSuffix}' }
+
+  CloudTrailArn:
+    Condition: IsUsEast1
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export: { Name: !Sub 'TapStack-CloudTrail-ARN-${EnvironmentSuffix}' }
+
+  RdsEndpoint:
+    Condition: IsUsEast1
+    Description: 'RDS Database Endpoint'
+    Value: !GetAtt RdsDatabase.Endpoint.Address
+    Export: { Name: !Sub 'TapStack-RDS-Endpoint-${EnvironmentSuffix}' }
+
+  ApiGatewayUrl:
+    Condition: IsUsEast1
+    Description: 'API Gateway URL'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export: { Name: !Sub 'TapStack-API-URL-${EnvironmentSuffix}' }
+
+  WafWebAclArn:
+    Condition: IsUsEast1
+    Description: 'WAF WebACL ARN'
+    Value: !GetAtt WafWebAcl.Arn
+    Export: { Name: !Sub 'TapStack-WAF-ARN-${EnvironmentSuffix}' }
+
+  AutoScalingGroupName:
+    Condition: IsUsEast1
+    Description: 'Auto Scaling Group Name'
+    Value: !Ref AutoScalingGroup
+    Export: { Name: !Sub 'TapStack-ASG-${EnvironmentSuffix}' }
+
+  WebSecurityGroupId:
+    Condition: IsUsEast1
+    Description: 'Web Security Group ID'
+    Value: !Ref WebSecurityGroup
+    Export: { Name: !Sub 'TapStack-WebSG-${EnvironmentSuffix}' }
+
+  DatabaseSecurityGroupId:
+    Condition: IsUsEast1
+    Description: 'Database Security Group ID'
+    Value: !Ref DatabaseSecurityGroup
+    Export: { Name: !Sub 'TapStack-DatabaseSG-${EnvironmentSuffix}' }
+
+  ConfigRecorderName:
+    Condition: IsUsEast1
+    Description: 'AWS Config Recorder Name'
+    Value: !Ref ConfigRecorder
+    Export: { Name: !Sub 'TapStack-ConfigRecorder-${EnvironmentSuffix}' }
+
+  ConfigDeliveryChannelName:
+    Condition: IsUsEast1
+    Description: 'AWS Config Delivery Channel Name'
+    Value: !Ref ConfigDeliveryChannel
+    Export: { Name: !Sub 'TapStack-ConfigDeliveryChannel-${EnvironmentSuffix}' }

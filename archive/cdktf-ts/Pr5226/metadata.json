@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000030",
+  "team": "6",
+  "startedAt": "2025-10-28T10:58:47.295Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "RDS",
+    "Internet Gateway",
+    "ALB",
+    "Route Table",
+    "Subnets",
+    "EIP",
+    "Security Groups",
+    "EC2",
+    "IAM",
+    "VPC",
+    "Secrets Manager",
+    "Auto Scaling",
+    "TLS",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

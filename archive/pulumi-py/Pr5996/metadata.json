@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349336",
+  "team": "6",
+  "startedAt": "2025-11-06T14:23:01.182Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": " Using Python scripts with Pulumi which allows for more dynamic templating and infrastructure management. This enables leveraging Python's logic capabilities to define complex conditional resource configurations, improving the automation and maintainability of the infrastructure.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "S3 Bucket",
+    "IAM Role",
+    "IAM Policy",
+    "IAM Instance Profile",
+    "CloudWatch LogGroup",
+    "CloudWatch Alarm",
+    "SNS Topic",
+    "KMS Key",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

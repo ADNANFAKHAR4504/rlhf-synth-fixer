@@ -1,0 +1,21 @@
+# Example terraform.tfvars file
+# Override default values for production deployment
+
+# project_name     = "fintech-api"
+# primary_region   = "us-east-1"
+# secondary_region = "us-west-2"
+# api_stage        = "prod"
+
+# Optional features (default: false)
+# enable_route53   = false
+# enable_vpc       = false
+
+# Required for production (defaults provided for testing)
+# master_api_key   = "your-secure-master-api-key"
+# jwt_secret       = "your-secure-jwt-secret"
+# alarm_email      = "your-team@example.com"
+
+# Optional configuration
+# domain_name      = "yourdomain.com"
+# waf_rate_limit   = 10000
+

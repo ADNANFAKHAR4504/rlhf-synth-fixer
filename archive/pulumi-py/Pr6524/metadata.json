@@ -1,0 +1,38 @@
+{
+  "task_id": "101912456",
+  "po_id": "101912456",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-14T00:55:26Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "environment-migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "DynamoDB",
+    "ELB",
+    "Lambda",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "AWS Backup",
+    "SSM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

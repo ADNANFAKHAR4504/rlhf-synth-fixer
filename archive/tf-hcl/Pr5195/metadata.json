@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5010",
+  "team": "stf",
+  "startedAt": "2025-10-24T14:55:01.110Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": "VPC, Subnet, Lambda, Step Function, Kinesis Data Stream, EventBridge, SQS, Athena, Glue, S3, DynamoDB, CloudWatch, SNS, IAM, Timestream",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

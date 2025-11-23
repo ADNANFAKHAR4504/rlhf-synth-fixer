@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "typescript",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "6ft0y",
+  "team": "synth",
+  "startedAt": "2025-10-31T16:16:22+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

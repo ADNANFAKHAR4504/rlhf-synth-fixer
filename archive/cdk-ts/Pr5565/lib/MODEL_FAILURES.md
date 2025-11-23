@@ -1,0 +1,12 @@
+- Use Node.js 18+ or 20 and ARM64 for all Lambda runtimes instead of Node.js 14.
+- Make all resources deletable for test environments: remove RETAIN policies and set RemovalPolicy.DESTROY; enable autoDeleteObjects for S3 buckets.
+- Replace cross-region replication patterns that require pre-existing buckets with test-safe deletable resources; omit hard replication linkage for tests.
+- Ensure DynamoDB: PAY_PER_REQUEST, TTL attribute present, PITR enabled, and environment-prefixed table name.
+- Configure S3 buckets with versioning, SSE-S3, lifecycle transition to Glacier at 30 days, and expiration at 90 days.
+- Add least-privilege IAM for Lambda to access DynamoDB, S3, SSM, CloudFormation, and CodeBuild only as needed.
+- Add EventBridge schedule for 30-minute drift checks and rule for rollback events; wire to Lambdas.
+- Add SNS topic with Lambda subscription for approval workflow.
+- Create CodeBuild project that uses an ECR image with image scanning enabled.
+- Define AWS Config custom rule backed by the compliance Lambda.
+- Export stack outputs with environment-prefixed names for integration flow.
+- Align stack props with bin/tap.ts by using environmentSuffix and removing region/DR duplication from the stack itself.

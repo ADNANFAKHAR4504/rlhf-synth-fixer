@@ -1,0 +1,110 @@
+# terraform.tfvars.example
+# Copy this file to terraform.tfvars and customize the values for your environment
+
+# Project Configuration
+project_name = "payment-processing"
+environment  = "prod"
+cost_center  = "fintech-payments"
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+availability_zones = [
+  "us-east-1a",
+  "us-east-1b", 
+  "us-east-1c"
+]
+
+public_subnet_cidrs = [
+  "10.0.1.0/24",
+  "10.0.2.0/24",
+  "10.0.3.0/24"
+]
+
+private_subnet_cidrs = [
+  "10.0.10.0/24",
+  "10.0.20.0/24",
+  "10.0.30.0/24"
+]
+
+database_subnet_cidrs = [
+  "10.0.100.0/24",
+  "10.0.101.0/24",
+  "10.0.102.0/24"
+]
+
+# Database Configuration
+postgres_engine_version = "15.6"
+database_name          = "payments"
+db_username           = "dbadmin"
+db_instance_class      = "db.t4g.medium"  # Minimum supported for Aurora PostgreSQL 15.6
+
+# Application Configuration
+# Replace with your actual container image
+container_image = "your-account.dkr.ecr.us-east-1.amazonaws.com/payment-processing:latest"
+container_port  = 3000
+health_check_path = "/health"
+
+# ECS Configuration
+fargate_cpu    = 512
+fargate_memory = 1024
+desired_count  = 2
+min_capacity   = 1
+max_capacity   = 10
+
+# SSL/TLS Configuration (optional)
+# Leave certificate_arn empty if you don't have SSL certificates
+# When certificate_arn is empty, the application will serve HTTP traffic directly
+# When certificate_arn is provided, HTTP traffic will redirect to HTTPS
+
+certificate_arn = ""  # No SSL certificate - serves HTTP directly
+# certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Route53 DNS Configuration (optional)
+# Leave domain_name empty to skip DNS configuration
+# When domain_name is provided, Route53 records will be created with weighted routing
+
+domain_name = ""  # No DNS management
+# domain_name = "api.yourcompany.com"
+
+# Route53 Weighted Routing Configuration
+# For gradual traffic migration from dev to prod:
+# - Development: route53_weight = 0 (no traffic initially)
+# - Staging: route53_weight = 10 (small amount of traffic for testing)  
+# - Production: route53_weight = 100 (full traffic after validation)
+
+route53_weight = 100  # Full traffic weight for production
+create_www_record = true  # Create www.domain.com CNAME record
+
+# Monitoring Configuration
+notification_email = "admin@yourcompany.com"
+
+# Example configurations for different environments:
+
+# === DEVELOPMENT ENVIRONMENT ===
+# environment = "dev"
+# desired_count = 1
+# min_capacity = 1
+# max_capacity = 3
+# fargate_cpu = 256
+# fargate_memory = 512
+# route53_weight = 0  # No traffic initially
+# domain_name = "api-dev.yourcompany.com"
+
+# === STAGING ENVIRONMENT ===
+# environment = "staging" 
+# desired_count = 1
+# min_capacity = 1
+# max_capacity = 5
+# route53_weight = 10  # 10% traffic for testing
+# domain_name = "api-staging.yourcompany.com"
+
+# === PRODUCTION ENVIRONMENT ===
+# environment = "prod"
+# desired_count = 2
+# min_capacity = 2
+# max_capacity = 10
+# route53_weight = 100  # Full production traffic
+# domain_name = "api.yourcompany.com"

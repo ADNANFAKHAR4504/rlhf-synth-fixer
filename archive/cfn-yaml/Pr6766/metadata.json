@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-18T10:04:06+00:00",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-environment-consistency-&-replication"
+  ],
+  "po_id": "101912473",
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS CloudFormation",
+    "AWS IAM",
+    "Amazon RDS",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon ECS",
+    "Elastic Load Balancing",
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "Amazon SNS",
+    "AWS Systems Manager",
+    "Amazon CloudWatch",
+    "AWS Auto Scaling"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

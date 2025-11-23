@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "386559",
+  "team": "2",
+  "startedAt": "2025-10-22T11:01:08.210Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "dynamodb",
+    "api-gateway",
+    "lambda",
+    "kms",
+    "s3",
+    "ec2",
+    "subnet"
+  ],
+  "training_quality": 9,
+  "background": "Serverless App Infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ayushj1-turing",
+  "dockerS3Location": ""
+}

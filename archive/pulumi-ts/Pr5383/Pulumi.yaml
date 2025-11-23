@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: Multi-environment data processing infrastructure with S3, Lambda, and DynamoDB
+main: lib/

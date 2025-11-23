@@ -1,0 +1,30 @@
+{
+  "po_id": "8411081187",
+  "subtask": "Application Deployment",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "region": "eu-south-2",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-10-22T11:25:22+05:30",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "AWS RDS (PostgreSQL)",
+    "AWS ElastiCache (Redis)",
+    "AWS CodePipeline",
+    "AWS SecretsManager",
+    "AWS KMS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

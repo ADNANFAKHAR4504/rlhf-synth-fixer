@@ -1,0 +1,53 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-28T03:41:14+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Security Configuration as Code"
+  ],
+  "po_id": "5955986200",
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::FlowLog",
+    "AWS::EC2::EIP",
+    "AWS::RDS::DBInstance",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::EFS::FileSystem",
+    "AWS::EFS::MountTarget",
+    "AWS::ECS::Cluster",
+    "AWS::ECS::Service",
+    "AWS::ECS::TaskDefinition",
+    "AWS::ElasticLoadBalancingV2::LoadBalancer",
+    "AWS::ElasticLoadBalancingV2::TargetGroup",
+    "AWS::ElasticLoadBalancingV2::Listener",
+    "AWS::CodePipeline::Pipeline",
+    "AWS::CodeBuild::Project",
+    "AWS::S3::Bucket",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::IAM::Role",
+    "AWS::Logs::LogGroup",
+    "AWS::CloudWatch::Alarm",
+    "AWS::ApplicationAutoScaling::ScalableTarget",
+    "AWS::ApplicationAutoScaling::ScalingPolicy"
+  ],
+  "region": "eu-south-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
