@@ -38,7 +38,7 @@ Check for ALL required fields and report missing ones:
 - `complexity` (must be: medium, hard, expert)
 - `turn_type` (must be: single, multi)
 - `po_id` (non-empty string)
-- `team` (non-empty string, typically 1-6, synth, synth-N, stf)
+- `team` (non-empty string, MUST always be "synth")
 - `startedAt` (ISO 8601 timestamp)
 - `subtask` (must match valid subtask from reference file)
 - `subject_labels` (must be array, non-empty, must match valid labels for subtask)

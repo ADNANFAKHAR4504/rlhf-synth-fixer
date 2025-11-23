@@ -9,10 +9,13 @@ log_info() { echo -e "${GREEN}✅ $1${NC}" >&2; }
 log_error() { echo -e "${RED}❌ $1${NC}" >&2; }
 
 # Extract JSON value (simple extraction, no jq needed)
+# Ensures exact key match (not partial matches like "team" matching "synth_group")
 json_val() {
     local json="$1" key="$2"
     # Handle multiline JSON and spaces around colons
-    echo "$json" | tr -d '\n' | grep -oE "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed 's/.*: *"\([^"]*\)".*/\1/'
+    # Match exact key: "key" followed by colon and quoted value
+    # Extract only the first match to avoid issues with multiple occurrences
+    echo "$json" | tr -d '\n' | grep -oE "\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/'
 }
 
 # Usage check
@@ -550,8 +553,8 @@ extract_region() {
 REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
 
 # Read team value from settings.local.json
-# If team is mentioned in settings, use that value (e.g., synth-2, synth-1)
-# Otherwise, default to "synth"
+# CRITICAL: Team value MUST always be "synth" (never synth-1, synth-2, etc.)
+# If team is mentioned in settings, validate it; otherwise default to "synth"
 # Check multiple locations: current dir (main repo), parent dirs (worktree context), or relative to script
 SETTINGS_FILE=""
 if [ -f ".claude/settings.local.json" ]; then
@@ -567,7 +570,14 @@ fi
 
 if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
     TEAM=$(json_val "$(cat "$SETTINGS_FILE")" "team")
-    [ -z "$TEAM" ] && TEAM="synth"
+    # Normalize team value: always use "synth" regardless of what's in settings
+    # This prevents synth-1, synth-2, Synth-2, etc. from being used
+    if [ -z "$TEAM" ] || [ "$TEAM" != "synth" ]; then
+        if [ -n "$TEAM" ] && [ "$TEAM" != "synth" ]; then
+            log_info "Team value '$TEAM' in settings normalized to 'synth'"
+        fi
+        TEAM="synth"
+    fi
 else
     TEAM="synth"
 fi

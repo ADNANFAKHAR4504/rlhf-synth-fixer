@@ -204,8 +204,8 @@ fi
 # 11. Validate team
 TEAM=$(jq -r '.team // empty' "$METADATA_FILE")
 if [ -n "$TEAM" ]; then
-    if [[ ! "$TEAM" =~ ^(1|2|3|4|5|6|synth|synth-[0-9]+|stf)$ ]]; then
-        log_error "Invalid team: '$TEAM' (must be: 1-6, synth, synth-N (where N is a number), or stf)"
+    if [[ ! "$TEAM" =~ ^(1|2|3|4|5|6|synth|stf)$ ]]; then
+        log_error "Invalid team: '$TEAM' (must be: 1-6, synth, or stf)"
         ((ERRORS++))
     else
         log_info "Team: $TEAM"
