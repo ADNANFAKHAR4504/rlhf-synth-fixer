@@ -505,7 +505,7 @@ resource "aws_security_group" "lambda_sg" {
 
 # Lambda functions
 resource "aws_lambda_function" "token_authorizer" {
-  filename                       = "authorizer.zip"
+  filename                       = "lambda/authorizer.zip"
   function_name                  = "fraud-detection-token-authorizer-${var.environment_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "authorizer.lambda_handler"
@@ -521,7 +521,8 @@ resource "aws_lambda_function" "token_authorizer" {
 
   environment {
     variables = {
-      LOG_LEVEL = "INFO"
+      EXPECTED_TOKEN = "valid-token-123"
+      LOG_LEVEL      = "INFO"
     }
   }
 
@@ -535,7 +536,7 @@ resource "aws_lambda_function" "token_authorizer" {
 }
 
 resource "aws_lambda_function" "transaction_validation" {
-  filename                       = "validation.zip"
+  filename                       = "lambda/validation.zip"
   function_name                  = "fraud-detection-transaction-validation-${var.environment_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "validation.lambda_handler"
@@ -566,7 +567,7 @@ resource "aws_lambda_function" "transaction_validation" {
 }
 
 resource "aws_lambda_function" "fraud_scoring" {
-  filename                       = "fraud_scoring.zip"
+  filename                       = "lambda/fraud_scoring.zip"
   function_name                  = "fraud-detection-scoring-${var.environment_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "fraud_scoring.lambda_handler"
@@ -599,7 +600,7 @@ resource "aws_lambda_function" "fraud_scoring" {
 }
 
 resource "aws_lambda_function" "notification_processing" {
-  filename                       = "notification.zip"
+  filename                       = "lambda/notification.zip"
   function_name                  = "fraud-detection-notification-${var.environment_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "notification.lambda_handler"
@@ -616,6 +617,7 @@ resource "aws_lambda_function" "notification_processing" {
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.transactions.name
+      SNS_TOPIC_ARN  = aws_sns_topic.alarm_notification.arn
       LOG_LEVEL      = "INFO"
     }
   }
@@ -781,11 +783,8 @@ resource "aws_cloudwatch_event_rule" "high_risk_transaction" {
   description = "Trigger when a high-risk transaction is detected"
 
   event_pattern = jsonencode({
-    source      = ["fraud-detection-system"]
+    source      = ["fraud-detection"]
     detail_type = ["High Risk Transaction Detected"]
-    detail = {
-      risk_level = ["HIGH"]
-    }
   })
 }
 
