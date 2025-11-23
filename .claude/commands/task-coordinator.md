@@ -342,10 +342,30 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
 
 **CRITICAL: Strict worktree structure enforcement**
 
-1. **Check for existing directory and create git worktree** (EXACT naming):
+1. **Extract task ID and check for existing directory**:
    ```bash
+   # Extract task_id from iac-task-selector's JSON file (should exist)
+   # Find the task JSON file created by iac-task-selector
+   TASK_JSON_FILES=(.claude/task-*.json)
+   if [ ! -f "${TASK_JSON_FILES[0]}" ]; then
+       echo "❌ ERROR: No task JSON file found in .claude/"
+       echo "   iac-task-selector should have created .claude/task-{task_id}.json"
+       exit 1
+   fi
+   
+   # Extract TASK_ID from the JSON file
+   TASK_JSON=$(cat "${TASK_JSON_FILES[0]}")
+   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   
+   if [ -z "$TASK_ID" ]; then
+       echo "❌ ERROR: Could not extract task_id from JSON file"
+       exit 1
+   fi
+   
+   echo "📋 Task ID: $TASK_ID"
+   
    # Check if directory already exists (should not, but handle gracefully)
-   WORKTREE_DIR="worktree/synth-{task_id}"
+   WORKTREE_DIR="worktree/synth-${TASK_ID}"
    
    if [ -d "$WORKTREE_DIR" ]; then
        # Check if it's already a git worktree
@@ -360,44 +380,51 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
        fi
    else
        # REQUIRED format - do not deviate:
-       git worktree add "$WORKTREE_DIR" -b synth-{task_id}
+       if ! git worktree add "$WORKTREE_DIR" -b synth-${TASK_ID}; then
+           echo "❌ ERROR: Failed to create git worktree"
+           echo "   Possible causes:"
+           echo "   - Branch synth-${TASK_ID} already exists"
+           echo "   - Permission issues"
+           echo "   - Git repository corruption"
+           exit 1
+       fi
        echo "✅ Created git worktree: $WORKTREE_DIR"
    fi
    ```
 
    **Naming Rules**:
-   - Directory: MUST be `worktree/synth-{task_id}` (with forward slash)
-   - Branch: MUST be `synth-{task_id}` (matching directory name)
-   - ❌ WRONG: `worktree-synth-{task_id}`, `worktrees/`, `IAC-synth-{task_id}`
-   - ✅ CORRECT: `worktree/synth-{task_id}`
+   - Directory: MUST be `worktree/synth-${TASK_ID}` (with forward slash)
+   - Branch: MUST be `synth-${TASK_ID}` (matching directory name)
+   - ❌ WRONG: `worktree-synth-${TASK_ID}`, `worktrees/`, `IAC-synth-${TASK_ID}`
+   - ✅ CORRECT: `worktree/synth-${TASK_ID}`
 
 2. **Load task data and create metadata.json/PROMPT.md**:
    ```bash
-   # Read task JSON created by iac-task-selector
-   TASK_JSON_FILE=".claude/task-{task_id}.json"
+   # Store main repo root path before changing directories
+   MAIN_REPO_ROOT="$(pwd)"
    
-   if [ ! -f "$TASK_JSON_FILE" ]; then
-       echo "❌ ERROR: Task JSON file not found: $TASK_JSON_FILE"
-       echo "   iac-task-selector should have created this file"
-       exit 1
-   fi
-   
-   TASK_JSON=$(cat "$TASK_JSON_FILE")
-   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+   # TASK_ID and TASK_JSON are already set from step 1
+   # Set absolute path for cleanup
+   TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
+   TASK_JSON_FILE_ABS="$MAIN_REPO_ROOT/$TASK_JSON_FILE"
    
    # Change to worktree directory
-   cd worktree/synth-{task_id}
+   cd worktree/synth-${TASK_ID}
    
    # Create metadata.json and PROMPT.md inside the worktree
    if ! ./.claude/scripts/create-task-files.sh "$TASK_JSON" "."; then
        echo "❌ ERROR: Failed to create metadata.json and PROMPT.md"
+       echo "   Cleaning up worktree..."
+       cd "$MAIN_REPO_ROOT"
+       git worktree remove "$WORKTREE_DIR" --force 2>/dev/null || true
+       rm -f "$TASK_JSON_FILE_ABS"
        exit 1
    fi
    
    echo "✅ Created metadata.json and PROMPT.md in worktree"
    
-   # Clean up temporary task JSON file
-   rm -f "../../$TASK_JSON_FILE"
+   # Clean up temporary task JSON file (using absolute path)
+   rm -f "$TASK_JSON_FILE_ABS"
    echo "✅ Cleaned up temporary task JSON file"
    ```
 
