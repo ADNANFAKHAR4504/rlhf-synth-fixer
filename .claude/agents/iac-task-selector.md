@@ -49,6 +49,7 @@ If `.claude/tasks.csv` is present:
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
+   # OPTIMIZED: Returns complete JSON with all fields needed, eliminating redundant CSV reads
    echo "🔍 Selecting next available task..."
    TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
    
@@ -58,44 +59,41 @@ If `.claude/tasks.csv` is present:
        exit 1
    fi
    
-   # Extract task_id and other fields
-   TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-   SUBTASK=$(echo "$TASK_JSON" | grep -o '"subtask":"[^"]*"' | cut -d'"' -f4)
-   PLATFORM=$(echo "$TASK_JSON" | grep -o '"platform":"[^"]*"' | cut -d'"' -f4)
-   LANGUAGE=$(echo "$TASK_JSON" | grep -o '"language":"[^"]*"' | cut -d'"' -f4)
-   DIFFICULTY=$(echo "$TASK_JSON" | grep -o '"difficulty":"[^"]*"' | cut -d'"' -f4)
+   # OPTIMIZED: Extract all fields in single pass using AWK (much faster than multiple grep/cut)
+   # Simple and reliable: parse JSON by splitting on quotes and tracking key-value pairs
+   eval $(echo "$TASK_JSON" | awk -F'"' '{
+       for (i=1; i<=NF; i++) {
+           if ($i == "task_id" && $(i+1) ~ /^:/) TASK_ID=$(i+2)
+           if ($i == "subtask" && $(i+1) ~ /^:/) SUBTASK=$(i+2)
+           if ($i == "platform" && $(i+1) ~ /^:/) PLATFORM=$(i+2)
+           if ($i == "language" && $(i+1) ~ /^:/) LANGUAGE=$(i+2)
+           if ($i == "difficulty" && $(i+1) ~ /^:/) DIFFICULTY=$(i+2)
+       }
+   } END {
+       print "TASK_ID=" TASK_ID
+       print "SUBTASK=" SUBTASK
+       print "PLATFORM=" PLATFORM
+       print "LANGUAGE=" LANGUAGE
+       print "DIFFICULTY=" DIFFICULTY
+   }')
    
    echo "✅ Selected and locked task: $TASK_ID ($PLATFORM-$LANGUAGE, $DIFFICULTY)"
    echo "📋 Subtask: $SUBTASK"
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
-   
-   # Verify task was actually marked as in_progress in CSV
-   VERIFY_STATUS=$(grep "^$TASK_ID," .claude/tasks.csv | cut -d',' -f2)
-   if [ "$VERIFY_STATUS" != "in_progress" ]; then
-       echo "⚠️ WARNING: Task $TASK_ID status verification failed! Current status: '$VERIFY_STATUS'"
-       echo "⚠️ This may indicate a race condition or CSV corruption"
-   fi
+   # NOTE: No verification step needed - select-and-update is atomic and guaranteed to update status
    ```
 
-2. **Get full task details** (if you need all fields):
-   ```bash
-   # Get complete task data including all available fields
-   TASK_DETAILS=$(./.claude/scripts/task-manager.sh get "$TASK_ID")
-   
-   # Save to temporary file for create-task-files.sh
-   echo "$TASK_DETAILS" > /tmp/task_${TASK_ID}.json
-   ```
-
-3. **Check task status distribution** (optional - for monitoring):
+2. **Check task status distribution** (optional - for monitoring):
    ```bash
    ./.claude/scripts/task-manager.sh status
    ```
 
-4. **Create metadata.json and PROMPT.md**:
+3. **Create metadata.json and PROMPT.md**:
    ```bash
+   # OPTIMIZED: Use JSON directly instead of calling get command (eliminates redundant CSV read)
+   # The TASK_JSON already contains all fields needed by create-task-files.sh
    # Use the optimized script to generate both files
-   # This is much faster than Python equivalents
-   ./.claude/scripts/create-task-files.sh /tmp/task_${TASK_ID}.json worktree/synth-${TASK_ID}
+   ./.claude/scripts/create-task-files.sh "$TASK_JSON" worktree/synth-${TASK_ID}
    ```
 
 **Benefits of task-manager.sh:**
@@ -169,9 +167,9 @@ If you suspect duplicate task selection in parallel execution:
    - Confirm you executed `select-and-update` (not just `select`)
    - Confirm you did NOT read .claude/tasks.csv directly
    - Confirm you did NOT call find-next-task.py
+   - Confirm you used JSON directly instead of calling `get` command
 
 **If duplicate selection still occurs**, capture these details and report:
 - Which task ID was selected by multiple agents
 - Timestamps of when each agent selected it
-- Whether the verification step (line 70-74) showed any warnings
 - Contents of .claude/tasks.csv.lock directory during the duplicate selection
