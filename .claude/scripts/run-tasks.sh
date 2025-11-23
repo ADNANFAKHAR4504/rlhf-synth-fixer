@@ -1,6 +1,6 @@
 #!/bin/bash
 # run-tasks.sh
-# Pre-selects tasks, then launches n parallel Claude sessions with task-coordinator
+# Single command to launch n parallel Claude sessions with task-coordinator
 # Usage: ./run-tasks.sh <n>
 # Example: ./run-tasks.sh 3
 
@@ -21,7 +21,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${CYAN}🚀 Pre-selecting $NUM_TASKS tasks, then launching Claude sessions${NC}"
+echo -e "${CYAN}🚀 Launching $NUM_TASKS Parallel Claude Task Sessions${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -37,8 +37,8 @@ echo -e "${BLUE}📋 Checking available tasks...${NC}"
 TASK_STATUS=$("$REPO_ROOT/.claude/scripts/task-manager.sh" status 2>/dev/null || echo '{}')
 PENDING_COUNT=$(echo "$TASK_STATUS" | grep -o '"pending":[0-9]*' | head -1 | grep -o '[0-9]*' || echo "0")
 
-if [ "$PENDING_COUNT" -lt "$NUM_TASKS" ]; then
-    echo -e "${YELLOW}⚠️  Only $PENDING_COUNT pending tasks available (need $NUM_TASKS)${NC}"
+if [ "$PENDING_COUNT" -eq 0 ]; then
+    echo -e "${YELLOW}⚠️  No pending tasks found${NC}"
     "$REPO_ROOT/.claude/scripts/task-manager.sh" status
     exit 1
 fi
@@ -49,78 +49,9 @@ echo ""
 # Create logs directory
 mkdir -p .claude/logs
 
-# Pre-select all tasks BEFORE launching Claude sessions
-echo -e "${CYAN}🔒 Pre-selecting $NUM_TASKS tasks (thread-safe)...${NC}"
-echo ""
-
-TASK_IDS=()
-FAILED_SELECTIONS=0
-
-for i in $(seq 1 $NUM_TASKS); do
-    echo -e "${BLUE}  → Selecting task $i/$NUM_TASKS...${NC}"
-    
-    # Select task atomically (thread-safe with file locking)
-    TASK_JSON=$("$REPO_ROOT/.claude/scripts/task-manager.sh" select-and-update 2>&1)
-    SELECT_EXIT_CODE=$?
-    
-    if [ $SELECT_EXIT_CODE -ne 0 ] || [ -z "$TASK_JSON" ]; then
-        echo -e "${RED}    ❌ Failed to select task $i${NC}"
-        echo "    Error: $TASK_JSON"
-        FAILED_SELECTIONS=$((FAILED_SELECTIONS + 1))
-        continue
-    fi
-    
-    # Extract task ID
-    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-    
-    if [ -z "$TASK_ID" ]; then
-        echo -e "${RED}    ❌ Failed to parse task ID${NC}"
-        FAILED_SELECTIONS=$((FAILED_SELECTIONS + 1))
-        continue
-    fi
-    
-    # Store task ID
-    TASK_IDS+=("$TASK_ID")
-    echo "$TASK_ID" > ".claude/logs/task-${i}.id"
-    
-    # Extract other info for display
-    PLATFORM=$(echo "$TASK_JSON" | grep -o '"platform":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-    LANGUAGE=$(echo "$TASK_JSON" | grep -o '"language":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-    
-    echo -e "${GREEN}    ✅ Selected task $i: ${TASK_ID} (${PLATFORM}-${LANGUAGE})${NC}"
-    
-    # Small delay between selections to ensure lock release
-    if [ $i -lt $NUM_TASKS ]; then
-        sleep 1
-    fi
-done
-
-echo ""
-
-# Check if we got enough tasks
-SELECTED_COUNT=${#TASK_IDS[@]}
-if [ $SELECTED_COUNT -lt $NUM_TASKS ]; then
-    echo -e "${RED}❌ Only selected $SELECTED_COUNT out of $NUM_TASKS tasks${NC}"
-    echo -e "${YELLOW}⚠️  Will launch only $SELECTED_COUNT sessions${NC}"
-    NUM_TASKS=$SELECTED_COUNT
-fi
-
-if [ $SELECTED_COUNT -eq 0 ]; then
-    echo -e "${RED}❌ Failed to select any tasks${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✅ Successfully pre-selected $SELECTED_COUNT tasks${NC}"
-echo ""
-echo -e "${CYAN}📋 Selected Tasks:${NC}"
-for i in $(seq 1 $SELECTED_COUNT); do
-    TASK_ID="${TASK_IDS[$((i-1))]}"
-    echo -e "   ${i}. ${TASK_ID}"
-done
-echo ""
-
 # Detect terminal type
 if command -v osascript &> /dev/null; then
+    # macOS - use AppleScript to open tabs
     TERMINAL_TYPE="macos"
 elif [ -n "${ITERM_SESSION_ID:-}" ]; then
     TERMINAL_TYPE="iterm2"
@@ -128,33 +59,29 @@ else
     TERMINAL_TYPE="unknown"
 fi
 
-# Function to open new terminal tab (macOS Terminal.app) - same window
+# Function to open new terminal tab (macOS Terminal.app)
+# Uses the expect-based runner for reliable automation
 open_terminal_tab() {
     local task_num=$1
-    local task_id=$2
     local log_file="$REPO_ROOT/.claude/logs/task-${task_num}.log"
-    local runner_script="$REPO_ROOT/.claude/scripts/run-single-task-with-selection.sh"
+    local runner_script="$REPO_ROOT/.claude/scripts/run-single-task-auto.sh"
     
     osascript <<EOF
 tell application "Terminal"
     activate
-    if (count of windows) = 0 then
-        do script "cd '$REPO_ROOT' && TASK_ID='$task_id' '$runner_script' $task_num 2>&1 | tee '$log_file'"
-    else
-        tell front window
-            do script "cd '$REPO_ROOT' && TASK_ID='$task_id' '$runner_script' $task_num 2>&1 | tee '$log_file'"
-        end tell
-    end if
+    tell front window
+        do script "cd '$REPO_ROOT' && '$runner_script' $task_num 2>&1 | tee '$log_file'"
+    end tell
 end tell
 EOF
 }
 
-# Function to open new iTerm2 tab - same window
+# Function to open new iTerm2 tab
+# Uses the expect-based runner for reliable automation
 open_iterm2_tab() {
     local task_num=$1
-    local task_id=$2
     local log_file="$REPO_ROOT/.claude/logs/task-${task_num}.log"
-    local runner_script="$REPO_ROOT/.claude/scripts/run-single-task-with-selection.sh"
+    local runner_script="$REPO_ROOT/.claude/scripts/run-single-task-auto.sh"
     
     osascript <<EOF
 tell application "iTerm2"
@@ -162,33 +89,33 @@ tell application "iTerm2"
     tell current window
         create tab with default profile
         tell current session of current tab
-            write text "cd '$REPO_ROOT' && TASK_ID='$task_id' '$runner_script' $task_num 2>&1 | tee '$log_file'"
+            write text "cd '$REPO_ROOT' && '$runner_script' $task_num 2>&1 | tee '$log_file'"
         end tell
     end tell
 end tell
 EOF
 }
 
-# Launch tasks with pre-selected task IDs
-echo -e "${BLUE}📂 Launching $SELECTED_COUNT Claude sessions...${NC}"
+# Launch tasks
+echo -e "${BLUE}📂 Opening $NUM_TASKS terminal tabs...${NC}"
 echo ""
 
-for i in $(seq 1 $SELECTED_COUNT); do
-    TASK_ID="${TASK_IDS[$((i-1))]}"
-    echo -e "${CYAN}  → Launching session $i with task ${TASK_ID}...${NC}"
+for i in $(seq 1 $NUM_TASKS); do
+    echo -e "${CYAN}  → Launching task session $i...${NC}"
     
     if [ "$TERMINAL_TYPE" = "macos" ]; then
         if [ -n "${ITERM_SESSION_ID:-}" ] || command -v iterm2 &> /dev/null; then
-            open_iterm2_tab "$i" "$TASK_ID" 2>/dev/null || open_terminal_tab "$i" "$TASK_ID"
+            open_iterm2_tab "$i" 2>/dev/null || open_terminal_tab "$i"
         else
-            open_terminal_tab "$i" "$TASK_ID"
+            open_terminal_tab "$i"
         fi
     else
-        echo -e "${YELLOW}⚠️  Auto-tab opening not supported${NC}"
-        echo "   Run: cd '$REPO_ROOT' && TASK_ID='$TASK_ID' ./.claude/scripts/run-single-task-with-selection.sh $i"
+        echo -e "${YELLOW}⚠️  Auto-tab opening not supported. Please open tabs manually.${NC}"
+        echo "   Run in each tab: cd '$REPO_ROOT' && claude"
+        echo "   Then type: /task-coordinator"
     fi
     
-    sleep 2  # Stagger launches
+    sleep 1  # Stagger launches
 done
 
 echo ""
@@ -201,7 +128,22 @@ echo ""
 echo -e "${BLUE}View status:${NC}"
 echo "   ./.claude/scripts/status.sh"
 echo ""
-echo -e "${BLUE}Watch status:${NC}"
+echo -e "${BLUE}View detailed status:${NC}"
+echo "   ./.claude/scripts/status.sh --detailed"
+echo ""
+echo -e "${BLUE}Watch status (auto-refresh):${NC}"
 echo "   ./.claude/scripts/status.sh --watch"
 echo ""
+echo -e "${BLUE}View task logs:${NC}"
+echo "   tail -f .claude/logs/task-*.log"
+echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${GREEN}💡 Tip: Each Claude session will automatically:${NC}"
+echo "   1. Select next pending task from tasks.csv"
+echo "   2. Mark it as 'in_progress'"
+echo "   3. Process it through all phases"
+echo "   4. Update status when complete"
+echo ""
+echo -e "${YELLOW}👀 Watch the terminal tabs to see real-time progress!${NC}"
+
