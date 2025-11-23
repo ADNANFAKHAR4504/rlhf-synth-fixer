@@ -59,7 +59,7 @@ If `.claude/tasks.csv` is present:
        exit 1
    fi
    
-   # Extract task_id for display/logging (simple grep, no complex parsing needed)
+   # Extract task_id once (used throughout this workflow)
    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    
    # Display selected task info (optional - for logging)
@@ -76,12 +76,23 @@ If `.claude/tasks.csv` is present:
 3. **Create metadata.json and PROMPT.md**:
    ```bash
    # Use JSON directly - TASK_JSON contains all fields needed by create-task-files.sh
-   # Extract task_id for directory path
+   # Extract task_id for directory path (if not already extracted in step 1)
    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    
+   # Create worktree directory structure if it doesn't exist
+   # Note: The actual git worktree will be created by task-coordinator,
+   # but we need the directory to exist to create files in it
+   WORKTREE_DIR="worktree/synth-${TASK_ID}"
+   mkdir -p "$WORKTREE_DIR"
+   
    # Create metadata.json and PROMPT.md in the worktree directory
-   # Note: Worktree will be created by task-coordinator, but we create files in the expected location
-   ./.claude/scripts/create-task-files.sh "$TASK_JSON" worktree/synth-${TASK_ID}
+   # The task-coordinator will create the git worktree at this location later
+   if ! ./.claude/scripts/create-task-files.sh "$TASK_JSON" "$WORKTREE_DIR"; then
+       echo "❌ ERROR: Failed to create metadata.json and PROMPT.md"
+       exit 1
+   fi
+   
+   echo "✅ Created metadata.json and PROMPT.md in $WORKTREE_DIR"
    ```
 
 **Benefits of task-manager.sh:**
@@ -95,21 +106,42 @@ If `.claude/tasks.csv` is present:
 - **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
 4. **Hand off to task-coordinator for worktree setup**:
-   - The task-coordinator will create the worktree using EXACT format: `worktree/synth-{task_id}`
+   - The task-coordinator will create the git worktree using EXACT format: `worktree/synth-{task_id}`
+   - The directory structure already exists (created in step 3) with metadata.json and PROMPT.md
+   - The task-coordinator will:
+     1. Create git worktree: `git worktree add worktree/synth-{task_id} -b synth-{task_id}`
+     2. Copy metadata.json and PROMPT.md into the worktree (if not already there)
+     3. Verify worktree setup with `verify-worktree.sh`
    - Validation will fail if naming is incorrect
-   - This agent only creates metadata.json and PROMPT.md files
 
 ### Option 2: Direct Task Input
 If `.claude/tasks.csv` is not present:
-1. Check if `lib/PROMPT.md` exists and contains proper task requirements
-2. If missing or incomplete, report BLOCKED status and ask the user to fill `lib/PROMPT.md` with:
-    - Clear infrastructure requirements
-    - AWS services needed
-    - Architecture details
-    - Any specific constraints or preferences
-3. Validate that `metadata.json` exists with required fields
-4. If `metadata.json` is missing, report BLOCKED status and request user to provide platform/language info
-5. Proceed with the workflow once requirements are properly defined and validated
+
+**Note**: This agent runs in the main repository root. If you're in a worktree context, paths will be different.
+
+1. **Check for existing task files** (in current directory or worktree):
+   - If in main repo root: Check for `worktree/synth-*/lib/PROMPT.md` or ask user for task location
+   - If in worktree: Check for `lib/PROMPT.md` in current directory
+   
+2. **If PROMPT.md missing or incomplete**, report BLOCKED status and ask the user to:
+   - Provide the task location (worktree path or main repo location)
+   - Fill `lib/PROMPT.md` with:
+     - Clear infrastructure requirements
+     - AWS services needed
+     - Architecture details
+     - Any specific constraints or preferences
+
+3. **Validate metadata.json exists** with required fields:
+   - If in main repo: Check `worktree/synth-*/metadata.json`
+   - If in worktree: Check `metadata.json` in current directory
+   
+4. **If metadata.json is missing**, report BLOCKED status and request user to provide:
+   - Platform (cdk, cdktf, cfn, tf, pulumi)
+   - Language (ts, py, js, yaml, json, hcl, go)
+   - Complexity (medium, hard, expert)
+   - Task ID (if available)
+
+5. **Proceed with workflow** once requirements are properly defined and validated
 
 ## Error Recovery
 - If any step fails, report specific BLOCKED status with resolution steps
