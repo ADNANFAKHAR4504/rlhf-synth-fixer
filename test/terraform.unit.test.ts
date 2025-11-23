@@ -166,7 +166,7 @@ describe("Main Infrastructure Tests", () => {
   });
 
   test("region pairs use proper key generation", () => {
-    expect(tapStackContent).toMatch(/key\s*=\s*".*to.*"/);
+    expect(tapStackContent).toMatch(/key\s*=\s*"\${region1}-\${region2}"/);
   });
 
 
@@ -191,25 +191,36 @@ describe("VPC and Networking Tests", () => {
     expect(tapStackContent).toMatch(/resource\s*"aws_internet_gateway"\s*"ap_southeast_1"/);
   });
 
-  test("has subnets with proper for_each configuration", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private"/);
-    expect(tapStackContent).toMatch(/for_each\s*=/);
+  test("has subnets with proper regional configuration", () => {
+    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"public_ap_southeast_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_subnet"\s*"private_ap_southeast_1"/);
   });
 
   test("has NAT Gateways and EIPs", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_eip"\s*"nat"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_nat_gateway"\s*"main"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_eip"\s*"nat_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_nat_gateway"\s*"us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_eip"\s*"nat_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_nat_gateway"\s*"eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_eip"\s*"nat_ap_southeast_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_nat_gateway"\s*"ap_southeast_1"/);
   });
 
   test("has route tables for public and private subnets", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"public"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"private"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"public_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"private_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"public_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table"\s*"private_eu_west_1"/);
   });
 
   test("has route table associations", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"public"/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"private"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"public_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"private_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"public_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_route_table_association"\s*"private_eu_west_1"/);
   });
 });
 
@@ -227,8 +238,10 @@ describe("Security Configuration Tests", () => {
   });
 
   test("has security groups for RDS and Lambda", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"rds/);
-    expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"lambda"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"rds_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"lambda_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"rds_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_security_group"\s*"lambda_eu_west_1"/);
   });
 
   test("has proper security group rules", () => {
@@ -255,7 +268,9 @@ describe("RDS Configuration Tests", () => {
   });
 
   test("has RDS clusters with proper configuration", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_rds_cluster"\s*"main"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_rds_cluster"\s*"us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_rds_cluster"\s*"eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_rds_cluster"\s*"ap_southeast_1"/);
     expect(tapStackContent).toMatch(/engine\s*=\s*"aurora-mysql"/);
     expect(tapStackContent).toMatch(/manage_master_user_password\s*=\s*true/);
   });
@@ -355,7 +370,9 @@ describe("Lambda Configuration Tests", () => {
   });
 
   test("has Lambda functions", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_lambda_function"\s*"payment_validator"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_lambda_function"\s*"payment_validator_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_lambda_function"\s*"payment_validator_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_lambda_function"\s*"payment_validator_ap_southeast_1"/);
   });
 
   test("has proper Lambda configuration", () => {
@@ -398,18 +415,18 @@ describe("Lambda Configuration Tests", () => {
   });
 
   test("Lambda uses private subnets", () => {
-    expect(tapStackContent).toMatch(/aws_subnet\.private.*private-.*id/);
+    expect(tapStackContent).toMatch(/aws_subnet\.private_us_east_1.*id/);
   });
 
   test("Lambda references security groups", () => {
-    expect(tapStackContent).toMatch(/aws_security_group\.lambda.*id/);
+    expect(tapStackContent).toMatch(/aws_security_group\.lambda_us_east_1.*id/);
   });
 
   test("Lambda has all required environment variables", () => {
-    expect(tapStackContent).toMatch(/REGION\s*=\s*each\.key/);
+    expect(tapStackContent).toMatch(/REGION\s*=\s*"us-east-1"/);
     expect(tapStackContent).toMatch(/S3_BUCKET\s*=\s*aws_s3_bucket/);
     expect(tapStackContent).toMatch(/DB_ENDPOINT\s*=\s*aws_rds_cluster/);
-    expect(tapStackContent).toMatch(/KMS_KEY_ID\s*=\s*local\.kms_main/);
+    expect(tapStackContent).toMatch(/KMS_KEY_ID\s*=\s*aws_kms_key/);
   });
 
 
@@ -423,7 +440,9 @@ describe("API Gateway Configuration Tests", () => {
   });
 
   test("has API Gateway REST APIs", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_rest_api"\s*"main"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_rest_api"\s*"us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_rest_api"\s*"eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_rest_api"\s*"ap_southeast_1"/);
   });
 
   test("has API Gateway resources and methods", () => {
@@ -432,17 +451,19 @@ describe("API Gateway Configuration Tests", () => {
   });
 
   test("has API Gateway integrations with Lambda", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_integration"\s*"lambda"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_integration"\s*"lambda_us_east_1"/);
     expect(tapStackContent).toMatch(/integration_http_method\s*=\s*"POST"/);
   });
 
   test("has API Gateway deployments", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_deployment"\s*"main"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_deployment"\s*"us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_deployment"\s*"eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_api_gateway_deployment"\s*"ap_southeast_1"/);
     expect(tapStackContent).toMatch(/depends_on\s*=\s*\[/);
   });
 
   test("API Gateway has proper naming convention", () => {
-    expect(tapStackContent).toMatch(/name\s*=\s*"\${local\.environment}-\${each\.key}-payment-api"/);
+    expect(tapStackContent).toMatch(/name\s*=\s*"\${local\.environment}-us-east-1-payment-api"/);
   });
 
   test("API Gateway has description", () => {
@@ -470,7 +491,7 @@ describe("API Gateway Configuration Tests", () => {
   });
 
   test("API Gateway integration references Lambda URI", () => {
-    expect(tapStackContent).toMatch(/uri\s*=\s*aws_lambda_function\.payment_validator.*invoke_arn/);
+    expect(tapStackContent).toMatch(/uri\s*=\s*aws_lambda_function\.payment_validator_us_east_1.*invoke_arn/);
   });
 
   test("API Gateway deployment uses environment stage", () => {
@@ -478,7 +499,7 @@ describe("API Gateway Configuration Tests", () => {
   });
 
   test("Lambda permission has correct source ARN", () => {
-    expect(tapStackContent).toMatch(/source_arn\s*=\s*"\${aws_api_gateway_rest_api\.main.*execution_arn}\/\*\/\*"/);
+    expect(tapStackContent).toMatch(/source_arn\s*=\s*"\${aws_api_gateway_rest_api\.us_east_1.*execution_arn}\/\*\/\*"/);
   });
 
   test("Lambda permission principal is API Gateway", () => {
@@ -496,11 +517,13 @@ describe("S3 Configuration Tests", () => {
   });
 
   test("has S3 buckets for transaction logs", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket"\s*"transaction_logs"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket"\s*"transaction_logs_us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket"\s*"transaction_logs_eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket"\s*"transaction_logs_ap_southeast_1"/);
   });
 
   test("has S3 bucket versioning enabled", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket_versioning"\s*"transaction_logs"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_s3_bucket_versioning"\s*"transaction_logs_us_east_1"/);
     expect(tapStackContent).toMatch(/status\s*=\s*"Enabled"/);
   });
 
@@ -865,11 +888,13 @@ describe("CloudWatch and Monitoring Tests", () => {
   });
 
   test("has CloudWatch dashboard resources", () => {
-    expect(tapStackContent).toMatch(/resource\s*"aws_cloudwatch_dashboard"\s*"main"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_cloudwatch_dashboard"\s*"us_east_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_cloudwatch_dashboard"\s*"eu_west_1"/);
+    expect(tapStackContent).toMatch(/resource\s*"aws_cloudwatch_dashboard"\s*"ap_southeast_1"/);
   });
 
   test("CloudWatch dashboard has proper naming", () => {
-    expect(tapStackContent).toMatch(/dashboard_name\s*=\s*"\${local\.environment}-\${each\.key}-payment-dashboard"/);
+    expect(tapStackContent).toMatch(/dashboard_name\s*=\s*"\${local\.environment}-us-east-1-payment-dashboard"/);
   });
 
   test("dashboard includes RDS metrics", () => {
