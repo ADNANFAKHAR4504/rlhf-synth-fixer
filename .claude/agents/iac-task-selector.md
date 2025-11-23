@@ -69,9 +69,6 @@ If `.claude/tasks.csv` is present:
        exit 1
    fi
    
-   # Export TASK_ID for task-coordinator to use (prevents race condition with glob)
-   export SELECTED_TASK_ID="$TASK_ID"
-   
    # Display selected task info (optional - for logging)
    echo "✅ Selected and locked task: $TASK_ID"
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
@@ -112,7 +109,6 @@ If `.claude/tasks.csv` is present:
    echo "✅ Stored task data in $TASK_JSON_FILE"
    echo "📋 Task ID: $TASK_ID"
    echo "🔄 Ready for handoff to task-coordinator"
-   echo "🔑 SELECTED_TASK_ID environment variable set: $SELECTED_TASK_ID"
    echo ""
    echo "⚠️  Note: Temporary file will be cleaned up by task-coordinator"
    ```
@@ -128,15 +124,17 @@ If `.claude/tasks.csv` is present:
 - **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
 4. **Hand off to task-coordinator for worktree setup**:
-   - **CRITICAL**: The `SELECTED_TASK_ID` environment variable is set and must be passed to task-coordinator
    - The task-coordinator will:
-     1. Verify `SELECTED_TASK_ID` environment variable is set (prevents race condition with glob)
-     2. Read task data from `.claude/task-${SELECTED_TASK_ID}.json` (specific file, not glob)
-     3. Create git worktree: `git worktree add worktree/synth-${SELECTED_TASK_ID} -b synth-${SELECTED_TASK_ID}`
-     4. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
-     5. Clean up temporary task JSON file
-     6. Verify worktree setup with `verify-worktree.sh`
+     1. Find the most recent task JSON file in `.claude/task-*.json` (sorted by modification time)
+     2. Extract task ID from the filename
+     3. Validate the JSON file and verify task_id matches
+     4. Create git worktree: `git worktree add worktree/synth-${TASK_ID} -b synth-${TASK_ID}`
+     5. Verify worktree was created successfully
+     6. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
+     7. Clean up temporary task JSON file
+     8. Verify worktree setup with `verify-worktree.sh`
    - **CRITICAL**: Do NOT create the worktree directory or files before handoff - git worktree add requires an empty/non-existent directory
+   - **NOTE**: Environment variables don't persist across agent invocations, so task-coordinator uses the JSON file as the single source of truth
 
 ### Option 2: Direct Task Input
 If `.claude/tasks.csv` is not present:
