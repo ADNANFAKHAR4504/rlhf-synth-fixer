@@ -1,0 +1,38 @@
+{
+  "task_id": "l0s3m1",
+  "platform": "cdktf",
+  "language": "python",
+  "complexity": "expert",
+  "phase": "qa",
+  "created_at": "2025-11-24T02:04:00Z",
+  "environmentSuffix": "synthl0s3m1",
+  "region": "us-east-1",
+  "services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB Global Table",
+    "Route 53",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SSM"
+  ],
+  "multi_region": true,
+  "regions": [
+    "us-east-1",
+    "us-west-2"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "Route 53",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SSM"
+  ]
+}
