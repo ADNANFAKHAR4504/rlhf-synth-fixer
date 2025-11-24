@@ -432,7 +432,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-
     // Create Kubernetes provider using the EKS cluster
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _k8sProvider = new k8s.Provider(
@@ -534,7 +533,6 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this }
     );
-
 
     // Export outputs to match the expected interface
     this.vpcId = vpc.id;
