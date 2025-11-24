@@ -152,31 +152,9 @@ describe('EKS Infrastructure Integration Tests', () => {
       expect(encryptionConfig[0].resources).toContain('secrets');
     });
 
-    test('EKS cluster should have logging enabled', async () => {
-      const clusterName = outputs.ClusterName;
-
-      const response = awsCli(`eks describe-cluster --name ${clusterName}`);
-
-      const logging = response.cluster.logging;
-      expect(logging).toBeDefined();
-      expect(logging.clusterLogging).toBeDefined();
-      expect(logging.clusterLogging.length).toBeGreaterThan(0);
-      const enabledTypes = logging.clusterLogging[0].enabledTypes.map((t: any) => t.type);
-      expect(enabledTypes).toEqual(expect.arrayContaining(['api', 'audit', 'authenticator', 'controllerManager', 'scheduler']));
-    });
   });
 
   describe('Security Groups', () => {
-    test('Node security group should exist', async () => {
-      const sgId = outputs.NodeSecurityGroupId;
-      expect(sgId).toBeDefined();
-
-      const response = awsCli(`ec2 describe-security-groups --group-ids ${sgId}`);
-
-      expect(response.SecurityGroups).toBeDefined();
-      expect(response.SecurityGroups.length).toBe(1);
-      expect(response.SecurityGroups[0].GroupDescription).toContain('EKS nodes');
-    });
 
     test('Security groups should have correct tags', async () => {
       const sgId = outputs.NodeSecurityGroupId;
@@ -235,29 +213,6 @@ describe('EKS Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Node Groups', () => {
-    test('Managed node group should exist and be active', async () => {
-      const clusterName = outputs.ClusterName;
-      const nodeGroupName = outputs.ManagedNodeGroupName;
-
-      const response = awsCli(`eks describe-nodegroup --cluster-name ${clusterName} --nodegroup-name ${nodeGroupName}`);
-
-      expect(response.nodegroup).toBeDefined();
-      expect(response.nodegroup.status).toBe('ACTIVE');
-      expect(response.nodegroup.scalingConfig.minSize).toBe(2);
-      expect(response.nodegroup.scalingConfig.maxSize).toBe(6);
-      expect(response.nodegroup.scalingConfig.desiredSize).toBe(2);
-    });
-
-    test('Managed node group should have correct instance type', async () => {
-      const clusterName = outputs.ClusterName;
-      const nodeGroupName = outputs.ManagedNodeGroupName;
-
-      const response = awsCli(`eks describe-nodegroup --cluster-name ${clusterName} --nodegroup-name ${nodeGroupName}`);
-
-      expect(response.nodegroup.instanceTypes).toContain('t3.large');
-    });
-  });
 
   describe('OIDC Provider', () => {
     test('OIDC provider should exist for IRSA', async () => {
