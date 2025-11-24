@@ -218,7 +218,7 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Data, monitoring, and storage resources', () => {
+  describe('Data, monitoring and storage resources', () => {
     test('RDS instance stays private, encrypted, and Multi-AZ', () => {
       // Arrange
       const rds = template.Resources.RDSDatabase.Properties;
