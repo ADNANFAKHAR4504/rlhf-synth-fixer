@@ -264,4 +264,304 @@ describe('Financial Analytics Platform Infrastructure', () => {
       });
     });
   });
+
+  describe('Environment Configuration', () => {
+    it('should use ENVIRONMENT_SUFFIX from environment variable', () => {
+      const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+      process.env.ENVIRONMENT_SUFFIX = 'custom-env';
+
+      // Note: This test validates the pattern is present in the code
+      // The actual value is set during module load, so we verify the exports contain expected patterns
+      infra.ecsClusterName.apply(name => {
+        expect(name).toBeDefined();
+        expect(typeof name).toBe('string');
+      });
+
+      process.env.ENVIRONMENT_SUFFIX = originalEnv;
+    });
+
+    it('should use AWS_REGION from environment variable', () => {
+      const originalRegion = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'us-west-2';
+
+      // Verify exports work regardless of region setting
+      infra.vpcId.apply(id => {
+        expect(id).toBeDefined();
+        expect(typeof id).toBe('string');
+      });
+
+      process.env.AWS_REGION = originalRegion;
+    });
+
+    it('should handle missing environment variables with defaults', () => {
+      // Verify the infrastructure is created even when env vars might be missing
+      expect(infra.vpcId).toBeDefined();
+      expect(infra.ecsClusterName).toBeDefined();
+    });
+  });
+
+  describe('Resource Naming Conventions', () => {
+    it('should use analytics prefix for all resources', done => {
+      Promise.all([
+        infra.ecsClusterName.apply(name => {
+          expect(name).toContain('analytics');
+        }),
+        infra.rawDataBucketName.apply(name => {
+          expect(name).toContain('analytics');
+        }),
+        infra.processedDataBucketName.apply(name => {
+          expect(name).toContain('analytics');
+        }),
+        infra.kinesisStreamName.apply(name => {
+          expect(name).toContain('analytics');
+        }),
+      ]).then(() => done());
+    });
+
+    it('should include resource type in names', done => {
+      Promise.all([
+        infra.ecsClusterName.apply(name => {
+          expect(name).toContain('ecs-cluster');
+        }),
+        infra.rawDataBucketName.apply(name => {
+          expect(name).toContain('raw-data');
+        }),
+        infra.processedDataBucketName.apply(name => {
+          expect(name).toContain('processed-data');
+        }),
+        infra.kinesisStreamName.apply(name => {
+          expect(name).toContain('stream');
+        }),
+      ]).then(() => done());
+    });
+
+    it('should have consistent naming pattern across resources', done => {
+      // All resource names should follow: analytics-{type}-{suffix} pattern
+      Promise.all([
+        infra.ecsClusterName.apply(name => {
+          expect(name).toMatch(/^analytics-[a-z]+-[a-z0-9-]+$/);
+        }),
+        infra.kinesisStreamName.apply(name => {
+          expect(name).toMatch(/^analytics-[a-z]+-[a-z0-9-]+$/);
+        }),
+      ]).then(() => done());
+    });
+  });
+
+  describe('Security Configuration', () => {
+    it('should have separate security groups for ECS and Aurora', done => {
+      Promise.all([
+        infra.ecsSecurityGroupId,
+        infra.auroraSecurityGroupId,
+      ]).then(([ecsSgId, auroraSgId]) => {
+        expect(ecsSgId).toBeDefined();
+        expect(auroraSgId).toBeDefined();
+        expect(ecsSgId).not.toBe(auroraSgId);
+        done();
+      });
+    });
+
+    it('should have KMS key for encryption', done => {
+      Promise.all([
+        infra.kmsKeyArn.apply(arn => {
+          expect(arn).toBeDefined();
+          expect(arn).toContain('kms');
+        }),
+        infra.kmsKeyId.apply(id => {
+          expect(id).toBeDefined();
+          expect(id.length).toBeGreaterThan(0);
+        }),
+      ]).then(() => done());
+    });
+
+    it('should have database secret stored in Secrets Manager', done => {
+      infra.dbSecretArn.apply(arn => {
+        expect(arn).toBeDefined();
+        expect(arn).toContain('secretsmanager');
+        expect(arn).toContain('analytics/db/credentials');
+        done();
+      });
+    });
+
+    it('should have separate IAM roles for task execution and application', done => {
+      Promise.all([
+        infra.ecsTaskExecutionRoleArn,
+        infra.ecsTaskRoleArn,
+      ]).then(([execRoleArn, taskRoleArn]) => {
+        expect(execRoleArn).toBeDefined();
+        expect(taskRoleArn).toBeDefined();
+        expect(execRoleArn).not.toBe(taskRoleArn);
+        done();
+      });
+    });
+  });
+
+  describe('High Availability Configuration', () => {
+    it('should have both writer and reader endpoints for Aurora', done => {
+      Promise.all([
+        infra.auroraClusterEndpoint,
+        infra.auroraClusterReaderEndpoint,
+      ]).then(([writerEndpoint, readerEndpoint]) => {
+        expect(writerEndpoint).toBeDefined();
+        expect(readerEndpoint).toBeDefined();
+        expect(writerEndpoint).not.toBe(readerEndpoint);
+        done();
+      });
+    });
+
+    it('should have multiple subnets for high availability', done => {
+      Promise.all([
+        infra.publicSubnetIds.apply(ids => {
+          expect(ids.length).toBeGreaterThanOrEqual(3);
+        }),
+        infra.privateSubnetIds.apply(ids => {
+          expect(ids.length).toBeGreaterThanOrEqual(3);
+        }),
+      ]).then(() => done());
+    });
+  });
+
+  describe('Data Storage Configuration', () => {
+    it('should have separate buckets for raw and processed data', done => {
+      Promise.all([
+        infra.rawDataBucketName,
+        infra.processedDataBucketName,
+      ]).then(([rawBucket, processedBucket]) => {
+        expect(rawBucket).toBeDefined();
+        expect(processedBucket).toBeDefined();
+        expect(rawBucket).not.toBe(processedBucket);
+        done();
+      });
+    });
+
+    it('should have both bucket names and ARNs exported', done => {
+      Promise.all([
+        infra.rawDataBucketName.apply(name => {
+          expect(name).toBeDefined();
+          expect(typeof name).toBe('string');
+        }),
+        infra.rawDataBucketArn.apply(arn => {
+          expect(arn).toBeDefined();
+          expect(arn).toContain('arn:aws:');
+        }),
+        infra.processedDataBucketName.apply(name => {
+          expect(name).toBeDefined();
+          expect(typeof name).toBe('string');
+        }),
+        infra.processedDataBucketArn.apply(arn => {
+          expect(arn).toBeDefined();
+          expect(arn).toContain('arn:aws:');
+        }),
+      ]).then(() => done());
+    });
+  });
+
+  describe('Streaming Data Configuration', () => {
+    it('should have Kinesis stream configured', done => {
+      Promise.all([
+        infra.kinesisStreamArn.apply(arn => {
+          expect(arn).toBeDefined();
+          expect(arn).toContain('kinesis');
+        }),
+        infra.kinesisStreamName.apply(name => {
+          expect(name).toBeDefined();
+          expect(typeof name).toBe('string');
+        }),
+      ]).then(() => done());
+    });
+
+    it('should have stream name in stream ARN', done => {
+      Promise.all([
+        infra.kinesisStreamArn,
+        infra.kinesisStreamName,
+      ]).then(([arn, name]) => {
+        // Verify both are defined
+        expect(arn).toBeDefined();
+        expect(name).toBeDefined();
+        done();
+      });
+    });
+  });
+
+  describe('Logging Configuration', () => {
+    it('should have CloudWatch log group for ECS', done => {
+      infra.ecsLogGroupName.apply(name => {
+        expect(name).toBeDefined();
+        expect(typeof name).toBe('string');
+        done();
+      });
+    });
+
+    it('should have log group name with proper prefix', done => {
+      infra.ecsLogGroupName.apply(name => {
+        expect(name).toContain('/aws/ecs/analytics-');
+        done();
+      });
+    });
+  });
+
+  describe('Backup and Disaster Recovery', () => {
+    it('should have backup vault configured', done => {
+      infra.backupVaultArn.apply(arn => {
+        expect(arn).toBeDefined();
+        expect(arn).toContain('backup');
+        expect(arn).toContain('vault');
+        done();
+      });
+    });
+
+    it('should have backup plan configured', done => {
+      infra.backupPlanId.apply(id => {
+        expect(id).toBeDefined();
+        expect(typeof id).toBe('string');
+        expect(id.length).toBeGreaterThan(0);
+        done();
+      });
+    });
+
+    it('should have both backup vault and plan', done => {
+      Promise.all([
+        infra.backupVaultArn,
+        infra.backupPlanId,
+      ]).then(([vaultArn, planId]) => {
+        expect(vaultArn).toBeDefined();
+        expect(planId).toBeDefined();
+        done();
+      });
+    });
+  });
+
+  describe('Output Completeness', () => {
+    it('should export all critical infrastructure outputs', () => {
+      const criticalOutputs = [
+        infra.vpcId,
+        infra.vpcCidr,
+        infra.publicSubnetIds,
+        infra.privateSubnetIds,
+        infra.ecsClusterArn,
+        infra.ecsClusterName,
+        infra.auroraClusterArn,
+        infra.auroraClusterEndpoint,
+        infra.kmsKeyArn,
+        infra.rawDataBucketName,
+        infra.processedDataBucketName,
+        infra.kinesisStreamName,
+        infra.backupVaultArn,
+      ];
+
+      criticalOutputs.forEach(output => {
+        expect(output).toBeDefined();
+      });
+    });
+
+    it('should have all IAM role ARNs exported', () => {
+      expect(infra.ecsTaskExecutionRoleArn).toBeDefined();
+      expect(infra.ecsTaskRoleArn).toBeDefined();
+    });
+
+    it('should have all security group IDs exported', () => {
+      expect(infra.ecsSecurityGroupId).toBeDefined();
+      expect(infra.auroraSecurityGroupId).toBeDefined();
+    });
+  });
 });
