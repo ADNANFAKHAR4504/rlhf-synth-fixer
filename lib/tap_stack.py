@@ -106,10 +106,11 @@ class TapStack(TerraformStack):
         # OIDC Provider for IRSA
         # Using Terraform token system to access the OIDC issuer URL
         # eks_cluster.identity returns a list, we need to access the first element's oidc issuer
-        oidc_issuer_url = eks_cluster.identity_fqn
+        # The correct way to access the OIDC issuer URL is through the identity attribute
+        oidc_issuer_url = f"${{aws_eks_cluster.{eks_cluster.friendly_unique_id}.identity[0].oidc[0].issuer}}"
 
         oidc_provider = IamOpenidConnectProvider(self, "eks_oidc_provider",
-            url=eks_cluster.identity_fqn,
+            url=oidc_issuer_url,
             client_id_list=["sts.amazonaws.com"],
             thumbprint_list=["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"],  # AWS EKS standard thumbprint
             tags=common_tags
@@ -217,7 +218,7 @@ class TapStack(TerraformStack):
         )
 
         TerraformOutput(self, "oidc_issuer_url",
-            value=eks_cluster.identity_fqn,
+            value=oidc_issuer_url,
             description="OIDC issuer URL"
         )
 
