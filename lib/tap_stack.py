@@ -61,7 +61,7 @@ class TapStack(TerraformStack):
         )
 
         # Configure AWS Provider for primary region
-        AwsProvider(
+        self.primary_provider = AwsProvider(
             self,
             "aws",
             region=self.aws_region,
@@ -69,7 +69,7 @@ class TapStack(TerraformStack):
         )
 
         # Configure AWS Provider for secondary region (us-west-2)
-        AwsProvider(
+        self.secondary_provider = AwsProvider(
             self,
             "aws_secondary",
             alias="secondary",
@@ -115,31 +115,31 @@ class TapStack(TerraformStack):
 
         # ========== SECONDARY REGION RESOURCES (us-west-2) ==========
         # KMS Key
-        self.secondary_kms_key = self._create_kms_key("secondary", provider_alias="secondary")
+        self.secondary_kms_key = self._create_kms_key("secondary", provider=self.secondary_provider)
 
         # VPC Infrastructure
-        self.secondary_vpc = self._create_vpc("secondary", "10.1.0.0/16", provider_alias="secondary")
-        self.secondary_subnets = self._create_subnets("secondary", self.secondary_vpc, "us-west-2", "10.1", provider_alias="secondary")
-        self.secondary_igw = self._create_internet_gateway("secondary", self.secondary_vpc, provider_alias="secondary")
-        self.secondary_route_table = self._create_route_table("secondary", self.secondary_vpc, self.secondary_igw, self.secondary_subnets, provider_alias="secondary")
-        self.secondary_security_group = self._create_security_group("secondary", self.secondary_vpc, provider_alias="secondary")
+        self.secondary_vpc = self._create_vpc("secondary", "10.1.0.0/16", provider=self.secondary_provider)
+        self.secondary_subnets = self._create_subnets("secondary", self.secondary_vpc, "us-west-2", "10.1", provider=self.secondary_provider)
+        self.secondary_igw = self._create_internet_gateway("secondary", self.secondary_vpc, provider=self.secondary_provider)
+        self.secondary_route_table = self._create_route_table("secondary", self.secondary_vpc, self.secondary_igw, self.secondary_subnets, provider=self.secondary_provider)
+        self.secondary_security_group = self._create_security_group("secondary", self.secondary_vpc, provider=self.secondary_provider)
 
         # S3 Bucket for replication
-        self.secondary_bucket = self._create_s3_bucket("secondary", provider_alias="secondary")
-        self._enable_s3_versioning("secondary", self.secondary_bucket, provider_alias="secondary")
-        self._configure_s3_encryption("secondary", self.secondary_bucket, self.secondary_kms_key, provider_alias="secondary")
+        self.secondary_bucket = self._create_s3_bucket("secondary", provider=self.secondary_provider)
+        self._enable_s3_versioning("secondary", self.secondary_bucket, provider=self.secondary_provider)
+        self._configure_s3_encryption("secondary", self.secondary_bucket, self.secondary_kms_key, provider=self.secondary_provider)
 
         # IAM Role for Lambda
-        self.secondary_lambda_role = self._create_lambda_role("secondary", self.secondary_bucket, self.secondary_kms_key, provider_alias="secondary")
+        self.secondary_lambda_role = self._create_lambda_role("secondary", self.secondary_bucket, self.secondary_kms_key, provider=self.secondary_provider)
 
         # Lambda Function
-        self.secondary_lambda = self._create_lambda_function("secondary", self.secondary_lambda_role, provider_alias="secondary")
+        self.secondary_lambda = self._create_lambda_function("secondary", self.secondary_lambda_role, provider=self.secondary_provider)
 
         # SNS Topic
-        self.secondary_sns_topic = self._create_sns_topic("secondary", provider_alias="secondary")
+        self.secondary_sns_topic = self._create_sns_topic("secondary", provider=self.secondary_provider)
 
         # CloudWatch
-        self._create_cloudwatch_dashboard("secondary", self.secondary_lambda, provider_alias="secondary")
+        self._create_cloudwatch_dashboard("secondary", self.secondary_lambda, provider=self.secondary_provider)
 
         # ========== GLOBAL RESOURCES ==========
         # DynamoDB Global Tables
@@ -151,15 +151,15 @@ class TapStack(TerraformStack):
         # Outputs
         self._create_outputs()
 
-    def _create_kms_key(self, region_name: str, provider_alias: str = None) -> KmsKey:
+    def _create_kms_key(self, region_name: str, provider = None) -> KmsKey:
         """Create KMS customer-managed key with rotation enabled."""
         kwargs = {
             "description": f"KMS key for healthcare DR {region_name} - {self.environment_suffix}",
             "enable_key_rotation": True,
             "tags": {**self.common_tags, "Name": f"healthcare-dr-kms-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         kms_key = KmsKey(
             self,
@@ -171,8 +171,8 @@ class TapStack(TerraformStack):
             "name": f"alias/healthcare-dr-{region_name}-v1-{self.environment_suffix}",
             "target_key_id": kms_key.key_id
         }
-        if provider_alias:
-            alias_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            alias_kwargs["provider"] = provider
 
         KmsAlias(
             self,
@@ -182,7 +182,7 @@ class TapStack(TerraformStack):
 
         return kms_key
 
-    def _create_vpc(self, region_name: str, cidr_block: str, provider_alias: str = None) -> Vpc:
+    def _create_vpc(self, region_name: str, cidr_block: str, provider = None) -> Vpc:
         """Create VPC."""
         kwargs = {
             "cidr_block": cidr_block,
@@ -190,8 +190,8 @@ class TapStack(TerraformStack):
             "enable_dns_support": True,
             "tags": {**self.common_tags, "Name": f"healthcare-dr-vpc-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return Vpc(
             self,
@@ -199,7 +199,7 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _create_subnets(self, region_name: str, vpc: Vpc, region: str, cidr_prefix: str, provider_alias: str = None) -> list:
+    def _create_subnets(self, region_name: str, vpc: Vpc, region: str, cidr_prefix: str, provider = None) -> list:
         """Create subnets across availability zones."""
         subnets = []
         azs = ["a", "b", "c"]
@@ -224,14 +224,14 @@ class TapStack(TerraformStack):
 
         return subnets
 
-    def _create_internet_gateway(self, region_name: str, vpc: Vpc, provider_alias: str = None) -> InternetGateway:
+    def _create_internet_gateway(self, region_name: str, vpc: Vpc, provider = None) -> InternetGateway:
         """Create Internet Gateway."""
         kwargs = {
             "vpc_id": vpc.id,
             "tags": {**self.common_tags, "Name": f"healthcare-dr-igw-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return InternetGateway(
             self,
@@ -239,14 +239,14 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _create_route_table(self, region_name: str, vpc: Vpc, igw: InternetGateway, subnets: list, provider_alias: str = None) -> RouteTable:
+    def _create_route_table(self, region_name: str, vpc: Vpc, igw: InternetGateway, subnets: list, provider = None) -> RouteTable:
         """Create route table with internet gateway route."""
         rt_kwargs = {
             "vpc_id": vpc.id,
             "tags": {**self.common_tags, "Name": f"healthcare-dr-rt-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            rt_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            rt_kwargs["provider"] = provider
 
         route_table = RouteTable(
             self,
@@ -259,8 +259,8 @@ class TapStack(TerraformStack):
             "destination_cidr_block": "0.0.0.0/0",
             "gateway_id": igw.id
         }
-        if provider_alias:
-            route_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            route_kwargs["provider"] = provider
 
         Route(
             self,
@@ -274,8 +274,8 @@ class TapStack(TerraformStack):
                 "subnet_id": subnet.id,
                 "route_table_id": route_table.id
             }
-            if provider_alias:
-                assoc_kwargs["provider"] = f"aws.{provider_alias}"
+            if provider:
+                assoc_kwargs["provider"] = provider
 
             RouteTableAssociation(
                 self,
@@ -285,7 +285,7 @@ class TapStack(TerraformStack):
 
         return route_table
 
-    def _create_security_group(self, region_name: str, vpc: Vpc, provider_alias: str = None) -> SecurityGroup:
+    def _create_security_group(self, region_name: str, vpc: Vpc, provider = None) -> SecurityGroup:
         """Create security group for Lambda."""
         kwargs = {
             "name": f"healthcare-dr-lambda-sg-{region_name}-v1-{self.environment_suffix}",
@@ -305,8 +305,8 @@ class TapStack(TerraformStack):
             )],
             "tags": {**self.common_tags, "Name": f"healthcare-dr-lambda-sg-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return SecurityGroup(
             self,
@@ -314,15 +314,15 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _create_s3_bucket(self, region_name: str, provider_alias: str = None) -> S3Bucket:
+    def _create_s3_bucket(self, region_name: str, provider = None) -> S3Bucket:
         """Create S3 bucket for medical documents."""
         kwargs = {
             "bucket": f"healthcare-medical-docs-{region_name}-v1-{self.environment_suffix}",
             "force_destroy": True,
             "tags": {**self.common_tags, "Name": f"medical-docs-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return S3Bucket(
             self,
@@ -330,7 +330,7 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _enable_s3_versioning(self, region_name: str, bucket: S3Bucket, provider_alias: str = None):
+    def _enable_s3_versioning(self, region_name: str, bucket: S3Bucket, provider = None):
         """Enable versioning on S3 bucket."""
         kwargs = {
             "bucket": bucket.id,
@@ -338,8 +338,8 @@ class TapStack(TerraformStack):
                 "status": "Enabled"
             }
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return S3BucketVersioningA(
             self,
@@ -347,7 +347,7 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _configure_s3_encryption(self, region_name: str, bucket: S3Bucket, kms_key: KmsKey, provider_alias: str = None):
+    def _configure_s3_encryption(self, region_name: str, bucket: S3Bucket, kms_key: KmsKey, provider = None):
         """Configure S3 bucket encryption with KMS."""
         kwargs = {
             "bucket": bucket.id,
@@ -358,8 +358,8 @@ class TapStack(TerraformStack):
                 )
             )]
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         S3BucketServerSideEncryptionConfigurationA(
             self,
@@ -367,7 +367,7 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _create_lambda_role(self, region_name: str, bucket: S3Bucket, kms_key: KmsKey, provider_alias: str = None) -> IamRole:
+    def _create_lambda_role(self, region_name: str, bucket: S3Bucket, kms_key: KmsKey, provider = None) -> IamRole:
         """Create IAM role for Lambda with cross-region permissions."""
         assume_role_policy = {
             "Version": "2012-10-17",
@@ -385,8 +385,8 @@ class TapStack(TerraformStack):
             "assume_role_policy": json.dumps(assume_role_policy),
             "tags": {**self.common_tags, "Name": f"lambda-role-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            role_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            role_kwargs["provider"] = provider
 
         lambda_role = IamRole(
             self,
@@ -439,8 +439,8 @@ class TapStack(TerraformStack):
                 ]
             })
         }
-        if provider_alias:
-            policy_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            policy_kwargs["provider"] = provider
 
         lambda_policy = IamPolicy(
             self,
@@ -453,8 +453,8 @@ class TapStack(TerraformStack):
             "role": lambda_role.name,
             "policy_arn": lambda_policy.arn
         }
-        if provider_alias:
-            attach1_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            attach1_kwargs["provider"] = provider
 
         IamRolePolicyAttachment(
             self,
@@ -466,8 +466,8 @@ class TapStack(TerraformStack):
             "role": lambda_role.name,
             "policy_arn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         }
-        if provider_alias:
-            attach2_kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            attach2_kwargs["provider"] = provider
 
         IamRolePolicyAttachment(
             self,
@@ -477,7 +477,7 @@ class TapStack(TerraformStack):
 
         return lambda_role
 
-    def _create_lambda_function(self, region_name: str, lambda_role: IamRole, provider_alias: str = None) -> LambdaFunction:
+    def _create_lambda_function(self, region_name: str, lambda_role: IamRole, provider = None) -> LambdaFunction:
         """Create Lambda function for API endpoints."""
         kwargs = {
             "function_name": f"healthcare-dr-api-{region_name}-v1-{self.environment_suffix}",
@@ -496,8 +496,8 @@ class TapStack(TerraformStack):
             },
             "tags": {**self.common_tags, "Name": f"api-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return LambdaFunction(
             self,
@@ -505,14 +505,14 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _create_sns_topic(self, region_name: str, provider_alias: str = None) -> SnsTopic:
+    def _create_sns_topic(self, region_name: str, provider = None) -> SnsTopic:
         """Create SNS topic for failover notifications."""
         kwargs = {
             "name": f"healthcare-dr-failover-{region_name}-v1-{self.environment_suffix}",
             "tags": {**self.common_tags, "Name": f"failover-topic-{region_name}-v1-{self.environment_suffix}"}
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         return SnsTopic(
             self,
@@ -520,7 +520,7 @@ class TapStack(TerraformStack):
             **kwargs
         )
 
-    def _create_cloudwatch_dashboard(self, region_name: str, lambda_func: LambdaFunction, provider_alias: str = None):
+    def _create_cloudwatch_dashboard(self, region_name: str, lambda_func: LambdaFunction, provider = None):
         """Create CloudWatch dashboard for monitoring."""
         region = self.aws_region if region_name == "primary" else "us-west-2"
 
@@ -547,8 +547,8 @@ class TapStack(TerraformStack):
             "dashboard_name": f"healthcare-dr-{region_name}-v1-{self.environment_suffix}",
             "dashboard_body": json.dumps(dashboard_body)
         }
-        if provider_alias:
-            kwargs["provider"] = f"aws.{provider_alias}"
+        if provider:
+            kwargs["provider"] = provider
 
         CloudwatchDashboard(
             self,
