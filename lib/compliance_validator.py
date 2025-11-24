@@ -1,7 +1,14 @@
 """Compliance validator construct for infrastructure analysis."""
 
+import os
 from constructs import Construct
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
+)
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
@@ -28,15 +35,29 @@ class ComplianceValidator(Construct):
         self.reports_bucket = S3Bucket(
             self,
             f"reports-bucket-{environment_suffix}",
-            bucket=f"compliance-reports-{environment_suffix}",
-            versioning={"enabled": True},
-            server_side_encryption_configuration={
-                "rule": {
-                    "apply_server_side_encryption_by_default": {
-                        "sse_algorithm": "AES256"
-                    }
-                }
-            }
+            bucket=f"compliance-reports-{environment_suffix}"
+        )
+
+        # Enable versioning (separate resource to avoid deprecation warning)
+        S3BucketVersioningA(
+            self,
+            f"reports-bucket-versioning-{environment_suffix}",
+            bucket=self.reports_bucket.id,
+            versioning_configuration={"status": "Enabled"}
+        )
+
+        # Enable encryption (separate resource to avoid deprecation warning)
+        S3BucketServerSideEncryptionConfigurationA(
+            self,
+            f"reports-bucket-encryption-{environment_suffix}",
+            bucket=self.reports_bucket.id,
+            rule=[
+                S3BucketServerSideEncryptionConfigurationRuleA(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ]
         )
 
         # IAM role for Lambda validation function
@@ -121,12 +142,18 @@ class ComplianceValidator(Construct):
         self.lambda_role.node.add_dependency(self.lambda_policy)
 
         # Lambda function for post-deployment validation
+        # Calculate absolute path to Lambda ZIP file
+        import os
+        zip_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "lambda", "compliance_validator.zip")
+        )
+        
         self.validator_lambda = LambdaFunction(
             self,
             f"compliance-validator-lambda-{environment_suffix}",
             function_name=f"compliance-validator-{environment_suffix}",
             role=self.lambda_role.arn,
-            handler="index.handler",
+            handler="compliance_validator_handler.handler",
             runtime="python3.11",
             timeout=300,
             memory_size=512,
@@ -137,7 +164,7 @@ class ComplianceValidator(Construct):
                     "AWS_REGION": aws_region
                 }
             },
-            filename="lib/lambda/compliance_validator.zip"
+            filename=zip_path
         )
 
         # Lambda permission for S3 invocation
