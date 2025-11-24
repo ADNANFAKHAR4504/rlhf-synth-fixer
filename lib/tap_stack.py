@@ -148,60 +148,8 @@ class TapStack(TerraformStack):
             restrict_public_buckets=True,
         )
 
-        # Create bucket policy that denies non-HTTPS requests and allows CloudFront OAC
-        bucket_policy_doc = DataAwsIamPolicyDocument(
-            self,
-            "origin-bucket-policy-doc",
-            provider=self.provider_us_west_2,
-            statement=[
-                DataAwsIamPolicyDocumentStatement(
-                    sid="DenyNonHTTPS",
-                    effect="Deny",
-                    principals=[
-                        {
-                            "type": "*",
-                            "identifiers": ["*"],
-                        }
-                    ],
-                    actions=["s3:*"],
-                    resources=[
-                        self.origin_bucket.arn,
-                        f"{self.origin_bucket.arn}/*",
-                    ],
-                    condition=[
-                        {
-                            "test": "Bool",
-                            "variable": "aws:SecureTransport",
-                            "values": ["false"],
-                        }
-                    ],
-                ),
-                DataAwsIamPolicyDocumentStatement(
-                    sid="AllowCloudFrontServicePrincipal",
-                    effect="Allow",
-                    principals=[
-                        {
-                            "type": "Service",
-                            "identifiers": ["cloudfront.amazonaws.com"],
-                        }
-                    ],
-                    actions=["s3:GetObject"],
-                    resources=[f"{self.origin_bucket.arn}/*"],
-                    condition=[
-                        {
-                            "test": "StringEquals",
-                            "variable": "AWS:SourceArn",
-                            "values": [
-                                "arn:aws:cloudfront::${{data.aws_caller_identity.current.account_id}}:distribution/*"
-                            ],
-                        }
-                    ],
-                ),
-            ],
-        )
-
-        # Note: We'll need to update this policy after CloudFront is created with actual ARN
-        # For now, we use a wildcard that will be restricted by the condition
+        # Note: The bucket policy will be created after CloudFront distribution
+        # to reference the actual distribution ARN (see create_cloudfront_distribution method)
 
     def create_ip_allowlist(self):
         """Create IP set for allowlisting office IPs"""
