@@ -276,15 +276,22 @@ import { MicroserviceConstruct } from '../constructs/microservice';
 import { AppMeshServiceConstruct } from '../constructs/app-mesh-service';
 import { SERVICES } from '../config/service-config';
 
+export interface EcsMicroservicesStackProps extends cdk.StackProps {
+  isLocalStack?: boolean;
+  environmentSuffix?: string;
+}
+
 export class EcsMicroservicesStack extends cdk.Stack {
   private vpc: ec2.Vpc;
   private cluster: ecs.Cluster;
   private alb: elbv2.ApplicationLoadBalancer;
   private mesh: appmesh.Mesh;
   private secrets: { [key: string]: secretsmanager.Secret };
+  private environmentSuffix: string;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: EcsMicroservicesStackProps) {
     super(scope, id, props);
+    this.environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Create VPC with 3 AZs
     this.createVpc();
@@ -352,9 +359,10 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createSecrets(): void {
+    const secretPrefix = `/microservices-${this.environmentSuffix}`;
     this.secrets = {
       databaseUrl: new secretsmanager.Secret(this, 'DatabaseUrl', {
-        secretName: '/microservices/database-url',
+        secretName: `${secretPrefix}/database-url`,
         description: 'Database connection URL',
         generateSecretString: {
           secretStringTemplate: JSON.stringify({
@@ -368,7 +376,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
         },
       }),
       apiKey: new secretsmanager.Secret(this, 'ApiKey', {
-        secretName: '/microservices/api-key',
+        secretName: `${secretPrefix}/api-key`,
         description: 'External API Key',
         generateSecretString: {
           passwordLength: 32,
@@ -528,9 +536,9 @@ export class EcsMicroservicesStack extends cdk.Stack {
 
     // Deploy each microservice
     servicesToDeploy.forEach((serviceConfig, index) => {
-      // Create ECR Repository
+      // Create ECR Repository with environment suffix for multi-environment support
       const repository = new ecr.Repository(this, `${serviceConfig.name}Repository`, {
-        repositoryName: serviceConfig.name,
+        repositoryName: `${serviceConfig.name}-${this.environmentSuffix}`,
         imageScanOnPush: true,
         imageTagMutability: ecr.TagMutability.MUTABLE,
         lifecycleRules: [{
@@ -570,9 +578,9 @@ export class EcsMicroservicesStack extends cdk.Stack {
 
       deployedServices[serviceConfig.name] = service;
 
-      // Add service to ALB target group
+      // Add service to ALB target group with environment suffix
       const targetGroup = new elbv2.ApplicationTargetGroup(this, `${serviceConfig.name}TargetGroup`, {
-        targetGroupName: `${serviceConfig.name}-tg`,
+        targetGroupName: `${serviceConfig.name}-tg-${this.environmentSuffix}`.substring(0, 32),
         vpc: this.vpc,
         port: serviceConfig.port,
         protocol: elbv2.ApplicationProtocol.HTTP,
@@ -991,25 +999,30 @@ cdk destroy
 
 ### Pre-deployment Setup
 
-1. **Push Docker Images to ECR**:
+1. **Push Docker Images to ECR** (repositories are environment-specific):
 ```bash
 # Build and push images for each service
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com
 
-# For each service (payment-api, fraud-detector, transaction-api)
-docker build -t [service-name] .
-docker tag [service-name]:latest [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com/[service-name]:latest
-docker push [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com/[service-name]:latest
+# For each service - note the environment suffix (e.g., payment-api-pr7179)
+# Replace 'pr7179' with your environment suffix
+docker build -t payment-api .
+docker tag payment-api:latest [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com/payment-api-pr7179:latest
+docker push [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com/payment-api-pr7179:latest
+
+docker build -t fraud-detector .
+docker tag fraud-detector:latest [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com/fraud-detector-pr7179:latest
+docker push [ACCOUNT].dkr.ecr.us-east-1.amazonaws.com/fraud-detector-pr7179:latest
 ```
 
-2. **Update Secrets Manager**:
+2. **Update Secrets Manager** (adjust suffix for your environment):
 ```bash
-# Update database URL secret
-aws secretsmanager update-secret --secret-id /microservices/database-url \
+# Update database URL secret (replace 'pr7179' with your environment suffix)
+aws secretsmanager update-secret --secret-id /microservices-pr7179/database-url \
   --secret-string '{"engine":"postgres","host":"your-db.amazonaws.com","port":5432,"database":"prod","username":"admin","password":"your-password"}'
 
 # Update API key
-aws secretsmanager update-secret --secret-id /microservices/api-key \
+aws secretsmanager update-secret --secret-id /microservices-pr7179/api-key \
   --secret-string 'your-api-key-here'
 ```
 
@@ -1028,9 +1041,26 @@ aws secretsmanager update-secret --secret-id /microservices/api-key \
 ✅ **Health Checks**: 30-second intervals, 3 unhealthy threshold
 ✅ **Production Ready**: Spot/On-demand mix, ECS Exec enabled
 ✅ **Output Management**: Proper parent-level outputs without export conflicts
+✅ **Multi-Environment Support**: Environment-specific resource naming for parallel deployments
 
-## Critical Issue Resolved
+## Critical Issues Resolved
 
+### 1. Export Name Conflict Prevention
 **Export Name Conflict Prevention**: The nested EcsMicroservicesStack outputs do NOT have `exportName` properties to prevent CloudFormation export conflicts. Only the parent TapStack creates global exports, ensuring clean deployments without "export name already exists" errors.
 
-This CDK application provides a complete, production-ready microservices architecture on AWS ECS with comprehensive monitoring, security, and scalability features.
+### 2. Multi-Environment Resource Naming
+**Environment-Specific Resources**: All AWS resources that require account-wide or region-wide unique names now include the `environmentSuffix`:
+- **ECR Repositories**: `payment-api-pr7179` instead of `payment-api`
+- **Target Groups**: `payment-api-tg-pr7179` instead of `payment-api-tg`
+- **Secrets Manager**: `/microservices-pr7179/database-url` instead of `/microservices/database-url`
+
+This enables multiple PRs/environments to deploy simultaneously to the same AWS account without resource name conflicts.
+
+### 3. Best Practice: Environment Suffix Pattern
+To support multi-environment deployments:
+1. Pass `environmentSuffix` prop to `EcsMicroservicesStack`
+2. Apply suffix to all uniquely-named resources (ECR, Target Groups, Secrets)
+3. Resources scoped to stack (VPC, Cluster, ALB) use `stackName` which already includes environment suffix
+4. Update tests to expect environment-specific resource names
+
+This CDK application provides a complete, production-ready microservices architecture on AWS ECS with comprehensive monitoring, security, and scalability features that supports parallel deployments across multiple environments.

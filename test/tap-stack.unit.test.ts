@@ -768,7 +768,7 @@ describe('TapStack Unit Tests', () => {
     test('ECR repositories should be created for each service', () => {
       servicesToTest.forEach(service => {
         template.hasResourceProperties('AWS::ECR::Repository', {
-          RepositoryName: service.name,
+          RepositoryName: `${service.name}-${environmentSuffix}`,
           ImageScanningConfiguration: {
             ScanOnPush: true,
           },
@@ -957,7 +957,7 @@ describe('TapStack Unit Tests', () => {
         template.hasResourceProperties(
           'AWS::ElasticLoadBalancingV2::TargetGroup',
           {
-            Name: `${service.name}-tg`,
+            Name: `${service.name}-tg-${environmentSuffix}`.substring(0, 32),
             Port: service.port,
             Protocol: 'HTTP',
             TargetType: 'ip',
@@ -1007,9 +1007,11 @@ describe('TapStack Unit Tests', () => {
       const secretPrefix =
         process.env.TEST_SECRET_PREFIX ||
         process.env.SECRET_PREFIX ||
-        '/microservices';
+        `/microservices-${environmentSuffix}`;
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: Match.stringLikeRegexp(`.*${secretPrefix}.*database.*`),
+        Name: Match.stringLikeRegexp(
+          `.*${secretPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*database.*`
+        ),
         GenerateSecretString: Match.anyValue(),
       });
     });
@@ -1018,9 +1020,11 @@ describe('TapStack Unit Tests', () => {
       const secretPrefix =
         process.env.TEST_SECRET_PREFIX ||
         process.env.SECRET_PREFIX ||
-        '/microservices';
+        `/microservices-${environmentSuffix}`;
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: Match.stringLikeRegexp(`.*${secretPrefix}.*api-key.*`),
+        Name: Match.stringLikeRegexp(
+          `.*${secretPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*api-key.*`
+        ),
         GenerateSecretString: Match.anyValue(),
       });
     });

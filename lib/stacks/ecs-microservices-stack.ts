@@ -75,14 +75,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
 
     const maxAzs = parseInt(
       this.node.tryGetContext('maxAzs') ||
-        process.env.VPC_MAX_AZS ||
-        defaultMaxAzs,
+      process.env.VPC_MAX_AZS ||
+      defaultMaxAzs,
       10
     );
     const natGateways = parseInt(
       this.node.tryGetContext('natGateways') ||
-        process.env.VPC_NAT_GATEWAYS ||
-        defaultNatGateways,
+      process.env.VPC_NAT_GATEWAYS ||
+      defaultNatGateways,
       10
     );
     const vpcCidr =
@@ -160,7 +160,8 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createSecrets(): void {
-    const secretPrefix = process.env.SECRET_PREFIX || '/microservices';
+    const secretPrefix =
+      process.env.SECRET_PREFIX || `/microservices-${this.environmentSuffix}`;
     const dbHost = process.env.DATABASE_HOST || 'database.example.com';
     const dbPort = parseInt(process.env.DATABASE_PORT || '5432', 10);
     const dbName = process.env.DATABASE_NAME || 'microservices';
@@ -412,11 +413,11 @@ export class EcsMicroservicesStack extends cdk.Stack {
       const appMeshService = this.isCiCd
         ? null
         : new AppMeshServiceConstruct(this, `${serviceConfig.name}AppMesh`, {
-            mesh: this.mesh!,
-            serviceName: serviceConfig.name,
-            port: serviceConfig.port,
-            healthCheckPath: serviceConfig.healthCheckPath,
-          });
+          mesh: this.mesh!,
+          serviceName: serviceConfig.name,
+          port: serviceConfig.port,
+          healthCheckPath: serviceConfig.healthCheckPath,
+        });
 
       const service = new MicroserviceConstruct(
         this,
@@ -445,7 +446,11 @@ export class EcsMicroservicesStack extends cdk.Stack {
         this,
         `${serviceConfig.name}TargetGroup`,
         {
-          targetGroupName: `${serviceConfig.name}-tg`,
+          targetGroupName:
+            `${serviceConfig.name}-tg-${this.environmentSuffix}`.substring(
+              0,
+              32
+            ),
           vpc: this.vpc,
           port: this.isCiCd ? 80 : serviceConfig.port, // Use port 80 for nginx in CI/CD
           protocol: elbv2.ApplicationProtocol.HTTP,

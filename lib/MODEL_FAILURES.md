@@ -12,6 +12,19 @@
 - **Impact**: Deployments would fail with "Export with name X is already exported by stack Y" errors, preventing successful infrastructure provisioning
 - **Fix Applied**: Removed `exportName` from nested stack outputs, keeping them as local outputs while only the parent stack creates global exports
 
+### 2a. ECR Repository Name Conflicts (Critical Multi-PR Issue)
+- **Problem**: ECR repositories were created with fixed names (e.g., `payment-api`, `fraud-detector`) without environment-specific suffixes, causing conflicts when multiple PRs deployed to the same AWS account
+- **Root Cause**: The `repositoryName` property used only the service name from config, making it impossible for multiple environments/PRs to coexist in the same account
+- **Error Message**: `payment-api already exists in stack arn:aws:cloudformation:us-east-1:***:stack/tap-ecs-microservices-pr6745/...`
+- **Impact**: Only one PR could deploy at a time; subsequent PR deployments would fail with "repository already exists" errors
+- **Fix Applied**: 
+  - Added `environmentSuffix` property to `EcsMicroservicesStackProps`
+  - Updated ECR repository names to include environment suffix: `${serviceConfig.name}-${this.environmentSuffix}`
+  - Updated Target Group names to include environment suffix: `${serviceConfig.name}-tg-${this.environmentSuffix}`
+  - Updated Secrets Manager prefix to include environment suffix: `/microservices-${this.environmentSuffix}`
+  - Updated all unit tests to expect environment-specific resource names
+- **Result**: Multiple PRs can now deploy simultaneously without resource name conflicts
+
 ### 3. Stack Cleanup and Deletability
 - **Problem**: Some resources had retention policies that prevented clean stack deletion
 - **Fix**: Ensured all resources use `RemovalPolicy.DESTROY` and appropriate cleanup settings
