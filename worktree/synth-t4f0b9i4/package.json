@@ -1,0 +1,16 @@
+{
+  "name": "tap-stack-t4f0b9i4",
+  "version": "1.0.0",
+  "description": "CloudFormation EKS infrastructure for task t4f0b9i4",
+  "scripts": {
+    "test": "pipenv run test",
+    "lint": "pipenv run lint",
+    "build": "pipenv run build",
+    "validate": "pipenv run validate",
+    "deploy": "pipenv run deploy",
+    "setup": "pipenv install --dev"
+  },
+  "keywords": ["cloudformation", "eks", "infrastructure"],
+  "author": "Turing",
+  "license": "MIT"
+}
