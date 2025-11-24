@@ -5,7 +5,7 @@ resource "aws_kms_key" "s3_encryption" {
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = var.kms_deletion_window_in_days
   enable_key_rotation     = true
-  
+
   tags = merge(var.common_tags, {
     Name    = "${var.project_name}-s3-kms-${var.environment}"
     Purpose = "S3Encryption"
@@ -755,7 +755,7 @@ resource "aws_iam_role" "sagemaker" {
 resource "aws_iam_role_policy" "sagemaker" {
   name = "${var.project_name}-sagemaker-policy-${var.environment}"
   role = aws_iam_role.sagemaker.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1809,7 +1809,7 @@ resource "aws_lambda_permission" "eventbridge_lambda" {
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "ml_pipeline" {
   dashboard_name = "${var.project_name}-ml-dashboard-${var.environment}"
-  
+
   dashboard_body = jsonencode({
     widgets = [
       {

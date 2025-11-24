@@ -337,7 +337,7 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/lambda_function.zip"
 
   source {
-    content = <<EOF
+    content  = <<EOF
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 
 exports.handler = async (event) => {

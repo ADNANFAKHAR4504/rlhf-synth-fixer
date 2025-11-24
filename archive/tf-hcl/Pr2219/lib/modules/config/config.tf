@@ -3,7 +3,7 @@ resource "aws_config_delivery_channel" "main" {
   name           = "SecConfig-Delivery-Channel"
   s3_bucket_name = var.config_bucket
   s3_key_prefix  = "config"
-  
+
   depends_on = [aws_config_configuration_recorder.main]
 }
 

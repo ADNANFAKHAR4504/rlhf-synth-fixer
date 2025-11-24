@@ -61,26 +61,26 @@ variable "sensor_types" {
 locals {
   # Resource naming convention with suffix
   suffix = "abdb"
-  
+
   # Common tags for all resources
   common_tags = {
-    Environment  = var.environment
-    Project      = var.project_name
-    ManagedBy    = "terraform"
-    Stack        = "tap-stack-${local.suffix}"
-    CreatedAt    = timestamp()
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+    Stack       = "tap-stack-${local.suffix}"
+    CreatedAt   = timestamp()
   }
-  
+
   # Naming prefixes
   name_prefix = "${var.project_name}-${var.environment}-${local.suffix}"
-  
+
   # VPC Configuration
   vpc_cidr = "10.0.0.0/16"
-  
+
   # Subnet CIDRs
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-  
+
   # Availability Zones (using data source for dynamic AZ selection)
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 }
@@ -104,7 +104,7 @@ resource "aws_vpc" "main" {
   cidr_block           = local.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
@@ -113,7 +113,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
   })
@@ -126,7 +126,7 @@ resource "aws_subnet" "public" {
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
     Type = "Public"
@@ -139,7 +139,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
     Type = "Private"
@@ -150,11 +150,11 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count  = 2
   domain = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-eip-nat-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -163,23 +163,23 @@ resource "aws_nat_gateway" "main" {
   count         = 2
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rt-public"
   })
@@ -189,12 +189,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rt-private-${count.index + 1}"
   })
@@ -221,7 +221,7 @@ resource "aws_route_table_association" "private" {
 # S3 Bucket for Data Lake
 resource "aws_s3_bucket" "data_lake" {
   bucket = "${local.name_prefix}-data-lake"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-data-lake"
     Type = "DataLake"
@@ -231,7 +231,7 @@ resource "aws_s3_bucket" "data_lake" {
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "data_lake" {
   bucket = aws_s3_bucket.data_lake.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -240,7 +240,7 @@ resource "aws_s3_bucket_versioning" "data_lake" {
 # S3 Bucket Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "data_lake" {
   bucket = aws_s3_bucket.data_lake.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -251,7 +251,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data_lake" {
 # S3 Bucket for Athena Results
 resource "aws_s3_bucket" "athena_results" {
   bucket = "${local.name_prefix}-athena-results"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-athena-results"
     Type = "AthenaResults"
@@ -261,7 +261,7 @@ resource "aws_s3_bucket" "athena_results" {
 # S3 Bucket for Glue Scripts
 resource "aws_s3_bucket" "glue_scripts" {
   bucket = "${local.name_prefix}-glue-scripts"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-glue-scripts"
     Type = "GlueScripts"
@@ -273,36 +273,36 @@ resource "aws_s3_bucket" "glue_scripts" {
 # ----------------------------------------------------------------------------
 
 resource "aws_dynamodb_table" "buffered_data" {
-  name           = "${local.name_prefix}-buffered-data"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "device_id"
-  range_key      = "timestamp"
-  
+  name         = "${local.name_prefix}-buffered-data"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "device_id"
+  range_key    = "timestamp"
+
   attribute {
     name = "device_id"
     type = "S"
   }
-  
+
   attribute {
     name = "timestamp"
     type = "N"
   }
-  
+
   attribute {
     name = "sensor_type"
     type = "S"
   }
-  
+
   global_secondary_index {
     name            = "sensor_type_index"
     hash_key        = "sensor_type"
     range_key       = "timestamp"
     projection_type = "ALL"
   }
-  
+
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-buffered-data"
   })
@@ -314,18 +314,18 @@ resource "aws_dynamodb_table" "buffered_data" {
 
 resource "aws_kinesis_stream" "main" {
   name             = "${local.name_prefix}-stream"
-  shard_count      = 100  # To handle 890,000 msgs/minute
-  retention_period = 168  # 7 days
-  
+  shard_count      = 100 # To handle 890,000 msgs/minute
+  retention_period = 168 # 7 days
+
   shard_level_metrics = [
     "IncomingRecords",
     "OutgoingRecords"
   ]
-  
+
   stream_mode_details {
     stream_mode = "PROVISIONED"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-stream"
   })
@@ -337,7 +337,7 @@ resource "aws_kinesis_stream" "main" {
 
 resource "aws_timestreamwrite_database" "main" {
   database_name = replace("${local.name_prefix}-tsdb", "-", "_")
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-tsdb"
   })
@@ -346,12 +346,12 @@ resource "aws_timestreamwrite_database" "main" {
 resource "aws_timestreamwrite_table" "sensor_data" {
   database_name = aws_timestreamwrite_database.main.database_name
   table_name    = "sensor_data"
-  
+
   retention_properties {
     magnetic_store_retention_period_in_days = 365
     memory_store_retention_period_in_hours  = 24
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-sensor-data"
   })
@@ -364,7 +364,7 @@ resource "aws_timestreamwrite_table" "sensor_data" {
 # IAM Role for Device Verification Lambda
 resource "aws_iam_role" "lambda_device_verification" {
   name = "${local.name_prefix}-lambda-device-verification"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -375,7 +375,7 @@ resource "aws_iam_role" "lambda_device_verification" {
       }
     }]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -383,7 +383,7 @@ resource "aws_iam_role" "lambda_device_verification" {
 resource "aws_iam_role_policy" "lambda_device_verification" {
   name = "${local.name_prefix}-lambda-device-verification-policy"
   role = aws_iam_role.lambda_device_verification.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -436,7 +436,7 @@ resource "aws_iam_role_policy_attachment" "lambda_device_verification_vpc" {
 # IAM Role for Data Replay Lambda
 resource "aws_iam_role" "lambda_data_replay" {
   name = "${local.name_prefix}-lambda-data-replay"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -447,7 +447,7 @@ resource "aws_iam_role" "lambda_data_replay" {
       }
     }]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -455,7 +455,7 @@ resource "aws_iam_role" "lambda_data_replay" {
 resource "aws_iam_role_policy" "lambda_data_replay" {
   name = "${local.name_prefix}-lambda-data-replay-policy"
   role = aws_iam_role.lambda_data_replay.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -511,7 +511,7 @@ resource "aws_iam_role_policy_attachment" "lambda_data_replay_vpc" {
 # IAM Role for Step Functions
 resource "aws_iam_role" "step_functions" {
   name = "${local.name_prefix}-step-functions"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -522,7 +522,7 @@ resource "aws_iam_role" "step_functions" {
       }
     }]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -530,7 +530,7 @@ resource "aws_iam_role" "step_functions" {
 resource "aws_iam_role_policy" "step_functions" {
   name = "${local.name_prefix}-step-functions-policy"
   role = aws_iam_role.step_functions.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -586,7 +586,7 @@ resource "aws_iam_role_policy" "step_functions" {
 # IAM Role for Glue Jobs
 resource "aws_iam_role" "glue" {
   name = "${local.name_prefix}-glue"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -597,7 +597,7 @@ resource "aws_iam_role" "glue" {
       }
     }]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -605,7 +605,7 @@ resource "aws_iam_role" "glue" {
 resource "aws_iam_role_policy" "glue" {
   name = "${local.name_prefix}-glue-policy"
   role = aws_iam_role.glue.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -669,14 +669,14 @@ resource "aws_security_group" "lambda" {
   name        = "${local.name_prefix}-lambda-sg"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.main.id
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-lambda-sg"
   })
@@ -895,7 +895,7 @@ resource "aws_lambda_function" "data_replay" {
 resource "aws_sfn_state_machine" "recovery_orchestrator" {
   name     = "${local.name_prefix}-recovery-orchestrator"
   role_arn = aws_iam_role.step_functions.arn
-  
+
   definition = jsonencode({
     Comment = "IoT Recovery Orchestration Pipeline"
     StartAt = "InitiateRecovery"
@@ -907,19 +907,19 @@ resource "aws_sfn_state_machine" "recovery_orchestrator" {
             StartAt = "ReplayBufferedData"
             States = {
               ReplayBufferedData = {
-                Type = "Task"
+                Type     = "Task"
                 Resource = "arn:aws:states:::lambda:invoke"
                 Parameters = {
                   FunctionName = aws_lambda_function.data_replay.arn
-                  "Payload.$" = "$"
+                  "Payload.$"  = "$"
                 }
                 TimeoutSeconds = 300
                 Retry = [
                   {
-                    ErrorEquals = ["States.TaskFailed"]
+                    ErrorEquals     = ["States.TaskFailed"]
                     IntervalSeconds = 2
-                    MaxAttempts = 3
-                    BackoffRate = 2.0
+                    MaxAttempts     = 3
+                    BackoffRate     = 2.0
                   }
                 ]
                 End = true
@@ -930,23 +930,23 @@ resource "aws_sfn_state_machine" "recovery_orchestrator" {
             StartAt = "RecalculateTimestream"
             States = {
               RecalculateTimestream = {
-                Type = "Task"
+                Type     = "Task"
                 Resource = "arn:aws:states:::aws-sdk:timestreamwrite:writeRecords"
                 Parameters = {
                   DatabaseName = aws_timestreamwrite_database.main.database_name
-                  TableName = aws_timestreamwrite_table.sensor_data.table_name
+                  TableName    = aws_timestreamwrite_table.sensor_data.table_name
                   Records = [
                     {
-                      Time = "$$.State.EnteredTime"
-                      TimeUnit = "MILLISECONDS"
-                      MeasureName = "recovery_status"
-                      MeasureValue = "1"
+                      Time             = "$$.State.EnteredTime"
+                      TimeUnit         = "MILLISECONDS"
+                      MeasureName      = "recovery_status"
+                      MeasureValue     = "1"
                       MeasureValueType = "DOUBLE"
                     }
                   ]
                 }
                 TimeoutSeconds = 600
-                End = true
+                End            = true
               }
             }
           },
@@ -954,14 +954,14 @@ resource "aws_sfn_state_machine" "recovery_orchestrator" {
             StartAt = "PublishToEventBridge"
             States = {
               PublishToEventBridge = {
-                Type = "Task"
+                Type     = "Task"
                 Resource = "arn:aws:states:::events:putEvents"
                 Parameters = {
                   Entries = [
                     {
-                      Source = "iot.recovery"
-                      DetailType = "Recovery Initiated"
-                      "Detail.$" = "$"
+                      Source       = "iot.recovery"
+                      DetailType   = "Recovery Initiated"
+                      "Detail.$"   = "$"
                       EventBusName = "default"
                     }
                   ]
@@ -974,19 +974,19 @@ resource "aws_sfn_state_machine" "recovery_orchestrator" {
         Next = "RecoveryComplete"
       }
       RecoveryComplete = {
-        Type = "Pass"
+        Type   = "Pass"
         Result = "Recovery process completed successfully"
-        End = true
+        End    = true
       }
     }
   })
-  
+
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.step_functions.arn}:*"
     include_execution_data = true
     level                  = "ERROR"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-recovery-orchestrator"
   })
@@ -1000,21 +1000,21 @@ resource "aws_sfn_state_machine" "recovery_orchestrator" {
 resource "aws_cloudwatch_log_group" "lambda_device_verification" {
   name              = "/aws/lambda/${aws_lambda_function.device_verification.function_name}"
   retention_in_days = 7
-  
+
   tags = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "lambda_data_replay" {
   name              = "/aws/lambda/${aws_lambda_function.data_replay.function_name}"
   retention_in_days = 7
-  
+
   tags = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "step_functions" {
   name              = "/aws/states/${local.name_prefix}-recovery-orchestrator"
   retention_in_days = 7
-  
+
   tags = local.common_tags
 }
 
@@ -1030,11 +1030,11 @@ resource "aws_cloudwatch_metric_alarm" "iot_connection_failures" {
   threshold           = "100"
   alarm_description   = "Triggers when IoT connection failures exceed threshold"
   treat_missing_data  = "notBreaching"
-  
+
   alarm_actions = [
     aws_sns_topic.alerts.arn
   ]
-  
+
   tags = local.common_tags
 }
 
@@ -1050,23 +1050,23 @@ resource "aws_cloudwatch_metric_alarm" "iot_message_drop" {
   threshold           = "1000"
   alarm_description   = "Triggers when IoT message rate drops below expected"
   treat_missing_data  = "breaching"
-  
+
   alarm_actions = [
     aws_sns_topic.alerts.arn
   ]
-  
+
   tags = local.common_tags
 }
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "recovery" {
   dashboard_name = "${local.name_prefix}-recovery-dashboard"
-  
+
   dashboard_body = jsonencode({
     widgets = [
       {
-        type = "metric"
-        width = 12
+        type   = "metric"
+        width  = 12
         height = 6
         properties = {
           metrics = [
@@ -1074,24 +1074,24 @@ resource "aws_cloudwatch_dashboard" "recovery" {
             [".", "Connect.Failure", { stat = "Sum" }]
           ]
           period = 300
-          stat = "Sum"
+          stat   = "Sum"
           region = var.region
-          title = "IoT Connection Metrics"
+          title  = "IoT Connection Metrics"
         }
       },
       {
-        type = "metric"
-        width = 12
+        type   = "metric"
+        width  = 12
         height = 6
         properties = {
           metrics = [
-            ["AWS/Lambda", "Duration", { stat = "Average", dimensions = { FunctionName = aws_lambda_function.device_verification.function_name }}],
-            [".", "Errors", { stat = "Sum", dimensions = { FunctionName = aws_lambda_function.device_verification.function_name }}]
+            ["AWS/Lambda", "Duration", { stat = "Average", dimensions = { FunctionName = aws_lambda_function.device_verification.function_name } }],
+            [".", "Errors", { stat = "Sum", dimensions = { FunctionName = aws_lambda_function.device_verification.function_name } }]
           ]
           period = 300
-          stat = "Average"
+          stat   = "Average"
           region = var.region
-          title = "Device Verification Lambda"
+          title  = "Device Verification Lambda"
         }
       }
     ]
@@ -1104,7 +1104,7 @@ resource "aws_cloudwatch_dashboard" "recovery" {
 
 resource "aws_sns_topic" "alerts" {
   name = "${local.name_prefix}-alerts"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alerts"
   })
@@ -1131,12 +1131,12 @@ resource "aws_lambda_permission" "sns_invoke" {
 resource "aws_cloudwatch_event_rule" "recovery_events" {
   name        = "${local.name_prefix}-recovery-events"
   description = "Route recovery events to SQS queues"
-  
+
   event_pattern = jsonencode({
-    source = ["iot.recovery"]
+    source      = ["iot.recovery"]
     detail-type = ["Recovery Initiated"]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -1145,7 +1145,7 @@ resource "aws_cloudwatch_event_target" "sqs_routing" {
   rule      = aws_cloudwatch_event_rule.recovery_events.name
   target_id = "sqs-${var.sensor_types[count.index]}"
   arn       = aws_sqs_queue.sensor_queues[count.index].arn
-  
+
   input_transformer {
     input_paths = {
       sensor_type = "$.detail.sensor_type"
@@ -1167,19 +1167,19 @@ EOF
 
 resource "aws_sqs_queue" "sensor_queues" {
   count = length(var.sensor_types)
-  
+
   name                       = "${local.name_prefix}-${var.sensor_types[count.index]}-queue"
   delay_seconds              = 0
   max_message_size           = 262144
-  message_retention_seconds  = 1209600  # 14 days
+  message_retention_seconds  = 1209600 # 14 days
   receive_wait_time_seconds  = 10
   visibility_timeout_seconds = 300
-  
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.sensor_dlq[count.index].arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-${var.sensor_types[count.index]}-queue"
     SensorType = var.sensor_types[count.index]
@@ -1188,10 +1188,10 @@ resource "aws_sqs_queue" "sensor_queues" {
 
 resource "aws_sqs_queue" "sensor_dlq" {
   count = length(var.sensor_types)
-  
+
   name                      = "${local.name_prefix}-${var.sensor_types[count.index]}-dlq"
-  message_retention_seconds = 1209600  # 14 days
-  
+  message_retention_seconds = 1209600 # 14 days
+
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-${var.sensor_types[count.index]}-dlq"
     SensorType = var.sensor_types[count.index]
@@ -1202,7 +1202,7 @@ resource "aws_sqs_queue" "sensor_dlq" {
 resource "aws_sqs_queue_policy" "sensor_queues" {
   count     = length(var.sensor_types)
   queue_url = aws_sqs_queue.sensor_queues[count.index].id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1211,7 +1211,7 @@ resource "aws_sqs_queue_policy" "sensor_queues" {
         Principal = {
           Service = "events.amazonaws.com"
         }
-        Action = "sqs:SendMessage"
+        Action   = "sqs:SendMessage"
         Resource = aws_sqs_queue.sensor_queues[count.index].arn
         Condition = {
           ArnEquals = {
@@ -1230,7 +1230,7 @@ resource "aws_sqs_queue_policy" "sensor_queues" {
 resource "aws_athena_database" "data_lake" {
   name   = replace("${local.name_prefix}_data_lake", "-", "_")
   bucket = aws_s3_bucket.athena_results.id
-  
+
   properties = {
     compression = "GZIP"
   }
@@ -1238,24 +1238,24 @@ resource "aws_athena_database" "data_lake" {
 
 resource "aws_athena_workgroup" "main" {
   name = "${local.name_prefix}-workgroup"
-  
+
   configuration {
     enforce_workgroup_configuration    = true
     publish_cloudwatch_metrics_enabled = true
-    
+
     result_configuration {
       output_location = "s3://${aws_s3_bucket.athena_results.id}/query-results/"
-      
+
       encryption_configuration {
         encryption_option = "SSE_S3"
       }
     }
-    
+
     engine_version {
       selected_engine_version = "AUTO"
     }
   }
-  
+
   tags = local.common_tags
 }
 
@@ -1264,7 +1264,7 @@ resource "aws_athena_named_query" "gap_detection" {
   workgroup   = aws_athena_workgroup.main.id
   database    = aws_athena_database.data_lake.name
   description = "Detect data gaps in sensor readings"
-  
+
   query = <<EOF
 WITH time_series AS (
   SELECT 
@@ -1294,64 +1294,64 @@ EOF
 
 resource "aws_glue_catalog_database" "main" {
   name = replace("${local.name_prefix}_glue_db", "-", "_")
-  
+
   description = "Glue catalog database for IoT data processing"
 }
 
 resource "aws_glue_catalog_table" "sensor_data" {
   name          = "sensor_data"
   database_name = aws_glue_catalog_database.main.name
-  
+
   storage_descriptor {
     location      = "s3://${aws_s3_bucket.data_lake.bucket}/sensor-data/"
     input_format  = "org.apache.hadoop.mapred.TextInputFormat"
     output_format = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
-    
+
     ser_de_info {
       name                  = "json_serde"
       serialization_library = "org.apache.hive.serde2.lazy.LazySimpleSerDe"
-      
+
       parameters = {
         "field.delim" = ","
       }
     }
-    
+
     columns {
       name = "device_id"
       type = "string"
     }
-    
+
     columns {
       name = "timestamp"
       type = "bigint"
     }
-    
+
     columns {
       name = "sensor_type"
       type = "string"
     }
-    
+
     columns {
       name = "value"
       type = "double"
     }
-    
+
     columns {
       name = "unit"
       type = "string"
     }
   }
-  
+
   partition_keys {
     name = "year"
     type = "string"
   }
-  
+
   partition_keys {
     name = "month"
     type = "string"
   }
-  
+
   partition_keys {
     name = "day"
     type = "string"
@@ -1362,29 +1362,29 @@ resource "aws_glue_job" "backfill" {
   name         = "${local.name_prefix}-backfill-job"
   role_arn     = aws_iam_role.glue.arn
   glue_version = "4.0"
-  
+
   command {
     name            = "glueetl"
     script_location = "s3://${aws_s3_bucket.glue_scripts.bucket}/backfill.py"
     python_version  = "3"
   }
-  
+
   default_arguments = {
-    "--enable-metrics"                = ""
+    "--enable-metrics"                   = ""
     "--enable-continuous-cloudwatch-log" = "true"
-    "--enable-spark-ui"               = "true"
-    "--spark-event-logs-path"         = "s3://${aws_s3_bucket.glue_scripts.bucket}/spark-logs/"
-    "--job-language"                  = "python"
-    "--TempDir"                       = "s3://${aws_s3_bucket.glue_scripts.bucket}/temp/"
+    "--enable-spark-ui"                  = "true"
+    "--spark-event-logs-path"            = "s3://${aws_s3_bucket.glue_scripts.bucket}/spark-logs/"
+    "--job-language"                     = "python"
+    "--TempDir"                          = "s3://${aws_s3_bucket.glue_scripts.bucket}/temp/"
   }
-  
+
   max_capacity = 10
-  timeout      = 30  # 30 minutes
-  
+  timeout      = 30 # 30 minutes
+
   execution_property {
     max_concurrent_runs = 2
   }
-  
+
   tags = local.common_tags
 }
 
@@ -1392,7 +1392,7 @@ resource "aws_glue_job" "backfill" {
 resource "aws_s3_object" "glue_script" {
   bucket = aws_s3_bucket.glue_scripts.id
   key    = "backfill.py"
-  
+
   content = <<EOF
 import sys
 from awsglue.transforms import *
@@ -1634,7 +1634,7 @@ output "eventbridge_rule_name" {
 output "sqs_queue_urls" {
   description = "SQS queue URLs for sensor types"
   value = {
-    for idx, queue in aws_sqs_queue.sensor_queues : 
+    for idx, queue in aws_sqs_queue.sensor_queues :
     var.sensor_types[idx] => queue.url
   }
 }

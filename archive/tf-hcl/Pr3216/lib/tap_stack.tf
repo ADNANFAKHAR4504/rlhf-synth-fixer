@@ -9,7 +9,7 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(var.tags, {
     Name = "healthcare-vpc"
   })
@@ -26,7 +26,7 @@ resource "aws_subnet" "private_a" {
   vpc_id            = local.vpc_id
   cidr_block        = "10.0.10.0/24"
   availability_zone = "us-east-1a"
-  
+
   tags = merge(var.tags, {
     Name = "healthcare-private-subnet-1a"
     Type = "Private"
@@ -38,7 +38,7 @@ resource "aws_subnet" "private_b" {
   vpc_id            = local.vpc_id
   cidr_block        = "10.0.20.0/24"
   availability_zone = "us-east-1b"
-  
+
   tags = merge(var.tags, {
     Name = "healthcare-private-subnet-1b"
     Type = "Private"
@@ -58,7 +58,7 @@ resource "aws_kms_key" "rds" {
   description             = "KMS key for RDS encryption - Healthcare PHI data"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   # Key policy allows root account full access and enables IAM policies
   policy = jsonencode({
     Version = "2012-10-17"
@@ -88,7 +88,7 @@ resource "aws_kms_key" "rds" {
       }
     ]
   })
-  
+
   tags = var.tags
 }
 
@@ -102,7 +102,7 @@ resource "aws_security_group" "rds" {
   name_prefix = "healthcare-rds-"
   description = "Security group for Healthcare RDS MySQL - PHI data"
   vpc_id      = local.vpc_id
-  
+
   # Ingress: MySQL port only from VPC CIDR (10.0.0.0/16)
   ingress {
     description = "MySQL from VPC"
@@ -111,7 +111,7 @@ resource "aws_security_group" "rds" {
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16"]
   }
-  
+
   # Egress: Allow HTTPS for AWS API calls (backups, monitoring)
   egress {
     description = "HTTPS for AWS services"
@@ -120,7 +120,7 @@ resource "aws_security_group" "rds" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   # Egress: Allow DNS resolution
   egress {
     description = "DNS"
@@ -129,11 +129,11 @@ resource "aws_security_group" "rds" {
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   tags = merge(var.tags, {
     Name = "healthcare-rds-sg"
   })
@@ -143,9 +143,9 @@ resource "aws_security_group" "rds" {
 resource "aws_db_subnet_group" "main" {
   name       = "healthcare-db-subnet-group"
   subnet_ids = local.subnet_ids
-  
+
   description = "Subnet group for Healthcare RDS - spans 2 private subnets"
-  
+
   tags = merge(var.tags, {
     Name = "healthcare-db-subnet-group"
   })
@@ -156,26 +156,26 @@ resource "aws_db_parameter_group" "mysql8" {
   name_prefix = "healthcare-mysql8-tls-"
   family      = "mysql8.0"
   description = "MySQL 8.0 parameter group enforcing TLS connections for PHI data"
-  
+
   # Enforce TLS - clients must connect using SSL/TLS
   parameter {
     name  = "require_secure_transport"
     value = "ON"
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   tags = var.tags
 }
 
 # IAM role for Enhanced Monitoring (if enabled)
 resource "aws_iam_role" "rds_enhanced_monitoring" {
   count = var.enhanced_monitoring_enabled ? 1 : 0
-  
+
   name_prefix = "healthcare-rds-monitoring-"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -186,13 +186,13 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
       }
     }]
   })
-  
+
   tags = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
   count = var.enhanced_monitoring_enabled ? 1 : 0
-  
+
   role       = aws_iam_role.rds_enhanced_monitoring[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
@@ -200,11 +200,11 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 # RDS MySQL instance - core database for healthcare application
 resource "aws_db_instance" "main" {
   identifier = var.db_identifier
-  
+
   # Engine configuration
   engine         = "mysql"
   engine_version = var.db_engine_version
-  
+
   # Instance specs
   instance_class        = var.db_instance_class
   allocated_storage     = var.db_allocated_storage
@@ -212,46 +212,46 @@ resource "aws_db_instance" "main" {
   storage_type          = "gp3"
   storage_encrypted     = true # Encryption at rest with KMS
   kms_key_id            = aws_kms_key.rds.arn
-  
+
   # Database configuration
   db_name  = var.db_name
   username = var.db_username
   password = var.db_password # Use AWS Secrets Manager in production
-  
+
   # Network & Security
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false # Critical: no public access for PHI
-  
+
   # High availability
   multi_az = var.multi_az
-  
+
   # Parameter group enforcing TLS
   parameter_group_name = aws_db_parameter_group.mysql8.name
-  
+
   # IAM authentication for additional security
   iam_database_authentication_enabled = true
-  
+
   # Backup configuration
   backup_retention_period = var.backup_retention_period
   backup_window           = var.backup_window
   maintenance_window      = var.maintenance_window
-  
+
   # Monitoring
   enabled_cloudwatch_logs_exports       = ["error", "general", "slowquery"]
   performance_insights_enabled          = var.performance_insights_enabled && var.db_instance_class != "db.t3.micro"
   performance_insights_kms_key_id       = (var.performance_insights_enabled && var.db_instance_class != "db.t3.micro") ? aws_kms_key.rds.arn : null
   performance_insights_retention_period = (var.performance_insights_enabled && var.db_instance_class != "db.t3.micro") ? var.performance_insights_retention_period : null
-  
+
   monitoring_interval = var.enhanced_monitoring_enabled ? var.enhanced_monitoring_interval : 0
   monitoring_role_arn = var.enhanced_monitoring_enabled ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
-  
+
   # Other settings
   auto_minor_version_upgrade = true
   deletion_protection        = true # Prevent accidental deletion
   skip_final_snapshot        = false
   final_snapshot_identifier  = "${var.db_identifier}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   tags = merge(var.tags, {
     Name = var.db_identifier
   })
@@ -260,7 +260,7 @@ resource "aws_db_instance" "main" {
 # S3 bucket for RDS snapshot exports
 resource "aws_s3_bucket" "snapshots" {
   bucket_prefix = var.s3_bucket_prefix
-  
+
   tags = merge(var.tags, {
     Name        = "${var.s3_bucket_prefix}-bucket"
     Description = "RDS snapshot exports for Healthcare DB"
@@ -270,7 +270,7 @@ resource "aws_s3_bucket" "snapshots" {
 # Block all public access to S3 bucket
 resource "aws_s3_bucket_public_access_block" "snapshots" {
   bucket = aws_s3_bucket.snapshots.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -280,7 +280,7 @@ resource "aws_s3_bucket_public_access_block" "snapshots" {
 # Enable versioning for data protection
 resource "aws_s3_bucket_versioning" "snapshots" {
   bucket = aws_s3_bucket.snapshots.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -289,7 +289,7 @@ resource "aws_s3_bucket_versioning" "snapshots" {
 # Server-side encryption for S3 bucket
 resource "aws_s3_bucket_server_side_encryption_configuration" "snapshots" {
   bucket = aws_s3_bucket.snapshots.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
@@ -301,7 +301,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "snapshots" {
 # IAM role for RDS snapshot export to S3
 resource "aws_iam_role" "snapshot_export" {
   name_prefix = "healthcare-rds-snapshot-export-"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -312,7 +312,7 @@ resource "aws_iam_role" "snapshot_export" {
       }
     }]
   })
-  
+
   tags = var.tags
 }
 
@@ -320,7 +320,7 @@ resource "aws_iam_role" "snapshot_export" {
 resource "aws_iam_policy" "snapshot_export" {
   name_prefix = "healthcare-rds-snapshot-export-"
   description = "Policy for RDS to export snapshots to S3"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -370,13 +370,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = var.alarm_cpu_threshold
   alarm_description   = "RDS CPU utilization is too high"
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.identifier
   }
-  
+
   alarm_actions = var.alarm_sns_topic_arn != "" ? [var.alarm_sns_topic_arn] : []
-  
+
   tags = var.tags
 }
 
@@ -390,13 +390,13 @@ resource "aws_cloudwatch_metric_alarm" "storage_low" {
   statistic           = "Average"
   threshold           = var.alarm_storage_threshold
   alarm_description   = "RDS free storage space is low"
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.identifier
   }
-  
+
   alarm_actions = var.alarm_sns_topic_arn != "" ? [var.alarm_sns_topic_arn] : []
-  
+
   tags = var.tags
 }
 
@@ -410,13 +410,13 @@ resource "aws_cloudwatch_metric_alarm" "connections_high" {
   statistic           = "Average"
   threshold           = var.alarm_connections_threshold
   alarm_description   = "RDS connection count is high"
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.identifier
   }
-  
+
   alarm_actions = var.alarm_sns_topic_arn != "" ? [var.alarm_sns_topic_arn] : []
-  
+
   tags = var.tags
 }
 

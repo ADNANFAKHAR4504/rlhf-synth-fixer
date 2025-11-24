@@ -42,23 +42,23 @@ locals {
 
   # Naming conventions
   name_prefix = "tap-prod"
-  
+
   # Region configurations
   primary_region   = "us-east-1"
   secondary_region = "us-west-2"
-  
+
   # VPC CIDR blocks
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-  
+
   # Availability zones
   primary_azs   = ["us-east-1a", "us-east-1b", "us-east-1c"]
   secondary_azs = ["us-west-2a", "us-west-2b", "us-west-2c"]
-  
+
   # Subnet CIDR blocks for primary region
   primary_public_subnets  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   primary_private_subnets = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-  
+
   # Subnet CIDR blocks for secondary region
   secondary_public_subnets  = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
   secondary_private_subnets = ["10.1.101.0/24", "10.1.102.0/24", "10.1.103.0/24"]
@@ -114,8 +114,8 @@ resource "random_string" "primary_db_username" {
 }
 
 resource "random_password" "primary_db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?^_"
 }
 
@@ -127,8 +127,8 @@ resource "random_string" "secondary_db_username" {
 }
 
 resource "random_password" "secondary_db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?^_"
 }
 
@@ -943,11 +943,11 @@ resource "aws_lb_listener" "secondary" {
 
 # Primary Auto Scaling Group
 resource "aws_autoscaling_group" "primary" {
-  provider            = aws.us_east_1
-  name                = "${local.name_prefix}-asg-primary"
-  vpc_zone_identifier = aws_subnet.primary_private[*].id
-  target_group_arns   = [aws_lb_target_group.primary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_east_1
+  name                      = "${local.name_prefix}-asg-primary"
+  vpc_zone_identifier       = aws_subnet.primary_private[*].id
+  target_group_arns         = [aws_lb_target_group.primary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 1
@@ -977,11 +977,11 @@ resource "aws_autoscaling_group" "primary" {
 
 # Secondary Auto Scaling Group
 resource "aws_autoscaling_group" "secondary" {
-  provider            = aws.us_west_2
-  name                = "${local.name_prefix}-asg-secondary"
-  vpc_zone_identifier = aws_subnet.secondary_private[*].id
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_west_2
+  name                      = "${local.name_prefix}-asg-secondary"
+  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
+  target_group_arns         = [aws_lb_target_group.secondary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 1
@@ -1015,41 +1015,41 @@ resource "aws_autoscaling_group" "secondary" {
 
 # Primary Auto Scaling Policy - Scale Up
 resource "aws_autoscaling_policy" "primary_scale_up" {
-  provider           = aws.us_east_1
-  name               = "${local.name_prefix}-scale-up-primary"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_east_1
+  name                   = "${local.name_prefix}-scale-up-primary"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Primary Auto Scaling Policy - Scale Down
 resource "aws_autoscaling_policy" "primary_scale_down" {
-  provider           = aws.us_east_1
-  name               = "${local.name_prefix}-scale-down-primary"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_east_1
+  name                   = "${local.name_prefix}-scale-down-primary"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Secondary Auto Scaling Policy - Scale Up
 resource "aws_autoscaling_policy" "secondary_scale_up" {
-  provider           = aws.us_west_2
-  name               = "${local.name_prefix}-scale-up-secondary"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_west_2
+  name                   = "${local.name_prefix}-scale-up-secondary"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
 # Secondary Auto Scaling Policy - Scale Down
 resource "aws_autoscaling_policy" "secondary_scale_down" {
-  provider           = aws.us_west_2
-  name               = "${local.name_prefix}-scale-down-secondary"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_west_2
+  name                   = "${local.name_prefix}-scale-down-secondary"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
@@ -1190,12 +1190,12 @@ resource "aws_db_instance" "primary" {
 
   # Encryption
   storage_encrypted = true
-  kms_key_id       = aws_kms_key.primary_rds.arn
+  kms_key_id        = aws_kms_key.primary_rds.arn
 
   # Backup and maintenance
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring
   monitoring_interval = 60
@@ -1229,12 +1229,12 @@ resource "aws_db_instance" "secondary" {
 
   # Encryption
   storage_encrypted = true
-  kms_key_id       = aws_kms_key.secondary_rds.arn
+  kms_key_id        = aws_kms_key.secondary_rds.arn
 
   # Backup and maintenance
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring
   monitoring_interval = 60
@@ -1431,7 +1431,7 @@ resource "aws_s3_object" "index_html" {
   bucket       = aws_s3_bucket.static_content.id
   key          = "index.html"
   content_type = "text/html"
-  content = <<EOF
+  content      = <<EOF
 <!DOCTYPE html>
 <html>
 <head>

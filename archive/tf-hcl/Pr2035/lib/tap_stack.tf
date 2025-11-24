@@ -16,19 +16,19 @@ locals {
     primary   = "us-east-1"
     secondary = "us-west-2"
   }
-  
+
   common_tags = {
     Application = "tapapp"
     Environment = "production"
     ManagedBy   = "terraform"
   }
-  
+
   # AMI mapping for different regions
   ami_map = {
-    "us-east-1" = "ami-0c02fb55956c7d316"  # Amazon Linux 2
-    "us-west-2" = "ami-008fe2fc65df48dac"  # Amazon Linux 2
+    "us-east-1" = "ami-0c02fb55956c7d316" # Amazon Linux 2
+    "us-west-2" = "ami-008fe2fc65df48dac" # Amazon Linux 2
   }
-  
+
   # User data script template
   user_data_script = <<-EOF
     #!/bin/bash
@@ -604,16 +604,16 @@ resource "aws_launch_template" "secondary" {
 
 # Auto Scaling Groups
 resource "aws_autoscaling_group" "primary" {
-  provider            = aws.primary
-  name                = "${local.app_name}-${local.regions.primary}-asg"
-  vpc_zone_identifier = aws_subnet.primary_public[*].id
-  target_group_arns   = [aws_lb_target_group.primary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.primary
+  name                      = "${local.app_name}-${local.regions.primary}-asg"
+  vpc_zone_identifier       = aws_subnet.primary_public[*].id
+  target_group_arns         = [aws_lb_target_group.primary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size         = 1
-  max_size         = 4
-  desired_capacity = 2
+  min_size                  = 1
+  max_size                  = 4
+  desired_capacity          = 2
   wait_for_capacity_timeout = "30m"
   launch_template {
     id      = aws_launch_template.primary.id
@@ -637,16 +637,16 @@ resource "aws_autoscaling_group" "primary" {
 }
 
 resource "aws_autoscaling_group" "secondary" {
-  provider            = aws.secondary
-  name                = "${local.app_name}-${local.regions.secondary}-asg"
-  vpc_zone_identifier = aws_subnet.secondary_public[*].id
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.secondary
+  name                      = "${local.app_name}-${local.regions.secondary}-asg"
+  vpc_zone_identifier       = aws_subnet.secondary_public[*].id
+  target_group_arns         = [aws_lb_target_group.secondary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size         = 1
-  max_size         = 4
-  desired_capacity = 2
+  min_size                  = 1
+  max_size                  = 4
+  desired_capacity          = 2
   wait_for_capacity_timeout = "30m"
   launch_template {
     id      = aws_launch_template.secondary.id
@@ -671,38 +671,38 @@ resource "aws_autoscaling_group" "secondary" {
 
 # Auto Scaling Policies
 resource "aws_autoscaling_policy" "primary_scale_up" {
-  provider           = aws.primary
-  name               = "${local.app_name}-${local.regions.primary}-scale-up"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.primary
+  name                   = "${local.app_name}-${local.regions.primary}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 resource "aws_autoscaling_policy" "primary_scale_down" {
-  provider           = aws.primary
-  name               = "${local.app_name}-${local.regions.primary}-scale-down"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.primary
+  name                   = "${local.app_name}-${local.regions.primary}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 resource "aws_autoscaling_policy" "secondary_scale_up" {
-  provider           = aws.secondary
-  name               = "${local.app_name}-${local.regions.secondary}-scale-up"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.secondary
+  name                   = "${local.app_name}-${local.regions.secondary}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
 resource "aws_autoscaling_policy" "secondary_scale_down" {
-  provider           = aws.secondary
-  name               = "${local.app_name}-${local.regions.secondary}-scale-down"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.secondary
+  name                   = "${local.app_name}-${local.regions.secondary}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 

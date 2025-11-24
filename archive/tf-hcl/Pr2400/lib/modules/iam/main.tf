@@ -1,7 +1,7 @@
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "ec2-production-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -14,7 +14,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-  
+
   tags = var.common_tags
 }
 
@@ -22,7 +22,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_policy" "ec2_policy" {
   name        = "ec2-production-policy"
   description = "Policy for EC2 instances with least privilege"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -53,7 +53,7 @@ resource "aws_iam_policy" "ec2_policy" {
       }
     ]
   })
-  
+
   tags = var.common_tags
 }
 
@@ -79,14 +79,14 @@ resource "aws_iam_role_policy_attachment" "secrets_policy_attachment" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2-production-profile"
   role = aws_iam_role.ec2_role.name
-  
+
   tags = var.common_tags
 }
 
 # IAM Role for Lambda functions (if needed for automation)
 resource "aws_iam_role" "lambda_role" {
   name = "lambda-production-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -99,7 +99,7 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-  
+
   tags = var.common_tags
 }
 

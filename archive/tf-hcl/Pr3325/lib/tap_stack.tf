@@ -148,7 +148,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${var.project}-flow-logs"
   retention_in_days = 30
   tags              = local.common_tags
-  
+
   depends_on = [aws_kms_key.main]
 }
 
@@ -493,7 +493,7 @@ resource "aws_cloudwatch_log_group" "app_logs" {
   name              = "/aws/${var.project}/application"
   retention_in_days = 30
   tags              = local.common_tags
-  
+
   depends_on = [aws_kms_key.main]
 }
 
@@ -742,14 +742,14 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-  
+
   # Access logs disabled temporarily due to S3 bucket policy timing issues
   # Can be enabled post-deployment with:
   # aws elbv2 modify-load-balancer-attributes --load-balancer-arn <arn> \
   #   --attributes Key=access_logs.s3.enabled,Value=true Key=access_logs.s3.bucket,Value=<bucket> Key=access_logs.s3.prefix,Value=alb-logs
-  
+
   tags = local.common_tags
-  
+
   depends_on = [aws_s3_bucket_policy.lb_logs]
 }
 
@@ -788,10 +788,10 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
-  
+
   default_action {
     type = var.ssl_certificate_arn != "" ? "redirect" : "forward"
-    
+
     dynamic "redirect" {
       for_each = var.ssl_certificate_arn != "" ? [1] : []
       content {
@@ -800,7 +800,7 @@ resource "aws_lb_listener" "http" {
         status_code = "HTTP_301"
       }
     }
-    
+
     target_group_arn = var.ssl_certificate_arn == "" ? aws_lb_target_group.main.arn : null
   }
 }

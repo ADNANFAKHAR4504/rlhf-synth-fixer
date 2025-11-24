@@ -9,7 +9,7 @@ resource "aws_sqs_queue" "dlq" {
 
   # SSE configuration - uses AWS managed key by default
   sqs_managed_sse_enabled = var.sqs_kms_master_key_id == null ? true : false
-  kms_master_key_id      = var.sqs_kms_master_key_id
+  kms_master_key_id       = var.sqs_kms_master_key_id
 
   tags = var.tags
 }
@@ -29,7 +29,7 @@ resource "aws_sqs_queue" "main" {
 
   # SSE configuration
   sqs_managed_sse_enabled = var.sqs_kms_master_key_id == null ? true : false
-  kms_master_key_id      = var.sqs_kms_master_key_id
+  kms_master_key_id       = var.sqs_kms_master_key_id
 
   tags = var.tags
 }
@@ -181,11 +181,11 @@ data "archive_file" "lambda_code" {
 resource "aws_lambda_function" "processor" {
   filename         = data.archive_file.lambda_code.output_path
   function_name    = "${var.project_prefix}-${var.environment_suffix}-processor"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "index.handler"
-  runtime         = "nodejs20.x"
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
   source_code_hash = data.archive_file.lambda_code.output_base64sha256
-  
+
   # Timeout must be less than SQS visibility timeout to prevent duplicate processing
   timeout     = var.lambda_timeout
   memory_size = var.lambda_memory_size
@@ -206,11 +206,11 @@ resource "aws_lambda_function" "processor" {
 resource "aws_lambda_event_source_mapping" "sqs_trigger" {
   event_source_arn = aws_sqs_queue.main.arn
   function_name    = aws_lambda_function.processor.arn
-  
+
   # Batching configuration for efficiency
   batch_size                         = var.lambda_batch_size
   maximum_batching_window_in_seconds = var.lambda_maximum_batching_window_in_seconds
-  
+
   # Enable the trigger
   enabled = true
 }
@@ -222,13 +222,13 @@ resource "aws_cloudwatch_metric_alarm" "queue_old_messages" {
   alarm_name          = "${var.project_prefix}-${var.environment_suffix}-queue-old-messages"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "ApproximateAgeOfOldestMessage"
-  namespace          = "AWS/SQS"
-  period             = "300" # 5 minutes
-  statistic          = "Average"
-  threshold          = var.alarm_age_of_oldest_message_threshold
-  alarm_description  = "Queue has messages older than ${var.alarm_age_of_oldest_message_threshold} seconds"
-  treat_missing_data = "notBreaching"
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = "300" # 5 minutes
+  statistic           = "Average"
+  threshold           = var.alarm_age_of_oldest_message_threshold
+  alarm_description   = "Queue has messages older than ${var.alarm_age_of_oldest_message_threshold} seconds"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     QueueName = aws_sqs_queue.main.name
@@ -242,13 +242,13 @@ resource "aws_cloudwatch_metric_alarm" "queue_backlog" {
   alarm_name          = "${var.project_prefix}-${var.environment_suffix}-queue-backlog"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "ApproximateNumberOfMessagesVisible"
-  namespace          = "AWS/SQS"
-  period             = "300"
-  statistic          = "Average"
-  threshold          = var.alarm_messages_visible_threshold
-  alarm_description  = "Queue has more than ${var.alarm_messages_visible_threshold} visible messages"
-  treat_missing_data = "notBreaching"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = var.alarm_messages_visible_threshold
+  alarm_description   = "Queue has more than ${var.alarm_messages_visible_threshold} visible messages"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     QueueName = aws_sqs_queue.main.name
@@ -262,13 +262,13 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_name          = "${var.project_prefix}-${var.environment_suffix}-lambda-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "Errors"
-  namespace          = "AWS/Lambda"
-  period             = "60"
-  statistic          = "Sum"
-  threshold          = "10"
-  alarm_description  = "Lambda function error rate is high"
-  treat_missing_data = "notBreaching"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "Lambda function error rate is high"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.processor.function_name
@@ -282,13 +282,13 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   alarm_name          = "${var.project_prefix}-${var.environment_suffix}-lambda-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "Throttles"
-  namespace          = "AWS/Lambda"
-  period             = "60"
-  statistic          = "Sum"
-  threshold          = "5"
-  alarm_description  = "Lambda function is being throttled"
-  treat_missing_data = "notBreaching"
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = "5"
+  alarm_description   = "Lambda function is being throttled"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.processor.function_name
@@ -302,13 +302,13 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   alarm_name          = "${var.project_prefix}-${var.environment_suffix}-dlq-messages"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name        = "ApproximateNumberOfMessagesVisible"
-  namespace          = "AWS/SQS"
-  period             = "60"
-  statistic          = "Sum"
-  threshold          = "0"
-  alarm_description  = "Messages in DLQ require immediate attention"
-  treat_missing_data = "notBreaching"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = "0"
+  alarm_description   = "Messages in DLQ require immediate attention"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     QueueName = aws_sqs_queue.dlq.name

@@ -1,7 +1,7 @@
 # modules/storage/main.tf
 resource "aws_s3_bucket" "video_storage" {
   bucket = var.bucket_name
-  
+
   tags = {
     Name = "media-streaming-video-storage"
   }
@@ -29,7 +29,7 @@ resource "aws_s3_bucket_versioning" "video_storage" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "video_storage" {
   bucket = aws_s3_bucket.video_storage.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -40,12 +40,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "video_storage" {
 resource "aws_s3_bucket_intelligent_tiering_configuration" "video_storage" {
   bucket = aws_s3_bucket.video_storage.id
   name   = "EntireBucket"
-  
+
   tiering {
     access_tier = "DEEP_ARCHIVE_ACCESS"
     days        = 180
   }
-  
+
   tiering {
     access_tier = "ARCHIVE_ACCESS"
     days        = 90
@@ -59,7 +59,7 @@ resource "aws_s3_bucket_accelerate_configuration" "video_storage" {
 
 resource "aws_s3_bucket_cors_configuration" "video_storage" {
   bucket = aws_s3_bucket.video_storage.id
-  
+
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "HEAD"]
@@ -71,15 +71,15 @@ resource "aws_s3_bucket_cors_configuration" "video_storage" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "video_storage" {
   bucket = aws_s3_bucket.video_storage.id
-  
+
   rule {
     id     = "transition-to-intelligent-tiering"
     status = "Enabled"
-    
+
     filter {
       prefix = "videos/"
     }
-    
+
     transition {
       days          = 30
       storage_class = "INTELLIGENT_TIERING"

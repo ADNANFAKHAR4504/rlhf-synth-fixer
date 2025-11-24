@@ -347,17 +347,17 @@ resource "aws_cloudwatch_log_group" "validator" {
   name              = "/aws/lambda/${var.name_prefix}-validator"
   retention_in_days = var.is_production ? 30 : 7
   kms_key_id        = var.kms_key_arn
-  
+
   tags = var.tags
 }
 
 resource "aws_cloudwatch_log_group" "cache_updater" {
   count = var.microservices_count
-  
+
   name              = "/aws/lambda/${var.name_prefix}-cache-updater-${format("%03d", count.index)}"
   retention_in_days = var.is_production ? 30 : 7
   kms_key_id        = var.kms_key_arn
-  
+
   tags = merge(
     var.tags,
     {
@@ -370,7 +370,7 @@ resource "aws_cloudwatch_log_group" "consistency_checker" {
   name              = "/aws/lambda/${var.name_prefix}-consistency-checker"
   retention_in_days = var.is_production ? 30 : 7
   kms_key_id        = var.kms_key_arn
-  
+
   tags = var.tags
 }
 
@@ -378,7 +378,7 @@ resource "aws_cloudwatch_log_group" "rollback" {
   name              = "/aws/lambda/${var.name_prefix}-rollback"
   retention_in_days = var.is_production ? 30 : 7
   kms_key_id        = var.kms_key_arn
-  
+
   tags = var.tags
 }
 
@@ -393,14 +393,14 @@ resource "aws_cloudwatch_metric_alarm" "validator_errors" {
   statistic           = "Sum"
   threshold           = 10
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     FunctionName = aws_lambda_function.validator.function_name
   }
-  
+
   alarm_description = "Alert when validator Lambda has more than 10 errors in 2 minutes"
   alarm_actions     = [var.sns_alert_topic_arn]
-  
+
   tags = var.tags
 }
 
@@ -414,14 +414,14 @@ resource "aws_cloudwatch_metric_alarm" "validator_throttles" {
   statistic           = "Sum"
   threshold           = 5
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     FunctionName = aws_lambda_function.validator.function_name
   }
-  
+
   alarm_description = "Alert when validator Lambda is throttled"
   alarm_actions     = [var.sns_alert_topic_arn]
-  
+
   tags = var.tags
 }
 
@@ -435,13 +435,13 @@ resource "aws_cloudwatch_metric_alarm" "consistency_checker_errors" {
   statistic           = "Sum"
   threshold           = 5
   treat_missing_data  = "notBreaching"
-  
+
   dimensions = {
     FunctionName = aws_lambda_function.consistency_checker.function_name
   }
-  
+
   alarm_description = "Alert when consistency checker has errors"
   alarm_actions     = [var.sns_alert_topic_arn]
-  
+
   tags = var.tags
 }

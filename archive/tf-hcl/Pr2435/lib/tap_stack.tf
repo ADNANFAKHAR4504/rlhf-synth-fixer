@@ -74,15 +74,15 @@ locals {
   secondary_prefix = "${var.project_name}-${var.environment}-secondary"
 
   # Subnet calculations
-  primary_public_subnet_1  = cidrsubnet(var.primary_vpc_cidr, 8, 1)   # 10.0.1.0/24
-  primary_public_subnet_2  = cidrsubnet(var.primary_vpc_cidr, 8, 2)   # 10.0.2.0/24
-  primary_private_subnet_1 = cidrsubnet(var.primary_vpc_cidr, 8, 10)  # 10.0.10.0/24
-  primary_private_subnet_2 = cidrsubnet(var.primary_vpc_cidr, 8, 11)  # 10.0.11.0/24
+  primary_public_subnet_1  = cidrsubnet(var.primary_vpc_cidr, 8, 1)  # 10.0.1.0/24
+  primary_public_subnet_2  = cidrsubnet(var.primary_vpc_cidr, 8, 2)  # 10.0.2.0/24
+  primary_private_subnet_1 = cidrsubnet(var.primary_vpc_cidr, 8, 10) # 10.0.10.0/24
+  primary_private_subnet_2 = cidrsubnet(var.primary_vpc_cidr, 8, 11) # 10.0.11.0/24
 
-  secondary_public_subnet_1  = cidrsubnet(var.secondary_vpc_cidr, 8, 1)   # 10.1.1.0/24
-  secondary_public_subnet_2  = cidrsubnet(var.secondary_vpc_cidr, 8, 2)   # 10.1.2.0/24
-  secondary_private_subnet_1 = cidrsubnet(var.secondary_vpc_cidr, 8, 10)  # 10.1.10.0/24
-  secondary_private_subnet_2 = cidrsubnet(var.secondary_vpc_cidr, 8, 11)  # 10.1.11.0/24
+  secondary_public_subnet_1  = cidrsubnet(var.secondary_vpc_cidr, 8, 1)  # 10.1.1.0/24
+  secondary_public_subnet_2  = cidrsubnet(var.secondary_vpc_cidr, 8, 2)  # 10.1.2.0/24
+  secondary_private_subnet_1 = cidrsubnet(var.secondary_vpc_cidr, 8, 10) # 10.1.10.0/24
+  secondary_private_subnet_2 = cidrsubnet(var.secondary_vpc_cidr, 8, 11) # 10.1.11.0/24
 }
 
 # =============================================================================
@@ -1165,11 +1165,11 @@ resource "aws_lb_listener" "secondary" {
 
 # Auto Scaling Group - Primary Region
 resource "aws_autoscaling_group" "primary" {
-  provider            = aws.us_east_2
-  name                = "${local.primary_prefix}-asg"
-  vpc_zone_identifier = [aws_subnet.primary_private_1.id, aws_subnet.primary_private_2.id]
-  target_group_arns   = [aws_lb_target_group.primary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_east_2
+  name                      = "${local.primary_prefix}-asg"
+  vpc_zone_identifier       = [aws_subnet.primary_private_1.id, aws_subnet.primary_private_2.id]
+  target_group_arns         = [aws_lb_target_group.primary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -1205,11 +1205,11 @@ resource "aws_autoscaling_group" "primary" {
 
 # Auto Scaling Group - Secondary Region
 resource "aws_autoscaling_group" "secondary" {
-  provider            = aws.us_west_1
-  name                = "${local.secondary_prefix}-asg"
-  vpc_zone_identifier = [aws_subnet.secondary_private_1.id, aws_subnet.secondary_private_2.id]
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_west_1
+  name                      = "${local.secondary_prefix}-asg"
+  vpc_zone_identifier       = [aws_subnet.secondary_private_1.id, aws_subnet.secondary_private_2.id]
+  target_group_arns         = [aws_lb_target_group.secondary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -1293,8 +1293,8 @@ resource "aws_db_instance" "primary" {
   db_subnet_group_name   = aws_db_subnet_group.primary.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -1309,10 +1309,10 @@ resource "aws_db_instance" "primary" {
 resource "aws_db_instance" "secondary_replica" {
   provider = aws.us_west_1
 
-  identifier                = "${local.secondary_prefix}-database-replica"
-  replicate_source_db       = aws_db_instance.primary.arn
-  storage_encrypted         = true
-  instance_class            = var.db_instance_class
+  identifier                 = "${local.secondary_prefix}-database-replica"
+  replicate_source_db        = aws_db_instance.primary.arn
+  storage_encrypted          = true
+  instance_class             = var.db_instance_class
   auto_minor_version_upgrade = false
 
   vpc_security_group_ids = [aws_security_group.secondary_rds.id]
@@ -1340,14 +1340,14 @@ resource "aws_route53_zone" "main" {
 
 # Route 53 Health Check - Primary ALB
 resource "aws_route53_health_check" "primary_alb" {
-  fqdn                            = aws_lb.primary.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/"
-  failure_threshold               = "5"
-  request_interval                = "30"
-  cloudwatch_alarm_region         = var.primary_region
-  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.primary_alb_health.alarm_name
+  fqdn                    = aws_lb.primary.dns_name
+  port                    = 80
+  type                    = "HTTP"
+  resource_path           = "/"
+  failure_threshold       = "5"
+  request_interval        = "30"
+  cloudwatch_alarm_region = var.primary_region
+  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.primary_alb_health.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-health-check"
@@ -1356,14 +1356,14 @@ resource "aws_route53_health_check" "primary_alb" {
 
 # Route 53 Health Check - Secondary ALB
 resource "aws_route53_health_check" "secondary_alb" {
-  fqdn                            = aws_lb.secondary.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/"
-  failure_threshold               = "5"
-  request_interval                = "30"
-  cloudwatch_alarm_region         = var.secondary_region
-  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.secondary_alb_health.alarm_name
+  fqdn                    = aws_lb.secondary.dns_name
+  port                    = 80
+  type                    = "HTTP"
+  resource_path           = "/"
+  failure_threshold       = "5"
+  request_interval        = "30"
+  cloudwatch_alarm_region = var.secondary_region
+  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.secondary_alb_health.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-health-check"
@@ -1510,41 +1510,41 @@ resource "aws_sns_topic" "alerts_secondary" {
 
 # Auto Scaling Policy - Scale Up Primary
 resource "aws_autoscaling_policy" "primary_scale_up" {
-  provider           = aws.us_east_2
-  name               = "${local.primary_prefix}-scale-up"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_east_2
+  name                   = "${local.primary_prefix}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Auto Scaling Policy - Scale Down Primary
 resource "aws_autoscaling_policy" "primary_scale_down" {
-  provider           = aws.us_east_2
-  name               = "${local.primary_prefix}-scale-down"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_east_2
+  name                   = "${local.primary_prefix}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Auto Scaling Policy - Scale Up Secondary
 resource "aws_autoscaling_policy" "secondary_scale_up" {
-  provider           = aws.us_west_1
-  name               = "${local.secondary_prefix}-scale-up"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_west_1
+  name                   = "${local.secondary_prefix}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
 # Auto Scaling Policy - Scale Down Secondary
 resource "aws_autoscaling_policy" "secondary_scale_down" {
-  provider           = aws.us_west_1
-  name               = "${local.secondary_prefix}-scale-down"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_west_1
+  name                   = "${local.secondary_prefix}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 

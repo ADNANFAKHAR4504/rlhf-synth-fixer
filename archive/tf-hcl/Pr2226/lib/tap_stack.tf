@@ -77,26 +77,26 @@ variable "ci_mode" {
 # Locals
 locals {
   env = terraform.workspace != "default" ? terraform.workspace : var.environment
-  
+
   regions = {
     use1  = "us-east-1"
     apse2 = "ap-southeast-2"
   }
-  
+
   region_suffixes = {
     use1  = "use1"
     apse2 = "apse2"
   }
-  
+
   common_tags = {
     environment = local.env
     team        = var.team
     project     = var.project
     ManagedBy   = "terraform"
   }
-  
+
   is_production = local.env == "production"
-  
+
   # CI mode adjustments
   enable_config_recorders = !var.ci_mode
   enable_cloudtrail       = !var.ci_mode
@@ -132,12 +132,12 @@ resource "aws_kms_key" "main_use1" {
   description             = "KMS key for ${var.project} in us-east-1"
   deletion_window_in_days = 7
   provider                = aws.use1
-  
+
   # Add lifecycle to prevent recreation
   lifecycle {
     prevent_destroy = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-kms-use1"
     Region = "us-east-1"
@@ -156,12 +156,12 @@ resource "aws_kms_key" "main_apse2" {
   description             = "KMS key for ${var.project} in ap-southeast-2"
   deletion_window_in_days = 7
   provider                = aws.apse2
-  
+
   # Add lifecycle to prevent recreation
   lifecycle {
     prevent_destroy = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-kms-apse2"
     Region = "ap-southeast-2"
@@ -183,17 +183,17 @@ data "aws_caller_identity" "current_apse2" {
 }
 
 resource "aws_kms_key_policy" "main_use1" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid KMS issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid KMS issues
   key_id   = aws_kms_key.main_use1.id
   provider = aws.use1
-  
+
   depends_on = [aws_kms_key.main_use1, aws_kms_alias.main_use1]
-  
+
   lifecycle {
-    ignore_changes = [key_id]
+    ignore_changes        = [key_id]
     create_before_destroy = true
   }
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -267,17 +267,17 @@ resource "aws_kms_key_policy" "main_use1" {
 
 
 resource "aws_kms_key_policy" "main_apse2" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid KMS issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid KMS issues
   key_id   = aws_kms_key.main_apse2.id
   provider = aws.apse2
-  
+
   depends_on = [aws_kms_key.main_apse2, aws_kms_alias.main_apse2]
-  
+
   lifecycle {
-    ignore_changes = [key_id]
+    ignore_changes        = [key_id]
     create_before_destroy = true
   }
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -355,7 +355,7 @@ resource "aws_vpc" "main_use1" {
   enable_dns_hostnames = true
   enable_dns_support   = true
   provider             = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-use1"
     Region = "us-east-1"
@@ -368,7 +368,7 @@ resource "aws_vpc" "main_apse2" {
   enable_dns_hostnames = true
   enable_dns_support   = true
   provider             = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-apse2"
     Region = "ap-southeast-2"
@@ -379,7 +379,7 @@ resource "aws_vpc" "main_apse2" {
 resource "aws_internet_gateway" "main_use1" {
   vpc_id   = aws_vpc.main_use1.id
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-igw-use1"
     Region = "us-east-1"
@@ -390,7 +390,7 @@ resource "aws_internet_gateway" "main_use1" {
 resource "aws_internet_gateway" "main_apse2" {
   vpc_id   = aws_vpc.main_apse2.id
   provider = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-igw-apse2"
     Region = "ap-southeast-2"
@@ -404,7 +404,7 @@ resource "aws_subnet" "public_use1_a" {
   availability_zone       = data.aws_availability_zones.use1.names[0]
   map_public_ip_on_launch = true
   provider                = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-public-use1-a"
     Region = "us-east-1"
@@ -418,7 +418,7 @@ resource "aws_subnet" "public_use1_b" {
   availability_zone       = data.aws_availability_zones.use1.names[1]
   map_public_ip_on_launch = true
   provider                = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-public-use1-b"
     Region = "us-east-1"
@@ -432,7 +432,7 @@ resource "aws_subnet" "private_use1_a" {
   cidr_block        = "10.0.10.0/24"
   availability_zone = data.aws_availability_zones.use1.names[0]
   provider          = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-use1-a"
     Region = "us-east-1"
@@ -445,7 +445,7 @@ resource "aws_subnet" "private_use1_b" {
   cidr_block        = "10.0.11.0/24"
   availability_zone = data.aws_availability_zones.use1.names[1]
   provider          = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-use1-b"
     Region = "us-east-1"
@@ -462,7 +462,7 @@ resource "aws_subnet" "public_apse2_a" {
   availability_zone       = data.aws_availability_zones.apse2.names[0]
   map_public_ip_on_launch = true
   provider                = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-public-apse2-a"
     Region = "ap-southeast-2"
@@ -476,7 +476,7 @@ resource "aws_subnet" "public_apse2_b" {
   availability_zone       = data.aws_availability_zones.apse2.names[1]
   map_public_ip_on_launch = true
   provider                = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-public-apse2-b"
     Region = "ap-southeast-2"
@@ -490,7 +490,7 @@ resource "aws_subnet" "private_apse2_a" {
   cidr_block        = "10.2.10.0/24"
   availability_zone = data.aws_availability_zones.apse2.names[0]
   provider          = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-apse2-a"
     Region = "ap-southeast-2"
@@ -503,7 +503,7 @@ resource "aws_subnet" "private_apse2_b" {
   cidr_block        = "10.2.11.0/24"
   availability_zone = data.aws_availability_zones.apse2.names[1]
   provider          = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-apse2-b"
     Region = "ap-southeast-2"
@@ -515,24 +515,24 @@ resource "aws_subnet" "private_apse2_b" {
 resource "aws_eip" "nat_use1_a" {
   domain   = "vpc"
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-eip-use1-a"
     Region = "us-east-1"
   })
-  
+
   depends_on = [aws_internet_gateway.main_use1]
 }
 
 resource "aws_eip" "nat_use1_b" {
   domain   = "vpc"
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-eip-use1-b"
     Region = "us-east-1"
   })
-  
+
   depends_on = [aws_internet_gateway.main_use1]
 }
 
@@ -540,24 +540,24 @@ resource "aws_eip" "nat_use1_b" {
 resource "aws_eip" "nat_apse2_a" {
   domain   = "vpc"
   provider = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-eip-apse2-a"
     Region = "ap-southeast-2"
   })
-  
+
   depends_on = [aws_internet_gateway.main_apse2]
 }
 
 resource "aws_eip" "nat_apse2_b" {
   domain   = "vpc"
   provider = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-eip-apse2-b"
     Region = "ap-southeast-2"
   })
-  
+
   depends_on = [aws_internet_gateway.main_apse2]
 }
 
@@ -566,12 +566,12 @@ resource "aws_nat_gateway" "main_use1_a" {
   allocation_id = aws_eip.nat_use1_a.id
   subnet_id     = aws_subnet.public_use1_a.id
   provider      = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-use1-a"
     Region = "us-east-1"
   })
-  
+
   depends_on = [aws_internet_gateway.main_use1]
 }
 
@@ -579,12 +579,12 @@ resource "aws_nat_gateway" "main_use1_b" {
   allocation_id = aws_eip.nat_use1_b.id
   subnet_id     = aws_subnet.public_use1_b.id
   provider      = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-use1-b"
     Region = "us-east-1"
   })
-  
+
   depends_on = [aws_internet_gateway.main_use1]
 }
 
@@ -593,12 +593,12 @@ resource "aws_nat_gateway" "main_apse2_a" {
   allocation_id = aws_eip.nat_apse2_a.id
   subnet_id     = aws_subnet.public_apse2_a.id
   provider      = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-apse2-a"
     Region = "ap-southeast-2"
   })
-  
+
   depends_on = [aws_internet_gateway.main_apse2]
 }
 
@@ -606,12 +606,12 @@ resource "aws_nat_gateway" "main_apse2_b" {
   allocation_id = aws_eip.nat_apse2_b.id
   subnet_id     = aws_subnet.public_apse2_b.id
   provider      = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nat-apse2-b"
     Region = "ap-southeast-2"
   })
-  
+
   depends_on = [aws_internet_gateway.main_apse2]
 }
 
@@ -619,12 +619,12 @@ resource "aws_nat_gateway" "main_apse2_b" {
 resource "aws_route_table" "public_use1" {
   vpc_id   = aws_vpc.main_use1.id
   provider = aws.use1
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main_use1.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-public-rt-use1"
     Region = "us-east-1"
@@ -636,12 +636,12 @@ resource "aws_route_table" "public_use1" {
 resource "aws_route_table" "public_apse2" {
   vpc_id   = aws_vpc.main_apse2.id
   provider = aws.apse2
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main_apse2.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-public-rt-apse2"
     Region = "ap-southeast-2"
@@ -653,12 +653,12 @@ resource "aws_route_table" "public_apse2" {
 resource "aws_route_table" "private_use1_a" {
   vpc_id   = aws_vpc.main_use1.id
   provider = aws.use1
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main_use1_a.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-rt-use1-a"
     Region = "us-east-1"
@@ -669,12 +669,12 @@ resource "aws_route_table" "private_use1_a" {
 resource "aws_route_table" "private_use1_b" {
   vpc_id   = aws_vpc.main_use1.id
   provider = aws.use1
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main_use1_b.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-rt-use1-b"
     Region = "us-east-1"
@@ -686,12 +686,12 @@ resource "aws_route_table" "private_use1_b" {
 resource "aws_route_table" "private_apse2_a" {
   vpc_id   = aws_vpc.main_apse2.id
   provider = aws.apse2
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main_apse2_a.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-rt-apse2-a"
     Region = "ap-southeast-2"
@@ -702,12 +702,12 @@ resource "aws_route_table" "private_apse2_a" {
 resource "aws_route_table" "private_apse2_b" {
   vpc_id   = aws_vpc.main_apse2.id
   provider = aws.apse2
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main_apse2_b.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-private-rt-apse2-b"
     Region = "ap-southeast-2"
@@ -773,9 +773,9 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_use1" {
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_use1.arn
   provider          = aws.use1
-  
+
   depends_on = [aws_kms_key_policy.main_use1[0]]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-flow-logs-use1"
     Region = "us-east-1"
@@ -788,9 +788,9 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_apse2" {
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_apse2.arn
   provider          = aws.apse2
-  
+
   depends_on = [aws_kms_key_policy.main_apse2[0]]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-flow-logs-apse2"
     Region = "ap-southeast-2"
@@ -801,7 +801,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_apse2" {
 resource "aws_iam_role" "vpc_flow_logs_use1" {
   name     = "${var.project}-${local.env}-vpc-flow-logs-use1"
   provider = aws.use1
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -814,7 +814,7 @@ resource "aws_iam_role" "vpc_flow_logs_use1" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-flow-logs-role-use1"
     Region = "us-east-1"
@@ -825,7 +825,7 @@ resource "aws_iam_role" "vpc_flow_logs_use1" {
 resource "aws_iam_role" "vpc_flow_logs_apse2" {
   name     = "${var.project}-${local.env}-vpc-flow-logs-apse2"
   provider = aws.apse2
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -838,7 +838,7 @@ resource "aws_iam_role" "vpc_flow_logs_apse2" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-flow-logs-role-apse2"
     Region = "ap-southeast-2"
@@ -850,7 +850,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_use1" {
   name     = "${var.project}-${local.env}-vpc-flow-logs-policy-use1"
   role     = aws_iam_role.vpc_flow_logs_use1.id
   provider = aws.use1
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -862,7 +862,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_use1" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Effect = "Allow"
+        Effect   = "Allow"
         Resource = "${aws_cloudwatch_log_group.vpc_flow_logs_use1.arn}:*"
       }
     ]
@@ -874,7 +874,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_apse2" {
   name     = "${var.project}-${local.env}-vpc-flow-logs-policy-apse2-09846"
   role     = aws_iam_role.vpc_flow_logs_apse2.id
   provider = aws.apse2
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -886,7 +886,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs_apse2" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Effect = "Allow"
+        Effect   = "Allow"
         Resource = "${aws_cloudwatch_log_group.vpc_flow_logs_apse2.arn}:*"
       }
     ]
@@ -900,7 +900,7 @@ resource "aws_flow_log" "main_use1" {
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main_use1.id
   provider        = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-flow-log-use1"
     Region = "us-east-1"
@@ -914,7 +914,7 @@ resource "aws_flow_log" "main_apse2" {
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main_apse2.id
   provider        = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-vpc-flow-log-apse2"
     Region = "ap-southeast-2"
@@ -925,7 +925,7 @@ resource "aws_flow_log" "main_apse2" {
 resource "aws_network_acl" "main_use1" {
   vpc_id   = aws_vpc.main_use1.id
   provider = aws.use1
-  
+
   # Allow inbound HTTPS
   ingress {
     protocol   = "tcp"
@@ -935,7 +935,7 @@ resource "aws_network_acl" "main_use1" {
     from_port  = 443
     to_port    = 443
   }
-  
+
   # Allow inbound HTTP
   ingress {
     protocol   = "tcp"
@@ -945,7 +945,7 @@ resource "aws_network_acl" "main_use1" {
     from_port  = 80
     to_port    = 80
   }
-  
+
   # Allow SSH from bastion_allowed_cidrs only
   dynamic "ingress" {
     for_each = length(var.bastion_allowed_cidrs) > 0 ? var.bastion_allowed_cidrs : []
@@ -958,7 +958,7 @@ resource "aws_network_acl" "main_use1" {
       to_port    = 22
     }
   }
-  
+
   # Allow ephemeral ports for return traffic
   ingress {
     protocol   = "tcp"
@@ -968,7 +968,7 @@ resource "aws_network_acl" "main_use1" {
     from_port  = 1024
     to_port    = 65535
   }
-  
+
   # Allow all outbound
   egress {
     protocol   = "-1"
@@ -978,7 +978,7 @@ resource "aws_network_acl" "main_use1" {
     from_port  = 0
     to_port    = 0
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nacl-use1"
     Region = "us-east-1"
@@ -989,7 +989,7 @@ resource "aws_network_acl" "main_use1" {
 resource "aws_network_acl" "main_apse2" {
   vpc_id   = aws_vpc.main_apse2.id
   provider = aws.apse2
-  
+
   # Allow inbound HTTPS
   ingress {
     protocol   = "tcp"
@@ -999,7 +999,7 @@ resource "aws_network_acl" "main_apse2" {
     from_port  = 443
     to_port    = 443
   }
-  
+
   # Allow inbound HTTP
   ingress {
     protocol   = "tcp"
@@ -1009,7 +1009,7 @@ resource "aws_network_acl" "main_apse2" {
     from_port  = 80
     to_port    = 80
   }
-  
+
   # Allow SSH from bastion_allowed_cidrs only
   dynamic "ingress" {
     for_each = length(var.bastion_allowed_cidrs) > 0 ? var.bastion_allowed_cidrs : []
@@ -1022,7 +1022,7 @@ resource "aws_network_acl" "main_apse2" {
       to_port    = 22
     }
   }
-  
+
   # Allow ephemeral ports for return traffic
   ingress {
     protocol   = "tcp"
@@ -1032,7 +1032,7 @@ resource "aws_network_acl" "main_apse2" {
     from_port  = 1024
     to_port    = 65535
   }
-  
+
   # Allow all outbound
   egress {
     protocol   = "-1"
@@ -1042,7 +1042,7 @@ resource "aws_network_acl" "main_apse2" {
     from_port  = 0
     to_port    = 0
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-nacl-apse2"
     Region = "ap-southeast-2"
@@ -1056,7 +1056,7 @@ resource "aws_security_group" "bastion_use1" {
   description = "Security group for bastion host in us-east-1"
   vpc_id      = aws_vpc.main_use1.id
   provider    = aws.use1
-  
+
   dynamic "ingress" {
     for_each = length(var.bastion_allowed_cidrs) > 0 ? var.bastion_allowed_cidrs : []
     content {
@@ -1067,7 +1067,7 @@ resource "aws_security_group" "bastion_use1" {
       description = "SSH access from allowed CIDR"
     }
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1075,7 +1075,7 @@ resource "aws_security_group" "bastion_use1" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-sg-use1"
     Region = "us-east-1"
@@ -1088,7 +1088,7 @@ resource "aws_security_group" "bastion_apse2" {
   description = "Security group for bastion host in ap-southeast-2"
   vpc_id      = aws_vpc.main_apse2.id
   provider    = aws.apse2
-  
+
   dynamic "ingress" {
     for_each = length(var.bastion_allowed_cidrs) > 0 ? var.bastion_allowed_cidrs : []
     content {
@@ -1099,7 +1099,7 @@ resource "aws_security_group" "bastion_apse2" {
       description = "SSH access from allowed CIDR"
     }
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1107,7 +1107,7 @@ resource "aws_security_group" "bastion_apse2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-sg-apse2"
     Region = "ap-southeast-2"
@@ -1120,7 +1120,7 @@ resource "aws_security_group" "alb_use1" {
   description = "Security group for ALB in us-east-1"
   vpc_id      = aws_vpc.main_use1.id
   provider    = aws.use1
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
@@ -1128,7 +1128,7 @@ resource "aws_security_group" "alb_use1" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
@@ -1136,7 +1136,7 @@ resource "aws_security_group" "alb_use1" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS access"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1144,7 +1144,7 @@ resource "aws_security_group" "alb_use1" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-alb-sg-use1"
     Region = "us-east-1"
@@ -1157,7 +1157,7 @@ resource "aws_security_group" "alb_apse2" {
   description = "Security group for ALB in ap-southeast-2"
   vpc_id      = aws_vpc.main_apse2.id
   provider    = aws.apse2
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
@@ -1165,7 +1165,7 @@ resource "aws_security_group" "alb_apse2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
@@ -1173,7 +1173,7 @@ resource "aws_security_group" "alb_apse2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS access"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1181,7 +1181,7 @@ resource "aws_security_group" "alb_apse2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-alb-sg-apse2"
     Region = "ap-southeast-2"
@@ -1194,7 +1194,7 @@ resource "aws_security_group" "ecs_use1" {
   description = "Security group for ECS tasks in us-east-1"
   vpc_id      = aws_vpc.main_use1.id
   provider    = aws.use1
-  
+
   ingress {
     from_port       = 0
     to_port         = 65535
@@ -1202,7 +1202,7 @@ resource "aws_security_group" "ecs_use1" {
     security_groups = [aws_security_group.alb_use1.id]
     description     = "Traffic from ALB"
   }
-  
+
   ingress {
     from_port       = 22
     to_port         = 22
@@ -1210,7 +1210,7 @@ resource "aws_security_group" "ecs_use1" {
     security_groups = [aws_security_group.bastion_use1.id]
     description     = "SSH from bastion"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1218,7 +1218,7 @@ resource "aws_security_group" "ecs_use1" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-ecs-sg-use1"
     Region = "us-east-1"
@@ -1231,7 +1231,7 @@ resource "aws_security_group" "ecs_apse2" {
   description = "Security group for ECS tasks in ap-southeast-2"
   vpc_id      = aws_vpc.main_apse2.id
   provider    = aws.apse2
-  
+
   ingress {
     from_port       = 0
     to_port         = 65535
@@ -1239,7 +1239,7 @@ resource "aws_security_group" "ecs_apse2" {
     security_groups = [aws_security_group.alb_apse2.id]
     description     = "Traffic from ALB"
   }
-  
+
   ingress {
     from_port       = 22
     to_port         = 22
@@ -1247,7 +1247,7 @@ resource "aws_security_group" "ecs_apse2" {
     security_groups = [aws_security_group.bastion_apse2.id]
     description     = "SSH from bastion"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1255,7 +1255,7 @@ resource "aws_security_group" "ecs_apse2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-ecs-sg-apse2"
     Region = "ap-southeast-2"
@@ -1268,7 +1268,7 @@ resource "aws_security_group" "rds_use1" {
   description = "Security group for RDS in us-east-1"
   vpc_id      = aws_vpc.main_use1.id
   provider    = aws.use1
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -1276,7 +1276,7 @@ resource "aws_security_group" "rds_use1" {
     security_groups = [aws_security_group.ecs_use1.id]
     description     = "PostgreSQL from ECS"
   }
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -1284,7 +1284,7 @@ resource "aws_security_group" "rds_use1" {
     security_groups = [aws_security_group.bastion_use1.id]
     description     = "PostgreSQL from bastion"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1292,7 +1292,7 @@ resource "aws_security_group" "rds_use1" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-rds-sg-use1"
     Region = "us-east-1"
@@ -1305,7 +1305,7 @@ resource "aws_security_group" "rds_apse2" {
   description = "Security group for RDS in ap-southeast-2"
   vpc_id      = aws_vpc.main_apse2.id
   provider    = aws.apse2
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -1313,7 +1313,7 @@ resource "aws_security_group" "rds_apse2" {
     security_groups = [aws_security_group.ecs_apse2.id]
     description     = "PostgreSQL from ECS"
   }
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -1321,7 +1321,7 @@ resource "aws_security_group" "rds_apse2" {
     security_groups = [aws_security_group.bastion_apse2.id]
     description     = "PostgreSQL from bastion"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1329,7 +1329,7 @@ resource "aws_security_group" "rds_apse2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-rds-sg-apse2"
     Region = "ap-southeast-2"
@@ -1341,7 +1341,7 @@ resource "aws_security_group" "rds_apse2" {
 resource "aws_iam_role" "bastion_use1" {
   name     = "${var.project}-${local.env}-bastion-role-use1"
   provider = aws.use1
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1354,7 +1354,7 @@ resource "aws_iam_role" "bastion_use1" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-role-use1"
     Region = "us-east-1"
@@ -1365,7 +1365,7 @@ resource "aws_iam_role" "bastion_use1" {
 resource "aws_iam_role" "bastion_apse2" {
   name     = "${var.project}-${local.env}-bastion-role-apse2"
   provider = aws.apse2
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1378,7 +1378,7 @@ resource "aws_iam_role" "bastion_apse2" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-role-apse2"
     Region = "ap-southeast-2"
@@ -1390,7 +1390,7 @@ resource "aws_iam_role_policy" "bastion_policy_use1" {
   name     = "${var.project}-${local.env}-bastion-policy-use1"
   role     = aws_iam_role.bastion_use1.id
   provider = aws.use1
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1423,7 +1423,7 @@ resource "aws_iam_role_policy" "bastion_policy_apse2" {
   name     = "${var.project}-${local.env}-bastion-policy-apse2"
   role     = aws_iam_role.bastion_apse2.id
   provider = aws.apse2
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1456,7 +1456,7 @@ resource "aws_iam_instance_profile" "bastion_use1" {
   name     = "${var.project}-${local.env}-bastion-profile-use1"
   role     = aws_iam_role.bastion_use1.name
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-profile-use1"
     Region = "us-east-1"
@@ -1468,7 +1468,7 @@ resource "aws_iam_instance_profile" "bastion_apse2" {
   name     = "${var.project}-${local.env}-bastion-profile-apse2"
   role     = aws_iam_role.bastion_apse2.name
   provider = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-profile-apse2"
     Region = "ap-southeast-2"
@@ -1479,7 +1479,7 @@ resource "aws_iam_instance_profile" "bastion_apse2" {
 resource "aws_iam_role" "ecs_task_execution_use1" {
   name     = "${var.project}-${local.env}-ecs-task-execution-use1"
   provider = aws.use1
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1492,7 +1492,7 @@ resource "aws_iam_role" "ecs_task_execution_use1" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-ecs-task-execution-use1"
     Region = "us-east-1"
@@ -1503,7 +1503,7 @@ resource "aws_iam_role" "ecs_task_execution_use1" {
 resource "aws_iam_role" "ecs_task_execution_apse2" {
   name     = "${var.project}-${local.env}-ecs-task-execution-apse2"
   provider = aws.apse2
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1516,7 +1516,7 @@ resource "aws_iam_role" "ecs_task_execution_apse2" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-ecs-task-execution-apse2"
     Region = "ap-southeast-2"
@@ -1528,7 +1528,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_policy_use1" {
   name     = "${var.project}-${local.env}-ecs-task-execution-policy-use1"
   role     = aws_iam_role.ecs_task_execution_use1.id
   provider = aws.use1
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1559,7 +1559,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_policy_apse2" {
   name     = "${var.project}-${local.env}-ecs-task-execution-policy-apse2"
   role     = aws_iam_role.ecs_task_execution_apse2.id
   provider = aws.apse2
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1592,7 +1592,7 @@ resource "aws_secretsmanager_secret" "db_credentials_use1" {
   kms_key_id              = aws_kms_key.main_use1.arn
   recovery_window_in_days = local.is_production ? 30 : 0
   provider                = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-db-credentials-use1"
     Region = "us-east-1"
@@ -1606,7 +1606,7 @@ resource "aws_secretsmanager_secret" "db_credentials_apse2" {
   kms_key_id              = aws_kms_key.main_apse2.arn
   recovery_window_in_days = local.is_production ? 30 : 0
   provider                = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-db-credentials-apse2"
     Region = "ap-southeast-2"
@@ -1617,7 +1617,7 @@ resource "aws_secretsmanager_secret" "db_credentials_apse2" {
 resource "aws_secretsmanager_secret_version" "db_credentials_use1" {
   secret_id = aws_secretsmanager_secret.db_credentials_use1.id
   provider  = aws.use1
-  
+
   secret_string = jsonencode({
     username = "dbadmin"
     password = random_password.db_password_use1.result
@@ -1628,7 +1628,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials_use1" {
 resource "aws_secretsmanager_secret_version" "db_credentials_apse2" {
   secret_id = aws_secretsmanager_secret.db_credentials_apse2.id
   provider  = aws.apse2
-  
+
   secret_string = jsonencode({
     username = "dbadmin"
     password = random_password.db_password_apse2.result
@@ -1652,7 +1652,7 @@ resource "aws_db_subnet_group" "main_use1" {
   name       = "${var.project}-${local.env}-db-subnet-group-use1"
   subnet_ids = [aws_subnet.private_use1_a.id, aws_subnet.private_use1_b.id]
   provider   = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-db-subnet-group-use1"
     Region = "us-east-1"
@@ -1664,7 +1664,7 @@ resource "aws_db_subnet_group" "main_apse2" {
   name       = "${var.project}-${local.env}-db-subnet-group-apse2"
   subnet_ids = [aws_subnet.private_apse2_a.id, aws_subnet.private_apse2_b.id]
   provider   = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-db-subnet-group-apse2"
     Region = "ap-southeast-2"
@@ -1676,17 +1676,17 @@ resource "aws_db_parameter_group" "postgres_use1" {
   family   = "postgres14"
   name     = "${var.project}-${local.env}-postgres-params-use1"
   provider = aws.use1
-  
+
   parameter {
     name  = "log_statement"
     value = "all"
   }
-  
+
   parameter {
     name  = "log_min_duration_statement"
     value = "1000"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-postgres-params-use1"
     Region = "us-east-1"
@@ -1698,17 +1698,17 @@ resource "aws_db_parameter_group" "postgres_apse2" {
   family   = "postgres14"
   name     = "${var.project}-${local.env}-postgres-params-apse2"
   provider = aws.apse2
-  
+
   parameter {
     name  = "log_statement"
     value = "all"
   }
-  
+
   parameter {
     name  = "log_min_duration_statement"
     value = "1000"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-postgres-params-apse2"
     Region = "ap-southeast-2"
@@ -1717,44 +1717,44 @@ resource "aws_db_parameter_group" "postgres_apse2" {
 
 # RDS Instances
 resource "aws_db_instance" "main_use1" {
-  identifier                = "${var.project}-${local.env}-db-use1"
-  engine                    = var.db_engine
-  engine_version            = var.db_engine_version
-  instance_class            = var.db_instance_class
-  allocated_storage         = 20
-  max_allocated_storage     = 100
-  storage_type              = "gp3"
-  storage_encrypted         = true
-  kms_key_id                = aws_kms_key.main_use1.arn
-  
-  db_name  = "maindb"
-  username = "dbadmin"
-  manage_master_user_password = true
+  identifier            = "${var.project}-${local.env}-db-use1"
+  engine                = var.db_engine
+  engine_version        = var.db_engine_version
+  instance_class        = var.db_instance_class
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.main_use1.arn
+
+  db_name                       = "maindb"
+  username                      = "dbadmin"
+  manage_master_user_password   = true
   master_user_secret_kms_key_id = aws_kms_key.main_use1.arn
-  
+
   db_subnet_group_name   = aws_db_subnet_group.main_use1.name
   vpc_security_group_ids = [aws_security_group.rds_use1.id]
   parameter_group_name   = aws_db_parameter_group.postgres_use1.name
-  
+
   backup_retention_period = var.rds_backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "Sun:04:00-Sun:05:00"
-  
-  multi_az               = local.is_production
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "Sun:04:00-Sun:05:00"
+
+  multi_az                   = local.is_production
   auto_minor_version_upgrade = true
-  deletion_protection    = false
-  skip_final_snapshot    = true
-  final_snapshot_identifier = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-use1" : null
-  
+  deletion_protection        = false
+  skip_final_snapshot        = true
+  final_snapshot_identifier  = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-use1" : null
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.rds_monitoring_use1.arn
-  
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.rds_monitoring_use1.arn
+
   # Ensure parameter group and KMS key policy are ready
   depends_on = [aws_db_parameter_group.postgres_use1, aws_kms_key_policy.main_use1[0]]
-  
+
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-db-use1"
     Region = "us-east-1"
@@ -1763,42 +1763,42 @@ resource "aws_db_instance" "main_use1" {
 
 
 resource "aws_db_instance" "main_apse2" {
-  identifier                = "${var.project}-${local.env}-db-apse2"
-  engine                    = var.db_engine
-  engine_version            = var.db_engine_version
-  instance_class            = var.db_instance_class
-  allocated_storage         = 20
-  max_allocated_storage     = 100
-  storage_type              = "gp3"
-  storage_encrypted         = true
-  kms_key_id                = aws_kms_key.main_apse2.arn
-  
-  db_name  = "maindb"
-  username = "dbadmin"
-  manage_master_user_password = true
+  identifier            = "${var.project}-${local.env}-db-apse2"
+  engine                = var.db_engine
+  engine_version        = var.db_engine_version
+  instance_class        = var.db_instance_class
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.main_apse2.arn
+
+  db_name                       = "maindb"
+  username                      = "dbadmin"
+  manage_master_user_password   = true
   master_user_secret_kms_key_id = aws_kms_key.main_apse2.arn
-  
+
   db_subnet_group_name   = aws_db_subnet_group.main_apse2.name
   vpc_security_group_ids = [aws_security_group.rds_apse2.id]
   parameter_group_name   = aws_db_parameter_group.postgres_apse2.name
-  
+
   backup_retention_period = var.rds_backup_retention_days
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "Sun:04:00-Sun:05:00"
-  
-  multi_az               = local.is_production
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "Sun:04:00-Sun:05:00"
+
+  multi_az                   = local.is_production
   auto_minor_version_upgrade = true
-  deletion_protection    = false
-  skip_final_snapshot    = true
-  final_snapshot_identifier = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-apse2" : null
-  
+  deletion_protection        = false
+  skip_final_snapshot        = true
+  final_snapshot_identifier  = local.is_production ? "${var.project}-${local.env}-db-final-snapshot-apse2" : null
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.rds_monitoring_apse2.arn
-  
-  provider = aws.apse2
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.rds_monitoring_apse2.arn
+
+  provider   = aws.apse2
   depends_on = [aws_db_parameter_group.postgres_apse2, aws_kms_key_policy.main_apse2[0]]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-db-apse2"
     Region = "ap-southeast-2"
@@ -1809,7 +1809,7 @@ resource "aws_db_instance" "main_apse2" {
 resource "aws_iam_role" "rds_monitoring_use1" {
   name     = "${var.project}-${local.env}-rds-monitoring-use1"
   provider = aws.use1
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1822,7 +1822,7 @@ resource "aws_iam_role" "rds_monitoring_use1" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-rds-monitoring-use1"
     Region = "us-east-1"
@@ -1833,7 +1833,7 @@ resource "aws_iam_role" "rds_monitoring_use1" {
 resource "aws_iam_role" "rds_monitoring_apse2" {
   name     = "${var.project}-${local.env}-rds-monitoring-apse2"
   provider = aws.apse2
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1846,7 +1846,7 @@ resource "aws_iam_role" "rds_monitoring_apse2" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-rds-monitoring-apse2"
     Region = "ap-southeast-2"
@@ -1871,19 +1871,19 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring_apse2" {
 resource "aws_ecs_cluster" "main_use1" {
   name     = "${var.project}-${local.env}-cluster-use1"
   provider = aws.use1
-  
+
   configuration {
     execute_command_configuration {
       kms_key_id = aws_kms_key.main_use1.arn
       logging    = "OVERRIDE"
-      
+
       log_configuration {
         cloud_watch_encryption_enabled = true
         cloud_watch_log_group_name     = aws_cloudwatch_log_group.ecs_use1.name
       }
     }
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-cluster-use1"
     Region = "us-east-1"
@@ -1894,19 +1894,19 @@ resource "aws_ecs_cluster" "main_use1" {
 resource "aws_ecs_cluster" "main_apse2" {
   name     = "${var.project}-${local.env}-cluster-apse2"
   provider = aws.apse2
-  
+
   configuration {
     execute_command_configuration {
       kms_key_id = aws_kms_key.main_apse2.arn
       logging    = "OVERRIDE"
-      
+
       log_configuration {
         cloud_watch_encryption_enabled = true
         cloud_watch_log_group_name     = aws_cloudwatch_log_group.ecs_apse2.name
       }
     }
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-cluster-apse2"
     Region = "ap-southeast-2"
@@ -1918,7 +1918,7 @@ resource "aws_ecs_cluster_capacity_providers" "main_use1" {
   cluster_name       = aws_ecs_cluster.main_use1.name
   capacity_providers = ["FARGATE", "FARGATE_SPOT"]
   provider           = aws.use1
-  
+
   default_capacity_provider_strategy {
     base              = 1
     weight            = 100
@@ -1931,7 +1931,7 @@ resource "aws_ecs_cluster_capacity_providers" "main_apse2" {
   cluster_name       = aws_ecs_cluster.main_apse2.name
   capacity_providers = ["FARGATE", "FARGATE_SPOT"]
   provider           = aws.apse2
-  
+
   default_capacity_provider_strategy {
     base              = 1
     weight            = 100
@@ -1945,9 +1945,9 @@ resource "aws_cloudwatch_log_group" "ecs_use1" {
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_use1.arn
   provider          = aws.use1
-  
+
   depends_on = [aws_kms_key_policy.main_use1[0]]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-ecs-logs-use1"
     Region = "us-east-1"
@@ -1960,9 +1960,9 @@ resource "aws_cloudwatch_log_group" "ecs_apse2" {
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main_apse2.arn
   provider          = aws.apse2
-  
+
   depends_on = [aws_kms_key_policy.main_apse2[0]]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-ecs-logs-apse2"
     Region = "ap-southeast-2"
@@ -1991,7 +1991,7 @@ resource "random_id" "alb_logs_suffix_apse2" {
 resource "aws_s3_bucket" "main_use1" {
   bucket   = "tap-${local.env}-main-use1-${random_id.bucket_suffix_use1.hex}"
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-main-use1"
     Region = "us-east-1"
@@ -2002,7 +2002,7 @@ resource "aws_s3_bucket" "main_use1" {
 resource "aws_s3_bucket" "main_apse2" {
   bucket   = "tap-${local.env}-main-apse2-${random_id.bucket_suffix_apse2.hex}"
   provider = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-main-apse2"
     Region = "ap-southeast-2"
@@ -2013,7 +2013,7 @@ resource "aws_s3_bucket" "main_apse2" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "main_use1" {
   bucket   = aws_s3_bucket.main_use1.id
   provider = aws.use1
-  
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.main_use1.arn
@@ -2027,7 +2027,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main_use1" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "main_apse2" {
   bucket   = aws_s3_bucket.main_apse2.id
   provider = aws.apse2
-  
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.main_apse2.arn
@@ -2059,7 +2059,7 @@ resource "aws_s3_bucket_versioning" "main_apse2" {
 resource "aws_s3_bucket_public_access_block" "main_use1" {
   bucket   = aws_s3_bucket.main_use1.id
   provider = aws.use1
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -2068,14 +2068,14 @@ resource "aws_s3_bucket_public_access_block" "main_use1" {
 
 # S3 Bucket Ownership Controls
 resource "aws_s3_bucket_ownership_controls" "main_use1" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid region issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid region issues
   bucket   = aws_s3_bucket.main_use1.id
   provider = aws.use1
-  
+
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-  
+
   depends_on = [aws_s3_bucket.main_use1]
 }
 
@@ -2084,7 +2084,7 @@ resource "aws_s3_bucket_ownership_controls" "main_use1" {
 resource "aws_s3_bucket_public_access_block" "main_apse2" {
   bucket   = aws_s3_bucket.main_apse2.id
   provider = aws.apse2
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -2093,14 +2093,14 @@ resource "aws_s3_bucket_public_access_block" "main_apse2" {
 
 # S3 Bucket Ownership Controls
 resource "aws_s3_bucket_ownership_controls" "main_apse2" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid region issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid region issues
   bucket   = aws_s3_bucket.main_apse2.id
   provider = aws.apse2
-  
+
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-  
+
   depends_on = [aws_s3_bucket.main_apse2]
 }
 
@@ -2108,35 +2108,35 @@ resource "aws_s3_bucket_ownership_controls" "main_apse2" {
 resource "aws_s3_bucket_lifecycle_configuration" "main_use1" {
   bucket   = aws_s3_bucket.main_use1.id
   provider = aws.use1
-  
+
   rule {
     id     = "lifecycle"
     status = "Enabled"
-    
+
     filter {
       prefix = ""
     }
-    
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
-    
+
     transition {
       days          = 90
       storage_class = "GLACIER"
     }
-    
+
     transition {
       days          = 365
       storage_class = "DEEP_ARCHIVE"
     }
-    
+
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "STANDARD_IA"
     }
-    
+
     noncurrent_version_expiration {
       noncurrent_days = 90
     }
@@ -2147,35 +2147,35 @@ resource "aws_s3_bucket_lifecycle_configuration" "main_use1" {
 resource "aws_s3_bucket_lifecycle_configuration" "main_apse2" {
   bucket   = aws_s3_bucket.main_apse2.id
   provider = aws.apse2
-  
+
   rule {
     id     = "lifecycle"
     status = "Enabled"
-    
+
     filter {
       prefix = ""
     }
-    
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
-    
+
     transition {
       days          = 90
       storage_class = "GLACIER"
     }
-    
+
     transition {
       days          = 365
       storage_class = "DEEP_ARCHIVE"
     }
-    
+
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "STANDARD_IA"
     }
-    
+
     noncurrent_version_expiration {
       noncurrent_days = 90
     }
@@ -2186,9 +2186,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "main_apse2" {
 resource "aws_s3_bucket_policy" "config_use1" {
   bucket   = aws_s3_bucket.main_use1.id
   provider = aws.use1
-  
+
   depends_on = [aws_s3_bucket_ownership_controls.main_use1[0]]
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -2232,9 +2232,9 @@ resource "aws_s3_bucket_policy" "config_use1" {
 resource "aws_s3_bucket_policy" "config_apse2" {
   bucket   = aws_s3_bucket.main_apse2.id
   provider = aws.apse2
-  
+
   depends_on = [aws_s3_bucket_ownership_controls.main_apse2[0]]
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -2282,7 +2282,7 @@ data "aws_elb_service_account" "main" {
 resource "aws_s3_bucket" "alb_logs_use1" {
   bucket   = "tap-${local.env}-logs-use1-${random_id.alb_logs_suffix_use1.hex}"
   provider = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-alb-logs-use1"
     Region = "us-east-1"
@@ -2293,7 +2293,7 @@ resource "aws_s3_bucket" "alb_logs_use1" {
 resource "aws_s3_bucket" "alb_logs_apse2" {
   bucket   = "tap-${local.env}-logs-apse2-${random_id.alb_logs_suffix_apse2.hex}"
   provider = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-alb-logs-apse2"
     Region = "ap-southeast-2"
@@ -2302,27 +2302,27 @@ resource "aws_s3_bucket" "alb_logs_apse2" {
 
 # ALB Logs Bucket Ownership Controls
 resource "aws_s3_bucket_ownership_controls" "alb_logs_use1" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid region issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid region issues
   bucket   = aws_s3_bucket.alb_logs_use1.id
   provider = aws.use1
-  
+
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-  
+
   depends_on = [aws_s3_bucket.alb_logs_use1]
 }
 
 
 resource "aws_s3_bucket_ownership_controls" "alb_logs_apse2" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid region issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid region issues
   bucket   = aws_s3_bucket.alb_logs_apse2.id
   provider = aws.apse2
-  
+
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-  
+
   depends_on = [aws_s3_bucket.alb_logs_apse2]
 }
 
@@ -2330,16 +2330,16 @@ resource "aws_s3_bucket_ownership_controls" "alb_logs_apse2" {
 resource "aws_s3_bucket_policy" "alb_logs_use1" {
   bucket   = aws_s3_bucket.alb_logs_use1.id
   provider = aws.use1
-  
+
   depends_on = [aws_s3_bucket_ownership_controls.alb_logs_use1[0]]
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::127311923021:root"  # ELB service account for us-east-1
+          AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.alb_logs_use1.arn}/*"
@@ -2373,16 +2373,16 @@ resource "aws_s3_bucket_policy" "alb_logs_use1" {
 resource "aws_s3_bucket_policy" "alb_logs_apse2" {
   bucket   = aws_s3_bucket.alb_logs_apse2.id
   provider = aws.apse2
-  
+
   depends_on = [aws_s3_bucket_ownership_controls.alb_logs_apse2[0]]
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::783225319266:root"  # ELB service account for ap-southeast-2
+          AWS = "arn:aws:iam::783225319266:root" # ELB service account for ap-southeast-2
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.alb_logs_apse2.arn}/*"
@@ -2420,17 +2420,17 @@ resource "aws_lb" "main_use1" {
   security_groups    = [aws_security_group.alb_use1.id]
   subnets            = [aws_subnet.public_use1_a.id, aws_subnet.public_use1_b.id]
   provider           = aws.use1
-  
+
   enable_deletion_protection = false
-  
+
   access_logs {
     bucket  = aws_s3_bucket.alb_logs_use1.bucket
     prefix  = "alb-logs"
     enabled = true
   }
-  
+
   depends_on = [aws_s3_bucket_policy.alb_logs_use1]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-alb-use1"
     Region = "us-east-1"
@@ -2445,17 +2445,17 @@ resource "aws_lb" "main_apse2" {
   security_groups    = [aws_security_group.alb_apse2.id]
   subnets            = [aws_subnet.public_apse2_a.id, aws_subnet.public_apse2_b.id]
   provider           = aws.apse2
-  
+
   enable_deletion_protection = false
-  
+
   access_logs {
     bucket  = aws_s3_bucket.alb_logs_apse2.bucket
     prefix  = "alb-logs"
     enabled = true
   }
-  
+
   depends_on = [aws_s3_bucket_policy.alb_logs_apse2]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-alb-apse2"
     Region = "ap-southeast-2"
@@ -2469,7 +2469,7 @@ resource "aws_lb_target_group" "main_use1" {
   protocol = "HTTP"
   vpc_id   = aws_vpc.main_use1.id
   provider = aws.use1
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -2479,7 +2479,7 @@ resource "aws_lb_target_group" "main_use1" {
     path                = "/health"
     matcher             = "200"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-tg-use1"
     Region = "us-east-1"
@@ -2493,7 +2493,7 @@ resource "aws_lb_target_group" "main_apse2" {
   protocol = "HTTP"
   vpc_id   = aws_vpc.main_apse2.id
   provider = aws.apse2
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -2503,7 +2503,7 @@ resource "aws_lb_target_group" "main_apse2" {
     path                = "/health"
     matcher             = "200"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-tg-apse2"
     Region = "ap-southeast-2"
@@ -2516,7 +2516,7 @@ resource "aws_lb_listener" "main_use1" {
   port              = "80"
   protocol          = "HTTP"
   provider          = aws.use1
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main_use1.arn
@@ -2529,7 +2529,7 @@ resource "aws_lb_listener" "main_apse2" {
   port              = "80"
   protocol          = "HTTP"
   provider          = aws.apse2
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main_apse2.arn
@@ -2542,65 +2542,65 @@ resource "aws_wafv2_web_acl" "main_use1" {
   name     = "${var.project}-${local.env}-waf-use1-9846"
   scope    = "REGIONAL"
   provider = aws.use1
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   default_action {
     allow {}
   }
-  
+
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
     priority = 2
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesKnownBadInputsRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "${var.project}${local.env}WAFuse1"
-    sampled_requests_enabled    = true
+    metric_name                = "${var.project}${local.env}WAFuse1"
+    sampled_requests_enabled   = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-waf-use1"
     Region = "us-east-1"
@@ -2613,65 +2613,65 @@ resource "aws_wafv2_web_acl" "main_apse2" {
   name     = "${var.project}-${local.env}-waf-apse2-9846"
   scope    = "REGIONAL"
   provider = aws.apse2
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   default_action {
     allow {}
   }
-  
+
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
     priority = 2
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesKnownBadInputsRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "${var.project}${local.env}WAFapse2"
-    sampled_requests_enabled    = true
+    metric_name                = "${var.project}${local.env}WAFapse2"
+    sampled_requests_enabled   = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-waf-apse2"
     Region = "ap-southeast-2"
@@ -2684,7 +2684,7 @@ resource "aws_wafv2_web_acl_association" "main_use1" {
   resource_arn = aws_lb.main_use1.arn
   web_acl_arn  = aws_wafv2_web_acl.main_use1[0].arn
   provider     = aws.use1
-  
+
   depends_on = [aws_lb.main_use1, aws_wafv2_web_acl.main_use1]
 }
 
@@ -2694,7 +2694,7 @@ resource "aws_wafv2_web_acl_association" "main_apse2" {
   resource_arn = aws_lb.main_apse2.arn
   web_acl_arn  = aws_wafv2_web_acl.main_apse2[0].arn
   provider     = aws.apse2
-  
+
   depends_on = [aws_lb.main_apse2, aws_wafv2_web_acl.main_apse2]
 }
 
@@ -2706,17 +2706,17 @@ resource "aws_instance" "bastion_use1" {
   subnet_id              = aws_subnet.public_use1_a.id
   iam_instance_profile   = aws_iam_instance_profile.bastion_use1.name
   provider               = aws.use1
-  
+
   # Ensure KMS key and policy are ready before creating encrypted volumes
   depends_on = [aws_kms_key_policy.main_use1[0]]
-  
+
   root_block_device {
     volume_type = "gp3"
     volume_size = 8
     encrypted   = true
     kms_key_id  = aws_kms_key.main_use1.arn
   }
-  
+
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -2724,7 +2724,7 @@ resource "aws_instance" "bastion_use1" {
               systemctl enable amazon-ssm-agent
               systemctl start amazon-ssm-agent
               EOF
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-use1"
     Region = "us-east-1"
@@ -2739,17 +2739,17 @@ resource "aws_instance" "bastion_apse2" {
   subnet_id              = aws_subnet.public_apse2_a.id
   iam_instance_profile   = aws_iam_instance_profile.bastion_apse2.name
   provider               = aws.apse2
-  
+
   # Ensure KMS key and policy are ready before creating encrypted volumes
   depends_on = [aws_kms_key_policy.main_apse2[0]]
-  
+
   root_block_device {
     volume_type = "gp3"
     volume_size = 8
     encrypted   = true
     kms_key_id  = aws_kms_key.main_apse2.arn
   }
-  
+
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
@@ -2757,7 +2757,7 @@ resource "aws_instance" "bastion_apse2" {
               systemctl enable amazon-ssm-agent
               systemctl start amazon-ssm-agent
               EOF
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-bastion-apse2"
     Region = "ap-southeast-2"
@@ -2778,7 +2778,7 @@ resource "aws_s3_bucket" "cloudtrail_use1" {
   bucket        = "tap-${local.env}-cloudtrail-use1-${random_id.cloudtrail_suffix_use1.hex}"
   force_destroy = !local.is_production
   provider      = aws.use1
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-cloudtrail-use1"
     Region = "us-east-1"
@@ -2790,7 +2790,7 @@ resource "aws_s3_bucket" "cloudtrail_apse2" {
   bucket        = "tap-${local.env}-cloudtrail-apse2-${random_id.cloudtrail_suffix_apse2.hex}"
   force_destroy = !local.is_production
   provider      = aws.apse2
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-cloudtrail-apse2"
     Region = "ap-southeast-2"
@@ -2799,27 +2799,27 @@ resource "aws_s3_bucket" "cloudtrail_apse2" {
 
 # CloudTrail Bucket Ownership Controls
 resource "aws_s3_bucket_ownership_controls" "cloudtrail_use1" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid region issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid region issues
   bucket   = aws_s3_bucket.cloudtrail_use1.id
   provider = aws.use1
-  
+
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-  
+
   depends_on = [aws_s3_bucket.cloudtrail_use1]
 }
 
 
 resource "aws_s3_bucket_ownership_controls" "cloudtrail_apse2" {
-  count    = var.ci_mode ? 0 : 1  # Skip in CI mode to avoid region issues
+  count    = var.ci_mode ? 0 : 1 # Skip in CI mode to avoid region issues
   bucket   = aws_s3_bucket.cloudtrail_apse2.id
   provider = aws.apse2
-  
+
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
-  
+
   depends_on = [aws_s3_bucket.cloudtrail_apse2]
 }
 
@@ -2827,9 +2827,9 @@ resource "aws_s3_bucket_ownership_controls" "cloudtrail_apse2" {
 resource "aws_s3_bucket_policy" "cloudtrail_use1" {
   bucket   = aws_s3_bucket.cloudtrail_use1.id
   provider = aws.use1
-  
+
   depends_on = [aws_s3_bucket_ownership_controls.cloudtrail_use1[0]]
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -2864,9 +2864,9 @@ resource "aws_s3_bucket_policy" "cloudtrail_use1" {
 resource "aws_s3_bucket_policy" "cloudtrail_apse2" {
   bucket   = aws_s3_bucket.cloudtrail_apse2.id
   provider = aws.apse2
-  
+
   depends_on = [aws_s3_bucket_ownership_controls.cloudtrail_apse2[0]]
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -2907,27 +2907,27 @@ resource "aws_cloudtrail" "main_use1" {
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.main_use1.arn
   provider                      = aws.use1
-  
+
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-    
+
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.main_use1.arn}/*"]
     }
-    
+
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.cloudtrail_use1.arn}/*"]
     }
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-trail-use1"
     Region = "us-east-1"
   })
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail_use1, aws_kms_key_policy.main_use1]
 }
 
@@ -2941,27 +2941,27 @@ resource "aws_cloudtrail" "main_apse2" {
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.main_apse2.arn
   provider                      = aws.apse2
-  
+
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-    
+
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.main_apse2.arn}/*"]
     }
-    
+
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.cloudtrail_apse2.arn}/*"]
     }
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-trail-apse2"
     Region = "ap-southeast-2"
   })
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail_apse2]
 }
 
@@ -2969,7 +2969,7 @@ resource "aws_cloudtrail" "main_apse2" {
 resource "aws_iam_role" "config_role_use1" {
   name     = "${var.project}-${local.env}-config-role-use1"
   provider = aws.use1
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -2982,7 +2982,7 @@ resource "aws_iam_role" "config_role_use1" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-config-role-use1"
     Region = "us-east-1"
@@ -2993,7 +2993,7 @@ resource "aws_iam_role" "config_role_use1" {
 resource "aws_iam_role" "config_role_apse2" {
   name     = "${var.project}-${local.env}-config-role-apse2"
   provider = aws.apse2
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -3006,7 +3006,7 @@ resource "aws_iam_role" "config_role_apse2" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${var.project}-${local.env}-config-role-apse2"
     Region = "ap-southeast-2"
@@ -3030,7 +3030,7 @@ resource "aws_iam_role_policy_attachment" "config_role_apse2" {
 # AWS Config Delivery Channels
 # Disabled due to existing Config recorder in account
 resource "aws_config_delivery_channel" "main_use1" {
-  count          = 0  # Disabled due to existing Config recorder limit
+  count          = 0 # Disabled due to existing Config recorder limit
   name           = "${var.project}-${local.env}-config-delivery-use1"
   s3_bucket_name = aws_s3_bucket.main_use1.bucket
   provider       = aws.use1
@@ -3039,7 +3039,7 @@ resource "aws_config_delivery_channel" "main_use1" {
 
 
 resource "aws_config_delivery_channel" "main_apse2" {
-  count          = 0  # Disable to avoid quota issues - only use us-east-1
+  count          = 0 # Disable to avoid quota issues - only use us-east-1
   name           = "${var.project}-${local.env}-config-delivery-apse2"
   s3_bucket_name = aws_s3_bucket.main_apse2.bucket
   provider       = aws.apse2
@@ -3051,11 +3051,11 @@ resource "aws_config_delivery_channel" "main_apse2" {
 # This is why we only enable it in us-east-1 and disable in ap-southeast-2
 # Disabled due to existing Config recorder in account
 resource "aws_config_configuration_recorder" "main_use1" {
-  count    = 0  # Disabled due to existing Config recorder limit
+  count    = 0 # Disabled due to existing Config recorder limit
   name     = "${var.project}-${local.env}-config-recorder-use1"
   role_arn = aws_iam_role.config_role_use1.arn
   provider = aws.use1
-  
+
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
@@ -3064,11 +3064,11 @@ resource "aws_config_configuration_recorder" "main_use1" {
 
 
 resource "aws_config_configuration_recorder" "main_apse2" {
-  count    = 0  # Disable to avoid quota issues - only use us-east-1
+  count    = 0 # Disable to avoid quota issues - only use us-east-1
   name     = "${var.project}-${local.env}-config-recorder-apse2"
   role_arn = aws_iam_role.config_role_apse2.arn
   provider = aws.apse2
-  
+
   recording_group {
     all_supported                 = true
     include_global_resource_types = false
@@ -3078,36 +3078,36 @@ resource "aws_config_configuration_recorder" "main_apse2" {
 # AWS Config Rules (Security-focused)
 # Disabled due to existing Config recorder in account
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled_use1" {
-  count    = 0  # Disabled due to existing Config recorder limit
+  count    = 0 # Disabled due to existing Config recorder limit
   name     = "s3-bucket-server-side-encryption-enabled"
   provider = aws.use1
-  
+
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
-  
+
   depends_on = [aws_config_configuration_recorder.main_use1]
 }
 
 
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled_apse2" {
-  count    = 0  # Disable to avoid quota issues - only use us-east-1
+  count    = 0 # Disable to avoid quota issues - only use us-east-1
   name     = "s3-bucket-server-side-encryption-enabled"
   provider = aws.apse2
-  
+
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
-  
+
   depends_on = [aws_config_configuration_recorder.main_apse2]
 }
 
 # Enable AWS Config Recorders
 # Disabled due to existing Config recorder in account
 resource "aws_config_configuration_recorder_status" "main_use1" {
-  count      = 0  # Disabled due to existing Config recorder limit
+  count      = 0 # Disabled due to existing Config recorder limit
   name       = aws_config_configuration_recorder.main_use1[0].name
   is_enabled = true
   provider   = aws.use1
@@ -3196,12 +3196,12 @@ output "alb_arns_apse2" {
 # RDS Endpoints
 output "rds_endpoints_use1" {
   description = "RDS endpoint for us-east-1"
-  value       = "${aws_db_instance.main_use1.endpoint}"
+  value       = aws_db_instance.main_use1.endpoint
 }
 
 output "rds_endpoints_apse2" {
   description = "RDS endpoint for ap-southeast-2"
-  value       = "${aws_db_instance.main_apse2.endpoint}"
+  value       = aws_db_instance.main_apse2.endpoint
 }
 
 # ECS Cluster Names

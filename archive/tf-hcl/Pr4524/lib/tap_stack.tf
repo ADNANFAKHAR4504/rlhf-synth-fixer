@@ -65,7 +65,7 @@ variable "db_instance_class" {
 locals {
   # Generate random suffix for unique resource naming
   random_suffix = lower(substr(replace(uuid(), "-", ""), 0, 4))
-  
+
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
@@ -73,17 +73,17 @@ locals {
     ManagedBy   = "Terraform"
     Stack       = "tap-stack-${local.random_suffix}"
   }
-  
+
   # Resource naming convention
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   # Availability zones - using first 3 AZs for high availability
   azs = ["${var.region}a", "${var.region}b", "${var.region}c"]
-  
+
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-  
+
   # Database subnet CIDRs
   db_subnet_cidrs = ["10.0.20.0/24", "10.0.21.0/24", "10.0.22.0/24"]
 }
@@ -644,12 +644,12 @@ resource "aws_s3_bucket_notification" "lambda_trigger" {
 resource "aws_lambda_function" "processor" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${local.name_prefix}-processor-${local.random_suffix}"
-  role            = aws_iam_role.lambda.arn
-  handler         = "index.handler"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.9"
-  timeout         = 30
-  memory_size     = 128
+  runtime          = "python3.9"
+  timeout          = 30
+  memory_size      = 128
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -746,8 +746,8 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = false
-  enable_http2              = true
+  enable_deletion_protection       = false
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
   tags = merge(local.common_tags, {
@@ -857,10 +857,10 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-asg-${local.random_suffix}"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-asg-${local.random_suffix}"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.min_size
@@ -901,7 +901,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${local.name_prefix}-scale-up-${local.random_suffix}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -910,7 +910,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${local.name_prefix}-scale-down-${local.random_suffix}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -974,10 +974,10 @@ resource "aws_db_instance" "master" {
   engine_version = "8.0"
   instance_class = var.db_instance_class
 
-  allocated_storage     = 20
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+  kms_key_id        = aws_kms_key.main.arn
 
   db_name  = "tapdb"
   username = "a${random_string.rds_username.result}"
@@ -986,11 +986,11 @@ resource "aws_db_instance" "master" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
   deletion_protection        = false
@@ -1005,13 +1005,13 @@ resource "aws_db_instance" "master" {
 
 # RDS Read Replica
 resource "aws_db_instance" "read_replica" {
-  identifier             = "${local.name_prefix}-db-replica-${local.random_suffix}"
-  replicate_source_db    = aws_db_instance.master.identifier
-  instance_class         = var.db_instance_class
+  identifier          = "${local.name_prefix}-db-replica-${local.random_suffix}"
+  replicate_source_db = aws_db_instance.master.identifier
+  instance_class      = var.db_instance_class
 
-  publicly_accessible = false
+  publicly_accessible        = false
   auto_minor_version_upgrade = true
-  skip_final_snapshot = true
+  skip_final_snapshot        = true
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-replica-${local.random_suffix}"
@@ -1047,9 +1047,9 @@ resource "aws_secretsmanager_secret_version" "rds" {
 
 # Parameter Store - RDS Username
 resource "aws_ssm_parameter" "rds_username" {
-  name  = "/${local.name_prefix}/rds/username"
-  type  = "SecureString"
-  value = "a${random_string.rds_username.result}"
+  name   = "/${local.name_prefix}/rds/username"
+  type   = "SecureString"
+  value  = "a${random_string.rds_username.result}"
   key_id = aws_kms_key.main.id
 
   tags = merge(local.common_tags, {
@@ -1059,9 +1059,9 @@ resource "aws_ssm_parameter" "rds_username" {
 
 # Parameter Store - RDS Password
 resource "aws_ssm_parameter" "rds_password" {
-  name  = "/${local.name_prefix}/rds/password"
-  type  = "SecureString"
-  value = random_password.rds_password.result
+  name   = "/${local.name_prefix}/rds/password"
+  type   = "SecureString"
+  value  = random_password.rds_password.result
   key_id = aws_kms_key.main.id
 
   tags = merge(local.common_tags, {

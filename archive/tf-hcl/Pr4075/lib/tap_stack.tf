@@ -65,23 +65,23 @@ variable "desired_capacity" {
 locals {
   # Generate random suffix for resource naming
   random_suffix = lower(substr(replace(uuid(), "-", ""), 0, 4))
-  
+
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-  
+
   # Resource naming conventions
   vpc_name_primary   = "vpc-primary-${local.random_suffix}"
   vpc_name_secondary = "vpc-secondary-${local.random_suffix}"
   vpc_name_third     = "vpc-third-${local.random_suffix}"
-  
+
   # CIDR blocks for VPCs
   vpc_cidr_primary   = "10.0.0.0/16"
   vpc_cidr_secondary = "10.1.0.0/16"
   vpc_cidr_third     = "10.2.0.0/16"
-  
+
   # Availability zones mapping
   azs_primary   = ["us-east-1a", "us-east-1b"]
   azs_secondary = ["us-west-2a", "us-west-2b"]
@@ -569,15 +569,15 @@ resource "aws_lb_listener" "primary" {
 
 # Auto Scaling Group for Primary Region
 resource "aws_autoscaling_group" "primary" {
-  provider            = aws.us_east_1
-  name                = "asg-primary-${random_string.suffix.result}"
-  vpc_zone_identifier = aws_subnet.primary_private[*].id
-  target_group_arns   = [aws_lb_target_group.primary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_east_1
+  name                      = "asg-primary-${random_string.suffix.result}"
+  vpc_zone_identifier       = aws_subnet.primary_private[*].id
+  target_group_arns         = [aws_lb_target_group.primary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = var.min_size
-  max_size            = var.max_size
-  desired_capacity    = var.desired_capacity
+  min_size                  = var.min_size
+  max_size                  = var.max_size
+  desired_capacity          = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.primary.id
@@ -613,29 +613,29 @@ resource "aws_db_subnet_group" "primary" {
 
 # RDS Instance for Primary Region
 resource "aws_db_instance" "primary" {
-  provider                = aws.us_east_1
-  identifier              = "rds-primary-${random_string.suffix.result}"
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = var.rds_instance_class
-  allocated_storage       = 20
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  
+  provider          = aws.us_east_1
+  identifier        = "rds-primary-${random_string.suffix.result}"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = var.rds_instance_class
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = "appdb"
   username = "a${random_string.rds_username_primary.result}"
   password = random_password.rds_password_primary.result
-  
+
   vpc_security_group_ids = [aws_security_group.primary_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.primary.name
-  
-  multi_az                    = true
-  publicly_accessible         = false
-  auto_minor_version_upgrade  = true
-  backup_retention_period     = 7
+
+  multi_az                   = true
+  publicly_accessible        = false
+  auto_minor_version_upgrade = true
+  backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-  
+
   skip_final_snapshot = true
 
   tags = local.common_tags
@@ -1083,15 +1083,15 @@ resource "aws_lb_listener" "secondary" {
 
 # Auto Scaling Group for Secondary Region
 resource "aws_autoscaling_group" "secondary" {
-  provider            = aws.us_west_2
-  name                = "asg-secondary-${random_string.suffix.result}"
-  vpc_zone_identifier = aws_subnet.secondary_private[*].id
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_west_2
+  name                      = "asg-secondary-${random_string.suffix.result}"
+  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
+  target_group_arns         = [aws_lb_target_group.secondary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = var.min_size
-  max_size            = var.max_size
-  desired_capacity    = var.desired_capacity
+  min_size                  = var.min_size
+  max_size                  = var.max_size
+  desired_capacity          = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.secondary.id
@@ -1127,29 +1127,29 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS Instance for Secondary Region
 resource "aws_db_instance" "secondary" {
-  provider                = aws.us_west_2
-  identifier              = "rds-secondary-${random_string.suffix.result}"
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = var.rds_instance_class
-  allocated_storage       = 20
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  
+  provider          = aws.us_west_2
+  identifier        = "rds-secondary-${random_string.suffix.result}"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = var.rds_instance_class
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = "appdb"
   username = "a${random_string.rds_username_secondary.result}"
   password = random_password.rds_password_secondary.result
-  
+
   vpc_security_group_ids = [aws_security_group.secondary_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
-  
-  multi_az                    = true
-  publicly_accessible         = false
-  auto_minor_version_upgrade  = true
-  backup_retention_period     = 7
+
+  multi_az                   = true
+  publicly_accessible        = false
+  auto_minor_version_upgrade = true
+  backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-  
+
   skip_final_snapshot = true
 
   tags = local.common_tags
@@ -1597,15 +1597,15 @@ resource "aws_lb_listener" "third" {
 
 # Auto Scaling Group for Third Region
 resource "aws_autoscaling_group" "third" {
-  provider            = aws.eu_central_1
-  name                = "asg-third-${random_string.suffix.result}"
-  vpc_zone_identifier = aws_subnet.third_private[*].id
-  target_group_arns   = [aws_lb_target_group.third.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.eu_central_1
+  name                      = "asg-third-${random_string.suffix.result}"
+  vpc_zone_identifier       = aws_subnet.third_private[*].id
+  target_group_arns         = [aws_lb_target_group.third.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = var.min_size
-  max_size            = var.max_size
-  desired_capacity    = var.desired_capacity
+  min_size                  = var.min_size
+  max_size                  = var.max_size
+  desired_capacity          = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.third.id
@@ -1641,29 +1641,29 @@ resource "aws_db_subnet_group" "third" {
 
 # RDS Instance for Third Region
 resource "aws_db_instance" "third" {
-  provider                = aws.eu_central_1
-  identifier              = "rds-third-${random_string.suffix.result}"
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = var.rds_instance_class
-  allocated_storage       = 20
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  
+  provider          = aws.eu_central_1
+  identifier        = "rds-third-${random_string.suffix.result}"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = var.rds_instance_class
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = "appdb"
   username = "a${random_string.rds_username_third.result}"
   password = random_password.rds_password_third.result
-  
+
   vpc_security_group_ids = [aws_security_group.third_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.third.name
-  
-  multi_az                    = true
-  publicly_accessible         = false
-  auto_minor_version_upgrade  = true
-  backup_retention_period     = 7
+
+  multi_az                   = true
+  publicly_accessible        = false
+  auto_minor_version_upgrade = true
+  backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-  
+
   skip_final_snapshot = true
 
   tags = local.common_tags

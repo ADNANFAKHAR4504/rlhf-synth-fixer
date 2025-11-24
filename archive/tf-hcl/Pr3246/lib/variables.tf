@@ -21,10 +21,10 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default = {
-    Project    = "TAP"
+    Project     = "TAP"
     Environment = "production"
-    Owner      = "platform-team"
-    CostCenter = "logistics"
+    Owner       = "platform-team"
+    CostCenter  = "logistics"
   }
 }
 

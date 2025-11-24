@@ -397,11 +397,11 @@ resource "aws_elasticache_replication_group" "redis" {
   replication_group_id = "${local.resource_prefix}-redis"
   description          = "Redis cache for recommendations"
   engine               = "redis"
-  node_type                     = var.redis_node_type
-  num_cache_clusters            = var.redis_num_cache_nodes
-  parameter_group_name          = aws_elasticache_parameter_group.redis.name
-  subnet_group_name             = aws_elasticache_subnet_group.redis.name
-  security_group_ids            = [aws_security_group.redis.id]
+  node_type            = var.redis_node_type
+  num_cache_clusters   = var.redis_num_cache_nodes
+  parameter_group_name = aws_elasticache_parameter_group.redis.name
+  subnet_group_name    = aws_elasticache_subnet_group.redis.name
+  security_group_ids   = [aws_security_group.redis.id]
 
   port = 6379
 
@@ -838,9 +838,9 @@ resource "aws_lambda_function" "recommendation_api" {
 
   environment {
     variables = {
-      REDIS_ENDPOINT            = aws_elasticache_replication_group.redis.primary_endpoint_address
-      PERSONALIZE_REGION        = var.aws_region
-      PERSONALIZE_CAMPAIGN_ARN  = var.personalize_campaign_arn
+      REDIS_ENDPOINT           = aws_elasticache_replication_group.redis.primary_endpoint_address
+      PERSONALIZE_REGION       = var.aws_region
+      PERSONALIZE_CAMPAIGN_ARN = var.personalize_campaign_arn
     }
   }
 

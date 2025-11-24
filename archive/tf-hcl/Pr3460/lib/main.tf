@@ -71,9 +71,9 @@ variable "s3_log_bucket_name" {
 resource "aws_wafv2_web_acl" "api_waf" {
   name  = "adexchange-api-waf"
   scope = "REGIONAL"
-    default_action {
-      allow {}
-    }
+  default_action {
+    allow {}
+  }
   rule {
     name     = "AdvertiserRateLimit"
     priority = 1
@@ -108,11 +108,11 @@ resource "aws_api_gateway_rest_api" "exchange_api" {
 }
 
 resource "aws_api_gateway_authorizer" "jwt_auth" {
-  name                   = "AdExchangeJWTAuth"
-  rest_api_id            = aws_api_gateway_rest_api.exchange_api.id
-  type                   = "TOKEN"
-  authorizer_uri         = var.api_auth_jwks_url
-  identity_source        = "method.request.header.Authorization"
+  name            = "AdExchangeJWTAuth"
+  rest_api_id     = aws_api_gateway_rest_api.exchange_api.id
+  type            = "TOKEN"
+  authorizer_uri  = var.api_auth_jwks_url
+  identity_source = "method.request.header.Authorization"
 }
 
 resource "aws_api_gateway_stage" "prod" {
@@ -131,7 +131,7 @@ resource "aws_api_gateway_method_settings" "cache" {
   stage_name  = aws_api_gateway_stage.prod.stage_name
   method_path = "*/*"
   settings {
-    caching_enabled = true
+    caching_enabled      = true
     cache_ttl_in_seconds = 60
   }
 }
@@ -157,12 +157,12 @@ resource "aws_lambda_function" "bid_handler" {
     variables = {
       DYNAMODB_TABLE = var.dynamodb_table_name
       REDIS_ENDPOINT = aws_elasticache_replication_group.redis.primary_endpoint_address
-  DAX_ENDPOINT   = aws_dax_cluster.budget_dax.cluster_address
+      DAX_ENDPOINT   = aws_dax_cluster.budget_dax.cluster_address
     }
   }
   # Assume deployment package is provided externally
-  filename      = "bootstrap.zip"
-  publish       = true
+  filename = "bootstrap.zip"
+  publish  = true
 }
 
 resource "aws_lambda_provisioned_concurrency_config" "bid_handler_conc" {
@@ -184,8 +184,8 @@ resource "aws_lambda_function" "bid_evaluator" {
       # FRAUD_MODEL_ARN removed, resource not present
     }
   }
-  filename      = "bid_evaluator.zip"
-  publish       = true
+  filename = "bid_evaluator.zip"
+  publish  = true
 }
 
 
@@ -198,19 +198,19 @@ resource "aws_dynamodb_table" "campaigns" {
     name = "campaign_id"
     type = "S"
   }
-  stream_enabled     = true
-  stream_view_type   = "NEW_AND_OLD_IMAGES"
+  stream_enabled   = true
+  stream_view_type = "NEW_AND_OLD_IMAGES"
   point_in_time_recovery {
     enabled = true
   }
 }
 
 resource "aws_dax_cluster" "budget_dax" {
-  cluster_name         = "adx-budget-dax"
-  node_type            = "dax.r5.large"
-  replication_factor   = 3
-  iam_role_arn         = aws_iam_role.dax_exec.arn
-  subnet_group_name    = aws_dax_subnet_group.dax_subnet.name
+  cluster_name       = "adx-budget-dax"
+  node_type          = "dax.r5.large"
+  replication_factor = 3
+  iam_role_arn       = aws_iam_role.dax_exec.arn
+  subnet_group_name  = aws_dax_subnet_group.dax_subnet.name
   # security_group_ids   = [aws_security_group.dax.id] # Resource not declared
   server_side_encryption {
     enabled = true
@@ -225,17 +225,17 @@ resource "aws_dax_subnet_group" "dax_subnet" {
 
 # ------------------- ELASTICACHE REDIS -------------------
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id          = "adexchange-redis"
-  description                   = "Redis for frequency capping and segmentation"
-  node_type                     = var.redis_node_type
-  engine                        = "redis"
-  engine_version                = "7.0"
-  num_node_groups               = 3
-  replicas_per_node_group       = 2
-  automatic_failover_enabled    = true
-  at_rest_encryption_enabled    = true
-  transit_encryption_enabled    = true
-  subnet_group_name             = aws_elasticache_subnet_group.redis_subnet.name
+  replication_group_id       = "adexchange-redis"
+  description                = "Redis for frequency capping and segmentation"
+  node_type                  = var.redis_node_type
+  engine                     = "redis"
+  engine_version             = "7.0"
+  num_node_groups            = 3
+  replicas_per_node_group    = 2
+  automatic_failover_enabled = true
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  subnet_group_name          = aws_elasticache_subnet_group.redis_subnet.name
   # security_group_ids            = [aws_security_group.redis.id] # Resource not declared
 }
 
@@ -252,8 +252,8 @@ resource "aws_kinesis_stream" "bid_stream" {
 }
 
 resource "aws_kinesis_analytics_application" "bid_analytics" {
-  name        = "adexchange-bid-analytics"
-  tags        = local.common_tags
+  name = "adexchange-bid-analytics"
+  tags = local.common_tags
 }
 
 resource "aws_kinesis_firehose_delivery_stream" "bid_firehose" {
@@ -317,15 +317,15 @@ resource "aws_athena_workgroup" "adexchange" {
 }
 
 resource "aws_quicksight_dashboard" "adexchange" {
-  dashboard_id = "adexchange-dashboard"
-  name         = "AdExchange Dashboard"
+  dashboard_id        = "adexchange-dashboard"
+  name                = "AdExchange Dashboard"
   version_description = "Initial version"
   source_entity {
     source_template {
-  arn = "arn:aws:quicksight:${var.region}:123456789012:template/adexchange-template"
+      arn = "arn:aws:quicksight:${var.region}:123456789012:template/adexchange-template"
       data_set_references {
         data_set_placeholder = "adexchange-dataset"
-  data_set_arn        = "arn:aws:quicksight:${var.region}:123456789012:dataset/adexchange-dataset"
+        data_set_arn         = "arn:aws:quicksight:${var.region}:123456789012:dataset/adexchange-dataset"
       }
     }
   }
@@ -334,9 +334,9 @@ resource "aws_quicksight_dashboard" "adexchange" {
 
 # ------------------- STEP FUNCTIONS EXPRESS -------------------
 resource "aws_sfn_state_machine" "auction_workflow" {
-  name     = "adexchange-auction-workflow"
-  role_arn = aws_iam_role.step_exec.arn
-  type     = "EXPRESS"
+  name       = "adexchange-auction-workflow"
+  role_arn   = aws_iam_role.step_exec.arn
+  type       = "EXPRESS"
   definition = <<EOF
 {
   "Comment": "Parallel auction workflow",
@@ -420,7 +420,7 @@ EOF
 
 # ------------------- IAM ROLES (least privilege) -------------------
 resource "aws_iam_role" "lambda_exec" {
-  name = "adexchange-lambda-exec"
+  name               = "adexchange-lambda-exec"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -433,11 +433,11 @@ resource "aws_iam_role" "lambda_exec" {
   ]
 }
 EOF
-  tags = local.common_tags
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role" "dax_exec" {
-  name = "adexchange-dax-exec"
+  name               = "adexchange-dax-exec"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -450,11 +450,11 @@ resource "aws_iam_role" "dax_exec" {
   ]
 }
 EOF
-  tags = local.common_tags
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role" "step_exec" {
-  name = "adexchange-step-exec"
+  name               = "adexchange-step-exec"
   assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -467,7 +467,7 @@ resource "aws_iam_role" "step_exec" {
   ]
 }
 EOF
-  tags = local.common_tags
+  tags               = local.common_tags
 }
 
 # ------------------- OUTPUTS -------------------

@@ -9,13 +9,13 @@ data "aws_ami" "amazon_linux_2" {
   }
 
   filter {
-    name = "virtualization-type"
-    values = ["hvm"]  # virtualization-type hvm
+    name   = "virtualization-type"
+    values = ["hvm"] # virtualization-type hvm
   }
 
   filter {
-    name = "architecture"
-    values = ["x86_64"]  # architecture x86_64
+    name   = "architecture"
+    values = ["x86_64"] # architecture x86_64
   }
 
   filter {
@@ -58,7 +58,7 @@ variable "volume_size" {
 variable "snapshot_schedule" {
   description = "Cron expression for snapshot schedule"
   type        = string
-  default     = "cron(0 2 * * ? *)"  # Daily at 2 AM UTC
+  default     = "cron(0 2 * * ? *)" # Daily at 2 AM UTC
 }
 
 variable "snapshot_retention_days" {
@@ -76,12 +76,12 @@ variable "alert_email" {
 # Locals
 locals {
   common_tags = {
-    Environment  = "production"
-    ManagedBy    = "terraform"
-    Project      = "webapp"
-    CostCenter   = "engineering"
-    Application  = "web-application"
-    Owner        = "infrastructure-team"
+    Environment = "production"
+    ManagedBy   = "terraform"
+    Project     = "webapp"
+    CostCenter  = "engineering"
+    Application = "web-application"
+    Owner       = "infrastructure-team"
   }
 
   vpc_cidr    = "10.0.0.0/16"
@@ -123,7 +123,7 @@ resource "aws_subnet" "webapp_subnet" {
 }
 
 resource "aws_security_group" "webapp_security_group" {
-  name = "webapp-security-group-${random_string.unique_suffix.result}"
+  name        = "webapp-security-group-${random_string.unique_suffix.result}"
   description = "Security group for webapp EC2 instance"
   vpc_id      = aws_vpc.webapp_vpc.id
 
@@ -204,7 +204,7 @@ resource "aws_instance" "webapp_instance" {
 
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"  # IMDSv2
+    http_tokens                 = "required" # IMDSv2
     http_put_response_hop_limit = 1
     instance_metadata_tags      = "enabled"
   }
@@ -227,12 +227,12 @@ resource "aws_ebs_volume" "webapp_volume" {
   availability_zone = var.availability_zone
   size              = var.volume_size
   type              = "gp3"
-  encrypted = true
+  encrypted         = true
 
   tags = merge(local.common_tags, {
-    Name = "webapp-volume"
+    Name               = "webapp-volume"
     DeletionProtection = "true"
-    Purpose = "Application Data"
+    Purpose            = "Application Data"
   })
 }
 
@@ -308,7 +308,7 @@ resource "aws_dlm_lifecycle_policy" "webapp_snapshot_policy" {
       create_rule {
         interval      = 24
         interval_unit = "HOURS"
-        times         = ["02:00"]  # 2 AM UTC
+        times         = ["02:00"] # 2 AM UTC
       }
 
       retain_rule {
@@ -433,8 +433,8 @@ resource "aws_iam_role" "vpc_flow_log_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "vpc-flow-logs.amazonaws.com" }
     }]
   })
@@ -447,8 +447,8 @@ resource "aws_iam_role_policy" "vpc_flow_log_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
       Resource = "*"
     }]
   })
@@ -459,7 +459,7 @@ resource "aws_flow_log" "webapp_vpc_flow_log" {
   log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.webapp_vpc.id
-  tags = merge(local.common_tags, { Name = "webapp-vpc-flow-log" })
+  tags            = merge(local.common_tags, { Name = "webapp-vpc-flow-log" })
 }
 
 output "vpc_flow_log_group" {

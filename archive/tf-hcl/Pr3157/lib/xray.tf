@@ -19,8 +19,8 @@ resource "aws_cloudwatch_event_bus" "notification_bus" {
 }
 
 resource "aws_cloudwatch_event_rule" "search_events" {
-  name        = "${var.app_name}-search-events"
-  description = "Capture search events"
+  name           = "${var.app_name}-search-events"
+  description    = "Capture search events"
   event_bus_name = aws_cloudwatch_event_bus.notification_bus.name
 
   event_pattern = jsonencode({
@@ -30,10 +30,10 @@ resource "aws_cloudwatch_event_rule" "search_events" {
 }
 
 resource "aws_cloudwatch_event_target" "search_events_log" {
-  rule      = aws_cloudwatch_event_rule.search_events.name
+  rule           = aws_cloudwatch_event_rule.search_events.name
   event_bus_name = aws_cloudwatch_event_bus.notification_bus.name
-  target_id = "SendToCloudWatch"
-  arn       = aws_cloudwatch_log_group.event_logs.arn
+  target_id      = "SendToCloudWatch"
+  arn            = aws_cloudwatch_log_group.event_logs.arn
 }
 
 resource "aws_cloudwatch_log_group" "event_logs" {
@@ -53,16 +53,16 @@ resource "aws_cloudwatch_log_resource_policy" "eventbridge_log_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "EventBridgeToCloudWatchLogs"
-        Effect    = "Allow"
+        Sid    = "EventBridgeToCloudWatchLogs"
+        Effect = "Allow"
         Principal = {
           Service = "events.amazonaws.com"
         }
-        Action    = [
+        Action = [
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource  = aws_cloudwatch_log_group.event_logs.arn
+        Resource = aws_cloudwatch_log_group.event_logs.arn
       }
     ]
   })

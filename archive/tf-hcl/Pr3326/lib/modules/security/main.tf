@@ -4,76 +4,76 @@ resource "aws_wafv2_web_acl" "main" {
   name        = "media-streaming-waf"
   description = "WAF for media streaming platform"
   scope       = "CLOUDFRONT"
-  
+
   default_action {
     allow {}
   }
-  
+
   # AWS managed rule sets
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 0
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "AWSManagedRulesCommonRuleSet"
       sampled_requests_enabled   = true
     }
   }
-  
+
   # SQL Injection protection
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
     priority = 1
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesSQLiRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "AWSManagedRulesSQLiRuleSet"
       sampled_requests_enabled   = true
     }
   }
-  
+
   # Custom rate limiting rule
   dynamic "rule" {
     for_each = var.waf_rate_limits
-    
+
     content {
       name     = rule.value.name
       priority = rule.value.priority
-      
+
       action {
         block {}
       }
-      
+
       statement {
         rate_based_statement {
           limit              = rule.value.limit
           aggregate_key_type = "IP"
         }
       }
-      
+
       visibility_config {
         cloudwatch_metrics_enabled = true
         metric_name                = rule.value.metric_name
@@ -81,29 +81,29 @@ resource "aws_wafv2_web_acl" "main" {
       }
     }
   }
-  
+
   # Geo-blocking rule
   rule {
     name     = "GeoBlockRule"
     priority = length(var.waf_rate_limits) + 2
-    
+
     action {
       block {}
     }
-    
+
     statement {
       geo_match_statement {
         country_codes = var.blocked_countries
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "GeoBlockRule"
       sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "media-streaming-waf"
@@ -123,14 +123,14 @@ resource "aws_security_group" "bastion" {
   name        = "bastion-security-group"
   description = "Security group for the bastion host"
   vpc_id      = var.vpc_id
-  
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = var.bastion_allowed_cidr
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -143,7 +143,7 @@ resource "aws_security_group" "bastion" {
 resource "aws_network_acl" "public" {
   vpc_id     = var.vpc_id
   subnet_ids = var.public_subnet_ids
-  
+
   egress {
     protocol   = "-1"
     rule_no    = 100
@@ -152,7 +152,7 @@ resource "aws_network_acl" "public" {
     from_port  = 0
     to_port    = 0
   }
-  
+
   ingress {
     protocol   = "tcp"
     rule_no    = 100
@@ -161,7 +161,7 @@ resource "aws_network_acl" "public" {
     from_port  = 80
     to_port    = 80
   }
-  
+
   ingress {
     protocol   = "tcp"
     rule_no    = 110
@@ -170,7 +170,7 @@ resource "aws_network_acl" "public" {
     from_port  = 443
     to_port    = 443
   }
-  
+
   ingress {
     protocol   = "tcp"
     rule_no    = 120
@@ -179,7 +179,7 @@ resource "aws_network_acl" "public" {
     from_port  = 22
     to_port    = 22
   }
-  
+
   ingress {
     protocol   = "tcp"
     rule_no    = 130
@@ -193,7 +193,7 @@ resource "aws_network_acl" "public" {
 resource "aws_network_acl" "private" {
   vpc_id     = var.vpc_id
   subnet_ids = var.private_subnet_ids
-  
+
   egress {
     protocol   = "-1"
     rule_no    = 100
@@ -202,7 +202,7 @@ resource "aws_network_acl" "private" {
     from_port  = 0
     to_port    = 0
   }
-  
+
   ingress {
     protocol   = "tcp"
     rule_no    = 100
@@ -211,7 +211,7 @@ resource "aws_network_acl" "private" {
     from_port  = 0
     to_port    = 65535
   }
-  
+
   ingress {
     protocol   = "udp"
     rule_no    = 110
@@ -220,7 +220,7 @@ resource "aws_network_acl" "private" {
     from_port  = 0
     to_port    = 65535
   }
-  
+
   ingress {
     protocol   = "tcp"
     rule_no    = 120

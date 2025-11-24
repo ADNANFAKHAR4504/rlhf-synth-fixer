@@ -68,32 +68,32 @@ data "aws_caller_identity" "current" {
 
 locals {
   resource_suffix = "drsh"
-  
+
   common_tags = {
     Environment = var.environment
     Owner       = var.owner
     ManagedBy   = "Terraform"
     Purpose     = "DR-Infrastructure"
   }
-  
+
   primary_tags = merge(local.common_tags, {
     DR-Role = "Primary"
     Region  = var.primary_region
   })
-  
+
   secondary_tags = merge(local.common_tags, {
     DR-Role = "Secondary"
     Region  = var.secondary_region
   })
-  
+
   # Network configurations
   primary_vpc_cidr   = "10.1.0.0/16"
   secondary_vpc_cidr = "10.2.0.0/16"
-  
+
   # Subnet configurations
   primary_public_subnets  = ["10.1.1.0/24", "10.1.2.0/24"]
   primary_private_subnets = ["10.1.10.0/24", "10.1.11.0/24"]
-  
+
   secondary_public_subnets  = ["10.2.1.0/24", "10.2.2.0/24"]
   secondary_private_subnets = ["10.2.10.0/24", "10.2.11.0/24"]
 }
@@ -118,13 +118,13 @@ resource "aws_secretsmanager_secret" "db_password_primary" {
   name                    = "rds-master-password-primary-${local.resource_suffix}"
   description             = "Master password for primary RDS instance"
   recovery_window_in_days = 7
-  
+
   tags = local.primary_tags
 }
 
 resource "aws_secretsmanager_secret_version" "db_password_primary" {
-  provider      = aws.us_east_1
-  secret_id     = aws_secretsmanager_secret.db_password_primary.id
+  provider  = aws.us_east_1
+  secret_id = aws_secretsmanager_secret.db_password_primary.id
   secret_string = jsonencode({
     username = var.db_username
     password = random_password.db_password.result
@@ -140,13 +140,13 @@ resource "aws_secretsmanager_secret" "db_password_secondary" {
   name                    = "rds-master-password-secondary-${local.resource_suffix}"
   description             = "Master password for secondary RDS instance"
   recovery_window_in_days = 7
-  
+
   tags = local.secondary_tags
 }
 
 resource "aws_secretsmanager_secret_version" "db_password_secondary" {
-  provider      = aws.us_west_2
-  secret_id     = aws_secretsmanager_secret.db_password_secondary.id
+  provider  = aws.us_west_2
+  secret_id = aws_secretsmanager_secret.db_password_secondary.id
   secret_string = jsonencode({
     username = var.db_username
     password = random_password.db_password.result
@@ -162,7 +162,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = local.primary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.primary_tags, {
     Name = "vpc-primary-${local.resource_suffix}"
   })
@@ -172,7 +172,7 @@ resource "aws_vpc" "primary" {
 resource "aws_internet_gateway" "primary" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   tags = merge(local.primary_tags, {
     Name = "igw-primary-${local.resource_suffix}"
   })
@@ -186,7 +186,7 @@ resource "aws_subnet" "primary_public" {
   cidr_block              = local.primary_public_subnets[count.index]
   availability_zone       = data.aws_availability_zones.primary.names[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.primary_tags, {
     Name = "subnet-public-primary-${count.index + 1}-${local.resource_suffix}"
     Type = "Public"
@@ -200,7 +200,7 @@ resource "aws_subnet" "primary_private" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.primary_private_subnets[count.index]
   availability_zone = data.aws_availability_zones.primary.names[count.index]
-  
+
   tags = merge(local.primary_tags, {
     Name = "subnet-private-primary-${count.index + 1}-${local.resource_suffix}"
     Type = "Private"
@@ -212,11 +212,11 @@ resource "aws_eip" "primary_nat" {
   provider = aws.us_east_1
   count    = 2
   domain   = "vpc"
-  
+
   tags = merge(local.primary_tags, {
     Name = "eip-nat-primary-${count.index + 1}-${local.resource_suffix}"
   })
-  
+
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -226,11 +226,11 @@ resource "aws_nat_gateway" "primary" {
   count         = 2
   allocation_id = aws_eip.primary_nat[count.index].id
   subnet_id     = aws_subnet.primary_public[count.index].id
-  
+
   tags = merge(local.primary_tags, {
     Name = "nat-primary-${count.index + 1}-${local.resource_suffix}"
   })
-  
+
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -238,12 +238,12 @@ resource "aws_nat_gateway" "primary" {
 resource "aws_route_table" "primary_public" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-  
+
   tags = merge(local.primary_tags, {
     Name = "rt-public-primary-${local.resource_suffix}"
     Type = "Public"
@@ -255,12 +255,12 @@ resource "aws_route_table" "primary_private" {
   provider = aws.us_east_1
   count    = 2
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary[count.index].id
   }
-  
+
   tags = merge(local.primary_tags, {
     Name = "rt-private-primary-${count.index + 1}-${local.resource_suffix}"
     Type = "Private"
@@ -292,7 +292,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = local.secondary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.secondary_tags, {
     Name = "vpc-secondary-${local.resource_suffix}"
   })
@@ -302,7 +302,7 @@ resource "aws_vpc" "secondary" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   tags = merge(local.secondary_tags, {
     Name = "igw-secondary-${local.resource_suffix}"
   })
@@ -316,7 +316,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = local.secondary_public_subnets[count.index]
   availability_zone       = data.aws_availability_zones.secondary.names[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.secondary_tags, {
     Name = "subnet-public-secondary-${count.index + 1}-${local.resource_suffix}"
     Type = "Public"
@@ -330,7 +330,7 @@ resource "aws_subnet" "secondary_private" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_private_subnets[count.index]
   availability_zone = data.aws_availability_zones.secondary.names[count.index]
-  
+
   tags = merge(local.secondary_tags, {
     Name = "subnet-private-secondary-${count.index + 1}-${local.resource_suffix}"
     Type = "Private"
@@ -342,11 +342,11 @@ resource "aws_eip" "secondary_nat" {
   provider = aws.us_west_2
   count    = 2
   domain   = "vpc"
-  
+
   tags = merge(local.secondary_tags, {
     Name = "eip-nat-secondary-${count.index + 1}-${local.resource_suffix}"
   })
-  
+
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -356,11 +356,11 @@ resource "aws_nat_gateway" "secondary" {
   count         = 2
   allocation_id = aws_eip.secondary_nat[count.index].id
   subnet_id     = aws_subnet.secondary_public[count.index].id
-  
+
   tags = merge(local.secondary_tags, {
     Name = "nat-secondary-${count.index + 1}-${local.resource_suffix}"
   })
-  
+
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -368,12 +368,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "secondary_public" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "rt-public-secondary-${local.resource_suffix}"
     Type = "Public"
@@ -385,12 +385,12 @@ resource "aws_route_table" "secondary_private" {
   provider = aws.us_west_2
   count    = 2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary[count.index].id
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "rt-private-secondary-${count.index + 1}-${local.resource_suffix}"
     Type = "Private"
@@ -423,7 +423,7 @@ resource "aws_security_group" "rds_primary" {
   name        = "rds-primary-${local.resource_suffix}"
   description = "Security group for RDS database in primary region"
   vpc_id      = aws_vpc.primary.id
-  
+
   ingress {
     description = "PostgreSQL from private subnets"
     from_port   = 5432
@@ -431,7 +431,7 @@ resource "aws_security_group" "rds_primary" {
     protocol    = "tcp"
     cidr_blocks = local.primary_private_subnets
   }
-  
+
   ingress {
     description = "PostgreSQL from Lambda"
     from_port   = 5432
@@ -439,7 +439,7 @@ resource "aws_security_group" "rds_primary" {
     protocol    = "tcp"
     self        = true
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -447,7 +447,7 @@ resource "aws_security_group" "rds_primary" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.primary_tags, {
     Name = "rds-primary-${local.resource_suffix}"
   })
@@ -459,7 +459,7 @@ resource "aws_security_group" "lambda_primary" {
   name        = "lambda-primary-${local.resource_suffix}"
   description = "Security group for Lambda functions in primary region"
   vpc_id      = aws_vpc.primary.id
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -467,7 +467,7 @@ resource "aws_security_group" "lambda_primary" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.primary_tags, {
     Name = "lambda-primary-${local.resource_suffix}"
   })
@@ -483,7 +483,7 @@ resource "aws_security_group" "rds_secondary" {
   name        = "rds-secondary-${local.resource_suffix}"
   description = "Security group for RDS database in secondary region"
   vpc_id      = aws_vpc.secondary.id
-  
+
   ingress {
     description = "PostgreSQL from private subnets"
     from_port   = 5432
@@ -491,7 +491,7 @@ resource "aws_security_group" "rds_secondary" {
     protocol    = "tcp"
     cidr_blocks = local.secondary_private_subnets
   }
-  
+
   ingress {
     description = "PostgreSQL from Lambda"
     from_port   = 5432
@@ -499,7 +499,7 @@ resource "aws_security_group" "rds_secondary" {
     protocol    = "tcp"
     self        = true
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -507,7 +507,7 @@ resource "aws_security_group" "rds_secondary" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "rds-secondary-${local.resource_suffix}"
   })
@@ -519,7 +519,7 @@ resource "aws_security_group" "lambda_secondary" {
   name        = "lambda-secondary-${local.resource_suffix}"
   description = "Security group for Lambda functions in secondary region"
   vpc_id      = aws_vpc.secondary.id
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -527,7 +527,7 @@ resource "aws_security_group" "lambda_secondary" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "lambda-secondary-${local.resource_suffix}"
   })
@@ -543,7 +543,7 @@ resource "aws_db_subnet_group" "primary" {
   name        = "db-subnet-group-primary-${local.resource_suffix}"
   description = "Database subnet group for primary region"
   subnet_ids  = aws_subnet.primary_private[*].id
-  
+
   tags = merge(local.primary_tags, {
     Name = "db-subnet-group-primary-${local.resource_suffix}"
   })
@@ -555,7 +555,7 @@ resource "aws_db_subnet_group" "secondary" {
   name        = "db-subnet-group-secondary-${local.resource_suffix}"
   description = "Database subnet group for secondary region"
   subnet_ids  = aws_subnet.secondary_private[*].id
-  
+
   tags = merge(local.secondary_tags, {
     Name = "db-subnet-group-secondary-${local.resource_suffix}"
   })
@@ -566,69 +566,69 @@ resource "aws_db_subnet_group" "secondary" {
 
 # Primary RDS Instance
 resource "aws_db_instance" "primary" {
-  provider                = aws.us_east_1
-  identifier              = "rds-primary-${local.resource_suffix}"
-  allocated_storage       = 100
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  engine                  = "postgres"
-  engine_version          = "17.6"
-  instance_class          = "db.r6g.xlarge"
-  db_name                 = "financedb"
-  username                = var.db_username
-  password                = random_password.db_password.result
-  parameter_group_name    = "default.postgres17"
-  db_subnet_group_name    = aws_db_subnet_group.primary.name
-  vpc_security_group_ids  = [aws_security_group.rds_primary.id]
-  
+  provider               = aws.us_east_1
+  identifier             = "rds-primary-${local.resource_suffix}"
+  allocated_storage      = 100
+  storage_type           = "gp3"
+  storage_encrypted      = true
+  engine                 = "postgres"
+  engine_version         = "17.6"
+  instance_class         = "db.r6g.xlarge"
+  db_name                = "financedb"
+  username               = var.db_username
+  password               = random_password.db_password.result
+  parameter_group_name   = "default.postgres17"
+  db_subnet_group_name   = aws_db_subnet_group.primary.name
+  vpc_security_group_ids = [aws_security_group.rds_primary.id]
+
   # Backup configuration
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   # High availability
-  multi_az               = true
-  publicly_accessible    = false
-  deletion_protection    = true
-  skip_final_snapshot    = false
+  multi_az                  = true
+  publicly_accessible       = false
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "rds-primary-final-snapshot-${local.resource_suffix}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   # Monitoring
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-  performance_insights_enabled    = true
+  enabled_cloudwatch_logs_exports       = ["postgresql"]
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
-  monitoring_interval             = 60
-  monitoring_role_arn            = aws_iam_role.rds_monitoring.arn
-  
-  
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_monitoring.arn
+
+
   tags = merge(local.primary_tags, {
     Name = "rds-primary-${local.resource_suffix}"
   })
-  
+
   depends_on = [aws_cloudwatch_log_group.rds_primary]
 }
 
 # Secondary RDS Read Replica
 resource "aws_db_instance" "secondary" {
-  provider                     = aws.us_west_2
-  identifier                   = "rds-secondary-${local.resource_suffix}"
-  replicate_source_db          = aws_db_instance.primary.arn
-  instance_class               = "db.r6g.xlarge"
-  publicly_accessible          = false
-  auto_minor_version_upgrade   = false
-  skip_final_snapshot          = true
-  storage_encrypted            = true
-  
+  provider                   = aws.us_west_2
+  identifier                 = "rds-secondary-${local.resource_suffix}"
+  replicate_source_db        = aws_db_instance.primary.arn
+  instance_class             = "db.r6g.xlarge"
+  publicly_accessible        = false
+  auto_minor_version_upgrade = false
+  skip_final_snapshot        = true
+  storage_encrypted          = true
+
   # Monitoring
-  performance_insights_enabled    = true
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
-  monitoring_interval             = 60
-  monitoring_role_arn            = aws_iam_role.rds_monitoring_secondary.arn
-  
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_monitoring_secondary.arn
+
   tags = merge(local.secondary_tags, {
     Name = "rds-secondary-${local.resource_suffix}"
   })
-  
+
   depends_on = [aws_cloudwatch_log_group.rds_secondary]
 }
 
@@ -641,7 +641,7 @@ resource "aws_cloudwatch_log_group" "rds_primary" {
   provider          = aws.us_east_1
   name              = "/aws/rds/instance/rds-primary-${local.resource_suffix}/postgresql"
   retention_in_days = 14
-  
+
   tags = local.primary_tags
 }
 
@@ -650,7 +650,7 @@ resource "aws_cloudwatch_log_group" "rds_secondary" {
   provider          = aws.us_west_2
   name              = "/aws/rds/instance/rds-secondary-${local.resource_suffix}/postgresql"
   retention_in_days = 14
-  
+
   tags = local.secondary_tags
 }
 
@@ -659,7 +659,7 @@ resource "aws_cloudwatch_log_group" "lambda_primary" {
   provider          = aws.us_east_1
   name              = "/aws/lambda/db-health-check-primary-${local.resource_suffix}"
   retention_in_days = 14
-  
+
   tags = local.primary_tags
 }
 
@@ -668,7 +668,7 @@ resource "aws_cloudwatch_log_group" "lambda_secondary" {
   provider          = aws.us_west_2
   name              = "/aws/lambda/db-health-check-secondary-${local.resource_suffix}"
   retention_in_days = 14
-  
+
   tags = local.secondary_tags
 }
 
@@ -680,7 +680,7 @@ resource "aws_cloudwatch_log_group" "lambda_secondary" {
 resource "aws_iam_role" "rds_monitoring" {
   provider = aws.us_east_1
   name     = "rds-monitoring-role-primary-${local.resource_suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -693,7 +693,7 @@ resource "aws_iam_role" "rds_monitoring" {
       }
     ]
   })
-  
+
   tags = local.primary_tags
 }
 
@@ -707,7 +707,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 resource "aws_iam_role" "rds_monitoring_secondary" {
   provider = aws.us_west_2
   name     = "rds-monitoring-role-secondary-${local.resource_suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -720,7 +720,7 @@ resource "aws_iam_role" "rds_monitoring_secondary" {
       }
     ]
   })
-  
+
   tags = local.secondary_tags
 }
 
@@ -734,7 +734,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring_secondary" {
 resource "aws_iam_role" "lambda_primary" {
   provider = aws.us_east_1
   name     = "lambda-execution-role-primary-${local.resource_suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -747,7 +747,7 @@ resource "aws_iam_role" "lambda_primary" {
       }
     ]
   })
-  
+
   tags = local.primary_tags
 }
 
@@ -756,7 +756,7 @@ resource "aws_iam_role_policy" "lambda_primary" {
   provider = aws.us_east_1
   name     = "lambda-policy-primary-${local.resource_suffix}"
   role     = aws_iam_role.lambda_primary.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -796,7 +796,7 @@ resource "aws_iam_role_policy" "lambda_primary" {
 resource "aws_iam_role" "lambda_secondary" {
   provider = aws.us_west_2
   name     = "lambda-execution-role-secondary-${local.resource_suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -809,7 +809,7 @@ resource "aws_iam_role" "lambda_secondary" {
       }
     ]
   })
-  
+
   tags = local.secondary_tags
 }
 
@@ -818,7 +818,7 @@ resource "aws_iam_role_policy" "lambda_secondary" {
   provider = aws.us_west_2
   name     = "lambda-policy-secondary-${local.resource_suffix}"
   role     = aws_iam_role.lambda_secondary.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -863,30 +863,30 @@ resource "aws_lambda_function" "health_check_primary" {
   provider         = aws.us_east_1
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "db-health-check-primary-${local.resource_suffix}"
-  role            = aws_iam_role.lambda_primary.arn
-  handler         = "index.handler"
+  role             = aws_iam_role.lambda_primary.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.11"
-  timeout         = 10
-  memory_size     = 256
-  
+  runtime          = "python3.11"
+  timeout          = 10
+  memory_size      = 256
+
   environment {
     variables = {
-      DB_ENDPOINT     = aws_db_instance.primary.endpoint
-      SECRET_NAME     = aws_secretsmanager_secret.db_password_primary.name
-      REGION          = var.primary_region
+      DB_ENDPOINT = aws_db_instance.primary.endpoint
+      SECRET_NAME = aws_secretsmanager_secret.db_password_primary.name
+      REGION      = var.primary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = aws_subnet.primary_private[*].id
     security_group_ids = [aws_security_group.lambda_primary.id]
   }
-  
+
   tags = merge(local.primary_tags, {
     Name = "lambda-health-check-primary-${local.resource_suffix}"
   })
-  
+
   depends_on = [
     aws_iam_role_policy.lambda_primary,
     aws_cloudwatch_log_group.lambda_primary
@@ -898,30 +898,30 @@ resource "aws_lambda_function" "health_check_secondary" {
   provider         = aws.us_west_2
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "db-health-check-secondary-${local.resource_suffix}"
-  role            = aws_iam_role.lambda_secondary.arn
-  handler         = "index.handler"
+  role             = aws_iam_role.lambda_secondary.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.11"
-  timeout         = 10
-  memory_size     = 256
-  
+  runtime          = "python3.11"
+  timeout          = 10
+  memory_size      = 256
+
   environment {
     variables = {
-      DB_ENDPOINT     = aws_db_instance.secondary.endpoint
-      SECRET_NAME     = aws_secretsmanager_secret.db_password_secondary.name
-      REGION          = var.secondary_region
+      DB_ENDPOINT = aws_db_instance.secondary.endpoint
+      SECRET_NAME = aws_secretsmanager_secret.db_password_secondary.name
+      REGION      = var.secondary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = aws_subnet.secondary_private[*].id
     security_group_ids = [aws_security_group.lambda_secondary.id]
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "lambda-health-check-secondary-${local.resource_suffix}"
   })
-  
+
   depends_on = [
     aws_iam_role_policy.lambda_secondary,
     aws_cloudwatch_log_group.lambda_secondary
@@ -932,7 +932,7 @@ resource "aws_lambda_function" "health_check_secondary" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "/tmp/lambda_function.zip"
-  
+
   source {
     content  = <<-EOT
 import json
@@ -1043,7 +1043,7 @@ EOT
 resource "aws_s3_bucket" "backup_primary" {
   provider = aws.us_east_1
   bucket   = "backup-primary-${local.resource_suffix}-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(local.primary_tags, {
     Name = "backup-primary-${local.resource_suffix}"
   })
@@ -1053,7 +1053,7 @@ resource "aws_s3_bucket" "backup_primary" {
 resource "aws_s3_bucket_versioning" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -1063,7 +1063,7 @@ resource "aws_s3_bucket_versioning" "backup_primary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -1075,7 +1075,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "backup_primary" {
 resource "aws_s3_bucket_public_access_block" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -1086,16 +1086,16 @@ resource "aws_s3_bucket_public_access_block" "backup_primary" {
 resource "aws_s3_bucket_lifecycle_configuration" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   rule {
     id     = "archive-old-backups"
     status = "Enabled"
-    
+
     transition {
       days          = 30
       storage_class = "GLACIER"
     }
-    
+
     expiration {
       days = 365
     }
@@ -1106,7 +1106,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup_primary" {
 resource "aws_s3_bucket" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = "backup-secondary-${local.resource_suffix}-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(local.secondary_tags, {
     Name = "backup-secondary-${local.resource_suffix}"
   })
@@ -1116,7 +1116,7 @@ resource "aws_s3_bucket" "backup_secondary" {
 resource "aws_s3_bucket_versioning" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.backup_secondary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -1126,7 +1126,7 @@ resource "aws_s3_bucket_versioning" "backup_secondary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.backup_secondary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -1138,7 +1138,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "backup_secondary"
 resource "aws_s3_bucket_public_access_block" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.backup_secondary.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -1149,16 +1149,16 @@ resource "aws_s3_bucket_public_access_block" "backup_secondary" {
 resource "aws_s3_bucket_lifecycle_configuration" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.backup_secondary.id
-  
+
   rule {
     id     = "archive-old-backups"
     status = "Enabled"
-    
+
     transition {
       days          = 30
       storage_class = "GLACIER"
     }
-    
+
     expiration {
       days = 365
     }
@@ -1169,7 +1169,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup_secondary" {
 resource "aws_iam_role" "s3_replication" {
   provider = aws.us_east_1
   name     = "s3-replication-role-${local.resource_suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1182,7 +1182,7 @@ resource "aws_iam_role" "s3_replication" {
       }
     ]
   })
-  
+
   tags = local.primary_tags
 }
 
@@ -1190,7 +1190,7 @@ resource "aws_iam_role" "s3_replication" {
 resource "aws_iam_policy" "s3_replication" {
   provider = aws.us_east_1
   name     = "s3-replication-policy-${local.resource_suffix}"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1235,23 +1235,23 @@ resource "aws_s3_bucket_replication_configuration" "backup_replication" {
   provider = aws.us_east_1
   role     = aws_iam_role.s3_replication.arn
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   rule {
     id     = "replicate-all"
     status = "Enabled"
-    
+
     filter {}
-    
+
     destination {
       bucket        = aws_s3_bucket.backup_secondary.arn
       storage_class = "STANDARD_IA"
     }
-    
+
     delete_marker_replication {
       status = "Enabled"
     }
   }
-  
+
   depends_on = [aws_s3_bucket_versioning.backup_primary]
 }
 
@@ -1263,7 +1263,7 @@ resource "aws_s3_bucket_replication_configuration" "backup_replication" {
 resource "aws_sns_topic" "alerts_primary" {
   provider = aws.us_east_1
   name     = "dr-alerts-primary-${local.resource_suffix}"
-  
+
   tags = merge(local.primary_tags, {
     Name = "sns-alerts-primary-${local.resource_suffix}"
   })
@@ -1289,7 +1289,7 @@ resource "aws_sns_topic_subscription" "sms_primary" {
 resource "aws_sns_topic" "alerts_secondary" {
   provider = aws.us_west_2
   name     = "dr-alerts-secondary-${local.resource_suffix}"
-  
+
   tags = merge(local.secondary_tags, {
     Name = "sns-alerts-secondary-${local.resource_suffix}"
   })
@@ -1317,13 +1317,13 @@ resource "aws_sns_topic_subscription" "sms_secondary" {
 
 # RDS Event Subscription - Primary
 resource "aws_db_event_subscription" "primary" {
-  provider    = aws.us_east_1
-  name        = "rds-events-primary-${local.resource_suffix}"
-  sns_topic   = aws_sns_topic.alerts_primary.arn
-  
+  provider  = aws.us_east_1
+  name      = "rds-events-primary-${local.resource_suffix}"
+  sns_topic = aws_sns_topic.alerts_primary.arn
+
   source_type = "db-instance"
   source_ids  = [aws_db_instance.primary.identifier]
-  
+
   event_categories = [
     "availability",
     "failure",
@@ -1331,7 +1331,7 @@ resource "aws_db_event_subscription" "primary" {
     "maintenance",
     "notification"
   ]
-  
+
   tags = merge(local.primary_tags, {
     Name = "rds-events-primary-${local.resource_suffix}"
   })
@@ -1339,13 +1339,13 @@ resource "aws_db_event_subscription" "primary" {
 
 # RDS Event Subscription - Secondary
 resource "aws_db_event_subscription" "secondary" {
-  provider    = aws.us_west_2
-  name        = "rds-events-secondary-${local.resource_suffix}"
-  sns_topic   = aws_sns_topic.alerts_secondary.arn
-  
+  provider  = aws.us_west_2
+  name      = "rds-events-secondary-${local.resource_suffix}"
+  sns_topic = aws_sns_topic.alerts_secondary.arn
+
   source_type = "db-instance"
   source_ids  = [aws_db_instance.secondary.identifier]
-  
+
   event_categories = [
     "availability",
     "failure",
@@ -1353,7 +1353,7 @@ resource "aws_db_event_subscription" "secondary" {
     "maintenance",
     "notification"
   ]
-  
+
   tags = merge(local.secondary_tags, {
     Name = "rds-events-secondary-${local.resource_suffix}"
   })
@@ -1376,11 +1376,11 @@ resource "aws_cloudwatch_metric_alarm" "replication_lag" {
   threshold           = "60"
   alarm_description   = "Alert when replication lag exceeds 60 seconds"
   alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.secondary.identifier
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "alarm-replication-lag-${local.resource_suffix}"
   })
@@ -1399,11 +1399,11 @@ resource "aws_cloudwatch_metric_alarm" "cpu_primary" {
   threshold           = "80"
   alarm_description   = "Alert when CPU exceeds 80%"
   alarm_actions       = [aws_sns_topic.alerts_primary.arn]
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.primary.identifier
   }
-  
+
   tags = merge(local.primary_tags, {
     Name = "alarm-cpu-primary-${local.resource_suffix}"
   })
@@ -1422,11 +1422,11 @@ resource "aws_cloudwatch_metric_alarm" "cpu_secondary" {
   threshold           = "80"
   alarm_description   = "Alert when CPU exceeds 80%"
   alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.secondary.identifier
   }
-  
+
   tags = merge(local.secondary_tags, {
     Name = "alarm-cpu-secondary-${local.resource_suffix}"
   })
@@ -1440,17 +1440,17 @@ resource "aws_cloudwatch_metric_alarm" "cpu_secondary" {
 resource "aws_route53_zone" "main" {
   provider = aws.us_east_1
   name     = "dr-finance-${local.resource_suffix}.internal"
-  
+
   vpc {
     vpc_id     = aws_vpc.primary.id
     vpc_region = var.primary_region
   }
-  
+
   vpc {
     vpc_id     = aws_vpc.secondary.id
     vpc_region = var.secondary_region
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "zone-dr-finance-${local.resource_suffix}"
   })
@@ -1465,7 +1465,7 @@ resource "aws_route53_health_check" "primary" {
   resource_path     = ""
   failure_threshold = "2"
   request_interval  = "30"
-  
+
   tags = merge(local.primary_tags, {
     Name = "health-check-primary-${local.resource_suffix}"
   })
@@ -1480,7 +1480,7 @@ resource "aws_route53_health_check" "secondary" {
   resource_path     = ""
   failure_threshold = "2"
   request_interval  = "30"
-  
+
   tags = merge(local.secondary_tags, {
     Name = "health-check-secondary-${local.resource_suffix}"
   })
@@ -1493,11 +1493,11 @@ resource "aws_route53_record" "db_primary" {
   name     = "db.dr-finance-${local.resource_suffix}.internal"
   type     = "CNAME"
   ttl      = 60
-  
+
   failover_routing_policy {
     type = "PRIMARY"
   }
-  
+
   set_identifier  = "Primary"
   records         = [aws_db_instance.primary.address]
   health_check_id = aws_route53_health_check.primary.id
@@ -1510,11 +1510,11 @@ resource "aws_route53_record" "db_secondary" {
   name     = "db.dr-finance-${local.resource_suffix}.internal"
   type     = "CNAME"
   ttl      = 60
-  
+
   failover_routing_policy {
     type = "SECONDARY"
   }
-  
+
   set_identifier  = "Secondary"
   records         = [aws_db_instance.secondary.address]
   health_check_id = aws_route53_health_check.secondary.id
@@ -1768,12 +1768,12 @@ output "rds_event_subscription_secondary_id" {
   value       = aws_db_event_subscription.secondary.id
 }
 
-output "aws_primary_region"{
+output "aws_primary_region" {
   description = "aws primary region"
   value       = var.primary_region
 }
 
-output "aws_secondary_region"{
+output "aws_secondary_region" {
   description = "aws secondary region"
   value       = var.secondary_region
 }

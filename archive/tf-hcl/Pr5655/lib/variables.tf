@@ -16,7 +16,7 @@ variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
   default     = "dev"
-  
+
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be one of: dev, staging, prod."
@@ -75,9 +75,9 @@ variable "backup_retention_days" {
   description = "Override backup retention period"
   type        = number
   default     = null
-  
+
   validation {
-    condition = var.backup_retention_days == null || (var.backup_retention_days >= 1 && var.backup_retention_days <= 35)
+    condition     = var.backup_retention_days == null || (var.backup_retention_days >= 1 && var.backup_retention_days <= 35)
     error_message = "Backup retention must be between 1 and 35 days."
   }
 }
@@ -98,7 +98,7 @@ variable "log_retention_days" {
   description = "CloudWatch log retention in days"
   type        = number
   default     = 30
-  
+
   validation {
     condition = contains([
       1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653
@@ -129,7 +129,7 @@ variable "secrets_rotation_days" {
   description = "Automatic secrets rotation interval in days"
   type        = number
   default     = 30
-  
+
   validation {
     condition     = var.secrets_rotation_days >= 1 && var.secrets_rotation_days <= 365
     error_message = "Secrets rotation must be between 1 and 365 days."
@@ -147,9 +147,9 @@ variable "ecs_cpu_override" {
   description = "Override ECS task CPU (256, 512, 1024, 2048, 4096)"
   type        = number
   default     = null
-  
+
   validation {
-    condition = var.ecs_cpu_override == null || contains([256, 512, 1024, 2048, 4096], var.ecs_cpu_override)
+    condition     = var.ecs_cpu_override == null || contains([256, 512, 1024, 2048, 4096], var.ecs_cpu_override)
     error_message = "ECS CPU must be one of: 256, 512, 1024, 2048, 4096."
   }
 }
@@ -164,7 +164,7 @@ variable "ecs_desired_count_override" {
   description = "Override ECS service desired count"
   type        = number
   default     = null
-  
+
   validation {
     condition     = var.ecs_desired_count_override == null || var.ecs_desired_count_override >= 1
     error_message = "ECS desired count must be at least 1."

@@ -87,13 +87,13 @@ resource "aws_lambda_function" "failover" {
 
   environment {
     variables = {
-      GLOBAL_CLUSTER_ID    = var.global_cluster_id
-      PRIMARY_REGION       = var.primary_region
-      SECONDARY_REGION     = var.secondary_region
-      SNS_TOPIC_ARN        = var.sns_topic_arn
-      PRIMARY_ALB_DNS      = var.primary_alb_dns
-      SECONDARY_ALB_DNS    = var.secondary_alb_dns
-      ENVIRONMENT          = var.environment
+      GLOBAL_CLUSTER_ID = var.global_cluster_id
+      PRIMARY_REGION    = var.primary_region
+      SECONDARY_REGION  = var.secondary_region
+      SNS_TOPIC_ARN     = var.sns_topic_arn
+      PRIMARY_ALB_DNS   = var.primary_alb_dns
+      SECONDARY_ALB_DNS = var.secondary_alb_dns
+      ENVIRONMENT       = var.environment
     }
   }
 

@@ -379,7 +379,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail-${local.suffix}"
           }
         }
@@ -400,8 +400,8 @@ resource "aws_cloudtrail" "main" {
   kms_key_id = aws_kms_key.main.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -498,7 +498,7 @@ resource "aws_s3_bucket_policy" "config" {
         Resource = "${aws_s3_bucket.config.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"     = "bucket-owner-full-control"
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
           }
         }
@@ -529,8 +529,8 @@ resource "aws_iam_role_policy" "config_policy" {
         Resource = aws_s3_bucket.config.arn
       },
       {
-        Effect = "Allow"
-        Action = "s3:PutObject"
+        Effect   = "Allow"
+        Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.config.arn}/*"
         Condition = {
           StringEquals = {
@@ -539,8 +539,8 @@ resource "aws_iam_role_policy" "config_policy" {
         }
       },
       {
-        Effect = "Allow"
-        Action = "s3:GetObject"
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.config.arn}/*"
       },
       {
@@ -672,7 +672,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "maindb"
   username = "admin"
@@ -682,8 +682,8 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -888,7 +888,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "lambda_function.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import json
 
 def handler(event, context):
@@ -943,8 +943,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -965,15 +965,15 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "MainWebACL"
-    sampled_requests_enabled    = true
+    metric_name                = "MainWebACL"
+    sampled_requests_enabled   = true
   }
 
   tags = {
@@ -991,13 +991,13 @@ resource "aws_wafv2_web_acl_association" "main" {
 resource "aws_iam_policy" "require_mfa" {
   name        = "require-mfa-${local.environment}-${local.suffix}"
   description = "Require MFA for all IAM users with console access"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "DenyAllExceptListedIfNoMFA",
-        Effect = "Deny",
-        Action = "*",
+        Sid      = "DenyAllExceptListedIfNoMFA",
+        Effect   = "Deny",
+        Action   = "*",
         Resource = "*",
         Condition = {
           BoolIfExists = {

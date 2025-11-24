@@ -782,10 +782,10 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "webapp-asg${var.environment_suffix}"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.web.arn]
-  health_check_type   = "ELB"
+  name                      = "webapp-asg${var.environment_suffix}"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.web.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.min_size
@@ -880,8 +880,8 @@ resource "aws_db_instance" "main" {
   # Database configuration
   allocated_storage     = 20
   max_allocated_storage = 100
-  storage_type         = "gp2"
-  storage_encrypted    = true
+  storage_type          = "gp2"
+  storage_encrypted     = true
 
   # Database credentials
   db_name  = var.db_name
@@ -898,20 +898,20 @@ resource "aws_db_instance" "main" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
 
   # Performance Insights
-  performance_insights_enabled = true
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   # Other settings
-  skip_final_snapshot       = true
-  deletion_protection      = false
+  skip_final_snapshot        = true
+  deletion_protection        = false
   auto_minor_version_upgrade = true
 
   tags = merge(local.common_tags, {
