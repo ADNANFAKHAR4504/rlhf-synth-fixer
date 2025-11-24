@@ -8,16 +8,6 @@
       "AllowedPattern": "^[a-zA-Z0-9-]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
     },
-    "VpcId": {
-      "Type": "String",
-      "Description": "VPC ID where CodeBuild will run",
-      "Default": "vpc-00000000"
-    },
-    "PrivateSubnetIds": {
-      "Type": "CommaDelimitedList",
-      "Description": "Private subnet IDs for CodeBuild (no internet access)",
-      "Default": "subnet-00000000"
-    },
     "CodeCommitRepositoryName": {
       "Type": "String",
       "Description": "Name of the CodeCommit repository containing source code",
@@ -50,18 +40,6 @@
     }
   },
   "Conditions": {
-    "HasVpc": {
-      "Fn::Not": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "VpcId"
-            },
-            "vpc-00000000"
-          ]
-        }
-      ]
-    },
     "HasCodeCommit": {
       "Fn::Not": [
         {
@@ -70,46 +48,6 @@
               "Ref": "CodeCommitRepositoryName"
             },
             "microservice-repo"
-          ]
-        }
-      ]
-    },
-    "HasEcs": {
-      "Fn::And": [
-        {
-          "Fn::Not": [
-            {
-              "Fn::Equals": [
-                {
-                  "Ref": "EcsClusterName"
-                },
-                "default-cluster"
-              ]
-            }
-          ]
-        },
-        {
-          "Fn::Not": [
-            {
-              "Fn::Equals": [
-                {
-                  "Ref": "EcsServiceName"
-                },
-                "default-service"
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "HasEcr": {
-      "Fn::Not": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "EcrRepositoryUri"
-            },
-            "000000000000.dkr.ecr.us-east-1.amazonaws.com/default"
           ]
         }
       ]
@@ -791,6 +729,7 @@
     },
     "PipelineEventRole": {
       "Type": "AWS::IAM::Role",
+      "Condition": "HasCodeCommit",
       "Properties": {
         "RoleName": {
           "Fn::Sub": "pipeline-event-role-${EnvironmentSuffix}"
@@ -817,7 +756,14 @@
                   "Effect": "Allow",
                   "Action": "codepipeline:StartPipelineExecution",
                   "Resource": {
-                    "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+                    "Fn::Sub": [
+                      "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${PipelineName}",
+                      {
+                        "PipelineName": {
+                          "Ref": "Pipeline"
+                        }
+                      }
+                    ]
                   }
                 }
               ]
@@ -828,6 +774,7 @@
     },
     "PipelineTriggerRule": {
       "Type": "AWS::Events::Rule",
+      "Condition": "HasCodeCommit",
       "Properties": {
         "Name": {
           "Fn::Sub": "pipeline-trigger-${EnvironmentSuffix}"
@@ -864,7 +811,14 @@
         "Targets": [
           {
             "Arn": {
-              "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+              "Fn::Sub": [
+                "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${PipelineName}",
+                {
+                  "PipelineName": {
+                    "Ref": "Pipeline"
+                  }
+                }
+              ]
             },
             "RoleArn": {
               "Fn::GetAtt": [
@@ -881,8 +835,16 @@
   "Outputs": {
     "PipelineArn": {
       "Description": "ARN of the created CodePipeline",
+      "Condition": "HasCodeCommit",
       "Value": {
-        "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+        "Fn::Sub": [
+          "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${PipelineName}",
+          {
+            "PipelineName": {
+              "Ref": "Pipeline"
+            }
+          }
+        ]
       },
       "Export": {
         "Name": {
