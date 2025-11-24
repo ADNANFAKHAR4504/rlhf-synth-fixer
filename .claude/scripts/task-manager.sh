@@ -25,8 +25,8 @@ log_warn() { echo -e "${YELLOW}⚠️  $1${NC}" >&2; }
 # Returns: 0 on success, 1 on timeout
 acquire_lock() {
     local elapsed=0
-    local wait_interval=0.001  # Start with 1ms for faster initial attempts
-    local max_interval=0.05    # Cap at 50ms
+    local wait_interval=0.01  # Start with 10ms for faster initial attempts
+    local max_interval=0.1    # Cap at 100ms
     
     log_info "Attempting to acquire lock (PID: $$)..."
     
@@ -148,8 +148,6 @@ select_task() {
     # This combines parse_csv and selection into one pass, eliminating pipe overhead
     local result
     result=$(awk -F',' '
-    BEGIN { found = 0 }
-
     function parse_csv_line(line,    fields, n, i, current, in_quote) {
         n = 0
         current = ""
@@ -181,78 +179,32 @@ select_task() {
         num_fields = parse_csv_line($0, fields)
         if (num_fields < 5) next
         
-        # Extract all fields: task_id,status,platform,language,difficulty,subtask,subject_labels,problem,background,environment,constraints
+        # Extract fields (task_id, status, platform, language, difficulty, subtask)
         task_id = fields[1]
         status = fields[2]
         platform = fields[3]
         language = fields[4]
         difficulty = fields[5]
-        subtask = (num_fields >= 6 ? fields[6] : "")
-        subject_labels = (num_fields >= 7 ? fields[7] : "[]")
         problem = (num_fields >= 8 ? fields[8] : "")
-        background = (num_fields >= 9 ? fields[9] : "")
-        environment = (num_fields >= 10 ? fields[10] : "")
-        constraints = (num_fields >= 11 ? fields[11] : "")
         
         # Trim whitespace
         gsub(/^[ \t]+|[ \t]+$/, "", status)
         gsub(/^[ \t]+|[ \t]+$/, "", difficulty)
         gsub(/^[ \t]+|[ \t]+$/, "", platform)
         gsub(/^[ \t]+|[ \t]+$/, "", language)
-        gsub(/^[ \t]+|[ \t]+$/, "", subtask)
-        gsub(/^[ \t]+|[ \t]+$/, "", background)
-        gsub(/^[ \t]+|[ \t]+$/, "", problem)
-        gsub(/^[ \t]+|[ \t]+$/, "", environment)
-        gsub(/^[ \t]+|[ \t]+$/, "", constraints)
-        
-        # Clean quotes from fields (but preserve JSON array format for subject_labels)
-        gsub(/^"|"$/, "", task_id)
-        gsub(/^"|"$/, "", status)
-        gsub(/^"|"$/, "", platform)
-        gsub(/^"|"$/, "", difficulty)
-        gsub(/^"|"$/, "", subtask)
-        gsub(/^"|"$/, "", background)
-        gsub(/^"|"$/, "", problem)
-        gsub(/^"|"$/, "", language)
-        gsub(/^"|"$/, "", environment)
-        gsub(/^"|"$/, "", constraints)
-        
-        # Handle subject_labels - preserve JSON array format if present
-        if (subject_labels ~ /^\[.*\]$/) {
-            # Already a JSON array, just remove outer quotes if present
-            gsub(/^"|"$/, "", subject_labels)
-        } else if (subject_labels == "" || subject_labels == "\"\"") {
-            # Empty, set to empty array
-            subject_labels = "[]"
-        } else {
-            # Not empty but not a JSON array - might be a string that needs conversion
-            gsub(/^"|"$/, "", subject_labels)
-            if (subject_labels !~ /^\[.*\]$/) {
-                # Not a JSON array, wrap it as a single-element array
-                gsub(/"/, "\\\"", subject_labels)
-                subject_labels = "[\"" subject_labels "\"]"
-            }
-        }
-        
-        # Escape quotes in string values for JSON
-        gsub(/"/, "\\\"", background)
-        gsub(/"/, "\\\"", problem)
-        gsub(/"/, "\\\"", constraints)
-        gsub(/"/, "\\\"", environment)
         
         # Select first pending task with hard/medium/expert difficulty
         if ((status == "" || tolower(status) == "pending") &&
             (tolower(difficulty) == "hard" || tolower(difficulty) == "medium" || tolower(difficulty) == "expert")) {
-            # Output as complete JSON with all fields and exit immediately (early exit optimization)
-            printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"subtask\":\"%s\",\"background\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\",\"environment\":\"%s\",\"constraints\":\"%s\",\"subject_labels\":%s}\n",
-                   task_id, (status == "" ? "pending" : status), platform, difficulty, subtask, background, problem, language, environment, constraints, subject_labels
-            found = 1
+            # Output as JSON and exit immediately (early exit optimization)
+            printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\"}\n",
+                   task_id, (status == "" ? "pending" : status), platform, difficulty, substr(problem, 1, 100), language
             exit 0
         }
     }
     END {
-        # No match found - only execute if no task was found
-        if (!found && NR > 1) {
+        # No match found
+        if (NR > 1) {
             print "{\"error\":\"No pending tasks found with hard/medium/expert difficulty\"}" > "/dev/stderr"
             exit 1
         }
