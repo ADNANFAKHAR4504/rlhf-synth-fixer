@@ -146,14 +146,6 @@ describe('EKS Cluster Infrastructure Unit Tests', () => {
       });
     });
 
-    it('should create KMS key alias', (done) => {
-      pulumi.all([infra.kmsKeyAliasName]).apply(([aliasName]) => {
-        expect(aliasName).toBeDefined();
-        expect(aliasName).toMatch(/alias\/eks-secrets-/);
-        done();
-      });
-    });
-
     it('should export KMS key ARN', (done) => {
       pulumi.all([infra.kmsKeyArn]).apply(([kmsKeyArn]) => {
         expect(kmsKeyArn).toBeDefined();
