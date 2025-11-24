@@ -11,11 +11,28 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "EC2",
+    "Route Table",
+    "NAT Gateway",
+    "Elastic IP",
+    "Security Group",
+    "Launch Template",
+    "ASG",
+    "ALB",
+    "SNS",
+    "RDS",
+    "Secrets Manager",
     "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "S3 Bucket Policy",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
