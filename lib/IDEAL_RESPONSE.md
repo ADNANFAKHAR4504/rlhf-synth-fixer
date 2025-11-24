@@ -2,7 +2,18 @@
 
 This is the correct, complete implementation of the cryptocurrency price alert system using Pulumi with TypeScript.
 
-## File: lib/tap-stack.ts
+## Architecture Overview
+
+The system implements a serverless cryptocurrency price alert infrastructure with:
+- **Webhook Processing**: ARM64 Lambda function to receive exchange webhooks
+- **Alert Storage**: DynamoDB table with point-in-time recovery
+- **Scheduled Checks**: EventBridge rule triggering price checks every 5 minutes
+- **Notifications**: SNS topic for SMS alerts with AWS managed encryption
+- **Monitoring**: X-Ray tracing and CloudWatch logging for all components
+
+## Complete Source Code
+
+### File: lib/tap-stack.ts
 
 ```typescript
 /**
@@ -16,6 +27,7 @@ This is the correct, complete implementation of the cryptocurrency price alert s
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as path from 'path';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -53,203 +65,285 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {
-      Environment: "production",
-      Service: "price-alerts",
+      Environment: 'production',
+      Service: 'price-alerts',
     };
 
     // Create SNS topic for price alerts with encryption
-    const alertTopic = new aws.sns.Topic(`price-alert-topic-${environmentSuffix}`, {
-      displayName: "Cryptocurrency Price Alerts",
-      kmsMasterKeyId: "alias/aws/sns",
-      tags: tags,
-    }, { parent: this });
+    const alertTopic = new aws.sns.Topic(
+      `price-alert-topic-${environmentSuffix}`,
+      {
+        displayName: 'Cryptocurrency Price Alerts',
+        kmsMasterKeyId: 'alias/aws/sns',
+        tags: tags,
+      },
+      { parent: this }
+    );
 
     // Create DynamoDB table for storing user alerts
-    const alertsTable = new aws.dynamodb.Table(`alerts-table-${environmentSuffix}`, {
-      name: `crypto-alerts-${environmentSuffix}`,
-      billingMode: "PAY_PER_REQUEST",
-      hashKey: "userId",
-      rangeKey: "alertId",
-      attributes: [
-        { name: "userId", type: "S" },
-        { name: "alertId", type: "S" },
-      ],
-      pointInTimeRecovery: {
-        enabled: true,
+    const alertsTable = new aws.dynamodb.Table(
+      `alerts-table-${environmentSuffix}`,
+      {
+        name: `crypto-alerts-${environmentSuffix}`,
+        billingMode: 'PAY_PER_REQUEST',
+        hashKey: 'userId',
+        rangeKey: 'alertId',
+        attributes: [
+          { name: 'userId', type: 'S' },
+          { name: 'alertId', type: 'S' },
+        ],
+        pointInTimeRecovery: {
+          enabled: true,
+        },
+        tags: tags,
       },
-      tags: tags,
-    }, { parent: this });
+      { parent: this }
+    );
 
     // Create IAM role for webhook processor Lambda
-    const webhookLambdaRole = new aws.iam.Role(`webhook-lambda-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Effect: "Allow",
-          Principal: {
-            Service: "lambda.amazonaws.com",
-          },
-        }],
-      }),
-      tags: tags,
-    }, { parent: this });
+    const webhookLambdaRole = new aws.iam.Role(
+      `webhook-lambda-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: tags,
+      },
+      { parent: this }
+    );
 
     // Attach basic Lambda execution policy
-    new aws.iam.RolePolicyAttachment(`webhook-lambda-basic-${environmentSuffix}`, {
-      role: webhookLambdaRole.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `webhook-lambda-basic-${environmentSuffix}`,
+      {
+        role: webhookLambdaRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      },
+      { parent: this }
+    );
 
     // Attach X-Ray write policy for tracing
-    new aws.iam.RolePolicyAttachment(`webhook-lambda-xray-${environmentSuffix}`, {
-      role: webhookLambdaRole.name,
-      policyArn: "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess",
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `webhook-lambda-xray-${environmentSuffix}`,
+      {
+        role: webhookLambdaRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      },
+      { parent: this }
+    );
 
     // Create inline policy for DynamoDB access
-    new aws.iam.RolePolicy(`webhook-lambda-policy-${environmentSuffix}`, {
-      role: webhookLambdaRole.id,
-      policy: pulumi.all([alertsTable.arn]).apply(([tableArn]) => JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Effect: "Allow",
-          Action: [
-            "dynamodb:PutItem",
-            "dynamodb:GetItem",
-            "dynamodb:UpdateItem",
-          ],
-          Resource: tableArn,
-        }],
-      })),
-    }, { parent: this });
+    new aws.iam.RolePolicy(
+      `webhook-lambda-policy-${environmentSuffix}`,
+      {
+        role: webhookLambdaRole.id,
+        policy: pulumi.all([alertsTable.arn]).apply(([tableArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'dynamodb:PutItem',
+                  'dynamodb:GetItem',
+                  'dynamodb:UpdateItem',
+                ],
+                Resource: tableArn,
+              },
+            ],
+          })
+        ),
+      },
+      { parent: this }
+    );
 
     // Create KMS key for Lambda environment variables encryption
-    const lambdaKmsKey = new aws.kms.Key(`lambda-kms-key-${environmentSuffix}`, {
-      description: "KMS key for Lambda environment variables encryption",
-      tags: tags,
-    }, { parent: this });
+    const lambdaKmsKey = new aws.kms.Key(
+      `lambda-kms-key-${environmentSuffix}`,
+      {
+        description: 'KMS key for Lambda environment variables encryption',
+        tags: tags,
+      },
+      { parent: this }
+    );
 
     // Create webhook processor Lambda function
-    const webhookLambda = new aws.lambda.Function(`webhook-processor-${environmentSuffix}`, {
-      name: `webhook-processor-${environmentSuffix}`,
-      runtime: "nodejs18.x",
-      handler: "index.handler",
-      role: webhookLambdaRole.arn,
-      timeout: 30,
-      memorySize: 1024,
-      architectures: ["arm64"],
-      code: new pulumi.asset.AssetArchive({
-        "index.js": new pulumi.asset.FileAsset("lib/lambda/webhook-handler.js"),
-      }),
-      environment: {
-        variables: {
-          ALERTS_TABLE_NAME: alertsTable.name,
+    const webhookLambda = new aws.lambda.Function(
+      `webhook-processor-${environmentSuffix}`,
+      {
+        name: `webhook-processor-${environmentSuffix}`,
+        runtime: 'nodejs18.x',
+        handler: 'webhook-handler.handler',
+        role: webhookLambdaRole.arn,
+        timeout: 30,
+        memorySize: 1024,
+        architectures: ['arm64'],
+        code: new pulumi.asset.AssetArchive({
+          'webhook-handler.js': new pulumi.asset.FileAsset(
+            path.join(__dirname, 'lambda', 'webhook-handler.js')
+          ),
+        }),
+        environment: {
+          variables: {
+            ALERTS_TABLE_NAME: alertsTable.name,
+          },
         },
+        kmsKeyArn: lambdaKmsKey.arn,
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: tags,
       },
-      kmsKeyArn: lambdaKmsKey.arn,
-      tracingConfig: {
-        mode: "Active",
-      },
-      tags: tags,
-    }, { parent: this });
+      { parent: this }
+    );
 
     // Create IAM role for price check Lambda
-    const priceCheckLambdaRole = new aws.iam.Role(`price-check-lambda-role-${environmentSuffix}`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Effect: "Allow",
-          Principal: {
-            Service: "lambda.amazonaws.com",
-          },
-        }],
-      }),
-      tags: tags,
-    }, { parent: this });
+    const priceCheckLambdaRole = new aws.iam.Role(
+      `price-check-lambda-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: tags,
+      },
+      { parent: this }
+    );
 
     // Attach policies for price check Lambda
-    new aws.iam.RolePolicyAttachment(`price-check-lambda-basic-${environmentSuffix}`, {
-      role: priceCheckLambdaRole.name,
-      policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `price-check-lambda-basic-${environmentSuffix}`,
+      {
+        role: priceCheckLambdaRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      },
+      { parent: this }
+    );
 
-    new aws.iam.RolePolicyAttachment(`price-check-lambda-xray-${environmentSuffix}`, {
-      role: priceCheckLambdaRole.name,
-      policyArn: "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess",
-    }, { parent: this });
+    new aws.iam.RolePolicyAttachment(
+      `price-check-lambda-xray-${environmentSuffix}`,
+      {
+        role: priceCheckLambdaRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess',
+      },
+      { parent: this }
+    );
 
     // Create inline policy for DynamoDB and SNS access
-    new aws.iam.RolePolicy(`price-check-lambda-policy-${environmentSuffix}`, {
-      role: priceCheckLambdaRole.id,
-      policy: pulumi.all([alertsTable.arn, alertTopic.arn]).apply(([tableArn, topicArn]) => JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "dynamodb:Scan",
-              "dynamodb:Query",
-              "dynamodb:GetItem",
-            ],
-            Resource: tableArn,
-          },
-          {
-            Effect: "Allow",
-            Action: ["sns:Publish"],
-            Resource: topicArn,
-          },
-        ],
-      })),
-    }, { parent: this });
+    new aws.iam.RolePolicy(
+      `price-check-lambda-policy-${environmentSuffix}`,
+      {
+        role: priceCheckLambdaRole.id,
+        policy: pulumi
+          .all([alertsTable.arn, alertTopic.arn])
+          .apply(([tableArn, topicArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:Scan',
+                    'dynamodb:Query',
+                    'dynamodb:GetItem',
+                  ],
+                  Resource: tableArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['sns:Publish'],
+                  Resource: topicArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // Create price check Lambda function
-    const priceCheckLambda = new aws.lambda.Function(`price-checker-${environmentSuffix}`, {
-      name: `price-checker-${environmentSuffix}`,
-      runtime: "nodejs18.x",
-      handler: "index.handler",
-      role: priceCheckLambdaRole.arn,
-      timeout: 60,
-      memorySize: 512,
-      architectures: ["arm64"],
-      code: new pulumi.asset.AssetArchive({
-        "index.js": new pulumi.asset.FileAsset("lib/lambda/price-checker.js"),
-      }),
-      environment: {
-        variables: {
-          ALERTS_TABLE_NAME: alertsTable.name,
-          ALERT_TOPIC_ARN: alertTopic.arn,
+    const priceCheckLambda = new aws.lambda.Function(
+      `price-checker-${environmentSuffix}`,
+      {
+        name: `price-checker-${environmentSuffix}`,
+        runtime: 'nodejs18.x',
+        handler: 'price-checker.handler',
+        role: priceCheckLambdaRole.arn,
+        timeout: 60,
+        memorySize: 512,
+        architectures: ['arm64'],
+        code: new pulumi.asset.AssetArchive({
+          'price-checker.js': new pulumi.asset.FileAsset(
+            path.join(__dirname, 'lambda', 'price-checker.js')
+          ),
+        }),
+        environment: {
+          variables: {
+            ALERTS_TABLE_NAME: alertsTable.name,
+            ALERT_TOPIC_ARN: alertTopic.arn,
+          },
         },
+        kmsKeyArn: lambdaKmsKey.arn,
+        tracingConfig: {
+          mode: 'Active',
+        },
+        tags: tags,
       },
-      kmsKeyArn: lambdaKmsKey.arn,
-      tracingConfig: {
-        mode: "Active",
-      },
-      tags: tags,
-    }, { parent: this });
+      { parent: this }
+    );
 
     // Create EventBridge rule to trigger price check every 5 minutes
-    const priceCheckRule = new aws.cloudwatch.EventRule(`price-check-rule-${environmentSuffix}`, {
-      name: `price-check-schedule-${environmentSuffix}`,
-      description: "Trigger price check Lambda every 5 minutes",
-      scheduleExpression: "rate(5 minutes)",
-      tags: tags,
-    }, { parent: this });
+    const priceCheckRule = new aws.cloudwatch.EventRule(
+      `price-check-rule-${environmentSuffix}`,
+      {
+        name: `price-check-schedule-${environmentSuffix}`,
+        description: 'Trigger price check Lambda every 5 minutes',
+        scheduleExpression: 'rate(5 minutes)',
+        tags: tags,
+      },
+      { parent: this }
+    );
 
     // Grant EventBridge permission to invoke Lambda
-    new aws.lambda.Permission(`price-check-lambda-permission-${environmentSuffix}`, {
-      action: "lambda:InvokeFunction",
-      function: priceCheckLambda.name,
-      principal: "events.amazonaws.com",
-      sourceArn: priceCheckRule.arn,
-    }, { parent: this });
+    new aws.lambda.Permission(
+      `price-check-lambda-permission-${environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: priceCheckLambda.name,
+        principal: 'events.amazonaws.com',
+        sourceArn: priceCheckRule.arn,
+      },
+      { parent: this }
+    );
 
     // Create EventBridge target
-    new aws.cloudwatch.EventTarget(`price-check-target-${environmentSuffix}`, {
-      rule: priceCheckRule.name,
-      arn: priceCheckLambda.arn,
-    }, { parent: this });
+    new aws.cloudwatch.EventTarget(
+      `price-check-target-${environmentSuffix}`,
+      {
+        rule: priceCheckRule.name,
+        arn: priceCheckLambda.arn,
+      },
+      { parent: this }
+    );
 
     // Set outputs
     this.webhookLambdaArn = webhookLambda.arn;
@@ -268,7 +362,7 @@ export class TapStack extends pulumi.ComponentResource {
 }
 ```
 
-## File: lib/lambda/webhook-handler.js
+### File: lib/lambda/webhook-handler.js
 
 ```javascript
 const AWS = require('aws-sdk');
@@ -325,7 +419,7 @@ exports.handler = async (event) => {
 };
 ```
 
-## File: lib/lambda/price-checker.js
+### File: lib/lambda/price-checker.js
 
 ```javascript
 const AWS = require('aws-sdk');
@@ -389,57 +483,152 @@ exports.handler = async (event) => {
 };
 ```
 
-## Implementation Summary
+## Requirements Validation
 
-This implementation meets all mandatory requirements:
+### ✅ Core Requirements Met
 
-1. **Webhook Processing Lambda**
-   - ARM64 architecture (Graviton2)
-   - 1024MB memory, 30s timeout
-   - X-Ray tracing with custom subsegments
-   - Processes webhook events and stores alerts
+1. **Webhook Processing**
+   - ✅ Lambda function with ARM64 architecture (Graviton2)
+   - ✅ 1024MB memory, 30s timeout
+   - ✅ X-Ray tracing enabled with custom subsegments
+   - ✅ Processes webhook events and stores alerts
 
 2. **Alert Storage (DynamoDB)**
-   - Partition key: userId
-   - Sort key: alertId
-   - On-demand billing mode
-   - Point-in-time recovery enabled
+   - ✅ Partition key: `userId`
+   - ✅ Sort key: `alertId`
+   - ✅ On-demand billing mode
+   - ✅ Point-in-time recovery enabled
 
 3. **Scheduled Price Checks**
-   - EventBridge rule (5-minute schedule)
-   - Price check Lambda with ARM64
-   - X-Ray tracing enabled
+   - ✅ EventBridge rule with 5-minute schedule
+   - ✅ Price check Lambda with ARM64 architecture
+   - ✅ X-Ray tracing enabled
 
 4. **Notification System**
-   - SNS topic with SMS support
-   - AWS managed encryption
+   - ✅ SNS topic with SMS support capability
+   - ✅ AWS managed encryption (alias/aws/sns)
 
 5. **Monitoring and Tracing**
-   - All Lambda functions have X-Ray tracing
-   - Custom subsegments for detailed tracing
-   - CloudWatch logs enabled
+   - ✅ All Lambda functions have X-Ray tracing (`mode: 'Active'`)
+   - ✅ Custom X-Ray subsegments in Lambda code
+   - ✅ CloudWatch logs enabled via AWSLambdaBasicExecutionRole
 
 6. **Infrastructure Outputs**
-   - Lambda ARNs exported
-   - DynamoDB table name exported
-   - SNS topic ARN exported
+   - ✅ Lambda function ARNs exported
+   - ✅ DynamoDB table name exported
+   - ✅ SNS topic ARN exported
 
-7. **Resource Naming**
-   - All resources use environmentSuffix
-   - Pattern: `{resource-type}-${environmentSuffix}`
+### ✅ Technical Requirements Met
 
-8. **Security**
-   - KMS encryption for Lambda environment variables
-   - SNS encryption with AWS managed keys
-   - IAM least privilege policies
+- ✅ All infrastructure defined using Pulumi with TypeScript
+- ✅ Deployed to us-east-1 region (configurable)
+- ✅ Lambda functions use ARM64 architecture
+- ✅ DynamoDB uses on-demand billing
+- ✅ EventBridge schedules price checks every 5 minutes
+- ✅ SNS has AWS managed encryption
+- ✅ IAM roles follow least privilege
+- ✅ CloudWatch monitoring enabled
+- ✅ X-Ray tracing active on all Lambda functions
+- ✅ Resource names include environmentSuffix
+- ✅ Naming convention: `{resource-type}-${environmentSuffix}`
+- ✅ All resources are destroyable (no Retain policies)
 
-9. **Cost Optimization**
-   - ARM64 architecture
-   - On-demand DynamoDB billing
-   - Serverless architecture
+### ✅ Deployment Requirements Met
 
-10. **Tags**
-    - Environment: production
-    - Service: price-alerts
+- ✅ Resource names include environmentSuffix
+- ✅ All resources are destroyable
+- ✅ Lambda environment variables use KMS encryption
 
-All resources are destroyable (no Retain policies).
+### ✅ Resource Tagging
+
+All resources tagged with:
+- ✅ Environment: production
+- ✅ Service: price-alerts
+
+### ✅ Constraints Satisfied
+
+- ✅ Lambda functions use ARM64 (Graviton2)
+- ✅ DynamoDB has point-in-time recovery
+- ✅ All Lambda functions have tracing enabled
+- ✅ SNS uses server-side encryption
+- ✅ No Retain policies
+- ✅ Error handling and logging included
+- ✅ KMS encryption for Lambda environment variables
+
+## Deployment Instructions
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Configure AWS Credentials**
+   ```bash
+   export AWS_REGION=us-east-1
+   export AWS_PROFILE=your-profile  # Optional
+   ```
+
+3. **Initialize Pulumi Stack**
+   ```bash
+   pulumi stack init dev
+   pulumi config set aws:region us-east-1
+   ```
+
+4. **Deploy Infrastructure**
+   ```bash
+   pulumi up
+   ```
+
+5. **View Outputs**
+   ```bash
+   pulumi stack output
+   ```
+
+6. **Destroy Infrastructure**
+   ```bash
+   pulumi destroy
+   ```
+
+## Testing
+
+### Unit Tests
+```bash
+npm run test:unit
+```
+
+### Integration Tests
+```bash
+npm run test:integration
+```
+
+## Cost Optimization
+
+- **ARM64 Architecture**: 20% better price-performance than x86
+- **On-demand DynamoDB**: No idle capacity charges
+- **Serverless Architecture**: Pay only for actual usage
+- **5-minute Schedule**: Balance between real-time and cost
+
+## Security Features
+
+- **KMS Encryption**: Lambda environment variables encrypted
+- **SNS Encryption**: AWS managed keys for message encryption
+- **IAM Least Privilege**: Minimal permissions for each role
+- **X-Ray Tracing**: Full observability without logging sensitive data
+
+## Monitoring
+
+- **CloudWatch Logs**: Automatic log groups for Lambda functions
+- **X-Ray Traces**: Distributed tracing across all components
+- **Custom Annotations**: Business metrics in X-Ray subsegments
+- **EventBridge Metrics**: Schedule execution tracking
+
+## Summary
+
+This implementation provides a complete, production-ready cryptocurrency price alert system that:
+- Processes webhook events in real-time
+- Stores user alerts securely
+- Checks prices every 5 minutes
+- Sends SMS notifications when thresholds are met
+- Provides full observability and monitoring
+- Optimizes for cost with ARM64 and serverless architecture
+- Ensures security with encryption and least privilege access

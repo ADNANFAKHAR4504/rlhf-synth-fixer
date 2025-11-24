@@ -165,13 +165,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `webhook-processor-${environmentSuffix}`,
         runtime: 'nodejs18.x',
-        handler: 'index.handler',
+        handler: 'webhook-handler.handler',
         role: webhookLambdaRole.arn,
         timeout: 30,
         memorySize: 1024,
         architectures: ['arm64'],
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.FileAsset(
+          'webhook-handler.js': new pulumi.asset.FileAsset(
             path.join(__dirname, 'lambda', 'webhook-handler.js')
           ),
         }),
@@ -268,13 +268,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `price-checker-${environmentSuffix}`,
         runtime: 'nodejs18.x',
-        handler: 'index.handler',
+        handler: 'price-checker.handler',
         role: priceCheckLambdaRole.arn,
         timeout: 60,
         memorySize: 512,
         architectures: ['arm64'],
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.FileAsset(
+          'price-checker.js': new pulumi.asset.FileAsset(
             path.join(__dirname, 'lambda', 'price-checker.js')
           ),
         }),

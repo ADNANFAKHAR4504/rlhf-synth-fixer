@@ -9,7 +9,11 @@ import {
   GetFunctionCommand,
   InvokeCommand,
 } from '@aws-sdk/client-lambda';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
+import { 
+  DynamoDBClient, 
+  DescribeTableCommand,
+  DescribeContinuousBackupsCommand 
+} from '@aws-sdk/client-dynamodb';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import {
   EventBridgeClient,
@@ -202,13 +206,13 @@ describe('TapStack Integration Tests', () => {
 
     it('should have point-in-time recovery enabled', async () => {
       const response = await dynamoClient.send(
-        new DescribeTableCommand({
+        new DescribeContinuousBackupsCommand({
           TableName: outputs.alertsTableName,
         })
       );
 
       expect(
-        response.Table?.ContinuousBackups?.PointInTimeRecoveryDescription
+        response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription
           ?.PointInTimeRecoveryStatus
       ).toBe('ENABLED');
     });
@@ -346,10 +350,11 @@ describe('TapStack Integration Tests', () => {
 
   describe('Resource Naming Convention', () => {
     it('should use environmentSuffix in all resource names', () => {
-      expect(outputs.alertsTableName).toContain('synthz7s1o7');
-      expect(outputs.webhookLambdaArn).toContain('webhook-processor-synthz7s1o7');
-      expect(outputs.priceCheckLambdaArn).toContain('price-checker-synthz7s1o7');
-      expect(outputs.alertTopicArn).toContain('price-alert-topic-synthz7s1o7');
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr7178';
+      expect(outputs.alertsTableName).toContain(environmentSuffix);
+      expect(outputs.webhookLambdaArn).toContain(`webhook-processor-${environmentSuffix}`);
+      expect(outputs.priceCheckLambdaArn).toContain(`price-checker-${environmentSuffix}`);
+      expect(outputs.alertTopicArn).toContain(`price-alert-topic-${environmentSuffix}`);
     });
   });
 });
