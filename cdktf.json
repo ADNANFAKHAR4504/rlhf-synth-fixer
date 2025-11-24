@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "pipenv run python main.py",
+  "app": "pipenv run python tap.py",
   "projectId": "observability-platform",
   "sendCrashReports": "false",
   "terraformProviders": [

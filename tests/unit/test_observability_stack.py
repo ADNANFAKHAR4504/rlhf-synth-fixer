@@ -1,16 +1,16 @@
 import pytest
 from cdktf import Testing
-from stacks.observability_stack import ObservabilityStack
+from lib.tap_stack import TapStack
 
 
 class TestObservabilityStack:
-    """Unit tests for ObservabilityStack"""
+    """Unit tests for TapStack"""
 
     @pytest.fixture
     def stack(self):
         """Create a test stack"""
         app = Testing.app()
-        return ObservabilityStack(app, "test-stack", environment_suffix="test")
+        return TapStack(app, "test-stack", environment_suffix="test")
 
     def test_stack_synthesizes(self, stack):
         """Test that the stack synthesizes without errors"""
@@ -164,13 +164,13 @@ class TestObservabilityStack:
 
 
 class TestObservabilityStackIntegration:
-    """Integration tests for ObservabilityStack"""
+    """Integration tests for TapStack"""
 
     def test_multiple_environments(self):
         """Test that multiple environments can coexist"""
         app = Testing.app()
-        dev_stack = ObservabilityStack(app, "dev-stack", environment_suffix="dev")
-        prod_stack = ObservabilityStack(app, "prod-stack", environment_suffix="prod")
+        dev_stack = TapStack(app, "dev-stack", environment_suffix="dev")
+        prod_stack = TapStack(app, "prod-stack", environment_suffix="prod")
 
         dev_synth = Testing.synth(dev_stack)
         prod_synth = Testing.synth(prod_stack)
@@ -182,7 +182,7 @@ class TestObservabilityStackIntegration:
     def test_custom_environment_suffix(self):
         """Test custom environment suffix"""
         app = Testing.app()
-        stack = ObservabilityStack(app, "custom-stack", environment_suffix="staging")
+        stack = TapStack(app, "custom-stack", environment_suffix="staging")
         synthesized = Testing.synth(stack)
 
         assert "staging" in synthesized
@@ -190,7 +190,7 @@ class TestObservabilityStackIntegration:
     def test_resource_dependencies(self):
         """Test that resource dependencies are correct"""
         app = Testing.app()
-        stack = ObservabilityStack(app, "dep-stack", environment_suffix="test")
+        stack = TapStack(app, "dep-stack", environment_suffix="test")
         synthesized = Testing.synth(stack)
 
         # KMS key should be created before log groups

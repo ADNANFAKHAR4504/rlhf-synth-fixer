@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
@@ -25,14 +25,37 @@ from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 import json
 
 
-class ObservabilityStack(TerraformStack):
-    def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev"):
+class TapStack(TerraformStack):
+    def __init__(
+        self,
+        scope: Construct,
+        id: str,
+        environment_suffix: str = "dev",
+        state_bucket: str = "iac-rlhf-tf-states",
+        state_bucket_region: str = "us-east-1",
+        aws_region: str = "us-east-1",
+        default_tags: dict = None
+    ):
         super().__init__(scope, id)
 
         self.environment_suffix = environment_suffix
 
-        # AWS Provider
-        AwsProvider(self, "aws", region="us-east-1")
+        # Configure S3 backend for remote state
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{id}/terraform.tfstate",
+            region=state_bucket_region,
+            encrypt=True
+        )
+
+        # AWS Provider with default tags
+        AwsProvider(
+            self,
+            "aws",
+            region=aws_region,
+            default_tags=[default_tags] if default_tags else None
+        )
 
         # Data sources
         self.current_account = DataAwsCallerIdentity(self, "current")
@@ -301,8 +324,8 @@ class ObservabilityStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=lambda_role.arn,
-            filename="lambda/payment_handler.zip",
-            source_code_hash="${filebase64sha256(\"lambda/payment_handler.zip\")}",
+            filename="lib/lambda/payment_handler.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda/payment_handler.zip\")}",
             timeout=30,
             memory_size=512,
             layers=[lambda_insights_layer],
@@ -330,8 +353,8 @@ class ObservabilityStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=lambda_role.arn,
-            filename="lambda/order_processor.zip",
-            source_code_hash="${filebase64sha256(\"lambda/order_processor.zip\")}",
+            filename="lib/lambda/order_processor.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda/order_processor.zip\")}",
             timeout=30,
             memory_size=512,
             layers=[lambda_insights_layer],
