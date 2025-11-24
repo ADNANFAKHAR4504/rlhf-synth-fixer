@@ -29,13 +29,16 @@ export class RdsComponent extends pulumi.ComponentResource {
     const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
     // DB Subnet Group
+    // RDS subnet group names must be lowercase alphanumeric with hyphens/underscores
+    const subnetGroupName = `rds-subnet-group-${args.environmentSuffix.toLowerCase()}`;
     this.subnetGroup = new aws.rds.SubnetGroup(
       `rds-subnet-group-${args.environmentSuffix}`,
       {
+        name: subnetGroupName,
         subnetIds: args.subnetIds,
         tags: {
           ...args.tags,
-          Name: `rds-subnet-group-${args.environmentSuffix}`,
+          Name: subnetGroupName,
         },
       },
       defaultResourceOptions

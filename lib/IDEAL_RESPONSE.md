@@ -217,15 +217,15 @@ Key defaults:
 
 **File: `lib/components/s3.ts`**
 
-Uses current V2 APIs (which are the correct, non-deprecated versions):
+Uses current non-V2 APIs (which are the correct, non-deprecated versions):
 
 ```typescript
-// ✅ CORRECT (current API)
-new aws.s3.BucketServerSideEncryptionConfigurationV2(...)
-new aws.s3.BucketLifecycleConfigurationV2(...)
+// ✅ CORRECT (current API - non-deprecated)
+new aws.s3.BucketServerSideEncryptionConfiguration(...)
+new aws.s3.BucketLifecycleConfiguration(...)
 ```
 
-Note: The V2 suffix indicates these are the current version of the S3 configuration resources in the Pulumi AWS provider.
+Note: The V2 suffixed resources (`BucketServerSideEncryptionConfigurationV2`, `BucketLifecycleConfigurationV2`) are deprecated. The non-V2 versions are the current, recommended APIs.
 
 #### Fix 2: Correct CloudWatch Alarm Properties
 

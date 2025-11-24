@@ -13,16 +13,20 @@ The MODEL_RESPONSE provided a strong foundational structure with proper use of P
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-The generated S3 component may have used incorrect or deprecated Pulumi AWS resource types.
-
-**IDEAL_RESPONSE Fix**:
-Uses the current V2 APIs which are the correct versions:
+The generated S3 component used deprecated V2 APIs:
 ```typescript
 new aws.s3.BucketServerSideEncryptionConfigurationV2(...)
 new aws.s3.BucketLifecycleConfigurationV2(...)
 ```
 
-**Root Cause**: Confusion about which S3 API versions are current. The V2 suffixed resources are actually the current, non-deprecated versions in the Pulumi AWS provider.
+**IDEAL_RESPONSE Fix**:
+Uses the current non-V2 APIs which are the correct, non-deprecated versions:
+```typescript
+new aws.s3.BucketServerSideEncryptionConfiguration(...)
+new aws.s3.BucketLifecycleConfiguration(...)
+```
+
+**Root Cause**: The V2 suffixed resources are deprecated in favor of the non-V2 versions. Pulumi AWS provider deprecation warnings indicate the V2 resources should be replaced with the non-V2 versions.
 
 **AWS Documentation Reference**: https://www.pulumi.com/registry/packages/aws/api-docs/s3/bucketserversideencryptionconfiguration/
 

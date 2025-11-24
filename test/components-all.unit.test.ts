@@ -1,4 +1,57 @@
 import * as pulumi from '@pulumi/pulumi';
+
+// Mock Pulumi AWS S3 resources explicitly to avoid constructor errors
+jest.mock('@pulumi/aws', () => {
+  const actual = jest.requireActual('@pulumi/aws');
+  
+  return {
+    ...actual,
+    s3: {
+      ...actual.s3,
+      // Keep the actual Bucket constructor as it's needed for the component
+      Bucket: actual.s3.Bucket,
+      // Mock the configuration resources using jest.fn(function) pattern for proper constructors
+      BucketVersioningV2: jest.fn(function (this: any, name: string, args: any, opts?: any) {
+        this.id = pulumi.output(`versioning-${name}`);
+        return this;
+      }),
+      BucketServerSideEncryptionConfiguration: jest.fn(function (
+        this: any,
+        name: string,
+        args: any,
+        opts?: any
+      ) {
+        this.id = pulumi.output(`sse-${name}`);
+        this.rules = args?.rules || [];
+        return this;
+      }),
+      BucketLifecycleConfiguration: jest.fn(function (
+        this: any,
+        name: string,
+        args: any,
+        opts?: any
+      ) {
+        this.id = pulumi.output(`lifecycle-${name}`);
+        this.rules = args?.rules || [];
+        return this;
+      }),
+      BucketPublicAccessBlock: jest.fn(function (
+        this: any,
+        name: string,
+        args: any,
+        opts?: any
+      ) {
+        this.id = pulumi.output(`pab-${name}`);
+        this.blockPublicAcls = args?.blockPublicAcls;
+        this.blockPublicPolicy = args?.blockPublicPolicy;
+        this.ignorePublicAcls = args?.ignorePublicAcls;
+        this.restrictPublicBuckets = args?.restrictPublicBuckets;
+        return this;
+      }),
+    },
+  };
+});
+
 import { SecurityGroupsComponent } from '../lib/components/security-groups';
 import { RdsComponent } from '../lib/components/rds';
 import { EcsComponent } from '../lib/components/ecs';
