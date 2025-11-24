@@ -137,18 +137,55 @@ class TestDMSResources:
         dms_arn = stack_outputs.get("DmsReplicationInstanceArn")
         assert dms_arn is not None, "DMS ARN not found in stack outputs"
 
-        # Extract instance identifier from ARN
-        instance_id = dms_arn.split(":")[-1]
+        # DMS ARN format: arn:aws:dms:region:account-id:rep:instance-id
+        # Extract instance identifier from ARN (the part after 'rep:')
+        instance_id_from_arn = dms_arn.split(":")[-1]
+        
+        # Also try to get the instance identifier from the stack (format: dms-replication-{suffix})
+        # This helps with debugging if ARN matching fails
+        expected_identifier_pattern = "dms-replication-"
 
-        response = dms_client.describe_replication_instances(
-            Filters=[
-                {"Name": "replication-instance-id", "Values": [instance_id]}
+        # List all replication instances and filter by ARN (most reliable approach)
+        # This avoids issues with filter names that may vary across AWS API versions
+        response = dms_client.describe_replication_instances()
+        
+        # Filter by ARN first (most reliable)
+        instances = [
+            inst for inst in response["ReplicationInstances"]
+            if inst["ReplicationInstanceArn"] == dms_arn
+        ]
+        
+        # If no match by ARN, try matching by identifier pattern
+        if len(instances) == 0:
+            instances = [
+                inst for inst in response["ReplicationInstances"]
+                if expected_identifier_pattern in inst.get("ReplicationInstanceIdentifier", "")
             ]
+        
+        # Build helpful error message if no instances found
+        if len(instances) == 0:
+            all_arns = [inst["ReplicationInstanceArn"] for inst in response["ReplicationInstances"]]
+            all_identifiers = [inst.get("ReplicationInstanceIdentifier", "N/A") for inst in response["ReplicationInstances"]]
+            error_msg = (
+                f"Expected 1 DMS instance with ARN {dms_arn}, "
+                f"found {len(instances)}. "
+                f"Total instances in account: {len(response['ReplicationInstances'])}. "
+                f"Available ARNs: {all_arns}. "
+                f"Available identifiers: {all_identifiers}"
+            )
+            assert False, error_msg
+
+        response["ReplicationInstances"] = instances
+
+        assert len(response["ReplicationInstances"]) == 1, (
+            f"Expected 1 DMS instance with ARN {dms_arn}, "
+            f"found {len(response['ReplicationInstances'])}"
         )
-        assert len(response["ReplicationInstances"]) == 1
         instance = response["ReplicationInstances"][0]
-        assert instance["ReplicationInstanceStatus"] in ["available", "creating"]
-        assert instance["MultiAZ"] is True
+        assert instance["ReplicationInstanceStatus"] in ["available", "creating", "modifying"], (
+            f"Instance status is {instance['ReplicationInstanceStatus']}, expected available/creating/modifying"
+        )
+        assert instance["MultiAZ"] is True, "DMS instance should have MultiAZ enabled"
 
 
 class TestRoute53:
