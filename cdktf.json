@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "pipenv run python ./lib/tap_stack.py",
+  "app": "pipenv run python ./tap.py",
   "projectId": "tap-eks-cluster",
   "terraformProviders": [
     "aws@~> 5.0"

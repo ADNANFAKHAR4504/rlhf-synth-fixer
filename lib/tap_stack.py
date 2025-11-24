@@ -19,14 +19,19 @@ import json
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, stack_id: str, environment_suffix: str):
+    def __init__(self, scope: Construct, stack_id: str, environment_suffix: str,
+                 state_bucket: str = None, state_bucket_region: str = None,
+                 aws_region: str = "us-east-1", default_tags: dict = None):
         super().__init__(scope, stack_id)
 
         # CRITICAL: Use LocalBackend instead of S3Backend
         LocalBackend(self, path="terraform.tfstate")
 
-        # AWS Provider
-        AwsProvider(self, "AWS", region="us-east-1")
+        # Extract tags from default_tags if provided
+        tags = default_tags.get("tags", {}) if default_tags else {}
+
+        # AWS Provider with default tags
+        AwsProvider(self, "AWS", region=aws_region, default_tags=[{"tags": tags}] if tags else None)
 
         # Common tags
         common_tags = {
@@ -99,11 +104,12 @@ class TapStack(TerraformStack):
         )
 
         # OIDC Provider for IRSA
-        # Note: CDKTF Python has limitations accessing nested list values from tokens
-        # The thumbprint_list requires a static value
-        # Using string interpolation to access the OIDC issuer URL
+        # Using Terraform token system to access the OIDC issuer URL
+        # eks_cluster.identity returns a list, we need to access the first element's oidc issuer
+        oidc_issuer_url = eks_cluster.identity_fqn
+
         oidc_provider = IamOpenidConnectProvider(self, "eks_oidc_provider",
-            url=f"${{{{aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer}}}}",
+            url=eks_cluster.identity_fqn,
             client_id_list=["sts.amazonaws.com"],
             thumbprint_list=["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"],  # AWS EKS standard thumbprint
             tags=common_tags
@@ -211,7 +217,7 @@ class TapStack(TerraformStack):
         )
 
         TerraformOutput(self, "oidc_issuer_url",
-            value=f"${{{{aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer}}}}",
+            value=eks_cluster.identity_fqn,
             description="OIDC issuer URL"
         )
 
