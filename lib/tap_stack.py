@@ -917,21 +917,23 @@ class TapStack:
 
         # Create Route 53 record with weighted routing policy
         # Initial weight is 0% to allow gradual traffic shifting
+        # Note: Route53 records don't support tags
         self.route53_record = aws.route53.Record(
             f"migration-route53-record-{self.environment_suffix}",
             zone_id=self.hosted_zone_id,
             name=self.domain_name,
             type="A",
             set_identifier=f"new-stack-{self.environment_suffix}",
-            weighted_routing_policy=aws.route53.RecordWeightedRoutingPolicyArgs(
-                weight=0  # Initial weight 0% as per requirement
-            ),
+            weighted_routing_policies=[
+                aws.route53.RecordWeightedRoutingPolicyArgs(
+                    weight=0  # Initial weight 0% as per requirement
+                )
+            ],
             aliases=[
                 aws.route53.RecordAliasArgs(
                     name=self.alb.dns_name,
                     zone_id=self.alb.zone_id,
                     evaluate_target_health=True
                 )
-            ],
-            tags=self.common_tags
+            ]
         )
