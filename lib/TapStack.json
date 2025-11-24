@@ -11,17 +11,17 @@
     "VpcId": {
       "Type": "String",
       "Description": "VPC ID where CodeBuild will run",
-      "Default": ""
+      "Default": "vpc-00000000"
     },
     "PrivateSubnetIds": {
       "Type": "CommaDelimitedList",
       "Description": "Private subnet IDs for CodeBuild (no internet access)",
-      "Default": ""
+      "Default": "subnet-00000000"
     },
     "CodeCommitRepositoryName": {
       "Type": "String",
       "Description": "Name of the CodeCommit repository containing source code",
-      "Default": ""
+      "Default": "microservice-repo"
     },
     "CodeCommitBranchName": {
       "Type": "String",
@@ -31,17 +31,17 @@
     "EcsClusterName": {
       "Type": "String",
       "Description": "Name of the ECS cluster for deployment",
-      "Default": ""
+      "Default": "default-cluster"
     },
     "EcsServiceName": {
       "Type": "String",
       "Description": "Name of the ECS service to deploy to",
-      "Default": ""
+      "Default": "default-service"
     },
     "EcrRepositoryUri": {
       "Type": "String",
       "Description": "ECR repository URI for Docker images",
-      "Default": ""
+      "Default": "000000000000.dkr.ecr.us-east-1.amazonaws.com/default"
     },
     "ApprovalNotificationEmail": {
       "Type": "String",
@@ -57,7 +57,7 @@
             {
               "Ref": "VpcId"
             },
-            ""
+            "vpc-00000000"
           ]
         }
       ]
@@ -69,7 +69,7 @@
             {
               "Ref": "CodeCommitRepositoryName"
             },
-            ""
+            "microservice-repo"
           ]
         }
       ]
@@ -83,7 +83,7 @@
                 {
                   "Ref": "EcsClusterName"
                 },
-                ""
+                "default-cluster"
               ]
             }
           ]
@@ -95,7 +95,7 @@
                 {
                   "Ref": "EcsServiceName"
                 },
-                ""
+                "default-service"
               ]
             }
           ]
@@ -109,7 +109,7 @@
             {
               "Ref": "EcrRepositoryUri"
             },
-            ""
+            "000000000000.dkr.ecr.us-east-1.amazonaws.com/default"
           ]
         }
       ]
@@ -315,34 +315,6 @@
         }
       }
     },
-    "CodeBuildSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupDescription": {
-          "Fn::Sub": "Security group for CodeBuild projects - ${EnvironmentSuffix}"
-        },
-        "VpcId": {
-          "Ref": "VpcId"
-        },
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTPS to VPC endpoints"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "codebuild-sg-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
     "CodeBuildLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
@@ -491,19 +463,6 @@
         "Source": {
           "Type": "CODEPIPELINE",
           "BuildSpec": "buildspec.yml"
-        },
-        "VpcConfig": {
-          "VpcId": {
-            "Ref": "VpcId"
-          },
-          "Subnets": {
-            "Ref": "PrivateSubnetIds"
-          },
-          "SecurityGroupIds": [
-            {
-              "Ref": "CodeBuildSecurityGroup"
-            }
-          ]
         },
         "LogsConfig": {
           "CloudWatchLogs": {
@@ -667,6 +626,7 @@
     },
     "Pipeline": {
       "Type": "AWS::CodePipeline::Pipeline",
+      "Condition": "HasCodeCommit",
       "Properties": {
         "Name": {
           "Fn::Sub": "microservices-pipeline-${EnvironmentSuffix}"
