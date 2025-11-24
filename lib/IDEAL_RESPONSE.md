@@ -496,6 +496,8 @@ class TapStack(cdk.Stack):
                 managed_policies=[
                     iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy"),
                     iam.ManagedPolicy.from_aws_managed_policy_name("AWSXRayDaemonWriteAccess"),
+                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore"),  # Required for SSM connectivity
+                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess"),  # Required for DynamoDB operations
                 ],
             ),
             block_devices=[
@@ -531,7 +533,7 @@ class TapStack(cdk.Stack):
             ),
             update_policy=autoscaling.UpdatePolicy.rolling_update(
                 max_batch_size=1,
-                min_instances_in_service=1,
+                min_instances_in_service=0,  # Must be 0 when max_capacity=1 to allow rolling updates
                 pause_time=Duration.minutes(5),
             ),
         )
@@ -615,15 +617,15 @@ class TapStack(cdk.Stack):
             cache_node_type="cache.r6g.8xlarge",
             engine="redis",
             engine_version="7.0",
-            num_node_groups=15,  # Number of shards
-            replicas_per_node_group=2,  # 2 replicas per shard
+            num_node_groups=15,  # Original: 15 shards
+            replicas_per_node_group=2,  # Original: 2 replicas per shard
             automatic_failover_enabled=True,
             multi_az_enabled=True,
             cache_parameter_group_name=redis_param_group.ref,
             cache_subnet_group_name=redis_subnet_group.ref,
             security_group_ids=[redis_sg.security_group_id],
-            at_rest_encryption_enabled=True,
-            transit_encryption_enabled=True,
+            at_rest_encryption_enabled=True,  # Re-enable encryption
+            transit_encryption_enabled=True,  # Re-enable encryption
             snapshot_retention_limit=7,
             snapshot_window="03:00-05:00",
             preferred_maintenance_window="sun:05:00-sun:07:00",

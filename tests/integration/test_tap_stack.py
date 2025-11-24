@@ -122,7 +122,7 @@ class TestTapStackIntegration(unittest.TestCase):
                                   if i['PingStatus'] == 'Online']
 
                 if online_instances:
-                    print(f"✓ Found {len(online_instances)} SSM-ready instance(s)")
+                    print(f"SUCCESS: Found {len(online_instances)} SSM-ready instance(s)")
                     return online_instances
                 else:
                     print(f"  [{elapsed:.0f}s] Instances found but not yet SSM-ready...")
@@ -157,10 +157,10 @@ class TestTapStackIntegration(unittest.TestCase):
                 elapsed = time.time() - start_time
 
                 if status == 'Success':
-                    print(f"✓ Command completed successfully in {elapsed:.1f}s")
+                    print(f"SUCCESS: Command completed successfully in {elapsed:.1f}s")
                     return response
                 elif status in ['Failed', 'Cancelled', 'TimedOut', 'Cancelling']:
-                    print(f"✗ Command {status} after {elapsed:.1f}s")
+                    print(f"FAILED: Command {status} after {elapsed:.1f}s")
                     print(f"  StdOut: {response.get('StandardOutputContent', '')[:500]}")
                     print(f"  StdErr: {response.get('StandardErrorContent', '')[:500]}")
                     return response
@@ -646,7 +646,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_e2e_ec2_to_aurora_live_connectivity(self):
         """E2E LIVE: Test EC2 can actually connect to Aurora PostgreSQL."""
-        print("\n🔄 Testing live EC2 to Aurora connectivity...")
+        print("\nTesting live EC2 to Aurora connectivity...")
 
         try:
             online_instances = self._wait_for_ssm_ready()
@@ -659,8 +659,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
         # Install PostgreSQL client and test actual connection
         commands = [
-            # Install PostgreSQL client
-            "sudo yum install -y postgresql15 2>&1 | tail -5",
+            # Install PostgreSQL client (postgresql package is available in AL2)
+            "sudo yum install -y postgresql 2>&1 | tail -5",
             # Test TCP connectivity to Aurora
             f"timeout 10 bash -c 'cat < /dev/null > /dev/tcp/{aurora_host}/5432' && echo 'TCP_SUCCESS' || echo 'TCP_FAILED'",
         ]
@@ -696,7 +696,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_e2e_ec2_to_redis_live_connectivity(self):
         """E2E LIVE: Test EC2 can actually connect to Redis cluster."""
-        print("\n🔄 Testing live EC2 to Redis connectivity...")
+        print("\nTesting live EC2 to Redis connectivity...")
 
         try:
             online_instances = self._wait_for_ssm_ready()
@@ -748,7 +748,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_e2e_ec2_to_dynamodb_live_operations(self):
         """E2E LIVE: Test EC2 can perform DynamoDB operations."""
-        print("\n🔄 Testing live EC2 to DynamoDB operations...")
+        print("\nTesting live EC2 to DynamoDB operations...")
 
         online_instances = self._wait_for_ssm_ready()
         instance_id = online_instances[0]['InstanceId']
@@ -796,7 +796,7 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_e2e_dynamodb_write_read_delete(self):
         """E2E LIVE: Test actual DynamoDB write/read/delete operations."""
-        print("\n🔄 Testing live DynamoDB write/read/delete cycle...")
+        print("\nTesting live DynamoDB write/read/delete cycle...")
 
         response = self.dynamodb.list_tables()
         all_tables = response['TableNames']
@@ -874,14 +874,14 @@ class TestTapStackIntegration(unittest.TestCase):
             response = self.dynamodb.get_item(TableName=table_name, Key=key)
             self.assertNotIn('Item', response, "Item should be deleted")
 
-            print("✅ Complete DynamoDB lifecycle test successful!")
+            print("SUCCESS: Complete DynamoDB lifecycle test successful!")
 
         except ClientError as e:
             self.fail(f"DynamoDB operations failed: {e}")
 
     def test_e2e_cross_resource_vpc_connectivity(self):
         """E2E: Verify all resources are in the same VPC."""
-        print("\n🔄 Verifying cross-resource VPC connectivity...")
+        print("\nVerifying cross-resource VPC connectivity...")
 
         # Get Aurora VPC
         aurora_response = self.rds.describe_db_clusters(
@@ -916,7 +916,7 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertEqual(instance_vpc, self.vpc_id,
                            "EC2 instances should be in the same VPC")
 
-        print("✅ All resources are properly connected in the same VPC!")
+        print("SUCCESS: All resources are properly connected in the same VPC!")
 
     def test_e2e_dax_accelerates_dynamodb(self):
         """E2E: Test DAX cluster is configured for DynamoDB tables."""

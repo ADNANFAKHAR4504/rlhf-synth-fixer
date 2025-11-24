@@ -448,6 +448,7 @@ class TapStack(cdk.Stack):
                     iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy"),
                     iam.ManagedPolicy.from_aws_managed_policy_name("AWSXRayDaemonWriteAccess"),
                     iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore"),  # Required for SSM connectivity
+                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess"),  # Required for DynamoDB operations
                 ],
             ),
             block_devices=[
