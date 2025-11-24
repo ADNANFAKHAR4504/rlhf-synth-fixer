@@ -182,8 +182,8 @@ aws cloudformation create-stack \
     ParameterKey=EnvironmentName,ParameterValue=production \
     ParameterKey=IsPrimaryRegion,ParameterValue=true \
     ParameterKey=SecondaryRegion,ParameterValue=us-west-2 \
-    ParameterKey=AlertEmail,ParameterValue=ops@yourdomain.com \
-    ParameterKey=HostedZoneName,ParameterValue=payment.yourdomain.com \
+    ParameterKey=AlertEmail,ParameterValue=ops@payment-system-demo.com \
+    ParameterKey=HostedZoneName,ParameterValue=payment-system-demo.com \
     ParameterKey=LambdaReservedConcurrency,ParameterValue=100 \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
@@ -200,8 +200,8 @@ aws cloudformation create-stack \
     ParameterKey=EnvironmentName,ParameterValue=production \
     ParameterKey=IsPrimaryRegion,ParameterValue=false \
     ParameterKey=SecondaryRegion,ParameterValue=us-west-2 \
-    ParameterKey=AlertEmail,ParameterValue=ops@yourdomain.com \
-    ParameterKey=HostedZoneName,ParameterValue=payment.yourdomain.com \
+    ParameterKey=AlertEmail,ParameterValue=ops@payment-system-demo.com \
+    ParameterKey=HostedZoneName,ParameterValue=payment-system-demo.com \
     ParameterKey=LambdaReservedConcurrency,ParameterValue=100 \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2

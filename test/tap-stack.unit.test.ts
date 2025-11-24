@@ -13,7 +13,7 @@ describe('TapStack', () => {
     isPrimaryRegion: true,
     secondaryRegion: 'us-west-2',
     alertEmail: 'test@example.com',
-    hostedZoneName: 'test.example.com',
+    hostedZoneName: 'test.payment-system-demo.com',
     lambdaReservedConcurrency: 50,
   };
 
@@ -245,7 +245,7 @@ describe('TapStack', () => {
 
   test('should create Route 53 hosted zone in primary region', () => {
     template.hasResourceProperties('AWS::Route53::HostedZone', {
-      Name: 'test.example.com',
+      Name: 'test.payment-system-demo.com',
       HostedZoneConfig: {
         Comment: 'Hosted zone for multi-region payment processing system',
       },
@@ -266,7 +266,7 @@ describe('TapStack', () => {
 
   test('should create Route 53 DNS record', () => {
     template.hasResourceProperties('AWS::Route53::RecordSet', {
-      Name: { 'Fn::Sub': 'api.test.example.com' },
+      Name: { 'Fn::Sub': 'api.test.payment-system-demo.com' },
       Type: 'CNAME',
       SetIdentifier: {
         'Fn::Sub': {
@@ -416,7 +416,7 @@ describe('TapStack', () => {
     });
 
     minimalTemplate.hasResourceProperties('AWS::Route53::HostedZone', {
-      Name: 'payment-system.example.com', // default value
+      Name: 'payment-system-demo.com', // default value
     });
   });
 

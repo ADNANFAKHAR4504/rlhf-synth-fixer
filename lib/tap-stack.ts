@@ -29,7 +29,7 @@ export class TapStack extends cdk.Stack {
       isPrimaryRegion = true,
       secondaryRegion = 'us-west-2',
       alertEmail = 'alerts@example.com',
-      hostedZoneName = 'payment-system.example.com',
+      hostedZoneName = 'payment-system-demo.com',
       lambdaReservedConcurrency = 100,
     } = props;
 
