@@ -19,6 +19,14 @@ class TapStack:
         self.source_rds_endpoint = config.get("sourceRdsEndpoint") or "legacy-db.example.com:3306"
         self.hosted_zone_id = config.get("hostedZoneId") or "Z1234567890ABC"
         self.domain_name = config.get("domainName") or "migration.example.com"
+        
+        # Get secrets from config (marked as secrets for security)
+        # In production, set these via: pulumi config set --secret dbPassword <value>
+        # For testing, defaults are provided but should be overridden in production
+        # Note: Using get() instead of get_secret() to allow defaults for testing
+        # In production, these should be set as secrets: pulumi config set --secret dbPassword <value>
+        self.db_password = config.get("dbPassword") or "ChangeMe123456!"
+        self.dms_source_password = config.get("dmsSourcePassword") or "SourcePassword123!"
 
         # Common tags for all resources
         self.common_tags = {
@@ -226,9 +234,10 @@ class TapStack:
 
     def _create_secrets(self):
         """Create Secrets Manager secret for database credentials."""
+        # Use secret password from config
         db_secret_value = {
             "username": "admin",
-            "password": "ChangeMe123456!",
+            "password": self.db_password,
             "engine": "mysql",
             "host": "placeholder",
             "port": 3306,
@@ -306,7 +315,7 @@ class TapStack:
             engine_mode="provisioned",
             database_name="appdb",
             master_username="admin",
-            master_password="ChangeMe123456!",
+            master_password=self.db_password,
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.aurora_sg.id],
             backup_retention_period=1,
@@ -748,7 +757,7 @@ class TapStack:
             port=3306,
             database_name="appdb",
             username="admin",
-            password="SourcePassword123!",
+            password=self.dms_source_password,
             ssl_mode="none",
             tags=self.common_tags
         )
@@ -763,7 +772,7 @@ class TapStack:
             port=3306,
             database_name="appdb",
             username="admin",
-            password="ChangeMe123456!",
+            password=self.db_password,
             ssl_mode="none",
             tags=self.common_tags
         )
@@ -906,20 +915,23 @@ class TapStack:
             "example.com" in self.domain_name):
             return
 
-        # Create Route 53 record with weighted routing
-        # In Pulumi AWS, for weighted routing use multivalue_answer_routing_policy
-        # or simple alias record without weighted_routing_policy
+        # Create Route 53 record with weighted routing policy
+        # Initial weight is 0% to allow gradual traffic shifting
         self.route53_record = aws.route53.Record(
             f"migration-route53-record-{self.environment_suffix}",
             zone_id=self.hosted_zone_id,
             name=self.domain_name,
             type="A",
             set_identifier=f"new-stack-{self.environment_suffix}",
+            weighted_routing_policy=aws.route53.RecordWeightedRoutingPolicyArgs(
+                weight=0  # Initial weight 0% as per requirement
+            ),
             aliases=[
                 aws.route53.RecordAliasArgs(
                     name=self.alb.dns_name,
                     zone_id=self.alb.zone_id,
                     evaluate_target_health=True
                 )
-            ]
+            ],
+            tags=self.common_tags
         )

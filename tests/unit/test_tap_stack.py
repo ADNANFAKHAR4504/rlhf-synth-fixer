@@ -27,6 +27,9 @@ class MyMocks(pulumi.runtime.Mocks):
         if 'arn' not in outputs and 'aws' in args.typ:
             resource_type = args.typ.split('/')[-1].split(':')[0] if '/' in args.typ else args.typ.split(':')[-1]
             outputs['arn'] = f"arn:aws:{resource_type}::123456789012:{outputs['id']}"
+        # Handle random string resources - return a mock result
+        if 'random' in args.typ and 'RandomString' in args.typ:
+            outputs['result'] = '12345678'  # Mock random string result
         return [args.name, outputs]
 
     def call(self, args: pulumi.runtime.MockCallArgs):
