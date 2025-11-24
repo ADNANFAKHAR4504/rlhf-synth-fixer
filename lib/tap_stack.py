@@ -234,13 +234,18 @@ class TapStack(pulumi.ComponentResource):
                     )
                 )
             ),
-            public_access_block=aws.s3.BucketPublicAccessBlockArgs(
-                block_public_acls=True,
-                block_public_policy=True,
-                ignore_public_acls=True,
-                restrict_public_buckets=True
-            ),
             tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Separate public access block resource
+        self.reports_bucket_pab = aws.s3.BucketPublicAccessBlock(
+            f"tap-transaction-reports-pab-{self.environment_suffix}",
+            bucket=self.reports_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
             opts=ResourceOptions(parent=self)
         )
 
