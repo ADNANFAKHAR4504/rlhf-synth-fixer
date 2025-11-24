@@ -1,6 +1,6 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as k8s from '@pulumi/kubernetes';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface TapStackArgs {
@@ -460,7 +460,6 @@ export class TapStack extends pulumi.ComponentResource {
             })
           )
           .apply(param => param.value),
-        instanceType: 't4g.medium',
         userData: clusterNameStr.apply(name =>
           Buffer.from(
             `#!/bin/bash
@@ -544,7 +543,6 @@ rpm -U ./amazon-cloudwatch-agent.rpm
             })
           )
           .apply(param => param.value),
-        instanceType: 'c7g.large',
         userData: clusterNameStr.apply(name =>
           Buffer.from(
             `#!/bin/bash
