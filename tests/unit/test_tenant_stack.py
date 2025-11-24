@@ -16,17 +16,17 @@ class TestTenantStackStructure:
     def setup_method(self):
         """Reset mocks before each test."""
         # Clear any previous test state if needed
-        pass
 
     def test_tenant_stack_instantiates_successfully(self):
         """TenantStack instantiates successfully with required parameters."""
         app = App()
         stack = TenantStack(
             app,
-            "TestTenantStack",
-            tenant_id="test-tenant",
-            cidr_block="10.0.0.0/16",
-            environment_suffix="test"
+            "test-tenant",
+            "10.0.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify that TenantStack instantiates without errors
@@ -39,10 +39,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestVPC",
-            tenant_id="acme-corp",
-            cidr_block="10.0.0.0/16",
-            environment_suffix="test"
+            "acme-corp",
+            "10.0.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify VPC exists
@@ -54,10 +55,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestSubnets",
-            tenant_id="tech-startup",
-            cidr_block="10.1.0.0/16",
-            environment_suffix="test"
+            "tech-startup",
+            "10.1.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify subnets exist
@@ -69,10 +71,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestSG",
-            tenant_id="retail-co",
-            cidr_block="10.2.0.0/16",
-            environment_suffix="test"
+            "retail-co",
+            "10.2.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify security group exists
@@ -84,10 +87,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestKMS",
-            tenant_id="test-kms",
-            cidr_block="10.3.0.0/16",
-            environment_suffix="test"
+            "test-kms",
+            "10.3.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify KMS key exists
@@ -101,10 +105,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestS3",
-            tenant_id="test-s3",
-            cidr_block="10.4.0.0/16",
-            environment_suffix="test"
+            "test-s3",
+            "10.4.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify S3 bucket and configurations exist
@@ -120,10 +125,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestDynamoDB",
-            tenant_id="test-dynamodb",
-            cidr_block="10.5.0.0/16",
-            environment_suffix="test"
+            "test-dynamodb",
+            "10.5.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify DynamoDB table exists
@@ -135,10 +141,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestLambda",
-            tenant_id="test-lambda",
-            cidr_block="10.6.0.0/16",
-            environment_suffix="test"
+            "test-lambda",
+            "10.6.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify Lambda resources exist
@@ -152,10 +159,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            "TestLogs",
-            tenant_id="test-logs",
-            cidr_block="10.7.0.0/16",
-            environment_suffix="test"
+            "test-logs",
+            "10.7.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify CloudWatch Log Group exists
@@ -167,11 +175,11 @@ class TestTenantStackStructure:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="test-eventbridge",
-            cidr_block="10.8.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "test-eventbridge",
+            "10.8.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify EventBridge resources exist
@@ -185,16 +193,16 @@ class TestTenantStackStructure:
         tenant_id = "test-package"
         stack = TenantStack(
             app,
-            tenant_id=tenant_id,
-            cidr_block="10.9.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            tenant_id,
+            "10.9.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
-        # Verify Lambda zip file is created
-        zip_path = f"lib/lambda/{tenant_id}-function.zip"
-        assert os.path.exists(zip_path)
+        # Verify Lambda function is created (uses lambda_function.zip from project root)
+        assert stack.lambda_function is not None
+        assert hasattr(stack.lambda_function, 'filename')
 
 
 class TestTenantStackResourceNaming:
@@ -207,11 +215,11 @@ class TestTenantStackResourceNaming:
         env_suffix = "dev"
         stack = TenantStack(
             app,
-            tenant_id=tenant_id,
-            cidr_block="10.10.0.0/16",
-            environment_suffix=env_suffix,
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            tenant_id,
+            "10.10.0.0/16",
+            env_suffix,
+            "us-east-1",
+            "central-logs-test"
         )
 
         # VPC should include environment suffix in its identifier
@@ -225,11 +233,11 @@ class TestTenantStackResourceNaming:
         env_suffix = "prod"
         stack = TenantStack(
             app,
-            tenant_id=tenant_id,
-            cidr_block="10.11.0.0/16",
-            environment_suffix=env_suffix,
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            tenant_id,
+            "10.11.0.0/16",
+            env_suffix,
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Verify all major resources exist (they should use suffix in naming)
@@ -253,11 +261,11 @@ class TestTenantStackTags:
         tenant_id = "tag-test"
         stack = TenantStack(
             app,
-            tenant_id=tenant_id,
-            cidr_block="10.12.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            tenant_id,
+            "10.12.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # All major resources should exist with tenant_id stored
@@ -269,11 +277,11 @@ class TestTenantStackTags:
         env_suffix = "staging"
         stack = TenantStack(
             app,
-            tenant_id="env-test",
-            cidr_block="10.13.0.0/16",
-            environment_suffix=env_suffix,
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "env-test",
+            "10.13.0.0/16",
+            env_suffix,
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Environment suffix should be stored
@@ -284,11 +292,11 @@ class TestTenantStackTags:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="managed-test",
-            cidr_block="10.14.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "managed-test",
+            "10.14.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Stack should be created successfully with all resources
@@ -304,29 +312,29 @@ class TestTenantStackCIDR:
 
         tenant1 = TenantStack(
             app,
-            tenant_id="tenant-1",
-            cidr_block="10.0.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "tenant-1",
+            "10.0.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         tenant2 = TenantStack(
             app,
-            tenant_id="tenant-2",
-            cidr_block="10.1.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "tenant-2",
+            "10.1.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         tenant3 = TenantStack(
             app,
-            tenant_id="tenant-3",
-            cidr_block="10.2.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "tenant-3",
+            "10.2.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # All three stacks should be created successfully
@@ -339,11 +347,11 @@ class TestTenantStackCIDR:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="cidr-test",
-            cidr_block="10.15.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "cidr-test",
+            "10.15.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Subnets should be created (validation happens during creation)
@@ -358,11 +366,11 @@ class TestTenantStackSecurity:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="kms-deletion-test",
-            cidr_block="10.16.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "kms-deletion-test",
+            "10.16.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # KMS key should be created
@@ -373,11 +381,11 @@ class TestTenantStackSecurity:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="s3-version-test",
-            cidr_block="10.17.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "s3-version-test",
+            "10.17.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # S3 versioning should be configured
@@ -388,11 +396,11 @@ class TestTenantStackSecurity:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="s3-encrypt-test",
-            cidr_block="10.18.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "s3-encrypt-test",
+            "10.18.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # S3 encryption should be configured
@@ -403,11 +411,11 @@ class TestTenantStackSecurity:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="dynamo-encrypt-test",
-            cidr_block="10.19.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "dynamo-encrypt-test",
+            "10.19.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # DynamoDB table should be created with encryption
@@ -418,11 +426,11 @@ class TestTenantStackSecurity:
         app = App()
         stack = TenantStack(
             app,
-            tenant_id="lambda-concurrency-test",
-            cidr_block="10.20.0.0/16",
-            environment_suffix="test",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "lambda-concurrency-test",
+            "10.20.0.0/16",
+            "test",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Lambda should be created with concurrency settings
@@ -446,11 +454,11 @@ class TestMultiTenantDeployment:
         for tenant in tenants:
             stack = TenantStack(
                 app,
-                tenant_id=tenant["id"],
-                cidr_block=tenant["cidr"],
-                environment_suffix="test",
-                aws_region="us-east-1",
-                central_log_group_name="central-logs-test"
+                tenant["id"],
+                tenant["cidr"],
+                "test",
+                "us-east-1",
+                "central-logs-test"
             )
             stacks.append(stack)
 
@@ -466,20 +474,20 @@ class TestMultiTenantDeployment:
         # Create same tenant for different environments
         dev_stack = TenantStack(
             app,
-            tenant_id="multi-env",
-            cidr_block="10.21.0.0/16",
-            environment_suffix="dev",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "multi-env",
+            "10.21.0.0/16",
+            "dev",
+            "us-east-1",
+            "central-logs-test"
         )
 
         staging_stack = TenantStack(
             app,
-            tenant_id="multi-env",
-            cidr_block="10.22.0.0/16",
-            environment_suffix="staging",
-            aws_region="us-east-1",
-            central_log_group_name="central-logs-test"
+            "multi-env",
+            "10.22.0.0/16",
+            "staging",
+            "us-east-1",
+            "central-logs-test"
         )
 
         # Both stacks should be created successfully

@@ -10,7 +10,12 @@ from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroup
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment, LambdaFunctionVpcConfig
 from cdktf_cdktf_provider_aws.iam_role import IamRole, IamRoleInlinePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTablePointInTimeRecovery, DynamodbTableServerSideEncryption
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable,
+    DynamodbTableAttribute,
+    DynamodbTablePointInTimeRecovery,
+    DynamodbTableServerSideEncryption
+)
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA, S3BucketVersioningVersioningConfiguration
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
@@ -210,6 +215,9 @@ class TenantStack(TerraformStack):
             )
             self.private_subnets.append(subnet)
 
+        # Alias for backward compatibility with tests
+        self.subnets = self.private_subnets
+
         # Create security group for Lambda functions
         self.lambda_sg = SecurityGroup(
             self,
@@ -241,6 +249,9 @@ class TenantStack(TerraformStack):
             }
         )
 
+        # Alias for backward compatibility with tests
+        self.security_group = self.lambda_sg
+
     def _create_iam_roles(self) -> None:
         """Create IAM roles with tenant-scoped permissions."""
         # Lambda execution role assume policy
@@ -271,7 +282,11 @@ class TenantStack(TerraformStack):
                         "dynamodb:UpdateItem",
                         "dynamodb:DeleteItem"
                     ],
-                    "Resource": f"arn:aws:dynamodb:{self.aws_region}:{self.caller_identity.account_id}:table/tenant-{self.tenant_id}-metadata-{self.environment_suffix}",
+                    "Resource": (
+                        f"arn:aws:dynamodb:{self.aws_region}:"
+                        f"{self.caller_identity.account_id}:table/"
+                        f"tenant-{self.tenant_id}-metadata-{self.environment_suffix}"
+                    ),
                     "Condition": {
                         "StringEquals": {
                             "aws:PrincipalTag/TenantId": self.tenant_id
@@ -317,22 +332,27 @@ class TenantStack(TerraformStack):
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                     ],
-                    "Resource": f"arn:aws:logs:{self.aws_region}:{self.caller_identity.account_id}:log-group:/aws/lambda/tenant-{self.tenant_id}-api-{self.environment_suffix}:*"
+                    "Resource": (
+                        f"arn:aws:logs:{self.aws_region}:"
+                        f"{self.caller_identity.account_id}:log-group:"
+                        f"/aws/lambda/tenant-{self.tenant_id}-api-{self.environment_suffix}:*"
+                    )
                 }
             ]
         }
+
+        # Create inline policy for Lambda role
+        self.lambda_policy = IamRoleInlinePolicy(
+            name="tenant-scoped-policy",
+            policy=Fn.jsonencode(tenant_policy)
+        )
 
         self.lambda_role = IamRole(
             self,
             f"lambda-role-{self.tenant_id}",
             name=f"tenant-{self.tenant_id}-lambda-role-{self.environment_suffix}",
             assume_role_policy=Fn.jsonencode(assume_role_policy),
-            inline_policy=[
-                IamRoleInlinePolicy(
-                    name="tenant-scoped-policy",
-                    policy=Fn.jsonencode(tenant_policy)
-                )
-            ],
+            inline_policy=[self.lambda_policy],
             tags={
                 **self.common_tags,
                 "TenantId": self.tenant_id
@@ -425,7 +445,7 @@ class TenantStack(TerraformStack):
         )
 
         # Enable versioning
-        S3BucketVersioningA(
+        self.s3_versioning = S3BucketVersioningA(
             self,
             f"s3-versioning-{self.tenant_id}",
             bucket=self.s3_bucket.id,
@@ -435,15 +455,17 @@ class TenantStack(TerraformStack):
         )
 
         # Configure server-side encryption with KMS
-        S3BucketServerSideEncryptionConfigurationA(
+        self.s3_encryption = S3BucketServerSideEncryptionConfigurationA(
             self,
             f"s3-encryption-{self.tenant_id}",
             bucket=self.s3_bucket.id,
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=self.kms_key.arn
+                    apply_server_side_encryption_by_default=(
+                        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                            sse_algorithm="aws:kms",
+                            kms_master_key_id=self.kms_key.arn
+                        )
                     ),
                     bucket_key_enabled=True
                 )
@@ -451,7 +473,7 @@ class TenantStack(TerraformStack):
         )
 
         # Configure lifecycle policy for 90-day expiration
-        S3BucketLifecycleConfiguration(
+        self.s3_lifecycle = S3BucketLifecycleConfiguration(
             self,
             f"s3-lifecycle-{self.tenant_id}",
             bucket=self.s3_bucket.id,
@@ -467,7 +489,7 @@ class TenantStack(TerraformStack):
         )
 
         # Configure intelligent tiering
-        S3BucketIntelligentTieringConfiguration(
+        self.s3_intelligent_tiering = S3BucketIntelligentTieringConfiguration(
             self,
             f"s3-intelligent-tiering-{self.tenant_id}",
             bucket=self.s3_bucket.id,
@@ -523,7 +545,7 @@ class TenantStack(TerraformStack):
         )
 
         # Grant EventBridge permission to invoke Lambda
-        LambdaPermission(
+        self.lambda_permission = LambdaPermission(
             self,
             f"lambda-permission-{self.tenant_id}",
             statement_id="AllowExecutionFromEventBridge",
