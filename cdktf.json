@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "python main.py",
+  "app": "python tap.py",
   "projectId": "payment-dr-infrastructure",
   "sendCrashReports": "false",
   "terraformProviders": [

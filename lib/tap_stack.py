@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pylint: disable=too-many-lines,duplicate-code
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -887,8 +888,10 @@ class TapStack(TerraformStack):
             provider=self.primary_provider
         )
 
-        primary_endpoint = f"https://{self.primary_payment_lambda.function_name}.lambda-url.{primary_region}.on.aws"
-        secondary_endpoint = f"https://{self.secondary_payment_lambda.function_name}.lambda-url.{secondary_region}.on.aws"
+        primary_function = self.primary_payment_lambda.function_name
+        primary_endpoint = f"https://{primary_function}.lambda-url.{primary_region}.on.aws"
+        secondary_function = self.secondary_payment_lambda.function_name
+        secondary_endpoint = f"https://{secondary_function}.lambda-url.{secondary_region}.on.aws"
 
         # Health check for primary endpoint
         self.primary_health_check = Route53HealthCheck(
