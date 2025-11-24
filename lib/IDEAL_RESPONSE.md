@@ -109,6 +109,8 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_kms_key(self):
         """Create KMS key for encryption across all services."""
+        # Note: KMS key policies require "Resource": "*" per AWS specifications
+        # The key policy applies only to this specific key, so wildcard is appropriate
         self.kms_key = aws.kms.Key(
             f"tap-kms-key-{self.environment_suffix}",
             description=f"KMS key for TAP financial transaction processing - {self.environment_suffix}",
@@ -165,7 +167,38 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_vpc_endpoints(self):
         """Create VPC endpoints for private service communication (placeholder)."""
-        # Note: This would require VPC setup, simplified for this implementation
+        # VPC Endpoints Documentation:
+        # 
+        # For production deployments, consider implementing VPC endpoints to enable
+        # private communication between Lambda functions and AWS services without
+        # traversing the public internet. This improves security and reduces data
+        # transfer costs.
+        #
+        # Recommended VPC endpoints for this stack:
+        # 1. DynamoDB Gateway Endpoint (no additional cost)
+        # 2. S3 Gateway Endpoint (no additional cost)
+        # 3. SQS Interface Endpoint (hourly charge applies)
+        # 4. SNS Interface Endpoint (hourly charge applies)
+        # 5. Step Functions Interface Endpoint (hourly charge applies)
+        # 6. EventBridge Interface Endpoint (hourly charge applies)
+        # 7. CloudWatch Logs Interface Endpoint (hourly charge applies)
+        # 8. KMS Interface Endpoint (hourly charge applies)
+        #
+        # Implementation requires:
+        # - VPC with private subnets
+        # - Lambda functions configured with VPC attachment
+        # - Security groups allowing egress to VPC endpoints
+        # - VPC endpoint security groups allowing ingress from Lambda SG
+        #
+        # Example implementation:
+        # vpc = aws.ec2.Vpc(...)
+        # dynamodb_endpoint = aws.ec2.VpcEndpoint(
+        #     f"tap-dynamodb-endpoint-{self.environment_suffix}",
+        #     vpc_id=vpc.id,
+        #     service_name=f"com.amazonaws.{aws.get_region().name}.dynamodb",
+        #     vpc_endpoint_type="Gateway",
+        #     route_table_ids=[route_table.id]
+        # )
         pass
 
     def _create_dynamodb_tables(self):
@@ -487,7 +520,7 @@ class TapStack(pulumi.ComponentResource):
                         "Action": [
                             "events:PutEvents"
                         ],
-                        "Resource": "*"
+                        "Resource": "arn:aws:events:""" + aws.get_region().name + """:""" + aws.get_caller_identity().account_id + """:event-bus/tap-transaction-events-""" + self.environment_suffix + """"
                     }
                 ]
             }"""),
@@ -808,6 +841,7 @@ class TapStack(pulumi.ComponentResource):
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
+
 ```
 
 ## lambda/priority_processor.py
