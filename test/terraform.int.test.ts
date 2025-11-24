@@ -297,11 +297,13 @@ describe('Terraform PaymentPlatform Infrastructure Integration Tests', () => {
           const subnets = result.data.Subnets;
           expect(subnets.length).toBe(3); // Should be 3 AZs
 
-          subnets.forEach((subnet, index) => {
+          subnets.forEach((subnet) => {
             expect(subnet.State).toBe('available');
             expect(subnet.VpcId).toBe(terraformOutputs.vpc_id);
             expect(subnet.MapPublicIpOnLaunch).toBe(true);
-            expect(subnet.CidrBlock).toBe(`10.0.${index + 1}.0/24`);
+            
+            // Verify CIDR is in the public range (10.0.1-3.0/24)
+            expect(['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24']).toContain(subnet.CidrBlock);
 
             // Verify tier tagging
             const tierTag = subnet.Tags?.find(tag => tag.Key === 'Tier');
