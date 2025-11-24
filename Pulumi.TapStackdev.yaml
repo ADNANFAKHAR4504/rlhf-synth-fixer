@@ -1,4 +1,0 @@
-encryptionsalt: v1:l/fhCdPUeno=:v1:K+CdizRmxiHyNiPg:oiWc+oMijOeA2bcTvVAdIVsVPL9xUQ==
-config:
-  tap:environmentSuffix: dev
-  aws:region: us-east-1

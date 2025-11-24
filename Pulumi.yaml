@@ -1,3 +1,5 @@
-name: tap
-runtime: nodejs
-description: Production-ready EKS cluster with advanced security
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for TAP
+main: bin/tap.ts
