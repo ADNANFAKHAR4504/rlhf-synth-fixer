@@ -397,6 +397,9 @@ def analysis_results():
     # Create unused parameter group
     setup_unused_parameter_group()
 
+    # Allow Moto time to persist metric data before running analysis
+    time.sleep(1)
+
     success, result = run_analysis_script(env=env)
     assert success, f"Analysis script failed: {result.stderr}"
 
