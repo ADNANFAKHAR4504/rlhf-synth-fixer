@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "turn_type": "single",
+  "po_id": "101912539",
+  "team": "synth",
+  "startedAt": "2025-11-21T11:21:07+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Use Pulumi constructs to define reusable components that can be instantiated for each environment",
+    "Implement environment-specific parameter overrides using Pulumi variables or context values",
+    "All Lambda functions must use ARM64 architecture for cost optimization",
+    "DynamoDB tables must have point-in-time recovery enabled only in production",
+    "Use Pulumi outputs to generate environment inventory files for compliance tracking",
+    "Implement tagging strategy that includes Environment, CostCenter, and DataClassification tags"
+  ],
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

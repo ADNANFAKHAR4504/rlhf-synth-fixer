@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-19T00:00:00-00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "n4g8n2",
+  "aws_services": [
+    "RDS",
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "IAM",
+    "Secrets Manager",
+    "Route53"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
