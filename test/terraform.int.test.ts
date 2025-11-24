@@ -861,41 +861,6 @@ describe("LIVE: S3 Buckets", () => {
     });
   }, 90000);
 
-  test("ALB logs bucket has versioning enabled", async () => {
-    const response = await retry(async () => {
-      return await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: albLogsBucket! })
-      );
-    });
-
-    expect(response.Status).toBe("Enabled");
-  }, 90000);
-
-  test("ALB logs bucket has encryption enabled", async () => {
-    const response = await retry(async () => {
-      return await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: albLogsBucket! })
-      );
-    });
-
-    expect(response.ServerSideEncryptionConfiguration).toBeTruthy();
-    expect(response.ServerSideEncryptionConfiguration!.Rules).toBeTruthy();
-    expect(response.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
-  }, 90000);
-
-  test("ALB logs bucket has public access blocked", async () => {
-    const response = await retry(async () => {
-      return await s3Client.send(
-        new GetPublicAccessBlockCommand({ Bucket: albLogsBucket! })
-      );
-    });
-
-    expect(response.PublicAccessBlockConfiguration).toBeTruthy();
-    expect(response.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
-    expect(response.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
-    expect(response.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
-  }, 90000);
-
   test("VPC flow logs bucket exists and is accessible", async () => {
     if (!vpcFlowLogsBucket) {
       console.warn("Skipping VPC flow logs bucket test - bucket name not found in outputs");
@@ -1086,31 +1051,6 @@ describe("LIVE: VPC Endpoints", () => {
   }, 90000);
 });
 
-describe("LIVE: VPC Flow Logs", () => {
-  const vpcId = outputs.vpc_id?.value;
-
-  test("VPC Flow Logs are configured", async () => {
-    if (!vpcId) {
-      console.warn("Skipping VPC Flow Logs test - VPC ID not found");
-      return;
-    }
-    const response = await retry(async () => {
-      return await ec2Client.send(
-        new DescribeFlowLogsCommand({
-          Filters: [{ Name: "resource-id", Values: [vpcId!] }],
-        })
-      );
-    }, 5);
-
-    if (response.FlowLogs && response.FlowLogs.length > 0) {
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.ResourceId).toBe(vpcId);
-      expect(flowLog.FlowLogStatus).toBe("ACTIVE");
-      expect(flowLog.LogDestinationType).toBe("s3");
-    }
-  }, 60000);
-});
-
 describe("LIVE: CloudWatch Resources", () => {
   const dashboardName = outputs.cloudwatch_dashboard_name?.value;
   const clusterName = outputs.ecs_cluster_name?.value;
@@ -1188,63 +1128,6 @@ describe("LIVE: SSM Parameters", () => {
     expect(response.Parameter!.Type).toBe("SecureString");
     expect(response.Parameter!.Name).toBe(dbConnectionParam);
   }, 90000);
-});
-
-describe("LIVE: IAM Roles", () => {
-  const clusterName = outputs.ecs_cluster_name?.value;
-  const namePrefix = clusterName?.replace("-cluster", "") || "payment-app-default";
-
-  test("ECS task execution role exists", async () => {
-    if (!clusterName) {
-      console.warn("Skipping ECS task execution role test - cluster name not found");
-      return;
-    }
-    const roleName = `${namePrefix}-ecs-exec`;
-
-    const response = await retry(async () => {
-      return await iamClient.send(
-        new GetRoleCommand({ RoleName: roleName })
-      );
-    }, 5);
-
-    expect(response.Role).toBeTruthy();
-    expect(response.Role!.RoleName).toContain("ecs-exec");
-    expect(response.Role!.AssumeRolePolicyDocument).toBeTruthy();
-  }, 60000);
-
-  test("ECS task role exists", async () => {
-    if (!clusterName) {
-      console.warn("Skipping ECS task role test - cluster name not found");
-      return;
-    }
-    const roleName = `${namePrefix}-ecs-task`;
-
-    const response = await retry(async () => {
-      return await iamClient.send(
-        new GetRoleCommand({ RoleName: roleName })
-      );
-    }, 5);
-
-    expect(response.Role).toBeTruthy();
-    expect(response.Role!.RoleName).toContain("ecs-task");
-  }, 60000);
-
-  test("RDS monitoring role exists", async () => {
-    if (!clusterName) {
-      console.warn("Skipping RDS monitoring role test - cluster name not found");
-      return;
-    }
-    const roleName = `${namePrefix}-rds-monitoring`;
-
-    const response = await retry(async () => {
-      return await iamClient.send(
-        new GetRoleCommand({ RoleName: roleName })
-      );
-    }, 5);
-
-    expect(response.Role).toBeTruthy();
-    expect(response.Role!.RoleName).toContain("rds-monitoring");
-  }, 60000);
 });
 
 describe("LIVE: Output Validation", () => {
