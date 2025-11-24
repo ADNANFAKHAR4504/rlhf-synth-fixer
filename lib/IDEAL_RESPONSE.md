@@ -292,11 +292,11 @@ Your code has been rated at 10.00/10
 ```
 lib/
 ├── __init__.py
-├── tap.py (777 lines) - Main CDKTF stack
+├── tap.py (811 lines) - Main CDKTF stack with integrated Lambda packaging
 ├── lambda/
 │   └── payment_processor/
 │       └── handler.py (247 lines) - Lambda function
-├── payment_processor.zip (Lambda deployment package)
+├── payment_processor.zip (Auto-generated Lambda deployment package)
 ├── PROMPT.md (Task requirements)
 └── IDEAL_RESPONSE.md (This file)
 
@@ -304,10 +304,12 @@ tests/
 ├── __init__.py
 ├── unit/
 │   ├── __init__.py
-│   └── test_tap_stack.py (854 lines)
+│   └── test_tap_stack.py (763 lines)
 └── integration/
     ├── __init__.py
     └── test_tap_stack.py (324 lines)
+
+Note: Lambda packaging is automated via _create_lambda_package() method in tap.py
 ```
 
 ## Best Practices Implemented
@@ -403,6 +405,91 @@ cdktf destroy --auto-approve
 ```
 
 Note: All resources are destroyable (no Retain policies).
+
+### Troubleshooting Deployment Issues
+
+#### Issue: "ResourceAlreadyExistsException" or "AlreadyExists" Errors
+
+**Symptom:**
+```
+Error: creating CloudWatch Logs Log Group: ResourceAlreadyExistsException
+Error: creating AWS DynamoDB Table: Table already exists
+Error: creating IAM Role: Role with name already exists
+Error: creating KMS Alias: An alias with the name already exists
+```
+
+**Root Cause:**
+Orphaned resources from a previous failed deployment exist in AWS but are not tracked in Terraform state.
+
+**Solution 1: Clean Destroy (Recommended for CI/CD)**
+```bash
+# Method A: If you have the Terraform state
+cd cdktf.out/stacks/TapStack${ENVIRONMENT_SUFFIX}
+terraform destroy -auto-approve
+
+# Method B: Using CDKTF destroy
+cdktf destroy --auto-approve
+
+# Then redeploy
+cdktf deploy --auto-approve
+```
+
+**Solution 2: Import Existing Resources**
+```bash
+# Import existing resources into Terraform state
+cd cdktf.out/stacks/TapStack${ENVIRONMENT_SUFFIX}
+terraform import aws_dynamodb_table.payments_table payment-${ENVIRONMENT_SUFFIX}-payments
+terraform import aws_iam_role.lambda_role payment-${ENVIRONMENT_SUFFIX}-lambda-role
+# ... (repeat for all conflicting resources)
+
+# Then apply changes
+terraform apply -auto-approve
+```
+
+**Solution 3: Manual Cleanup (Last Resort)**
+```bash
+# Delete specific resources via AWS CLI
+aws dynamodb delete-table --table-name payment-${ENVIRONMENT_SUFFIX}-payments
+aws iam delete-role --role-name payment-${ENVIRONMENT_SUFFIX}-lambda-role
+aws kms delete-alias --alias-name alias/payment-${ENVIRONMENT_SUFFIX}-dynamodb
+# ... (repeat for all orphaned resources)
+
+# Wait for deletions to complete, then redeploy
+cdktf deploy --auto-approve
+```
+
+**Prevention:**
+- Always use `cdktf destroy` before redeploying to the same environment
+- In CI/CD, add a cleanup step before deployment
+- Use unique environment suffixes for each PR/deployment
+
+#### Issue: Lambda Deployment Package Not Found
+
+**Symptom:**
+```
+Error: reading ZIP file (lib/payment_processor.zip): no such file or directory
+```
+
+**Solution:**
+The Lambda deployment package is automatically created when `lib/tap.py` runs. This is built into the `_create_lambda_package()` method in the `PaymentInfrastructureStack.__init__()` method.
+
+```python
+# Automatic Lambda packaging (built-in)
+def _create_lambda_package(self):
+    """Create Lambda deployment package by zipping the handler code"""
+    # Creates lib/payment_processor.zip automatically
+```
+
+If the error persists:
+```bash
+# Verify handler exists
+ls -la lib/lambda/payment_processor/handler.py
+
+# Manually create ZIP if needed (for testing)
+cd lib/lambda/payment_processor
+zip ../../payment_processor.zip handler.py
+cd ../../..
+```
 
 ## Multi-Region Considerations
 
