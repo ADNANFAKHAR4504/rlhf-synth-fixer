@@ -9,13 +9,10 @@ log_info() { echo -e "${GREEN}✅ $1${NC}" >&2; }
 log_error() { echo -e "${RED}❌ $1${NC}" >&2; }
 
 # Extract JSON value (simple extraction, no jq needed)
-# Ensures exact key match (not partial matches like "team" matching "synth_group")
 json_val() {
     local json="$1" key="$2"
     # Handle multiline JSON and spaces around colons
-    # Match exact key: "key" followed by colon and quoted value
-    # Extract only the first match to avoid issues with multiple occurrences
-    echo "$json" | tr -d '\n' | grep -oE "\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/'
+    echo "$json" | tr -d '\n' | grep -oE "\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | sed 's/.*: *"\([^"]*\)".*/\1/'
 }
 
 # Usage check
@@ -261,7 +258,7 @@ get_subject_labels_for_subtask() {
             }
         }
         
-        # Continue collecting if we are in the array
+        # Continue collecting if we're in the array
         if (collecting && bracket_depth > 0) {
             # Check each character in this line
             line_added = 0
@@ -278,7 +275,7 @@ get_subject_labels_for_subtask() {
                     }
                 }
             }
-            # If bracket did not close, add entire line
+            # If bracket didn't close, add entire line
             if (bracket_depth > 0) {
                 result = result $0
             }
@@ -320,18 +317,18 @@ is_valid_subtask() {
     grep -q "\"subtask\"[[:space:]]*:[[:space:]]*\"$subtask\"" "$ref_file" 2>/dev/null
 }
 
-# Normalize subtask: check if it is valid, if not try to map from subject label
+# Normalize subtask: check if it's valid, if not try to map from subject label
 SUBTASK="$SUBTASK_RAW"
 if [ -n "$SUBTASK" ]; then
     if ! is_valid_subtask "$SUBTASK" "$REFERENCE_FILE"; then
-        # Try to find if it is actually a subject label
+        # Try to find if it's actually a subject label
         MAPPED_SUBTASK=$(get_subtask_from_label "$SUBTASK" "$REFERENCE_FILE")
         if [ -n "$MAPPED_SUBTASK" ]; then
             log_info "Normalized subtask: '$SUBTASK' -> '$MAPPED_SUBTASK'"
             SUBTASK="$MAPPED_SUBTASK"
         else
             log_error "Invalid subtask: '$SUBTASK'. Valid subtasks are defined in $REFERENCE_FILE"
-            # Do not exit - allow it but warn
+            # Don't exit - allow it but warn
         fi
     fi
 fi
@@ -372,7 +369,7 @@ fi
 # Normalize platform to match CLI tool format (must be lowercase abbreviated form)
 case "$PLATFORM" in
     cloudformation) PLATFORM="cfn" ;;
-    cdk|cdktf|pulumi|tf|cfn) : ;;  # remain as-is (already lowercase)
+    # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
 esac
 
 # Normalize language to match CLI tool format (must be lowercase abbreviated form)
@@ -553,31 +550,12 @@ extract_region() {
 REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
 
 # Read team value from settings.local.json
-# CRITICAL: Team value MUST always be "synth" (never synth-1, synth-2, etc.)
-# If team is mentioned in settings, validate it; otherwise default to "synth"
-# Check multiple locations: current dir (main repo), parent dirs (worktree context), or relative to script
-SETTINGS_FILE=""
-if [ -f ".claude/settings.local.json" ]; then
-    # In main repo root
-    SETTINGS_FILE=".claude/settings.local.json"
-elif [ -f "../../.claude/settings.local.json" ]; then
-    # In worktree (two levels up)
-    SETTINGS_FILE="../../.claude/settings.local.json"
-elif [ -f "../.claude/settings.local.json" ]; then
-    # One level up
-    SETTINGS_FILE="../.claude/settings.local.json"
-fi
-
-if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
+# If team is mentioned in settings, use that value (e.g., synth-2, synth-1)
+# Otherwise, default to "synth"
+SETTINGS_FILE=".claude/settings.local.json"
+if [ -f "$SETTINGS_FILE" ]; then
     TEAM=$(json_val "$(cat "$SETTINGS_FILE")" "team")
-    # Normalize team value: always use "synth" regardless of what's in settings
-    # This prevents synth-1, synth-2, Synth-2, etc. from being used
-    if [ -z "$TEAM" ] || [ "$TEAM" != "synth" ]; then
-        if [ -n "$TEAM" ] && [ "$TEAM" != "synth" ]; then
-            log_info "Team value '$TEAM' in settings normalized to 'synth'"
-        fi
-        TEAM="synth"
-    fi
+    [ -z "$TEAM" ] && TEAM="synth"
 else
     TEAM="synth"
 fi

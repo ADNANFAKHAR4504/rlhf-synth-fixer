@@ -25,8 +25,8 @@ log_warn() { echo -e "${YELLOW}⚠️  $1${NC}" >&2; }
 # Returns: 0 on success, 1 on timeout
 acquire_lock() {
     local elapsed=0
-    local wait_interval=5  # Start with 5 seconds for faster initial attempts
-    local max_interval=60    # Cap at 60 seconds
+    local wait_interval=0.01  # Start with 10ms for faster initial attempts
+    local max_interval=0.1    # Cap at 100ms
     
     log_info "Attempting to acquire lock (PID: $$)..."
     
@@ -148,8 +148,6 @@ select_task() {
     # This combines parse_csv and selection into one pass, eliminating pipe overhead
     local result
     result=$(awk -F',' '
-    BEGIN { found = 0 }
-
     function parse_csv_line(line,    fields, n, i, current, in_quote) {
         n = 0
         current = ""
@@ -181,78 +179,32 @@ select_task() {
         num_fields = parse_csv_line($0, fields)
         if (num_fields < 5) next
         
-        # Extract all fields: task_id,status,platform,language,difficulty,subtask,subject_labels,problem,background,environment,constraints
+        # Extract fields (task_id, status, platform, language, difficulty, subtask)
         task_id = fields[1]
         status = fields[2]
         platform = fields[3]
         language = fields[4]
         difficulty = fields[5]
-        subtask = (num_fields >= 6 ? fields[6] : "")
-        subject_labels = (num_fields >= 7 ? fields[7] : "[]")
         problem = (num_fields >= 8 ? fields[8] : "")
-        background = (num_fields >= 9 ? fields[9] : "")
-        environment = (num_fields >= 10 ? fields[10] : "")
-        constraints = (num_fields >= 11 ? fields[11] : "")
         
         # Trim whitespace
         gsub(/^[ \t]+|[ \t]+$/, "", status)
         gsub(/^[ \t]+|[ \t]+$/, "", difficulty)
         gsub(/^[ \t]+|[ \t]+$/, "", platform)
         gsub(/^[ \t]+|[ \t]+$/, "", language)
-        gsub(/^[ \t]+|[ \t]+$/, "", subtask)
-        gsub(/^[ \t]+|[ \t]+$/, "", background)
-        gsub(/^[ \t]+|[ \t]+$/, "", problem)
-        gsub(/^[ \t]+|[ \t]+$/, "", environment)
-        gsub(/^[ \t]+|[ \t]+$/, "", constraints)
-        
-        # Clean quotes from fields (but preserve JSON array format for subject_labels)
-        gsub(/^"|"$/, "", task_id)
-        gsub(/^"|"$/, "", status)
-        gsub(/^"|"$/, "", platform)
-        gsub(/^"|"$/, "", difficulty)
-        gsub(/^"|"$/, "", subtask)
-        gsub(/^"|"$/, "", background)
-        gsub(/^"|"$/, "", problem)
-        gsub(/^"|"$/, "", language)
-        gsub(/^"|"$/, "", environment)
-        gsub(/^"|"$/, "", constraints)
-        
-        # Handle subject_labels - preserve JSON array format if present
-        if (subject_labels ~ /^\[.*\]$/) {
-            # Already a JSON array, just remove outer quotes if present
-            gsub(/^"|"$/, "", subject_labels)
-        } else if (subject_labels == "" || subject_labels == "\"\"") {
-            # Empty, set to empty array
-            subject_labels = "[]"
-        } else {
-            # Not empty but not a JSON array - might be a string that needs conversion
-            gsub(/^"|"$/, "", subject_labels)
-            if (subject_labels !~ /^\[.*\]$/) {
-                # Not a JSON array, wrap it as a single-element array
-                gsub(/"/, "\\\"", subject_labels)
-                subject_labels = "[\"" subject_labels "\"]"
-            }
-        }
-        
-        # Escape quotes in string values for JSON
-        gsub(/"/, "\\\"", background)
-        gsub(/"/, "\\\"", problem)
-        gsub(/"/, "\\\"", constraints)
-        gsub(/"/, "\\\"", environment)
         
         # Select first pending task with hard/medium/expert difficulty
         if ((status == "" || tolower(status) == "pending") &&
             (tolower(difficulty) == "hard" || tolower(difficulty) == "medium" || tolower(difficulty) == "expert")) {
-            # Output as complete JSON with all fields and exit immediately (early exit optimization)
-            printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"subtask\":\"%s\",\"background\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\",\"environment\":\"%s\",\"constraints\":\"%s\",\"subject_labels\":%s}\n",
-                   task_id, (status == "" ? "pending" : status), platform, difficulty, subtask, background, problem, language, environment, constraints, subject_labels
-            found = 1
+            # Output as JSON and exit immediately (early exit optimization)
+            printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\"}\n",
+                   task_id, (status == "" ? "pending" : status), platform, difficulty, substr(problem, 1, 100), language
             exit 0
         }
     }
     END {
-        # No match found - only execute if no task was found
-        if (!found && NR > 1) {
+        # No match found
+        if (NR > 1) {
             print "{\"error\":\"No pending tasks found with hard/medium/expert difficulty\"}" > "/dev/stderr"
             exit 1
         }
@@ -262,56 +214,6 @@ select_task() {
     if [ $? -ne 0 ] || [ -z "$result" ]; then
         echo '{"error":"No pending tasks found with hard/medium/expert difficulty"}' >&2
         exit 1
-    fi
-    
-    # Extract task_id from result for validation
-    local selected_task_id
-    selected_task_id=$(echo "$result" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-    
-    if [ -z "$selected_task_id" ]; then
-        log_error "Failed to extract task_id from selection result"
-        exit 1
-    fi
-    
-    # VALIDATION: Check if worktree already exists (another agent may have claimed this task)
-    # This prevents race conditions where a task is selected but worktree was just created
-    local worktree_dir="${REPO_ROOT}/worktree/synth-${selected_task_id}"
-    if [ -d "$worktree_dir" ]; then
-        log_warn "Skipping task $selected_task_id - worktree already exists (another agent may have claimed it)"
-        # Recursively call select_task to find next available task
-        # This is safe because we're still within the locked section
-        local recursive_result
-        recursive_result=$(select_task)
-        if [ $? -ne 0 ] || [ -z "$recursive_result" ]; then
-            echo '{"error":"No available tasks found after validation"}' >&2
-            exit 1
-        fi
-        echo "$recursive_result"
-        return 0
-    fi
-    
-    # VALIDATION: Check for recent JSON files (within last 5 minutes)
-    # This catches cases where another agent just selected this task
-    local json_files=("${REPO_ROOT}/.claude/task-${selected_task_id}-"*.json)
-    if [ -f "${json_files[0]}" ]; then
-        local cutoff_time=$(($(date +%s) - 300))  # 5 minutes ago
-        for json_file in "${json_files[@]}"; do
-            if [ -f "$json_file" ]; then
-                local file_time=$(stat -f %m "$json_file" 2>/dev/null || stat -c %Y "$json_file" 2>/dev/null || echo 0)
-                if [ "$file_time" -gt "$cutoff_time" ]; then
-                    log_warn "Skipping task $selected_task_id - recent JSON file exists (another agent may have claimed it)"
-                    # Recursively call select_task to find next available task
-                    local recursive_result
-                    recursive_result=$(select_task)
-                    if [ $? -ne 0 ] || [ -z "$recursive_result" ]; then
-                        echo '{"error":"No available tasks found after validation"}' >&2
-                        exit 1
-                    fi
-                    echo "$recursive_result"
-                    return 0
-                fi
-            fi
-        done
     fi
     
     echo "$result"
@@ -433,58 +335,6 @@ get_task() {
     grep "^$task_id," "$CSV_FILE" | head -1
 }
 
-# Get task status safely (thread-safe, reads CSV with proper parsing)
-# Returns status as string: pending, in_progress, done, error, or empty if not found
-get_status() {
-    local task_id="$1"
-    [ ! -f "$CSV_FILE" ] && { echo ""; return 1; }
-    
-    # Parse CSV properly to extract status field (field 2)
-    awk -F',' -v task_id="$task_id" '
-    function parse_csv_line(line,    fields, n, i, current, in_quote) {
-        n = 0
-        current = ""
-        in_quote = 0
-        
-        for (i = 1; i <= length(line); i++) {
-            c = substr(line, i, 1)
-            
-            if (c == "\"") {
-                in_quote = !in_quote
-            } else if (c == "," && !in_quote) {
-                fields[++n] = current
-                current = ""
-            } else {
-                current = current c
-            }
-        }
-        fields[++n] = current
-        return n
-    }
-    
-    NR == 1 { next }  # Skip header
-    
-    {
-        num_fields = parse_csv_line($0, fields)
-        if (num_fields < 2) next
-        
-        # Extract task_id and status
-        current_task_id = fields[1]
-        status = fields[2]
-        
-        # Remove quotes
-        gsub(/^"|"$/, "", current_task_id)
-        gsub(/^"|"$/, "", status)
-        gsub(/^[ \t]+|[ \t]+$/, "", status)
-        
-        if (current_task_id == task_id) {
-            print (status == "" ? "pending" : status)
-            exit 0
-        }
-    }
-    ' "$CSV_FILE"
-}
-
 # Atomic select and update with file locking
 select_and_update() {
     local task_json
@@ -500,9 +350,6 @@ select_and_update() {
     # Ensure lock is released on exit
     trap "release_lock" EXIT INT TERM
     
-    # Critical section - reset stale tasks first
-    reset_stale_tasks
-
     # Critical section - select and update atomically
     task_json=$(select_task) || exit_code=$?
     
@@ -518,11 +365,6 @@ select_and_update() {
     
     # Update status while holding lock
     update_status "$task_id" "in_progress" || exit_code=$?
-
-    # CRITICAL: Sleep briefly to ensure CSV write is flushed to disk
-    # This prevents other agents from reading stale CSV data
-    sleep 1  # 1s to ensure filesystem sync
-    log_info "Status update confirmed, releasing lock"
     
     # Clear flag
     unset LOCK_HELD
@@ -701,64 +543,12 @@ mark_error() {
     return $result
 }
 
-# Reset stale in_progress tasks (older than 30 minutes)
-reset_stale_tasks() {
-    [ ! -f "$CSV_FILE" ] && return
-    
-    local cutoff_time=$(($(date +%s) - 1800))  # 30 minutes ago
-    local temp_file=$(mktemp)
-    local reset_count=0
-    
-    while IFS= read -r line; do
-        if echo "$line" | grep -q "^[^,]*,in_progress,"; then
-            # Check corresponding JSON file timestamp
-            local task_id=$(echo "$line" | cut -d',' -f1)
-            local json_files=(.claude/task-${task_id}-*.json)
-            
-            if [ -f "${json_files[0]}" ]; then
-                local file_time=$(stat -f %m "${json_files[0]}" 2>/dev/null || stat -c %Y "${json_files[0]}" 2>/dev/null || echo 999999999999)
-                if [ "$file_time" -lt "$cutoff_time" ]; then
-                    echo "$line" | sed 's/,in_progress,/,pending,/'
-                    reset_count=$((reset_count + 1))
-                    log_warn "Reset stale task: $task_id"
-                    continue
-                fi
-            fi
-        fi
-        echo "$line"
-    done < "$CSV_FILE" > "$temp_file"
-    
-    if [ $reset_count -gt 0 ]; then
-        mv "$temp_file" "$CSV_FILE"
-        log_info "Reset $reset_count stale tasks"
-    else
-        rm -f "$temp_file"
-    fi
-}
-
-# Check for duplicate in-flight selections
-check_duplicate_selection() {
-    local existing_jsons=(.claude/task-*-*.json)
-    if [ -f "${existing_jsons[0]}" ]; then
-        for json_file in "${existing_jsons[@]}"; do
-            if [ -f "$json_file" ]; then
-                local json_age=$(($(date +%s) - $(stat -f %m "$json_file" 2>/dev/null || stat -c %Y "$json_file" 2>/dev/null || echo 0)))
-                if [ $json_age -lt 300 ]; then  # Less than 5 minutes old
-                    log_warn "Recent task selection detected (${json_file}), waiting briefly..."
-                    sleep 1
-                fi
-            fi
-        done
-    fi
-}
-
 # Command dispatcher
 case "${1:-help}" in
     select) select_task ;;
     update) shift; update_status "$@" ;;
     status) check_status ;;
     get) get_task "$2" ;;
-    get-status) get_status "$2" ;;
     select-and-update) select_and_update ;;
     mark-done) mark_done "$2" "$3" ;;
     mark-error) mark_error "$2" "$3" "$4" ;;
@@ -776,9 +566,7 @@ Commands:
     mark-done <id> <pr_number>      Mark task as done with PR number (locked)
     mark-error <id> <error_msg> [step]  Mark task as error (locked)
     status                          Show task distribution
-    get <id>                        Get task details (CSV line)
-    get-status <id>                 Get task status safely (thread-safe, returns: pending/in_progress/done/error) (CSV line)
-    get-status <id>                 Get task status safely (thread-safe, returns: pending/in_progress/done/error)
+    get <id>                        Get task details
 
 Environment:
     CSV_FILE        CSV path (default: .claude/tasks.csv)

@@ -26,7 +26,7 @@ interface TaskMetadata {
   complexity: string;         // REQUIRED: Task complexity (medium, hard, expert)
   turn_type: string;          // REQUIRED: Turn type (single, multi)
   po_id: string;              // REQUIRED: Task ID (e.g., "1maext", "synth-abc123")
-  team: string;               // REQUIRED: Team identifier - MUST always be "synth" (read from settings.local.json if present, but normalized to "synth")
+  team: string;               // REQUIRED: Team identifier (1-6, synth, synth-N, stf) - read from settings.local.json if present
   startedAt: string;          // REQUIRED: ISO 8601 timestamp
   subtask: string;            // REQUIRED: Main subtask category
   subject_labels?: string[];  // OPTIONAL: Array of subject labels

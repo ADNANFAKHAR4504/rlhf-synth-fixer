@@ -54,8 +54,7 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 - **MANDATORY EMOJI CHECK for IDEAL_RESPONSE.md**:
   ```bash
   # Check for emojis in IDEAL_RESPONSE.md - if found, fail immediately
-  # Use LC_ALL=C for consistent grep behavior across platforms
-  if LC_ALL=C grep -E '[🚀🎯📊✨💡🔥⚡️🌟💻🛠️⚠️✅❌🔴🟢🟡]|:[a-z_]+:' lib/IDEAL_RESPONSE.md 2>/dev/null; then
+  if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/IDEAL_RESPONSE.md 2>/dev/null; then
     echo "❌ CRITICAL: Emojis found in IDEAL_RESPONSE.md. Emojis are not allowed."
     exit 1
   fi
@@ -88,8 +87,7 @@ Report: "Using PROMPT file: {FILENAME}" and "Using MODEL_RESPONSE file: {FILENAM
 **MANDATORY EMOJI CHECK**:
 ```bash
 # Check for emojis in PROMPT files - if found, fail immediately
-# Use LC_ALL=C for consistent grep behavior across platforms
-if LC_ALL=C grep -E '[🚀🎯📊✨💡🔥⚡️🌟💻🛠️⚠️✅❌🔴🟢🟡]|:[a-z_]+:' lib/PROMPT*.md 2>/dev/null; then
+if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/PROMPT*.md 2>/dev/null; then
   echo "❌ CRITICAL: Emojis found in PROMPT.md files. Emojis are not allowed."
   exit 1
 fi
