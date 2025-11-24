@@ -1,0 +1,21 @@
+{
+  "task_id": "101912591",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-24T00:00:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "po_id": "101912591",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "training_quality": 10
+}
