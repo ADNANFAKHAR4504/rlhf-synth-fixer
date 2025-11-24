@@ -5,7 +5,7 @@
   "complexity": "expert",
   "team": "synth",
   "subtask": "Application Deployment",
-  "subject_labels": "Web Application Deployment",
+  "subject_labels": ["Web Application Deployment"],
   "aws_services": [
     "RDS",
     "EC2",
