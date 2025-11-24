@@ -150,7 +150,7 @@ export class SecurityStack extends pulumi.ComponentResource {
                 Sid: 'Allow CloudWatch Logs',
                 Effect: 'Allow',
                 Principal: {
-                  Service: `logs.us-east-1.amazonaws.com`,
+                  Service: 'logs.us-east-1.amazonaws.com',
                 },
                 Action: [
                   'kms:Encrypt',
