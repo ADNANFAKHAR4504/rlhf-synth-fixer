@@ -51,6 +51,14 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 - Verify latest PROMPT file (lib/PROMPT.md, lib/PROMPT2.md, or lib/PROMPT3.md) exists
 - Verify lib/IDEAL_RESPONSE.md exists
+- **MANDATORY EMOJI CHECK for IDEAL_RESPONSE.md**:
+  ```bash
+  # Check for emojis in IDEAL_RESPONSE.md - if found, fail immediately
+  if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/IDEAL_RESPONSE.md 2>/dev/null; then
+    echo "❌ CRITICAL: Emojis found in IDEAL_RESPONSE.md. Emojis are not allowed."
+    exit 1
+  fi
+  ```
 - Confirm integration tests in test/ folder
 - Return "PR is not ready" if missing
 
@@ -75,6 +83,15 @@ Report: "Using PROMPT file: {FILENAME}" and "Using MODEL_RESPONSE file: {FILENAM
 - On failure, see `docs/references/error-handling.md` Standard Error Response
 
 #### Step 3: PROMPT.md Style Validation
+
+**MANDATORY EMOJI CHECK**:
+```bash
+# Check for emojis in PROMPT files - if found, fail immediately
+if grep -P '[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{26FF}]|[\x{2700}-\x{27BF}]' lib/PROMPT*.md 2>/dev/null; then
+  echo "❌ CRITICAL: Emojis found in PROMPT.md files. Emojis are not allowed."
+  exit 1
+fi
+```
 
 **Validation**: Run Checkpoint D: PROMPT.md Style Validation
 - See `docs/references/validation-checkpoints.md` for style requirements
@@ -207,16 +224,62 @@ Training quality measures **learning value for model improvement**, NOT code qua
 
 **Step-by-step Process**:
 
-**Step 1: Check Critical Blockers (Automatic Fail)**
+**Step 1: Check Critical Blockers (Evaluate Fixability)**
 
-| Blocker | Set Score To | Action |
-|---------|--------------|--------|
-| Platform/language mismatch (e.g., task needs Pulumi+Go, got CDK+TypeScript) | 3 | STOP, BLOCK PR |
-| Wrong AWS region (if specified in task) | 5 | STOP, BLOCK PR |
-| Wrong AWS account | 3 | STOP, BLOCK PR |
-| Missing ≥50% of required AWS services | 4 | STOP, BLOCK PR |
+| Blocker | Set Score To | Fixable? | Action |
+|---------|--------------|----------|--------|
+| Platform/language mismatch (e.g., task needs Pulumi+Go, got CDK+TypeScript) | 3 | YES (regenerate) | Attempt regeneration → If fails, ERROR |
+| Wrong AWS region (if specified in task) | 5 | YES (redeploy) | Attempt region fix → If fails, ERROR |
+| Wrong AWS account | 3 | NO (manual) | ERROR immediately |
+| Missing ≥50% of required AWS services | 4 | YES (add services) | Attempt service addition → If fails, ERROR |
 
-**If ANY blocker present**: Set score to blocker value, skip to Step 6 (reporting).
+**Fix Attempt Logic**:
+1. **Wrong Region (Score 5)**:
+   - Check if region specified in task description
+   - If fixable: Update code to use correct region
+   - Regenerate/redeploy with correct region
+   - Recalculate score after fix
+   - If still < 8: Mark ERROR
+
+2. **Missing Services (Score 4)**:
+   - Identify missing services from task description
+   - If fixable: Add missing services to PROMPT.md
+   - Regenerate code with complete service list
+   - Recalculate score after fix
+   - If still < 8: Mark ERROR
+
+3. **Platform/Language Mismatch (Score 3)**:
+   - Verify mismatch is real (not false positive)
+   - If fixable: Regenerate with correct platform/language
+   - Recalculate score after fix
+   - If still < 8: Mark ERROR
+
+**Step 1.5: Fix Attempt Decision Tree**
+
+```
+START: Critical blocker detected
+  ↓
+Is blocker fixable?
+  ├─ NO (wrong AWS account, manual intervention) → ❌ ERROR immediately
+  └─ YES → Continue
+    ↓
+Attempt fix (regenerate/redeploy/add services)
+  ↓
+Fix successful?
+  ├─ NO → ❌ ERROR ("Fix attempt failed: {reason}")
+  └─ YES → Recalculate training_quality score
+    ↓
+New score ≥ 8?
+  ├─ YES → ✅ Continue to Step 2 (approve)
+  └─ NO → Check if iteration allowed
+    ↓
+Score 4-5 and iteration criteria met?
+  ├─ YES → ⚠️ ITERATE (see iteration-policy.md)
+  └─ NO → ❌ ERROR ("Score {score}/10 after fix attempt")
+```
+
+**If fix attempt succeeds and score ≥ 8**: Continue to Step 2 (approve)
+**If fix attempt fails or score still < 8**: Mark ERROR with reason
 
 **Step 2: Start with Base Score = 8**
 
@@ -244,38 +307,63 @@ Examples: Changed RDS instance size, added resource tags, used VPC endpoints
 
 **Adjustment**: Maintain score at 8 (±0 points)
 
-**Category C (Minor) → -1 to -2 points if ONLY these**:
+**Category C (Minor) → -1 to -2 points**:
 - Linting/formatting (code style, syntax errors)
 - Simple bug fixes (typos, missing commas, wrong property names)
 - Configuration tweaks (environment variables, hardcoded values)
 - Output additions (missing stack outputs for tests)
 
+**⚠️ CRITICAL**: Apply Category C penalty **ONLY if ALL fixes are Category C** (no Category A/B fixes present)
+
 Examples: Fixed linting errors, corrected typo, changed hardcoded region to variable
 
-**Adjustment**: ≥4 Category C fixes (only) → -1 point; ≥6 → -2 points
+**Adjustment Rules**:
+- If ≥6 Category C fixes (only) → -2 points
+- If 4-5 Category C fixes (only) → -1 point
+- If <4 Category C fixes (only) → See Category D below
+- If Category A/B fixes exist → Ignore Category C penalties (Category A dominates)
 
 **Category D (Minimal) → -2 to -4 points**:
-- Almost no fixes needed (MODEL_RESPONSE was 95%+ correct)
-- Trivial changes only (whitespace, comments, formatting)
-- <5 total fixes across ALL categories
+- Total fixes < 5 AND all fixes are Category C (trivial)
+- MODEL_RESPONSE was 95%+ correct
+- No Category A/B fixes exist
 
 Examples: 3 minor linting fixes + 1 missing output
 
-**Adjustment**: -2 to -4 points (model already too competent for this task)
+**Penalty Selection**:
+- 1-2 trivial fixes → -4 points
+- 3-4 trivial fixes → -3 points
+- 5+ trivial fixes → Use Category C penalty instead
+
+**Mixed Category Handling**:
+- **If Category A fixes exist**: Apply Category A bonus, ignore Category C penalties
+- **If only Category B fixes**: Apply ±0, ignore C/D penalties
+- **If only Category C fixes**: Apply Category C penalty rules
+- **If only Category D**: Apply Category D penalty
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Step 3 for complete rules
 
 **Step 4: Review IDEAL_RESPONSE.md - Evaluate Complexity**
 
-Count complexity factors:
+Evaluate complexity factors in **priority order**:
 
-| Complexity Factor | Points |
-|-------------------|--------|
-| Single AWS service, basic config | -1 |
-| Multiple services (3+) with integrations | +1 |
-| Security best practices (KMS, IAM policies, encryption) | +1 |
-| High availability (multi-AZ, auto-scaling, failover) | +1 |
-| Advanced patterns (event-driven, serverless, microservices) | +1 |
+| Complexity Factor | Points | Priority |
+|-------------------|--------|----------|
+| Multiple services (3+) with integrations | +1 | 1 (highest) |
+| Security best practices (KMS, IAM policies, encryption) | +1 | 2 |
+| High availability (multi-AZ, auto-scaling, failover) | +1 | 3 |
+| Advanced patterns (event-driven, serverless, microservices) | +1 | 4 |
+| Single AWS service, basic config | -1 | (independent) |
+
+**Priority Rules**:
+- Apply factors in priority order (1 → 2 → 3 → 4)
+- Stop when reaching +2 bonus cap
+- If all positive factors apply, take first 2 = +2 total
+- Single service penalty (-1) applies independently
 
 **Maximum complexity bonus: +2 points** (prevents score inflation)
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Step 4 for complete rules and examples
 
 **Step 5: Calculate Final Score**
 
@@ -283,10 +371,18 @@ Count complexity factors:
 Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 ```
 
+**Calculation Order**:
+1. Calculate: Base + MODEL_FAILURES + Complexity
+2. Apply cap: min(max(calculated, 0), 10)
+3. Round to nearest integer (0.5 rounds up)
+4. **NO manual adjustments** - use formula only
+
 **Constraints**:
 - Minimum: 0
 - Maximum: 10
 - Round to nearest integer
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Step 5 for complete calculation rules
 
 **Step 6: Interpret Score and Take Action**
 
@@ -294,16 +390,25 @@ Final Score = Base (8) + MODEL_FAILURES Adjustment + Complexity Adjustment
 |-------|---------|--------|
 | **9-10** | Excellent training value | ✅ APPROVE - Continue review |
 | **8** | Good training value (threshold) | ✅ APPROVE - Continue review |
-| **6-7** | Below threshold | ❌ BLOCK - List improvements needed |
-| **4-5** | Poor training value | ❌ BLOCK - Consider skip |
+| **6-7** | Below threshold | ⚠️ Evaluate iteration |
+| **4-5** | Below threshold | ⚠️ Evaluate iteration if fixable |
 | **0-3** | Insufficient/Critical issues | ❌ BLOCK - Mark as error |
+
+**Score 4-5 Evaluation**:
+1. Check MODEL_FAILURES.md for fix categories
+2. If Category A/B fixes exist: Evaluate iteration (see iteration-policy.md)
+3. If only Category C/D fixes: Mark ERROR ("Model competent")
+4. If iteration criteria met: Proceed with iteration
+5. If iteration criteria not met: Mark ERROR with reason
 
 **CRITICAL THRESHOLD: ≥8 required for PR creation**
 
 **Examples with Calculations**:
-1. **Score 9**: 2 Category A fixes (security + monitoring) + multi-service + security practices = 8 + 2 + 2 = 12 → capped at 10, final 9
-2. **Score 8**: 2 Category B fixes + standard setup = 8 + 0 + 0 = 8
-3. **Score 5**: 4 Category C fixes only + basic setup = 8 - 1 - 1 = 6, adjusted to 5 (model too good)
+1. **Score 10**: 2 Category A fixes (security + monitoring) + multi-service (+1, priority 1) + security practices (+1, priority 2) = 8 + 2 + 2 = 12 → capped at 10
+2. **Score 8**: 2 Category B fixes + 2 services (neutral) = 8 + 0 + 0 = 8
+3. **Score 5**: 3 Category C fixes only (<4) → Category D penalty (-3) + 2 services (neutral) = 8 - 3 + 0 = 5
+
+**Reference**: See `.claude/docs/policies/training-quality-guide.md` Examples section for detailed scenarios
 
 **Infrastructure Analysis Task Bonus**: If subject_labels contains "Infrastructure Analysis" or "Infrastructure Monitoring", evaluate the analysis script quality (lib/analyse.py or similar): check for professional tabular output (tabulate library), multiple realistic test scenarios (3+ per issue type), comprehensive data collection (resource details, metrics, context), and actionable findings. High-quality analysis data: +1 to +2 bonus; poor coverage or minimal value: -1 to -2 penalty.
 
@@ -533,10 +638,12 @@ Before posting your comment, verify:
 - Compare lib/IDEAL_RESPONSE.md with lib/TapStack.* implementation
   - **Skip detailed comparison if files are identical** (check hashes first: `md5sum`)
   - Only report actual differences
+  - **If differences found: suggest updating IDEAL_RESPONSE.md (NOT MODEL_RESPONSE.md)**
 - Calculate compliance percentage
 - **FOR SCORING ONLY**: Compare lib/IDEAL_RESPONSE.md and latest MODEL_RESPONSE file
   - **PURPOSE**: Understand what the model got wrong and what was fixed (for training quality score)
   - **NOT FOR**: Finding current errors (those are already fixed in IDEAL_RESPONSE.md!)
+  - **DO NOT suggest updating MODEL_RESPONSE.md** - it is read-only historical record
   - **Focus on infrastructure differences**: resources, configuration, security, architecture
   - Avoid listing trivial formatting/comment differences
   - Document significant fixes for MODEL_FAILURES analysis and training quality bonus

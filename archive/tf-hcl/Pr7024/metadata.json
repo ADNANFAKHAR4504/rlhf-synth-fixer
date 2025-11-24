@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350220",
+  "team": "4",
+  "startedAt": "2025-11-20T16:12:06.086Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "GuardDuty",
+    "WAF",
+    "Config",
+    "CloudWatch",
+    "SSM",
+    "Secrets Manager"
+  ],
+  "training_quality": 9,
+  "background": "Secure AWS infrastructure implementation following industry best practices. Implements comprehensive security controls including VPC isolation, KMS encryption, GuardDuty threat detection, WAF protection, CloudTrail auditing, AWS Config compliance monitoring, and secure RDS deployment. All resources follow least privilege IAM principles with proper tagging and naming conventions. Infrastructure includes 187 comprehensive tests (142 unit + 45 integration) validating both static configuration and deployed resources.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

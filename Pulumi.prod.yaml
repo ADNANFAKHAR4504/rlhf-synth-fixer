@@ -1,0 +1,6 @@
+config:
+  aws:region: us-east-1
+  payment-processing:environmentSuffix: prod-test-001
+  payment-processing:environment: prod
+  payment-processing:vpcCidr: 10.2.0.0/16
+  payment-processing:enableMultiAZ: true

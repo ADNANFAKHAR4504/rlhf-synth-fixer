@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "m1s5f7",
+  "team": "synth",
+  "startedAt": "2025-11-20T20:15:57+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "EventBridge",
+    "IAM",
+    "CloudWatch",
+    "S3"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
