@@ -5,8 +5,14 @@
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "startedAt": "2025-11-24T00:00:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Infrastructure",
+    "VPC and Networking"
+  ],
   "po_id": "101912591",
   "aws_services": [
     "VPC",
