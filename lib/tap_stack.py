@@ -1,6 +1,7 @@
 """Multi-region disaster recovery TAP Stack for payment processing system."""
 
 import json
+import os
 
 from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.backup_plan import (BackupPlan, BackupPlanRule,
@@ -865,6 +866,11 @@ def handler(event, context):
     return result
 """
 
+        # Get absolute path to lambda zip file
+        lambda_zip_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "lambda", "lambda_function.zip")
+        )
+
         # Primary Lambda Function
         primary_lambda = LambdaFunction(
             self,
@@ -875,8 +881,8 @@ def handler(event, context):
             runtime="python3.11",
             memory_size=1024,
             timeout=60,
-            filename="lib/lambda/lambda_function.zip",  # Would be created by build process
-            source_code_hash=Fn.filebase64sha256("lib/lambda/lambda_function.zip"),
+            filename=lambda_zip_path,  # Would be created by build process
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             vpc_config={
                 "subnet_ids": [
                     primary_private_subnet_1.id,
@@ -912,8 +918,8 @@ def handler(event, context):
             runtime="python3.11",
             memory_size=1024,
             timeout=60,
-            filename="lib/lambda/lambda_function.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda/lambda_function.zip"),
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             vpc_config={
                 "subnet_ids": [
                     secondary_private_subnet_1.id,
