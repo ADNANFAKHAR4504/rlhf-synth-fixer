@@ -438,6 +438,31 @@ export class TapStack extends pulumi.ComponentResource {
     secondaryRegions.forEach(region => {
       const vpc = vpcs[region];
 
+      // Create KMS key for encryption in secondary region
+      const kmsKey = new aws.kms.Key(
+        `aurora-kms-${region}-${environmentSuffix}`,
+        {
+          description: `KMS key for Aurora encryption in ${region}`,
+          enableKeyRotation: true,
+          tags: {
+            Name: `aurora-kms-${region}-${environmentSuffix}`,
+            Environment: environmentSuffix,
+            Region: region,
+          },
+        },
+        { provider: vpc.provider, parent: this }
+      );
+
+      // Create KMS key alias
+      new aws.kms.Alias(
+        `aurora-kms-alias-${region}-${environmentSuffix}`,
+        {
+          name: `alias/aurora-${region}-${environmentSuffix}`,
+          targetKeyId: kmsKey.id,
+        },
+        { provider: vpc.provider, parent: this }
+      );
+
       // Create DB subnet group
       const subnetGroup = new aws.rds.SubnetGroup(
         `db-subnet-group-${region}-${environmentSuffix}`,
@@ -495,6 +520,8 @@ export class TapStack extends pulumi.ComponentResource {
           vpcSecurityGroupIds: [dbSecurityGroup.id],
           skipFinalSnapshot: true,
           globalClusterIdentifier: globalCluster.id,
+          kmsKeyId: kmsKey.arn,
+          storageEncrypted: true,
           serverlessv2ScalingConfiguration: {
             minCapacity: 0.5,
             maxCapacity: 1.0,
@@ -508,7 +535,7 @@ export class TapStack extends pulumi.ComponentResource {
         {
           provider: vpc.provider,
           parent: this,
-          dependsOn: [globalCluster, primaryInstance],
+          dependsOn: [globalCluster, primaryInstance, kmsKey],
         }
       );
 
@@ -1057,7 +1084,7 @@ export class TapStack extends pulumi.ComponentResource {
     ecsResources: { [region: string]: EcsResources },
     vpcs: { [region: string]: VpcResources }
   ): MonitoringResources {
-    // Create SNS topic for notifications
+    // Create SNS topic for notifications in primary region
     const topic = new aws.sns.Topic(
       `migration-notifications-${environmentSuffix}`,
       {
@@ -1070,6 +1097,24 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+
+    // Create SNS topics in each region for CloudWatch alarms
+    const regionalTopics: { [region: string]: aws.sns.Topic } = {};
+    Object.keys(vpcs).forEach(region => {
+      regionalTopics[region] = new aws.sns.Topic(
+        `notifications-${region}-${environmentSuffix}`,
+        {
+          name: `notifications-${region}-${environmentSuffix}`,
+          displayName: `Notifications for ${region}`,
+          tags: {
+            Name: `notifications-${region}-${environmentSuffix}`,
+            Environment: environmentSuffix,
+            Region: region,
+          },
+        },
+        { provider: vpcs[region].provider, parent: this }
+      );
+    });
 
     // Create CloudWatch dashboard
     const dashboard = new aws.cloudwatch.Dashboard(
@@ -1160,7 +1205,7 @@ export class TapStack extends pulumi.ComponentResource {
           statistic: 'Average',
           threshold: 80,
           alarmDescription: `Alert when ECS CPU exceeds 80% in ${region}`,
-          alarmActions: [topic.arn],
+          alarmActions: [regionalTopics[region].arn],
           dimensions: {
             ClusterName: resources.cluster.name,
             ServiceName: resources.service.name,
