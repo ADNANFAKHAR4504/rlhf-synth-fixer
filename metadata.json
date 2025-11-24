@@ -8,8 +8,7 @@
   "startedAt": "2025-11-24T00:00:00Z",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Web Application Deployment",
-    "Serverless Application Deployment"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "Lambda",
