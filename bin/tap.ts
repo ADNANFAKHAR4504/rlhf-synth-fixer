@@ -11,27 +11,6 @@
 
 import * as infra from '../lib/tap-stack';
 
-// Get the environment suffix from environment variables, defaulting to 'dev'.
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-// Get metadata from environment variables for tagging purposes.
-// These are often injected by CI/CD systems.
-const repository = process.env.REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
-const prNumber = process.env.PR_NUMBER || 'unknown';
-const team = process.env.TEAM || 'unknown';
-const createdAt = new Date().toISOString();
-
-// Define a set of default tags to apply to all resources.
-const defaultTags = {
-  Environment: environmentSuffix,
-  Repository: repository,
-  Author: commitAuthor,
-  PRNumber: prNumber,
-  Team: team,
-  CreatedAt: createdAt,
-};
-
 // Export stack outputs from the infrastructure
 export const vpcId = infra.vpcId;
 export const vpcCidr = infra.vpcCidr;

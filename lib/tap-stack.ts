@@ -3,10 +3,9 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
-// Get configuration
-const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
-const region = aws.config.region || 'us-east-2';
+// Get configuration from environment variables
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-2';
 
 // Tags for all resources
 const commonTags = {
