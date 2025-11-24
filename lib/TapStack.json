@@ -655,7 +655,7 @@
                   "BranchName": {
                     "Ref": "CodeCommitBranchName"
                   },
-                  "PollForSourceChanges": false
+                  "PollForSourceChanges": true
                 },
                 "OutputArtifacts": [
                   {
@@ -806,57 +806,6 @@
                 }
               ]
             }
-          }
-        ]
-      }
-    },
-    "PipelineTriggerRule": {
-      "Type": "AWS::Events::Rule",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "pipeline-trigger-${EnvironmentSuffix}"
-        },
-        "Description": "Trigger pipeline on CodeCommit repository changes",
-        "EventPattern": {
-          "source": [
-            "aws.codecommit"
-          ],
-          "detail-type": [
-            "CodeCommit Repository State Change"
-          ],
-          "detail": {
-            "event": [
-              "referenceCreated",
-              "referenceUpdated"
-            ],
-            "referenceType": [
-              "branch"
-            ],
-            "referenceName": [
-              {
-                "Ref": "CodeCommitBranchName"
-              }
-            ]
-          },
-          "resources": [
-            {
-              "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}"
-            }
-          ]
-        },
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/microservices-pipeline-${EnvironmentSuffix}"
-            },
-            "RoleArn": {
-              "Fn::GetAtt": [
-                "PipelineEventRole",
-                "Arn"
-              ]
-            },
-            "Id": "PipelineTarget"
           }
         ]
       }
