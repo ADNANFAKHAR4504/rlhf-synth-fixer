@@ -7,7 +7,6 @@ from typing import Optional
 import aws_cdk as cdk
 from constructs import Construct
 
-from .compliance_config_construct import ComplianceConfigConstruct
 from .compliance_lambda_construct import ComplianceLambdaConstruct
 from .compliance_storage_construct import ComplianceStorageConstruct
 from .compliance_alerting_construct import ComplianceAlertingConstruct
@@ -33,7 +32,7 @@ class TapStack(cdk.Stack):
     Main CDK stack for automated compliance auditing system.
 
     Orchestrates all compliance infrastructure components including
-    AWS Config, Lambda functions, storage, alerting, and monitoring.
+    Lambda functions, storage, alerting, and monitoring.
     """
 
     def __init__(
@@ -88,16 +87,7 @@ class TapStack(cdk.Stack):
             alert_topic=alerting.critical_alert_topic
         )
 
-        # 5. AWS Config (rules and aggregator)
-        config_construct = ComplianceConfigConstruct(
-            self,
-            f"ComplianceConfig{environment_suffix}",
-            environment_suffix=environment_suffix,
-            config_bucket=storage.config_bucket,
-            remediation_lambda=lambda_construct.remediation_function
-        )
-
-        # 6. Monitoring (CloudWatch dashboard)
+        # 5. Monitoring (CloudWatch dashboard)
         monitoring = ComplianceMonitoringConstruct(
             self,
             f"ComplianceMonitoring{environment_suffix}",
@@ -117,9 +107,44 @@ class TapStack(cdk.Stack):
 
         cdk.CfnOutput(
             self,
+            "ConfigBucketName",
+            value=storage.config_bucket.bucket_name,
+            description="S3 bucket for Config data storage"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "VpcId",
+            value=network.vpc.vpc_id,
+            description="VPC ID for compliance infrastructure"
+        )
+
+        cdk.CfnOutput(
+            self,
             "ScannerFunctionName",
             value=lambda_construct.scanner_function.function_name,
-            description="Lambda function for cross-account scanning"
+            description="Lambda function for single-account scanning"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ScannerFunctionArn",
+            value=lambda_construct.scanner_function.function_arn,
+            description="ARN of scanner Lambda function"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "ReportGeneratorFunctionName",
+            value=lambda_construct.report_generator_function.function_name,
+            description="Lambda function for report generation"
+        )
+
+        cdk.CfnOutput(
+            self,
+            "RemediationFunctionName",
+            value=lambda_construct.remediation_function.function_name,
+            description="Lambda function for automatic remediation"
         )
 
         cdk.CfnOutput(

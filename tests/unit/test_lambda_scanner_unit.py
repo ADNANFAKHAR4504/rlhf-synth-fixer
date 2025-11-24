@@ -22,134 +22,154 @@ import scanner
 class TestScannerLambda:
     """Unit tests for scanner Lambda function."""
 
-    @patch('scanner.sts_client')
-    def test_assume_role_success(self, mock_sts):
-        """Test successful role assumption."""
-        mock_sts.assume_role.return_value = {
-            'Credentials': {
-                'AccessKeyId': 'AKIA...',
-                'SecretAccessKey': 'secret',
-                'SessionToken': 'token'
+    @patch('scanner.s3_client')
+    def test_check_s3_bucket_encryption_with_encryption(self, mock_s3):
+        """Test S3 bucket encryption check when encryption is enabled."""
+        mock_s3.list_buckets.return_value = {
+            'Buckets': [
+                {'Name': 'test-bucket-encrypted'}
+            ]
+        }
+        mock_s3.get_bucket_encryption.return_value = {
+            'ServerSideEncryptionConfiguration': {
+                'Rules': [{
+                    'ApplyServerSideEncryptionByDefault': {
+                        'SSEAlgorithm': 'AES256'
+                    }
+                }]
             }
         }
 
-        result = scanner.assume_role('123456789012', 'TestRole')
+        result = scanner.check_s3_bucket_encryption()
 
-        assert result is not None
-        assert 'AccessKeyId' in result
-        mock_sts.assume_role.assert_called_once()
+        assert len(result) == 1
+        assert result[0]['resource_type'] == 'S3Bucket'
+        assert result[0]['resource_id'] == 'test-bucket-encrypted'
+        assert result[0]['compliant'] is True
 
-    @patch('scanner.sts_client')
-    def test_assume_role_failure(self, mock_sts):
-        """Test role assumption failure."""
-        mock_sts.assume_role.side_effect = ClientError(
-            {'Error': {'Code': 'AccessDenied', 'Message': 'Access denied'}},
-            'AssumeRole'
+    @patch('scanner.s3_client')
+    def test_check_s3_bucket_encryption_without_encryption(self, mock_s3):
+        """Test S3 bucket encryption check when encryption is not enabled."""
+        mock_s3.list_buckets.return_value = {
+            'Buckets': [
+                {'Name': 'test-bucket-unencrypted'}
+            ]
+        }
+        mock_s3.get_bucket_encryption.side_effect = ClientError(
+            {'Error': {'Code': 'ServerSideEncryptionConfigurationNotFoundError', 'Message': 'Not found'}},
+            'GetBucketEncryption'
         )
 
-        result = scanner.assume_role('123456789012', 'TestRole')
+        result = scanner.check_s3_bucket_encryption()
 
-        assert result is None
+        assert len(result) == 1
+        assert result[0]['compliant'] is False
 
-    @patch('scanner.config_client')
-    def test_get_compliance_summary_no_credentials(self, mock_config):
-        """Test getting compliance summary without cross-account credentials."""
-        mock_config.describe_config_rules.return_value = {
-            'ConfigRules': [
-                {'ConfigRuleName': 'test-rule', 'ConfigRuleId': 'rule-123'}
+    @patch('scanner.ec2_client')
+    def test_check_vpc_flow_logs_enabled(self, mock_ec2):
+        """Test VPC flow logs check when flow logs are enabled."""
+        mock_ec2.describe_vpcs.return_value = {
+            'Vpcs': [
+                {'VpcId': 'vpc-12345'}
             ]
         }
-        mock_config.describe_compliance_by_config_rule.return_value = {
-            'ComplianceByConfigRules': [
-                {
-                    'Compliance': {
-                        'ComplianceType': 'COMPLIANT'
-                    }
-                }
+        mock_ec2.describe_flow_logs.return_value = {
+            'FlowLogs': [
+                {'FlowLogId': 'fl-12345'}
             ]
         }
 
-        result = scanner.get_compliance_summary()
+        result = scanner.check_vpc_flow_logs()
 
-        assert result['compliant'] == 1
-        assert result['non_compliant'] == 0
-        assert len(result['rules']) == 1
+        assert len(result) == 1
+        assert result[0]['resource_type'] == 'VPC'
+        assert result[0]['resource_id'] == 'vpc-12345'
+        assert result[0]['compliant'] is True
 
-    @patch('scanner.config_client')
-    def test_get_compliance_summary_with_credentials(self, mock_config):
-        """Test getting compliance summary with cross-account credentials."""
-        credentials = {
-            'AccessKeyId': 'AKIA...',
-            'SecretAccessKey': 'secret',
-            'SessionToken': 'token'
+    @patch('scanner.ec2_client')
+    def test_check_vpc_flow_logs_disabled(self, mock_ec2):
+        """Test VPC flow logs check when flow logs are not enabled."""
+        mock_ec2.describe_vpcs.return_value = {
+            'Vpcs': [
+                {'VpcId': 'vpc-67890'}
+            ]
+        }
+        mock_ec2.describe_flow_logs.return_value = {
+            'FlowLogs': []
         }
 
-        with patch('scanner.boto3.client') as mock_boto3_client:
-            mock_cross_config = MagicMock()
-            mock_boto3_client.return_value = mock_cross_config
+        result = scanner.check_vpc_flow_logs()
 
-            mock_cross_config.describe_config_rules.return_value = {
-                'ConfigRules': [
-                    {'ConfigRuleName': 'test-rule', 'ConfigRuleId': 'rule-123'}
-                ]
-            }
-            mock_cross_config.describe_compliance_by_config_rule.return_value = {
-                'ComplianceByConfigRules': [
+        assert len(result) == 1
+        assert result[0]['compliant'] is False
+
+    @patch('scanner.lambda_client')
+    def test_check_lambda_settings_tracing_enabled(self, mock_lambda):
+        """Test Lambda settings check when tracing is enabled."""
+        mock_paginator = MagicMock()
+        mock_lambda.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [
+            {
+                'Functions': [
                     {
-                        'Compliance': {
-                            'ComplianceType': 'NON_COMPLIANT'
-                        }
+                        'FunctionName': 'test-function',
+                        'TracingConfig': {'Mode': 'Active'},
+                        'ReservedConcurrentExecutions': 5
                     }
                 ]
             }
-
-            result = scanner.get_compliance_summary(credentials)
-
-            assert result['non_compliant'] == 1
-            assert result['compliant'] == 0
-
-    @patch('scanner.config_client')
-    def test_get_compliance_summary_mixed_statuses(self, mock_config):
-        """Test compliance summary with mixed compliance statuses."""
-        mock_config.describe_config_rules.return_value = {
-            'ConfigRules': [
-                {'ConfigRuleName': 'rule-1', 'ConfigRuleId': 'id-1'},
-                {'ConfigRuleName': 'rule-2', 'ConfigRuleId': 'id-2'},
-                {'ConfigRuleName': 'rule-3', 'ConfigRuleId': 'id-3'},
-                {'ConfigRuleName': 'rule-4', 'ConfigRuleId': 'id-4'}
-            ]
-        }
-
-        compliance_responses = [
-            {'ComplianceByConfigRules': [{'Compliance': {'ComplianceType': 'COMPLIANT'}}]},
-            {'ComplianceByConfigRules': [{'Compliance': {'ComplianceType': 'NON_COMPLIANT'}}]},
-            {'ComplianceByConfigRules': [{'Compliance': {'ComplianceType': 'NOT_APPLICABLE'}}]},
-            {'ComplianceByConfigRules': [{'Compliance': {'ComplianceType': 'INSUFFICIENT_DATA'}}]}
         ]
 
-        mock_config.describe_compliance_by_config_rule.side_effect = compliance_responses
+        result = scanner.check_lambda_settings()
+
+        assert len(result) == 2  # Two checks per function
+        assert result[0]['compliant'] is True  # Tracing enabled
+        assert result[1]['compliant'] is True  # Reserved concurrency set
+
+    @patch('scanner.lambda_client')
+    def test_check_lambda_settings_tracing_disabled(self, mock_lambda):
+        """Test Lambda settings check when tracing is not enabled."""
+        mock_paginator = MagicMock()
+        mock_lambda.get_paginator.return_value = mock_paginator
+        mock_paginator.paginate.return_value = [
+            {
+                'Functions': [
+                    {
+                        'FunctionName': 'test-function-2',
+                        'TracingConfig': {'Mode': 'PassThrough'}
+                    }
+                ]
+            }
+        ]
+
+        result = scanner.check_lambda_settings()
+
+        assert len(result) == 2
+        assert result[0]['compliant'] is False  # Tracing not enabled
+        assert result[1]['compliant'] is False  # No reserved concurrency
+
+    @patch('scanner.check_lambda_settings')
+    @patch('scanner.check_vpc_flow_logs')
+    @patch('scanner.check_s3_bucket_encryption')
+    def test_get_compliance_summary(self, mock_s3_check, mock_vpc_check, mock_lambda_check):
+        """Test compliance summary aggregation."""
+        mock_s3_check.return_value = [
+            {'compliant': True, 'resource_type': 'S3Bucket'},
+            {'compliant': False, 'resource_type': 'S3Bucket'}
+        ]
+        mock_vpc_check.return_value = [
+            {'compliant': True, 'resource_type': 'VPC'}
+        ]
+        mock_lambda_check.return_value = [
+            {'compliant': False, 'resource_type': 'LambdaFunction'}
+        ]
 
         result = scanner.get_compliance_summary()
 
-        assert result['compliant'] == 1
-        assert result['non_compliant'] == 1
-        assert result['not_applicable'] == 1
-        assert result['insufficient_data'] == 1
-        assert len(result['rules']) == 4
-
-    @patch('scanner.config_client')
-    def test_get_compliance_summary_api_error(self, mock_config):
-        """Test compliance summary with API error."""
-        mock_config.describe_config_rules.side_effect = ClientError(
-            {'Error': {'Code': 'AccessDenied', 'Message': 'Access denied'}},
-            'DescribeConfigRules'
-        )
-
-        result = scanner.get_compliance_summary()
-
-        assert result['compliant'] == 0
-        assert result['non_compliant'] == 0
-        assert len(result['rules']) == 0
+        assert result['compliant'] == 2
+        assert result['non_compliant'] == 2
+        assert result['total_checks'] == 4
+        assert len(result['checks']) == 4
 
     @patch('scanner.s3_client')
     def test_save_scan_results_success(self, mock_s3):
@@ -223,17 +243,16 @@ class TestScannerLambda:
     @patch('scanner.save_scan_results')
     @patch('scanner.get_compliance_summary')
     @patch('scanner.sts_client')
-    def test_handler_single_account_compliant(
+    def test_handler_compliant(
         self, mock_sts, mock_get_compliance, mock_save, mock_send_alert, mock_trigger
     ):
-        """Test handler with single compliant account."""
+        """Test handler with all compliant checks."""
         mock_sts.get_caller_identity.return_value = {'Account': '123456789012'}
         mock_get_compliance.return_value = {
             'compliant': 10,
             'non_compliant': 0,
-            'not_applicable': 0,
-            'insufficient_data': 0,
-            'rules': []
+            'total_checks': 10,
+            'checks': []
         }
         mock_save.return_value = 'scans/2024-01-01/scan.json'
 
@@ -253,17 +272,16 @@ class TestScannerLambda:
     @patch('scanner.save_scan_results')
     @patch('scanner.get_compliance_summary')
     @patch('scanner.sts_client')
-    def test_handler_single_account_non_compliant(
+    def test_handler_non_compliant(
         self, mock_sts, mock_get_compliance, mock_save, mock_send_alert, mock_trigger
     ):
-        """Test handler with single non-compliant account."""
+        """Test handler with non-compliant checks."""
         mock_sts.get_caller_identity.return_value = {'Account': '123456789012'}
         mock_get_compliance.return_value = {
             'compliant': 5,
             'non_compliant': 3,
-            'not_applicable': 0,
-            'insufficient_data': 0,
-            'rules': []
+            'total_checks': 8,
+            'checks': []
         }
         mock_save.return_value = 'scans/2024-01-01/scan.json'
 
@@ -278,62 +296,6 @@ class TestScannerLambda:
         mock_send_alert.assert_called_once()
         mock_trigger.assert_called_once()
 
-    @patch('scanner.trigger_report_generation')
-    @patch('scanner.send_alert')
-    @patch('scanner.save_scan_results')
-    @patch('scanner.assume_role')
-    @patch('scanner.get_compliance_summary')
-    @patch('scanner.sts_client')
-    def test_handler_cross_account_scan(
-        self, mock_sts, mock_get_compliance, mock_assume_role,
-        mock_save, mock_send_alert, mock_trigger
-    ):
-        """Test handler with cross-account scanning."""
-        mock_sts.get_caller_identity.return_value = {'Account': '123456789012'}
-
-        # First call for current account, second for target account
-        mock_get_compliance.side_effect = [
-            {
-                'compliant': 10,
-                'non_compliant': 0,
-                'not_applicable': 0,
-                'insufficient_data': 0,
-                'rules': []
-            },
-            {
-                'compliant': 8,
-                'non_compliant': 2,
-                'not_applicable': 0,
-                'insufficient_data': 0,
-                'rules': []
-            }
-        ]
-
-        mock_assume_role.return_value = {
-            'AccessKeyId': 'AKIA...',
-            'SecretAccessKey': 'secret',
-            'SessionToken': 'token'
-        }
-
-        mock_save.return_value = 'scans/2024-01-01/scan.json'
-
-        event = {
-            'detail': {
-                'target_accounts': [
-                    {'account_id': '999888777666', 'role_name': 'ComplianceAuditRole'}
-                ]
-            }
-        }
-        context = {}
-
-        result = scanner.handler(event, context)
-
-        assert result['statusCode'] == 200
-        body = json.loads(result['body'])
-        assert body['total_non_compliant'] == 2
-        mock_assume_role.assert_called_once()
-        mock_send_alert.assert_called_once()
-
     @patch('scanner.save_scan_results')
     @patch('scanner.get_compliance_summary')
     @patch('scanner.sts_client')
@@ -345,9 +307,8 @@ class TestScannerLambda:
         mock_get_compliance.return_value = {
             'compliant': 10,
             'non_compliant': 0,
-            'not_applicable': 0,
-            'insufficient_data': 0,
-            'rules': []
+            'total_checks': 10,
+            'checks': []
         }
         mock_save.return_value = None
 
@@ -359,78 +320,3 @@ class TestScannerLambda:
 
             assert result['statusCode'] == 200
             mock_trigger.assert_not_called()
-
-    @patch('scanner.config_client')
-    def test_get_compliance_summary_with_exception_handling(self, mock_config):
-        """Test compliance summary with exception in rule-specific query."""
-        mock_config.describe_config_rules.return_value = {
-            'ConfigRules': [
-                {'ConfigRuleName': 'rule-1', 'ConfigRuleId': 'id-1'},
-                {'ConfigRuleName': 'rule-2', 'ConfigRuleId': 'id-2'}
-            ]
-        }
-
-        # First call succeeds, second call fails
-        mock_config.describe_compliance_by_config_rule.side_effect = [
-            {
-                'ComplianceByConfigRules': [
-                    {'Compliance': {'ComplianceType': 'COMPLIANT'}}
-                ]
-            },
-            ClientError(
-                {'Error': {'Code': 'AccessDenied', 'Message': 'Access denied'}},
-                'DescribeComplianceByConfigRule'
-            )
-        ]
-
-        result = scanner.get_compliance_summary()
-
-        # Should have partial results from first rule
-        assert result['compliant'] == 1
-        assert len(result['rules']) == 1
-
-    @patch('scanner.trigger_report_generation')
-    @patch('scanner.send_alert')
-    @patch('scanner.save_scan_results')
-    @patch('scanner.assume_role')
-    @patch('scanner.get_compliance_summary')
-    @patch('scanner.sts_client')
-    def test_handler_cross_account_assume_role_failure(
-        self, mock_sts, mock_get_compliance, mock_assume_role,
-        mock_save, mock_send_alert, mock_trigger
-    ):
-        """Test handler when cross-account assume role fails."""
-        mock_sts.get_caller_identity.return_value = {'Account': '123456789012'}
-
-        # Only current account scan succeeds
-        mock_get_compliance.return_value = {
-            'compliant': 10,
-            'non_compliant': 0,
-            'not_applicable': 0,
-            'insufficient_data': 0,
-            'rules': []
-        }
-
-        # Assume role fails
-        mock_assume_role.return_value = None
-
-        mock_save.return_value = 'scans/2024-01-01/scan.json'
-
-        event = {
-            'detail': {
-                'target_accounts': [
-                    {'account_id': '999888777666', 'role_name': 'ComplianceAuditRole'}
-                ]
-            }
-        }
-        context = {}
-
-        result = scanner.handler(event, context)
-
-        # Should still succeed with only current account
-        assert result['statusCode'] == 200
-        body = json.loads(result['body'])
-        assert body['total_non_compliant'] == 0
-        mock_assume_role.assert_called_once()
-        # get_compliance_summary should only be called once (for current account)
-        assert mock_get_compliance.call_count == 1

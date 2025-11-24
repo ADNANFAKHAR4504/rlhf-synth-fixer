@@ -29,7 +29,7 @@ self.report_generator_function = lambda_.Function(
     code=lambda_.Code.from_asset("lib/lambda/report_generator"),
     timeout=cdk.Duration.minutes(5),
     memory_size=1024,
-    managed_policies=[  # ❌ THIS PARAMETER DOESN'T EXIST
+    managed_policies=[  #  THIS PARAMETER DOESN'T EXIST
         iam.ManagedPolicy.from_aws_managed_policy_name(
             "service-role/AWSLambdaVPCAccessExecutionRole"
         ),
@@ -56,7 +56,7 @@ self.report_generator_role = iam.Role(
     "ReportGeneratorLambdaRole",
     role_name=f"compliance-report-generator-role-{environment_suffix}",
     assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-    managed_policies=[  # ✅ MANAGED POLICIES GO HERE
+    managed_policies=[  #  MANAGED POLICIES GO HERE
         iam.ManagedPolicy.from_aws_managed_policy_name(
             "service-role/AWSLambdaVPCAccessExecutionRole"
         ),
@@ -74,7 +74,7 @@ self.report_generator_function = lambda_.Function(
     runtime=lambda_.Runtime.PYTHON_3_9,
     handler="report_generator.handler",
     code=lambda_.Code.from_asset("lib/lambda/report_generator"),
-    role=self.report_generator_role,  # ✅ PASS ROLE HERE
+    role=self.report_generator_role,  #  PASS ROLE HERE
     timeout=cdk.Duration.minutes(5),
     memory_size=1024,
     vpc=vpc,
@@ -159,9 +159,9 @@ To prevent similar failures, the model should be trained on:
 ## Conclusion
 
 The MODEL_RESPONSE required **1 critical fix** related to Lambda Function IAM role configuration in CDK Python. Once corrected, the infrastructure code achieves:
-- ✅ 100% test coverage (379/379 statements)
-- ✅ 10.00/10 lint score
-- ✅ Successful CDK synthesis
-- ✅ All 73 unit tests passing
+-  100% test coverage (379/379 statements)
+-  10.00/10 lint score
+-  Successful CDK synthesis
+-  All 73 unit tests passing
 
 This demonstrates that the core architecture and logic were sound, but the platform-specific API usage needs improvement in future model training.

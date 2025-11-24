@@ -1,6 +1,6 @@
 # Security, Compliance, and Governance
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using cdk with py**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using cdk with py**
 > 
 > Platform: **cdk**  
 > Language: **py**  
@@ -11,26 +11,27 @@
 ---
 
 ## Background
-A financial services company needs automated infrastructure compliance auditing to meet regulatory requirements. Their existing manual reviews are time-consuming and error-prone, requiring a programmatic solution to continuously validate infrastructure configurations against security policies and generate audit reports.
+A financial services company need s automated infrastructure compliance auditing to meet regulatory requirements. Their existing manual reviews are time-consuming and error-prone, requiring a programmatic solution to continuously validate infrastructure configurations against security policies and generate audit reports.
 
 ## Problem Statement
 Create a CDK Python program to build an automated infrastructure compliance auditing system. The configuration must:
 
-1. Deploy AWS Config with custom rules to evaluate S3 bucket encryption, VPC flow log configuration, and Lambda function settings
-2. Create a Lambda function (Python 3.9, 1GB memory) that performs cross-account infrastructure scanning using AssumeRole
-3. Configure EventBridge rules to trigger compliance scans every 6 hours and on-demand via custom events
-4. Set up an S3 bucket with versioning and lifecycle rules to store audit reports for 90 days
-5. Implement Lambda functions to generate compliance reports in both JSON and CSV formats
-6. Create SNS topics for critical non-compliance alerts with email subscriptions
-7. Configure AWS Config aggregator to collect compliance data from multiple accounts
-8. Deploy CloudWatch dashboards showing compliance metrics and trend analysis
-9. Ensure all Lambda functions have X-Ray tracing enabled for debugging
-10. Implement automatic remediation Lambda for specific violations (like enabling S3 encryption)
+1. Create a Lambda function (Python 3.9, 1GB memory) that performs single-account infrastructure scanning using direct AWS API calls to check:
+   - S3 bucket encryption status
+   - VPC flow log configuration
+   - Lambda function X-Ray tracing settings
+2. Configure EventBridge rules to trigger compliance scans every 6 hours and on-demand via custom events
+3. Set up an S3 bucket with versioning and lifecycle rules to store audit reports for 90 days
+4. Implement Lambda functions to generate compliance reports in both JSON and CSV formats
+5. Create SNS topics for critical non-compliance alerts with email subscriptions
+6. Deploy CloudWatch dashboards showing compliance metrics and trend analysis
+7. Ensure all Lambda functions have X-Ray tracing enabled for debugging
+8. Implement automatic remediation Lambda for specific violations (like enabling S3 encryption) that can be triggered manually or via custom events
 
-**Expected output:** A CDK stack that deploys a complete compliance auditing system capable of scanning infrastructure across multiple accounts, generating detailed reports, and alerting on violations with some automatic remediation capabilities.
+**Expected output:** A CDK stack that deploys a complete compliance auditing system capable of scanning infrastructure within a single account using direct API calls (without AWS Config), generating detailed reports, and alerting on violations with manual remediation capabilities.
 
 ## Environment
-Infrastructure compliance validation system deployed in us-east-1 using AWS Config for configuration tracking, Lambda for custom rule evaluation, S3 for audit report storage, and EventBridge for scheduling periodic compliance checks. Requires CDK 2.x with Python 3.9+, boto3 SDK installed. Resources span multiple AWS accounts accessed via AssumeRole. VPC with private subnets for Lambda execution, VPC endpoints for AWS service access. Audit reports generated in JSON and CSV formats stored in versioned S3 buckets with lifecycle policies.
+Infrastructure compliance validation system deployed in us-east-1 using direct AWS API calls for resource compliance checking, Lambda for scanning and report generation, S3 for audit report storage, and EventBridge for scheduling periodic compliance checks. Requires CDK 2.x with Python 3.9+, boto3 SDK installed. Single account deployment. VPC with private subnets for Lambda execution, VPC endpoints for AWS service access. Audit reports generated in JSON and CSV formats stored in versioned S3 buckets with lifecycle policies.
 
 ## Constraints and Requirements
 - All Lambda functions must have reserved concurrent executions set to prevent resource exhaustion
@@ -90,23 +91,19 @@ Infrastructure compliance validation system deployed in us-east-1 using AWS Conf
 - If task requires GuardDuty, add comment: "GuardDuty should be enabled manually at account level"
 
 #### AWS Config
-- **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
-- **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
+- **NOTE**: AWS Config is NOT used in this implementation. Compliance checking is performed via direct AWS API calls (S3, EC2, Lambda APIs) instead of Config rules.
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)

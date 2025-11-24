@@ -16,7 +16,7 @@ class ComplianceConfigConstruct(Construct):
     AWS Config infrastructure for compliance monitoring.
 
     Creates Config recorder, custom rules for S3, VPC, and Lambda compliance,
-    and Config aggregator for multi-account data collection.
+    and Config aggregator for single-account data collection.
 
     Note: Only one Config recorder can exist per region per account.
     This will fail if a recorder already exists.
@@ -114,8 +114,8 @@ class ComplianceConfigConstruct(Construct):
             description="Trigger automatic remediation for S3 encryption violations"
         )
 
-        # Config Aggregator for multi-account compliance data
-        # Note: Aggregator requires authorization from source accounts
+        # Config Aggregator for single-account compliance data
+        # Aggregates data from current account only
         self.config_aggregator = config.CfnConfigurationAggregator(
             self,
             "ConfigAggregator",

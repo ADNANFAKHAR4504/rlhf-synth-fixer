@@ -135,26 +135,6 @@ class TestRemediationLambda:
         # Should not raise exception
         remediation.send_remediation_alert('AWS::S3::Bucket', 'test-bucket', 'Enable encryption', True)
 
-    def test_handler_compliant_resource(self):
-        """Test handler with compliant resource (no remediation needed)."""
-        event = {
-            'detail': {
-                'configRuleName': 's3-bucket-encryption-enabled',
-                'newEvaluationResult': {
-                    'complianceType': 'COMPLIANT'
-                },
-                'resourceType': 'AWS::S3::Bucket',
-                'resourceId': 'test-bucket'
-            }
-        }
-        context = {}
-
-        result = remediation.handler(event, context)
-
-        assert result['statusCode'] == 200
-        body = json.loads(result['body'])
-        assert 'No remediation needed' in body['message']
-
     @patch('remediation.send_remediation_alert')
     @patch('remediation.enable_s3_encryption')
     def test_handler_s3_encryption_remediation(self, mock_enable_encryption, mock_send_alert):
@@ -163,12 +143,9 @@ class TestRemediationLambda:
 
         event = {
             'detail': {
-                'configRuleName': 's3-bucket-encryption-enabled',
-                'newEvaluationResult': {
-                    'complianceType': 'NON_COMPLIANT'
-                },
-                'resourceType': 'AWS::S3::Bucket',
-                'resourceId': 'test-bucket'
+                'resource_type': 'S3Bucket',
+                'resource_id': 'test-bucket',
+                'check': 'EncryptionEnabled'
             }
         }
         context = {}
@@ -190,12 +167,9 @@ class TestRemediationLambda:
 
         event = {
             'detail': {
-                'configRuleName': 's3-bucket-versioning-enabled',
-                'newEvaluationResult': {
-                    'complianceType': 'NON_COMPLIANT'
-                },
-                'resourceType': 'AWS::S3::Bucket',
-                'resourceId': 'test-bucket'
+                'resource_type': 'S3Bucket',
+                'resource_id': 'test-bucket',
+                'check': 'VersioningEnabled'
             }
         }
         context = {}
@@ -217,12 +191,9 @@ class TestRemediationLambda:
 
         event = {
             'detail': {
-                'configRuleName': 'lambda-function-tracing-enabled',
-                'newEvaluationResult': {
-                    'complianceType': 'NON_COMPLIANT'
-                },
-                'resourceType': 'AWS::Lambda::Function',
-                'resourceId': 'test-function'
+                'resource_type': 'LambdaFunction',
+                'resource_id': 'test-function',
+                'check': 'XRayTracingEnabled'
             }
         }
         context = {}
@@ -244,12 +215,9 @@ class TestRemediationLambda:
 
         event = {
             'detail': {
-                'configRuleName': 's3-bucket-encryption-enabled',
-                'newEvaluationResult': {
-                    'complianceType': 'NON_COMPLIANT'
-                },
-                'resourceType': 'AWS::S3::Bucket',
-                'resourceId': 'test-bucket'
+                'resource_type': 'S3Bucket',
+                'resource_id': 'test-bucket',
+                'check': 'EncryptionEnabled'
             }
         }
         context = {}
@@ -260,19 +228,16 @@ class TestRemediationLambda:
         body = json.loads(result['body'])
         assert body['success'] is False
         mock_send_alert.assert_called_once_with(
-            'AWS::S3::Bucket', 'test-bucket', 'Enable S3 encryption', False
+            'S3Bucket', 'test-bucket', 'Enable S3 encryption', False
         )
 
     def test_handler_no_remediation_available(self):
         """Test handler when no remediation is available for the violation."""
         event = {
             'detail': {
-                'configRuleName': 'some-other-rule',
-                'newEvaluationResult': {
-                    'complianceType': 'NON_COMPLIANT'
-                },
-                'resourceType': 'AWS::EC2::Instance',
-                'resourceId': 'i-1234567890'
+                'resource_type': 'VPC',
+                'resource_id': 'vpc-1234567890',
+                'check': 'FlowLogsEnabled'
             }
         }
         context = {}
@@ -290,31 +255,23 @@ class TestRemediationLambda:
 
         result = remediation.handler(event, context)
 
-        assert result['statusCode'] == 200
+        assert result['statusCode'] == 400
         body = json.loads(result['body'])
-        assert 'No remediation' in body['message']
+        assert 'Missing required parameters' in body['message']
 
-    @patch('remediation.send_remediation_alert')
-    @patch('remediation.enable_s3_encryption')
-    def test_handler_case_insensitive_rule_matching(self, mock_enable_encryption, mock_send_alert):
-        """Test that rule matching is case-insensitive."""
-        mock_enable_encryption.return_value = True
-
+    def test_handler_direct_invocation(self):
+        """Test handler with direct invocation format (no detail wrapper)."""
         event = {
-            'detail': {
-                'configRuleName': 'S3-BUCKET-ENCRYPTION-ENABLED',
-                'newEvaluationResult': {
-                    'complianceType': 'NON_COMPLIANT'
-                },
-                'resourceType': 'AWS::S3::Bucket',
-                'resourceId': 'test-bucket'
-            }
+            'resource_type': 'S3Bucket',
+            'resource_id': 'test-bucket',
+            'check': 'EncryptionEnabled'
         }
         context = {}
 
-        result = remediation.handler(event, context)
+        with patch('remediation.enable_s3_encryption') as mock_enable:
+            with patch('remediation.send_remediation_alert'):
+                mock_enable.return_value = True
+                result = remediation.handler(event, context)
 
-        assert result['statusCode'] == 200
-        body = json.loads(result['body'])
-        assert body['success'] is True
-        mock_enable_encryption.assert_called_once()
+                assert result['statusCode'] == 200
+                mock_enable.assert_called_once_with('test-bucket')

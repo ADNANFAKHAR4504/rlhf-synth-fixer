@@ -17,7 +17,7 @@ class ComplianceLambdaConstruct(Construct):
     """
     Lambda functions for compliance operations.
 
-    Creates functions for cross-account scanning, report generation,
+    Creates functions for single-account scanning, report generation,
     and automatic remediation with EventBridge scheduling.
     """
 
@@ -33,7 +33,7 @@ class ComplianceLambdaConstruct(Construct):
     ):
         super().__init__(scope, construct_id)
 
-        # IAM role for cross-account scanning (AssumeRole)
+        # IAM role for single-account scanning
         self.scanner_role = iam.Role(
             self,
             "ScannerLambdaRole",
@@ -49,31 +49,23 @@ class ComplianceLambdaConstruct(Construct):
             ]
         )
 
-        # Add cross-account AssumeRole permissions
-        self.scanner_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["sts:AssumeRole"],
-                resources=["arn:aws:iam::*:role/ComplianceAuditRole-*"]
-            )
-        )
-
-        # Add AWS Config read permissions
+        # Add permissions to check S3, EC2, and Lambda resources
         self.scanner_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=[
-                    "config:DescribeComplianceByConfigRule",
-                    "config:DescribeComplianceByResource",
-                    "config:GetComplianceDetailsByConfigRule",
-                    "config:GetComplianceDetailsByResource",
-                    "config:DescribeConfigRules"
+                    "s3:ListAllMyBuckets",
+                    "s3:GetBucketEncryption",
+                    "ec2:DescribeVpcs",
+                    "ec2:DescribeFlowLogs",
+                    "lambda:ListFunctions",
+                    "lambda:GetFunction"
                 ],
                 resources=["*"]
             )
         )
 
-        # Lambda function for cross-account infrastructure scanning
+        # Lambda function for single-account infrastructure scanning
         self.scanner_function = lambda_.Function(
             self,
             "ScannerFunction",

@@ -1,18 +1,18 @@
 # AWS Compliance Auditing System - CDK Python Implementation
 
-This implementation creates a comprehensive automated infrastructure compliance auditing system using AWS CDK with Python. The system deploys AWS Config with custom rules, Lambda functions for cross-account scanning and report generation, EventBridge for scheduling, S3 for audit storage, SNS for alerts, CloudWatch dashboards for metrics, and automatic remediation capabilities.
+This implementation creates a comprehensive automated infrastructure compliance auditing system using AWS CDK with Python. The system deploys AWS Config with custom rules, Lambda functions for single-account scanning and report generation, EventBridge for scheduling, S3 for audit storage, SNS for alerts, CloudWatch dashboards for metrics, and automatic remediation capabilities.
 
 ## Architecture Overview
 
 The solution includes:
-- AWS Config with custom compliance rules and aggregator
+- AWS Config with custom compliance rules and single-account aggregator
 - Lambda functions for scanning, report generation, and auto-remediation
 - EventBridge rules for 6-hour scheduled scans and custom events
 - S3 bucket with versioning, KMS encryption, and 90-day lifecycle
 - SNS topics for critical alerts
 - CloudWatch dashboard for compliance metrics
 - VPC with private subnets and VPC endpoints
-- Cross-account IAM role for AssumeRole scanning
+- Single-account deployment with scoped IAM permissions
 
 ## File: lib/tap_stack.py
 
@@ -138,7 +138,7 @@ class TapStack(cdk.Stack):
             self,
             "ScannerFunctionName",
             value=lambda_construct.scanner_function.function_name,
-            description="Lambda function for cross-account scanning"
+            description="Lambda function for single-account scanning"
         )
 
         cdk.CfnOutput(
@@ -492,7 +492,7 @@ class ComplianceLambdaConstruct(Construct):
     """
     Lambda functions for compliance operations.
 
-    Creates functions for cross-account scanning, report generation,
+    Creates functions for single-account scanning, report generation,
     and automatic remediation with EventBridge scheduling.
     """
 
@@ -508,7 +508,7 @@ class ComplianceLambdaConstruct(Construct):
     ):
         super().__init__(scope, construct_id)
 
-        # IAM role for cross-account scanning (AssumeRole)
+        # IAM role for single-account scanning
         self.scanner_role = iam.Role(
             self,
             "ScannerLambdaRole",
@@ -522,15 +522,6 @@ class ComplianceLambdaConstruct(Construct):
                     "AWSXRayDaemonWriteAccess"
                 )
             ]
-        )
-
-        # Add cross-account AssumeRole permissions
-        self.scanner_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["sts:AssumeRole"],
-                resources=["arn:aws:iam::*:role/ComplianceAuditRole-*"]
-            )
         )
 
         # Add AWS Config read permissions
@@ -548,7 +539,7 @@ class ComplianceLambdaConstruct(Construct):
             )
         )
 
-        # Lambda function for cross-account infrastructure scanning
+        # Lambda function for single-account infrastructure scanning
         self.scanner_function = lambda_.Function(
             self,
             "ScannerFunction",
@@ -719,7 +710,7 @@ class ComplianceConfigConstruct(Construct):
     AWS Config infrastructure for compliance monitoring.
 
     Creates Config recorder, custom rules for S3, VPC, and Lambda compliance,
-    and Config aggregator for multi-account data collection.
+    and Config aggregator for single-account data collection.
 
     Note: Only one Config recorder can exist per region per account.
     This will fail if a recorder already exists.
@@ -817,8 +808,8 @@ class ComplianceConfigConstruct(Construct):
             description="Trigger automatic remediation for S3 encryption violations"
         )
 
-        # Config Aggregator for multi-account compliance data
-        # Note: Aggregator requires authorization from source accounts
+        # Config Aggregator for single-account compliance data
+        # Aggregates data from current account only
         self.config_aggregator = config.CfnConfigurationAggregator(
             self,
             "ConfigAggregator",
@@ -959,7 +950,7 @@ class ComplianceMonitoringConstruct(Construct):
 
 ```python
 """scanner.py
-Lambda function for cross-account infrastructure compliance scanning.
+Lambda function for single-account infrastructure compliance scanning.
 """
 
 import json
@@ -980,49 +971,14 @@ ALERT_TOPIC_ARN = os.environ['ALERT_TOPIC_ARN']
 ENVIRONMENT_SUFFIX = os.environ['ENVIRONMENT_SUFFIX']
 
 
-def assume_role(account_id, role_name):
+def get_compliance_summary():
     """
-    Assume role in target account for cross-account scanning.
-
-    Args:
-        account_id: AWS account ID
-        role_name: IAM role name to assume
-
-    Returns:
-        Temporary credentials
-    """
-    role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-
-    try:
-        response = sts_client.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName=f"ComplianceScan-{ENVIRONMENT_SUFFIX}"
-        )
-        return response['Credentials']
-    except ClientError as e:
-        print(f"Error assuming role {role_arn}: {e}")
-        return None
-
-
-def get_compliance_summary(credentials=None):
-    """
-    Get compliance summary from AWS Config.
-
-    Args:
-        credentials: Optional temporary credentials for cross-account access
+    Get compliance summary from AWS Config for the current account.
 
     Returns:
         Dictionary of compliance results
     """
-    if credentials:
-        config_client_cross = boto3.client(
-            'config',
-            aws_access_key_id=credentials['AccessKeyId'],
-            aws_secret_access_key=credentials['SecretAccessKey'],
-            aws_session_token=credentials['SessionToken']
-        )
-    else:
-        config_client_cross = config_client
+    config_client_cross = config_client
 
     compliance_summary = {
         'compliant': 0,

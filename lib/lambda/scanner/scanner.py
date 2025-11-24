@@ -1,5 +1,5 @@
 """scanner.py
-Lambda function for cross-account infrastructure compliance scanning.
+Lambda function for single-account infrastructure compliance scanning.
 """
 
 import json
@@ -9,107 +9,171 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 # Initialize AWS clients
-sts_client = boto3.client('sts')
-s3_client = boto3.client('s3')
-config_client = boto3.client('config')
-sns_client = boto3.client('sns')
-events_client = boto3.client('events')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+sts_client = boto3.client('sts', region_name=AWS_REGION)
+s3_client = boto3.client('s3', region_name=AWS_REGION)
+ec2_client = boto3.client('ec2', region_name=AWS_REGION)
+lambda_client = boto3.client('lambda', region_name=AWS_REGION)
+sns_client = boto3.client('sns', region_name=AWS_REGION)
+events_client = boto3.client('events', region_name=AWS_REGION)
 
 AUDIT_BUCKET = os.environ['AUDIT_BUCKET']
 ALERT_TOPIC_ARN = os.environ['ALERT_TOPIC_ARN']
 ENVIRONMENT_SUFFIX = os.environ['ENVIRONMENT_SUFFIX']
 
 
-def assume_role(account_id, role_name):
+def check_s3_bucket_encryption():
     """
-    Assume role in target account for cross-account scanning.
-
-    Args:
-        account_id: AWS account ID
-        role_name: IAM role name to assume
+    Check S3 buckets for encryption compliance.
 
     Returns:
-        Temporary credentials
+        List of compliance check results
     """
-    role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-
+    results = []
     try:
-        response = sts_client.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName=f"ComplianceScan-{ENVIRONMENT_SUFFIX}"
-        )
-        return response['Credentials']
+        buckets_response = s3_client.list_buckets()
+
+        for bucket in buckets_response.get('Buckets', []):
+            bucket_name = bucket['Name']
+
+            try:
+                # Check encryption
+                encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
+                is_encrypted = True
+                encryption_type = encryption['ServerSideEncryptionConfiguration']['Rules'][0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm']
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
+                    is_encrypted = False
+                    encryption_type = 'None'
+                else:
+                    # Skip buckets we can't access
+                    continue
+
+            results.append({
+                'resource_type': 'S3Bucket',
+                'resource_id': bucket_name,
+                'check': 'EncryptionEnabled',
+                'compliant': is_encrypted,
+                'details': f'Encryption: {encryption_type}'
+            })
+
     except ClientError as e:
-        print(f"Error assuming role {role_arn}: {e}")
-        return None
+        print(f"Error checking S3 buckets: {e}")
+
+    return results
 
 
-def get_compliance_summary(credentials=None):
+def check_vpc_flow_logs():
     """
-    Get compliance summary from AWS Config.
+    Check VPCs for flow logs compliance.
 
-    Args:
-        credentials: Optional temporary credentials for cross-account access
+    Returns:
+        List of compliance check results
+    """
+    results = []
+    try:
+        # Get all VPCs
+        vpcs_response = ec2_client.describe_vpcs()
+
+        for vpc in vpcs_response.get('Vpcs', []):
+            vpc_id = vpc['VpcId']
+
+            # Check for flow logs
+            flow_logs_response = ec2_client.describe_flow_logs(
+                Filters=[
+                    {'Name': 'resource-id', 'Values': [vpc_id]}
+                ]
+            )
+
+            has_flow_logs = len(flow_logs_response.get('FlowLogs', [])) > 0
+
+            results.append({
+                'resource_type': 'VPC',
+                'resource_id': vpc_id,
+                'check': 'FlowLogsEnabled',
+                'compliant': has_flow_logs,
+                'details': f'Flow logs: {"Enabled" if has_flow_logs else "Disabled"}'
+            })
+
+    except ClientError as e:
+        print(f"Error checking VPC flow logs: {e}")
+
+    return results
+
+
+def check_lambda_settings():
+    """
+    Check Lambda functions for compliance settings.
+
+    Returns:
+        List of compliance check results
+    """
+    results = []
+    try:
+        # Get all Lambda functions
+        paginator = lambda_client.get_paginator('list_functions')
+
+        for page in paginator.paginate():
+            for function in page.get('Functions', []):
+                function_name = function['FunctionName']
+
+                # Check X-Ray tracing
+                tracing_config = function.get('TracingConfig', {})
+                tracing_mode = tracing_config.get('Mode', 'PassThrough')
+                tracing_enabled = tracing_mode == 'Active'
+
+                results.append({
+                    'resource_type': 'LambdaFunction',
+                    'resource_id': function_name,
+                    'check': 'XRayTracingEnabled',
+                    'compliant': tracing_enabled,
+                    'details': f'Tracing mode: {tracing_mode}'
+                })
+
+                # Check if function has reserved concurrency (optional check)
+                reserved_concurrency = function.get('ReservedConcurrentExecutions')
+                has_reserved_concurrency = reserved_concurrency is not None
+
+                results.append({
+                    'resource_type': 'LambdaFunction',
+                    'resource_id': function_name,
+                    'check': 'ReservedConcurrencySet',
+                    'compliant': has_reserved_concurrency,
+                    'details': f'Reserved concurrency: {reserved_concurrency if has_reserved_concurrency else "Not set"}'
+                })
+
+    except ClientError as e:
+        print(f"Error checking Lambda functions: {e}")
+
+    return results
+
+
+def get_compliance_summary():
+    """
+    Get compliance summary by checking resources directly.
 
     Returns:
         Dictionary of compliance results
     """
-    if credentials:
-        config_client_cross = boto3.client(
-            'config',
-            aws_access_key_id=credentials['AccessKeyId'],
-            aws_secret_access_key=credentials['SecretAccessKey'],
-            aws_session_token=credentials['SessionToken']
-        )
-    else:
-        config_client_cross = config_client
+    all_checks = []
 
+    # Run all compliance checks
+    print("Checking S3 bucket encryption...")
+    all_checks.extend(check_s3_bucket_encryption())
+
+    print("Checking VPC flow logs...")
+    all_checks.extend(check_vpc_flow_logs())
+
+    print("Checking Lambda function settings...")
+    all_checks.extend(check_lambda_settings())
+
+    # Aggregate results
     compliance_summary = {
-        'compliant': 0,
-        'non_compliant': 0,
-        'not_applicable': 0,
-        'insufficient_data': 0,
-        'rules': []
+        'compliant': sum(1 for check in all_checks if check['compliant']),
+        'non_compliant': sum(1 for check in all_checks if not check['compliant']),
+        'total_checks': len(all_checks),
+        'checks': all_checks
     }
-
-    try:
-        # Get all Config rules
-        rules_response = config_client_cross.describe_config_rules()
-
-        for rule in rules_response.get('ConfigRules', []):
-            rule_name = rule['ConfigRuleName']
-
-            # Get compliance details for each rule
-            try:
-                compliance_response = config_client_cross.describe_compliance_by_config_rule(
-                    ConfigRuleNames=[rule_name]
-                )
-
-                for compliance in compliance_response.get('ComplianceByConfigRules', []):
-                    status = compliance['Compliance']['ComplianceType']
-
-                    rule_info = {
-                        'rule_name': rule_name,
-                        'status': status,
-                        'rule_id': rule.get('ConfigRuleId', 'N/A')
-                    }
-
-                    compliance_summary['rules'].append(rule_info)
-
-                    if status == 'COMPLIANT':
-                        compliance_summary['compliant'] += 1
-                    elif status == 'NON_COMPLIANT':
-                        compliance_summary['non_compliant'] += 1
-                    elif status == 'NOT_APPLICABLE':
-                        compliance_summary['not_applicable'] += 1
-                    else:
-                        compliance_summary['insufficient_data'] += 1
-
-            except ClientError as e:
-                print(f"Error getting compliance for rule {rule_name}: {e}")
-
-    except ClientError as e:
-        print(f"Error describing Config rules: {e}")
 
     return compliance_summary
 
@@ -189,16 +253,10 @@ def handler(event, context):
     """
     Main Lambda handler for compliance scanning.
 
-    Performs cross-account infrastructure compliance scanning,
+    Performs single-account infrastructure compliance scanning,
     aggregates results, and triggers alerts and reports.
     """
     print(f"Starting compliance scan - Environment: {ENVIRONMENT_SUFFIX}")
-
-    scan_results = {
-        'timestamp': datetime.utcnow().isoformat(),
-        'environment': ENVIRONMENT_SUFFIX,
-        'accounts': []
-    }
 
     # Scan current account
     print("Scanning current account...")
@@ -206,44 +264,16 @@ def handler(event, context):
 
     compliance_summary = get_compliance_summary()
 
-    account_result = {
+    scan_results = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'environment': ENVIRONMENT_SUFFIX,
         'account_id': current_account_id,
         'compliance_summary': compliance_summary
     }
 
-    scan_results['accounts'].append(account_result)
-
-    # Check for cross-account scan requests in event
-    target_accounts = event.get('detail', {}).get('target_accounts', [])
-
-    for account_info in target_accounts:
-        account_id = account_info.get('account_id')
-        role_name = account_info.get('role_name', 'ComplianceAuditRole')
-
-        print(f"Scanning account {account_id}...")
-
-        credentials = assume_role(account_id, role_name)
-        if credentials:
-            compliance_summary = get_compliance_summary(credentials)
-
-            account_result = {
-                'account_id': account_id,
-                'compliance_summary': compliance_summary
-            }
-
-            scan_results['accounts'].append(account_result)
-
     # Calculate total compliance metrics
-    total_compliant = sum(acc['compliance_summary']['compliant']
-                          for acc in scan_results['accounts'])
-    total_non_compliant = sum(acc['compliance_summary']['non_compliant']
-                              for acc in scan_results['accounts'])
-
-    scan_results['total_summary'] = {
-        'compliant': total_compliant,
-        'non_compliant': total_non_compliant,
-        'total_rules': total_compliant + total_non_compliant
-    }
+    total_compliant = compliance_summary['compliant']
+    total_non_compliant = compliance_summary['non_compliant']
 
     # Save results
     scan_key = save_scan_results(scan_results)

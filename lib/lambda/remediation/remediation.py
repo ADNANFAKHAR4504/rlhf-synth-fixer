@@ -7,9 +7,10 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
-s3_client = boto3.client('s3')
-lambda_client = boto3.client('lambda')
-sns_client = boto3.client('sns')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+s3_client = boto3.client('s3', region_name=AWS_REGION)
+lambda_client = boto3.client('lambda', region_name=AWS_REGION)
+sns_client = boto3.client('sns', region_name=AWS_REGION)
 
 ALERT_TOPIC_ARN = os.environ['ALERT_TOPIC_ARN']
 ENVIRONMENT_SUFFIX = os.environ['ENVIRONMENT_SUFFIX']
@@ -133,28 +134,31 @@ def handler(event, context):
     """
     Main Lambda handler for automatic remediation.
 
-    Triggered by AWS Config compliance change events.
+    Triggered by custom events or manual invocation.
     Performs automatic remediation for specific violation types.
     """
     print(f"Starting automatic remediation - Environment: {ENVIRONMENT_SUFFIX}")
 
-    # Parse Config rule compliance change event
+    # Parse custom remediation event
     detail = event.get('detail', {})
-    config_rule_name = detail.get('configRuleName', '')
-    compliance_type = detail.get('newEvaluationResult', {}).get('complianceType', '')
-    resource_type = detail.get('resourceType', '')
-    resource_id = detail.get('resourceId', '')
+    resource_type = detail.get('resource_type', '')
+    resource_id = detail.get('resource_id', '')
+    check = detail.get('check', '')
 
-    print(f"Config Rule: {config_rule_name}")
-    print(f"Compliance: {compliance_type}")
+    # Support direct invocation format as well
+    if not resource_type:
+        resource_type = event.get('resource_type', '')
+        resource_id = event.get('resource_id', '')
+        check = event.get('check', '')
+
+    print(f"Check: {check}")
     print(f"Resource: {resource_type}/{resource_id}")
 
-    # Only remediate non-compliant resources
-    if compliance_type != 'NON_COMPLIANT':
-        print("Resource is compliant, no remediation needed")
+    if not resource_type or not resource_id:
+        print("Missing required parameters: resource_type and resource_id")
         return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'No remediation needed'})
+            'statusCode': 400,
+            'body': json.dumps({'message': 'Missing required parameters'})
         }
 
     remediation_performed = False
@@ -162,19 +166,19 @@ def handler(event, context):
     success = False
 
     # S3 bucket encryption remediation
-    if resource_type == 'AWS::S3::Bucket' and 'encryption' in config_rule_name.lower():
+    if resource_type == 'S3Bucket' and check == 'EncryptionEnabled':
         action = "Enable S3 encryption"
         success = enable_s3_encryption(resource_id)
         remediation_performed = True
 
-    # S3 bucket versioning remediation
-    elif resource_type == 'AWS::S3::Bucket' and 'versioning' in config_rule_name.lower():
+    # S3 bucket versioning remediation (if needed)
+    elif resource_type == 'S3Bucket' and 'versioning' in check.lower():
         action = "Enable S3 versioning"
         success = enable_s3_versioning(resource_id)
         remediation_performed = True
 
     # Lambda tracing remediation
-    elif resource_type == 'AWS::Lambda::Function' and 'tracing' in config_rule_name.lower():
+    elif resource_type == 'LambdaFunction' and check == 'XRayTracingEnabled':
         action = "Enable Lambda X-Ray tracing"
         success = enable_lambda_tracing(resource_id)
         remediation_performed = True
