@@ -1,7 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Multi-region disaster recovery solution for payment processing system with Lambda, DynamoDB Global Tables, S3 replication, Route 53 failover, and comprehensive monitoring",
-
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -15,19 +14,30 @@
       "Type": "String",
       "Description": "Environment name for tagging",
       "Default": "production",
-      "AllowedValues": ["production", "staging", "development"]
+      "AllowedValues": [
+        "production",
+        "staging",
+        "development"
+      ]
     },
     "IsPrimaryRegion": {
       "Type": "String",
       "Description": "Set to 'true' for primary region (us-east-1), 'false' for secondary (us-west-2)",
       "Default": "true",
-      "AllowedValues": ["true", "false"]
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
     },
     "SecondaryRegion": {
       "Type": "String",
       "Description": "Secondary region for replication",
       "Default": "us-west-2",
-      "AllowedValues": ["us-west-2", "eu-west-1", "ap-southeast-1"]
+      "AllowedValues": [
+        "us-west-2",
+        "eu-west-1",
+        "ap-southeast-1"
+      ]
     },
     "AlertEmail": {
       "Type": "String",
@@ -48,18 +58,24 @@
       "MaxValue": 1000
     }
   },
-
   "Conditions": {
     "IsPrimary": {
-      "Fn::Equals": [{"Ref": "IsPrimaryRegion"}, "true"]
+      "Fn::Equals": [
+        {
+          "Ref": "IsPrimaryRegion"
+        },
+        "true"
+      ]
     },
     "IsSecondary": {
-      "Fn::Not": [{"Condition": "IsPrimary"}]
+      "Fn::Not": [
+        {
+          "Condition": "IsPrimary"
+        }
+      ]
     }
   },
-
   "Resources": {
-
     "PaymentProcessingTable": {
       "Type": "AWS::DynamoDB::GlobalTable",
       "Properties": {
@@ -121,7 +137,9 @@
             "Tags": [
               {
                 "Key": "Environment",
-                "Value": {"Ref": "EnvironmentName"}
+                "Value": {
+                  "Ref": "EnvironmentName"
+                }
               },
               {
                 "Key": "Region",
@@ -134,18 +152,24 @@
             ]
           },
           {
-            "Region": {"Ref": "SecondaryRegion"},
+            "Region": {
+              "Ref": "SecondaryRegion"
+            },
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
             },
             "Tags": [
               {
                 "Key": "Environment",
-                "Value": {"Ref": "EnvironmentName"}
+                "Value": {
+                  "Ref": "EnvironmentName"
+                }
               },
               {
                 "Key": "Region",
-                "Value": {"Ref": "SecondaryRegion"}
+                "Value": {
+                  "Ref": "SecondaryRegion"
+                }
               },
               {
                 "Key": "Service",
@@ -156,7 +180,6 @@
         ]
       }
     },
-
     "TransactionLogsBucket": {
       "Type": "AWS::S3::Bucket",
       "Condition": "IsPrimary",
@@ -203,16 +226,19 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "TransactionLogsBucketSecondary": {
       "Type": "AWS::S3::Bucket",
       "Condition": "IsSecondary",
@@ -259,16 +285,19 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "ReplicationRole": {
       "Type": "AWS::IAM::Role",
       "Condition": "IsPrimary",
@@ -301,10 +330,9 @@
                     "s3:ListBucket"
                   ],
                   "Resource": {
-                    "Fn::If": [
-                      "IsPrimary",
-                      {"Fn::GetAtt": ["TransactionLogsBucket", "Arn"]},
-                      {"Fn::GetAtt": ["TransactionLogsBucketSecondary", "Arn"]}
+                    "Fn::GetAtt": [
+                      "TransactionLogsBucket",
+                      "Arn"
                     ]
                   }
                 },
@@ -316,11 +344,7 @@
                     "s3:GetObjectVersionTagging"
                   ],
                   "Resource": {
-                    "Fn::If": [
-                      "IsPrimary",
-                      {"Fn::Sub": "${TransactionLogsBucket.Arn}/*"},
-                      {"Fn::Sub": "${TransactionLogsBucketSecondary.Arn}/*"}
-                    ]
+                    "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
                   }
                 },
                 {
@@ -341,12 +365,13 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           }
         ]
       }
     },
-
     "ApiSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
@@ -362,25 +387,32 @@
             "IsPrimary",
             [
               {
-                "Region": {"Ref": "SecondaryRegion"}
+                "Region": {
+                  "Ref": "SecondaryRegion"
+                }
               }
             ],
-            {"Ref": "AWS::NoValue"}
+            {
+              "Ref": "AWS::NoValue"
+            }
           ]
         },
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -419,7 +451,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": ["PaymentProcessingTable", "Arn"]
+                      "Fn::GetAtt": [
+                        "PaymentProcessingTable",
+                        "Arn"
+                      ]
                     },
                     {
                       "Fn::Sub": "${PaymentProcessingTable.Arn}/index/*"
@@ -461,8 +496,12 @@
                   "Resource": {
                     "Fn::If": [
                       "IsPrimary",
-                      {"Fn::Sub": "${TransactionLogsBucket.Arn}/*"},
-                      {"Fn::Sub": "${TransactionLogsBucketSecondary.Arn}/*"}
+                      {
+                        "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
+                      },
+                      {
+                        "Fn::Sub": "${TransactionLogsBucketSecondary.Arn}/*"
+                      }
                     ]
                   }
                 }
@@ -473,12 +512,13 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           }
         ]
       }
     },
-
     "PaymentProcessingFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -488,15 +528,24 @@
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
         "Role": {
-          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Timeout": 30,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": {"Ref": "LambdaReservedConcurrency"},
+        "ReservedConcurrentExecutions": {
+          "Ref": "LambdaReservedConcurrency"
+        },
         "Environment": {
           "Variables": {
-            "REGION": {"Ref": "AWS::Region"},
-            "ENVIRONMENT": {"Ref": "EnvironmentName"},
+            "REGION": {
+              "Ref": "AWS::Region"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentName"
+            },
             "TABLE_NAME": {
               "Ref": "PaymentProcessingTable"
             },
@@ -506,11 +555,17 @@
             "LOGS_BUCKET": {
               "Fn::If": [
                 "IsPrimary",
-                {"Ref": "TransactionLogsBucket"},
-                {"Ref": "TransactionLogsBucketSecondary"}
+                {
+                  "Ref": "TransactionLogsBucket"
+                },
+                {
+                  "Ref": "TransactionLogsBucketSecondary"
+                }
               ]
             },
-            "IS_PRIMARY": {"Ref": "IsPrimaryRegion"}
+            "IS_PRIMARY": {
+              "Ref": "IsPrimaryRegion"
+            }
           }
         },
         "Code": {
@@ -519,31 +574,42 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "FunctionUrl": {
       "Type": "AWS::Lambda::Url",
       "Properties": {
         "TargetFunctionArn": {
-          "Fn::GetAtt": ["PaymentProcessingFunction", "Arn"]
+          "Fn::GetAtt": [
+            "PaymentProcessingFunction",
+            "Arn"
+          ]
         },
         "AuthType": "NONE",
         "Cors": {
-          "AllowOrigins": ["*"],
-          "AllowMethods": ["POST"],
-          "AllowHeaders": ["Content-Type"]
+          "AllowOrigins": [
+            "*"
+          ],
+          "AllowMethods": [
+            "POST"
+          ],
+          "AllowHeaders": [
+            "Content-Type"
+          ]
         }
       }
     },
-
     "FunctionUrlPermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
@@ -555,7 +621,6 @@
         "FunctionUrlAuthType": "NONE"
       }
     },
-
     "HealthCheckFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -565,13 +630,18 @@
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
         "Role": {
-          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
         },
         "Timeout": 10,
         "MemorySize": 256,
         "Environment": {
           "Variables": {
-            "REGION": {"Ref": "AWS::Region"},
+            "REGION": {
+              "Ref": "AWS::Region"
+            },
             "TABLE_NAME": {
               "Ref": "PaymentProcessingTable"
             }
@@ -583,26 +653,31 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "HealthCheckUrl": {
       "Type": "AWS::Lambda::Url",
       "Properties": {
         "TargetFunctionArn": {
-          "Fn::GetAtt": ["HealthCheckFunction", "Arn"]
+          "Fn::GetAtt": [
+            "HealthCheckFunction",
+            "Arn"
+          ]
         },
         "AuthType": "NONE"
       }
     },
-
     "HealthCheckUrlPermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
@@ -614,19 +689,22 @@
         "FunctionUrlAuthType": "NONE"
       }
     },
-
     "HostedZone": {
       "Type": "AWS::Route53::HostedZone",
       "Condition": "IsPrimary",
       "Properties": {
-        "Name": {"Ref": "HostedZoneName"},
+        "Name": {
+          "Ref": "HostedZoneName"
+        },
         "HostedZoneConfig": {
           "Comment": "Hosted zone for multi-region payment processing system"
         },
         "HostedZoneTags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Service",
@@ -635,7 +713,6 @@
         ]
       }
     },
-
     "HealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
       "Properties": {
@@ -643,7 +720,20 @@
           "Type": "HTTPS",
           "ResourcePath": "/",
           "FullyQualifiedDomainName": {
-            "Fn::Select": [2, {"Fn::Split": ["/", {"Fn::GetAtt": ["HealthCheckUrl", "FunctionUrl"]}]}]
+            "Fn::Select": [
+              2,
+              {
+                "Fn::Split": [
+                  "/",
+                  {
+                    "Fn::GetAtt": [
+                      "HealthCheckUrl",
+                      "FunctionUrl"
+                    ]
+                  }
+                ]
+              }
+            ]
           },
           "Port": 443,
           "RequestInterval": 30,
@@ -658,12 +748,13 @@
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "DNSRecord": {
       "Type": "AWS::Route53::RecordSet",
       "Condition": "IsPrimary",
@@ -678,13 +769,24 @@
         "SetIdentifier": {
           "Fn::Sub": "${AWS::Region}-endpoint"
         },
-        "Weight": {
-          "Fn::If": ["IsPrimary", 100, 50]
-        },
+        "Weight": 100,
         "TTL": "60",
         "ResourceRecords": [
           {
-            "Fn::Select": [2, {"Fn::Split": ["/", {"Fn::GetAtt": ["FunctionUrl", "FunctionUrl"]}]}]
+            "Fn::Select": [
+              2,
+              {
+                "Fn::Split": [
+                  "/",
+                  {
+                    "Fn::GetAtt": [
+                      "FunctionUrl",
+                      "FunctionUrl"
+                    ]
+                  }
+                ]
+              }
+            ]
           }
         ],
         "HealthCheckId": {
@@ -692,7 +794,6 @@
         }
       }
     },
-
     "AlertTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
@@ -702,23 +803,28 @@
         "DisplayName": "Payment Processing Alerts",
         "Subscription": [
           {
-            "Endpoint": {"Ref": "AlertEmail"},
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
             "Protocol": "email"
           }
         ],
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "LambdaErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -749,7 +855,6 @@
         "TreatMissingData": "notBreaching"
       }
     },
-
     "LambdaThrottleAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -779,7 +884,6 @@
         ]
       }
     },
-
     "DynamoDBReadThrottleAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -810,7 +914,6 @@
         "TreatMissingData": "notBreaching"
       }
     },
-
     "DynamoDBWriteThrottleAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -841,7 +944,6 @@
         "TreatMissingData": "notBreaching"
       }
     },
-
     "ReplicationLatencyAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Condition": "IsPrimary",
@@ -861,11 +963,7 @@
           {
             "Name": "SourceBucket",
             "Value": {
-              "Fn::If": [
-                "IsPrimary",
-                {"Ref": "TransactionLogsBucket"},
-                {"Ref": "TransactionLogsBucketSecondary"}
-              ]
+              "Ref": "TransactionLogsBucket"
             }
           },
           {
@@ -887,7 +985,6 @@
       }
     }
   },
-
   "Outputs": {
     "DynamoDBTableName": {
       "Description": "Name of the DynamoDB Global Table",
@@ -903,7 +1000,10 @@
     "DynamoDBTableArn": {
       "Description": "ARN of the DynamoDB Global Table",
       "Value": {
-        "Fn::GetAtt": ["PaymentProcessingTable", "Arn"]
+        "Fn::GetAtt": [
+          "PaymentProcessingTable",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -916,8 +1016,12 @@
       "Value": {
         "Fn::If": [
           "IsPrimary",
-          {"Ref": "TransactionLogsBucket"},
-          {"Ref": "TransactionLogsBucketSecondary"}
+          {
+            "Ref": "TransactionLogsBucket"
+          },
+          {
+            "Ref": "TransactionLogsBucketSecondary"
+          }
         ]
       },
       "Export": {
@@ -931,8 +1035,18 @@
       "Value": {
         "Fn::If": [
           "IsPrimary",
-          {"Fn::GetAtt": ["TransactionLogsBucket", "Arn"]},
-          {"Fn::GetAtt": ["TransactionLogsBucketSecondary", "Arn"]}
+          {
+            "Fn::GetAtt": [
+              "TransactionLogsBucket",
+              "Arn"
+            ]
+          },
+          {
+            "Fn::GetAtt": [
+              "TransactionLogsBucketSecondary",
+              "Arn"
+            ]
+          }
         ]
       },
       "Export": {
@@ -944,7 +1058,10 @@
     "LambdaFunctionArn": {
       "Description": "ARN of the payment processing Lambda function",
       "Value": {
-        "Fn::GetAtt": ["PaymentProcessingFunction", "Arn"]
+        "Fn::GetAtt": [
+          "PaymentProcessingFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -955,7 +1072,10 @@
     "LambdaFunctionUrl": {
       "Description": "URL of the payment processing Lambda function",
       "Value": {
-        "Fn::GetAtt": ["FunctionUrl", "FunctionUrl"]
+        "Fn::GetAtt": [
+          "FunctionUrl",
+          "FunctionUrl"
+        ]
       },
       "Export": {
         "Name": {
@@ -966,7 +1086,10 @@
     "HealthCheckUrl": {
       "Description": "URL of the health check endpoint",
       "Value": {
-        "Fn::GetAtt": ["HealthCheckUrl", "FunctionUrl"]
+        "Fn::GetAtt": [
+          "HealthCheckUrl",
+          "FunctionUrl"
+        ]
       },
       "Export": {
         "Name": {
