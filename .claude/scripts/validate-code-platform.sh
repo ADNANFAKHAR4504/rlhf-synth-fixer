@@ -46,7 +46,7 @@ if [ "$EXPECTED_PLATFORM" = "analysis" ]; then
         print_success "Analysis script found in lib/"
 
         # Only validate language (should be python or bash)
-        if [ "$EXPECTED_LANGUAGE" = "py" ] || [ "$EXPECTED_LANGUAGE" = "python" ]; then
+        if [ "$EXPECTED_LANGUAGE" = "py" ] || [ "$EXPECTED_LANGUAGE" = "py" ]; then
             if grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
                 print_success "Language matches: Python script detected"
                 exit 0
@@ -133,8 +133,7 @@ elif grep -qE '```typescript|```ts|import.*from|interface |\.ts' lib/IDEAL_RESPO
     DETECTED_LANGUAGE="ts"
 # Check for HCL (Terraform configuration language) - MUST check before Python
 # Because Terraform files may reference .py files (e.g., lambda.py) which would match Python pattern
-# Use word boundary for .tf to avoid false positives on "software.tf" etc.
-elif grep -qE '```(hcl|terraform)|resource "aws_|provider "aws"|\.tf\b' lib/IDEAL_RESPONSE.md; then
+elif grep -qE '```hcl|```terraform|resource "aws_|provider "aws"|\.tf' lib/IDEAL_RESPONSE.md; then
     DETECTED_LANGUAGE="hcl"
 # Check for Python
 elif grep -qE '```python|```py|^import |^def |\.py' lib/IDEAL_RESPONSE.md; then
