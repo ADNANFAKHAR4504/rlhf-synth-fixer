@@ -39,9 +39,6 @@
   "Conditions": {
     "IsProduction": {
       "Fn::Equals": [{"Ref": "EnvironmentType"}, "production"]
-    },
-    "IsNonProduction": {
-      "Fn::Not": [{"Condition": "IsProduction"}]
     }
   },
   "Resources": {
@@ -208,7 +205,8 @@
         "FunctionName": {"Ref": "CSVProcessorFunction"},
         "Action": "lambda:InvokeFunction",
         "Principal": "s3.amazonaws.com",
-        "SourceArn": {"Fn::GetAtt": ["AnalyticsDataBucket", "Arn"]}
+        "SourceArn": {"Fn::GetAtt": ["AnalyticsDataBucket", "Arn"]},
+        "SourceAccount": {"Ref": "AWS::AccountId"}
       }
     },
     "MetadataTable": {
@@ -259,10 +257,10 @@
         ]
       },
       "DeletionPolicy": {
-        "Fn::If": ["IsProduction", "Snapshot", "Delete"]
+        "Fn::If": ["IsProduction", "Retain", "Delete"]
       },
       "UpdateReplacePolicy": {
-        "Fn::If": ["IsProduction", "Snapshot", "Delete"]
+        "Fn::If": ["IsProduction", "Retain", "Delete"]
       }
     },
     "PolicyComplianceTopic": {

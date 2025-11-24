@@ -12,14 +12,6 @@
       "Description": "Suffix for resource names"
     }
   },
-  "Conditions": {
-    "IsProduction": {
-      "Fn::Equals": [{"Ref": "EnvironmentType"}, "production"]
-    },
-    "IsNonProduction": {
-      "Fn::Not": [{"Condition": "IsProduction"}]
-    }
-  },
   "Resources": {
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",

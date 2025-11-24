@@ -42,9 +42,6 @@
     "IsStaging": {
       "Fn::Equals": [{"Ref": "EnvironmentType"}, "staging"]
     },
-    "IsDevelopment": {
-      "Fn::Equals": [{"Ref": "EnvironmentType"}, "development"]
-    },
     "NeedNATGateways": {
       "Fn::Or": [
         {"Condition": "IsProduction"},
@@ -109,7 +106,6 @@
     },
     "ApplicationStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["VPCStack", "SecurityStack"],
       "Properties": {
         "TemplateURL": {"Ref": "ApplicationTemplateURL"},
         "Parameters": {
