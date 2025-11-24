@@ -6,6 +6,7 @@ from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
 from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.eks_cluster import (
     EksCluster,
@@ -82,11 +83,14 @@ class TapStack(TerraformStack):
         # Create route table for public subnets
         public_route_table = RouteTable(self, "public_route_table",
             vpc_id=vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": igw.id
-            }],
             tags={**common_tags, "Name": f"eks-public-rt-{environment_suffix}"}
+        )
+
+        # Create route to internet gateway
+        Route(self, "public_route",
+            route_table_id=public_route_table.id,
+            destination_cidr_block="0.0.0.0/0",
+            gateway_id=igw.id
         )
 
         # Associate public subnets with public route table
@@ -143,7 +147,7 @@ class TapStack(TerraformStack):
         eks_cluster = EksCluster(self, "eks_cluster",
             name=f"eks-cluster-{environment_suffix}",
             role_arn=cluster_role.arn,
-            version="1.28",
+            version="1.29",
             vpc_config=EksClusterVpcConfig(
                 subnet_ids=subnet_ids,
                 endpoint_private_access=True,
