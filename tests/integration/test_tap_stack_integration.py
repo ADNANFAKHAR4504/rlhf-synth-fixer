@@ -16,7 +16,16 @@ class TestTapStackIntegration:
             pytest.skip("Stack outputs not found - stack not deployed")
 
         with open(outputs_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        
+        # Extract the actual outputs from the nested structure
+        # The JSON structure is: {"TapStackpr7109": {"output_key": "value", ...}}
+        if not data:
+            pytest.skip("Stack outputs file is empty")
+        
+        # Get the first (and should be only) stack's outputs
+        stack_name = list(data.keys())[0]
+        return data[stack_name]
 
     def test_api_gateway_endpoint_exists(self, stack_outputs):
         """Verify API Gateway endpoint is available in outputs."""
@@ -84,8 +93,9 @@ class TestTapStackIntegration:
     def test_resource_count_meets_requirements(self, stack_outputs):
         """Verify minimum number of resources were deployed."""
         # Should have outputs for multiple resource types
-        assert len(stack_outputs) >= 5, (
-            f"Expected at least 5 stack outputs, got {len(stack_outputs)}"
+        # We expect at least 25 outputs based on our TerraformOutput definitions
+        assert len(stack_outputs) >= 20, (
+            f"Expected at least 20 stack outputs, got {len(stack_outputs)}"
         )
 
     @pytest.mark.live
