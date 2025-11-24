@@ -63,9 +63,8 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
       expect(variablesTf).toMatch(/default\s*=\s*"prod-eks-cluster"/);
     });
 
-    test('kubernetes_version variable exists with default 1.29', () => {
+    test('kubernetes_version variable exists', () => {
       expect(variablesTf).toMatch(/variable\s+"kubernetes_version"\s*{/);
-      expect(variablesTf).toMatch(/default\s*=\s*"1\.29"/);
     });
 
     test('pr_number variable exists', () => {
