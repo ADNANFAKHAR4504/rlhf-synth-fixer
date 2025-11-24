@@ -1,0 +1,25 @@
+{
+  "po_id": "w0g1n4w8",
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "region": "us-east-1",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "KMS",
+    "S3",
+    "Lambda",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "startedAt": "2025-11-25T00:10:00+00:00",
+  "training_quality": 9
+}
