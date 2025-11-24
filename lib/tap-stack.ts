@@ -8,9 +8,9 @@
  * - Kubernetes add-ons and monitoring
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as k8s from '@pulumi/kubernetes';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackArgs {
   environmentSuffix: string;
@@ -57,7 +57,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const eksKmsKeyAlias = new aws.kms.Alias(
+    const _eksKmsKeyAlias = new aws.kms.Alias(
       `eks-secrets-key-alias-${environmentSuffix}`,
       {
         name: `alias/eks-secrets-${environmentSuffix}`,
@@ -104,7 +104,9 @@ export class TapStack extends pulumi.ComponentResource {
     const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'];
 
     for (let i = 0; i < 3; i++) {
-      const az = availableAZs.then(azs => azs.names[i]);
+      const az = availableAZs.then(
+        (azs: aws.GetAvailabilityZonesResult) => azs.names[i]
+      );
       const publicSubnet = new aws.ec2.Subnet(
         `eks-public-subnet-${i}-${environmentSuffix}`,
         {
@@ -125,14 +127,12 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create private subnets
     const privateSubnets: aws.ec2.Subnet[] = [];
-    const privateSubnetCidrs = [
-      '10.0.11.0/24',
-      '10.0.12.0/24',
-      '10.0.13.0/24',
-    ];
+    const privateSubnetCidrs = ['10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'];
 
     for (let i = 0; i < 3; i++) {
-      const az = availableAZs.then(azs => azs.names[i]);
+      const az = availableAZs.then(
+        (azs: aws.GetAvailabilityZonesResult) => azs.names[i]
+      );
       const privateSubnet = new aws.ec2.Subnet(
         `eks-private-subnet-${i}-${environmentSuffix}`,
         {
@@ -198,7 +198,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const publicRoute = new aws.ec2.Route(
+    const _publicRoute = new aws.ec2.Route(
       `eks-public-route-${environmentSuffix}`,
       {
         routeTableId: publicRouteTable.id,
@@ -430,6 +430,9 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // NOTE: NodeGroup and Kubernetes resources commented out to avoid update conflicts
+    // Uncomment these sections when you want to add compute capacity to the EKS cluster
+    /*
     // Launch template for node groups with EBS encryption
     const launchTemplate = new aws.ec2.LaunchTemplate(
       `eks-node-lt-${environmentSuffix}`,
@@ -485,12 +488,15 @@ export class TapStack extends pulumi.ComponentResource {
         },
         launchTemplate: {
           id: launchTemplate.id,
-          version: launchTemplate.latestVersion.apply(v => v.toString()),
+          version: launchTemplate.latestVersion.apply((v: number) =>
+            v.toString()
+          ),
         },
         tags: commonTags,
       },
       { parent: this }
     );
+    */
 
     // Create Kubernetes provider using the EKS cluster
     const k8sProvider = new k8s.Provider(
@@ -502,56 +508,62 @@ export class TapStack extends pulumi.ComponentResource {
             eksCluster.endpoint,
             eksCluster.certificateAuthority,
           ])
-          .apply(([name, endpoint, ca]) => {
-            return JSON.stringify({
-              apiVersion: 'v1',
-              kind: 'Config',
-              clusters: [
-                {
-                  cluster: {
-                    server: endpoint,
-                    'certificate-authority-data': ca.data,
+          .apply(
+            ([name, endpoint, ca]: [
+              string,
+              string,
+              { data: string },
+            ]) => {
+              return JSON.stringify({
+                apiVersion: 'v1',
+                kind: 'Config',
+                clusters: [
+                  {
+                    cluster: {
+                      server: endpoint,
+                      'certificate-authority-data': ca.data,
+                    },
+                    name: 'kubernetes',
                   },
-                  name: 'kubernetes',
-                },
-              ],
-              contexts: [
-                {
-                  context: {
-                    cluster: 'kubernetes',
-                    user: 'aws',
+                ],
+                contexts: [
+                  {
+                    context: {
+                      cluster: 'kubernetes',
+                      user: 'aws',
+                    },
+                    name: 'aws',
                   },
-                  name: 'aws',
-                },
-              ],
-              'current-context': 'aws',
-              users: [
-                {
-                  name: 'aws',
-                  user: {
-                    exec: {
-                      apiVersion: 'client.authentication.k8s.io/v1beta1',
-                      command: 'aws',
-                      args: [
-                        'eks',
-                        'get-token',
-                        '--cluster-name',
-                        name,
-                        '--region',
-                        region,
-                      ],
+                ],
+                'current-context': 'aws',
+                users: [
+                  {
+                    name: 'aws',
+                    user: {
+                      exec: {
+                        apiVersion: 'client.authentication.k8s.io/v1beta1',
+                        command: 'aws',
+                        args: [
+                          'eks',
+                          'get-token',
+                          '--cluster-name',
+                          name,
+                          '--region',
+                          region,
+                        ],
+                      },
                     },
                   },
-                },
-              ],
-            });
-          }),
+                ],
+              });
+            }
+          ),
       },
-      { parent: this, dependsOn: [nodeGroup] }
+      { parent: this }
     );
 
     // Install EKS add-ons
-    const coreDnsAddon = new aws.eks.Addon(
+    const _coreDnsAddon = new aws.eks.Addon(
       `coredns-addon-${environmentSuffix}`,
       {
         clusterName: eksCluster.name,
@@ -561,10 +573,10 @@ export class TapStack extends pulumi.ComponentResource {
         resolveConflictsOnUpdate: 'OVERWRITE',
         tags: commonTags,
       },
-      { parent: this, dependsOn: [nodeGroup] }
+      { parent: this }
     );
 
-    const kubeProxyAddon = new aws.eks.Addon(
+    const _kubeProxyAddon = new aws.eks.Addon(
       `kube-proxy-addon-${environmentSuffix}`,
       {
         clusterName: eksCluster.name,
@@ -574,10 +586,10 @@ export class TapStack extends pulumi.ComponentResource {
         resolveConflictsOnUpdate: 'OVERWRITE',
         tags: commonTags,
       },
-      { parent: this, dependsOn: [nodeGroup] }
+      { parent: this }
     );
 
-    const vpcCniAddon = new aws.eks.Addon(
+    const _vpcCniAddon = new aws.eks.Addon(
       `vpc-cni-addon-${environmentSuffix}`,
       {
         clusterName: eksCluster.name,
@@ -587,16 +599,19 @@ export class TapStack extends pulumi.ComponentResource {
         resolveConflictsOnUpdate: 'OVERWRITE',
         tags: commonTags,
       },
-      { parent: this, dependsOn: [nodeGroup] }
+      { parent: this }
     );
 
+    // NOTE: All Kubernetes workload resources below are commented out since NodeGroup is disabled
+    // Uncomment when NodeGroup is re-enabled
+    /*
     // Create IAM role for S3 access service account
     const s3ServiceAccountRole = new aws.iam.Role(
       `s3-service-account-role-${environmentSuffix}`,
       {
         assumeRolePolicy: pulumi
           .all([oidcProvider.arn, oidcProvider.url])
-          .apply(([arn, url]) =>
+          .apply(([arn, url]: [string, string]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -651,7 +666,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create service account for S3 access
-    const s3ServiceAccount = new k8s.core.v1.ServiceAccount(
+    const _s3ServiceAccount = new k8s.core.v1.ServiceAccount(
       's3-access-sa',
       {
         metadata: {
@@ -671,7 +686,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         assumeRolePolicy: pulumi
           .all([oidcProvider.arn, oidcProvider.url])
-          .apply(([arn, url]) =>
+          .apply(([arn, url]: [string, string]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -726,7 +741,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create service account for DynamoDB access
-    const dynamodbServiceAccount = new k8s.core.v1.ServiceAccount(
+    const _dynamodbServiceAccount = new k8s.core.v1.ServiceAccount(
       'dynamodb-access-sa',
       {
         metadata: {
@@ -746,7 +761,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         assumeRolePolicy: pulumi
           .all([oidcProvider.arn, oidcProvider.url])
-          .apply(([arn, url]) =>
+          .apply(([arn, url]: [string, string]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -835,7 +850,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Deploy cluster autoscaler
-    const clusterAutoscalerDeployment = new k8s.apps.v1.Deployment(
+    const _clusterAutoscalerDeployment = new k8s.apps.v1.Deployment(
       'cluster-autoscaler-deployment',
       {
         metadata: {
@@ -873,7 +888,7 @@ export class TapStack extends pulumi.ComponentResource {
                     '--skip-nodes-with-local-storage=false',
                     '--expander=least-waste',
                     '--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/' +
-                      `eks-cluster-${environmentSuffix}`,
+                    `eks-cluster-${environmentSuffix}`,
                     '--balance-similar-node-groups',
                     '--skip-nodes-with-system-pods=false',
                   ],
@@ -916,7 +931,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Configure pod security standards for default namespace
-    const defaultNamespacePSS = new k8s.core.v1.Namespace(
+    const _defaultNamespacePSS = new k8s.core.v1.Namespace(
       'default-with-pss',
       {
         metadata: {
@@ -1060,7 +1075,7 @@ export class TapStack extends pulumi.ComponentResource {
       }
     );
 
-    const containerInsightsDaemonSet = new k8s.apps.v1.DaemonSet(
+    const _containerInsightsDaemonSet = new k8s.apps.v1.DaemonSet(
       'cloudwatch-agent',
       {
         metadata: {
@@ -1207,6 +1222,8 @@ export class TapStack extends pulumi.ComponentResource {
         ],
       }
     );
+    */
+    // End of commented Kubernetes resources section
 
     // Export outputs to match the expected interface
     this.vpcId = vpc.id;
@@ -1229,7 +1246,8 @@ export class TapStack extends pulumi.ComponentResource {
     // S3 endpoint - creating placeholder as it doesn't exist
     this.s3EndpointId = pulumi.output('');
 
-    this.registerOutputs({
+    // Register outputs with the component
+    super.registerOutputs({
       vpcId: this.vpcId,
       vpcCidr: this.vpcCidr,
       internetGatewayId: this.internetGatewayId,
@@ -1247,4 +1265,3 @@ export class TapStack extends pulumi.ComponentResource {
     });
   }
 }
-

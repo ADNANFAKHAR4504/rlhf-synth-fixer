@@ -68,4 +68,3 @@ export const databaseSecurityGroupId = stack.databaseSecurityGroupId;
 export const flowLogsBucketName = stack.flowLogsBucketName;
 export const flowLogsLogGroupName = stack.flowLogsLogGroupName;
 export const s3EndpointId = stack.s3EndpointId;
-
