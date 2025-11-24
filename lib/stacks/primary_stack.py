@@ -349,8 +349,8 @@ class PrimaryStack(TerraformStack):
             runtime="python3.11",
             memory_size=3072,  # 3GB as required
             timeout=30,  # 30 seconds as required
-            filename="lib/lambda_function.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda_function.zip\")}",
+            filename="${path.module}/../../../lib/lambda_function.zip",
+            source_code_hash="${filebase64sha256(\"${path.module}/../../../lib/lambda_function.zip\")}",
             environment={
                 "variables": {
                     "ENVIRONMENT": "production",
