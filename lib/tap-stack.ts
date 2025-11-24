@@ -35,7 +35,6 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 type EnvironmentKey = 'prod' | 'staging' | 'dev';
@@ -246,8 +245,8 @@ const DEFAULT_CONFIG: TapStackConfig = {
   },
   replicationMap: {
     prod: ['staging', 'dev'],
-    staging: ['prod', 'dev'],
-    dev: ['prod', 'staging'],
+    staging: ['dev'],
+    dev: [],
   },
   environments: {
     prod: {
@@ -379,9 +378,9 @@ export class TapStack extends cdk.Stack {
     }
     ENVIRONMENT_ORDER.forEach(env => {
       const targets = config.replicationMap[env] || [];
-      if (!targets.length) {
+      if (!targets.length && env === 'prod') {
         errors.push(
-          `replicationMap must contain at least one target for ${env}`
+          'replicationMap for prod must include at least one replica target'
         );
       }
       targets.forEach(target => {
@@ -392,6 +391,12 @@ export class TapStack extends cdk.Stack {
         }
         if (target === env) {
           errors.push(`replicationMap for ${env} cannot reference itself`);
+        }
+        const reverseTargets = config.replicationMap[target as EnvironmentKey];
+        if (reverseTargets?.includes(env)) {
+          errors.push(
+            `replicationMap cannot contain bidirectional replication between ${env} and ${target}`
+          );
         }
       });
       if (config.environments[env].lambda.canaryWeight >= 0.5) {
@@ -832,6 +837,9 @@ export class TapStack extends cdk.Stack {
         variables: {
           ...this.config.stageVariables,
           environment: envKey,
+          bucketName,
+          kmsAlias,
+          featureFlag: envKey === 'dev' ? 'enable-new-risk-engine' : 'stable',
         },
       },
       defaultCorsPreflightOptions: {
@@ -854,12 +862,6 @@ export class TapStack extends cdk.Stack {
       const resource = api.root.addResource(family);
       resource.addMethod('GET', new apigateway.LambdaIntegration(alias));
       resource.addMethod('POST', new apigateway.LambdaIntegration(alias));
-    });
-
-    this.injectStageVariables(api, envKey, {
-      bucketName,
-      kmsAlias,
-      featureFlag: envKey === 'dev' ? 'enable-new-risk-engine' : 'stable',
     });
 
     return api;
@@ -896,50 +898,6 @@ export class TapStack extends cdk.Stack {
       );
     });
     return topic;
-  }
-
-  private injectStageVariables(
-    api: apigateway.RestApi,
-    envKey: EnvironmentKey,
-    variables: Record<string, string>
-  ): void {
-    new cr.AwsCustomResource(this, `${envKey}StageVariableInjector`, {
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
-      }),
-      onCreate: {
-        service: 'APIGateway',
-        action: 'updateStage',
-        parameters: {
-          restApiId: api.restApiId,
-          stageName: api.deploymentStage.stageName,
-          patchOperations: Object.entries(variables).map(([key, value]) => ({
-            op: 'replace',
-            path: `/variables/${key}`,
-            value,
-          })),
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(
-          this.formatName(envKey, 'stage-vars')
-        ),
-      },
-      onUpdate: {
-        service: 'APIGateway',
-        action: 'updateStage',
-        parameters: {
-          restApiId: api.restApiId,
-          stageName: api.deploymentStage.stageName,
-          patchOperations: Object.entries(variables).map(([key, value]) => ({
-            op: 'replace',
-            path: `/variables/${key}`,
-            value,
-          })),
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(
-          this.formatName(envKey, 'stage-vars-update')
-        ),
-      },
-    });
   }
 
   private configureCrossRegionReplication(): void {
