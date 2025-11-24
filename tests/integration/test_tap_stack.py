@@ -140,6 +140,44 @@ class TestTapStackIntegration(unittest.TestCase):
             f"This usually means the ASG failed to create instances (check for KMS key issues or other deployment failures)."
         )
 
+    @classmethod
+    def _wait_for_ssm_command(cls, command_id, instance_id, max_wait=120):
+        """Wait for SSM command to complete and return output."""
+        print(f"Waiting for SSM command {command_id} to complete...")
+        start_time = time.time()
+
+        while time.time() - start_time < max_wait:
+            try:
+                response = cls.ssm.get_command_invocation(
+                    CommandId=command_id,
+                    InstanceId=instance_id
+                )
+
+                status = response['Status']
+                elapsed = time.time() - start_time
+
+                if status == 'Success':
+                    print(f"✓ Command completed successfully in {elapsed:.1f}s")
+                    return response
+                elif status in ['Failed', 'Cancelled', 'TimedOut', 'Cancelling']:
+                    print(f"✗ Command {status} after {elapsed:.1f}s")
+                    print(f"  StdOut: {response.get('StandardOutputContent', '')[:500]}")
+                    print(f"  StdErr: {response.get('StandardErrorContent', '')[:500]}")
+                    return response
+                else:
+                    # Still running: InProgress, Pending
+                    print(f"  [{elapsed:.0f}s] Command status: {status}")
+                    time.sleep(5)
+
+            except ClientError as e:
+                if 'InvocationDoesNotExist' in str(e):
+                    # Command might not be registered yet
+                    time.sleep(2)
+                else:
+                    raise
+
+        raise TimeoutError(f"SSM command did not complete within {max_wait}s")
+
     # =========================================================================
     # VPC and Networking Tests
     # =========================================================================
@@ -636,20 +674,24 @@ class TestTapStackIntegration(unittest.TestCase):
             )
 
             command_id = ssm_response['Command']['CommandId']
-            time.sleep(15)  # Wait for installation
 
-            output = self.ssm.get_command_invocation(
-                CommandId=command_id,
-                InstanceId=instance_id
-            )
+            # Wait for command to complete
+            output = self._wait_for_ssm_command(command_id, instance_id, max_wait=120)
 
-            stdout = output.get('StandardOutput', '')
+            stdout = output.get('StandardOutputContent', '')
+            stderr = output.get('StandardErrorContent', '')
+            status = output.get('Status', '')
+
+            print(f"Command status: {status}")
             print(f"Aurora connectivity output: {stdout}")
+            if stderr:
+                print(f"Stderr: {stderr}")
 
+            self.assertEqual(status, 'Success', f"SSM command should succeed. Status: {status}, StdErr: {stderr}")
             self.assertIn('TCP_SUCCESS', stdout,
                          f"EC2 should connect to Aurora on port 5432. Output: {stdout}")
 
-        except ClientError as e:
+        except (ClientError, TimeoutError) as e:
             self.fail(f"Failed to test Aurora connectivity: {e}")
 
     def test_e2e_ec2_to_redis_live_connectivity(self):
@@ -684,20 +726,24 @@ class TestTapStackIntegration(unittest.TestCase):
             )
 
             command_id = ssm_response['Command']['CommandId']
-            time.sleep(15)
 
-            output = self.ssm.get_command_invocation(
-                CommandId=command_id,
-                InstanceId=instance_id
-            )
+            # Wait for command to complete
+            output = self._wait_for_ssm_command(command_id, instance_id, max_wait=120)
 
-            stdout = output.get('StandardOutput', '')
+            stdout = output.get('StandardOutputContent', '')
+            stderr = output.get('StandardErrorContent', '')
+            status = output.get('Status', '')
+
+            print(f"Command status: {status}")
             print(f"Redis connectivity output: {stdout}")
+            if stderr:
+                print(f"Stderr: {stderr}")
 
+            self.assertEqual(status, 'Success', f"SSM command should succeed. Status: {status}, StdErr: {stderr}")
             self.assertIn('TCP_SUCCESS', stdout,
                          f"EC2 should connect to Redis on port 6379. Output: {stdout}")
 
-        except ClientError as e:
+        except (ClientError, TimeoutError) as e:
             self.fail(f"Failed to test Redis connectivity: {e}")
 
     def test_e2e_ec2_to_dynamodb_live_operations(self):
@@ -728,20 +774,24 @@ class TestTapStackIntegration(unittest.TestCase):
             )
 
             command_id = ssm_response['Command']['CommandId']
-            time.sleep(20)
 
-            output = self.ssm.get_command_invocation(
-                CommandId=command_id,
-                InstanceId=instance_id
-            )
+            # Wait for command to complete
+            output = self._wait_for_ssm_command(command_id, instance_id, max_wait=180)
 
-            stdout = output.get('StandardOutput', '')
+            stdout = output.get('StandardOutputContent', '')
+            stderr = output.get('StandardErrorContent', '')
+            status = output.get('Status', '')
+
+            print(f"Command status: {status}")
             print(f"DynamoDB operations output: {stdout}")
+            if stderr:
+                print(f"Stderr: {stderr}")
 
+            self.assertEqual(status, 'Success', f"SSM command should succeed. Status: {status}, StdErr: {stderr}")
             self.assertIn('DESCRIBE_SUCCESS', stdout,
                          f"EC2 should access DynamoDB. Output: {stdout}")
 
-        except ClientError as e:
+        except (ClientError, TimeoutError) as e:
             self.fail(f"Failed to test DynamoDB operations: {e}")
 
     def test_e2e_dynamodb_write_read_delete(self):

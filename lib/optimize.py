@@ -1592,22 +1592,17 @@ class TradingPlatformOptimizer:
                 logger.warning("Redis endpoint not found in outputs")
                 redis_cluster_id = None
 
-            # Get environment suffix from stack name
-            env_suffix = 'dev'  # Default
-            for key in outputs.keys():
-                if 'TapStack' in key:
-                    # Extract suffix from stack name
-                    stack_name = key.split('.')[0]
-                    if stack_name.startswith('TapStack'):
-                        env_suffix = stack_name.replace('TapStack', '')
-                    break
+            # DynamoDB table names - read from outputs instead of constructing
+            dynamodb_tables = []
+            for table_key in ['TradesTableName', 'OrdersTableName', 'PositionsTableName']:
+                table_name = outputs.get(table_key)
+                if table_name:
+                    dynamodb_tables.append(table_name)
+                else:
+                    logger.warning(f"DynamoDB table name '{table_key}' not found in outputs")
 
-            # DynamoDB table names
-            dynamodb_tables = [
-                f'tap-trades-{env_suffix}',
-                f'tap-orders-{env_suffix}',
-                f'tap-positions-{env_suffix}'
-            ]
+            if not dynamodb_tables:
+                logger.warning("No DynamoDB table names found in outputs, skipping DynamoDB analysis")
 
             # Check SLA compliance first
             logger.info("Checking SLA compliance...")
@@ -1646,8 +1641,12 @@ class TradingPlatformOptimizer:
                 results['redis'] = {'estimated_savings': 0, 'recommendations': []}
 
             # DynamoDB analysis
-            logger.info(f"Analyzing DynamoDB tables: {dynamodb_tables}")
-            results['dynamodb'] = self.analyze_dynamodb_tables(dynamodb_tables)
+            if dynamodb_tables:
+                logger.info(f"Analyzing DynamoDB tables: {dynamodb_tables}")
+                results['dynamodb'] = self.analyze_dynamodb_tables(dynamodb_tables)
+            else:
+                logger.warning("Skipping DynamoDB analysis - no table names found")
+                results['dynamodb'] = {}
 
             # ML platform analysis
             logger.info("Analyzing ML platform...")
