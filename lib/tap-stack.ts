@@ -14,7 +14,7 @@ export interface TapStackProps extends cdk.StackProps {
   environmentName?: string;
   isPrimaryRegion?: boolean;
   secondaryRegion?: string;
-  alertEmail: string;
+  alertEmail?: string;
   hostedZoneName?: string;
   lambdaReservedConcurrency?: number;
 }
@@ -28,7 +28,7 @@ export class TapStack extends cdk.Stack {
       environmentName = 'production',
       isPrimaryRegion = true,
       secondaryRegion = 'us-west-2',
-      alertEmail,
+      alertEmail = 'alerts@example.com',
       hostedZoneName = 'payment-system.example.com',
       lambdaReservedConcurrency = 100,
     } = props;
