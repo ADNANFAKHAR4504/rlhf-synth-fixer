@@ -4,9 +4,14 @@
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "startedAt": "2025-11-24T04:02:55+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Serverless Architecture",
+    "Data Processing Pipeline"
+  ],
   "po_id": "101912564",
   "aws_services": [
     "S3",
