@@ -205,6 +205,7 @@ describe('TapStack', () => {
 
   describe('VPC Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -273,6 +274,7 @@ describe('TapStack', () => {
 
   describe('Security Groups', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -320,6 +322,7 @@ describe('TapStack', () => {
 
   describe('KMS Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -339,6 +342,7 @@ describe('TapStack', () => {
 
   describe('S3 Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -376,6 +380,7 @@ describe('TapStack', () => {
 
   describe('ECS Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -433,6 +438,7 @@ describe('TapStack', () => {
 
   describe('RDS Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -475,6 +481,7 @@ describe('TapStack', () => {
 
   describe('Load Balancer Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -517,6 +524,7 @@ describe('TapStack', () => {
 
   describe('Auto Scaling Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -547,6 +555,7 @@ describe('TapStack', () => {
 
   describe('CloudWatch Alarms', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 

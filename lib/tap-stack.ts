@@ -591,7 +591,7 @@ export class TapStack extends pulumi.ComponentResource {
         identifier: `fintech-db-${environmentSuffix}`,
         engine: 'postgres',
         engineVersion: '16.3',
-        instanceClass: 'db.t3.micro',
+        instanceClass: 'db.t3.small',
         allocatedStorage: 20,
         storageType: 'gp3',
         storageEncrypted: true,
