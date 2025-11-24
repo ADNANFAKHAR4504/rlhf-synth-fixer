@@ -20,11 +20,7 @@
     "DynamoDB"
   ],
   "subject_labels": [
-    "disaster-recovery",
-    "cross-region-replication",
-    "automated-failover",
-    "database",
-    "monitoring"
+    "Failure Recovery Automation"
   ],
   "regions": [
     "us-east-1",
