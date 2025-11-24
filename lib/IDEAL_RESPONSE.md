@@ -92,14 +92,15 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
   "LOGS_BUCKET": {
     "Fn::If": [
       "IsPrimary",
-      {"Ref": "TransactionLogsBucket"},
-      {"Ref": "TransactionLogsBucketSecondary"}
+      { "Ref": "TransactionLogsBucket" },
+      { "Ref": "TransactionLogsBucketSecondary" }
     ]
   }
 }
 ```
 
 Applied to:
+
 - Lambda environment variables
 - IAM policy resources
 - Stack outputs
@@ -116,6 +117,7 @@ Applied to:
 The corrected CloudFormation template (`lib/disaster-recovery-template.json`) includes:
 
 ### Parameters (7)
+
 1. `EnvironmentSuffix` - Unique identifier for resources (3-20 chars, alphanumeric)
 2. `EnvironmentName` - Environment tag (production/staging/development)
 3. `IsPrimaryRegion` - Primary vs secondary region flag (true/false)
@@ -125,43 +127,28 @@ The corrected CloudFormation template (`lib/disaster-recovery-template.json`) in
 7. `LambdaReservedConcurrency` - Lambda concurrency limit (default: 100, range: 1-1000)
 
 ### Conditions (2)
+
 - `IsPrimary`: Checks if IsPrimaryRegion is "true"
 - `IsSecondary`: Inverse of IsPrimary
 
 ### Resources (22)
 
 **Data Layer:**
+
 1. `PaymentProcessingTable` - DynamoDB Global Table with CustomerIndex GSI
 2. `TransactionLogsBucket` - Primary region S3 bucket (conditional)
 3. `TransactionLogsBucketSecondary` - Secondary region S3 bucket (conditional)
 
-**Security:**
-4. `ApiSecret` - Secrets Manager secret with cross-region replication
-5. `LambdaExecutionRole` - IAM role for Lambda with DynamoDB, S3, Secrets Manager permissions
-6. `ReplicationRole` - IAM role for S3 replication (conditional, primary only)
+**Security:** 4. `ApiSecret` - Secrets Manager secret with cross-region replication 5. `LambdaExecutionRole` - IAM role for Lambda with DynamoDB, S3, Secrets Manager permissions 6. `ReplicationRole` - IAM role for S3 replication (conditional, primary only)
 
-**Compute:**
-7. `PaymentProcessingFunction` - Main Lambda function (Python 3.11)
-8. `FunctionUrl` - Lambda function URL with CORS
-9. `FunctionUrlPermission` - Lambda invoke permission
-10. `HealthCheckFunction` - Health check Lambda
-11. `HealthCheckUrl` - Health check function URL
-12. `HealthCheckUrlPermission` - Health check invoke permission
+**Compute:** 7. `PaymentProcessingFunction` - Main Lambda function (Python 3.11) 8. `FunctionUrl` - Lambda function URL with CORS 9. `FunctionUrlPermission` - Lambda invoke permission 10. `HealthCheckFunction` - Health check Lambda 11. `HealthCheckUrl` - Health check function URL 12. `HealthCheckUrlPermission` - Health check invoke permission
 
-**DNS & Routing:**
-13. `HostedZone` - Route 53 hosted zone (conditional, primary only)
-14. `HealthCheck` - Route 53 health check monitoring Lambda endpoint
-15. `DNSRecord` - Route 53 weighted routing record (conditional, primary only)
+**DNS & Routing:** 13. `HostedZone` - Route 53 hosted zone (conditional, primary only) 14. `HealthCheck` - Route 53 health check monitoring Lambda endpoint 15. `DNSRecord` - Route 53 weighted routing record (conditional, primary only)
 
-**Monitoring:**
-16. `AlertTopic` - SNS topic with email subscription
-17. `LambdaErrorAlarm` - CloudWatch alarm for Lambda errors (threshold: 10)
-18. `LambdaThrottleAlarm` - CloudWatch alarm for Lambda throttles (threshold: 5)
-19. `DynamoDBReadThrottleAlarm` - DynamoDB read throttling alarm (threshold: 10)
-20. `DynamoDBWriteThrottleAlarm` - DynamoDB write throttling alarm (threshold: 10)
-21. `ReplicationLatencyAlarm` - S3 replication latency alarm (threshold: 900s, conditional)
+**Monitoring:** 16. `AlertTopic` - SNS topic with email subscription 17. `LambdaErrorAlarm` - CloudWatch alarm for Lambda errors (threshold: 10) 18. `LambdaThrottleAlarm` - CloudWatch alarm for Lambda throttles (threshold: 5) 19. `DynamoDBReadThrottleAlarm` - DynamoDB read throttling alarm (threshold: 10) 20. `DynamoDBWriteThrottleAlarm` - DynamoDB write throttling alarm (threshold: 10) 21. `ReplicationLatencyAlarm` - S3 replication latency alarm (threshold: 900s, conditional)
 
 ### Outputs (11)
+
 All outputs include descriptions and export names for cross-stack references:
 
 1. `DynamoDBTableName` - Table name for application configuration
@@ -179,6 +166,7 @@ All outputs include descriptions and export names for cross-stack references:
 ## Deployment Guide
 
 ### Prerequisites
+
 - AWS CLI configured with appropriate credentials
 - IAM permissions for all resource types
 - Valid email address for SNS notifications
@@ -222,7 +210,9 @@ aws cloudformation create-stack \
 ## Testing
 
 ### Unit Tests
+
 Comprehensive CloudFormation template validation (62 test cases):
+
 - Template structure and format
 - Parameter definitions and constraints
 - Condition logic
@@ -237,7 +227,9 @@ Comprehensive CloudFormation template validation (62 test cases):
 **Run**: `python3 -m pytest test/test_disaster_recovery_template.py -v`
 
 ### Integration Tests
+
 Live AWS resource validation (31 test cases):
+
 - DynamoDB table existence, billing mode, streams, PITR
 - S3 bucket versioning, encryption, public access blocking
 - Lambda function configuration and accessibility
@@ -254,18 +246,23 @@ Live AWS resource validation (31 test cases):
 ## Validation Results
 
 ### CloudFormation Validation
+
 ```bash
 aws cloudformation validate-template --template-body file://lib/disaster-recovery-template.json
 ```
+
 **Result**: PASSED - Template syntax valid
 
 ### JSON Syntax
+
 ```bash
 python3 -m json.tool lib/disaster-recovery-template.json
 ```
+
 **Result**: PASSED - Valid JSON
 
 ### Deployment Status
+
 - **Stack Name**: disaster-recovery-synth101912619
 - **Region**: us-east-1
 - **Status**: CREATE_COMPLETE
@@ -277,6 +274,7 @@ python3 -m json.tool lib/disaster-recovery-template.json
 All resources follow the pattern: `{resource-type}-{environment-suffix}`
 
 Examples:
+
 - DynamoDB: `payment-transactions-synth101912619`
 - S3: `transaction-logs-us-east-1-synth101912619`
 - Lambda: `payment-processor-synth101912619`
@@ -326,33 +324,13 @@ This solution is production-ready with the following considerations:
 See `lib/MODEL_FAILURES.md` for detailed analysis of all corrections made to achieve a fully functional disaster recovery solution.
 
 **Key Improvements**:
+
 1. Fixed invalid CloudFormation resource types
 2. Corrected AWS SDK API parameter names
 3. Resolved circular dependencies
 4. Added proper conditional logic for multi-region deployment
 5. Used valid domain names
 6. Simplified replication configuration for robust deployment
-
-## File Structure
-
-```
-worktree/synth-101912619/
-├── lib/
-│   ├── disaster-recovery-template.json  # Complete CloudFormation template
-│   ├── IDEAL_RESPONSE.md               # This file
-│   ├── MODEL_FAILURES.md               # Issue analysis
-│   ├── MODEL_RESPONSE.md               # Original generation
-│   ├── PROMPT.md                       # Requirements
-│   └── README.md                       # User documentation
-├── test/
-│   ├── test_disaster_recovery_template.py      # Unit tests (62)
-│   └── test_disaster_recovery_integration.py   # Integration tests (31)
-├── cfn-outputs/
-│   ├── raw-outputs.json               # Stack outputs (detailed)
-│   └── flat-outputs.json              # Stack outputs (flattened)
-└── coverage/
-    └── coverage-summary.json          # Test coverage report
-```
 
 ## Summary
 
