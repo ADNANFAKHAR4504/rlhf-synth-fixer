@@ -95,8 +95,9 @@ If `.claude/tasks.csv` is present:
    fi
    
    # Store TASK_JSON in a temporary file for task-coordinator to use
+   # Use PID to ensure unique filename across parallel agents (prevents race conditions)
    # This ensures task-coordinator can create metadata.json and PROMPT.md after worktree creation
-   TASK_JSON_FILE=".claude/task-${TASK_ID}.json"
+   TASK_JSON_FILE=".claude/task-${TASK_ID}-$$.json"
    
    if ! echo "$TASK_JSON" > "$TASK_JSON_FILE"; then
        echo "❌ ERROR: Failed to create task JSON file: $TASK_JSON_FILE"
@@ -151,16 +152,17 @@ If `.claude/tasks.csv` is present:
 
 4. **Hand off to task-coordinator for worktree setup**:
    - The task-coordinator will:
-     1. Find the most recent task JSON file in `.claude/task-*.json` (sorted by modification time)
-     2. Extract task ID from the filename
-     3. Validate the JSON file and verify task_id matches
-     4. Create git worktree: `git worktree add worktree/synth-${TASK_ID} -b synth-${TASK_ID}`
-     5. Verify worktree was created successfully
-     6. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
-     7. Clean up temporary task JSON file
-     8. Verify worktree setup with `verify-worktree.sh`
+     1. Find the most recent task JSON file in `.claude/task-*-[PID].json` (PID-based naming prevents race conditions)
+     2. Extract task ID from the filename (removing PID suffix)
+     3. Check if worktree already exists (another agent may have claimed this task)
+     4. Validate the JSON file and verify task_id matches
+     5. Create git worktree: `git worktree add worktree/synth-${TASK_ID} -b synth-${TASK_ID}`
+     6. Verify worktree was created successfully
+     7. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
+     8. Clean up temporary task JSON file
+     9. Verify worktree setup with `verify-worktree.sh`
    - **CRITICAL**: Do NOT create the worktree directory or files before handoff - git worktree add requires an empty/non-existent directory
-   - **NOTE**: Environment variables don't persist across agent invocations, so task-coordinator uses the JSON file as the single source of truth
+   - **NOTE**: PID-based filenames (task-{id}-{pid}.json) ensure each agent has a unique file, preventing parallel agents from processing the same task
 
 ### Option 2: Direct Task Input
 If `.claude/tasks.csv` is not present:

@@ -349,13 +349,18 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    find .claude/task-*.json -type f -mmin +60 -delete 2>/dev/null || true
    
    # PRIMARY METHOD: Find the most recent task JSON file (created by iac-task-selector)
-   # This is more reliable than environment variables which don't persist across agent invocations
+   # Uses PID-based naming (task-{id}-{pid}.json) to prevent race conditions
    # Sort by modification time to get the most recent one (handles parallel execution)
-   TASK_JSON_FILE=$(ls -t .claude/task-*.json 2>/dev/null | head -1)
+   TASK_JSON_FILE=$(ls -t .claude/task-*-[0-9]*.json 2>/dev/null | head -1)
+   
+   # Fallback: Try old naming pattern (task-{id}.json) for backward compatibility
+   if [ -z "$TASK_JSON_FILE" ] || [ ! -f "$TASK_JSON_FILE" ]; then
+       TASK_JSON_FILE=$(ls -t .claude/task-*.json 2>/dev/null | head -1)
+   fi
    
    if [ -z "$TASK_JSON_FILE" ] || [ ! -f "$TASK_JSON_FILE" ]; then
        echo "❌ ERROR: No task JSON file found in .claude/"
-       echo "   iac-task-selector should have created .claude/task-{task_id}.json"
+       echo "   iac-task-selector should have created .claude/task-{task_id}-{pid}.json"
        echo "   Files present: $(ls -1 .claude/task-*.json 2>/dev/null | wc -l)"
        exit 1
    fi
@@ -371,8 +376,9 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
        fi
    fi
    
-   # Extract TASK_ID from filename
-   TASK_ID=$(basename "$TASK_JSON_FILE" | sed 's/task-//;s/.json//')
+   # Extract TASK_ID from filename (remove PID suffix if present)
+   # Handles both patterns: task-{id}-{pid}.json and task-{id}.json
+   TASK_ID=$(basename "$TASK_JSON_FILE" | sed 's/task-//;s/-[0-9]*\.json$//;s/.json$//')
    
    if [ -z "$TASK_ID" ]; then
        echo "❌ ERROR: Could not extract task_id from filename: $TASK_JSON_FILE"
@@ -381,6 +387,47 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    
    echo "✅ Using task JSON file: $TASK_JSON_FILE"
    echo "📋 Task ID: $TASK_ID"
+   
+   # CRITICAL: Check if worktree already exists (another agent may have claimed this task)
+   # This is the second layer of protection against race conditions
+   WORKTREE_DIR="worktree/synth-${TASK_ID}"
+   
+   if [ -d "$WORKTREE_DIR" ]; then
+       echo "⚠️  WARNING: Worktree already exists for task $TASK_ID"
+       echo "   Directory: $WORKTREE_DIR"
+       echo "   This can happen if:"
+       echo "   - Another agent is already working on this task (race condition)"
+       echo "   - A previous run was interrupted and worktree remains"
+       echo "   - Manual worktree was created"
+       
+       # Clean up our JSON file since we won't use it
+       rm -f "$TASK_JSON_FILE"
+       
+       # Check CSV status to determine if another agent is active
+       CURRENT_STATUS=$(grep "^${TASK_ID}," .claude/tasks.csv 2>/dev/null | cut -d',' -f2 | tr -d ' ')
+       
+       if [ "$CURRENT_STATUS" = "in_progress" ]; then
+           echo "❌ ERROR: Task $TASK_ID is currently being processed by another agent"
+           echo "   CSV status: in_progress"
+           echo "   Worktree exists: Yes"
+           echo ""
+           echo "   RESOLUTION: Another agent already claimed this task"
+           echo "   Please run iac-task-selector again to select a different task"
+           exit 1
+       elif [ "$CURRENT_STATUS" = "done" ]; then
+           echo "⚠️  Task status in CSV is: done"
+           echo "   This is stale worktree from a completed task"
+           echo "   Cleaning up worktree..."
+           git worktree remove "$WORKTREE_DIR" --force 2>/dev/null || rm -rf "$WORKTREE_DIR"
+           echo "   Run iac-task-selector again to select a new task"
+           exit 1
+       else
+           echo "⚠️  Task status in CSV is: ${CURRENT_STATUS:-pending}"
+           echo "   Worktree may be from a failed/interrupted run"
+           echo "   Using existing worktree and continuing..."
+           # Continue with existing worktree (don't exit)
+       fi
+   fi
    
    # Read the specific task JSON file
    TASK_JSON=$(cat "$TASK_JSON_FILE")
@@ -422,20 +469,15 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
    
    echo "📋 Task ID: $TASK_ID (validated)"
    
-   # Check if directory already exists (should not, but handle gracefully)
+   # Note: Worktree existence was already checked above
+   # If we reach this point, either:
+   # - Worktree doesn't exist (normal case)
+   # - Worktree exists from failed run with non-in_progress status (using existing)
    WORKTREE_DIR="worktree/synth-${TASK_ID}"
    
    if [ -d "$WORKTREE_DIR" ]; then
-       # Check if it's already a git worktree
-       if [ -f "$WORKTREE_DIR/.git" ] || [ -d "$WORKTREE_DIR/.git" ]; then
-           echo "⚠️  Worktree directory already exists and appears to be a git worktree"
-           echo "   Skipping worktree creation, using existing worktree"
-       else
-           echo "❌ ERROR: Directory $WORKTREE_DIR exists but is not a git worktree"
-           echo "   This should not happen - iac-task-selector should not create directories"
-           echo "   Please remove the directory manually and retry"
-           exit 1
-       fi
+       # Already handled above - we're reusing an existing worktree from failed run
+       echo "✅ Using existing worktree: $WORKTREE_DIR"
    else
        # REQUIRED format - do not deviate:
        echo "🔧 Creating git worktree: $WORKTREE_DIR"
