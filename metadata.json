@@ -7,7 +7,7 @@
   "startedAt": "2025-11-24T13:56:57+05:30",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security, Compliance, and Governance"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EC2",
