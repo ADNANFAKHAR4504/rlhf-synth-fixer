@@ -245,10 +245,11 @@ class TapStack(TerraformStack):
         )
 
         # VPC CNI Addon with prefix delegation
+        # Using latest compatible version for EKS 1.29
         vpc_cni_addon = EksAddon(self, "vpc_cni_addon",
             cluster_name=eks_cluster.name,
             addon_name="vpc-cni",
-            addon_version="v1.15.1-eksbuild.1",
+            addon_version="v1.18.1-eksbuild.3",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             configuration_values=json.dumps({
