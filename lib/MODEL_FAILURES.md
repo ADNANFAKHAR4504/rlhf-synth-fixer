@@ -58,7 +58,7 @@ Changed to valid subtask "Provisioning of Infrastructure Environments"
 **Validation**:
 ```bash
 /Users/mayanksethi/Desktop/projects/turing/iac-test-automations/.claude/scripts/validate-metadata.sh metadata.json
-# Output: ✅ Metadata validation PASSED - all checks successful
+# Output: Metadata validation PASSED - all checks successful
 ```
 
 **Impact**: Blocked Phase 0 validation, required immediate fix before proceeding
@@ -101,7 +101,7 @@ const alertScheduleRule = new aws.cloudwatch.EventRule(
   `alert-schedule-rule-${environmentSuffix}`,
   {
     name: `alert-schedule-rule-${environmentSuffix}`,
-    eventBusName: cryptoEventBus.name,  // ❌ Custom event bus
+    eventBusName: cryptoEventBus.name,  // Custom event bus (INCORRECT)
     scheduleExpression: 'rate(5 minutes)',
     tags: commonTags,
   },
@@ -115,7 +115,7 @@ const alertScheduleRule = new aws.cloudwatch.EventRule(
   `alert-schedule-rule-${environmentSuffix}`,
   {
     name: `alert-schedule-rule-${environmentSuffix}`,
-    // ✅ No eventBusName specified = uses default event bus
+    // No eventBusName specified = uses default event bus (CORRECT)
     scheduleExpression: 'rate(5 minutes)',
     tags: commonTags,
   },
