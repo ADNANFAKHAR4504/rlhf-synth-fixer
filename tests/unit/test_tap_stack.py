@@ -14,160 +14,180 @@ from cdktf import App, Testing
 @pytest.fixture
 def mock_aws_resources():
     """Fixture to mock all AWS resource constructors."""
-    with patch('lib.tap_stack.S3Backend') as mock_s3_backend, \
-         patch('lib.tap_stack.AwsProvider') as mock_aws_provider, \
-         patch('lib.tap_stack.Vpc') as mock_vpc, \
-         patch('lib.tap_stack.Subnet') as mock_subnet, \
-         patch('lib.tap_stack.InternetGateway') as mock_igw, \
-         patch('lib.tap_stack.RouteTable') as mock_route_table, \
-         patch('lib.tap_stack.RouteTableAssociation') as mock_rt_assoc, \
-         patch('lib.tap_stack.SecurityGroup') as mock_sg, \
-         patch('lib.tap_stack.VpcPeeringConnection') as mock_vpc_peering, \
-         patch('lib.tap_stack.VpcPeeringConnectionAccepterA') as mock_vpc_accepter, \
-         patch('lib.tap_stack.Route') as mock_route, \
-         patch('lib.tap_stack.RdsGlobalCluster') as mock_global_cluster, \
-         patch('lib.tap_stack.RdsCluster') as mock_rds_cluster, \
-         patch('lib.tap_stack.RdsClusterInstance') as mock_rds_instance, \
-         patch('lib.tap_stack.DbSubnetGroup') as mock_db_subnet_group, \
-         patch('lib.tap_stack.SecretsmanagerSecret') as mock_secret, \
-         patch('lib.tap_stack.SecretsmanagerSecretVersion') as mock_secret_version, \
-         patch('lib.tap_stack.KmsKey') as mock_kms_key, \
-         patch('lib.tap_stack.KmsAlias') as mock_kms_alias, \
-         patch('lib.tap_stack.DynamodbTable') as mock_dynamodb, \
-         patch('lib.tap_stack.LambdaFunction') as mock_lambda, \
-         patch('lib.tap_stack.IamRole') as mock_iam_role, \
-         patch('lib.tap_stack.IamRolePolicyAttachment') as mock_iam_policy_attach, \
-         patch('lib.tap_stack.IamPolicy') as mock_iam_policy, \
-         patch('lib.tap_stack.CloudwatchEventRule') as mock_event_rule, \
-         patch('lib.tap_stack.CloudwatchEventTarget') as mock_event_target, \
-         patch('lib.tap_stack.LambdaPermission') as mock_lambda_permission, \
-         patch('lib.tap_stack.Route53Zone') as mock_r53_zone, \
-         patch('lib.tap_stack.Route53HealthCheck') as mock_r53_healthcheck, \
-         patch('lib.tap_stack.Route53Record') as mock_r53_record, \
-         patch('lib.tap_stack.CloudwatchMetricAlarm') as mock_cw_alarm, \
-         patch('lib.tap_stack.SnsTopic') as mock_sns_topic, \
-         patch('lib.tap_stack.SnsTopicSubscription') as mock_sns_subscription, \
-         patch('lib.tap_stack.TerraformOutput') as mock_tf_output:
+    # Create list of patches to avoid nested block limit
+    patches = [
+        patch('lib.tap_stack.S3Backend'),
+        patch('lib.tap_stack.AwsProvider'),
+        patch('lib.tap_stack.Vpc'),
+        patch('lib.tap_stack.Subnet'),
+        patch('lib.tap_stack.InternetGateway'),
+        patch('lib.tap_stack.RouteTable'),
+        patch('lib.tap_stack.RouteTableAssociation'),
+        patch('lib.tap_stack.SecurityGroup'),
+        patch('lib.tap_stack.VpcPeeringConnection'),
+        patch('lib.tap_stack.VpcPeeringConnectionAccepterA'),
+        patch('lib.tap_stack.Route'),
+        patch('lib.tap_stack.RdsGlobalCluster'),
+        patch('lib.tap_stack.RdsCluster'),
+        patch('lib.tap_stack.RdsClusterInstance'),
+        patch('lib.tap_stack.DbSubnetGroup'),
+        patch('lib.tap_stack.SecretsmanagerSecret'),
+        patch('lib.tap_stack.SecretsmanagerSecretVersion'),
+        patch('lib.tap_stack.KmsKey'),
+        patch('lib.tap_stack.KmsAlias'),
+        patch('lib.tap_stack.DynamodbTable'),
+        patch('lib.tap_stack.LambdaFunction'),
+        patch('lib.tap_stack.IamRole'),
+        patch('lib.tap_stack.IamRolePolicyAttachment'),
+        patch('lib.tap_stack.IamPolicy'),
+        patch('lib.tap_stack.CloudwatchEventRule'),
+        patch('lib.tap_stack.CloudwatchEventTarget'),
+        patch('lib.tap_stack.LambdaPermission'),
+        patch('lib.tap_stack.Route53Zone'),
+        patch('lib.tap_stack.Route53HealthCheck'),
+        patch('lib.tap_stack.Route53Record'),
+        patch('lib.tap_stack.CloudwatchMetricAlarm'),
+        patch('lib.tap_stack.SnsTopic'),
+        patch('lib.tap_stack.SnsTopicSubscription'),
+        patch('lib.tap_stack.TerraformOutput'),
+    ]
 
-        # Configure mocks with return values
-        mock_vpc_instance = Mock()
-        mock_vpc_instance.id = "vpc-12345678"
-        mock_vpc.return_value = mock_vpc_instance
+    # Start all patches
+    mocks = [p.start() for p in patches]
 
-        mock_subnet_instance = Mock()
-        mock_subnet_instance.id = "subnet-12345678"
-        mock_subnet.return_value = mock_subnet_instance
+    # Unpack mocks
+    (mock_s3_backend, mock_aws_provider, mock_vpc, mock_subnet, mock_igw,
+     mock_route_table, mock_rt_assoc, mock_sg, mock_vpc_peering, mock_vpc_accepter,
+     mock_route, mock_global_cluster, mock_rds_cluster, mock_rds_instance,
+     mock_db_subnet_group, mock_secret, mock_secret_version, mock_kms_key,
+     mock_kms_alias, mock_dynamodb, mock_lambda, mock_iam_role,
+     mock_iam_policy_attach, mock_iam_policy, mock_event_rule, mock_event_target,
+     mock_lambda_permission, mock_r53_zone, mock_r53_healthcheck, mock_r53_record,
+     mock_cw_alarm, mock_sns_topic, mock_sns_subscription, mock_tf_output) = mocks
 
-        mock_igw_instance = Mock()
-        mock_igw_instance.id = "igw-12345678"
-        mock_igw.return_value = mock_igw_instance
+    # Configure mocks with return values
+    mock_vpc_instance = Mock()
+    mock_vpc_instance.id = "vpc-12345678"
+    mock_vpc.return_value = mock_vpc_instance
 
-        mock_rt_instance = Mock()
-        mock_rt_instance.id = "rtb-12345678"
-        mock_route_table.return_value = mock_rt_instance
+    mock_subnet_instance = Mock()
+    mock_subnet_instance.id = "subnet-12345678"
+    mock_subnet.return_value = mock_subnet_instance
 
-        mock_sg_instance = Mock()
-        mock_sg_instance.id = "sg-12345678"
-        mock_sg.return_value = mock_sg_instance
+    mock_igw_instance = Mock()
+    mock_igw_instance.id = "igw-12345678"
+    mock_igw.return_value = mock_igw_instance
 
-        mock_peering_instance = Mock()
-        mock_peering_instance.id = "pcx-12345678"
-        mock_vpc_peering.return_value = mock_peering_instance
+    mock_rt_instance = Mock()
+    mock_rt_instance.id = "rtb-12345678"
+    mock_route_table.return_value = mock_rt_instance
 
-        mock_global_cluster_instance = Mock()
-        mock_global_cluster_instance.id = "global-cluster-12345678"
-        mock_global_cluster.return_value = mock_global_cluster_instance
+    mock_sg_instance = Mock()
+    mock_sg_instance.id = "sg-12345678"
+    mock_sg.return_value = mock_sg_instance
 
-        mock_secret_instance = Mock()
-        mock_secret_instance.id = "secret-12345678"
-        mock_secret_instance.arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
-        mock_secret.return_value = mock_secret_instance
+    mock_peering_instance = Mock()
+    mock_peering_instance.id = "pcx-12345678"
+    mock_vpc_peering.return_value = mock_peering_instance
 
-        mock_kms_instance = Mock()
-        mock_kms_instance.id = "key-12345678"
-        mock_kms_instance.key_id = "key-12345678"
-        mock_kms_instance.arn = "arn:aws:kms:us-east-1:123456789012:key/test"
-        mock_kms_key.return_value = mock_kms_instance
+    mock_global_cluster_instance = Mock()
+    mock_global_cluster_instance.id = "global-cluster-12345678"
+    mock_global_cluster.return_value = mock_global_cluster_instance
 
-        mock_db_subnet_instance = Mock()
-        mock_db_subnet_instance.name = "db-subnet-group"
-        mock_db_subnet_group.return_value = mock_db_subnet_instance
+    mock_secret_instance = Mock()
+    mock_secret_instance.id = "secret-12345678"
+    mock_secret_instance.arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:test"
+    mock_secret.return_value = mock_secret_instance
 
-        mock_rds_cluster_instance = Mock()
-        mock_rds_cluster_instance.id = "cluster-12345678"
-        mock_rds_cluster.return_value = mock_rds_cluster_instance
+    mock_kms_instance = Mock()
+    mock_kms_instance.id = "key-12345678"
+    mock_kms_instance.key_id = "key-12345678"
+    mock_kms_instance.arn = "arn:aws:kms:us-east-1:123456789012:key/test"
+    mock_kms_key.return_value = mock_kms_instance
 
-        mock_dynamodb_instance = Mock()
-        mock_dynamodb_instance.name = "test-table"
-        mock_dynamodb.return_value = mock_dynamodb_instance
+    mock_db_subnet_instance = Mock()
+    mock_db_subnet_instance.name = "db-subnet-group"
+    mock_db_subnet_group.return_value = mock_db_subnet_instance
 
-        mock_iam_role_instance = Mock()
-        mock_iam_role_instance.name = "test-role"
-        mock_iam_role_instance.arn = "arn:aws:iam::123456789012:role/test-role"
-        mock_iam_role.return_value = mock_iam_role_instance
+    mock_rds_cluster_instance = Mock()
+    mock_rds_cluster_instance.id = "cluster-12345678"
+    mock_rds_cluster.return_value = mock_rds_cluster_instance
 
-        mock_iam_policy_instance = Mock()
-        mock_iam_policy_instance.arn = "arn:aws:iam::123456789012:policy/test-policy"
-        mock_iam_policy.return_value = mock_iam_policy_instance
+    mock_dynamodb_instance = Mock()
+    mock_dynamodb_instance.name = "test-table"
+    mock_dynamodb.return_value = mock_dynamodb_instance
 
-        mock_lambda_instance = Mock()
-        mock_lambda_instance.function_name = "test-function"
-        mock_lambda_instance.arn = "arn:aws:lambda:us-east-1:123456789012:function:test-function"
-        mock_lambda.return_value = mock_lambda_instance
+    mock_iam_role_instance = Mock()
+    mock_iam_role_instance.name = "test-role"
+    mock_iam_role_instance.arn = "arn:aws:iam::123456789012:role/test-role"
+    mock_iam_role.return_value = mock_iam_role_instance
 
-        mock_event_rule_instance = Mock()
-        mock_event_rule_instance.name = "test-rule"
-        mock_event_rule_instance.arn = "arn:aws:events:us-east-1:123456789012:rule/test-rule"
-        mock_event_rule.return_value = mock_event_rule_instance
+    mock_iam_policy_instance = Mock()
+    mock_iam_policy_instance.arn = "arn:aws:iam::123456789012:policy/test-policy"
+    mock_iam_policy.return_value = mock_iam_policy_instance
 
-        mock_r53_zone_instance = Mock()
-        mock_r53_zone_instance.zone_id = "Z12345678"
-        mock_r53_zone.return_value = mock_r53_zone_instance
+    mock_lambda_instance = Mock()
+    mock_lambda_instance.function_name = "test-function"
+    mock_lambda_instance.arn = "arn:aws:lambda:us-east-1:123456789012:function:test-function"
+    mock_lambda.return_value = mock_lambda_instance
 
-        mock_r53_healthcheck_instance = Mock()
-        mock_r53_healthcheck_instance.id = "hc-12345678"
-        mock_r53_healthcheck.return_value = mock_r53_healthcheck_instance
+    mock_event_rule_instance = Mock()
+    mock_event_rule_instance.name = "test-rule"
+    mock_event_rule_instance.arn = "arn:aws:events:us-east-1:123456789012:rule/test-rule"
+    mock_event_rule.return_value = mock_event_rule_instance
 
-        mock_sns_instance = Mock()
-        mock_sns_instance.arn = "arn:aws:sns:us-east-1:123456789012:test-topic"
-        mock_sns_topic.return_value = mock_sns_instance
+    mock_r53_zone_instance = Mock()
+    mock_r53_zone_instance.zone_id = "Z12345678"
+    mock_r53_zone.return_value = mock_r53_zone_instance
 
-        yield {
-            's3_backend': mock_s3_backend,
-            'aws_provider': mock_aws_provider,
-            'vpc': mock_vpc,
-            'subnet': mock_subnet,
-            'igw': mock_igw,
-            'route_table': mock_route_table,
-            'rt_assoc': mock_rt_assoc,
-            'security_group': mock_sg,
-            'vpc_peering': mock_vpc_peering,
-            'vpc_accepter': mock_vpc_accepter,
-            'route': mock_route,
-            'global_cluster': mock_global_cluster,
-            'rds_cluster': mock_rds_cluster,
-            'rds_instance': mock_rds_instance,
-            'db_subnet_group': mock_db_subnet_group,
-            'secret': mock_secret,
-            'secret_version': mock_secret_version,
-            'kms_key': mock_kms_key,
-            'kms_alias': mock_kms_alias,
-            'dynamodb': mock_dynamodb,
-            'lambda_func': mock_lambda,
-            'iam_role': mock_iam_role,
-            'iam_policy_attach': mock_iam_policy_attach,
-            'iam_policy': mock_iam_policy,
-            'event_rule': mock_event_rule,
-            'event_target': mock_event_target,
-            'lambda_permission': mock_lambda_permission,
-            'r53_zone': mock_r53_zone,
-            'r53_healthcheck': mock_r53_healthcheck,
-            'r53_record': mock_r53_record,
-            'cw_alarm': mock_cw_alarm,
-            'sns_topic': mock_sns_topic,
-            'sns_subscription': mock_sns_subscription,
-            'tf_output': mock_tf_output
-        }
+    mock_r53_healthcheck_instance = Mock()
+    mock_r53_healthcheck_instance.id = "hc-12345678"
+    mock_r53_healthcheck.return_value = mock_r53_healthcheck_instance
+
+    mock_sns_instance = Mock()
+    mock_sns_instance.arn = "arn:aws:sns:us-east-1:123456789012:test-topic"
+    mock_sns_topic.return_value = mock_sns_instance
+
+    yield {
+        's3_backend': mock_s3_backend,
+        'aws_provider': mock_aws_provider,
+        'vpc': mock_vpc,
+        'subnet': mock_subnet,
+        'igw': mock_igw,
+        'route_table': mock_route_table,
+        'rt_assoc': mock_rt_assoc,
+        'security_group': mock_sg,
+        'vpc_peering': mock_vpc_peering,
+        'vpc_accepter': mock_vpc_accepter,
+        'route': mock_route,
+        'global_cluster': mock_global_cluster,
+        'rds_cluster': mock_rds_cluster,
+        'rds_instance': mock_rds_instance,
+        'db_subnet_group': mock_db_subnet_group,
+        'secret': mock_secret,
+        'secret_version': mock_secret_version,
+        'kms_key': mock_kms_key,
+        'kms_alias': mock_kms_alias,
+        'dynamodb': mock_dynamodb,
+        'lambda_func': mock_lambda,
+        'iam_role': mock_iam_role,
+        'iam_policy_attach': mock_iam_policy_attach,
+        'iam_policy': mock_iam_policy,
+        'event_rule': mock_event_rule,
+        'event_target': mock_event_target,
+        'lambda_permission': mock_lambda_permission,
+        'r53_zone': mock_r53_zone,
+        'r53_healthcheck': mock_r53_healthcheck,
+        'r53_record': mock_r53_record,
+        'cw_alarm': mock_cw_alarm,
+        'sns_topic': mock_sns_topic,
+        'sns_subscription': mock_sns_subscription,
+        'tf_output': mock_tf_output
+    }
+
+    # Cleanup: stop all patches
+    for p in patches:
+        p.stop()
 
 
 class TestTapStackInitialization:
