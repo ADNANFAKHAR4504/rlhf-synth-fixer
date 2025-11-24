@@ -1,0 +1,697 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-OS EKS Cluster with Enhanced Security - Production-ready Kubernetes cluster supporting Linux and Windows workloads with private endpoints, KMS encryption, and IRSA",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "Default": "prod",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID where EKS cluster will be deployed"
+    },
+    "PrivateSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "List of private subnet IDs (minimum 2, across different AZs)"
+    },
+    "KubernetesVersion": {
+      "Type": "String",
+      "Description": "Kubernetes version for EKS cluster",
+      "Default": "1.28",
+      "AllowedValues": ["1.28", "1.29", "1.30"]
+    }
+  },
+  "Resources": {
+    "EKSEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for EKS cluster encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EKS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "eks.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logs.amazonaws.com"
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/eks/*"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-encryption-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EKSEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/eks-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EKSEncryptionKey"
+        }
+      }
+    },
+    "EKSClusterRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "eks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+          "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EKSClusterSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "eks-cluster-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for EKS cluster control plane",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EKSCluster": {
+      "Type": "AWS::EKS::Cluster",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+        },
+        "Version": {
+          "Ref": "KubernetesVersion"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": ["EKSClusterRole", "Arn"]
+        },
+        "ResourcesVpcConfig": {
+          "EndpointPrivateAccess": true,
+          "EndpointPublicAccess": false,
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "EKSClusterSecurityGroup"
+            }
+          ]
+        },
+        "EncryptionConfig": [
+          {
+            "Provider": {
+              "KeyArn": {
+                "Fn::GetAtt": ["EKSEncryptionKey", "Arn"]
+              }
+            },
+            "Resources": ["secrets"]
+          }
+        ],
+        "Logging": {
+          "ClusterLogging": {
+            "EnabledTypes": [
+              {
+                "Type": "api"
+              },
+              {
+                "Type": "audit"
+              },
+              {
+                "Type": "authenticator"
+              },
+              {
+                "Type": "controllerManager"
+              },
+              {
+                "Type": "scheduler"
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EKSNodeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-node-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+          "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-node-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "LinuxLaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "eks-linux-lt-${EnvironmentSuffix}"
+        },
+        "LaunchTemplateData": {
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled"
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "eks-linux-node-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                },
+                {
+                  "Key": "ManagedBy",
+                  "Value": "CloudFormation"
+                }
+              ]
+            },
+            {
+              "ResourceType": "volume",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "eks-linux-volume-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                },
+                {
+                  "Key": "ManagedBy",
+                  "Value": "CloudFormation"
+                }
+              ]
+            }
+          ]
+        },
+        "TagSpecifications": [
+          {
+            "ResourceType": "launch-template",
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "eks-linux-lt-${EnvironmentSuffix}"
+                }
+              },
+              {
+                "Key": "Environment",
+                "Value": "Production"
+              },
+              {
+                "Key": "ManagedBy",
+                "Value": "CloudFormation"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "WindowsLaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "eks-windows-lt-${EnvironmentSuffix}"
+        },
+        "LaunchTemplateData": {
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled"
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "eks-windows-node-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                },
+                {
+                  "Key": "ManagedBy",
+                  "Value": "CloudFormation"
+                }
+              ]
+            },
+            {
+              "ResourceType": "volume",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {
+                    "Fn::Sub": "eks-windows-volume-${EnvironmentSuffix}"
+                  }
+                },
+                {
+                  "Key": "Environment",
+                  "Value": "Production"
+                },
+                {
+                  "Key": "ManagedBy",
+                  "Value": "CloudFormation"
+                }
+              ]
+            }
+          ]
+        },
+        "TagSpecifications": [
+          {
+            "ResourceType": "launch-template",
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": {
+                  "Fn::Sub": "eks-windows-lt-${EnvironmentSuffix}"
+                }
+              },
+              {
+                "Key": "Environment",
+                "Value": "Production"
+              },
+              {
+                "Key": "ManagedBy",
+                "Value": "CloudFormation"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "LinuxNodeGroup": {
+      "Type": "AWS::EKS::Nodegroup",
+      "DependsOn": ["VPCCNIAddon"],
+      "Properties": {
+        "NodegroupName": {
+          "Fn::Sub": "eks-linux-ng-${EnvironmentSuffix}"
+        },
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "NodeRole": {
+          "Fn::GetAtt": ["EKSNodeRole", "Arn"]
+        },
+        "Subnets": {
+          "Ref": "PrivateSubnetIds"
+        },
+        "AmiType": "AL2_x86_64",
+        "CapacityType": "SPOT",
+        "InstanceTypes": ["t3.medium"],
+        "ScalingConfig": {
+          "MinSize": 2,
+          "MaxSize": 10,
+          "DesiredSize": 2
+        },
+        "LaunchTemplate": {
+          "Id": {
+            "Ref": "LinuxLaunchTemplate"
+          }
+        },
+        "UpdateConfig": {
+          "MaxUnavailable": 1
+        },
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "eks-linux-ng-${EnvironmentSuffix}"
+          },
+          "Environment": "Production",
+          "ManagedBy": "CloudFormation"
+        }
+      }
+    },
+    "WindowsNodeGroup": {
+      "Type": "AWS::EKS::Nodegroup",
+      "DependsOn": ["LinuxNodeGroup", "VPCCNIAddon"],
+      "Properties": {
+        "NodegroupName": {
+          "Fn::Sub": "eks-windows-ng-${EnvironmentSuffix}"
+        },
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "NodeRole": {
+          "Fn::GetAtt": ["EKSNodeRole", "Arn"]
+        },
+        "Subnets": {
+          "Ref": "PrivateSubnetIds"
+        },
+        "AmiType": "WINDOWS_CORE_2022_x86_64",
+        "CapacityType": "SPOT",
+        "InstanceTypes": ["t3.large"],
+        "ScalingConfig": {
+          "MinSize": 1,
+          "MaxSize": 5,
+          "DesiredSize": 1
+        },
+        "LaunchTemplate": {
+          "Id": {
+            "Ref": "WindowsLaunchTemplate"
+          }
+        },
+        "UpdateConfig": {
+          "MaxUnavailable": 1
+        },
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "eks-windows-ng-${EnvironmentSuffix}"
+          },
+          "Environment": "Production",
+          "ManagedBy": "CloudFormation"
+        }
+      }
+    },
+    "VPCCNIAddon": {
+      "Type": "AWS::EKS::Addon",
+      "Properties": {
+        "AddonName": "vpc-cni",
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "ResolveConflicts": "OVERWRITE",
+        "ConfigurationValues": "{\"enablePrefixDelegation\":\"true\"}",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-cni-addon-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "OIDCProvider": {
+      "Type": "AWS::IAM::OIDCProvider",
+      "Properties": {
+        "Url": {
+          "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"]
+        },
+        "ClientIdList": ["sts.amazonaws.com"],
+        "ThumbprintList": [
+          "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-oidc-provider-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ClusterName": {
+      "Description": "Name of the EKS cluster",
+      "Value": {
+        "Ref": "EKSCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterName"
+        }
+      }
+    },
+    "ClusterEndpoint": {
+      "Description": "EKS cluster API endpoint URL",
+      "Value": {
+        "Fn::GetAtt": ["EKSCluster", "Endpoint"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterEndpoint"
+        }
+      }
+    },
+    "ClusterArn": {
+      "Description": "ARN of the EKS cluster",
+      "Value": {
+        "Fn::GetAtt": ["EKSCluster", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterArn"
+        }
+      }
+    },
+    "OIDCIssuerUrl": {
+      "Description": "OIDC issuer URL for IRSA",
+      "Value": {
+        "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OIDCIssuerUrl"
+        }
+      }
+    },
+    "OIDCProviderArn": {
+      "Description": "ARN of the OIDC provider",
+      "Value": {
+        "Ref": "OIDCProvider"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OIDCProviderArn"
+        }
+      }
+    },
+    "LinuxNodeGroupArn": {
+      "Description": "ARN of the Linux node group",
+      "Value": {
+        "Fn::GetAtt": ["LinuxNodeGroup", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LinuxNodeGroupArn"
+        }
+      }
+    },
+    "WindowsNodeGroupArn": {
+      "Description": "ARN of the Windows node group",
+      "Value": {
+        "Fn::GetAtt": ["WindowsNodeGroup", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-WindowsNodeGroupArn"
+        }
+      }
+    },
+    "EncryptionKeyArn": {
+      "Description": "ARN of the KMS encryption key",
+      "Value": {
+        "Fn::GetAtt": ["EKSEncryptionKey", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EncryptionKeyArn"
+        }
+      }
+    },
+    "ClusterSecurityGroupId": {
+      "Description": "Security group ID for the EKS cluster",
+      "Value": {
+        "Ref": "EKSClusterSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterSecurityGroupId"
+        }
+      }
+    }
+  }
+}

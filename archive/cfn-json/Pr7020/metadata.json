@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "i6v9t9",
+  "team": "synth",
+  "startedAt": "2025-11-20T23:28:50.828216+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
