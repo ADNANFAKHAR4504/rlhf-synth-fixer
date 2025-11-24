@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, S3Backend
+from cdktf import TerraformStack, TerraformOutput, S3Backend, TerraformAsset, AssetType
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
@@ -23,6 +23,7 @@ from cdktf_cdktf_provider_aws.xray_sampling_rule import XraySamplingRule
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 import json
+import os
 
 
 class TapStack(TerraformStack):
@@ -316,6 +317,14 @@ class TapStack(TerraformStack):
         # Lambda Insights Layer ARN for us-east-1 (Python)
         lambda_insights_layer = f"arn:aws:lambda:{self.current_region.name}:580247275435:layer:LambdaInsightsExtension:38"
 
+        # Create TerraformAsset for payment handler Lambda
+        payment_handler_asset = TerraformAsset(
+            self,
+            f"payment-handler-asset-{self.environment_suffix}",
+            path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "lib", "lambda", "payment_handler"),
+            type=AssetType.ARCHIVE
+        )
+
         # Create payment handler Lambda
         lambda_functions["payment_handler"] = LambdaFunction(
             self,
@@ -324,8 +333,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=lambda_role.arn,
-            filename="lib/lambda/payment_handler.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda/payment_handler.zip\")}",
+            filename=payment_handler_asset.path,
+            source_code_hash=payment_handler_asset.asset_hash,
             timeout=30,
             memory_size=512,
             layers=[lambda_insights_layer],
@@ -345,6 +354,14 @@ class TapStack(TerraformStack):
             }
         )
 
+        # Create TerraformAsset for order processor Lambda
+        order_processor_asset = TerraformAsset(
+            self,
+            f"order-processor-asset-{self.environment_suffix}",
+            path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "lib", "lambda", "order_processor"),
+            type=AssetType.ARCHIVE
+        )
+
         # Create order processor Lambda
         lambda_functions["order_processor"] = LambdaFunction(
             self,
@@ -353,8 +370,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=lambda_role.arn,
-            filename="lib/lambda/order_processor.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda/order_processor.zip\")}",
+            filename=order_processor_asset.path,
+            source_code_hash=order_processor_asset.asset_hash,
             timeout=30,
             memory_size=512,
             layers=[lambda_insights_layer],
