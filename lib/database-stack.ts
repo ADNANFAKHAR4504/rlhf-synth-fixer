@@ -54,7 +54,10 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     // Extract password from secret for RDS cluster
     const dbPassword = dbSecretVersion.secretString.apply(secretString => {
-      const parsed = JSON.parse(secretString);
+      if (!secretString) {
+        throw new Error('Secret string is undefined');
+      }
+      const parsed = JSON.parse(secretString) as { username: string; password: string };
       return parsed.password;
     });
 
