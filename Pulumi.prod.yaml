@@ -1,0 +1,5 @@
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: prod-001
+  TapStack:dockerImageUri: 123456789012.dkr.ecr.us-east-1.amazonaws.com/payment-processor:latest
+  TapStack:networkingStackRef: organization/networking-stack/prod

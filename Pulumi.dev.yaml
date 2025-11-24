@@ -1,0 +1,6 @@
+config:
+  aws:region: us-east-2
+  TapStack:environmentSuffix: dev-001
+  TapStack:dockerImageUri: 123456789012.dkr.ecr.us-east-1.amazonaws.com/payment-processor:latest
+  TapStack:networkingStackRef: organization/networking-stack/dev
+encryptionsalt: v1:Jfskbf2kB28=:v1:y9ofswhbXNfYW8+s:/RhnXQkWJAlZUisSvLt+dcYehijyyg==
