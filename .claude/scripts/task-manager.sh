@@ -25,8 +25,8 @@ log_warn() { echo -e "${YELLOW}⚠️  $1${NC}" >&2; }
 # Returns: 0 on success, 1 on timeout
 acquire_lock() {
     local elapsed=0
-    local wait_interval=0.001  # Start with 1ms for faster initial attempts
-    local max_interval=0.05    # Cap at 50ms
+    local wait_interval=5  # Start with 5 seconds for faster initial attempts
+    local max_interval=60    # Cap at 60 seconds
     
     log_info "Attempting to acquire lock (PID: $$)..."
     
@@ -398,6 +398,9 @@ select_and_update() {
     # Ensure lock is released on exit
     trap "release_lock" EXIT INT TERM
     
+    # Critical section - reset stale tasks first
+    reset_stale_tasks
+
     # Critical section - select and update atomically
     task_json=$(select_task) || exit_code=$?
     
@@ -413,6 +416,11 @@ select_and_update() {
     
     # Update status while holding lock
     update_status "$task_id" "in_progress" || exit_code=$?
+
+    # CRITICAL: Sleep briefly to ensure CSV write is flushed to disk
+    # This prevents other agents from reading stale CSV data
+    sleep 1  # 1s to ensure filesystem sync
+    log_info "Status update confirmed, releasing lock"
     
     # Clear flag
     unset LOCK_HELD
@@ -589,6 +597,57 @@ mark_error() {
     trap - EXIT INT TERM
     
     return $result
+}
+
+# Reset stale in_progress tasks (older than 30 minutes)
+reset_stale_tasks() {
+    [ ! -f "$CSV_FILE" ] && return
+    
+    local cutoff_time=$(($(date +%s) - 1800))  # 30 minutes ago
+    local temp_file=$(mktemp)
+    local reset_count=0
+    
+    while IFS= read -r line; do
+        if echo "$line" | grep -q "^[^,]*,in_progress,"; then
+            # Check corresponding JSON file timestamp
+            local task_id=$(echo "$line" | cut -d',' -f1)
+            local json_files=(.claude/task-${task_id}-*.json)
+            
+            if [ -f "${json_files[0]}" ]; then
+                local file_time=$(stat -f %m "${json_files[0]}" 2>/dev/null || stat -c %Y "${json_files[0]}" 2>/dev/null || echo 999999999999)
+                if [ "$file_time" -lt "$cutoff_time" ]; then
+                    echo "$line" | sed 's/,in_progress,/,pending,/'
+                    reset_count=$((reset_count + 1))
+                    log_warn "Reset stale task: $task_id"
+                    continue
+                fi
+            fi
+        fi
+        echo "$line"
+    done < "$CSV_FILE" > "$temp_file"
+    
+    if [ $reset_count -gt 0 ]; then
+        mv "$temp_file" "$CSV_FILE"
+        log_info "Reset $reset_count stale tasks"
+    else
+        rm -f "$temp_file"
+    fi
+}
+
+# Check for duplicate in-flight selections
+check_duplicate_selection() {
+    local existing_jsons=(.claude/task-*-*.json)
+    if [ -f "${existing_jsons[0]}" ]; then
+        for json_file in "${existing_jsons[@]}"; do
+            if [ -f "$json_file" ]; then
+                local json_age=$(($(date +%s) - $(stat -f %m "$json_file" 2>/dev/null || stat -c %Y "$json_file" 2>/dev/null || echo 0)))
+                if [ $json_age -lt 300 ]; then  # Less than 5 minutes old
+                    log_warn "Recent task selection detected (${json_file}), waiting briefly..."
+                    sleep 1
+                fi
+            fi
+        done
+    fi
 }
 
 # Command dispatcher
