@@ -1,7 +1,4 @@
 name: TapStack
-runtime:
-  name: python
-  options:
-    virtualenv: venv
+runtime: python
 description: Multi-environment infrastructure deployment with Pulumi
 main: tap.py
