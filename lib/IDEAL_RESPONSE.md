@@ -13,11 +13,13 @@ analyze_elasticache.py - Comprehensive ElastiCache Performance, Security, and Co
 import json
 import csv
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Tuple, Optional
 from collections import defaultdict
 from types import SimpleNamespace
 import boto3
+from botocore.exceptions import ClientError
 import warnings
 import os
 warnings.filterwarnings('ignore')
@@ -41,9 +43,32 @@ except ImportError:  # pragma: no cover - optional dependency path
                     writer.writerow(row)
 
     pd = SimpleNamespace(DataFrame=MinimalDataFrame)
-import plotly.graph_objs as go
-import plotly.offline as pyo
-from plotly.subplots import make_subplots
+try:
+    import plotly.graph_objs as go
+    import plotly.offline as pyo
+    from plotly.subplots import make_subplots
+except ImportError:  # pragma: no cover - optional dependency path
+    class _DummyTrace:  # pragma: no cover
+        """Minimal placeholder for plotly trace objects."""
+
+    class _DummyFigure:  # pragma: no cover
+        """Minimal placeholder for plotly figure."""
+
+        def __init__(self, *args, **kwargs):
+            self.traces = []
+
+        def add_trace(self, trace, row=None, col=None):
+            self.traces.append((trace, row, col))
+
+        def update_layout(self, *args, **kwargs):
+            return None
+
+        def to_html(self, include_plotlyjs=False, div_id=None):
+            return "<div></div>"
+
+    go = SimpleNamespace(Bar=lambda *args, **kwargs: _DummyTrace(), Scatter=lambda *args, **kwargs: _DummyTrace())
+    make_subplots = lambda *args, **kwargs: _DummyFigure()
+    pyo = SimpleNamespace()
 
 try:
     from tabulate import tabulate
@@ -79,6 +104,8 @@ RESERVED_DISCOUNT_1YR = 0.35  # 35% discount
 RESERVED_DISCOUNT_3YR = 0.55  # 55% discount
 
 # Node type pricing (USD per hour - sample pricing)
+# NOTE: These are static sample rates for illustrative rightsizing math; consider
+#       replacing with live AWS Pricing API lookups for production-grade accuracy.
 NODE_PRICING = {
     'cache.t2.micro': 0.017,
     'cache.t2.small': 0.034,
@@ -180,7 +207,7 @@ CURRENT_GEN_EQUIVALENTS = {
 
 
 class ElastiCacheAnalyzer:
-    def __init__(self):
+    def __init__(self, use_mock_data: bool = False):
         # Use environment endpoint for testing
         endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
         self.elasticache = boto3.client('elasticache', region_name=REGION, endpoint_url=endpoint_url)
@@ -189,6 +216,7 @@ class ElastiCacheAnalyzer:
         self.region = REGION
         self.clusters = []
         self.analysis_results = []
+        self.use_mock_data = use_mock_data
     
     def setup_mock_clusters(self):
         """Setup mock ElastiCache clusters for testing"""
@@ -248,11 +276,10 @@ class ElastiCacheAnalyzer:
     def run_analysis(self):
         """Main analysis workflow"""
         print("Starting ElastiCache analysis...")
-        
-        # Setup mock clusters if in test mode
-        test_mode = os.environ.get('TEST_MODE') or os.environ.get('PYTEST_CURRENT_TEST')
-        print(f"TEST_MODE: {os.environ.get('TEST_MODE')}, PYTEST_CURRENT_TEST: {os.environ.get('PYTEST_CURRENT_TEST')}")
-        if test_mode:
+        print(f"Mock data enabled: {self.use_mock_data}")
+
+        # Setup mock clusters if explicitly requested
+        if self.use_mock_data:
             print("Setting up mock clusters for testing...")
             self.setup_mock_clusters()
         
@@ -320,8 +347,7 @@ class ElastiCacheAnalyzer:
             return True
 
         # Check cluster age (skip for test mode)
-        test_mode = os.environ.get('TEST_MODE') or os.environ.get('PYTEST_CURRENT_TEST')
-        if not test_mode:
+        if not self.use_mock_data:
             create_time = cluster.get('CacheClusterCreateTime')
             if create_time:
                 age_days = (datetime.now(timezone.utc) - create_time).days
@@ -338,7 +364,7 @@ class ElastiCacheAnalyzer:
                 ResourceName=f"arn:aws:elasticache:{REGION}:*:cluster:{cluster_id}"
             )
             return {tag['Key']: tag['Value'] for tag in response.get('TagList', [])}
-        except Exception:
+        except (boto3.exceptions.Boto3Error, ClientError, Exception):
             return {}
 
     def get_replication_group_info(self, replication_group_id: str) -> Dict:
@@ -348,7 +374,7 @@ class ElastiCacheAnalyzer:
                 ReplicationGroupId=replication_group_id
             )
             return response['ReplicationGroups'][0] if response['ReplicationGroups'] else {}
-        except Exception:
+        except (boto3.exceptions.Boto3Error, ClientError, Exception):
             return {}
 
     def analyze_cluster(self, cluster: Dict) -> Dict:
@@ -362,7 +388,7 @@ class ElastiCacheAnalyzer:
         # Get metrics
         try:
             metrics = self.get_cluster_metrics(cluster_id, engine)
-        except Exception:
+        except (boto3.exceptions.Boto3Error, ClientError, Exception):
             # If metrics collection fails, use default values
             metrics = {
                 'cache_hit_rate': 0,
@@ -693,7 +719,7 @@ class ElastiCacheAnalyzer:
                 values = [dp[statistic] for dp in response['Datapoints']]
                 return sum(values) / len(values) if statistic == 'Average' else sum(values)
             return 0
-        except Exception:
+        except (boto3.exceptions.Boto3Error, ClientError):
             return 0
 
     def is_production_cluster(self, cluster: Dict) -> bool:
@@ -734,7 +760,7 @@ class ElastiCacheAnalyzer:
                 AlarmNamePrefix=cluster_id
             )
             return response.get('MetricAlarms', [])
-        except Exception:
+        except (boto3.exceptions.Boto3Error, ClientError, Exception):
             return []
 
     def check_unused_parameter_groups(self) -> List[str]:
@@ -754,7 +780,7 @@ class ElastiCacheAnalyzer:
                         unused_groups.append(group['CacheParameterGroupName'])
 
             return unused_groups
-        except Exception:
+        except (boto3.exceptions.Boto3Error, ClientError, Exception):
             return []
 
     def calculate_cost_analysis(self, cluster: Dict, issues: List[Dict], metrics: Dict) -> Dict:
@@ -1229,7 +1255,8 @@ class ElastiCacheAnalyzer:
 def main():
     """Main entry point"""
     try:
-        analyzer = ElastiCacheAnalyzer()
+        use_mock = '--use-mock-clusters' in sys.argv
+        analyzer = ElastiCacheAnalyzer(use_mock_data=use_mock)
         analyzer.run_analysis()
         return 0
     except Exception as e:

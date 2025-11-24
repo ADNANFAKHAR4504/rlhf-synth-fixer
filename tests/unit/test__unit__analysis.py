@@ -1096,7 +1096,6 @@ class TestElastiCacheAnalyzer:
         assert analyzer.is_production_cluster({'CacheClusterId': 'dev-redis-001', 'Tags': {}}) == False
 
     @patch('analyse.boto3.client')
-    @patch.dict(os.environ, {'TEST_MODE': '1'})
     def test_setup_mock_clusters_creates_test_clusters(self, mock_boto_client):
         """Test setup_mock_clusters creates mock clusters for testing"""
         mock_elasticache = MagicMock()
@@ -1118,10 +1117,9 @@ class TestElastiCacheAnalyzer:
     @patch('analyse.ElastiCacheAnalyzer.analyze_cluster')
     @patch('analyse.ElastiCacheAnalyzer.setup_mock_clusters')
     @patch('analyse.boto3.client')
-    @patch.dict(os.environ, {'TEST_MODE': '1'})
-    def test_run_analysis_in_test_mode_sets_up_mock_clusters(self, mock_boto_client, mock_setup, mock_analyze, mock_get_all, mock_print, mock_generate):
-        """Test run_analysis sets up mock clusters in test mode"""
-        analyzer = ElastiCacheAnalyzer()
+    def test_run_analysis_sets_up_mock_clusters_when_enabled(self, mock_boto_client, mock_setup, mock_analyze, mock_get_all, mock_print, mock_generate):
+        """Test run_analysis sets up mock clusters when explicitly enabled"""
+        analyzer = ElastiCacheAnalyzer(use_mock_data=True)
 
         mock_get_all.return_value = [{'CacheClusterId': 'test-cluster'}]
         mock_analyze.return_value = {
@@ -1328,12 +1326,11 @@ class TestElastiCacheAnalyzer:
         """Ensure run_analysis takes the non-test-mode branch"""
         analyzer = ElastiCacheAnalyzer()
 
-        with patch.dict(os.environ, {'TEST_MODE': '', 'PYTEST_CURRENT_TEST': ''}):
-            with patch.object(analyzer, 'setup_mock_clusters') as mock_setup:
-                with patch.object(analyzer, 'get_all_clusters', return_value=[]):
-                    with patch.object(analyzer, 'generate_outputs') as mock_outputs:
-                        with patch.object(analyzer, 'print_final_summary'):
-                            analyzer.run_analysis()
+        with patch.object(analyzer, 'setup_mock_clusters') as mock_setup:
+            with patch.object(analyzer, 'get_all_clusters', return_value=[]):
+                with patch.object(analyzer, 'generate_outputs') as mock_outputs:
+                    with patch.object(analyzer, 'print_final_summary'):
+                        analyzer.run_analysis()
 
         mock_setup.assert_not_called()
         mock_outputs.assert_called_once()
@@ -1366,8 +1363,7 @@ class TestElastiCacheAnalyzer:
         recent_time = datetime.now(timezone.utc) - timedelta(days=1)
         cluster = {'CacheClusterId': 'prod-redis-001', 'CacheClusterCreateTime': recent_time}
 
-        with patch.dict(os.environ, {'TEST_MODE': '', 'PYTEST_CURRENT_TEST': ''}):
-            assert analyzer.should_exclude_cluster(cluster) is True
+        assert analyzer.should_exclude_cluster(cluster) is True
 
     @patch('analyse.boto3.client')
     def test_get_cluster_tags_handles_generic_exception(self, mock_boto_client):

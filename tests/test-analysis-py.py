@@ -11,7 +11,7 @@ import subprocess
 
 def run_analysis_script():
     """Run the analysis script directly"""
-    cmd = ["python", "lib/analyse.py"]
+    cmd = ["python", "lib/analyse.py", "--use-mock-clusters"]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd="/root/iac-test-automations")
     return result.returncode == 0
 
