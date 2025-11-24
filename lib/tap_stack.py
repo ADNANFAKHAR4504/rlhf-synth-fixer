@@ -365,7 +365,6 @@ class TapStack(Stack):
                 "cluster-enabled": "yes",
                 "timeout": "300",
                 "tcp-keepalive": "300",
-                "tcp-backlog": "511",
                 "maxmemory-policy": "volatile-lru"
             }
         )
@@ -605,7 +604,6 @@ def handler(event, context):
                 security_groups=[self.security_groups['lambda']],
                 timeout=Duration.seconds(900),
                 memory_size=3008,
-                reserved_concurrent_executions=100,
                 role=lambda_role,
                 environment={
                     "DB_SECRET_ARN": self.database.secret.secret_arn,
