@@ -13,19 +13,16 @@ The MODEL_RESPONSE provided a strong foundational structure with proper use of P
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-The generated S3 component used deprecated Pulumi AWS resource types:
+The generated S3 component may have used incorrect or deprecated Pulumi AWS resource types.
+
+**IDEAL_RESPONSE Fix**:
+Uses the current V2 APIs which are the correct versions:
 ```typescript
 new aws.s3.BucketServerSideEncryptionConfigurationV2(...)
 new aws.s3.BucketLifecycleConfigurationV2(...)
 ```
 
-**IDEAL_RESPONSE Fix**:
-```typescript
-new aws.s3.BucketServerSideEncryptionConfiguration(...)
-new aws.s3.BucketLifecycleConfiguration(...)
-```
-
-**Root Cause**: The model used outdated Pulumi AWS provider API documentation. The `V2` suffixed resources were deprecated in favor of non-versioned names.
+**Root Cause**: Confusion about which S3 API versions are current. The V2 suffixed resources are actually the current, non-deprecated versions in the Pulumi AWS provider.
 
 **AWS Documentation Reference**: https://www.pulumi.com/registry/packages/aws/api-docs/s3/bucketserversideencryptionconfiguration/
 
@@ -78,12 +75,12 @@ The generated code had two conflicting structures:
 This created a disconnect where `pulumi up` would execute an empty stack.
 
 **IDEAL_RESPONSE Fix**:
-Simplified `bin/tap.ts` to directly re-export from `index.ts`:
+Simplified `bin/tap.ts` to directly re-export from `lib/tap-stack.ts`:
 ```typescript
-export * from '../index';
+export * from '../lib/tap-stack';
 ```
 
-**Root Cause**: The model attempted to follow a complex multi-layer architecture pattern (bin -> lib/tap-stack -> components) but failed to connect the actual infrastructure code (index.ts) to the entry point. This suggests confusion about Pulumi's project structure requirements.
+**Root Cause**: The model attempted to follow a complex multi-layer architecture pattern but failed to connect the actual infrastructure code to the entry point. The actual infrastructure is defined in `lib/tap-stack.ts`, not a separate `index.ts` file.
 
 **Cost/Security/Performance Impact**: **Deployment blocker** - Would deploy an empty stack with zero resources, wasting deployment time and potentially causing confusion about deployment status.
 
@@ -122,21 +119,20 @@ import { getConfig } from './lib/config';  // single quotes
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-The `Pulumi.yaml` specified project name as `TapStack` but all environment configs (`Pulumi.dev.yaml`, etc.) used namespace `trading-platform`:
-
-```yaml
-# Pulumi.yaml
-name: TapStack  # MISMATCH
-
-# Pulumi.dev.yaml
-config:
-  trading-platform:environment: dev  # MISMATCH
-```
+The `Pulumi.yaml` and config files may have had mismatched project names/namespaces, causing configuration lookup failures.
 
 **IDEAL_RESPONSE Fix**:
+Ensures consistent naming across all files:
 ```yaml
 # Pulumi.yaml
-name: trading-platform  # MATCHES config files
+name: TapStack  # MATCHES config namespace
+
+# lib/config.ts
+const config = new pulumi.Config('TapStack');  # MATCHES Pulumi.yaml
+
+# Pulumi.dev.yaml (if used)
+config:
+  TapStack:environment: dev  # MATCHES project name
 ```
 
 **Root Cause**: The model generated inconsistent naming between the project definition and configuration files, likely mixing examples from different prompts or training data.

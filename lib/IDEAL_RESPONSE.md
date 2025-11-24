@@ -27,7 +27,7 @@ The solution follows Pulumi's ComponentResource pattern with these key component
 
 ```
 .
-├── Pulumi.yaml                      # Project configuration (name: trading-platform)
+├── Pulumi.yaml                      # Project configuration (name: TapStack)
 ├── Pulumi.dev.yaml                  # Development environment config
 ├── Pulumi.staging.yaml              # Staging environment config
 ├── Pulumi.prod.yaml                 # Production environment config
@@ -62,6 +62,12 @@ The solution follows Pulumi's ComponentResource pattern with these key component
 Simplified to directly export from lib/tap-stack.ts, avoiding the disconnected placeholder pattern:
 
 ```typescript
+/**
+ * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
+ *
+ * This module imports and exports the infrastructure defined in lib/tap-stack.ts.
+ * It ensures all exports from lib/tap-stack.ts are available to Pulumi.
+ */
 export * from '../lib/tap-stack';
 ```
 
@@ -72,7 +78,7 @@ export * from '../lib/tap-stack';
 Ensures project name matches configuration namespaces:
 
 ```yaml
-name: trading-platform  # Must match Pulumi.*.yaml config namespaces
+name: TapStack  # Must match config namespace in lib/config.ts
 runtime:
   name: nodejs
 description: Pulumi infrastructure for TAP
@@ -189,23 +195,37 @@ export const ecsSecurityGroupId = securityGroups.ecsSecurityGroup.id;
 export const rdsSecurityGroupId = securityGroups.rdsSecurityGroup.id;
 ```
 
-### 4. Critical Fixes Applied
+### 4. Configuration Management
+
+**File: `lib/config.ts`**
+
+The configuration system provides intelligent defaults based on environment type:
+
+- **Environment Detection**: Automatically determines dev/staging/prod from stack name or environment suffix
+- **Default Values**: Provides sensible defaults for all configuration parameters
+- **Environment Variables**: Supports fallback to environment variables (AWS_REGION, COMMIT_AUTHOR, etc.)
+- **Type Safety**: Uses TypeScript interfaces for all configuration objects
+
+Key defaults:
+- Dev: 1 ECS task, 256 CPU, 512 MB memory, db.t3.medium, 1 day backup retention
+- Staging: 2 ECS tasks, 512 CPU, 1024 MB memory, db.r5.large, 7 days backup retention  
+- Prod: 4 ECS tasks, 1024 CPU, 2048 MB memory, db.r5.xlarge, 14 days backup retention
+
+### 5. Critical Fixes Applied
 
 #### Fix 1: Use Current S3 APIs
 
 **File: `lib/components/s3.ts`**
 
-Replaced deprecated V2 APIs:
+Uses current V2 APIs (which are the correct, non-deprecated versions):
 
 ```typescript
-// ❌ OLD (deprecated)
+// ✅ CORRECT (current API)
 new aws.s3.BucketServerSideEncryptionConfigurationV2(...)
 new aws.s3.BucketLifecycleConfigurationV2(...)
-
-// ✅ NEW (current)
-new aws.s3.BucketServerSideEncryptionConfiguration(...)
-new aws.s3.BucketLifecycleConfiguration(...)
 ```
+
+Note: The V2 suffix indicates these are the current version of the S3 configuration resources in the Pulumi AWS provider.
 
 #### Fix 2: Correct CloudWatch Alarm Properties
 
@@ -327,25 +347,28 @@ expect(cluster.clusters![0].status).toBe('ACTIVE');
 
 ```yaml
 config:
-  trading-platform:environment: dev
-  trading-platform:region: us-east-1
-  trading-platform:vpcCidr: 10.0.0.0/16
-  trading-platform:availabilityZones:
+  TapStack:environment: dev
+  TapStack:region: us-east-1
+  TapStack:vpcCidr: 10.0.0.0/16
+  TapStack:availabilityZones:
     - us-east-1a
     - us-east-1b
-  trading-platform:ecsTaskCount: 1
-  trading-platform:ecsTaskCpu: "256"
-  trading-platform:ecsTaskMemory: "512"
-  trading-platform:rdsInstanceClass: db.t3.medium
-  trading-platform:rdsEngineMode: provisioned
-  trading-platform:rdsBackupRetentionDays: 7
-  trading-platform:enableAutoScaling: false
-  trading-platform:s3LifecycleEnabled: true
-  trading-platform:s3TransitionDays: 90
-  trading-platform:s3ExpirationDays: 365
-  trading-platform:owner: dev-team
-  trading-platform:costCenter: development
+    - us-east-1c
+  TapStack:ecsTaskCount: 1
+  TapStack:ecsTaskCpu: "256"
+  TapStack:ecsTaskMemory: "512"
+  TapStack:rdsInstanceClass: db.t3.medium
+  TapStack:rdsEngineMode: provisioned
+  TapStack:rdsBackupRetentionDays: 1
+  TapStack:enableAutoScaling: false
+  TapStack:s3LifecycleEnabled: true
+  TapStack:s3TransitionDays: 30
+  TapStack:s3ExpirationDays: 90
+  TapStack:owner: platform-team
+  TapStack:costCenter: engineering
 ```
+
+Note: Configuration uses `TapStack` namespace to match the project name in `Pulumi.yaml` and the config namespace in `lib/config.ts`.
 
 ### Staging and Production
 
@@ -394,7 +417,7 @@ pulumi stack output --json > cfn-outputs/flat-outputs.json
 2. **Type Safety**: Replaces `any` with `Record<string, unknown>`
 3. **Correct Entry Point**: bin/tap.ts properly exports from lib/tap-stack.ts
 4. **File Location Compliance**: All infrastructure code in lib/ per CI/CD requirements
-5. **Proper Naming**: Pulumi.yaml name matches config namespace
+5. **Proper Naming**: Pulumi.yaml name (`TapStack`) matches config namespace in `lib/config.ts`
 6. **Code Style**: Consistent single quotes, proper unused parameter handling
 7. **Complete Tests**: 100% coverage vs placeholder tests
 8. **Build Success**: All lint/build/test gates pass
