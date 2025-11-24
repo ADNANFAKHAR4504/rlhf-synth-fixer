@@ -6,13 +6,10 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
-    // Transform JS files (so ESM syntax in some node_modules can be transpiled)
-    '^.+\\.jsx?$': 'babel-jest',
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    // allow transforming some packages that ship ESM (including kubernetes client and its deps)
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
+    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy)/)',
   ],
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
@@ -27,7 +24,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 50,
+      branches: 90,
       functions: 90,
       lines: 90,
       statements: 90,
@@ -41,8 +38,8 @@ module.exports = {
       isolatedModules: true,
       tsconfig: {
         allowJs: true,
-        esModuleInterop: true,
-      },
-    },
-  },
+        esModuleInterop: true
+      }
+    }
+  }
 };
