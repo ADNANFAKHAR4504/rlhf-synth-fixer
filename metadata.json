@@ -3,22 +3,15 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "f5l0f3",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-19T13:47:40.130667Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "ECS tasks must run in private subnets with no direct internet access",
-    "Container images must be scanned for vulnerabilities before deployment",
-    "Each microservice must have its own dedicated IAM task role",
-    "Secrets must be stored in AWS Secrets Manager and injected at runtime",
-    "Enable container insights and tracing for all services",
-    "Implement blue-green deployment strategy with automatic rollback",
-    "Configure auto-scaling based on custom CloudWatch metrics",
-    "Use Fargate Spot for non-critical background processing tasks",
-    "Implement circuit breaker pattern between microservices",
-    "Deploy containers across at least 3 availability zones"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
+  "po_id": "f5l0f3",
   "aws_services": [
     "VPC",
     "ECS",
@@ -33,5 +26,6 @@
     "IAM",
     "SNS"
   ],
+  "region": "us-east-1",
   "training_quality": 10
 }

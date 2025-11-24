@@ -94,10 +94,10 @@ class EcsStack(NestedStack):
             priority=30, conditions=[elbv2.ListenerCondition.path_patterns(["/api/notifications/*"])]
         )
 
-        # Create services
-        self.payment_api_service = self._create_service("payment-api", props.payment_api_repo, 2048, 4096, env_suffix, props, self.payment_api_target_group, 8080, False)
-        self.transaction_processor_service = self._create_service("transaction-processor", props.transaction_processor_repo, 1024, 2048, env_suffix, props, self.transaction_processor_target_group, 8081, False)
-        self.notification_service = self._create_service("notification-service", props.notification_service_repo, 1024, 2048, env_suffix, props, self.notification_service_target_group, 8082, True)
+        # Create services - pass ALB listener for dependency
+        self.payment_api_service = self._create_service("payment-api", props.payment_api_repo, 2048, 4096, env_suffix, props, self.payment_api_target_group, 8080, False, self.alb_listener)
+        self.transaction_processor_service = self._create_service("transaction-processor", props.transaction_processor_repo, 1024, 2048, env_suffix, props, self.transaction_processor_target_group, 8081, False, self.alb_listener)
+        self.notification_service = self._create_service("notification-service", props.notification_service_repo, 1024, 2048, env_suffix, props, self.notification_service_target_group, 8082, True, self.alb_listener)
 
         cdk.CfnOutput(self, f"LoadBalancerDNS{env_suffix}", value=self.alb.load_balancer_dns_name)
 
@@ -117,7 +117,7 @@ class EcsStack(NestedStack):
 
     def _create_service(self, service_name: str, repo: ecr.Repository, cpu: int, memory: int,
                         env_suffix: str, props: EcsStackProps, target_group: elbv2.ApplicationTargetGroup,
-                        port: int, use_spot: bool) -> ecs.FargateService:
+                        port: int, use_spot: bool, listener_rule: elbv2.ApplicationListenerRule) -> ecs.FargateService:
         """Create ECS service with all configurations."""
 
         # Task execution role
@@ -127,10 +127,32 @@ class EcsStack(NestedStack):
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
             managed_policies=[iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")]
         )
-        props.db_secret.grant_read(execution_role)
-        props.api_secret.grant_read(execution_role)
-        repo.grant_pull(execution_role)
-        props.kms_key.grant_decrypt(execution_role)
+
+        # Add explicit IAM policies instead of using grant methods to avoid circular dependencies
+        execution_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["secretsmanager:GetSecretValue"],
+            resources=[props.db_secret.secret_arn, props.api_secret.secret_arn]
+        ))
+        execution_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["ecr:GetAuthorizationToken"],
+            resources=["*"]
+        ))
+        execution_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=[
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage"
+            ],
+            resources=[repo.repository_arn]
+        ))
+        execution_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=["kms:Decrypt"],
+            resources=[props.kms_key.key_arn]
+        ))
 
         # Task role
         task_role = iam.Role(
@@ -145,7 +167,6 @@ class EcsStack(NestedStack):
             self, f"{service_name}LogGroup{env_suffix}",
             log_group_name=f"/ecs/payment-processing/{service_name}-{env_suffix}",
             retention=logs.RetentionDays.ONE_MONTH,
-            encryption_key=props.kms_key,
             removal_policy=RemovalPolicy.DESTROY
         )
 
@@ -215,6 +236,9 @@ class EcsStack(NestedStack):
             'ContainerPort': port,
             'TargetGroupArn': target_group.target_group_arn
         }])
+
+        # Ensure service depends on listener rule being created
+        service.node.add_dependency(listener_rule)
 
         # Auto-scaling
         scaling = service.auto_scale_task_count(min_capacity=2, max_capacity=10)
