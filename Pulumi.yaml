@@ -1,0 +1,3 @@
+name: tap
+runtime: nodejs
+description: Production-ready EKS cluster with advanced security
