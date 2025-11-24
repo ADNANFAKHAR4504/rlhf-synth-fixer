@@ -1,8 +1,12 @@
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput, LocalBackend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.data_aws_vpc import DataAwsVpc
-from cdktf_cdktf_provider_aws.data_aws_subnets import DataAwsSubnets
+from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.eks_cluster import (
     EksCluster,
     EksClusterVpcConfig,
@@ -39,18 +43,65 @@ class TapStack(TerraformStack):
             "ManagedBy": "CDKTF"
         }
 
-        # Get default VPC and private subnets
-        vpc = DataAwsVpc(self, "vpc",
-            default=True
+        # Get available availability zones
+        azs = DataAwsAvailabilityZones(self, "available_azs",
+            state="available"
         )
 
-        # Get subnets for the VPC
-        private_subnets = DataAwsSubnets(self, "private_subnets",
-            filter=[{
-                "name": "vpc-id",
-                "values": [vpc.id]
-            }]
+        # Create VPC
+        vpc = Vpc(self, "vpc",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={**common_tags, "Name": f"eks-vpc-{environment_suffix}"}
         )
+
+        # Create Internet Gateway
+        igw = InternetGateway(self, "igw",
+            vpc_id=vpc.id,
+            tags={**common_tags, "Name": f"eks-igw-{environment_suffix}"}
+        )
+
+        # Create public subnets in multiple AZs
+        public_subnet_1 = Subnet(self, "public_subnet_1",
+            vpc_id=vpc.id,
+            cidr_block="10.0.1.0/24",
+            availability_zone=f"${{data.aws_availability_zones.{azs.friendly_unique_id}.names[0]}}",
+            map_public_ip_on_launch=True,
+            tags={**common_tags, "Name": f"eks-public-subnet-1-{environment_suffix}", "kubernetes.io/role/elb": "1"}
+        )
+
+        public_subnet_2 = Subnet(self, "public_subnet_2",
+            vpc_id=vpc.id,
+            cidr_block="10.0.2.0/24",
+            availability_zone=f"${{data.aws_availability_zones.{azs.friendly_unique_id}.names[1]}}",
+            map_public_ip_on_launch=True,
+            tags={**common_tags, "Name": f"eks-public-subnet-2-{environment_suffix}", "kubernetes.io/role/elb": "1"}
+        )
+
+        # Create route table for public subnets
+        public_route_table = RouteTable(self, "public_route_table",
+            vpc_id=vpc.id,
+            route=[{
+                "cidr_block": "0.0.0.0/0",
+                "gateway_id": igw.id
+            }],
+            tags={**common_tags, "Name": f"eks-public-rt-{environment_suffix}"}
+        )
+
+        # Associate public subnets with public route table
+        RouteTableAssociation(self, "public_subnet_1_association",
+            subnet_id=public_subnet_1.id,
+            route_table_id=public_route_table.id
+        )
+
+        RouteTableAssociation(self, "public_subnet_2_association",
+            subnet_id=public_subnet_2.id,
+            route_table_id=public_route_table.id
+        )
+
+        # Use public subnets for EKS (simplified for testing)
+        subnet_ids = [public_subnet_1.id, public_subnet_2.id]
 
         # CloudWatch Log Group for EKS cluster logs
         log_group = CloudwatchLogGroup(self, "eks_log_group",
@@ -94,7 +145,7 @@ class TapStack(TerraformStack):
             role_arn=cluster_role.arn,
             version="1.28",
             vpc_config=EksClusterVpcConfig(
-                subnet_ids=private_subnets.ids,
+                subnet_ids=subnet_ids,
                 endpoint_private_access=True,
                 endpoint_public_access=True
             ),
@@ -155,7 +206,7 @@ class TapStack(TerraformStack):
             cluster_name=eks_cluster.name,
             node_group_name=f"node-group-od-{environment_suffix}",
             node_role_arn=node_role.arn,
-            subnet_ids=private_subnets.ids,
+            subnet_ids=subnet_ids,
             capacity_type="ON_DEMAND",
             instance_types=["t3.medium"],
             scaling_config=EksNodeGroupScalingConfig(
@@ -172,7 +223,7 @@ class TapStack(TerraformStack):
             cluster_name=eks_cluster.name,
             node_group_name=f"node-group-spot-{environment_suffix}",
             node_role_arn=node_role.arn,
-            subnet_ids=private_subnets.ids,
+            subnet_ids=subnet_ids,
             capacity_type="SPOT",
             instance_types=["t3.medium"],
             scaling_config=EksNodeGroupScalingConfig(
