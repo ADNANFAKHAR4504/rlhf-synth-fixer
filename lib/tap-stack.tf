@@ -587,7 +587,7 @@ resource "aws_lambda_function" "token_authorizer" {
 
   environment {
     variables = {
-      EXPECTED_TOKEN = "valid-token-123"
+      EXPECTED_TOKEN = "test-token-123"
       LOG_LEVEL      = "INFO"
     }
   }
