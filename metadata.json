@@ -1,0 +1,21 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-24T13:56:57+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "S3",
+    "VPC",
+    "IAM"
+  ],
+  "po_id": "c3g3x7",
+  "training_quality": 10
+}
