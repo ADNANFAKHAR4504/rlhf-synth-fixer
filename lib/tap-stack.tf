@@ -578,7 +578,7 @@ resource "aws_lambda_function" "token_authorizer" {
   runtime                        = "python3.11"
   timeout                        = 10
   memory_size                    = 128
-  reserved_concurrent_executions = 5
+  reserved_concurrent_executions = var.authorizer_reserved_concurrency
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]
@@ -612,7 +612,7 @@ resource "aws_lambda_function" "transaction_validation" {
   runtime                        = "python3.11"
   timeout                        = 30
   memory_size                    = 256
-  reserved_concurrent_executions = 30
+  reserved_concurrent_executions = var.transaction_validation_reserved_concurrency
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]
@@ -646,7 +646,7 @@ resource "aws_lambda_function" "fraud_scoring" {
   runtime                        = "python3.11"
   timeout                        = 60
   memory_size                    = 512
-  reserved_concurrent_executions = 15
+  reserved_concurrent_executions = var.fraud_scoring_reserved_concurrency
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]
@@ -682,7 +682,7 @@ resource "aws_lambda_function" "notification_processing" {
   runtime                        = "python3.11"
   timeout                        = 30
   memory_size                    = 256
-  reserved_concurrent_executions = 10
+  reserved_concurrent_executions = var.notification_reserved_concurrency
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]

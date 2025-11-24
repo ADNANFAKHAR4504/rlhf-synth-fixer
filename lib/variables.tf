@@ -35,3 +35,27 @@ variable "team" {
   type        = string
   default     = "unknown"
 }
+
+variable "authorizer_reserved_concurrency" {
+  description = "Optional reserved concurrency for the token authorizer Lambda"
+  type        = number
+  default     = null
+}
+
+variable "transaction_validation_reserved_concurrency" {
+  description = "Optional reserved concurrency for the transaction validation Lambda"
+  type        = number
+  default     = null
+}
+
+variable "fraud_scoring_reserved_concurrency" {
+  description = "Optional reserved concurrency for the fraud scoring Lambda"
+  type        = number
+  default     = null
+}
+
+variable "notification_reserved_concurrency" {
+  description = "Optional reserved concurrency for the notification Lambda"
+  type        = number
+  default     = null
+}
