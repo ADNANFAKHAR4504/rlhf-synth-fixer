@@ -1,0 +1,7 @@
+name: payment-dr-infrastructure
+runtime: nodejs
+description: Multi-region disaster recovery infrastructure for payment processing
+config:
+  environmentSuffix:
+    type: string
+    description: Unique suffix for resource naming
