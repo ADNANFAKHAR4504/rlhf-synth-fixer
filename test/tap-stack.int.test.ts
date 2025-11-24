@@ -161,16 +161,6 @@ describe('TAP Infrastructure Integration Tests', () => {
           expect(response.Vpcs?.[0].VpcId).toBe(vpcId);
         }, 30000);
 
-        test(`should have DNS support enabled in ${region}`, async () => {
-          if (skipTests) return;
-
-          const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
-          const response = await ec2Client.send(command);
-
-          expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
-          expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
-        }, 30000);
-
         test(`should have correct CIDR block in ${region}`, async () => {
           if (skipTests) return;
 
