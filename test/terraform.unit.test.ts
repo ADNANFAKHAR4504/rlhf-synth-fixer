@@ -118,7 +118,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("critical variables have default values for CI/CD flexibility", () => {
-      // Ensure variables have defaults without hardcoding what those defaults are
+      // Ensure variables have defaults without hardcoding 
       expect(variablesContent).toMatch(/variable\s+"aws_region"[\s\S]*?default\s*=/);
       expect(variablesContent).toMatch(/variable\s+"environment_suffix"[\s\S]*?default\s*=/);
     });
