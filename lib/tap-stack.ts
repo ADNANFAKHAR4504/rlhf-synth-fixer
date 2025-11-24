@@ -586,7 +586,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // RDS PostgreSQL Instance
     const rdsInstance = new aws.rds.Instance(
-      'rds-postgres',
+      'rds-instance',
       {
         identifier: `fintech-db-${environmentSuffix}`,
         engine: 'postgres',

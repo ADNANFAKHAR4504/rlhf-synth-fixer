@@ -141,7 +141,7 @@ pulumi.runtime.setMocks({
     // Copy all inputs to state
     Object.assign(state, args.inputs);
 
-    mockMonitor.registerResource(args.type, args.name, args.inputs, args.opts);
+    mockMonitor.registerResource(args.type, args.name, args.inputs, undefined);
 
     return {
       id: state.id,
@@ -569,6 +569,7 @@ describe('TapStack', () => {
 
   describe('Resource Naming with environmentSuffix', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       process.env.ENVIRONMENT_SUFFIX = 'prod';
       stack = new TapStack('test-stack', { tags: {} });
     });
@@ -605,6 +606,7 @@ describe('TapStack', () => {
 
   describe('Tag Propagation', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', {
         tags: {
           Environment: 'production',
@@ -628,6 +630,7 @@ describe('TapStack', () => {
 
   describe('Compliance Requirements', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -660,6 +663,15 @@ describe('TapStack', () => {
   });
 
   describe('Environment Variable Handling', () => {
+    beforeEach(() => {
+      mockMonitor.clear();
+    });
+
+    afterEach(() => {
+      process.env.ENVIRONMENT_SUFFIX = 'test';
+      process.env.AWS_REGION = 'us-east-1';
+    });
+
     it('should use default environmentSuffix when not set', () => {
       delete process.env.ENVIRONMENT_SUFFIX;
       stack = new TapStack('test-stack', { tags: {} });
@@ -679,6 +691,7 @@ describe('TapStack', () => {
 
   describe('Resource Dependencies', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -704,6 +717,10 @@ describe('TapStack', () => {
   });
 
   describe('Error Handling', () => {
+    beforeEach(() => {
+      mockMonitor.clear();
+    });
+
     it('should handle missing tags gracefully', () => {
       expect(() => {
         stack = new TapStack('test-stack', {});
@@ -719,6 +736,7 @@ describe('TapStack', () => {
 
   describe('Network Configuration', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
@@ -742,6 +760,7 @@ describe('TapStack', () => {
 
   describe('IAM Policies', () => {
     beforeEach(() => {
+      mockMonitor.clear();
       stack = new TapStack('test-stack', { tags: {} });
     });
 
