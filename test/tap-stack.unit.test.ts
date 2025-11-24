@@ -134,6 +134,53 @@ pulumi.runtime.setMocks({
         state.scalableDimension = 'ecs:service:DesiredCount';
         state.serviceNamespace = 'ecs';
         break;
+      case 'aws:cloudwatch/metricAlarm:MetricAlarm':
+        state.id = `alarm-mock-${args.name}`;
+        state.name = args.inputs.name || args.name;
+        break;
+      case 'aws:kms/alias:Alias':
+        state.id = `alias-mock-${args.name}`;
+        state.name = args.inputs.name || args.name;
+        break;
+      case 'aws:lb/listener:Listener':
+        state.id = `listener-mock-${args.name}`;
+        state.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/${args.name}/abc123`;
+        break;
+      case 'aws:iam/rolePolicy:RolePolicy':
+        state.id = `policy-mock-${args.name}`;
+        state.name = args.inputs.name || args.name;
+        break;
+      case 'aws:iam/rolePolicyAttachment:RolePolicyAttachment':
+        state.id = `attachment-mock-${args.name}`;
+        break;
+      case 'aws:appautoscaling/policy:Policy':
+        state.id = `scaling-policy-mock-${args.name}`;
+        state.name = args.inputs.name || args.name;
+        state.policyType = args.inputs.policyType || 'TargetTrackingScaling';
+        break;
+      case 'aws:ec2/internetGateway:InternetGateway':
+        state.id = `igw-mock-${args.name}`;
+        break;
+      case 'aws:ec2/routeTable:RouteTable':
+        state.id = `rt-mock-${args.name}`;
+        break;
+      case 'aws:ec2/route:Route':
+        state.id = `route-mock-${args.name}`;
+        break;
+      case 'aws:ec2/routeTableAssociation:RouteTableAssociation':
+        state.id = `rta-mock-${args.name}`;
+        break;
+      case 'aws:s3/bucketVersioning:BucketVersioning':
+      case 'aws:s3/bucketVersioningV2:BucketVersioningV2':
+        state.id = `versioning-mock-${args.name}`;
+        break;
+      case 'aws:s3/bucketLifecycleConfiguration:BucketLifecycleConfiguration':
+      case 'aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2':
+        state.id = `lifecycle-mock-${args.name}`;
+        break;
+      case 'aws:s3/bucketPolicy:BucketPolicy':
+        state.id = `bucket-policy-mock-${args.name}`;
+        break;
       default:
         state.id = `mock-${args.name}`;
     }
@@ -178,10 +225,9 @@ describe('TapStack', () => {
     // Set environment variables for testing
     process.env.ENVIRONMENT_SUFFIX = 'test';
     process.env.AWS_REGION = 'us-east-1';
-  });
 
-  beforeEach(() => {
-    mockMonitor.clear();
+    // Create stack once for all tests
+    stack = new TapStack('test-stack', { tags: {} });
   });
 
   describe('Stack Construction', () => {
@@ -204,11 +250,6 @@ describe('TapStack', () => {
   });
 
   describe('VPC Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create VPC with correct CIDR block', () => {
       const vpc = mockMonitor.getResource('main-vpc');
       expect(vpc).toBeDefined();
@@ -273,11 +314,6 @@ describe('TapStack', () => {
   });
 
   describe('Security Groups', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create ALB security group with HTTPS ingress', () => {
       const albSg = mockMonitor.getResource('alb-security-group');
       expect(albSg).toBeDefined();
@@ -321,11 +357,6 @@ describe('TapStack', () => {
   });
 
   describe('KMS Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create KMS key with rotation enabled', () => {
       const kmsKey = mockMonitor.getResource('encryption-key');
       expect(kmsKey).toBeDefined();
@@ -341,11 +372,6 @@ describe('TapStack', () => {
   });
 
   describe('S3 Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create S3 bucket for ALB logs', () => {
       const bucket = mockMonitor.getResource('alb-logs-bucket');
       expect(bucket).toBeDefined();
@@ -379,11 +405,6 @@ describe('TapStack', () => {
   });
 
   describe('ECS Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create ECS cluster', () => {
       const cluster = mockMonitor.getResource('ecs-cluster');
       expect(cluster).toBeDefined();
@@ -437,11 +458,6 @@ describe('TapStack', () => {
   });
 
   describe('RDS Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create RDS subnet group', () => {
       const subnetGroup = mockMonitor.getResource('rds-subnet-group');
       expect(subnetGroup).toBeDefined();
@@ -480,11 +496,6 @@ describe('TapStack', () => {
   });
 
   describe('Load Balancer Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create Application Load Balancer', () => {
       const alb = mockMonitor.getResource('application-load-balancer');
       expect(alb).toBeDefined();
@@ -523,11 +534,6 @@ describe('TapStack', () => {
   });
 
   describe('Auto Scaling Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create auto scaling target', () => {
       const target = mockMonitor.getResource('ecs-autoscaling-target');
       expect(target).toBeDefined();
@@ -554,11 +560,6 @@ describe('TapStack', () => {
   });
 
   describe('CloudWatch Alarms', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create ECS CPU alarm', () => {
       const alarm = mockMonitor.getResource('high-cpu-alarm');
       expect(alarm).toBeDefined();
@@ -577,14 +578,18 @@ describe('TapStack', () => {
   });
 
   describe('Resource Naming with environmentSuffix', () => {
-    beforeEach(() => {
+    let prodStack: TapStack;
+
+    beforeAll(() => {
       mockMonitor.clear();
       process.env.ENVIRONMENT_SUFFIX = 'prod';
-      stack = new TapStack('test-stack', { tags: {} });
+      prodStack = new TapStack('prod-stack', { tags: {} });
     });
 
-    afterEach(() => {
+    afterAll(() => {
       process.env.ENVIRONMENT_SUFFIX = 'test';
+      mockMonitor.clear();
+      stack = new TapStack('test-stack', { tags: {} });
     });
 
     it('should include environmentSuffix in VPC name', () => {
@@ -614,14 +619,21 @@ describe('TapStack', () => {
   });
 
   describe('Tag Propagation', () => {
-    beforeEach(() => {
+    let tagStack: TapStack;
+
+    beforeAll(() => {
       mockMonitor.clear();
-      stack = new TapStack('test-stack', {
+      tagStack = new TapStack('tag-stack', {
         tags: {
           Environment: 'production',
           Team: 'platform',
         },
       });
+    });
+
+    afterAll(() => {
+      mockMonitor.clear();
+      stack = new TapStack('test-stack', { tags: {} });
     });
 
     it('should apply custom tags to VPC', () => {
@@ -638,11 +650,6 @@ describe('TapStack', () => {
   });
 
   describe('Compliance Requirements', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should use customer-managed KMS key for RDS', () => {
       const rds = mockMonitor.getResource('rds-instance');
       expect(rds.props.storageEncrypted).toBe(true);
@@ -672,38 +679,36 @@ describe('TapStack', () => {
   });
 
   describe('Environment Variable Handling', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-    });
-
-    afterEach(() => {
-      process.env.ENVIRONMENT_SUFFIX = 'test';
-      process.env.AWS_REGION = 'us-east-1';
-    });
-
     it('should use default environmentSuffix when not set', () => {
+      mockMonitor.clear();
       delete process.env.ENVIRONMENT_SUFFIX;
-      stack = new TapStack('test-stack', { tags: {} });
+      const devStack = new TapStack('dev-stack', { tags: {} });
 
       const vpc = mockMonitor.getResource('main-vpc');
       expect(vpc.props.tags.Name).toContain('-dev');
+
+      // Restore and recreate main stack
+      process.env.ENVIRONMENT_SUFFIX = 'test';
+      mockMonitor.clear();
+      stack = new TapStack('test-stack', { tags: {} });
     });
 
     it('should use default region when not set', () => {
+      mockMonitor.clear();
       delete process.env.AWS_REGION;
-      stack = new TapStack('test-stack', { tags: {} });
+      const regionStack = new TapStack('region-stack', { tags: {} });
 
       // Stack should still be created successfully
-      expect(stack).toBeDefined();
+      expect(regionStack).toBeDefined();
+
+      // Restore and recreate main stack
+      process.env.AWS_REGION = 'us-east-1';
+      mockMonitor.clear();
+      stack = new TapStack('test-stack', { tags: {} });
     });
   });
 
   describe('Resource Dependencies', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create NAT Gateways with dependency on Internet Gateway', () => {
       const natGateways = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/natGateway:NatGateway'
@@ -726,10 +731,6 @@ describe('TapStack', () => {
   });
 
   describe('Error Handling', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-    });
-
     it('should handle missing tags gracefully', () => {
       expect(() => {
         stack = new TapStack('test-stack', {});
@@ -744,11 +745,6 @@ describe('TapStack', () => {
   });
 
   describe('Network Configuration', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create subnets across 3 availability zones', () => {
       const subnets = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/subnet:Subnet'
@@ -768,11 +764,6 @@ describe('TapStack', () => {
   });
 
   describe('IAM Policies', () => {
-    beforeEach(() => {
-      mockMonitor.clear();
-      stack = new TapStack('test-stack', { tags: {} });
-    });
-
     it('should create least-privilege IAM roles', () => {
       const taskRole = mockMonitor.getResource('ecs-task-role');
       expect(taskRole).toBeDefined();
