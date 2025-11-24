@@ -24,7 +24,8 @@ from cdktf_cdktf_provider_aws.dynamodb_table import (
     DynamodbTableAttribute,
     DynamodbTablePointInTimeRecovery,
 )
-from cdktf_cdktf_provider_aws.iam_role import IamRole, IamRoleInlinePolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.ecr_repository import EcrRepository
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
@@ -325,75 +326,78 @@ class TapStack(TerraformStack):
                         "Action": "sts:AssumeRole"
                     }
                 ]
-            }),
-            inline_policy=[
-                IamRoleInlinePolicy(
-                    name="lambda-permissions",
-                    policy=json.dumps({
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "dynamodb:PutItem",
-                                    "dynamodb:GetItem",
-                                    "dynamodb:UpdateItem",
-                                    "dynamodb:Query",
-                                    "dynamodb:Scan"
-                                ],
-                                "Resource": transactions_table.arn
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "s3:PutObject",
-                                    "s3:GetObject"
-                                ],
-                                "Resource": f"{audit_bucket.arn}/*"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "sns:Publish"
-                                ],
-                                "Resource": alerts_topic.arn
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "events:PutEvents"
-                                ],
-                                "Resource": payment_event_bus.arn
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "states:StartExecution"
-                                ],
-                                # pylint: disable=line-too-long
-                                "Resource": f"arn:aws:states:{aws_region}:*:stateMachine:transaction-workflow-{environment_suffix}"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "logs:CreateLogGroup",
-                                    "logs:CreateLogStream",
-                                    "logs:PutLogEvents"
-                                ],
-                                "Resource": "arn:aws:logs:*:*:*"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "xray:PutTraceSegments",
-                                    "xray:PutTelemetryRecords"
-                                ],
-                                "Resource": "*"
-                            }
-                        ]
-                    })
-                )
-            ]
+            })
+        )
+
+        # Separate IAM policy for Lambda permissions
+        IamRolePolicy(
+            self,
+            "lambda_permissions_policy",
+            name=f"lambda-permissions-{environment_suffix}",
+            role=lambda_role.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "dynamodb:PutItem",
+                            "dynamodb:GetItem",
+                            "dynamodb:UpdateItem",
+                            "dynamodb:Query",
+                            "dynamodb:Scan"
+                        ],
+                        "Resource": transactions_table.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject",
+                            "s3:GetObject"
+                        ],
+                        "Resource": f"{audit_bucket.arn}/*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sns:Publish"
+                        ],
+                        "Resource": alerts_topic.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "events:PutEvents"
+                        ],
+                        "Resource": payment_event_bus.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "states:StartExecution"
+                        ],
+                        # pylint: disable=line-too-long
+                        "Resource": f"arn:aws:states:{aws_region}:*:stateMachine:transaction-workflow-{environment_suffix}"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": "arn:aws:logs:*:*:*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "xray:PutTraceSegments",
+                            "xray:PutTelemetryRecords"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            })
         )
 
         # Attach AWS managed policy for Lambda basic execution
@@ -428,6 +432,9 @@ class TapStack(TerraformStack):
             tracing_config={
                 "mode": "Active"  # Enable X-Ray tracing
             },
+            lifecycle={
+                "ignore_changes": ["image_uri"]
+            },
             depends_on=[webhook_validator_logs]
         )
 
@@ -453,6 +460,9 @@ class TapStack(TerraformStack):
             tracing_config={
                 "mode": "Active"  # Enable X-Ray tracing
             },
+            lifecycle={
+                "ignore_changes": ["image_uri"]
+            },
             depends_on=[fraud_detector_logs]
         )
 
@@ -477,6 +487,9 @@ class TapStack(TerraformStack):
             },
             tracing_config={
                 "mode": "Active"  # Enable X-Ray tracing
+            },
+            lifecycle={
+                "ignore_changes": ["image_uri"]
             },
             depends_on=[archival_logs]
         )
@@ -585,56 +598,60 @@ class TapStack(TerraformStack):
                         "Action": "sts:AssumeRole"
                     }
                 ]
-            }),
-            inline_policy=[
-                IamRoleInlinePolicy(
-                    name="step-functions-permissions",
-                    policy=json.dumps({
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "lambda:InvokeFunction"
-                                ],
-                                "Resource": [
-                                    fraud_detector.arn,
-                                    archival_function.arn
-                                ]
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "sns:Publish"
-                                ],
-                                "Resource": alerts_topic.arn
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "logs:CreateLogDelivery",
-                                    "logs:GetLogDelivery",
-                                    "logs:UpdateLogDelivery",
-                                    "logs:DeleteLogDelivery",
-                                    "logs:ListLogDeliveries",
-                                    "logs:PutResourcePolicy",
-                                    "logs:DescribeResourcePolicies",
-                                    "logs:DescribeLogGroups"
-                                ],
-                                "Resource": "*"
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "xray:PutTraceSegments",
-                                    "xray:PutTelemetryRecords"
-                                ],
-                                "Resource": "*"
-                            }
+            })
+        )
+
+        # Separate IAM policy for Step Functions permissions
+        # Note: This will be created after Lambda functions are ready
+        sfn_policy = IamRolePolicy(
+            self,
+            "step_functions_permissions_policy",
+            name=f"step-functions-permissions-{environment_suffix}",
+            role=sfn_role.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "lambda:InvokeFunction"
+                        ],
+                        "Resource": [
+                            fraud_detector.arn,
+                            archival_function.arn
                         ]
-                    })
-                )
-            ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sns:Publish"
+                        ],
+                        "Resource": alerts_topic.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogDelivery",
+                            "logs:GetLogDelivery",
+                            "logs:UpdateLogDelivery",
+                            "logs:DeleteLogDelivery",
+                            "logs:ListLogDeliveries",
+                            "logs:PutResourcePolicy",
+                            "logs:DescribeResourcePolicies",
+                            "logs:DescribeLogGroups"
+                        ],
+                        "Resource": "*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "xray:PutTraceSegments",
+                            "xray:PutTelemetryRecords"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            })
         )
 
         # ===================================================================
@@ -741,38 +758,41 @@ class TapStack(TerraformStack):
                         "Action": "sts:AssumeRole"
                     }
                 ]
-            }),
-            inline_policy=[
-                IamRoleInlinePolicy(
-                    name="eventbridge-target-permissions",
-                    policy=json.dumps({
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "states:StartExecution"
-                                ],
-                                "Resource": transaction_workflow.arn
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "sns:Publish"
-                                ],
-                                "Resource": alerts_topic.arn
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "sqs:SendMessage"
-                                ],
-                                "Resource": dlq.arn
-                            }
-                        ]
-                    })
-                )
-            ]
+            })
+        )
+
+        # Separate IAM policy for EventBridge target permissions
+        IamRolePolicy(
+            self,
+            "eventbridge_target_permissions_policy",
+            name=f"eventbridge-target-permissions-{environment_suffix}",
+            role=eventbridge_role.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "states:StartExecution"
+                        ],
+                        "Resource": transaction_workflow.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sns:Publish"
+                        ],
+                        "Resource": alerts_topic.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:SendMessage"
+                        ],
+                        "Resource": dlq.arn
+                    }
+                ]
+            })
         )
 
         # Rule for high-value transactions (>$10,000)
