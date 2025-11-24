@@ -14,9 +14,6 @@ terraform {
 
   # Using local backend for testing/development
   # For production, configure S3 backend with DynamoDB locking
-  backend "local" {
-    path = "terraform.tfstate"
-  }
 }
 
 provider "aws" {

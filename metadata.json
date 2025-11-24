@@ -9,5 +9,7 @@
   "subtask": "Application Deployment",
   "subject_labels": ["Web Application Deployment"],
   "aws_services": ["VPC", "ECS", "RDS", "ALB", "S3", "CloudWatch", "ECR", "Systems Manager", "IAM", "KMS", "VPC Endpoints"],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
