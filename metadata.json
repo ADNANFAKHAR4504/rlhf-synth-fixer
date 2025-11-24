@@ -7,7 +7,7 @@
   "author": "mayanksethi-turing",
   "startedAt": "2025-11-24T05:52:17+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Infrastructure Analysis/Monitoring"],
+  "subject_labels": ["Security Configuration as Code"],
   "po_id": "a4w0l1",
   "aws_services": [
     "VPC",
