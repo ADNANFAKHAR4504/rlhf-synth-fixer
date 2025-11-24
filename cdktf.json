@@ -1,0 +1,13 @@
+{
+  "language": "python",
+  "app": "python bin/tap.py",
+  "projectId": "c4e6q1",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
