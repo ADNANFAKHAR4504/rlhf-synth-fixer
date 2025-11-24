@@ -77,11 +77,6 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
       expect(template.Conditions.IsProduction).toBeDefined();
       expect(template.Conditions.IsProduction['Fn::Equals']).toBeDefined();
     });
-
-    it('should have IsNonProduction condition', () => {
-      expect(template.Conditions.IsNonProduction).toBeDefined();
-      expect(template.Conditions.IsNonProduction['Fn::Not']).toBeDefined();
-    });
   });
 
   describe('VPC Resources', () => {

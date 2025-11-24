@@ -1,6 +1,6 @@
 {
   "platform": "cfn",
-  "language": "json",
+  "language": "js",
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
