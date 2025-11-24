@@ -11,21 +11,32 @@ class TestTapStackIntegration:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Load deployment outputs and setup AWS clients."""
+        # Get environment variables
+        self.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        self.region = os.getenv('AWS_REGION', 'us-east-1')
+
+        # Load outputs from flat-outputs.json
         outputs_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             'cfn-outputs',
             'flat-outputs.json'
         )
 
-        # Load outputs
         with open(outputs_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            self.outputs = data.get('tap', {})
 
-        # Setup AWS clients
-        self.ec2_client = boto3.client('ec2', region_name='us-east-1')
-        self.logs_client = boto3.client('logs', region_name='us-east-1')
-        self.iam_client = boto3.client('iam', region_name='us-east-1')
+            # Get the stack name dynamically
+            stack_name = f"TapStack{self.environment_suffix}"
+            self.outputs = data.get(stack_name, {})
+
+            # If outputs are empty, try to get from the first key (for backward compatibility)
+            if not self.outputs and data:
+                self.outputs = list(data.values())[0]
+
+        # Setup AWS clients with dynamic region
+        self.ec2_client = boto3.client('ec2', region_name=self.region)
+        self.logs_client = boto3.client('logs', region_name=self.region)
+        self.iam_client = boto3.client('iam', region_name=self.region)
 
     def test_vpc_exists_and_accessible(self):
         """Test that VPC exists and is accessible."""
@@ -409,3 +420,29 @@ class TestTapStackIntegration:
         assert 'CostCenter' in tags
         assert 'Owner' in tags
         assert 'CreatedBy' in tags
+
+    def test_subnets_are_in_correct_region(self):
+        """Test that all subnets are in the correct region."""
+        public_subnet_ids = self.outputs['public_subnet_ids']
+        private_subnet_ids = self.outputs['private_subnet_ids']
+        all_subnet_ids = public_subnet_ids + private_subnet_ids
+
+        response = self.ec2_client.describe_subnets(SubnetIds=all_subnet_ids)
+
+        for subnet in response['Subnets']:
+            # Availability zone should start with the configured region
+            assert subnet['AvailabilityZone'].startswith(self.region)
+
+    def test_nat_gateways_have_elastic_ips(self):
+        """Test that each NAT Gateway has an associated Elastic IP."""
+        nat_gateway_ids = self.outputs['nat_gateway_ids']
+        response = self.ec2_client.describe_nat_gateways(NatGatewayIds=nat_gateway_ids)
+
+        for nat_gw in response['NatGateways']:
+            # Each NAT Gateway should have at least one address
+            assert len(nat_gw['NatGatewayAddresses']) > 0
+
+            # Verify each address has an allocation ID (EIP)
+            for addr in nat_gw['NatGatewayAddresses']:
+                assert 'AllocationId' in addr
+                assert addr['AllocationId'].startswith('eipalloc-')

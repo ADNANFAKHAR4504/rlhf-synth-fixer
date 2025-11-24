@@ -473,14 +473,14 @@ Tests now:
 ## Deployment Validation
 
 All infrastructure deployed successfully:
-- ✅ VPC created with 10.0.0.0/16 CIDR
-- ✅ 3 public subnets across us-east-1a/b/c
-- ✅ 3 private subnets across us-east-1a/b/c
-- ✅ Internet Gateway attached
-- ✅ 3 NAT Gateways with Elastic IPs (tagged with Purpose:NAT)
-- ✅ Security groups with correct rules
-- ✅ VPC Flow Logs enabled to CloudWatch
-- ✅ All outputs exported successfully
+- VPC created with 10.0.0.0/16 CIDR
+- 3 public subnets across us-east-1a/b/c
+- 3 private subnets across us-east-1a/b/c
+- Internet Gateway attached
+- 3 NAT Gateways with Elastic IPs (tagged with Purpose:NAT)
+- Security groups with correct rules
+- VPC Flow Logs enabled to CloudWatch
+- All outputs exported successfully
 
 ## Test Results
 
@@ -491,10 +491,10 @@ All infrastructure deployed successfully:
 
 ## Compliance
 
-- ✅ PCI DSS network segmentation (3-tier architecture)
-- ✅ Least-privilege security group rules
-- ✅ VPC Flow Logs for audit trails
-- ✅ Multi-AZ redundancy
-- ✅ Proper resource tagging
-- ✅ All resources destroyable (no Retain policies)
-- ✅ Environment suffix in all resource names
+- PCI DSS network segmentation (3-tier architecture)
+- Least-privilege security group rules
+- VPC Flow Logs for audit trails
+- Multi-AZ redundancy
+- Proper resource tagging
+- All resources destroyable (no Retain policies)
+- Environment suffix in all resource names

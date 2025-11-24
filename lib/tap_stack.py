@@ -1,6 +1,6 @@
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput
-from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderDefaultTags
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -18,15 +18,30 @@ import json
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, stack_id: str, environment_suffix: str):
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        environment_suffix: str,
+        state_bucket: str = "iac-rlhf-tf-states",
+        state_bucket_region: str = "us-east-1",
+        aws_region: str = "us-east-1",
+        default_tags: dict = None
+    ):
         super().__init__(scope, stack_id)
 
         self.environment_suffix = environment_suffix
+        self.aws_region = aws_region
 
-        # AWS Provider
-        AwsProvider(self, "aws",
-            region="us-east-1"
-        )
+        # AWS Provider with default tags
+        provider_config = {
+            "region": aws_region
+        }
+
+        if default_tags:
+            provider_config["default_tags"] = [AwsProviderDefaultTags(**default_tags)]
+
+        AwsProvider(self, "aws", **provider_config)
 
         # Get availability zones
         azs = DataAwsAvailabilityZones(self, "azs",
@@ -69,7 +84,7 @@ class TapStack(TerraformStack):
             subnet = Subnet(self, f"public-subnet-{i+1}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=cidr,
-                availability_zone=f"us-east-1{chr(97+i)}",  # us-east-1a, us-east-1b, us-east-1c
+                availability_zone=f"{aws_region}{chr(97+i)}",  # e.g., us-east-1a, us-east-1b, us-east-1c
                 map_public_ip_on_launch=True,
                 tags={
                     "Name": f"public-subnet-{i+1}-{environment_suffix}",
@@ -88,7 +103,7 @@ class TapStack(TerraformStack):
             subnet = Subnet(self, f"private-subnet-{i+1}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=cidr,
-                availability_zone=f"us-east-1{chr(97+i)}",
+                availability_zone=f"{aws_region}{chr(97+i)}",
                 map_public_ip_on_launch=False,
                 tags={
                     "Name": f"private-subnet-{i+1}-{environment_suffix}",

@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "python main.py",
+  "app": "pipenv run python tap.py",
   "projectId": "vpc-foundation-tap",
   "sendCrashReports": "false",
   "terraformProviders": [
