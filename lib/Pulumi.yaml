@@ -1,0 +1,5 @@
+name: tap
+runtime: nodejs
+description: Secure secrets vault with automated rotation using Pulumi TypeScript
+config:
+  aws:region: us-east-1

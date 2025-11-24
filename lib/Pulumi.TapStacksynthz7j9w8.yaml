@@ -1,0 +1,4 @@
+encryptionsalt: v1:mVGyOq2VcOA=:v1:1T1mYx3wAFWd/Qsw:KrZMRpns3zoiP9deM8yZzi8kp1edxA==
+config:
+  aws:region: us-east-1
+  tap:environmentSuffix: synthz7j9w8

@@ -1,0 +1,17 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "z7j9w8",
+  "team": "synth",
+  "startedAt": "2025-11-24T18:06:27+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security",
+    "Compliance",
+    "Governance"
+  ],
+  "aws_services": [],
+  "training_quality": 10
+}
