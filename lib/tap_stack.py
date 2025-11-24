@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import App, TerraformStack, TerraformOutput, LocalBackend
+from cdktf import App, TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 from cdktf_cdktf_provider_aws.vpc import Vpc
@@ -29,8 +29,13 @@ class TapStack(TerraformStack):
                  aws_region: str = "us-east-1", default_tags: dict = None):
         super().__init__(scope, stack_id)
 
-        # CRITICAL: Use LocalBackend instead of S3Backend
-        LocalBackend(self, path="terraform.tfstate")
+        # Use S3Backend for remote state storage
+        S3Backend(self,
+            bucket=state_bucket,
+            key=f"{stack_id}/{environment_suffix}/terraform.tfstate",
+            region=state_bucket_region,
+            encrypt=True
+        )
 
         # Extract tags from default_tags if provided
         tags = default_tags.get("tags", {}) if default_tags else {}
@@ -54,13 +59,13 @@ class TapStack(TerraformStack):
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={**common_tags, "Name": f"eks-vpc-{environment_suffix}"}
+            tags={**common_tags, "Name": f"eks-vpc-v1-{environment_suffix}"}
         )
 
         # Create Internet Gateway
         igw = InternetGateway(self, "igw",
             vpc_id=vpc.id,
-            tags={**common_tags, "Name": f"eks-igw-{environment_suffix}"}
+            tags={**common_tags, "Name": f"eks-igw-v1-{environment_suffix}"}
         )
 
         # Create public subnets in multiple AZs
@@ -69,7 +74,7 @@ class TapStack(TerraformStack):
             cidr_block="10.0.1.0/24",
             availability_zone=f"${{data.aws_availability_zones.{azs.friendly_unique_id}.names[0]}}",
             map_public_ip_on_launch=True,
-            tags={**common_tags, "Name": f"eks-public-subnet-1-{environment_suffix}", "kubernetes.io/role/elb": "1"}
+            tags={**common_tags, "Name": f"eks-public-subnet-1-v1-{environment_suffix}", "kubernetes.io/role/elb": "1"}
         )
 
         public_subnet_2 = Subnet(self, "public_subnet_2",
@@ -77,13 +82,13 @@ class TapStack(TerraformStack):
             cidr_block="10.0.2.0/24",
             availability_zone=f"${{data.aws_availability_zones.{azs.friendly_unique_id}.names[1]}}",
             map_public_ip_on_launch=True,
-            tags={**common_tags, "Name": f"eks-public-subnet-2-{environment_suffix}", "kubernetes.io/role/elb": "1"}
+            tags={**common_tags, "Name": f"eks-public-subnet-2-v1-{environment_suffix}", "kubernetes.io/role/elb": "1"}
         )
 
         # Create route table for public subnets
         public_route_table = RouteTable(self, "public_route_table",
             vpc_id=vpc.id,
-            tags={**common_tags, "Name": f"eks-public-rt-{environment_suffix}"}
+            tags={**common_tags, "Name": f"eks-public-rt-v1-{environment_suffix}"}
         )
 
         # Create route to internet gateway
@@ -109,7 +114,7 @@ class TapStack(TerraformStack):
 
         # CloudWatch Log Group for EKS cluster logs
         log_group = CloudwatchLogGroup(self, "eks_log_group",
-            name=f"/aws/eks/eks-cluster-{environment_suffix}",
+            name=f"/aws/eks/eks-cluster-v1-{environment_suffix}",
             retention_in_days=30,
             tags=common_tags
         )
@@ -127,7 +132,7 @@ class TapStack(TerraformStack):
         })
 
         cluster_role = IamRole(self, "eks_cluster_role",
-            name=f"eks-cluster-role-{environment_suffix}",
+            name=f"eks-cluster-role-v1-{environment_suffix}",
             assume_role_policy=cluster_assume_role_policy,
             tags=common_tags
         )
@@ -145,7 +150,7 @@ class TapStack(TerraformStack):
 
         # EKS Cluster
         eks_cluster = EksCluster(self, "eks_cluster",
-            name=f"eks-cluster-{environment_suffix}",
+            name=f"eks-cluster-v1-{environment_suffix}",
             role_arn=cluster_role.arn,
             version="1.29",
             vpc_config=EksClusterVpcConfig(
@@ -184,7 +189,7 @@ class TapStack(TerraformStack):
         })
 
         node_role = IamRole(self, "eks_node_role",
-            name=f"eks-node-role-{environment_suffix}",
+            name=f"eks-node-role-v1-{environment_suffix}",
             assume_role_policy=node_assume_role_policy,
             tags=common_tags
         )
@@ -208,7 +213,7 @@ class TapStack(TerraformStack):
         # On-Demand Node Group
         on_demand_node_group = EksNodeGroup(self, "on_demand_node_group",
             cluster_name=eks_cluster.name,
-            node_group_name=f"node-group-od-{environment_suffix}",
+            node_group_name=f"node-group-od-v1-{environment_suffix}",
             node_role_arn=node_role.arn,
             subnet_ids=subnet_ids,
             capacity_type="ON_DEMAND",
@@ -225,7 +230,7 @@ class TapStack(TerraformStack):
         # Spot Node Group
         spot_node_group = EksNodeGroup(self, "spot_node_group",
             cluster_name=eks_cluster.name,
-            node_group_name=f"node-group-spot-{environment_suffix}",
+            node_group_name=f"node-group-spot-v1-{environment_suffix}",
             node_role_arn=node_role.arn,
             subnet_ids=subnet_ids,
             capacity_type="SPOT",
