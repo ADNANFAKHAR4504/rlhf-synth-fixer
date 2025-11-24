@@ -311,6 +311,7 @@ class TapStack(TerraformStack):
         self.flow_log_group = CloudwatchLogGroup(self, f"vpc-flow-logs-{environment_suffix}",
             name=f"/aws/vpc/flow-logs-{environment_suffix}",
             retention_in_days=7,
+            skip_destroy=False,
             tags={
                 "Name": f"vpc-flow-logs-{environment_suffix}",
                 "Environment": "production",
