@@ -255,6 +255,16 @@ class TapStack(pulumi.ComponentResource):
             bucket=self.reports_bucket.bucket,
             name="EntireBucket",
             status="Enabled",
+            tierings=[
+                aws.s3.BucketIntelligentTieringConfigurationTieringArgs(
+                    access_tier="ARCHIVE_ACCESS",
+                    days=90
+                ),
+                aws.s3.BucketIntelligentTieringConfigurationTieringArgs(
+                    access_tier="DEEP_ARCHIVE_ACCESS", 
+                    days=180
+                )
+            ],
             opts=ResourceOptions(parent=self)
         )
 
