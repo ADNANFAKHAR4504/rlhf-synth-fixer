@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface SecurityStackArgs {
   environmentSuffix: string;
@@ -30,7 +30,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         description: `KMS key for RDS encryption - ${environmentSuffix}`,
         enableKeyRotation: true,
         deletionWindowInDays: 10,
-        policy: currentCallerIdentity.then(identity =>
+        policy: pulumi.output(currentCallerIdentity).apply(identity =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -53,6 +53,7 @@ export class SecurityStack extends pulumi.ComponentResource {
                   'kms:Decrypt',
                   'kms:GenerateDataKey',
                   'kms:CreateGrant',
+                  'kms:DescribeKey',
                 ],
                 Resource: '*',
               },
@@ -83,7 +84,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         description: `KMS key for S3 encryption - ${environmentSuffix}`,
         enableKeyRotation: true,
         deletionWindowInDays: 10,
-        policy: currentCallerIdentity.then(identity =>
+        policy: pulumi.output(currentCallerIdentity).apply(identity =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -132,7 +133,7 @@ export class SecurityStack extends pulumi.ComponentResource {
         description: `KMS key for CloudWatch Logs encryption - ${environmentSuffix}`,
         enableKeyRotation: true,
         deletionWindowInDays: 10,
-        policy: currentCallerIdentity.then(identity =>
+        policy: pulumi.output(currentCallerIdentity).apply(identity =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -149,17 +150,20 @@ export class SecurityStack extends pulumi.ComponentResource {
                 Sid: 'Allow CloudWatch Logs',
                 Effect: 'Allow',
                 Principal: {
-                  Service: 'logs.us-east-1.amazonaws.com',
+                  Service: `logs.us-east-1.amazonaws.com`,
                 },
                 Action: [
+                  'kms:Encrypt',
                   'kms:Decrypt',
-                  'kms:GenerateDataKey',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
                   'kms:CreateGrant',
+                  'kms:DescribeKey',
                 ],
                 Resource: '*',
                 Condition: {
                   ArnLike: {
-                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:us-east-1:${identity.accountId}:*`,
+                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:us-east-1:${identity.accountId}:log-group:*`,
                   },
                 },
               },
