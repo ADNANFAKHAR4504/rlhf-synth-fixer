@@ -147,12 +147,12 @@ select_task() {
     # Exits immediately after finding first match (much faster for large CSVs)
     # This combines parse_csv and selection into one pass, eliminating pipe overhead
     local result
-    result=$(awk -F',' '
-    function parse_csv_line(line,    fields, n, i, current, in_quote) {
+    result=$(awk '
+    function parse_csv_line(line,    fields, n, i, current, in_quote, c) {
         n = 0
         current = ""
         in_quote = 0
-        
+
         for (i = 1; i <= length(line); i++) {
             c = substr(line, i, 1)
             
@@ -196,15 +196,16 @@ select_task() {
         # Select first pending task with hard/medium/expert difficulty
         if ((status == "" || tolower(status) == "pending") &&
             (tolower(difficulty) == "hard" || tolower(difficulty) == "medium" || tolower(difficulty) == "expert")) {
-            # Output as JSON and exit immediately (early exit optimization)
+            # Output as JSON and set found flag
             printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\"}\n",
                    task_id, (status == "" ? "pending" : status), platform, difficulty, substr(problem, 1, 100), language
+            found = 1
             exit 0
         }
     }
     END {
-        # No match found
-        if (NR > 1) {
+        # No match found (only error if we processed rows and found nothing)
+        if (NR > 1 && !found) {
             print "{\"error\":\"No pending tasks found with hard/medium/expert difficulty\"}" > "/dev/stderr"
             exit 1
         }
