@@ -94,7 +94,7 @@ class TapStack(TerraformStack):
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"payment-primary-vpc-{environment_suffix}",
+                "Name": f"payment-v1-primary-vpc-v1-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -108,7 +108,7 @@ class TapStack(TerraformStack):
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"payment-secondary-vpc-{environment_suffix}",
+                "Name": f"payment-v1-secondary-vpc-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -125,7 +125,7 @@ class TapStack(TerraformStack):
                 cidr_block=f"10.0.{i}.0/24",
                 availability_zone=az,
                 tags={
-                    "Name": f"payment-primary-private-{i}-{environment_suffix}",
+                    "Name": f"payment-v1-primary-private-{i}-{environment_suffix}",
                     "Environment": environment_suffix
                 },
                 provider=self.primary_provider
@@ -143,7 +143,7 @@ class TapStack(TerraformStack):
                 cidr_block=f"10.1.{i}.0/24",
                 availability_zone=az,
                 tags={
-                    "Name": f"payment-secondary-private-{i}-{environment_suffix}",
+                    "Name": f"payment-v1-secondary-private-{i}-{environment_suffix}",
                     "Environment": environment_suffix
                 },
                 provider=self.secondary_provider
@@ -156,7 +156,7 @@ class TapStack(TerraformStack):
             "primary_igw",
             vpc_id=self.primary_vpc.id,
             tags={
-                "Name": f"payment-primary-igw-{environment_suffix}",
+                "Name": f"payment-v1-primary-igw-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -167,7 +167,7 @@ class TapStack(TerraformStack):
             "secondary_igw",
             vpc_id=self.secondary_vpc.id,
             tags={
-                "Name": f"payment-secondary-igw-{environment_suffix}",
+                "Name": f"payment-v1-secondary-igw-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -179,7 +179,7 @@ class TapStack(TerraformStack):
             "primary_route_table",
             vpc_id=self.primary_vpc.id,
             tags={
-                "Name": f"payment-primary-rt-{environment_suffix}",
+                "Name": f"payment-v1-primary-rt-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -190,7 +190,7 @@ class TapStack(TerraformStack):
             "secondary_route_table",
             vpc_id=self.secondary_vpc.id,
             tags={
-                "Name": f"payment-secondary-rt-{environment_suffix}",
+                "Name": f"payment-v1-secondary-rt-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -205,7 +205,7 @@ class TapStack(TerraformStack):
             peer_region=secondary_region,
             auto_accept=False,
             tags={
-                "Name": f"payment-vpc-peering-{environment_suffix}",
+                "Name": f"payment-v1-vpc-peering-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -218,7 +218,7 @@ class TapStack(TerraformStack):
             vpc_peering_connection_id=self.vpc_peering.id,
             auto_accept=True,
             tags={
-                "Name": f"payment-vpc-peering-accepter-{environment_suffix}",
+                "Name": f"payment-v1-vpc-peering-accepter-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -266,7 +266,7 @@ class TapStack(TerraformStack):
         self.primary_db_sg = SecurityGroup(
             self,
             "primary_db_sg",
-            name=f"payment-primary-db-sg-{environment_suffix}",
+            name=f"payment-v1-primary-db-sg-{environment_suffix}",
             description="Security group for Aurora database in primary region",
             vpc_id=self.primary_vpc.id,
             ingress=[
@@ -286,7 +286,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"payment-primary-db-sg-{environment_suffix}",
+                "Name": f"payment-v1-primary-db-sg-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -295,7 +295,7 @@ class TapStack(TerraformStack):
         self.primary_lambda_sg = SecurityGroup(
             self,
             "primary_lambda_sg",
-            name=f"payment-primary-lambda-sg-{environment_suffix}",
+            name=f"payment-v1-primary-lambda-sg-{environment_suffix}",
             description="Security group for Lambda functions in primary region",
             vpc_id=self.primary_vpc.id,
             egress=[
@@ -307,7 +307,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"payment-primary-lambda-sg-{environment_suffix}",
+                "Name": f"payment-v1-primary-lambda-sg-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -317,7 +317,7 @@ class TapStack(TerraformStack):
         self.secondary_db_sg = SecurityGroup(
             self,
             "secondary_db_sg",
-            name=f"payment-secondary-db-sg-{environment_suffix}",
+            name=f"payment-v1-secondary-db-sg-{environment_suffix}",
             description="Security group for Aurora database in secondary region",
             vpc_id=self.secondary_vpc.id,
             ingress=[
@@ -337,7 +337,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"payment-secondary-db-sg-{environment_suffix}",
+                "Name": f"payment-v1-secondary-db-sg-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -346,7 +346,7 @@ class TapStack(TerraformStack):
         self.secondary_lambda_sg = SecurityGroup(
             self,
             "secondary_lambda_sg",
-            name=f"payment-secondary-lambda-sg-{environment_suffix}",
+            name=f"payment-v1-secondary-lambda-sg-{environment_suffix}",
             description="Security group for Lambda functions in secondary region",
             vpc_id=self.secondary_vpc.id,
             egress=[
@@ -358,7 +358,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"payment-secondary-lambda-sg-{environment_suffix}",
+                "Name": f"payment-v1-secondary-lambda-sg-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -369,10 +369,10 @@ class TapStack(TerraformStack):
         self.primary_subnet_group = DbSubnetGroup(
             self,
             "primary_db_subnet_group",
-            name=f"payment-primary-db-subnet-{environment_suffix}",
+            name=f"payment-v1-primary-db-subnet-{environment_suffix}",
             subnet_ids=[subnet.id for subnet in self.primary_private_subnets],
             tags={
-                "Name": f"payment-primary-db-subnet-{environment_suffix}",
+                "Name": f"payment-v1-primary-db-subnet-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -381,10 +381,10 @@ class TapStack(TerraformStack):
         self.secondary_subnet_group = DbSubnetGroup(
             self,
             "secondary_db_subnet_group",
-            name=f"payment-secondary-db-subnet-{environment_suffix}",
+            name=f"payment-v1-secondary-db-subnet-{environment_suffix}",
             subnet_ids=[subnet.id for subnet in self.secondary_private_subnets],
             tags={
-                "Name": f"payment-secondary-db-subnet-{environment_suffix}",
+                "Name": f"payment-v1-secondary-db-subnet-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -394,9 +394,9 @@ class TapStack(TerraformStack):
         self.global_cluster = RdsGlobalCluster(
             self,
             "global_cluster",
-            global_cluster_identifier=f"payment-global-{environment_suffix}",
+            global_cluster_identifier=f"payment-v1-global-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.3",
+            engine_version="15.4",
             database_name="paymentdb",
             storage_encrypted=True,
             provider=self.primary_provider
@@ -406,10 +406,10 @@ class TapStack(TerraformStack):
         self.primary_secret = SecretsmanagerSecret(
             self,
             "primary_db_secret",
-            name=f"payment-primary-db-creds-{environment_suffix}",
+            name=f"payment-v1-primary-db-creds-{environment_suffix}",
             description="Aurora database credentials for primary region",
             tags={
-                "Name": f"payment-primary-db-creds-{environment_suffix}",
+                "Name": f"payment-v1-primary-db-creds-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -436,9 +436,9 @@ class TapStack(TerraformStack):
         self.primary_cluster = RdsCluster(
             self,
             "primary_cluster",
-            cluster_identifier=f"payment-primary-{environment_suffix}",
+            cluster_identifier=f"payment-v1-primary-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.3",
+            engine_version="15.4",
             database_name="paymentdb",
             master_username="dbadmin",
             master_password="ChangeMe123456!",
@@ -451,7 +451,7 @@ class TapStack(TerraformStack):
             skip_final_snapshot=True,
             global_cluster_identifier=self.global_cluster.id,
             tags={
-                "Name": f"payment-primary-cluster-{environment_suffix}",
+                "Name": f"payment-v1-primary-cluster-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -462,14 +462,14 @@ class TapStack(TerraformStack):
             RdsClusterInstance(
                 self,
                 f"primary_instance_{i}",
-                identifier=f"payment-primary-instance-{i}-{environment_suffix}",
+                identifier=f"payment-v1-primary-instance-{i}-{environment_suffix}",
                 cluster_identifier=self.primary_cluster.id,
                 instance_class="db.r6g.large",
                 engine="aurora-postgresql",
-                engine_version="15.3",
+                engine_version="15.4",
                 publicly_accessible=False,
                 tags={
-                    "Name": f"payment-primary-instance-{i}-{environment_suffix}",
+                    "Name": f"payment-v1-primary-instance-{i}-{environment_suffix}",
                     "Environment": environment_suffix
                 },
                 provider=self.primary_provider
@@ -479,10 +479,10 @@ class TapStack(TerraformStack):
         self.secondary_secret = SecretsmanagerSecret(
             self,
             "secondary_db_secret",
-            name=f"payment-secondary-db-creds-{environment_suffix}",
+            name=f"payment-v1-secondary-db-creds-{environment_suffix}",
             description="Aurora database credentials for secondary region",
             tags={
-                "Name": f"payment-secondary-db-creds-{environment_suffix}",
+                "Name": f"payment-v1-secondary-db-creds-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -500,9 +500,9 @@ class TapStack(TerraformStack):
         self.secondary_cluster = RdsCluster(
             self,
             "secondary_cluster",
-            cluster_identifier=f"payment-secondary-{environment_suffix}",
+            cluster_identifier=f"payment-v1-secondary-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.3",
+            engine_version="15.4",
             db_subnet_group_name=self.secondary_subnet_group.name,
             vpc_security_group_ids=[self.secondary_db_sg.id],
             storage_encrypted=True,
@@ -510,7 +510,7 @@ class TapStack(TerraformStack):
             global_cluster_identifier=self.global_cluster.id,
             depends_on=[self.primary_cluster],
             tags={
-                "Name": f"payment-secondary-cluster-{environment_suffix}",
+                "Name": f"payment-v1-secondary-cluster-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -521,14 +521,14 @@ class TapStack(TerraformStack):
             RdsClusterInstance(
                 self,
                 f"secondary_instance_{i}",
-                identifier=f"payment-secondary-instance-{i}-{environment_suffix}",
+                identifier=f"payment-v1-secondary-instance-{i}-{environment_suffix}",
                 cluster_identifier=self.secondary_cluster.id,
                 instance_class="db.r6g.large",
                 engine="aurora-postgresql",
-                engine_version="15.3",
+                engine_version="15.4",
                 publicly_accessible=False,
                 tags={
-                    "Name": f"payment-secondary-instance-{i}-{environment_suffix}",
+                    "Name": f"payment-v1-secondary-instance-{i}-{environment_suffix}",
                     "Environment": environment_suffix
                 },
                 provider=self.secondary_provider
@@ -539,7 +539,7 @@ class TapStack(TerraformStack):
         self.dynamodb_table = DynamodbTable(
             self,
             "session_table",
-            name=f"payment-sessions-{environment_suffix}",
+            name=f"payment-v1-sessions-{environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="sessionId",
             stream_enabled=True,
@@ -556,7 +556,7 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"payment-sessions-{environment_suffix}",
+                "Name": f"payment-v1-sessions-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -566,7 +566,7 @@ class TapStack(TerraformStack):
         lambda_role_primary = IamRole(
             self,
             "lambda_role_primary",
-            name=f"payment-lambda-role-primary-{environment_suffix}",
+            name=f"payment-v1-lambda-role-primary-{environment_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -578,7 +578,7 @@ class TapStack(TerraformStack):
                 }]
             }),
             tags={
-                "Name": f"payment-lambda-role-primary-{environment_suffix}",
+                "Name": f"payment-v1-lambda-role-primary-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -595,7 +595,7 @@ class TapStack(TerraformStack):
         lambda_policy_primary = IamPolicy(
             self,
             "lambda_policy_primary",
-            name=f"payment-lambda-policy-primary-{environment_suffix}",
+            name=f"payment-v1-lambda-policy-primary-{environment_suffix}",
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -633,7 +633,7 @@ class TapStack(TerraformStack):
         self.primary_payment_lambda = LambdaFunction(
             self,
             "payment_lambda_primary",
-            function_name=f"payment-processor-primary-{environment_suffix}",
+            function_name=f"payment-v1-processor-primary-{environment_suffix}",
             role=lambda_role_primary.arn,
             handler="index.handler",
             runtime="python3.11",
@@ -653,7 +653,7 @@ class TapStack(TerraformStack):
                 "security_group_ids": [self.primary_lambda_sg.id]
             },
             tags={
-                "Name": f"payment-processor-primary-{environment_suffix}",
+                "Name": f"payment-v1-processor-primary-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -663,7 +663,7 @@ class TapStack(TerraformStack):
         lambda_role_secondary = IamRole(
             self,
             "lambda_role_secondary",
-            name=f"payment-lambda-role-secondary-{environment_suffix}",
+            name=f"payment-v1-lambda-role-secondary-{environment_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -675,7 +675,7 @@ class TapStack(TerraformStack):
                 }]
             }),
             tags={
-                "Name": f"payment-lambda-role-secondary-{environment_suffix}",
+                "Name": f"payment-v1-lambda-role-secondary-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -692,7 +692,7 @@ class TapStack(TerraformStack):
         lambda_policy_secondary = IamPolicy(
             self,
             "lambda_policy_secondary",
-            name=f"payment-lambda-policy-secondary-{environment_suffix}",
+            name=f"payment-v1-lambda-policy-secondary-{environment_suffix}",
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -730,7 +730,7 @@ class TapStack(TerraformStack):
         self.secondary_payment_lambda = LambdaFunction(
             self,
             "payment_lambda_secondary",
-            function_name=f"payment-processor-secondary-{environment_suffix}",
+            function_name=f"payment-v1-processor-secondary-{environment_suffix}",
             role=lambda_role_secondary.arn,
             handler="index.handler",
             runtime="python3.11",
@@ -750,7 +750,7 @@ class TapStack(TerraformStack):
                 "security_group_ids": [self.secondary_lambda_sg.id]
             },
             tags={
-                "Name": f"payment-processor-secondary-{environment_suffix}",
+                "Name": f"payment-v1-processor-secondary-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -760,7 +760,7 @@ class TapStack(TerraformStack):
         backup_lambda_role = IamRole(
             self,
             "backup_lambda_role",
-            name=f"payment-backup-lambda-role-{environment_suffix}",
+            name=f"payment-v1-backup-lambda-role-{environment_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -772,7 +772,7 @@ class TapStack(TerraformStack):
                 }]
             }),
             tags={
-                "Name": f"payment-backup-lambda-role-{environment_suffix}",
+                "Name": f"payment-v1-backup-lambda-role-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -789,7 +789,7 @@ class TapStack(TerraformStack):
         backup_policy = IamPolicy(
             self,
             "backup_lambda_policy",
-            name=f"payment-backup-lambda-policy-{environment_suffix}",
+            name=f"payment-v1-backup-lambda-policy-{environment_suffix}",
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -824,7 +824,7 @@ class TapStack(TerraformStack):
         self.backup_verification_lambda = LambdaFunction(
             self,
             "backup_verification_lambda",
-            function_name=f"payment-backup-verification-{environment_suffix}",
+            function_name=f"payment-v1-backup-verification-{environment_suffix}",
             role=backup_lambda_role.arn,
             handler="index.handler",
             runtime="python3.11",
@@ -834,12 +834,12 @@ class TapStack(TerraformStack):
             filename="lambda_placeholder.zip",
             environment={
                 "variables": {
-                    "CLUSTER_IDENTIFIER": f"payment-primary-{environment_suffix}",
+                    "CLUSTER_IDENTIFIER": f"payment-v1-primary-{environment_suffix}",
                     "ENVIRONMENT": environment_suffix
                 }
             },
             tags={
-                "Name": f"payment-backup-verification-{environment_suffix}",
+                "Name": f"payment-v1-backup-verification-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -849,7 +849,7 @@ class TapStack(TerraformStack):
         backup_schedule_rule = CloudwatchEventRule(
             self,
             "backup_schedule",
-            name=f"payment-backup-schedule-{environment_suffix}",
+            name=f"payment-v1-backup-schedule-{environment_suffix}",
             description="Trigger backup verification daily",
             schedule_expression="rate(1 day)",
             provider=self.primary_provider
@@ -879,9 +879,9 @@ class TapStack(TerraformStack):
         self.hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"payment-dr-{environment_suffix}.example.com",
+            name=f"payment-v1-dr-{environment_suffix}.internal.test",
             tags={
-                "Name": f"payment-dr-zone-{environment_suffix}",
+                "Name": f"payment-v1-dr-zone-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -902,7 +902,7 @@ class TapStack(TerraformStack):
             failure_threshold=3,
             measure_latency=True,
             tags={
-                "Name": f"payment-primary-health-{environment_suffix}",
+                "Name": f"payment-v1-primary-health-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -920,7 +920,7 @@ class TapStack(TerraformStack):
             failure_threshold=3,
             measure_latency=True,
             tags={
-                "Name": f"payment-secondary-health-{environment_suffix}",
+                "Name": f"payment-v1-secondary-health-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -931,7 +931,7 @@ class TapStack(TerraformStack):
             self,
             "primary_record",
             zone_id=self.hosted_zone.zone_id,
-            name=f"api.payment-dr-{environment_suffix}.example.com",
+            name=f"api.payment-dr-{environment_suffix}.internal.test",
             type="CNAME",
             ttl=60,
             records=[primary_endpoint.replace("https://", "")],
@@ -948,7 +948,7 @@ class TapStack(TerraformStack):
             self,
             "secondary_record",
             zone_id=self.hosted_zone.zone_id,
-            name=f"api.payment-dr-{environment_suffix}.example.com",
+            name=f"api.payment-dr-{environment_suffix}.internal.test",
             type="CNAME",
             ttl=60,
             records=[secondary_endpoint.replace("https://", "")],
@@ -965,10 +965,10 @@ class TapStack(TerraformStack):
         self.sns_topic = SnsTopic(
             self,
             "alerts_topic",
-            name=f"payment-alerts-{environment_suffix}",
+            name=f"payment-v1-alerts-{environment_suffix}",
             display_name="Payment System Alerts",
             tags={
-                "Name": f"payment-alerts-{environment_suffix}",
+                "Name": f"payment-v1-alerts-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -988,7 +988,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "primary_db_cpu_alarm",
-            alarm_name=f"payment-primary-db-cpu-{environment_suffix}",
+            alarm_name=f"payment-v1-primary-db-cpu-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -1002,7 +1002,7 @@ class TapStack(TerraformStack):
                 "DBClusterIdentifier": self.primary_cluster.id
             },
             tags={
-                "Name": f"payment-primary-db-cpu-{environment_suffix}",
+                "Name": f"payment-v1-primary-db-cpu-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -1012,7 +1012,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "secondary_db_cpu_alarm",
-            alarm_name=f"payment-secondary-db-cpu-{environment_suffix}",
+            alarm_name=f"payment-v1-secondary-db-cpu-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -1026,7 +1026,7 @@ class TapStack(TerraformStack):
                 "DBClusterIdentifier": self.secondary_cluster.id
             },
             tags={
-                "Name": f"payment-secondary-db-cpu-{environment_suffix}",
+                "Name": f"payment-v1-secondary-db-cpu-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -1036,7 +1036,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "primary_lambda_errors",
-            alarm_name=f"payment-primary-lambda-errors-{environment_suffix}",
+            alarm_name=f"payment-v1-primary-lambda-errors-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -1050,7 +1050,7 @@ class TapStack(TerraformStack):
                 "FunctionName": self.primary_payment_lambda.function_name
             },
             tags={
-                "Name": f"payment-primary-lambda-errors-{environment_suffix}",
+                "Name": f"payment-v1-primary-lambda-errors-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -1060,7 +1060,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "secondary_lambda_errors",
-            alarm_name=f"payment-secondary-lambda-errors-{environment_suffix}",
+            alarm_name=f"payment-v1-secondary-lambda-errors-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -1074,7 +1074,7 @@ class TapStack(TerraformStack):
                 "FunctionName": self.secondary_payment_lambda.function_name
             },
             tags={
-                "Name": f"payment-secondary-lambda-errors-{environment_suffix}",
+                "Name": f"payment-v1-secondary-lambda-errors-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -1084,7 +1084,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "dynamodb_read_throttle",
-            alarm_name=f"payment-dynamodb-read-throttle-{environment_suffix}",
+            alarm_name=f"payment-v1-dynamodb-read-throttle-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="ReadThrottleEvents",
@@ -1098,7 +1098,7 @@ class TapStack(TerraformStack):
                 "TableName": self.dynamodb_table.name
             },
             tags={
-                "Name": f"payment-dynamodb-read-throttle-{environment_suffix}",
+                "Name": f"payment-v1-dynamodb-read-throttle-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -1108,7 +1108,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "aurora_replication_lag",
-            alarm_name=f"payment-aurora-replication-lag-{environment_suffix}",
+            alarm_name=f"payment-v1-aurora-replication-lag-{environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="AuroraGlobalDBReplicationLag",
@@ -1122,7 +1122,7 @@ class TapStack(TerraformStack):
                 "DBClusterIdentifier": self.secondary_cluster.id
             },
             tags={
-                "Name": f"payment-aurora-replication-lag-{environment_suffix}",
+                "Name": f"payment-v1-aurora-replication-lag-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
@@ -1156,7 +1156,7 @@ class TapStack(TerraformStack):
         TerraformOutput(
             self,
             "dns_failover_domain",
-            value=f"api.payment-dr-{environment_suffix}.example.com"
+            value=f"api.payment-dr-{environment_suffix}.internal.test"
         )
 
         TerraformOutput(
