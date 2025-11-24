@@ -1,6 +1,8 @@
-name: financial-analytics-platform
-runtime: nodejs
-description: Production-ready infrastructure for financial analytics platform
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for TAP
+main: bin/tap.ts
 config:
   environmentSuffix:
     type: string

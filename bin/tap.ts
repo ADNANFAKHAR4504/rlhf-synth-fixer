@@ -9,7 +9,6 @@
  * different deployment environments (development, staging, production, etc.).
  */
 
-import * as aws from '@pulumi/aws';
 import * as infra from '../lib/tap-stack';
 
 // Get the environment suffix from environment variables, defaulting to 'dev'.
@@ -32,14 +31,6 @@ const defaultTags = {
   Team: team,
   CreatedAt: createdAt,
 };
-
-// Configure AWS provider with default tags
-const provider = new aws.Provider('aws', {
-  region: process.env.AWS_REGION || 'us-east-2',
-  defaultTags: {
-    tags: defaultTags,
-  },
-});
 
 // Export stack outputs from the infrastructure
 export const vpcId = infra.vpcId;

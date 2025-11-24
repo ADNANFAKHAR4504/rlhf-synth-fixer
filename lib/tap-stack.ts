@@ -877,4 +877,3 @@ export const kinesisStreamName = kinesisStream.name;
 export const ecsLogGroupName = ecsLogGroup.name;
 export const backupVaultArn = backupVault.arn;
 export const backupPlanId = backupPlan.id;
-
