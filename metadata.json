@@ -4,7 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "g7k8s8",
-  "team": "Synth-2",
+  "team": "synth",
   "startedAt": "2025-11-24T04:07:00-08:00",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
@@ -28,5 +28,10 @@
     "Route 53",
     "SNS"
   ],
-  "training_quality": 9
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
