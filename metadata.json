@@ -10,5 +10,5 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": "Lambda"
+  "aws_services": "VPC, EC2, RDS, Lambda, S3, ALB, Route53, CloudFront, SNS, SecretsManager, CloudWatch, IAM, AutoScaling"
 }

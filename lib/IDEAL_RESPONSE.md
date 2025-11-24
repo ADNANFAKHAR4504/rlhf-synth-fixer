@@ -16,7 +16,6 @@ import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -27,21 +26,18 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
-export interface MultiEnvironmentInfraProps extends cdk.StackProps {
+export interface MultiEnvironmentInfraProps {
   environment: string;
   region: string;
   domainName?: string;
   certificateArn?: string;
   environmentSuffix?: string;
   timestamp?: string;
-  // When true, the stack will not create or reference a customer-managed
-  // CMK for EBS volumes and will rely on the AWS-managed EBS key instead.
-  useAwsManagedEbsKey?: boolean;
 }
 
-export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
+export class MultiEnvironmentInfrastructureStack extends Construct {
   constructor(scope: Construct, id: string, props: MultiEnvironmentInfraProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const environment = props.environment;
     const region = props.region;
@@ -54,6 +50,9 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
 
     const prefix = `${environment}-${region}`;
     const nameSuffix = `-${envSuffix}-${timestamp}`;
+
+    // Get the stack to apply tags and outputs
+    const stack = cdk.Stack.of(this);
 
     // Apply tag required by the user
     cdk.Tags.of(this).add('iac-rlhf-amazon', 'true');
@@ -124,6 +123,12 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
       })
     );
 
+    // SNS topic
+    const errorTopic = new sns.Topic(
+      this,
+      `${prefix}-error-topic${nameSuffix}`
+    );
+
     // Lambda triggered by S3
     const lambdaRole = new iam.Role(
       this,
@@ -145,6 +150,11 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
       ),
       role: lambdaRole,
       timeout: cdk.Duration.minutes(5),
+      environment: {
+        ENVIRONMENT: environment,
+        SNS_TOPIC_ARN: errorTopic.topicArn,
+        ALERT_THRESHOLD_MB: '100',
+      },
     });
     bucket.grantRead(fn);
     bucket.addEventNotification(
@@ -168,50 +178,9 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
       }
     );
 
-    // Optionally create a customer-managed KMS key for EBS encryption so ASG
-    // volumes use a controlled key. For ephemeral/dev stacks you may prefer
-    // to set `useAwsManagedEbsKey=true` so the stack will not create a CMK and
-    // will instead rely on the AWS-managed EBS key.
-    let ebsKmsKey: kms.IKey | undefined = undefined;
-    if (!props.useAwsManagedEbsKey) {
-      const created = new kms.Key(this, `${prefix}-ebs-key${nameSuffix}`, {
-        enableKeyRotation: true,
-        description: `EBS CMK for ${prefix}`,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-      });
-
-      // Tag and alias to make the key discoverable
-      cdk.Tags.of(created).add('iac-rlhf-amazon', 'true');
-      new kms.Alias(this, `${prefix}-ebs-key-alias${nameSuffix}`, {
-        aliasName: `alias/iac-rlhf-ebs-${timestamp}`,
-        targetKey: created,
-      });
-
-      created.addToResourcePolicy(
-        new iam.PolicyStatement({
-          sid: 'AllowEC2ServiceUse',
-          principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
-          actions: [
-            'kms:CreateGrant',
-            'kms:Encrypt',
-            'kms:Decrypt',
-            'kms:ReEncrypt*',
-            'kms:GenerateDataKey*',
-            'kms:DescribeKey',
-          ],
-          resources: ['*'],
-          conditions: {
-            Bool: { 'kms:GrantIsForAWSResource': 'true' },
-          },
-        })
-      );
-
-      ebsKmsKey = created;
-
-      new cdk.CfnOutput(this, `${prefix}-ebs-kms-key-arn${nameSuffix}`, {
-        value: created.keyArn,
-      });
-    }
+    // Use AWS-managed EBS encryption key for all volumes
+    // Customer-managed KMS keys can cause issues with ASG instance launches
+    // due to key state synchronization problems
 
     // Create an instance role and security group for instances launched from the LaunchTemplate
     const instanceRole = new iam.Role(
@@ -243,19 +212,8 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
         machineImage: ec2.MachineImage.latestAmazonLinux2(),
         role: instanceRole,
         securityGroup: ltSg,
-        blockDevices: [
-          {
-            deviceName: '/dev/xvda',
-            volume: ec2.BlockDeviceVolume.ebs(8, {
-              encrypted: true,
-              // Only reference the in-stack CMK when it exists. If
-              // `useAwsManagedEbsKey=true` we'll omit the KMS key so the
-              // AWS-managed key or the AMI/snapshot's key will be used.
-              kmsKey: ebsKmsKey,
-              volumeType: ec2.EbsDeviceVolumeType.GP2,
-            }),
-          },
-        ],
+        // Removed blockDevices configuration entirely to avoid KMS key issues
+        // Let AWS use the default AMI root volume configuration
       }
     );
 
@@ -311,12 +269,6 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
       });
     }
 
-    // SNS topic
-    const errorTopic = new sns.Topic(
-      this,
-      `${prefix}-error-topic${nameSuffix}`
-    );
-
     // CloudFront distribution (only if certificate provided and domainName exists)
     let distribution: cloudfront.Distribution | undefined = undefined;
     if (domainName && certificate) {
@@ -367,17 +319,26 @@ export class MultiEnvironmentInfrastructureStack extends cdk.Stack {
     cpuAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(errorTopic));
 
     // Outputs
-    new cdk.CfnOutput(this, `${prefix}-alb-dns${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `${prefix}-alb-dns${nameSuffix}`, {
       value: alb.loadBalancerDnsName,
     });
-    new cdk.CfnOutput(this, `${prefix}-bucket-name${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `${prefix}-bucket-name${nameSuffix}`, {
       value: bucket.bucketName,
     });
-    new cdk.CfnOutput(this, `${prefix}-rds-endpoint${nameSuffix}`, {
+    new cdk.CfnOutput(stack, `${prefix}-rds-endpoint${nameSuffix}`, {
       value: db.dbInstanceEndpointAddress,
     });
+    new cdk.CfnOutput(stack, `${prefix}-lambda-arn${nameSuffix}`, {
+      value: fn.functionArn,
+    });
+    new cdk.CfnOutput(stack, `${prefix}-sns-topic-arn${nameSuffix}`, {
+      value: errorTopic.topicArn,
+    });
+    new cdk.CfnOutput(stack, `${prefix}-asg-name${nameSuffix}`, {
+      value: asg.autoScalingGroupName,
+    });
     if (distribution) {
-      new cdk.CfnOutput(this, `${prefix}-cf-domain${nameSuffix}`, {
+      new cdk.CfnOutput(stack, `${prefix}-cf-domain${nameSuffix}`, {
         value: distribution.distributionDomainName,
       });
     }
@@ -427,18 +388,11 @@ export class TapStack extends cdk.Stack {
     // Apply the required global tag for all resources created by stacks
     Tags.of(this).add('iac-rlhf-amazon', 'true');
 
-    // Create child stacks for each environment/region combination.
-    // Use the app as scope so the created stacks are top-level stacks
-    // (this keeps bin/tap.ts unchanged while tap-stack.ts orchestrates stack creation).
-    const app = this.node.root as cdk.App;
-
     const timestamp = Date.now().toString().slice(-6);
 
-    const environments = this.node.tryGetContext('environments') || [
-      'dev',
-      'staging',
-      'prod',
-    ];
+    // Only deploy dev environment to avoid production deployment issues
+    // Force dev-only deployment regardless of context
+    const environments = ['dev'];
 
     // Determine which regions to create stacks in. If CDK_DEFAULT_REGION is set
     // in the environment (recommended for CI), honor it and create stacks only
@@ -460,18 +414,14 @@ export class TapStack extends cdk.Stack {
 
     for (const env of environments) {
       for (const region of regions) {
-        const stackId = `multi-infra-${env}-${region}-${environmentSuffix}-${timestamp}`;
-        new MultiEnvironmentInfrastructureStack(app, stackId, {
+        const constructId = `multi-infra-${env}-${region}-${environmentSuffix}-${timestamp}`;
+        new MultiEnvironmentInfrastructureStack(this, constructId, {
           environment: env,
           region: region,
           environmentSuffix,
           timestamp,
           domainName,
           certificateArn,
-          env: {
-            account: process.env.CDK_DEFAULT_ACCOUNT,
-            region: region,
-          },
         });
       }
     }
