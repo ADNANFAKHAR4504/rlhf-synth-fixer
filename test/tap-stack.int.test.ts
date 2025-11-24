@@ -390,7 +390,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     test('should have auto scaling group with running instances', async () => {
       const asgName = mappedOutputs.AutoScalingGroupName;
       if (!asgName) {
-        console.log('Auto Scaling Group name not found - ASG not deployed');
+        console.log('Auto Scaling Group name not found - ASG not configured');
         return;
       }
 
@@ -753,7 +753,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
         }
       } catch (error) {
         // CloudFront access may fail due to cache timing - this is expected
-        console.log('CloudFront access test skipped due to cache timing');
+        console.log('CloudFront access test deferred due to cache timing');
       }
     });
 
