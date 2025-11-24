@@ -22,6 +22,10 @@ class EncryptionValidator:
         """
         self.violations = []
 
+        # Handle None or invalid input
+        if not synthesized_json:
+            return self.violations
+
         if 'resource' in synthesized_json:
             # Check S3 buckets
             s3_buckets = synthesized_json['resource'].get('aws_s3_bucket', {})
@@ -93,6 +97,7 @@ class EncryptionValidator:
 
         # Convert string 'true'/'false' to boolean if needed
         if isinstance(storage_encrypted, str):
+            # Accept 'true', 'TRUE', 'True', etc.
             storage_encrypted = storage_encrypted.lower() == 'true'
 
         if not storage_encrypted:

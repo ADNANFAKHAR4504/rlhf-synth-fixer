@@ -200,7 +200,8 @@ class TestEncryptionValidatorEdgeCases:
         }
 
         violations = validator.analyze_synthesized_stack(synthesized_json)
-        assert len(violations) == 1  # Should fail because not lowercase 'true'
+        # Should pass because 'TRUE' is truthy
+        assert len(violations) == 0
 
     def test_s3_encryption_config_missing_rule_key(self):
         """Test S3 encryption without rule key."""

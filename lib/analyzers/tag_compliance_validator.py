@@ -43,6 +43,10 @@ class TagComplianceValidator:
         """
         self.violations = []
 
+        # Handle None or invalid input
+        if not synthesized_json:
+            return self.violations
+
         # Traverse resources in synthesized JSON
         if 'resource' in synthesized_json:
             for resource_type, resources in synthesized_json['resource'].items():

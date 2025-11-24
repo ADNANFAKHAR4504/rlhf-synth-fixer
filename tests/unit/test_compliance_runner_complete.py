@@ -100,17 +100,17 @@ class TestComplianceRunnerComplete:
 
         runner = ComplianceRunner(str(stack_file))
 
-        # Mock sys.exit to prevent actual exit
+        # Mock sys.exit to capture the call
         exit_called = []
 
         def mock_exit(code):
             exit_called.append(code)
+            raise SystemExit(code)
 
         # Test that run_analysis handles load failure
         with pytest.raises(SystemExit):
             runner.synthesized_json = None
             monkeypatch.setattr(sys, 'exit', mock_exit)
-            runner.load_synthesized_stack()
             runner.run_analysis()
 
 

@@ -25,6 +25,10 @@ class NetworkAnalyzer:
         self.violations = []
         self.vpc_cidrs = {}
 
+        # Handle None or invalid input
+        if not synthesized_json:
+            return self.violations
+
         # Collect all VPC CIDR blocks
         if 'resource' in synthesized_json:
             vpc_resources = synthesized_json['resource'].get('aws_vpc', {})
