@@ -11,7 +11,7 @@ import json
 import sys
 import os
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, mock_open, call
+from unittest.mock import MagicMock, patch, mock_open, call, ANY
 from concurrent.futures import Future
 
 import pytest
@@ -1117,8 +1117,8 @@ class TestBotoClientHelper:
             'secretsmanager',
             endpoint_url='http://localhost:5000',
             region_name='us-east-1',
-            aws_access_key_id=None,
-            aws_secret_access_key=None
+            aws_access_key_id=ANY,
+            aws_secret_access_key=ANY
         )
 
     @patch('analyse.boto3.client')
