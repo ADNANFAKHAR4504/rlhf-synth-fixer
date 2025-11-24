@@ -742,7 +742,6 @@ class TapStack(pulumi.ComponentResource):
         # Alarm for transaction queue depth
         self.queue_depth_alarm = aws.cloudwatch.MetricAlarm(
             f"tap-queue-depth-alarm-{self.environment_suffix}",
-            alarm_name=f"tap-transaction-queue-depth-{self.environment_suffix}",
             alarm_description="Transaction queue depth exceeding threshold",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
@@ -762,7 +761,6 @@ class TapStack(pulumi.ComponentResource):
         # Alarm for Lambda function errors
         self.lambda_error_alarm = aws.cloudwatch.MetricAlarm(
             f"tap-lambda-error-alarm-{self.environment_suffix}",
-            alarm_name=f"tap-lambda-errors-{self.environment_suffix}",
             alarm_description="Lambda function error rate exceeding threshold",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
@@ -782,7 +780,6 @@ class TapStack(pulumi.ComponentResource):
         # Alarm for DLQ message count
         self.dlq_alarm = aws.cloudwatch.MetricAlarm(
             f"tap-dlq-alarm-{self.environment_suffix}",
-            alarm_name=f"tap-dead-letter-queue-{self.environment_suffix}",
             alarm_description="Messages in dead letter queue",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
