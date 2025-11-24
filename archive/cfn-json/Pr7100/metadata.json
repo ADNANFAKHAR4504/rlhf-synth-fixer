@@ -5,7 +5,9 @@
   "complexity": "expert",
   "team": "synth",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "aws_services": [
     "RDS",
     "EC2",
@@ -21,5 +23,11 @@
   "po_id": "m1d2p4",
   "turn_type": "single",
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
