@@ -9,10 +9,7 @@
   "startedAt": "2025-11-21T11:19:45-06:00",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "S3",
-    "Lambda",
-    "IAM",
-    "CloudWatch"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "S3",
@@ -22,5 +19,5 @@
   ],
   "training_quality": 9,
   "author": "iamarpit-turing",
-  "reviewer": "akshat-jain355"
+  "reviewer": "emmanuel-turing"
 }
