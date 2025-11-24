@@ -102,13 +102,13 @@ from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfigurationRuleTransition,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioningA,  # ✅ CORRECTED: Added "A" suffix
+    S3BucketVersioningA,  # CORRECTED: Added "A" suffix
     S3BucketVersioningVersioningConfiguration,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA,  # ✅ CORRECTED: Added "A" suffix
+    S3BucketServerSideEncryptionConfigurationA,  # CORRECTED: Added "A" suffix
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,  # ✅ CORRECTED: Added "A" suffix
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,  # CORRECTED: Added "A" suffix
 )
 # ... (additional imports for DynamoDB, IAM, ECR, Lambda, API Gateway, SNS, EventBridge, SQS, Step Functions, CloudWatch)
 import json
@@ -122,7 +122,7 @@ AwsProvider(
     self,
     "aws",
     region=aws_region,
-    default_tags=[{"tags": default_tags}] if default_tags else None,  # ✅ CORRECTED: Proper CDKTF structure
+    default_tags=[{"tags": default_tags}] if default_tags else None,  # CORRECTED: Proper CDKTF structure
 )
 ```
 
@@ -130,7 +130,7 @@ AwsProvider(
 
 ```python
 # Enable versioning on audit bucket
-S3BucketVersioningA(  # ✅ CORRECTED: Using class with "A" suffix
+S3BucketVersioningA(  # CORRECTED: Using class with "A" suffix
     self,
     "audit_bucket_versioning",
     bucket=audit_bucket.id,
@@ -145,13 +145,13 @@ S3BucketVersioningA(  # ✅ CORRECTED: Using class with "A" suffix
 ```python
 # Enable encryption on audit bucket
 # pylint: disable=line-too-long
-S3BucketServerSideEncryptionConfigurationA(  # ✅ CORRECTED: Using class with "A" suffix
+S3BucketServerSideEncryptionConfigurationA(  # CORRECTED: Using class with "A" suffix
     self,
     "audit_bucket_encryption",
     bucket=audit_bucket.id,
     rule=[
         S3BucketServerSideEncryptionConfigurationRuleA(
-            apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(  # ✅ CORRECTED: Using class with "A" suffix
+            apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(  # CORRECTED: Using class with "A" suffix
                 sse_algorithm="AES256"
             )
         )
@@ -165,7 +165,7 @@ S3BucketServerSideEncryptionConfigurationA(  # ✅ CORRECTED: Using class with "
 S3BucketLifecycleConfigurationRule(
     id="expire-old-logs",
     status="Enabled",
-    expiration=[  # ✅ CORRECTED: Wrapped in list
+    expiration=[  # CORRECTED: Wrapped in list
         S3BucketLifecycleConfigurationRuleExpiration(
             days=365
         )

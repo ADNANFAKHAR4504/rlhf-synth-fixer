@@ -14,13 +14,13 @@ The model used incorrect import names for several CDKTF AWS provider classes. Sp
 ```python
 # INCORRECT - from MODEL_RESPONSE
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioning,  # ❌ WRONG
+    S3BucketVersioning,  # WRONG
     S3BucketVersioningVersioningConfiguration,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfiguration,  # ❌ WRONG
+    S3BucketServerSideEncryptionConfiguration,  # WRONG
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,  # ❌ WRONG
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,  # WRONG
 )
 ```
 
@@ -28,13 +28,13 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
 ```python
 # CORRECT - from IDEAL_RESPONSE
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioningA,  # ✅ CORRECT (with "A" suffix)
+    S3BucketVersioningA,  # CORRECT (with "A" suffix)
     S3BucketVersioningVersioningConfiguration,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA,  # ✅ CORRECT (with "A" suffix)
+    S3BucketServerSideEncryptionConfigurationA,  # CORRECT (with "A" suffix)
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,  # ✅ CORRECT (with "A" suffix)
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,  # CORRECT (with "A" suffix)
 )
 ```
 
@@ -67,7 +67,7 @@ AwsProvider(
     self,
     "aws",
     region=aws_region,
-    default_tags=[default_tags],  # ❌ WRONG - passing dict in a list
+    default_tags=[default_tags],  # WRONG - passing dict in a list
 )
 ```
 
@@ -80,7 +80,7 @@ AwsProvider(
     self,
     "aws",
     region=aws_region,
-    default_tags=[{"tags": default_tags}] if default_tags else None,  # ✅ CORRECT
+    default_tags=[{"tags": default_tags}] if default_tags else None,  # CORRECT
 )
 ```
 
@@ -110,7 +110,7 @@ The model passed `expiration` as a single object instead of a list:
 S3BucketLifecycleConfigurationRule(
     id="expire-old-logs",
     status="Enabled",
-    expiration=S3BucketLifecycleConfigurationRuleExpiration(  # ❌ WRONG - single object
+    expiration=S3BucketLifecycleConfigurationRuleExpiration(  # WRONG - single object
         days=365
     ),
 ),
@@ -122,7 +122,7 @@ S3BucketLifecycleConfigurationRule(
 S3BucketLifecycleConfigurationRule(
     id="expire-old-logs",
     status="Enabled",
-    expiration=[  # ✅ CORRECT - wrapped in list
+    expiration=[  # CORRECT - wrapped in list
         S3BucketLifecycleConfigurationRuleExpiration(
             days=365
         )
@@ -157,7 +157,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from cdktf import App  # ❌ WRONG - import after non-import statements
+from cdktf import App  # WRONG - import after non-import statements
 from lib.tap_stack import TapStack
 ```
 
@@ -166,7 +166,7 @@ from lib.tap_stack import TapStack
 # CORRECT - from IDEAL_RESPONSE
 import sys
 import os
-from cdktf import App  # ✅ CORRECT - imports at top
+from cdktf import App  # CORRECT - imports at top
 from lib.tap_stack import TapStack
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
