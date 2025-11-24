@@ -1,7 +1,7 @@
 /* eslint-disable import/no-extraneous-dependencies */
+import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as AWS from 'aws-sdk';
 
 interface StackOutputs {
   vpcId: string;
@@ -278,3 +278,4 @@ describe('Infrastructure Deployment Integration Tests', () => {
     });
   });
 });
+

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 // Get configuration
@@ -877,3 +877,4 @@ export const kinesisStreamName = kinesisStream.name;
 export const ecsLogGroupName = ecsLogGroup.name;
 export const backupVaultArn = backupVault.arn;
 export const backupPlanId = backupPlan.id;
+

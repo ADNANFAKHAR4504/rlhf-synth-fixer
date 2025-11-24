@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
-  testMatch: ['**/*.spec.ts', '**/*.test.ts', '**/*.test.mjs'],
+  roots: ['<rootDir>/test'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
@@ -15,17 +15,14 @@ module.exports = {
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
   collectCoverageFrom: [
-    '<rootDir>/index.ts',
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
-    '!<rootDir>/**/*.spec.ts',
     '!<rootDir>/**/*.test.js',
     '!<rootDir>/node_modules/**',
-    '!<rootDir>/lib/**/*.md',
   ],
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {

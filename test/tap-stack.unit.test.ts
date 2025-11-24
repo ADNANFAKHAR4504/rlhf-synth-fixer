@@ -49,7 +49,7 @@ pulumi.runtime.setMocks(
 );
 
 // Import the infrastructure code
-import * as infra from '../../index';
+import * as infra from '../lib/tap-stack';
 
 describe('Financial Analytics Platform Infrastructure', () => {
   describe('VPC Configuration', () => {
