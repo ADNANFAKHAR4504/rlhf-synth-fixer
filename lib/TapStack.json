@@ -170,7 +170,7 @@
         "FunctionName": {
           "Fn::Sub": "ProcessWebhook-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["ProcessWebhookRole", "Arn"]
@@ -268,7 +268,7 @@
         "FunctionName": {
           "Fn::Sub": "CheckAlerts-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["CheckAlertsRole", "Arn"]
@@ -363,7 +363,7 @@
         "FunctionName": {
           "Fn::Sub": "SendNotification-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["SendNotificationRole", "Arn"]
@@ -454,7 +454,7 @@
         "FunctionName": {
           "Fn::Sub": "CleanupHistory-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["CleanupHistoryRole", "Arn"]

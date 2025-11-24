@@ -7,6 +7,23 @@
   "team": "synth",
   "startedAt": "2025-11-21T12:52:00-05:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Serverless Architecture", "Real-time Processing", "Event-Driven Systems"],
-  "aws_services": ["Lambda", "API Gateway", "DynamoDB", "SNS", "CloudWatch", "EventBridge", "KMS", "IAM"]
+  "subject_labels": [
+    "Serverless Architecture",
+    "Real-time Processing",
+    "Event-Driven Systems"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "reviewer": "chriscrsov"
 }
