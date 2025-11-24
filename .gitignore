@@ -104,7 +104,9 @@ bin/tfplan
 build
 .claude/tasks.csv
 .claude/tasks.csv.backup
+.claude/tasks.csv.backup.*
 .claude/*.csv.backup
+.claude/*.csv.backup.*
 .claude/tasks.csv.lock/
 .claude/open_pr_status.json
 .claude/synth_pr_status.json

@@ -370,6 +370,7 @@ fi
 case "$PLATFORM" in
     cloudformation) PLATFORM="cfn" ;;
     # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
+    *) ;; # No change for other platforms
 esac
 
 # Normalize language to match CLI tool format (must be lowercase abbreviated form)
@@ -379,6 +380,7 @@ case "$LANGUAGE" in
     javascript) LANGUAGE="js" ;;
     terraform) LANGUAGE="hcl" ;;
     # go, java, yaml, json, hcl remain as-is (already lowercase)
+    *) ;; # No change for other languages
 esac
 
 # CRITICAL: Use exact difficulty value as complexity (no mapping)

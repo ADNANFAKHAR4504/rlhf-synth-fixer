@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T05:28:30+00:00",
+  "subtask": "deploy a serverless cryptocurrency alert processing system",
+  "subject_labels": [
+    "serverless",
+    "real-time-processing",
+    "event-driven",
+    "monitoring",
+    "alerting"
+  ],
+  "po_id": "101912610",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "CloudWatch Logs",
+    "IAM"
+  ],
+  "region": "us-east-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
