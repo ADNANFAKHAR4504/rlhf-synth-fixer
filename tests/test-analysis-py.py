@@ -7,12 +7,14 @@ Tests for ElastiCache cluster analysis functionality.
 
 import json
 import subprocess
+from pathlib import Path
 
 
 def run_analysis_script():
     """Run the analysis script directly"""
+    repo_root = Path(__file__).resolve().parents[1]
     cmd = ["python", "lib/analyse.py", "--use-mock-clusters"]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd="/root/iac-test-automations")
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(repo_root))
     return result.returncode == 0
 
 
