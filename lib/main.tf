@@ -779,6 +779,10 @@ resource "aws_iam_role" "cluster_autoscaler" {
     }]
   })
 
+  depends_on = [
+    aws_iam_openid_connect_provider.eks
+  ]
+
   tags = merge(
     var.common_tags,
     {
