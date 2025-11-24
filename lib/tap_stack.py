@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
+from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 
@@ -52,4 +52,40 @@ class TapStack(TerraformStack):
             "compliance-validator",
             environment_suffix=environment_suffix,
             aws_region=aws_region,
+        )
+
+        # Create stack outputs
+        TerraformOutput(
+            self,
+            "reports_bucket_name",
+            value=self.compliance_validator.reports_bucket.bucket,
+            description="S3 bucket name for compliance reports"
+        )
+
+        TerraformOutput(
+            self,
+            "lambda_function_name",
+            value=self.compliance_validator.validator_lambda.function_name,
+            description="Lambda function name for compliance validation"
+        )
+
+        TerraformOutput(
+            self,
+            "lambda_function_arn",
+            value=self.compliance_validator.validator_lambda.arn,
+            description="Lambda function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "iam_role_name",
+            value=self.compliance_validator.lambda_role.name,
+            description="IAM role name for Lambda function"
+        )
+
+        TerraformOutput(
+            self,
+            "iam_role_arn",
+            value=self.compliance_validator.lambda_role.arn,
+            description="IAM role ARN"
         )
