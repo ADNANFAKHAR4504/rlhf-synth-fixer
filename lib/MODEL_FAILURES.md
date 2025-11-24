@@ -358,18 +358,190 @@ This document analyzes the failures in the MODEL_RESPONSE and compares it with t
 
 ---
 
+### 8. Redundant DependsOn Clauses Causing Lint Warnings
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**: The template includes redundant `DependsOn` clauses that are already enforced by CloudFormation's automatic dependency detection through intrinsic functions (`Ref`, `Fn::GetAtt`, `Fn::Sub`). This causes cfn-lint W3005 warnings:
+
+```json
+"WAFWebACL": {
+  "Type": "AWS::WAFv2::WebACL",
+  "DependsOn": ["WAFLogBucket", "WAFLogBucketPolicy", "OfficeIPSet"],
+  "Properties": {
+    "Rules": [{
+      "Statement": {
+        "IPSetReferenceStatement": {
+          "Arn": { "Fn::GetAtt": ["OfficeIPSet", "Arn"] }
+        }
+      }
+    }]
+  }
+},
+"WAFWebACLAssociation": {
+  "Type": "AWS::WAFv2::WebACLAssociation",
+  "DependsOn": ["WAFWebACL", "TestALB"],
+  "Properties": {
+    "ResourceArn": { "Ref": "TestALB" },
+    "WebACLArn": { "Fn::GetAtt": ["WAFWebACL", "Arn"] }
+  }
+},
+"WAFLoggingConfiguration": {
+  "Type": "AWS::WAFv2::LoggingConfiguration",
+  "DependsOn": ["WAFWebACL", "WAFLogBucket", "WAFLogBucketPolicy"],
+  "Properties": {
+    "ResourceArn": { "Fn::GetAtt": ["WAFWebACL", "Arn"] },
+    "LogDestinationConfigs": [{
+      "Fn::Sub": "arn:aws:s3:::${WAFLogBucket}"
+    }]
+  }
+}
+```
+
+**Lint Warnings**:
+- W3005: 'OfficeIPSet' dependency already enforced by a 'GetAtt' at 'Resources/WAFWebACL/Properties/Rules/0/Statement/IPSetReferenceStatement/Arn'
+- W3005: 'WAFWebACL' dependency already enforced by a 'GetAtt' at 'Resources/WAFWebACLAssociation/Properties/WebACLArn'
+- W3005: 'TestALB' dependency already enforced by a 'Ref' at 'Resources/WAFWebACLAssociation/Properties/ResourceArn'
+- W3005: 'WAFWebACL' dependency already enforced by a 'GetAtt' at 'Resources/WAFLoggingConfiguration/Properties/ResourceArn'
+- W3005: 'WAFLogBucket' dependency already enforced by a 'Ref' at 'Resources/WAFLoggingConfiguration/Properties/LogDestinationConfigs/0'
+
+**IDEAL_RESPONSE Fix**: Remove redundant `DependsOn` clauses, keeping only those that are not automatically inferred:
+
+```json
+"WAFWebACL": {
+  "Type": "AWS::WAFv2::WebACL",
+  "DependsOn": ["WAFLogBucket", "WAFLogBucketPolicy"],
+  "Properties": {
+    "Rules": [{
+      "Statement": {
+        "IPSetReferenceStatement": {
+          "Arn": { "Fn::GetAtt": ["OfficeIPSet", "Arn"] }
+        }
+      }
+    }]
+  }
+},
+"WAFWebACLAssociation": {
+  "Type": "AWS::WAFv2::WebACLAssociation",
+  "Properties": {
+    "ResourceArn": { "Ref": "TestALB" },
+    "WebACLArn": { "Fn::GetAtt": ["WAFWebACL", "Arn"] }
+  }
+},
+"WAFLoggingConfiguration": {
+  "Type": "AWS::WAFv2::LoggingConfiguration",
+  "DependsOn": ["WAFLogBucketPolicy"],
+  "Properties": {
+    "ResourceArn": { "Fn::GetAtt": ["WAFWebACL", "Arn"] },
+    "LogDestinationConfigs": [{
+      "Fn::Sub": "arn:aws:s3:::${WAFLogBucket}"
+    }]
+  }
+}
+```
+
+**Root Cause**: The model added explicit `DependsOn` clauses without understanding that CloudFormation automatically infers dependencies from intrinsic functions. While not functionally incorrect, this violates CloudFormation best practices and causes lint warnings that fail CI/CD pipelines.
+
+**AWS Documentation Reference**: 
+- [CloudFormation Dependencies](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dependson.html)
+- [cfn-lint W3005 Rule](https://github.com/aws-cloudformation/cfn-lint/blob/main/docs/rules.md#W3005)
+
+**Cost/Security/Performance Impact**:
+- **CI/CD Impact**: Lint failures prevent deployment pipeline from passing
+- **Code Quality**: Redundant dependencies reduce template clarity and maintainability
+- **Best Practices**: Violates CloudFormation best practices for dependency management
+- **No Functional Impact**: Template still works correctly, but fails linting checks
+
+**Training Value**: Teaches the model to understand CloudFormation's automatic dependency inference and only use explicit `DependsOn` when necessary (e.g., for resources not referenced via intrinsic functions, or for explicit ordering requirements).
+
+---
+
+### 9. Integration Test Static File Dependencies
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**: Integration tests read outputs from a static JSON file (`cfn-outputs/flat-outputs.json`) instead of dynamically discovering the stack and querying CloudFormation outputs:
+
+```typescript
+beforeAll(() => {
+  const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+  if (!fs.existsSync(outputsPath)) {
+    throw new Error('Deployment outputs not found. Run deployment first.');
+  }
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+});
+```
+
+**Problems**:
+- Tests fail if output file doesn't exist or is outdated
+- Cannot discover stack name dynamically (hardcoded or requires manual file updates)
+- Not suitable for CI/CD where stack names vary by environment (e.g., `TapStackpr7175`)
+- Tests are tightly coupled to deployment script output format
+
+**IDEAL_RESPONSE Fix**: Dynamically discover stack name and query CloudFormation outputs via AWS SDK:
+
+```typescript
+beforeAll(async () => {
+  // Dynamically discover stack name from environment or by listing stacks
+  if (process.env.ENVIRONMENT_SUFFIX) {
+    stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX}`;
+  } else {
+    // Fallback: Find most recent TapStack
+    const listResponse = await cfnClient.send(new ListStacksCommand({
+      StackStatusFilter: ['CREATE_COMPLETE', 'UPDATE_COMPLETE']
+    }));
+    const tapStacks = listResponse.StackSummaries?.filter(
+      (s) => s.StackName?.startsWith('TapStack')
+    ) || [];
+    stackName = tapStacks[0].StackName!;
+  }
+
+  // Query stack outputs dynamically
+  const describeCommand = new DescribeStacksCommand({ StackName: stackName });
+  const stackResponse = await cfnClient.send(describeCommand);
+  const stack = stackResponse.Stacks![0];
+
+  // Extract outputs
+  if (stack.Outputs) {
+    for (const output of stack.Outputs) {
+      if (output.OutputKey && output.OutputValue) {
+        outputs[output.OutputKey] = output.OutputValue;
+      }
+    }
+  }
+});
+```
+
+**Root Cause**: The model created integration tests that assume a static deployment workflow with file-based output sharing, rather than a dynamic CI/CD environment where stack names vary and outputs must be queried from AWS.
+
+**Cost/Security/Performance Impact**:
+- **CI/CD Compatibility**: Tests fail in CI/CD environments where stack names are dynamic (e.g., `TapStackpr7175`)
+- **Test Reliability**: Tests may use stale output data if file isn't updated
+- **Deployment Coupling**: Tests depend on deployment script creating specific file format
+- **Flexibility**: Cannot test stacks deployed outside the expected workflow
+
+**Training Value**: Teaches the model to create integration tests that:
+1. Dynamically discover resources using environment variables or AWS API queries
+2. Work in CI/CD environments with variable stack names
+3. Query AWS services directly rather than relying on intermediate files
+4. Are decoupled from specific deployment workflows
+
+---
+
 ## Summary
 
 ### Failure Count by Severity
 - **Critical**: 2 failures (Non-self-sufficient infrastructure, Incorrect bucket policy principal)
 - **High**: 2 failures (Missing network infrastructure, Missing ALB outputs)
-- **Medium**: 2 failures (Removed ALBArn parameter, Missing listener/target group)
+- **Medium**: 4 failures (Removed ALBArn parameter, Missing listener/target group, Redundant DependsOn clauses, Integration test static dependencies)
 - **Low**: 1 observation (Default environment value)
 
 ### Primary Knowledge Gaps
 1. **Self-Sufficient Infrastructure**: Model doesn't automatically create complete, testable infrastructure stacks
 2. **Service-Specific Permissions**: Confusion between generic S3 logging and service-specific logging principals
 3. **Integration Testing Requirements**: Insufficient consideration of testing outputs and complete infrastructure needs
+4. **CloudFormation Dependency Management**: Lack of understanding of automatic dependency inference vs. explicit DependsOn
+5. **CI/CD Test Design**: Tests assume static file-based workflows instead of dynamic AWS API-based discovery
 
 ### Training Value Justification
 
@@ -389,3 +561,6 @@ The failures represent common patterns that affect deployability and testability
 3. **Output Completeness**: Always output all resource identifiers needed for integration testing
 4. **Network Infrastructure Awareness**: When creating services that require networking (ALB, ECS, etc.), automatically include VPC, subnets, and routing
 5. **Default Value Context**: Consider the deployment context (testing vs. production) when setting parameter defaults
+6. **Dependency Inference Understanding**: Only add explicit `DependsOn` when CloudFormation cannot automatically infer the dependency from intrinsic functions
+7. **Dynamic Test Design**: Create integration tests that discover resources dynamically via environment variables and AWS APIs, not static files
+8. **Lint Compliance**: Run cfn-lint validation and fix all warnings before finalizing templates

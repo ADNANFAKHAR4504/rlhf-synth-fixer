@@ -1,5 +1,8 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+  ListStacksCommand,
+} from '@aws-sdk/client-cloudformation';
 import {
   S3Client,
   GetBucketEncryptionCommand,
@@ -21,21 +24,125 @@ import {
 } from '@aws-sdk/client-wafv2';
 
 describe('TapStack Integration Tests', () => {
-  let outputs: any;
-  const region = 'us-east-1';
+  let outputs: Record<string, string> = {};
+  let stackName: string;
+  const region = process.env.AWS_REGION || 'us-east-1';
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+  
+  const cfnClient = new CloudFormationClient({ region });
   const s3Client = new S3Client({ region });
   const elbClient = new ElasticLoadBalancingV2Client({ region });
   const wafClient = new WAFV2Client({ region });
 
-  beforeAll(() => {
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error('Deployment outputs not found. Run deployment first.');
+  beforeAll(async () => {
+    // Dynamically discover stack name from environment or by listing stacks
+    // In CI/CD, ENVIRONMENT_SUFFIX should be set (e.g., pr7175)
+    if (process.env.ENVIRONMENT_SUFFIX) {
+      stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX}`;
+      console.log(`Using stack name from ENVIRONMENT_SUFFIX: ${stackName}`);
+    } else {
+      // Fallback: Try to find the most recent TapStack
+      console.log('ENVIRONMENT_SUFFIX not set, searching for TapStack stacks...');
+      const listCommand = new ListStacksCommand({
+        StackStatusFilter: [
+          'CREATE_COMPLETE',
+          'UPDATE_COMPLETE',
+          'CREATE_IN_PROGRESS',
+          'UPDATE_IN_PROGRESS',
+        ],
+      });
+      const listResponse = await cfnClient.send(listCommand);
+      const tapStacks = listResponse.StackSummaries?.filter(
+        (s) => s.StackName?.startsWith('TapStack')
+      ) || [];
+      
+      if (tapStacks.length === 0) {
+        throw new Error(
+          'No TapStack found. Either set ENVIRONMENT_SUFFIX environment variable ' +
+          'or ensure a TapStack is deployed.'
+        );
+      }
+      
+      // Sort by creation time and get the most recent
+      tapStacks.sort((a, b) => {
+        const timeA = a.CreationTime?.getTime() || 0;
+        const timeB = b.CreationTime?.getTime() || 0;
+        return timeB - timeA;
+      });
+      
+      stackName = tapStacks[0].StackName!;
+      console.log(`Discovered most recent stack: ${stackName}`);
     }
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Verify stack exists and get outputs dynamically
+    let stackResponse;
+    try {
+      const describeCommand = new DescribeStacksCommand({ StackName: stackName });
+      stackResponse = await cfnClient.send(describeCommand);
+    } catch (error: any) {
+      if (error.name === 'ValidationError' || error.message?.includes('does not exist')) {
+        throw new Error(
+          `Stack ${stackName} not found. Deploy the stack first. ` +
+          `If using CI/CD, ensure ENVIRONMENT_SUFFIX is set correctly.`
+        );
+      }
+      throw error;
+    }
+    
+    if (!stackResponse.Stacks || stackResponse.Stacks.length === 0) {
+      throw new Error(`Stack ${stackName} not found. Deploy the stack first.`);
+    }
+
+    const stack = stackResponse.Stacks[0];
+    const validStatuses = ['CREATE_COMPLETE', 'UPDATE_COMPLETE'];
+    if (!validStatuses.includes(stack.StackStatus!)) {
+      throw new Error(
+        `Stack ${stackName} is not in a valid state. ` +
+        `Current status: ${stack.StackStatus}. ` +
+        `Expected: ${validStatuses.join(' or ')}`
+      );
+    }
+
+    // Extract outputs dynamically
+    if (stack.Outputs) {
+      for (const output of stack.Outputs) {
+        if (output.OutputKey && output.OutputValue) {
+          outputs[output.OutputKey] = output.OutputValue;
+        }
+      }
+    }
+
+    // Verify we have the required outputs
+    const requiredOutputs = [
+      'WebACLArn',
+      'WebACLId',
+      'WAFLogBucketName',
+      'WAFLogBucketArn',
+      'TestALBArn',
+      'TestALBDNSName',
+      'OfficeIPSetArn',
+    ];
+
+    const missingOutputs = requiredOutputs.filter((key) => !outputs[key]);
+    if (missingOutputs.length > 0) {
+      throw new Error(
+        `Missing required stack outputs: ${missingOutputs.join(', ')}. ` +
+        `Found outputs: ${Object.keys(outputs).join(', ')}. ` +
+        `Stack: ${stackName}`
+      );
+    }
+
+    console.log(
+      `✅ Stack ${stackName} discovered successfully with ${Object.keys(outputs).length} outputs`
+    );
   });
 
-  describe('Stack Outputs', () => {
+  describe('Stack Discovery and Outputs', () => {
+    test('should have discovered stack name', () => {
+      expect(stackName).toBeDefined();
+      expect(stackName).toMatch(/^TapStack/);
+    });
+
     test('should have all required outputs', () => {
       expect(outputs.WebACLArn).toBeDefined();
       expect(outputs.WebACLId).toBeDefined();

@@ -433,7 +433,7 @@
     },
     "WAFWebACL": {
       "Type": "AWS::WAFv2::WebACL",
-      "DependsOn": ["WAFLogBucket", "WAFLogBucketPolicy", "OfficeIPSet"],
+      "DependsOn": ["WAFLogBucket", "WAFLogBucketPolicy"],
       "Properties": {
         "Name": {
           "Fn::Sub": "api-protection-webacl-${EnvironmentSuffix}"
@@ -544,7 +544,6 @@
     },
     "WAFWebACLAssociation": {
       "Type": "AWS::WAFv2::WebACLAssociation",
-      "DependsOn": ["WAFWebACL", "TestALB"],
       "Properties": {
         "ResourceArn": {
           "Ref": "TestALB"
@@ -556,7 +555,7 @@
     },
     "WAFLoggingConfiguration": {
       "Type": "AWS::WAFv2::LoggingConfiguration",
-      "DependsOn": ["WAFWebACL", "WAFLogBucket", "WAFLogBucketPolicy"],
+      "DependsOn": ["WAFLogBucketPolicy"],
       "Properties": {
         "ResourceArn": {
           "Fn::GetAtt": ["WAFWebACL", "Arn"]
