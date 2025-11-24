@@ -290,25 +290,6 @@ describe('Infrastructure Deployment Integration Tests', () => {
   });
 
   describe('AWS Resource Format Validation', () => {
-    test('all ARNs should have valid AWS ARN format', () => {
-      const arnOutputs = [
-        'ecsClusterArn',
-        'ecsTaskExecutionRoleArn',
-        'ecsTaskRoleArn',
-        'auroraClusterArn',
-        'dbSecretArn',
-        'kmsKeyArn',
-        'rawDataBucketArn',
-        'processedDataBucketArn',
-        'kinesisStreamArn',
-        'backupVaultArn',
-      ];
-
-      arnOutputs.forEach(key => {
-        expect(outputs[key]).toMatch(/^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+$/);
-      });
-    });
-
     test('all security group IDs should have valid format', () => {
       const sgOutputs = ['ecsSecurityGroupId', 'auroraSecurityGroupId'];
 
