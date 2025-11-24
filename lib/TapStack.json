@@ -848,7 +848,7 @@
         "Targets": [
           {
             "Arn": {
-              "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/microservices-pipeline-${EnvironmentSuffix}"
+              "Fn::GetAtt": ["Pipeline", "Arn"]
             },
             "RoleArn": {
               "Fn::GetAtt": [
