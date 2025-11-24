@@ -56,7 +56,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-zero-trust-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-zero-trust-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -100,7 +100,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-az1-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-az1-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -138,7 +138,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-az2-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-az2-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -176,7 +176,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-az3-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-az3-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -214,7 +214,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "firewall-subnet-az1-${EnvironmentSuffix}"
+              "Fn::Sub": "firewall-subnet-az1-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -252,7 +252,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "firewall-subnet-az2-${EnvironmentSuffix}"
+              "Fn::Sub": "firewall-subnet-az2-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -290,7 +290,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "firewall-subnet-az3-${EnvironmentSuffix}"
+              "Fn::Sub": "firewall-subnet-az3-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -306,7 +306,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-route-table-${EnvironmentSuffix}"
+              "Fn::Sub": "private-route-table-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -370,7 +370,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "tgw-attachment-${EnvironmentSuffix}"
+              "Fn::Sub": "tgw-attachment-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -380,7 +380,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::NetworkFirewall::RuleGroup",
       "Properties": {
         "RuleGroupName": {
-          "Fn::Sub": "stateful-rules-${EnvironmentSuffix}"
+          "Fn::Sub": "stateful-rules-v1-${EnvironmentSuffix}"
         },
         "Type": "STATEFUL",
         "Capacity": 100,
@@ -426,7 +426,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "stateful-rules-${EnvironmentSuffix}"
+              "Fn::Sub": "stateful-rules-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -436,7 +436,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::NetworkFirewall::FirewallPolicy",
       "Properties": {
         "FirewallPolicyName": {
-          "Fn::Sub": "firewall-policy-${EnvironmentSuffix}"
+          "Fn::Sub": "firewall-policy-v1-${EnvironmentSuffix}"
         },
         "FirewallPolicy": {
           "StatelessDefaultActions": [
@@ -460,7 +460,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "firewall-policy-${EnvironmentSuffix}"
+              "Fn::Sub": "firewall-policy-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -470,7 +470,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::NetworkFirewall::Firewall",
       "Properties": {
         "FirewallName": {
-          "Fn::Sub": "network-firewall-${EnvironmentSuffix}"
+          "Fn::Sub": "network-firewall-v1-${EnvironmentSuffix}"
         },
         "FirewallPolicyArn": {
           "Fn::GetAtt": [
@@ -502,7 +502,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "network-firewall-${EnvironmentSuffix}"
+              "Fn::Sub": "network-firewall-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -579,7 +579,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ebs-kms-key-${EnvironmentSuffix}"
+              "Fn::Sub": "ebs-kms-key-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -590,7 +590,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/ebs-${EnvironmentSuffix}"
+          "Fn::Sub": "alias/ebs-v1-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "EBSKMSKey"
@@ -660,7 +660,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "s3-kms-key-${EnvironmentSuffix}"
+              "Fn::Sub": "s3-kms-key-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -671,7 +671,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/s3-${EnvironmentSuffix}"
+          "Fn::Sub": "alias/s3-v1-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "S3KMSKey"
@@ -718,7 +718,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rds-kms-key-${EnvironmentSuffix}"
+              "Fn::Sub": "rds-kms-key-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -729,7 +729,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/rds-${EnvironmentSuffix}"
+          "Fn::Sub": "alias/rds-v1-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "RDSKMSKey"
@@ -740,7 +740,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ec2-instance-role-${EnvironmentSuffix}"
+          "Fn::Sub": "ec2-instance-role-v1-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -779,7 +779,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
                     "s3:ListBucket"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:s3:::payment-processing-${EnvironmentSuffix}"
+                    "Fn::Sub": "arn:aws:s3:::payment-processing-v1-${EnvironmentSuffix}"
                   }
                 }
               ]
@@ -819,7 +819,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ec2-instance-role-${EnvironmentSuffix}"
+              "Fn::Sub": "ec2-instance-role-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -829,7 +829,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Fn::Sub": "ec2-instance-profile-${EnvironmentSuffix}"
+          "Fn::Sub": "ec2-instance-profile-v1-${EnvironmentSuffix}"
         },
         "Roles": [
           {
@@ -842,7 +842,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "vpc-flow-logs-${AWS::AccountId}-${EnvironmentSuffix}"
+          "Fn::Sub": "vpc-flow-logs-${AWS::AccountId}-v1-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -881,7 +881,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-flow-logs-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-flow-logs-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -951,7 +951,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-flow-log-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-flow-log-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -961,7 +961,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "aws-config-${AWS::AccountId}-${EnvironmentSuffix}"
+          "Fn::Sub": "aws-config-${AWS::AccountId}-v1-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -991,7 +991,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aws-config-${EnvironmentSuffix}"
+              "Fn::Sub": "aws-config-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1059,7 +1059,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "aws-config-role-${EnvironmentSuffix}"
+          "Fn::Sub": "aws-config-role-v1-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1109,7 +1109,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aws-config-role-${EnvironmentSuffix}"
+              "Fn::Sub": "aws-config-role-v1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1119,7 +1119,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::Config::ConfigurationRecorder",
       "Properties": {
         "Name": {
-          "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
+          "Fn::Sub": "config-recorder-v1-${EnvironmentSuffix}"
         },
         "RoleARN": {
           "Fn::GetAtt": [
@@ -1137,7 +1137,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::Config::DeliveryChannel",
       "Properties": {
         "Name": {
-          "Fn::Sub": "config-delivery-${EnvironmentSuffix}"
+          "Fn::Sub": "config-delivery-v1-${EnvironmentSuffix}"
         },
         "S3BucketName": {
           "Ref": "ConfigBucket"
@@ -1149,7 +1149,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
-          "Fn::Sub": "encrypted-volumes-${EnvironmentSuffix}"
+          "Fn::Sub": "encrypted-volumes-v1-${EnvironmentSuffix}"
         },
         "Description": "Checks whether EBS volumes are encrypted",
         "Source": {
@@ -1163,7 +1163,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "DependsOn": "ConfigRecorder",
       "Properties": {
         "ConfigRuleName": {
-          "Fn::Sub": "iam-password-policy-${EnvironmentSuffix}"
+          "Fn::Sub": "iam-password-policy-v1-${EnvironmentSuffix}"
         },
         "Description": "Checks whether the account password policy meets specified requirements",
         "Source": {
@@ -1176,7 +1176,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "ssm-endpoints-sg-${EnvironmentSuffix}"
+          "Fn::Sub": "ssm-endpoints-sg-v1-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Systems Manager VPC endpoints",
         "VpcId": {
@@ -1196,7 +1196,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ssm-endpoints-sg-${EnvironmentSuffix}"
+              "Fn::Sub": "ssm-endpoints-sg-v1-${EnvironmentSuffix}"
             }
           }
         ]
