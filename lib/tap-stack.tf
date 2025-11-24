@@ -236,6 +236,45 @@ resource "aws_vpc_endpoint" "cloudwatch" {
   }
 }
 
+resource "aws_vpc_endpoint" "sns" {
+  vpc_id              = aws_vpc.fraud_detection_vpc.id
+  service_name        = "com.amazonaws.${var.aws_region}.sns"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "fraud-detection-sns-endpoint-${var.environment_suffix}"
+  }
+}
+
+resource "aws_vpc_endpoint" "events" {
+  vpc_id              = aws_vpc.fraud_detection_vpc.id
+  service_name        = "com.amazonaws.${var.aws_region}.events"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "fraud-detection-events-endpoint-${var.environment_suffix}"
+  }
+}
+
+resource "aws_vpc_endpoint" "kms" {
+  vpc_id              = aws_vpc.fraud_detection_vpc.id
+  service_name        = "com.amazonaws.${var.aws_region}.kms"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_subnet_a.id, aws_subnet.private_subnet_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name = "fraud-detection-kms-endpoint-${var.environment_suffix}"
+  }
+}
+
 # DynamoDB table
 resource "aws_dynamodb_table" "transactions" {
   name         = "fraud-detection-transactions-${var.environment_suffix}"
@@ -310,6 +349,32 @@ resource "aws_s3_bucket_lifecycle_configuration" "transaction_archive" {
       storage_class = "GLACIER"
     }
   }
+}
+
+# S3 bucket policy to enforce secure transport
+resource "aws_s3_bucket_policy" "transaction_archive_secure_transport" {
+  bucket = aws_s3_bucket.transaction_archive.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.transaction_archive.arn,
+          "${aws_s3_bucket.transaction_archive.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = false
+          }
+        }
+      }
+    ]
+  })
 }
 
 # SQS queues
@@ -463,27 +528,24 @@ resource "aws_iam_role_policy" "lambda_inline_policy" {
       },
       {
         Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.alarm_notification.arn
+      },
+      {
+        Effect   = "Allow"
         Action   = "events:PutEvents"
-        Resource = aws_cloudwatch_event_rule.high_risk_transaction.arn
+        Resource = "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"
       },
       {
         Effect = "Allow"
         Action = [
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface"
+          "ec2:DeleteNetworkInterface",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups"
         ]
         Resource = "*"
-      },
-      {
-        Effect   = "Deny"
-        Action   = "*"
-        Resource = "*"
-        Condition = {
-          StringNotEquals = {
-            "aws:SourceVpc" = aws_vpc.fraud_detection_vpc.id
-          }
-        }
       }
     ]
   })
@@ -660,7 +722,7 @@ resource "aws_api_gateway_rest_api" "fraud_detection_api" {
 resource "aws_api_gateway_authorizer" "token_authorizer" {
   name                   = "token-authorizer-${var.environment_suffix}"
   rest_api_id            = aws_api_gateway_rest_api.fraud_detection_api.id
-  authorizer_uri         = aws_lambda_function.token_authorizer.invoke_arn
+  authorizer_uri         = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.token_authorizer.arn}/invocations"
   authorizer_credentials = aws_iam_role.api_gateway_authorizer_role.arn
   type                   = "TOKEN"
   identity_source        = "method.request.header.Authorization"
@@ -737,7 +799,7 @@ resource "aws_api_gateway_integration" "post_transaction" {
   http_method             = aws_api_gateway_method.post_transaction.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.transaction_validation.invoke_arn
+  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.transaction_validation.arn}/invocations"
 }
 
 resource "aws_api_gateway_method" "get_transaction" {
@@ -757,7 +819,7 @@ resource "aws_api_gateway_integration" "get_transaction" {
   http_method             = aws_api_gateway_method.get_transaction.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.transaction_validation.invoke_arn
+  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.transaction_validation.arn}/invocations"
 }
 
 # API Gateway deployment and stage
