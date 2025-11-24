@@ -240,11 +240,11 @@ describe('Transit Gateway Multi-VPC Unit Tests', () => {
     describe('Security Group Rules', () => {
         it('should validate ingress rule configuration', () => {
             const validateIngressRule = (rule: any): boolean => {
-                return rule.protocol &&
+                return !!(rule.protocol &&
                        rule.fromPort !== undefined &&
                        rule.toPort !== undefined &&
                        rule.fromPort <= rule.toPort &&
-                       (rule.cidrBlocks || rule.securityGroups);
+                       (rule.cidrBlocks || rule.securityGroups));
             };
 
             expect(validateIngressRule({
