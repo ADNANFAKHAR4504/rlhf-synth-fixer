@@ -270,10 +270,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
     test('should have VPC with proper configuration and multi-AZ subnets', async () => {
       const vpcId = mappedOutputs.VpcId;
-      if (!vpcId) {
-        console.log('VPC ID not found in outputs, skipping VPC configuration test');
-        return;
-      }
+      expect(vpcId).toBeDefined();
 
       // Test VPC configuration
       const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
@@ -296,10 +293,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
     test('should have security groups properly configured', async () => {
       const vpcId = mappedOutputs.VpcId;
-      if (!vpcId) {
-        console.log('VPC ID not found in outputs, skipping security group test');
-        return;
-      }
+      expect(vpcId).toBeDefined();
 
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
         Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
@@ -584,12 +578,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     test('should have REST API URL with correct format', () => {
       // Integration test: Verify API Gateway URL is properly configured
       const apiGatewayUrl = mappedOutputs.ApiGatewayUrl;
-
-      if (!apiGatewayUrl) {
-        console.log('API Gateway URL not found in outputs - may not be deployed');
-        return;
-      }
-
+      expect(apiGatewayUrl).toBeDefined();
       expect(apiGatewayUrl).toMatch(/^https:\/\/.*\.execute-api\./);
 
       // Extract API ID from URL for validation
@@ -600,11 +589,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     test('should have API Gateway URL accessible via HTTP', async () => {
       // Integration test: Test actual API Gateway endpoint accessibility
       const apiGatewayUrl = mappedOutputs.ApiGatewayUrl;
-
-      if (!apiGatewayUrl) {
-        console.log('API Gateway URL not found in outputs - skipping connectivity test');
-        return;
-      }
+      expect(apiGatewayUrl).toBeDefined();
 
       try {
         const response = await axios.get(`${apiGatewayUrl}/health`, {
@@ -623,11 +608,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
   describe('SQS Queue Configuration', () => {
     test('should have SQS queue with proper settings', async () => {
       const queueUrl = mappedOutputs.SqsQueueUrl;
-
-      if (!queueUrl) {
-        console.log('SQS Queue URL not found in outputs - may not be deployed');
-        return;
-      }
+      expect(queueUrl).toBeDefined();
 
       const command = new GetQueueAttributesCommand({
         QueueUrl: queueUrl,
@@ -664,11 +645,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
     test('should successfully invoke Lambda through API Gateway', async () => {
       const apiGatewayUrl = mappedOutputs.ApiGatewayUrl;
-
-      if (!apiGatewayUrl) {
-        console.log('API Gateway URL not found - skipping API Gateway integration test');
-        return;
-      }
+      expect(apiGatewayUrl).toBeDefined();
 
       // Test GET endpoint
       const getResponse = await axios.get(`${apiGatewayUrl}api`, {
@@ -806,11 +783,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
     test('should send message to SQS queue', async () => {
       const queueUrl = mappedOutputs.SqsQueueUrl;
-
-      if (!queueUrl) {
-        console.log('SQS Queue URL not found - skipping SQS integration test');
-        return;
-      }
+      expect(queueUrl).toBeDefined();
 
       const command = new SendMessageCommand({
         QueueUrl: queueUrl,
@@ -830,11 +803,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
     test('should receive message from SQS queue', async () => {
       const queueUrl = mappedOutputs.SqsQueueUrl;
-
-      if (!queueUrl) {
-        console.log('SQS Queue URL not found - skipping SQS receive test');
-        return;
-      }
+      expect(queueUrl).toBeDefined();
 
       // Wait a moment for message to be available
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1040,32 +1009,28 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
       // Step 5: Test SQS messaging (async processing layer)
       try {
         const queueUrl = mappedOutputs.SqsQueueUrl;
+        expect(queueUrl).toBeDefined();
 
-        if (!queueUrl) {
-          console.log('SQS Queue URL not found - skipping SQS messaging step');
-          flowResults.sqs_messaging.success = true; // Skip gracefully
-        } else {
-          const flowMessage = {
-            flowTest: true,
-            processedData: testData,
-            source: 'full-flow-integration',
-            processedAt: new Date().toISOString(),
-            flowId: uuidv4()
-          };
+        const flowMessage = {
+          flowTest: true,
+          processedData: testData,
+          source: 'full-flow-integration',
+          processedAt: new Date().toISOString(),
+          flowId: uuidv4()
+        };
 
-          const sqsCommand = new SendMessageCommand({
-            QueueUrl: queueUrl,
-            MessageBody: JSON.stringify(flowMessage),
-            MessageAttributes: {
-              source: { StringValue: 'full-flow-test', DataType: 'String' },
-              dataId: { StringValue: testData.id, DataType: 'String' },
-              flowType: { StringValue: 'integration', DataType: 'String' }
-            },
-          });
+        const sqsCommand = new SendMessageCommand({
+          QueueUrl: queueUrl,
+          MessageBody: JSON.stringify(flowMessage),
+          MessageAttributes: {
+            source: { StringValue: 'full-flow-test', DataType: 'String' },
+            dataId: { StringValue: testData.id, DataType: 'String' },
+            flowType: { StringValue: 'integration', DataType: 'String' }
+          },
+        });
 
-          const sqsResponse = await sqsClient.send(sqsCommand);
-          flowResults.sqs_messaging.success = !!sqsResponse.MessageId;
-        }
+        const sqsResponse = await sqsClient.send(sqsCommand);
+        flowResults.sqs_messaging.success = !!sqsResponse.MessageId;
 
       } catch (error) {
         flowResults.sqs_messaging.error = error instanceof Error ? error.message : String(error);
@@ -1088,18 +1053,15 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     test('should demonstrate complete data flow: API → Lambda → Database → SQS', async () => {
       // Step 1: Send data via API Gateway to Lambda (if available)
       const apiGatewayUrl = mappedOutputs.ApiGatewayUrl;
+      expect(apiGatewayUrl).toBeDefined();
 
-      if (apiGatewayUrl) {
-        const apiResponse = await axios.post(`${apiGatewayUrl}api/data`, testData, {
-          headers: { 'Content-Type': 'application/json' },
-          validateStatus: () => true,
-        });
+      const apiResponse = await axios.post(`${apiGatewayUrl}api/data`, testData, {
+        headers: { 'Content-Type': 'application/json' },
+        validateStatus: () => true,
+      });
 
-        // API Gateway should be reachable (even if Lambda returns error)
-        expect([200, 201, 400, 403, 404, 500, 502, 503].includes(apiResponse.status)).toBe(true);
-      } else {
-        console.log('API Gateway URL not found - skipping API Gateway step');
-      }
+      // API Gateway should be reachable (even if Lambda returns error)
+      expect([200, 201, 400, 403, 404, 500, 502, 503].includes(apiResponse.status)).toBe(true);
 
       // Step 2: Verify Lambda function can be invoked directly
       const functionName = mappedOutputs.LambdaFunctionName;
@@ -1120,28 +1082,25 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
       // Step 3: Test SQS messaging as part of the pipeline (if available)
       const queueUrl = mappedOutputs.SqsQueueUrl;
+      expect(queueUrl).toBeDefined();
 
-      if (queueUrl) {
-        const sqsMessage = {
-          processedData: testData,
-          source: 'api-lambda-pipeline',
-          processedAt: new Date().toISOString(),
-        };
+      const sqsMessage = {
+        processedData: testData,
+        source: 'api-lambda-pipeline',
+        processedAt: new Date().toISOString(),
+      };
 
-        const sqsCommand = new SendMessageCommand({
-          QueueUrl: queueUrl,
-          MessageBody: JSON.stringify(sqsMessage),
-          MessageAttributes: {
-            source: { StringValue: 'pipeline-test', DataType: 'String' },
-            dataId: { StringValue: testData.id, DataType: 'String' },
-          },
-        });
+      const sqsCommand = new SendMessageCommand({
+        QueueUrl: queueUrl,
+        MessageBody: JSON.stringify(sqsMessage),
+        MessageAttributes: {
+          source: { StringValue: 'pipeline-test', DataType: 'String' },
+          dataId: { StringValue: testData.id, DataType: 'String' },
+        },
+      });
 
-        const sqsResponse = await sqsClient.send(sqsCommand);
-        expect(sqsResponse.MessageId).toBeDefined();
-      } else {
-        console.log('SQS Queue URL not found - skipping SQS messaging step');
-      }
+      const sqsResponse = await sqsClient.send(sqsCommand);
+      expect(sqsResponse.MessageId).toBeDefined();
     });
 
     test('should verify Lambda can access database secrets for connectivity', async () => {
@@ -1568,32 +1527,28 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
         // Step 3: Send processed data to SQS (if available)
         const queueUrl = mappedOutputs.SqsQueueUrl;
+        expect(queueUrl).toBeDefined();
 
-        if (queueUrl) {
-          const processedMessage = {
-            originalWorkflowId: workflowId,
-            processedBy: 'lambda-integration',
-            s3Key: testKey,
-            processedAt: new Date().toISOString(),
-            status: 'processed'
-          };
+        const processedMessage = {
+          originalWorkflowId: workflowId,
+          processedBy: 'lambda-integration',
+          s3Key: testKey,
+          processedAt: new Date().toISOString(),
+          status: 'processed'
+        };
 
-          const sqsCommand = new SendMessageCommand({
-            QueueUrl: queueUrl,
-            MessageBody: JSON.stringify(processedMessage),
-            MessageAttributes: {
-              workflowId: { StringValue: workflowId, DataType: 'String' },
-              source: { StringValue: 'integration-test', DataType: 'String' },
-              step: { StringValue: 'sqs-processing', DataType: 'String' }
-            },
-          });
+        const sqsCommand = new SendMessageCommand({
+          QueueUrl: queueUrl,
+          MessageBody: JSON.stringify(processedMessage),
+          MessageAttributes: {
+            workflowId: { StringValue: workflowId, DataType: 'String' },
+            source: { StringValue: 'integration-test', DataType: 'String' },
+            step: { StringValue: 'sqs-processing', DataType: 'String' }
+          },
+        });
 
-          const sqsResponse = await sqsClient.send(sqsCommand);
-          integrationResults.sqs_processing = !!sqsResponse.MessageId;
-        } else {
-          console.log('SQS Queue URL not found - skipping SQS processing step');
-          integrationResults.sqs_processing = true; // Skip gracefully
-        }
+        const sqsResponse = await sqsClient.send(sqsCommand);
+        integrationResults.sqs_processing = !!sqsResponse.MessageId;
 
         // Step 4: Test CloudFront accessibility
         const cloudFrontDomain = mappedOutputs.CloudFrontDomainName;
