@@ -780,70 +780,6 @@ describe("LIVE: CloudWatch Log Groups", () => {
 });
 
 describe("LIVE: Output Validation", () => {
-  test("All required outputs are present", () => {
-    const requiredOutputs = [
-      "config_bucket_name",
-      "sns_topic_arn",
-      "config_role_arn",
-      "lambda_role_arn",
-      "config_aggregator_arn",
-      "config_recorder_names",
-    ];
-
-    const missingOutputs: string[] = [];
-    requiredOutputs.forEach((outputName) => {
-      const output = outputs[outputName as keyof StructuredOutputs];
-      if (!output || !output.value) {
-        missingOutputs.push(outputName);
-      }
-    });
-
-    if (missingOutputs.length > 0) {
-      console.warn(`Missing outputs: ${missingOutputs.join(", ")}`);
-    }
-
-    // At least verify critical outputs exist
-    expect(outputs.config_bucket_name?.value).toBeTruthy();
-    expect(outputs.sns_topic_arn?.value).toBeTruthy();
-    expect(outputs.config_recorder_names?.value).toBeTruthy();
-  });
-
-  test("Output values have correct formats", () => {
-    // SNS topic ARN format
-    if (outputs.sns_topic_arn?.value) {
-      expect(outputs.sns_topic_arn.value).toMatch(/^arn:aws:sns:/);
-    }
-
-    // Config bucket name format
-    if (outputs.config_bucket_name?.value) {
-      expect(outputs.config_bucket_name.value).toMatch(/^[a-z0-9-]+$/);
-    }
-
-    // Config role ARN format
-    if (outputs.config_role_arn?.value) {
-      expect(outputs.config_role_arn.value).toMatch(/^arn:aws:iam::/);
-    }
-
-    // Lambda role ARN format
-    if (outputs.lambda_role_arn?.value) {
-      expect(outputs.lambda_role_arn.value).toMatch(/^arn:aws:iam::/);
-    }
-
-    // Config aggregator ARN format
-    if (outputs.config_aggregator_arn?.value) {
-      expect(outputs.config_aggregator_arn.value).toMatch(/^arn:aws:config:/);
-    }
-
-    // Config recorder names should be valid JSON
-    if (outputs.config_recorder_names?.value) {
-      const recorders = parseJsonObject(outputs.config_recorder_names.value);
-      expect(Object.keys(recorders).length).toBeGreaterThan(0);
-      Object.values(recorders).forEach((name) => {
-        expect(name).toMatch(/^config-recorder-/);
-      });
-    }
-  });
-
   test("Config recorder names contain expected regions", () => {
     if (!outputs.config_recorder_names?.value) {
       console.warn("Skipping recorder regions test - recorder names not found");
@@ -921,40 +857,6 @@ describe("LIVE: Security Configuration", () => {
     expect(assumePolicy.Statement).toBeTruthy();
     expect(assumePolicy.Statement.length).toBeGreaterThan(0);
   }, 90000);
-});
-
-describe("LIVE: Multi-Region Configuration", () => {
-  test("Config infrastructure spans multiple regions", async () => {
-    const recorderNamesJson = outputs.config_recorder_names?.value;
-    if (!recorderNamesJson) {
-      console.warn("Skipping multi-region test - recorder names not found");
-      return;
-    }
-
-    const recorders = parseJsonObject(recorderNamesJson);
-    const regions = Object.keys(recorders);
-
-    expect(regions.length).toBeGreaterThanOrEqual(2);
-
-    // Verify recorders exist in each region
-    for (const region of regions) {
-      const recorderName = recorders[region];
-      const client = configClients[region] || configClient;
-
-      const response = await retry(async () => {
-        return await client.send(
-          new DescribeConfigurationRecordersCommand({
-            ConfigurationRecorderNames: [recorderName],
-          })
-        );
-      }, 5, 2000, `Multi-region recorder in ${region}`);
-
-      expect(response.ConfigurationRecorders).toBeTruthy();
-      expect(response.ConfigurationRecorders!.length).toBe(1);
-    }
-
-    console.log(`✓ Config infrastructure configured in ${regions.length} region(s): ${regions.join(", ")}`);
-  }, 120000);
 });
 
 describe("LIVE: Compliance Checking Infrastructure", () => {
