@@ -31,7 +31,7 @@ export class TapStack extends pulumi.ComponentResource {
     const artifactBucket = new aws.s3.Bucket(
       `pipeline-artifacts-${environmentSuffix}`,
       {
-        bucket: `pipeline-artifacts-${environmentSuffix}-${pulumi.getStack()}`,
+        bucket: `pipeline-artifacts-${environmentSuffix.toLowerCase()}`,
         versioning: { enabled: true },
         serverSideEncryptionConfiguration: {
           rule: {
@@ -340,15 +340,23 @@ artifacts:
             },
           ],
         }),
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambda',
-        ],
+        managedPolicyArns: ['arn:aws:iam::aws:policy/AWSCodeDeployRole'],
         tags: tags,
       },
       { parent: this }
     );
 
-    // 11. CodeDeploy Application
+    // Attach Lambda-specific permissions to CodeDeploy role
+    new aws.iam.RolePolicyAttachment(
+      `codedeploy-lambda-${environmentSuffix}`,
+      {
+        role: codeDeployRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AWSLambda_FullAccess',
+      },
+      { parent: this }
+    );
+
+    // 12. CodeDeploy Application
     const deployApp = new aws.codedeploy.Application(
       `deploy-app-${environmentSuffix}`,
       {
@@ -359,7 +367,7 @@ artifacts:
       { parent: this }
     );
 
-    // 12. CodeDeploy Deployment Group
+    // 13. CodeDeploy Deployment Group
     const deploymentGroup = new aws.codedeploy.DeploymentGroup(
       `deploy-group-${environmentSuffix}`,
       {
@@ -385,7 +393,7 @@ artifacts:
       { parent: this }
     );
 
-    // 13. CodePipeline Role
+    // 14. CodePipeline Role
     const pipelineRole = new aws.iam.Role(
       `pipeline-role-${environmentSuffix}`,
       {
@@ -410,7 +418,7 @@ artifacts:
       { parent: this }
     );
 
-    // 14. CodePipeline
+    // 15. CodePipeline
     const pipeline = new aws.codepipeline.Pipeline(
       `pipeline-${environmentSuffix}`,
       {
