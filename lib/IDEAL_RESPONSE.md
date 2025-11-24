@@ -16,14 +16,34 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Tuple, Optional
 from collections import defaultdict
+from types import SimpleNamespace
 import boto3
-import pandas as pd
-import plotly.graph_objs as go
-import plotly.offline as pyo
-from plotly.subplots import make_subplots
 import warnings
 import os
 warnings.filterwarnings('ignore')
+
+try:
+    import pandas as pd
+except ImportError:  # pragma: no cover - optional dependency path
+    class MinimalDataFrame:  # pragma: no cover
+        """Lightweight fallback when pandas is unavailable."""
+
+        def __init__(self, rows):
+            self.rows = rows
+
+        def to_csv(self, path, index=False):
+            fieldnames = list(self.rows[0].keys()) if self.rows else []
+            with open(path, 'w', newline='') as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                if fieldnames:
+                    writer.writeheader()
+                for row in self.rows:
+                    writer.writerow(row)
+
+    pd = SimpleNamespace(DataFrame=MinimalDataFrame)
+import plotly.graph_objs as go
+import plotly.offline as pyo
+from plotly.subplots import make_subplots
 
 try:
     from tabulate import tabulate
@@ -1219,4 +1239,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 ```
