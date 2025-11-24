@@ -91,22 +91,23 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'AlbDnsName', {
       value: isSynthesis ? 'mock-alb-dns-name' : microservicesStack.albDnsName,
       description: 'ALB DNS Name',
-      exportName: 'AlbDnsName',
+      exportName: `AlbDnsName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'ClusterName', {
       value: isSynthesis ? 'mock-cluster-name' : microservicesStack.clusterName,
       description: 'ECS Cluster Name',
-      exportName: 'ClusterName',
+      exportName: `ClusterName-${environmentSuffix}`,
     });
 
-    // Only output mesh name if mesh was created and not in synthesis
-    if (!isSynthesis && microservicesStack.meshName) {
-      new cdk.CfnOutput(this, 'MeshName', {
-        value: microservicesStack.meshName,
-        description: 'App Mesh Name',
-        exportName: 'MeshName',
-      });
-    }
+    // Always output mesh name for integration tests
+    // Use placeholder when mesh is not created (e.g., in CI/CD mode)
+    new cdk.CfnOutput(this, 'MeshName', {
+      value: isSynthesis
+        ? 'mock-mesh-name'
+        : microservicesStack.meshName || 'not-deployed-cicd-mode',
+      description: 'App Mesh Name (or placeholder if not deployed)',
+      exportName: `MeshName-${environmentSuffix}`,
+    });
   }
 }
