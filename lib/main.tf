@@ -6,6 +6,9 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  # Backend configuration will be provided via command-line arguments
+  backend "s3" {}
 }
 
 provider "aws" {

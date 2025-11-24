@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix to prevent resource naming conflicts across parallel deployments"
   type        = string
+  default     = "dev"
 }
 
 variable "aws_region" {
