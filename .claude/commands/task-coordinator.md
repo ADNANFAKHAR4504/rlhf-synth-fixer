@@ -404,7 +404,8 @@ This PR contains auto-generated Infrastructure as Code for the specified task.
        rm -f "$TASK_JSON_FILE"
        
        # Check CSV status to determine if another agent is active
-       CURRENT_STATUS=$(grep "^${TASK_ID}," .claude/tasks.csv 2>/dev/null | cut -d',' -f2 | tr -d ' ')
+       # Use thread-safe method to read status (avoids race conditions)
+       CURRENT_STATUS=$(./.claude/scripts/task-manager.sh get-status "${TASK_ID}" 2>/dev/null || echo "")
        
        if [ "$CURRENT_STATUS" = "in_progress" ]; then
            echo "❌ ERROR: Task $TASK_ID is currently being processed by another agent"

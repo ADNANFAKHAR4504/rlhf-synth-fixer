@@ -264,6 +264,56 @@ select_task() {
         exit 1
     fi
     
+    # Extract task_id from result for validation
+    local selected_task_id
+    selected_task_id=$(echo "$result" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+    
+    if [ -z "$selected_task_id" ]; then
+        log_error "Failed to extract task_id from selection result"
+        exit 1
+    fi
+    
+    # VALIDATION: Check if worktree already exists (another agent may have claimed this task)
+    # This prevents race conditions where a task is selected but worktree was just created
+    local worktree_dir="${REPO_ROOT}/worktree/synth-${selected_task_id}"
+    if [ -d "$worktree_dir" ]; then
+        log_warn "Skipping task $selected_task_id - worktree already exists (another agent may have claimed it)"
+        # Recursively call select_task to find next available task
+        # This is safe because we're still within the locked section
+        local recursive_result
+        recursive_result=$(select_task)
+        if [ $? -ne 0 ] || [ -z "$recursive_result" ]; then
+            echo '{"error":"No available tasks found after validation"}' >&2
+            exit 1
+        fi
+        echo "$recursive_result"
+        return 0
+    fi
+    
+    # VALIDATION: Check for recent JSON files (within last 5 minutes)
+    # This catches cases where another agent just selected this task
+    local json_files=("${REPO_ROOT}/.claude/task-${selected_task_id}-"*.json)
+    if [ -f "${json_files[0]}" ]; then
+        local cutoff_time=$(($(date +%s) - 300))  # 5 minutes ago
+        for json_file in "${json_files[@]}"; do
+            if [ -f "$json_file" ]; then
+                local file_time=$(stat -f %m "$json_file" 2>/dev/null || stat -c %Y "$json_file" 2>/dev/null || echo 0)
+                if [ "$file_time" -gt "$cutoff_time" ]; then
+                    log_warn "Skipping task $selected_task_id - recent JSON file exists (another agent may have claimed it)"
+                    # Recursively call select_task to find next available task
+                    local recursive_result
+                    recursive_result=$(select_task)
+                    if [ $? -ne 0 ] || [ -z "$recursive_result" ]; then
+                        echo '{"error":"No available tasks found after validation"}' >&2
+                        exit 1
+                    fi
+                    echo "$recursive_result"
+                    return 0
+                fi
+            fi
+        done
+    fi
+    
     echo "$result"
 }
 
@@ -381,6 +431,58 @@ get_task() {
     
     # Simply grep for the task and output first match
     grep "^$task_id," "$CSV_FILE" | head -1
+}
+
+# Get task status safely (thread-safe, reads CSV with proper parsing)
+# Returns status as string: pending, in_progress, done, error, or empty if not found
+get_status() {
+    local task_id="$1"
+    [ ! -f "$CSV_FILE" ] && { echo ""; return 1; }
+    
+    # Parse CSV properly to extract status field (field 2)
+    awk -F',' -v task_id="$task_id" '
+    function parse_csv_line(line,    fields, n, i, current, in_quote) {
+        n = 0
+        current = ""
+        in_quote = 0
+        
+        for (i = 1; i <= length(line); i++) {
+            c = substr(line, i, 1)
+            
+            if (c == "\"") {
+                in_quote = !in_quote
+            } else if (c == "," && !in_quote) {
+                fields[++n] = current
+                current = ""
+            } else {
+                current = current c
+            }
+        }
+        fields[++n] = current
+        return n
+    }
+    
+    NR == 1 { next }  # Skip header
+    
+    {
+        num_fields = parse_csv_line($0, fields)
+        if (num_fields < 2) next
+        
+        # Extract task_id and status
+        current_task_id = fields[1]
+        status = fields[2]
+        
+        # Remove quotes
+        gsub(/^"|"$/, "", current_task_id)
+        gsub(/^"|"$/, "", status)
+        gsub(/^[ \t]+|[ \t]+$/, "", status)
+        
+        if (current_task_id == task_id) {
+            print (status == "" ? "pending" : status)
+            exit 0
+        }
+    }
+    ' "$CSV_FILE"
 }
 
 # Atomic select and update with file locking
@@ -656,6 +758,7 @@ case "${1:-help}" in
     update) shift; update_status "$@" ;;
     status) check_status ;;
     get) get_task "$2" ;;
+    get-status) get_status "$2" ;;
     select-and-update) select_and_update ;;
     mark-done) mark_done "$2" "$3" ;;
     mark-error) mark_error "$2" "$3" "$4" ;;
@@ -673,7 +776,9 @@ Commands:
     mark-done <id> <pr_number>      Mark task as done with PR number (locked)
     mark-error <id> <error_msg> [step]  Mark task as error (locked)
     status                          Show task distribution
-    get <id>                        Get task details
+    get <id>                        Get task details (CSV line)
+    get-status <id>                 Get task status safely (thread-safe, returns: pending/in_progress/done/error) (CSV line)
+    get-status <id>                 Get task status safely (thread-safe, returns: pending/in_progress/done/error)
 
 Environment:
     CSV_FILE        CSV path (default: .claude/tasks.csv)
