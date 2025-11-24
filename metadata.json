@@ -6,6 +6,10 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-24T00:39:33+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
   "aws_services": [
     "Aurora (RDS)",
     "DynamoDB",
@@ -18,9 +22,6 @@
     "Systems Manager",
     "VPC"
   ],
-  "subtask": "Failure Recovery and High Availability",
-  "subject_labels": [
-    "Failure Recovery Automation"
-  ],
+  "region": "us-east-1",
   "training_quality": 10
 }

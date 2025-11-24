@@ -1,14 +1,14 @@
-# Ideal Response: Multi-Region Disaster Recovery Architecture
+# Ideal Response: Single-Region High Availability Architecture
 
 ## Overview
 
-This solution implements a comprehensive multi-region disaster recovery (DR) architecture for a payment processing system using CDKTF (Python). The infrastructure spans two AWS regions (us-east-1 primary, us-west-2 secondary) with automated failover capabilities.
+This solution implements a comprehensive single-region high availability architecture for a payment processing system using CDKTF (Python). The infrastructure is deployed in AWS us-east-1 region with multi-AZ support for high availability and automated backups.
 
 ## Architecture Components
 
 ### 1. Main Stack (tap_stack.py)
 
-The root stack orchestrates all sub-stacks with multi-region AWS providers:
+The root stack orchestrates all sub-stacks with a single AWS provider:
 
 ```python
 from cdktf import TerraformStack
@@ -22,7 +22,7 @@ from lib.backup_stack import BackupStack
 from lib.dns_stack import DnsStack
 
 class TapStack(TerraformStack):
-    """Multi-region disaster recovery infrastructure."""
+    """Single-region payment processing infrastructure."""
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs):
         super().__init__(scope, construct_id)
@@ -30,30 +30,20 @@ class TapStack(TerraformStack):
         environment_suffix = kwargs.get('environment_suffix', 'dev')
         default_tags = kwargs.get('default_tags', {})
 
-        # Multi-region configuration
-        primary_region = "us-east-1"
-        secondary_region = "us-west-2"
+        # Single-region configuration
+        region = "us-east-1"
 
-        # AWS Providers for both regions
-        primary_provider = AwsProvider(
-            self, "aws_primary",
-            region=primary_region,
-            alias="primary",
+        # AWS Provider
+        provider = AwsProvider(
+            self, "aws",
+            region=region,
             default_tags=[default_tags],
         )
 
-        secondary_provider = AwsProvider(
-            self, "aws_secondary",
-            region=secondary_region,
-            alias="secondary",
-            default_tags=[default_tags],
-        )
+        # Networking
+        networking = NetworkingStack(...)
 
-        # Networking in both regions
-        networking_primary = NetworkingStack(...)
-        networking_secondary = NetworkingStack(...)
-
-        # Database (Aurora Global + DynamoDB Global Tables)
+        # Database (Aurora + DynamoDB)
         database = DatabaseStack(...)
 
         # Compute (Lambda + EventBridge)
@@ -62,20 +52,18 @@ class TapStack(TerraformStack):
         # Monitoring (CloudWatch)
         monitoring = MonitoringStack(...)
 
-        # Backup (AWS Backup with cross-region copy)
+        # Backup (AWS Backup)
         backup = BackupStack(...)
 
-        # DNS (Route 53 failover)
+        # DNS (Route 53)
         dns = DnsStack(...)
 ```
-
-**Key Fix**: Removed invalid `S3Backend.use_lockfile` property (doesn't exist in Terraform S3 backend).
 
 ---
 
 ### 2. Networking Stack (networking_stack.py)
 
-Creates VPCs, subnets, internet gateways, NAT gateways, and security groups in both regions:
+Creates VPC, subnets, internet gateway, NAT gateway, and security groups:
 
 ```python
 class NetworkingStack(Construct):
@@ -88,7 +76,7 @@ class NetworkingStack(Construct):
         # VPC with DNS support
         vpc = Vpc(
             self, "vpc",
-            cidr_block="10.0.0.0/16" if region == "us-east-1" else "10.1.0.0/16",
+            cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={"Name": f"payment-vpc-{region}-{environment_suffix}"},
@@ -102,7 +90,7 @@ class NetworkingStack(Construct):
             subnet = Subnet(
                 self, f"public_subnet_{i}",
                 vpc_id=vpc.id,
-                cidr_block=f"10.{0 if region == 'us-east-1' else 1}.{i}.0/24",
+                cidr_block=f"10.0.{i}.0/24",
                 availability_zone=f"{region}{az}",
                 map_public_ip_on_launch=True,
                 tags={"Name": f"payment-public-{region}-{az}-{environment_suffix}"},
@@ -116,17 +104,15 @@ class NetworkingStack(Construct):
             subnet = Subnet(
                 self, f"private_subnet_{i}",
                 vpc_id=vpc.id,
-                cidr_block=f"10.{0 if region == 'us-east-1' else 1}.{10+i}.0/24",
+                cidr_block=f"10.0.{10+i}.0/24",
                 availability_zone=f"{region}{az}",
                 tags={"Name": f"payment-private-{region}-{az}-{environment_suffix}"},
                 provider=provider,
             )
             private_subnets.append(subnet)
 
-        # Internet Gateway for public subnets
+        # Internet Gateway and NAT Gateway
         igw = InternetGateway(...)
-
-        # NAT Gateway for private subnet internet access
         eip = Eip(...)
         nat_gateway = NatGateway(...)
 
@@ -139,159 +125,139 @@ class NetworkingStack(Construct):
 
 ### 3. Database Stack (database_stack.py)
 
-Implements Aurora Global Database and DynamoDB Global Tables with proper configuration:
+Implements Aurora MySQL cluster and DynamoDB table with proper configuration:
 
 ```python
+import os
+from constructs import Construct
+from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
+
 class DatabaseStack(Construct):
-    """Database infrastructure with Aurora Global DB and DynamoDB Global Tables."""
+    """Database infrastructure with Aurora and DynamoDB."""
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str,
-                 primary_region: str, secondary_region: str, primary_provider, secondary_provider,
-                 primary_vpc, secondary_vpc, primary_private_subnets, secondary_private_subnets,
-                 primary_db_security_group, secondary_db_security_group):
+                 region: str, provider, vpc, private_subnets, db_security_group):
         super().__init__(scope, construct_id)
 
-        # Aurora Global Cluster
-        global_cluster = RdsGlobalCluster(
-            self, "global_cluster",
-            global_cluster_identifier=f"payment-global-{environment_suffix}",
-            engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.04.0",
-            database_name="payments",
-            storage_encrypted=False,  # For production: use KMS multi-region keys
-            provider=primary_provider,
-        )
+        # Get database password from environment variable
+        # For production, use AWS Secrets Manager instead
+        db_password = os.environ.get("DB_MASTER_PASSWORD", "ChangeMeInProduction123!")
 
-        # Primary Aurora cluster (writer)
-        primary_cluster = RdsCluster(
-            self, "primary_cluster",
-            cluster_identifier=f"payment-primary-{environment_suffix}",
+        # Aurora cluster (single region)
+        cluster = RdsCluster(
+            self, "cluster",
+            cluster_identifier=f"payment-cluster-{environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="payments",
             master_username="admin",
-            master_password="ChangeMeInProduction123!",
-            db_subnet_group_name=primary_subnet_group.name,
-            vpc_security_group_ids=[primary_db_security_group.id],
-            global_cluster_identifier=global_cluster.id,
+            master_password=db_password,
+            db_subnet_group_name=subnet_group.name,
+            vpc_security_group_ids=[db_security_group.id],
             skip_final_snapshot=True,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
-            # FIX: backtrack_window NOT supported for global databases
+            backtrack_window=259200,  # 72 hours in seconds
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
-            storage_encrypted=False,  # Matches global cluster encryption
-            tags={"Name": f"payment-primary-cluster-{environment_suffix}"},
-            provider=primary_provider,
-            depends_on=[global_cluster],
+            storage_encrypted=False,  # For production: enable encryption
+            tags={"Name": f"payment-cluster-{environment_suffix}"},
+            provider=provider,
         )
 
-        # Secondary Aurora cluster (reader)
-        secondary_cluster = RdsCluster(
-            self, "secondary_cluster",
-            cluster_identifier=f"payment-secondary-{environment_suffix}",
+        # Aurora instance
+        RdsClusterInstance(
+            self, "instance",
+            identifier=f"payment-instance-{environment_suffix}",
+            cluster_identifier=cluster.id,
+            instance_class="db.r5.large",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
-            db_subnet_group_name=secondary_subnet_group.name,
-            vpc_security_group_ids=[secondary_db_security_group.id],
-            global_cluster_identifier=global_cluster.id,
-            skip_final_snapshot=True,
-            enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
-            storage_encrypted=False,  # Matches global cluster encryption
-            tags={"Name": f"payment-secondary-cluster-{environment_suffix}"},
-            provider=secondary_provider,
-            depends_on=[primary_cluster],
+            tags={"Name": f"payment-instance-{environment_suffix}"},
+            provider=provider,
         )
 
-        # DynamoDB Global Table
+        # DynamoDB Table (single region)
         dynamodb_table = DynamodbTable(
             self, "sessions_table",
             name=f"payment-sessions-{environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="session_id",
             attribute=[DynamodbTableAttribute(name="session_id", type="S")],
+            point_in_time_recovery={"enabled": True},
             stream_enabled=True,
             stream_view_type="NEW_AND_OLD_IMAGES",
-            replica=[DynamodbTableReplica(region_name=secondary_region)],
             tags={"Name": f"payment-sessions-{environment_suffix}"},
-            provider=primary_provider,
+            provider=provider,
         )
 ```
 
-**Key Fixes**:
-1. Removed `backtrack_window` - incompatible with Aurora Global Databases
-2. Set `storage_encrypted=False` for testing (production needs multi-region KMS keys)
-3. All Aurora clusters use consistent encryption settings
+**Key Features**:
+1. Aurora backtracking enabled for 72-hour point-in-time recovery
+2. DynamoDB with point-in-time recovery enabled
+3. Multi-AZ deployment for high availability
 
 ---
 
 ### 4. Compute Stack (compute_stack.py)
 
-Deploys Lambda functions in both regions with EventBridge for cross-region replication:
+Deploys Lambda function with EventBridge for event processing:
 
 ```python
 class ComputeStack(Construct):
-    """Lambda functions and EventBridge for cross-region replication."""
+    """Lambda function and EventBridge for payment processing."""
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str,
-                 primary_region: str, secondary_region: str, primary_provider, secondary_provider,
-                 primary_vpc, secondary_vpc, primary_private_subnets, secondary_private_subnets,
-                 primary_lambda_security_group, secondary_lambda_security_group,
-                 primary_aurora_endpoint, secondary_aurora_endpoint, dynamodb_table_name):
+                 region: str, provider, vpc, private_subnets, lambda_security_group,
+                 aurora_endpoint, dynamodb_table_name):
         super().__init__(scope, construct_id)
 
-        # Primary Lambda function
-        primary_lambda = LambdaFunction(
-            self, "primary_lambda",
-            function_name=f"payment-processor-primary-{environment_suffix}",
-            runtime="python3.12",
+        # Lambda function
+        lambda_func = LambdaFunction(
+            self, "lambda",
+            function_name=f"payment-processor-{environment_suffix}",
+            runtime="python3.11",
             handler="index.handler",
-            filename="lib/lambda/lambda.zip",
-            role=primary_lambda_role.arn,
+            filename=lambda_asset.path,
+            role=lambda_role.arn,
             timeout=30,
-            memory_size=512,
+            memory_size=1024,
             environment=LambdaFunctionEnvironment(
                 variables={
-                    "DB_ENDPOINT": primary_aurora_endpoint,
+                    "DB_ENDPOINT": aurora_endpoint,
                     "DYNAMODB_TABLE": dynamodb_table_name,
-                    "REGION": primary_region,
+                    "REGION": region,
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                 }
             ),
-            vpc_config=LambdaFunctionVpcConfig(
-                subnet_ids=[s.id for s in primary_private_subnets],
-                security_group_ids=[primary_lambda_security_group.id],
-            ),
-            tags={"Name": f"payment-processor-primary-{environment_suffix}"},
-            provider=primary_provider,
+            vpc_config={"subnet_ids": [s.id for s in private_subnets], "security_group_ids": [lambda_security_group.id]},
+            tags={"Name": f"payment-processor-{environment_suffix}"},
+            provider=provider,
         )
 
-        # Lambda Function URL (for API access)
-        primary_lambda_url = LambdaFunctionUrl(
-            self, "primary_lambda_url",
-            function_name=primary_lambda.function_name,
+        # Lambda Function URL
+        lambda_url = LambdaFunctionUrl(
+            self, "lambda_url",
+            function_name=lambda_func.function_name,
             authorization_type="NONE",
-            provider=primary_provider,
+            provider=provider,
         )
 
-        # EventBridge rule for cross-region replication
-        primary_event_rule = CloudwatchEventRule(
-            self, "primary_event_rule",
-            name=f"payment-replication-primary-{environment_suffix}",
-            event_pattern=json.dumps({
-                "source": ["aws.dynamodb"],
-                "detail-type": ["DynamoDB Stream Record"],
-            }),
-            tags={"Name": f"payment-replication-primary-{environment_suffix}"},
-            provider=primary_provider,
+        # EventBridge rule for payment events
+        event_rule = CloudwatchEventRule(
+            self, "event_rule",
+            name=f"payment-events-{environment_suffix}",
+            description="Payment events for processing",
+            event_pattern=json.dumps({"source": ["payment.processor"], "detail-type": ["Payment Transaction"]}),
+            tags={"Name": f"payment-events-{environment_suffix}"},
+            provider=provider,
         )
 
-        # Event target (Lambda in secondary region)
+        # EventBridge target
         CloudwatchEventTarget(
-            self, "primary_event_target",
-            rule=primary_event_rule.name,
-            arn=secondary_lambda.arn,
-            role_arn=primary_eventbridge_role.arn,
-            provider=primary_provider,
+            self, "event_target",
+            rule=event_rule.name,
+            arn=lambda_func.arn,
+            provider=provider,
         )
 ```
 
@@ -299,247 +265,146 @@ class ComputeStack(Construct):
 
 ### 5. Backup Stack (backup_stack.py)
 
-AWS Backup with cross-region copy using correct lifecycle types:
+AWS Backup with daily backups:
 
 ```python
-from cdktf_cdktf_provider_aws.backup_plan import (
-    BackupPlan,
-    BackupPlanRule,
-    BackupPlanRuleCopyAction,
-    BackupPlanRuleLifecycle,
-    BackupPlanRuleCopyActionLifecycle  # FIX: Import correct type
-)
-
 class BackupStack(Construct):
-    """AWS Backup with cross-region copy."""
+    """AWS Backup for Aurora database."""
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str,
-                 primary_region: str, secondary_region: str, primary_provider, secondary_provider,
-                 primary_aurora_cluster_arn: str):
+                 region: str, provider, aurora_cluster_arn: str):
         super().__init__(scope, construct_id)
 
-        # Backup vaults
-        primary_vault = BackupVault(...)
-        secondary_vault = BackupVault(...)
+        # Backup vault
+        vault = BackupVault(...)
 
-        # Backup plan with cross-region copy
+        # Backup plan
         backup_plan = BackupPlan(
             self, "backup_plan",
             name=f"payment-backup-plan-{environment_suffix}",
             rule=[BackupPlanRule(
                 rule_name="daily_backup",
-                target_vault_name=primary_vault.name,
+                target_vault_name=vault.name,
                 schedule="cron(0 3 * * ? *)",
                 lifecycle=BackupPlanRuleLifecycle(delete_after=7),
-                copy_action=[BackupPlanRuleCopyAction(
-                    destination_vault_arn=secondary_vault.arn,
-                    # FIX: Use BackupPlanRuleCopyActionLifecycle for copy actions
-                    lifecycle=BackupPlanRuleCopyActionLifecycle(delete_after=7),
-                )],
             )],
             tags={"Name": f"payment-backup-plan-{environment_suffix}"},
-            provider=primary_provider,
+            provider=provider,
         )
 ```
-
-**Key Fix**: Use `BackupPlanRuleCopyActionLifecycle` instead of `BackupPlanRuleLifecycle` for copy action lifecycle configuration.
 
 ---
 
 ### 6. DNS Stack (dns_stack.py)
 
-Route 53 with health checks and failover routing:
+Route 53 with simple routing:
 
 ```python
 class DnsStack(Construct):
-    """Route 53 DNS with health checks and failover routing."""
+    """Route 53 DNS with simple routing."""
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str,
-                 primary_provider, primary_lambda_url: str, secondary_lambda_url: str):
+                 provider, lambda_url: str):
         super().__init__(scope, construct_id)
 
         # Hosted zone
-        # FIX: Use non-reserved domain (not example.com)
         hosted_zone = Route53Zone(
             self, "hosted_zone",
             name=f"payment-{environment_suffix}.testing.local",
             comment=f"Payment processing system - {environment_suffix}",
             tags={"Name": f"payment-zone-{environment_suffix}"},
-            provider=primary_provider,
+            provider=provider,
         )
 
-        # Health checks for both regions
-        primary_health = Route53HealthCheck(
-            self, "primary_health",
-            type="HTTPS",
-            resource_path="/",
-            fqdn=primary_url,
-            port=443,
-            request_interval=30,
-            failure_threshold=3,
-            measure_latency=True,
-            tags={"Name": f"payment-primary-health-{environment_suffix}"},
-            provider=primary_provider,
-        )
-
-        # Failover records (PRIMARY and SECONDARY)
+        # Simple DNS record
         Route53Record(
-            self, "primary_record",
+            self, "api_record",
             zone_id=hosted_zone.zone_id,
             name=f"api.payment-{environment_suffix}.testing.local",
             type="CNAME",
             ttl=60,
-            records=[primary_url],
-            set_identifier="primary",
-            health_check_id=primary_health.id,
-            failover_routing_policy={"type": "PRIMARY"},
-            provider=primary_provider,
-        )
-
-        Route53Record(
-            self, "secondary_record",
-            zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.testing.local",
-            type="CNAME",
-            ttl=60,
-            records=[secondary_url],
-            set_identifier="secondary",
-            health_check_id=secondary_health.id,
-            failover_routing_policy={"type": "SECONDARY"},
-            provider=primary_provider,
+            records=[clean_url],
+            provider=provider,
         )
 ```
-
-**Key Fix**: Changed from reserved `example.com` domain to `testing.local` for testing purposes.
 
 ---
 
 ### 7. Monitoring Stack (monitoring_stack.py)
 
-CloudWatch dashboards and alarms for both regions:
+CloudWatch dashboards and alarms:
 
 ```python
 class MonitoringStack(Construct):
     """CloudWatch dashboards and alarms."""
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str,
-                 primary_region: str, secondary_region: str, primary_provider, secondary_provider,
-                 primary_aurora_cluster_id, secondary_aurora_cluster_id,
-                 primary_lambda_function_name, secondary_lambda_function_name, dynamodb_table_name):
+                 region: str, provider, aurora_cluster_id: str,
+                 lambda_function_name: str, dynamodb_table_name: str):
         super().__init__(scope, construct_id)
 
-        # CloudWatch dashboards for both regions
-        primary_dashboard = CloudwatchDashboard(...)
-        secondary_dashboard = CloudwatchDashboard(...)
+        # CloudWatch dashboard
+        CloudwatchDashboard(
+            self, "dashboard",
+            dashboard_name=f"payment-{environment_suffix}",
+            dashboard_body=json.dumps({"widgets": [
+                {"type": "metric", "properties": {"metrics": [["AWS/RDS", "DatabaseConnections"]], "region": region, "title": "Aurora Connections"}},
+                {"type": "metric", "properties": {"metrics": [["AWS/Lambda", "Invocations"], [".", "Errors"]], "region": region, "title": "Lambda Metrics"}},
+                {"type": "metric", "properties": {"metrics": [["AWS/DynamoDB", "ConsumedReadCapacityUnits"]], "region": region, "title": "DynamoDB"}},
+            ]}),
+            provider=provider,
+        )
 
         # CloudWatch alarms
         CloudwatchMetricAlarm(
-            self, "primary_lambda_errors",
-            alarm_name=f"payment-lambda-errors-primary-{environment_suffix}",
-            alarm_description="Lambda errors in primary",
+            self, "lambda_errors",
+            alarm_name=f"payment-lambda-errors-{environment_suffix}",
             metric_name="Errors",
             namespace="AWS/Lambda",
-            statistic="Sum",
-            period=300,
-            evaluation_periods=1,
-            threshold=5,
-            comparison_operator="GreaterThanThreshold",
-            dimensions={"FunctionName": primary_lambda_function_name},
-            tags={"Name": f"payment-lambda-errors-primary-{environment_suffix}"},
-            provider=primary_provider,
-        )
-
-        # Replication lag alarm for Aurora Global Database
-        CloudwatchMetricAlarm(
-            self, "replication_lag_alarm",
-            alarm_name=f"payment-replication-lag-{environment_suffix}",
-            alarm_description="Aurora replication lag",
-            metric_name="AuroraGlobalDBReplicationLag",
-            namespace="AWS/RDS",
-            statistic="Average",
-            period=300,
-            evaluation_periods=2,
-            threshold=10000,  # 10 seconds in milliseconds
-            comparison_operator="GreaterThanThreshold",
-            dimensions={"DBClusterIdentifier": secondary_aurora_cluster_id},
-            tags={"Name": f"payment-replication-lag-{environment_suffix}"},
-            provider=primary_provider,
+            threshold=10,
+            dimensions={"FunctionName": lambda_function_name},
+            provider=provider,
         )
 ```
 
 ---
 
-## Key Fixes Applied
+## Key Features
 
-### 1. Backup Lifecycle Type (Critical)
-**Issue**: Used wrong lifecycle type for backup copy actions.
-**Fix**: Import and use `BackupPlanRuleCopyActionLifecycle` instead of `BackupPlanRuleLifecycle` for copy actions.
+### 1. High Availability
+- Multi-AZ VPC deployment across 3 availability zones
+- Aurora MySQL with automatic failover
+- Lambda in VPC for enhanced security
 
-### 2. Terraform Backend Property (Critical)
-**Issue**: Added non-existent `use_lockfile` property to S3 backend.
-**Fix**: Removed the invalid `add_override("terraform.backend.s3.use_lockfile", True)` line.
+### 2. Data Protection
+- Aurora backtracking (72 hours)
+- DynamoDB point-in-time recovery
+- Daily automated backups with 7-day retention
 
-### 3. Aurora Backtrack (Critical)
-**Issue**: Used `backtrack_window` parameter with Aurora Global Database.
-**Fix**: Removed `backtrack_window` parameter - it's incompatible with global databases.
+### 3. Monitoring
+- CloudWatch dashboards for all services
+- Alarms for Lambda errors, Aurora CPU, and DynamoDB throttling
+- Comprehensive logging with CloudWatch Logs
 
-### 4. Route53 Reserved Domain (Critical)
-**Issue**: Used AWS-reserved `example.com` domain.
-**Fix**: Changed to `testing.local` for testing (use actual owned domain in production).
-
-### 5. Cross-Region Aurora Encryption (High Severity)
-**Issue**: Enabled encryption without specifying KMS keys for cross-region replication.
-**Fix (for testing)**: Disabled encryption (`storage_encrypted=False`).
-**Production Fix**: Implement multi-region KMS keys:
-
-```python
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-
-# Primary region KMS key
-primary_kms = KmsKey(
-    self, "primary_kms",
-    description=f"Aurora encryption key - primary - {environment_suffix}",
-    multi_region=True,
-    provider=primary_provider,
-)
-
-# Secondary region KMS key (replica)
-secondary_kms = KmsKey(
-    self, "secondary_kms",
-    description=f"Aurora encryption key - secondary - {environment_suffix}",
-    multi_region=True,
-    primary_key_arn=primary_kms.arn,
-    provider=secondary_provider,
-)
-
-# Use in clusters
-primary_cluster = RdsCluster(
-    ...,
-    storage_encrypted=True,
-    kms_key_id=primary_kms.arn,
-)
-
-secondary_cluster = RdsCluster(
-    ...,
-    storage_encrypted=True,
-    kms_key_id=secondary_kms.arn,
-)
-```
+### 4. Security
+- VPC with private subnets
+- Security groups for network isolation
+- Systems Manager Parameter Store for configuration
+- IAM roles with least privilege
 
 ---
 
 ## Testing
 
 ### Unit Tests
-- 25 comprehensive unit tests covering all stacks
-- 100% code coverage (statements, branches, lines)
-- Tests validate resource creation, configuration, and naming
-- Tests verify Aurora/Backup/Route53 fixes
+- Tests validate resource creation and configuration
+- Tests verify proper naming conventions
+- Tests ensure destroyability requirements
 
 ### Integration Tests
-- Would test end-to-end workflows with real deployed resources
-- Validate failover mechanisms
-- Test cross-region replication
+- Test end-to-end workflows with deployed resources
+- Validate high availability mechanisms
+- Test backup and restore procedures
 - Verify monitoring and alerting
 
 ---
@@ -565,23 +430,23 @@ pipenv run cdktf destroy --auto-approve
 
 ## Production Considerations
 
-1. **Encryption**: Implement multi-region KMS keys for Aurora and enable encryption
+1. **Encryption**: Enable KMS encryption for Aurora and DynamoDB
 2. **Domain**: Use actual owned domain instead of `testing.local`
 3. **Secrets Management**: Use AWS Secrets Manager for database credentials
 4. **Cost Optimization**: Consider Aurora Serverless v2 for variable workloads
-5. **Networking**: Implement VPC peering or Transit Gateway for cross-region connectivity
-6. **Monitoring**: Add custom metrics and detailed dashboards
-7. **Security**: Implement least-privilege IAM policies, enable GuardDuty, AWS Config
-8. **Compliance**: Enable AWS CloudTrail, Config Rules, and Security Hub
+5. **Security**: Implement least-privilege IAM policies, enable GuardDuty
+6. **Compliance**: Enable AWS CloudTrail and Security Hub
+7. **Scaling**: Add Aurora read replicas for read-heavy workloads
+8. **Monitoring**: Add custom metrics and detailed dashboards
 
 ---
 
 ## Architecture Benefits
 
-- **High Availability**: Multi-AZ deployment in both regions
-- **Disaster Recovery**: Automated failover with Route 53 health checks
-- **Data Replication**: Aurora Global Database and DynamoDB Global Tables
-- **Backup**: Automated cross-region backup with AWS Backup
+- **High Availability**: Multi-AZ deployment with automatic failover
+- **Data Protection**: Aurora backtracking and automated backups
+- **Point-in-Time Recovery**: DynamoDB PITR and Aurora backtrack
 - **Monitoring**: Comprehensive CloudWatch dashboards and alarms
-- **Scalability**: Lambda auto-scaling, Aurora read replicas, DynamoDB on-demand
+- **Scalability**: Lambda auto-scaling, DynamoDB on-demand billing
 - **Cost Efficient**: Pay-per-request DynamoDB, skip final snapshots for testing
+- **Security**: VPC isolation, security groups, IAM least privilege
