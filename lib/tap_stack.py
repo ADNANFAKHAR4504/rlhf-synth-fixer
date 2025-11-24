@@ -300,7 +300,17 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_sqs_queues(self):
         """Create SQS FIFO queues for transaction processing."""
-        # Dead letter queue for failed transactions (created first)
+        # Standard dead letter queue for Lambda functions (FIFO not supported for Lambda DLQ)
+        self.lambda_dead_letter_queue = aws.sqs.Queue(
+            f"tap-lambda-dlq-{self.environment_suffix}",
+            name=f"tap-lambda-dlq-{self.environment_suffix}",
+            kms_master_key_id=self.kms_key.key_id,
+            message_retention_seconds=1209600,  # 14 days
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # FIFO dead letter queue for SQS redrive policy
         self.dead_letter_queue = aws.sqs.Queue(
             f"tap-transactions-dlq-{self.environment_suffix}.fifo",
             name=f"tap-transactions-dlq-{self.environment_suffix}.fifo",
@@ -400,6 +410,7 @@ class TapStack(pulumi.ComponentResource):
                 self.transaction_queue.arn,
                 self.priority_queue.arn,
                 self.dead_letter_queue.arn,
+                self.lambda_dead_letter_queue.arn,
                 self.processing_table.arn,
                 self.fraud_table.arn,
                 self.reports_bucket.arn,
@@ -420,7 +431,8 @@ class TapStack(pulumi.ComponentResource):
                         "Resource": [
                             """ + f'"{args[0]}"' + """,
                             """ + f'"{args[1]}"' + """,
-                            """ + f'"{args[2]}"' + """
+                            """ + f'"{args[2]}"' + """,
+                            """ + f'"{args[3]}"' + """
                         ]
                     },
                     {
@@ -434,10 +446,10 @@ class TapStack(pulumi.ComponentResource):
                             "dynamodb:Scan"
                         ],
                         "Resource": [
-                            """ + f'"{args[3]}"' + """,
-                            """ + f'"{args[3]}/index/*"' + """,
                             """ + f'"{args[4]}"' + """,
-                            """ + f'"{args[4]}/index/*"' + """
+                            """ + f'"{args[4]}/index/*"' + """,
+                            """ + f'"{args[5]}"' + """,
+                            """ + f'"{args[5]}/index/*"' + """
                         ]
                     },
                     {
@@ -447,7 +459,7 @@ class TapStack(pulumi.ComponentResource):
                             "s3:PutObject",
                             "s3:DeleteObject"
                         ],
-                        "Resource": """ + f'"{args[5]}/*"' + """
+                        "Resource": """ + f'"{args[6]}/*"' + """
                     },
                     {
                         "Effect": "Allow",
@@ -455,8 +467,8 @@ class TapStack(pulumi.ComponentResource):
                             "sns:Publish"
                         ],
                         "Resource": [
-                            """ + f'"{args[6]}"' + """,
-                            """ + f'"{args[7]}"' + """
+                            """ + f'"{args[7]}"' + """,
+                            """ + f'"{args[8]}"' + """
                         ]
                     },
                     {
@@ -465,7 +477,7 @@ class TapStack(pulumi.ComponentResource):
                             "kms:Decrypt",
                             "kms:GenerateDataKey"
                         ],
-                        "Resource": """ + f'"{args[8]}"' + """
+                        "Resource": """ + f'"{args[9]}"' + """
                     },
                     {
                         "Effect": "Allow",
@@ -535,7 +547,7 @@ class TapStack(pulumi.ComponentResource):
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
             code=pulumi.FileArchive("./lib/lambda"),
             dead_letter_config=aws.lambda_.FunctionDeadLetterConfigArgs(
-                target_arn=self.dead_letter_queue.arn
+                target_arn=self.lambda_dead_letter_queue.arn
             ),
             tags=self.tags,
             opts=ResourceOptions(parent=self)
@@ -547,7 +559,6 @@ class TapStack(pulumi.ComponentResource):
             event_source_arn=self.transaction_queue.arn,
             function_name=self.transaction_processor.name,
             batch_size=10,
-            maximum_batching_window_in_seconds=5,
             opts=ResourceOptions(parent=self)
         )
 
@@ -584,7 +595,6 @@ class TapStack(pulumi.ComponentResource):
             event_source_arn=self.priority_queue.arn,
             function_name=self.priority_processor.name,
             batch_size=5,
-            maximum_batching_window_in_seconds=2,
             opts=ResourceOptions(parent=self)
         )
 
