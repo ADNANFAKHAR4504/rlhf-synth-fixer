@@ -212,8 +212,8 @@ class TapStack(TerraformStack):
                 "map_public_ip_on_launch": True,
                 "tags": {**self.common_tags, "Name": f"healthcare-dr-subnet-{region_name}-v1-{az}-{self.environment_suffix}"}
             }
-            if provider_alias:
-                kwargs["provider"] = f"aws.{provider_alias}"
+            if provider:
+                kwargs["provider"] = provider
 
             subnet = Subnet(
                 self,
