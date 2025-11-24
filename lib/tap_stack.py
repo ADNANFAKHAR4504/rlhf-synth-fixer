@@ -507,19 +507,7 @@ class TapStack(pulumi.ComponentResource):
             layer_name=f"tap-common-dependencies-{self.environment_suffix}",
             description="Common dependencies for TAP transaction processing",
             compatible_runtimes=["python3.11"],
-            code=aws.lambda_.LayerVersionCodeArgs(
-                zip_file="""
-import base64
-import json
-import os
-import zipfile
-import tempfile
-
-# Create a simple lambda layer with common utilities
-def create_layer():
-    pass
-"""
-            ),
+            code=pulumi.FileArchive("./lambda"),
             opts=ResourceOptions(parent=self)
         )
 
