@@ -2601,14 +2601,14 @@ resource "aws_appautoscaling_policy" "ecs_secondary_cpu" {
 
 # Lambda function for automated DR drills
 resource "aws_lambda_function" "automated_dr_drill" {
-  provider      = aws.primary
-  filename      = "${path.module}/lambda/dr_drill.zip"
-  function_name = "${var.app_name}-dr-drill"
-  role          = aws_iam_role.lambda_failover_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
-  timeout       = 600
-  memory_size   = 512
+  provider         = aws.primary
+  filename         = "${path.module}/lambda/dr_drill.zip"
+  function_name    = "${var.app_name}-dr-drill"
+  role            = aws_iam_role.lambda_failover_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  timeout         = 600
+  memory_size     = 512
 
   environment {
     variables = {
@@ -2616,8 +2616,8 @@ resource "aws_lambda_function" "automated_dr_drill" {
       SECONDARY_HEALTH_CHECK_ID = aws_route53_health_check.secondary.id
       PRIMARY_DB_ENDPOINT       = aws_rds_cluster.primary.endpoint
       SECONDARY_DB_ENDPOINT     = aws_rds_cluster.secondary.endpoint
-      SNS_TOPIC_ARN             = aws_sns_topic.alerts.arn
-      DYNAMODB_TABLE_NAME       = aws_dynamodb_table.primary.name
+      SNS_TOPIC_ARN            = aws_sns_topic.alerts.arn
+      DYNAMODB_TABLE_NAME      = aws_dynamodb_table.primary.name
     }
   }
 
@@ -2684,16 +2684,16 @@ resource "aws_budgets_budget" "dr_infrastructure" {
   notification {
     comparison_operator        = "GREATER_THAN"
     threshold                  = 80
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "ACTUAL"
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "ACTUAL"
     subscriber_email_addresses = ["ops@example.com"]
   }
 
   notification {
     comparison_operator        = "GREATER_THAN"
     threshold                  = 100
-    threshold_type             = "PERCENTAGE"
-    notification_type          = "FORECASTED"
+    threshold_type            = "PERCENTAGE"
+    notification_type         = "FORECASTED"
     subscriber_email_addresses = ["ops@example.com"]
   }
 }
@@ -2704,18 +2704,18 @@ resource "aws_budgets_budget" "dr_infrastructure" {
 
 # X-Ray sampling rule for distributed tracing
 resource "aws_xray_sampling_rule" "trading_platform" {
-  provider       = aws.primary
-  rule_name      = "${var.app_name}-sampling"
-  priority       = 1000
-  version        = 1
+  provider      = aws.primary
+  rule_name     = "${var.app_name}-sampling"
+  priority      = 1000
+  version       = 1
   reservoir_size = 1
-  fixed_rate     = 0.05
-  url_path       = "*"
-  host           = "*"
-  http_method    = "*"
-  service_type   = "*"
-  service_name   = var.app_name
-  resource_arn   = "*"
+  fixed_rate    = 0.05
+  url_path      = "*"
+  host          = "*"
+  http_method   = "*"
+  service_type  = "*"
+  service_name  = var.app_name
+  resource_arn  = "*"
 
   attributes = {
     Environment = var.environment
@@ -2930,20 +2930,20 @@ resource "aws_secretsmanager_secret_version" "db_master_password" {
 
 # Lambda function for secret rotation
 resource "aws_lambda_function" "rotate_secret" {
-  provider      = aws.primary
-  filename      = "${path.module}/lambda/rotate_secret.zip"
-  function_name = "${var.app_name}-rotate-secret"
-  role          = aws_iam_role.lambda_rotation_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
-  timeout       = 300
-  memory_size   = 256
+  provider         = aws.primary
+  filename         = "${path.module}/lambda/rotate_secret.zip"
+  function_name    = "${var.app_name}-rotate-secret"
+  role            = aws_iam_role.lambda_rotation_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  timeout         = 300
+  memory_size     = 256
 
   environment {
     variables = {
-      DB_CLUSTER_ID    = aws_rds_cluster.primary.id
-      DB_USERNAME      = var.db_username
-      SECONDARY_REGION = var.secondary_region
+      DB_CLUSTER_ID     = aws_rds_cluster.primary.id
+      DB_USERNAME       = var.db_username
+      SECONDARY_REGION  = var.secondary_region
     }
   }
 
@@ -3103,22 +3103,22 @@ resource "aws_cloudwatch_metric_alarm" "error_budget_exhausted" {
 
 # Lambda for SLO calculation and error budget tracking
 resource "aws_lambda_function" "slo_calculator" {
-  provider      = aws.primary
-  filename      = "${path.module}/lambda/slo_calculator.zip"
-  function_name = "${var.app_name}-slo-calculator"
-  role          = aws_iam_role.lambda_failover_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
-  timeout       = 300
-  memory_size   = 256
+  provider         = aws.primary
+  filename         = "${path.module}/lambda/slo_calculator.zip"
+  function_name    = "${var.app_name}-slo-calculator"
+  role            = aws_iam_role.lambda_failover_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  timeout         = 300
+  memory_size     = 256
 
   environment {
     variables = {
-      SLO_TARGET           = "99.99"
-      METRIC_NAMESPACE     = "TradingPlatform/SLO"
-      PRIMARY_ALB_ARN      = aws_lb.primary.arn
-      SECONDARY_ALB_ARN    = aws_lb.secondary.arn
-      CLOUDWATCH_LOG_GROUP = aws_cloudwatch_log_group.ecs_primary.name
+      SLO_TARGET            = "99.99"
+      METRIC_NAMESPACE      = "TradingPlatform/SLO"
+      PRIMARY_ALB_ARN       = aws_lb.primary.arn
+      SECONDARY_ALB_ARN     = aws_lb.secondary.arn
+      CLOUDWATCH_LOG_GROUP  = aws_cloudwatch_log_group.ecs_primary.name
     }
   }
 
@@ -3328,9 +3328,9 @@ output "config_rules" {
   description = "AWS Config rules for compliance validation"
   value = {
     encrypted_volumes = aws_config_config_rule.encrypted_volumes.name
-    rds_encryption    = aws_config_config_rule.rds_encryption.name
-    cloudtrail        = aws_config_config_rule.cloudtrail_enabled.name
-    iam_password      = aws_config_config_rule.iam_password_policy.name
+    rds_encryption   = aws_config_config_rule.rds_encryption.name
+    cloudtrail       = aws_config_config_rule.cloudtrail_enabled.name
+    iam_password     = aws_config_config_rule.iam_password_policy.name
   }
 }
 
@@ -3343,9 +3343,9 @@ output "secrets_manager_secret_arn" {
 output "secrets_rotation_enabled" {
   description = "Secret rotation configuration"
   value = {
-    enabled             = true
-    rotation_days       = 30
-    rotation_lambda_arn = aws_lambda_function.rotate_secret.arn
+    enabled               = true
+    rotation_days         = 30
+    rotation_lambda_arn   = aws_lambda_function.rotate_secret.arn
   }
 }
 
@@ -3368,7 +3368,7 @@ output "custom_metrics" {
   description = "Custom CloudWatch metrics for business KPIs"
   value = {
     trade_execution_latency = "TradingPlatform/TradeExecutionTime"
-    error_rate              = "TradingPlatform/ErrorRate"
-    error_budget            = "TradingPlatform/SLO/ErrorBudgetRemaining"
+    error_rate             = "TradingPlatform/ErrorRate"
+    error_budget           = "TradingPlatform/SLO/ErrorBudgetRemaining"
   }
 }

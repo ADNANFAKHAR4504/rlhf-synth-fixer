@@ -141,7 +141,7 @@ output "launch_template_blue_id" {
 }
 
 output "launch_template_green_id" {
-  description = "Launch template ID for green environment"
+  description = "Launch template ID for green environment"  
   value       = aws_launch_template.app_eu_central_1.id
 }
 

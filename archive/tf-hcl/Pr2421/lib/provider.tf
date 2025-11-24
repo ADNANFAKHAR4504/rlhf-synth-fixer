@@ -3,7 +3,7 @@
 terraform {
   required_version = ">= 1.4.0"
 
-  required_providers {
+required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
@@ -17,7 +17,7 @@ terraform {
       version = "~> 4.0"
     }
   }
-
+  
   backend "s3" {
   }
 }
@@ -26,7 +26,7 @@ terraform {
 provider "aws" {
   alias  = "use1"
   region = "us-east-1"
-
+  
   default_tags {
     tags = local.common_tags
   }
@@ -36,7 +36,7 @@ provider "aws" {
 provider "aws" {
   alias  = "usw2"
   region = "us-west-2"
-
+  
   default_tags {
     tags = local.common_tags
   }

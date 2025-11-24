@@ -44,9 +44,9 @@ locals {
     ManagedBy   = "Terraform"
     CreatedAt   = timestamp()
   }
-
+  
   azs = ["${var.region}a", "${var.region}b"]
-
+  
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
 }
@@ -59,17 +59,17 @@ locals {
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-
+  
   filter {
     name   = "root-device-type"
     values = ["ebs"]
@@ -87,7 +87,7 @@ resource "aws_kms_key" "s3_encryption" {
   description             = "KMS key for S3 bucket encryption - ${var.resource_suffix}"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-
+  
   tags = merge(local.common_tags, {
     Name = "s3-kms-key-${var.resource_suffix}"
   })
@@ -107,7 +107,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "main-vpc-${var.resource_suffix}"
   })
@@ -116,7 +116,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
+  
   tags = merge(local.common_tags, {
     Name = "main-igw-${var.resource_suffix}"
   })
@@ -126,11 +126,11 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   count  = 2
   domain = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "nat-eip-${count.index + 1}-${var.resource_suffix}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -141,7 +141,7 @@ resource "aws_subnet" "public" {
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "public-subnet-${count.index + 1}-${var.resource_suffix}"
     Type = "Public"
@@ -154,7 +154,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "private-subnet-${count.index + 1}-${var.resource_suffix}"
     Type = "Private"
@@ -166,23 +166,23 @@ resource "aws_nat_gateway" "main" {
   count         = 2
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "nat-gateway-${count.index + 1}-${var.resource_suffix}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "public-rt-${var.resource_suffix}"
     Type = "Public"
@@ -193,12 +193,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "private-rt-${count.index + 1}-${var.resource_suffix}"
     Type = "Private"
@@ -226,7 +226,7 @@ resource "aws_route_table_association" "private" {
 # S3 Bucket for VPC Flow Logs
 resource "aws_s3_bucket" "vpc_flow_logs" {
   bucket = "vpc-flow-logs-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}"
-
+  
   tags = merge(local.common_tags, {
     Name = "vpc-flow-logs-${var.resource_suffix}"
   })
@@ -234,7 +234,7 @@ resource "aws_s3_bucket" "vpc_flow_logs" {
 
 resource "aws_s3_bucket_public_access_block" "vpc_flow_logs" {
   bucket = aws_s3_bucket.vpc_flow_logs.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -243,11 +243,11 @@ resource "aws_s3_bucket_public_access_block" "vpc_flow_logs" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs" {
   bucket = aws_s3_bucket.vpc_flow_logs.id
-
+  
   rule {
     id     = "delete-old-logs"
     status = "Enabled"
-
+    
     expiration {
       days = 30
     }
@@ -258,7 +258,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flowlogs/${var.resource_suffix}"
   retention_in_days = 7
-
+  
   tags = merge(local.common_tags, {
     Name = "vpc-flow-logs-${var.resource_suffix}"
   })
@@ -267,7 +267,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_logs" {
   name = "vpc-flow-logs-role-${var.resource_suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -280,14 +280,14 @@ resource "aws_iam_role" "vpc_flow_logs" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
   name = "vpc-flow-logs-policy-${var.resource_suffix}"
   role = aws_iam_role.vpc_flow_logs.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -309,8 +309,8 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 # VPC Flow Logs
 # VPC Flow Logs (fixed usage)
 resource "aws_flow_log" "main" {
-  vpc_id       = aws_vpc.main.id
-  traffic_type = "ALL"
+  vpc_id               = aws_vpc.main.id
+  traffic_type         = "ALL"
 
   # Explicitly declare destination type for CloudWatch Logs
   log_destination_type = "cloud-watch-logs"
@@ -339,7 +339,7 @@ resource "aws_security_group" "ec2_instances" {
   name        = "ec2-instances-sg-${var.resource_suffix}"
   description = "Security group for EC2 instances in private subnets"
   vpc_id      = aws_vpc.main.id
-
+  
   # Allow outbound HTTPS for AWS service communication
   egress {
     from_port   = 443
@@ -348,7 +348,7 @@ resource "aws_security_group" "ec2_instances" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS outbound for AWS services"
   }
-
+  
   # Allow outbound HTTP for package updates
   egress {
     from_port   = 80
@@ -357,7 +357,7 @@ resource "aws_security_group" "ec2_instances" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP outbound for package updates"
   }
-
+  
   # Allow all outbound traffic to VPC CIDR
   egress {
     from_port   = 0
@@ -366,7 +366,7 @@ resource "aws_security_group" "ec2_instances" {
     cidr_blocks = [var.vpc_cidr]
     description = "All traffic within VPC"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "ec2-instances-sg-${var.resource_suffix}"
   })
@@ -379,7 +379,7 @@ resource "aws_security_group" "ec2_instances" {
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_instance" {
   name = "ec2-instance-role-${var.resource_suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -392,7 +392,7 @@ resource "aws_iam_role" "ec2_instance" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -400,7 +400,7 @@ resource "aws_iam_role" "ec2_instance" {
 resource "aws_iam_policy" "ec2_s3_access" {
   name        = "ec2-s3-access-policy-${var.resource_suffix}"
   description = "Policy for EC2 instances to access specific S3 bucket"
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -434,7 +434,7 @@ resource "aws_iam_policy" "ec2_s3_access" {
 resource "aws_iam_policy" "ec2_cloudwatch" {
   name        = "ec2-cloudwatch-policy-${var.resource_suffix}"
   description = "Policy for EC2 instances to send metrics to CloudWatch"
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -484,7 +484,7 @@ resource "aws_iam_instance_profile" "ec2_instance" {
 # Main S3 Bucket (Non-public)
 resource "aws_s3_bucket" "main" {
   bucket = "app-data-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}"
-
+  
   tags = merge(local.common_tags, {
     Name = "app-data-bucket-${var.resource_suffix}"
   })
@@ -493,7 +493,7 @@ resource "aws_s3_bucket" "main" {
 # S3 Bucket for Server Access Logging
 resource "aws_s3_bucket" "logs" {
   bucket = "s3-access-logs-${data.aws_caller_identity.current.account_id}-${var.resource_suffix}"
-
+  
   tags = merge(local.common_tags, {
     Name = "s3-logs-bucket-${var.resource_suffix}"
   })
@@ -502,7 +502,7 @@ resource "aws_s3_bucket" "logs" {
 # Block public access for main bucket
 resource "aws_s3_bucket_public_access_block" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -512,7 +512,7 @@ resource "aws_s3_bucket_public_access_block" "main" {
 # Block public access for logs bucket
 resource "aws_s3_bucket_public_access_block" "logs" {
   bucket = aws_s3_bucket.logs.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -522,7 +522,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 # Enable versioning on main bucket
 resource "aws_s3_bucket_versioning" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -531,7 +531,7 @@ resource "aws_s3_bucket_versioning" "main" {
 # Enable server-side encryption with KMS
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_encryption.arn
@@ -543,7 +543,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 # Enable access logging for main bucket
 resource "aws_s3_bucket_logging" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   target_bucket = aws_s3_bucket.logs.id
   target_prefix = "access-logs/"
 }
@@ -551,15 +551,15 @@ resource "aws_s3_bucket_logging" "main" {
 # S3 Bucket Policy for main bucket
 resource "aws_s3_bucket_policy" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
+        Sid    = "DenyInsecureConnections"
+        Effect = "Deny"
         Principal = "*"
-        Action    = "s3:*"
+        Action = "s3:*"
         Resource = [
           aws_s3_bucket.main.arn,
           "${aws_s3_bucket.main.arn}/*"
@@ -608,25 +608,25 @@ resource "aws_instance" "private_1" {
   subnet_id              = aws_subnet.private[0].id
   vpc_security_group_ids = [aws_security_group.ec2_instances.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_instance.name
-
-  monitoring = true # Enable detailed monitoring
-
+  
+  monitoring = true  # Enable detailed monitoring
+  
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required" # IMDSv2
+    http_tokens                 = "required"  # IMDSv2
     http_put_response_hop_limit = 1
   }
-
+  
   root_block_device {
     encrypted   = true
     volume_type = "gp3"
     volume_size = 20
-
+    
     tags = merge(local.common_tags, {
       Name = "ec2-root-volume-1-${var.resource_suffix}"
     })
   }
-
+  
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -669,7 +669,7 @@ resource "aws_instance" "private_1" {
       -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
   EOF
   )
-
+  
   tags = merge(local.common_tags, {
     Name = "private-instance-1-${var.resource_suffix}"
   })
@@ -682,25 +682,25 @@ resource "aws_instance" "private_2" {
   subnet_id              = aws_subnet.private[1].id
   vpc_security_group_ids = [aws_security_group.ec2_instances.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_instance.name
-
+  
   monitoring = true
-
+  
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
   }
-
+  
   root_block_device {
     encrypted   = true
     volume_type = "gp3"
     volume_size = 20
-
+    
     tags = merge(local.common_tags, {
       Name = "ec2-root-volume-2-${var.resource_suffix}"
     })
   }
-
+  
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -743,7 +743,7 @@ resource "aws_instance" "private_2" {
       -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
   EOF
   )
-
+  
   tags = merge(local.common_tags, {
     Name = "private-instance-2-${var.resource_suffix}"
   })
@@ -756,7 +756,7 @@ resource "aws_instance" "private_2" {
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "ec2-monitoring-${var.resource_suffix}"
-
+  
   dashboard_body = jsonencode({
     widgets = [
       {
@@ -791,11 +791,11 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
   statistic           = "Average"
   threshold           = 80
   alarm_description   = "This metric monitors EC2 cpu utilization"
-
+  
   dimensions = {
     InstanceId = count.index == 0 ? aws_instance.private_1.id : aws_instance.private_2.id
   }
-
+  
   tags = local.common_tags
 }
 

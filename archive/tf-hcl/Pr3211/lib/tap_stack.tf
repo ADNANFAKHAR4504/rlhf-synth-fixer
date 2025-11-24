@@ -324,7 +324,7 @@ resource "aws_route_table" "private_us_east_1" {
   provider = aws.us_east_1
   for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(var.private_subnet_cidrs_us_east_1))[0] } : var.private_subnet_cidrs_us_east_1
   vpc_id   = aws_vpc.us_east_1.id
-
+  
   dynamic "route" {
     for_each = var.enable_nat_gateway ? [1] : []
     content {
@@ -332,7 +332,7 @@ resource "aws_route_table" "private_us_east_1" {
       nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_east_1[sort(keys(aws_nat_gateway.us_east_1))[0]].id : aws_nat_gateway.us_east_1[each.key].id
     }
   }
-
+  
   tags = merge(local.base_tags, { Name = var.one_nat_gateway_per_region ? "${var.app_name}-rt-private-east1" : "${var.app_name}-rt-private-${each.key}" })
 }
 
@@ -423,7 +423,7 @@ resource "aws_route_table" "private_us_west_2" {
   provider = aws.us_west_2
   for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(var.private_subnet_cidrs_us_west_2))[0] } : var.private_subnet_cidrs_us_west_2
   vpc_id   = aws_vpc.us_west_2.id
-
+  
   dynamic "route" {
     for_each = var.enable_nat_gateway ? [1] : []
     content {
@@ -431,7 +431,7 @@ resource "aws_route_table" "private_us_west_2" {
       nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_west_2[sort(keys(aws_nat_gateway.us_west_2))[0]].id : aws_nat_gateway.us_west_2[each.key].id
     }
   }
-
+  
   tags = merge(local.base_tags, { Name = var.one_nat_gateway_per_region ? "${var.app_name}-rt-private-west2" : "${var.app_name}-rt-private-${each.key}" })
 }
 
@@ -635,8 +635,8 @@ resource "aws_kms_key" "s3_us_east_1" {
   description             = "KMS CMK for S3 us-east-1"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -649,7 +649,7 @@ resource "aws_kms_key" "s3_us_east_1" {
         Sid       = "AllowS3"
         Effect    = "Allow"
         Principal = { Service = "s3.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -668,8 +668,8 @@ resource "aws_kms_key" "lambda_us_east_1" {
   description             = "KMS CMK for Lambda us-east-1"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -682,7 +682,7 @@ resource "aws_kms_key" "lambda_us_east_1" {
         Sid       = "AllowLambdaService"
         Effect    = "Allow"
         Principal = { Service = "lambda.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -701,8 +701,8 @@ resource "aws_kms_key" "rds_us_east_1" {
   description             = "KMS CMK for RDS us-east-1"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -715,7 +715,7 @@ resource "aws_kms_key" "rds_us_east_1" {
         Sid       = "AllowRDSService"
         Effect    = "Allow"
         Principal = { Service = "rds.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -734,8 +734,8 @@ resource "aws_kms_key" "logs_us_east_1" {
   description             = "KMS CMK for CloudWatch Logs us-east-1"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -748,7 +748,7 @@ resource "aws_kms_key" "logs_us_east_1" {
         Sid       = "AllowLogsService"
         Effect    = "Allow"
         Principal = { Service = "logs.us-east-1.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -767,8 +767,8 @@ resource "aws_kms_key" "s3_us_west_2" {
   description             = "KMS CMK for S3 us-west-2"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -781,7 +781,7 @@ resource "aws_kms_key" "s3_us_west_2" {
         Sid       = "AllowS3"
         Effect    = "Allow"
         Principal = { Service = "s3.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -800,8 +800,8 @@ resource "aws_kms_key" "lambda_us_west_2" {
   description             = "KMS CMK for Lambda us-west-2"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -814,7 +814,7 @@ resource "aws_kms_key" "lambda_us_west_2" {
         Sid       = "AllowLambdaService"
         Effect    = "Allow"
         Principal = { Service = "lambda.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -833,8 +833,8 @@ resource "aws_kms_key" "rds_us_west_2" {
   description             = "KMS CMK for RDS us-west-2"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -847,7 +847,7 @@ resource "aws_kms_key" "rds_us_west_2" {
         Sid       = "AllowRDSService"
         Effect    = "Allow"
         Principal = { Service = "rds.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -866,8 +866,8 @@ resource "aws_kms_key" "logs_us_west_2" {
   description             = "KMS CMK for CloudWatch Logs us-west-2"
   enable_key_rotation     = true
   deletion_window_in_days = 10
-  policy = jsonencode({
-    Version = "2012-10-17"
+  policy                  = jsonencode({
+    Version   = "2012-10-17"
     Statement = [
       {
         Sid       = "EnableRoot"
@@ -880,7 +880,7 @@ resource "aws_kms_key" "logs_us_west_2" {
         Sid       = "AllowLogsService"
         Effect    = "Allow"
         Principal = { Service = "logs.us-west-2.amazonaws.com" }
-        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
+        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
         Resource  = "*"
       }
     ]
@@ -1004,7 +1004,7 @@ resource "aws_iam_policy" "ec2_s3_us_east_1" {
   provider    = aws.us_east_1
   name        = "${var.app_name}-ec2-s3-east1"
   description = "EC2 access to regional S3"
-  policy = jsonencode({
+  policy      = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -1014,12 +1014,12 @@ resource "aws_iam_policy" "ec2_s3_us_east_1" {
       },
       {
         Effect   = "Allow",
-        Action   = ["s3:GetObject", "s3:PutObject"],
+        Action   = ["s3:GetObject","s3:PutObject"],
         Resource = "${aws_s3_bucket.app_us_east_1.arn}/*"
       },
       {
         Effect   = "Allow",
-        Action   = ["kms:Decrypt", "kms:DescribeKey"],
+        Action   = ["kms:Decrypt","kms:DescribeKey"],
         Resource = aws_kms_key.s3_us_east_1.arn
       }
     ]
@@ -1054,7 +1054,7 @@ resource "aws_iam_policy" "ec2_s3_us_west_2" {
   provider    = aws.us_west_2
   name        = "${var.app_name}-ec2-s3-west2"
   description = "EC2 access to regional S3"
-  policy = jsonencode({
+  policy      = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -1064,12 +1064,12 @@ resource "aws_iam_policy" "ec2_s3_us_west_2" {
       },
       {
         Effect   = "Allow",
-        Action   = ["s3:GetObject", "s3:PutObject"],
+        Action   = ["s3:GetObject","s3:PutObject"],
         Resource = "${aws_s3_bucket.app_us_west_2.arn}/*"
       },
       {
         Effect   = "Allow",
-        Action   = ["kms:Decrypt", "kms:DescribeKey"],
+        Action   = ["kms:Decrypt","kms:DescribeKey"],
         Resource = aws_kms_key.s3_us_west_2.arn
       }
     ]
@@ -1104,17 +1104,17 @@ resource "aws_iam_policy" "lambda_logs_us_east_1" {
   provider    = aws.us_east_1
   name        = "${var.app_name}-lambda-logs-east1"
   description = "Allow Lambda to write logs"
-  policy = jsonencode({
+  policy      = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
         Effect   = "Allow",
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"],
+        Action   = ["logs:CreateLogStream","logs:PutLogEvents"],
         Resource = "${aws_cloudwatch_log_group.lambda_us_east_1.arn}:*"
       },
       {
         Effect   = "Allow",
-        Action   = ["kms:Decrypt", "kms:DescribeKey"],
+        Action   = ["kms:Decrypt","kms:DescribeKey"],
         Resource = aws_kms_key.lambda_us_east_1.arn
       }
     ]
@@ -1143,17 +1143,17 @@ resource "aws_iam_policy" "lambda_logs_us_west_2" {
   provider    = aws.us_west_2
   name        = "${var.app_name}-lambda-logs-west2"
   description = "Allow Lambda to write logs"
-  policy = jsonencode({
+  policy      = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
         Effect   = "Allow",
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"],
+        Action   = ["logs:CreateLogStream","logs:PutLogEvents"],
         Resource = "${aws_cloudwatch_log_group.lambda_us_west_2.arn}:*"
       },
       {
         Effect   = "Allow",
-        Action   = ["kms:Decrypt", "kms:DescribeKey"],
+        Action   = ["kms:Decrypt","kms:DescribeKey"],
         Resource = aws_kms_key.lambda_us_west_2.arn
       }
     ]
@@ -1172,7 +1172,7 @@ resource "aws_iam_role" "flow_logs_us_east_1" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect    = "Allow",
+      Effect = "Allow",
       Principal = { Service = "vpc-flow-logs.amazonaws.com" },
       Action    = "sts:AssumeRole"
     }]
@@ -1184,11 +1184,11 @@ resource "aws_iam_policy" "flow_logs_us_east_1" {
   provider    = aws.us_east_1
   name        = "${var.app_name}-flow-logs-policy-east1"
   description = "Allow flow logs to write to CloudWatch"
-  policy = jsonencode({
+  policy      = jsonencode({
     Version = "2012-10-17",
     Statement = [{
       Effect   = "Allow",
-      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"],
+      Action   = ["logs:CreateLogStream","logs:PutLogEvents"],
       Resource = "${aws_cloudwatch_log_group.flow_logs_us_east_1.arn}:*"
     }]
   })
@@ -1206,7 +1206,7 @@ resource "aws_iam_role" "flow_logs_us_west_2" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect    = "Allow",
+      Effect = "Allow",
       Principal = { Service = "vpc-flow-logs.amazonaws.com" },
       Action    = "sts:AssumeRole"
     }]
@@ -1218,11 +1218,11 @@ resource "aws_iam_policy" "flow_logs_us_west_2" {
   provider    = aws.us_west_2
   name        = "${var.app_name}-flow-logs-policy-west2"
   description = "Allow flow logs to write to CloudWatch"
-  policy = jsonencode({
+  policy      = jsonencode({
     Version = "2012-10-17",
     Statement = [{
       Effect   = "Allow",
-      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"],
+      Action   = ["logs:CreateLogStream","logs:PutLogEvents"],
       Resource = "${aws_cloudwatch_log_group.flow_logs_us_west_2.arn}:*"
     }]
   })
@@ -1239,35 +1239,35 @@ resource "aws_iam_role_policy_attachment" "flow_logs_attach_us_west_2" {
 ##############################
 
 resource "aws_cloudwatch_log_group" "lambda_us_east_1" {
-  provider          = aws.us_east_1
-  name              = "/aws/lambda/${var.app_name}-fn-east1"
+  provider        = aws.us_east_1
+  name            = "/aws/lambda/${var.app_name}-fn-east1"
   retention_in_days = var.log_retention_days
-  kms_key_id        = aws_kms_key.logs_us_east_1.arn
-  tags              = merge(local.base_tags, { Name = "${var.app_name}-lambda-lg-east1" })
+  kms_key_id      = aws_kms_key.logs_us_east_1.arn
+  tags            = merge(local.base_tags, { Name = "${var.app_name}-lambda-lg-east1" })
 }
 
 resource "aws_cloudwatch_log_group" "lambda_us_west_2" {
-  provider          = aws.us_west_2
-  name              = "/aws/lambda/${var.app_name}-fn-west2"
+  provider        = aws.us_west_2
+  name            = "/aws/lambda/${var.app_name}-fn-west2"
   retention_in_days = var.log_retention_days
-  kms_key_id        = aws_kms_key.logs_us_west_2.arn
-  tags              = merge(local.base_tags, { Name = "${var.app_name}-lambda-lg-west2" })
+  kms_key_id      = aws_kms_key.logs_us_west_2.arn
+  tags            = merge(local.base_tags, { Name = "${var.app_name}-lambda-lg-west2" })
 }
 
 resource "aws_cloudwatch_log_group" "flow_logs_us_east_1" {
-  provider          = aws.us_east_1
-  name              = "/vpc/flow-logs/${var.app_name}-east1"
+  provider         = aws.us_east_1
+  name             = "/vpc/flow-logs/${var.app_name}-east1"
   retention_in_days = var.log_retention_days
-  kms_key_id        = aws_kms_key.logs_us_east_1.arn
-  tags              = merge(local.base_tags, { Name = "${var.app_name}-vpc-flow-lg-east1" })
+  kms_key_id       = aws_kms_key.logs_us_east_1.arn
+  tags             = merge(local.base_tags, { Name = "${var.app_name}-vpc-flow-lg-east1" })
 }
 
 resource "aws_cloudwatch_log_group" "flow_logs_us_west_2" {
-  provider          = aws.us_west_2
-  name              = "/vpc/flow-logs/${var.app_name}-west2"
+  provider         = aws.us_west_2
+  name             = "/vpc/flow-logs/${var.app_name}-west2"
   retention_in_days = var.log_retention_days
-  kms_key_id        = aws_kms_key.logs_us_west_2.arn
-  tags              = merge(local.base_tags, { Name = "${var.app_name}-vpc-flow-lg-west2" })
+  kms_key_id       = aws_kms_key.logs_us_west_2.arn
+  tags             = merge(local.base_tags, { Name = "${var.app_name}-vpc-flow-lg-west2" })
 }
 
 ##############################
@@ -1302,7 +1302,7 @@ resource "aws_flow_log" "us_west_2" {
 data "archive_file" "lambda_placeholder" {
   type        = "zip"
   output_path = "${path.module}/lambda_placeholder.zip"
-
+  
   source {
     content  = <<-EOT
       const AWS = require('aws-sdk');
@@ -1577,14 +1577,14 @@ HTTPServer(("0.0.0.0", ${var.app_port}), H).serve_forever()
 PY
     nohup python3 /usr/local/bin/app.py &
   EOT
-  tags                        = merge(local.base_tags, { Name = "${var.app_name}-ec2-east1" })
+  tags = merge(local.base_tags, { Name = "${var.app_name}-ec2-east1" })
 }
 
 resource "aws_lb_target_group_attachment" "east_1" {
-  provider         = aws.us_east_1
-  target_group_arn = aws_lb_target_group.us_east_1.arn
-  target_id        = aws_instance.app_us_east_1.id
-  port             = var.app_port
+  provider          = aws.us_east_1
+  target_group_arn  = aws_lb_target_group.us_east_1.arn
+  target_id         = aws_instance.app_us_east_1.id
+  port              = var.app_port
 }
 
 resource "aws_instance" "app_us_west_2" {
@@ -1609,14 +1609,14 @@ HTTPServer(("0.0.0.0", ${var.app_port}), H).serve_forever()
 PY
     nohup python3 /usr/local/bin/app.py &
   EOT
-  tags                        = merge(local.base_tags, { Name = "${var.app_name}-ec2-west2" })
+  tags = merge(local.base_tags, { Name = "${var.app_name}-ec2-west2" })
 }
 
 resource "aws_lb_target_group_attachment" "west_2" {
-  provider         = aws.us_west_2
-  target_group_arn = aws_lb_target_group.us_west_2.arn
-  target_id        = aws_instance.app_us_west_2.id
-  port             = var.app_port
+  provider          = aws.us_west_2
+  target_group_arn  = aws_lb_target_group.us_west_2.arn
+  target_id         = aws_instance.app_us_west_2.id
+  port              = var.app_port
 }
 
 ##############################
@@ -1657,25 +1657,25 @@ resource "aws_db_subnet_group" "us_east_1" {
 }
 
 resource "aws_db_instance" "us_east_1" {
-  provider                = aws.us_east_1
-  identifier              = "${var.app_name}-db-east1"
-  engine                  = var.db_engine
-  engine_version          = var.db_engine_version
-  instance_class          = var.db_instance_class
-  username                = var.db_username
-  password                = var.db_password
-  allocated_storage       = 20
-  storage_encrypted       = true
-  kms_key_id              = aws_kms_key.rds_us_east_1.arn
-  db_subnet_group_name    = aws_db_subnet_group.us_east_1.name
-  vpc_security_group_ids  = [aws_security_group.db_us_east_1.id]
-  multi_az                = true
-  publicly_accessible     = false
-  backup_retention_period = var.backup_retention_days
-  deletion_protection     = true
-  skip_final_snapshot     = true
-  apply_immediately       = true
-  tags                    = merge(local.base_tags, { Name = "${var.app_name}-db-east1" })
+  provider                 = aws.us_east_1
+  identifier               = "${var.app_name}-db-east1"
+  engine                   = var.db_engine
+  engine_version           = var.db_engine_version
+  instance_class           = var.db_instance_class
+  username                 = var.db_username
+  password                 = var.db_password
+  allocated_storage        = 20
+  storage_encrypted        = true
+  kms_key_id               = aws_kms_key.rds_us_east_1.arn
+  db_subnet_group_name     = aws_db_subnet_group.us_east_1.name
+  vpc_security_group_ids   = [aws_security_group.db_us_east_1.id]
+  multi_az                 = true
+  publicly_accessible      = false
+  backup_retention_period  = var.backup_retention_days
+  deletion_protection      = true
+  skip_final_snapshot      = true
+  apply_immediately        = true
+  tags                     = merge(local.base_tags, { Name = "${var.app_name}-db-east1" })
 }
 
 resource "aws_db_subnet_group" "us_west_2" {
@@ -1686,25 +1686,25 @@ resource "aws_db_subnet_group" "us_west_2" {
 }
 
 resource "aws_db_instance" "us_west_2" {
-  provider                = aws.us_west_2
-  identifier              = "${var.app_name}-db-west2"
-  engine                  = var.db_engine
-  engine_version          = var.db_engine_version
-  instance_class          = var.db_instance_class
-  username                = var.db_username
-  password                = var.db_password
-  allocated_storage       = 20
-  storage_encrypted       = true
-  kms_key_id              = aws_kms_key.rds_us_west_2.arn
-  db_subnet_group_name    = aws_db_subnet_group.us_west_2.name
-  vpc_security_group_ids  = [aws_security_group.db_us_west_2.id]
-  multi_az                = true
-  publicly_accessible     = false
-  backup_retention_period = var.backup_retention_days
-  deletion_protection     = true
-  skip_final_snapshot     = true
-  apply_immediately       = true
-  tags                    = merge(local.base_tags, { Name = "${var.app_name}-db-west2" })
+  provider                 = aws.us_west_2
+  identifier               = "${var.app_name}-db-west2"
+  engine                   = var.db_engine
+  engine_version           = var.db_engine_version
+  instance_class           = var.db_instance_class
+  username                 = var.db_username
+  password                 = var.db_password
+  allocated_storage        = 20
+  storage_encrypted        = true
+  kms_key_id               = aws_kms_key.rds_us_west_2.arn
+  db_subnet_group_name     = aws_db_subnet_group.us_west_2.name
+  vpc_security_group_ids   = [aws_security_group.db_us_west_2.id]
+  multi_az                 = true
+  publicly_accessible      = false
+  backup_retention_period  = var.backup_retention_days
+  deletion_protection      = true
+  skip_final_snapshot      = true
+  apply_immediately        = true
+  tags                     = merge(local.base_tags, { Name = "${var.app_name}-db-west2" })
 }
 
 ##############################
@@ -1717,11 +1717,11 @@ resource "aws_lambda_function" "us_east_1" {
   role          = aws_iam_role.lambda_us_east_1.arn
   handler       = var.lambda_handler
   runtime       = var.lambda_runtime
-
+  
   # Use inline code instead of requiring a zip file
   filename         = "${path.module}/lambda_placeholder.zip"
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
-
+  
   kms_key_arn = aws_kms_key.lambda_us_east_1.arn
   environment {
     variables = {
@@ -1730,7 +1730,7 @@ resource "aws_lambda_function" "us_east_1" {
     }
   }
   tags = merge(local.base_tags, { Name = "${var.app_name}-fn-east1" })
-
+  
   depends_on = [data.archive_file.lambda_placeholder]
 }
 
@@ -1740,11 +1740,11 @@ resource "aws_lambda_function" "us_west_2" {
   role          = aws_iam_role.lambda_us_west_2.arn
   handler       = var.lambda_handler
   runtime       = var.lambda_runtime
-
+  
   # Use inline code instead of requiring a zip file
   filename         = "${path.module}/lambda_placeholder.zip"
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
-
+  
   kms_key_arn = aws_kms_key.lambda_us_west_2.arn
   environment {
     variables = {
@@ -1753,7 +1753,7 @@ resource "aws_lambda_function" "us_west_2" {
     }
   }
   tags = merge(local.base_tags, { Name = "${var.app_name}-fn-west2" })
-
+  
   depends_on = [data.archive_file.lambda_placeholder]
 }
 
@@ -1810,16 +1810,16 @@ output "s3_bucket_names" {
 output "kms_key_arns" {
   value = {
     us_east_1 = {
-      s3     = aws_kms_key.s3_us_east_1.arn
+      s3    = aws_kms_key.s3_us_east_1.arn
       lambda = aws_kms_key.lambda_us_east_1.arn
-      rds    = aws_kms_key.rds_us_east_1.arn
-      logs   = aws_kms_key.logs_us_east_1.arn
+      rds   = aws_kms_key.rds_us_east_1.arn
+      logs  = aws_kms_key.logs_us_east_1.arn
     }
     us_west_2 = {
-      s3     = aws_kms_key.s3_us_west_2.arn
+      s3    = aws_kms_key.s3_us_west_2.arn
       lambda = aws_kms_key.lambda_us_west_2.arn
-      rds    = aws_kms_key.rds_us_west_2.arn
-      logs   = aws_kms_key.logs_us_west_2.arn
+      rds   = aws_kms_key.rds_us_west_2.arn
+      logs  = aws_kms_key.logs_us_west_2.arn
     }
   }
 }

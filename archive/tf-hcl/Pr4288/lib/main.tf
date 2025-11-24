@@ -617,7 +617,7 @@ resource "aws_quicksight_data_set" "logs_dataset" {
 
   physical_table_map {
     physical_table_map_id = "logs_table"
-
+    
     relational_table {
       data_source_arn = aws_quicksight_data_source.logs_data_source.arn
       name            = "application_logs" # Start with application logs as primary

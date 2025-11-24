@@ -66,25 +66,25 @@ data "aws_ami" "amazon_linux_2" {
 locals {
   # Generate random suffix for unique resource names
   random_suffix = lower(substr(md5(timestamp()), 0, 4))
-
+  
   # Common naming convention
   name_prefix = "tap-stack"
-
+  
   # Resource names with consistent naming
-  vpc_name             = "${local.name_prefix}-vpc-${local.random_suffix}"
-  igw_name             = "${local.name_prefix}-igw-${local.random_suffix}"
-  s3_bucket_name       = "${local.name_prefix}-bucket-${local.random_suffix}"
-  api_gateway_name     = "${local.name_prefix}-api-${local.random_suffix}"
-  ec2_instance_name    = "${local.name_prefix}-ec2-${local.random_suffix}"
-  lambda_function_name = "${local.name_prefix}-lambda-${local.random_suffix}"
-  ec2_role_name        = "${local.name_prefix}-ec2-role-${local.random_suffix}"
-  lambda_role_name     = "${local.name_prefix}-lambda-role-${local.random_suffix}"
-  api_role_name        = "${local.name_prefix}-api-role-${local.random_suffix}"
-
+  vpc_name                = "${local.name_prefix}-vpc-${local.random_suffix}"
+  igw_name                = "${local.name_prefix}-igw-${local.random_suffix}"
+  s3_bucket_name          = "${local.name_prefix}-bucket-${local.random_suffix}"
+  api_gateway_name        = "${local.name_prefix}-api-${local.random_suffix}"
+  ec2_instance_name       = "${local.name_prefix}-ec2-${local.random_suffix}"
+  lambda_function_name    = "${local.name_prefix}-lambda-${local.random_suffix}"
+  ec2_role_name          = "${local.name_prefix}-ec2-role-${local.random_suffix}"
+  lambda_role_name       = "${local.name_prefix}-lambda-role-${local.random_suffix}"
+  api_role_name          = "${local.name_prefix}-api-role-${local.random_suffix}"
+  
   # Subnet configurations
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-
+  
   # Common tags
   common_tags = {
     Environment = var.environment
@@ -92,7 +92,7 @@ locals {
     Stack       = local.name_prefix
     Suffix      = local.random_suffix
   }
-
+  
   # User data script for EC2
   ec2_user_data = <<-EOF
     #!/bin/bash
@@ -599,12 +599,12 @@ resource "aws_cloudwatch_log_group" "lambda" {
 resource "aws_lambda_function" "processor" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = local.lambda_function_name
-  role             = aws_iam_role.lambda.arn
-  handler          = "index.handler"
+  role            = aws_iam_role.lambda.arn
+  handler         = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
-  timeout          = 30
-  memory_size      = 128
+  runtime         = "python3.9"
+  timeout         = 30
+  memory_size     = 128
 
   environment {
     variables = {
@@ -630,7 +630,7 @@ resource "aws_lambda_function" "processor" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "/tmp/lambda_function_${local.random_suffix}.zip"
-
+  
   source {
     content  = <<-EOT
 import json

@@ -124,28 +124,28 @@ data "aws_ami" "amazon_linux_eu" {
 
 locals {
   suffix = "mitr"
-
+  
   # Common tags for all resources
   common_tags = {
-    Environment    = var.environment
+    Environment     = var.environment
     ManagedBy      = "Terraform"
     Application    = var.app_name
     MigrationPhase = var.migration_phase
   }
-
+  
   # Region-specific tags
   us_tags = merge(local.common_tags, {
     Region = var.primary_region
   })
-
+  
   eu_tags = merge(local.common_tags, {
     Region = var.secondary_region
   })
-
+  
   # CIDR blocks
   us_vpc_cidr = "10.0.0.0/16"
   eu_vpc_cidr = "10.1.0.0/16"
-
+  
   # Subnet calculations
   us_public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   us_private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
@@ -176,7 +176,7 @@ resource "aws_vpc" "us_vpc" {
   cidr_block           = local.us_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-vpc-us-${local.suffix}"
   })
@@ -186,7 +186,7 @@ resource "aws_vpc" "us_vpc" {
 resource "aws_internet_gateway" "us_igw" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.us_vpc.id
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-igw-us-${local.suffix}"
   })
@@ -200,7 +200,7 @@ resource "aws_subnet" "us_public" {
   cidr_block              = local.us_public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.us_east_1.names[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-public-subnet-us-${count.index + 1}-${local.suffix}"
     Type = "Public"
@@ -214,7 +214,7 @@ resource "aws_subnet" "us_private" {
   vpc_id            = aws_vpc.us_vpc.id
   cidr_block        = local.us_private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.us_east_1.names[count.index]
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-private-subnet-us-${count.index + 1}-${local.suffix}"
     Type = "Private"
@@ -226,7 +226,7 @@ resource "aws_eip" "us_nat" {
   provider = aws.us_east_1
   count    = 2
   domain   = "vpc"
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-nat-eip-us-${count.index + 1}-${local.suffix}"
   })
@@ -238,11 +238,11 @@ resource "aws_nat_gateway" "us_nat" {
   count         = 2
   allocation_id = aws_eip.us_nat[count.index].id
   subnet_id     = aws_subnet.us_public[count.index].id
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-nat-us-${count.index + 1}-${local.suffix}"
   })
-
+  
   depends_on = [aws_internet_gateway.us_igw]
 }
 
@@ -250,12 +250,12 @@ resource "aws_nat_gateway" "us_nat" {
 resource "aws_route_table" "us_public" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.us_vpc.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.us_igw.id
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-public-rt-us-${local.suffix}"
   })
@@ -266,12 +266,12 @@ resource "aws_route_table" "us_private" {
   provider = aws.us_east_1
   count    = 2
   vpc_id   = aws_vpc.us_vpc.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.us_nat[count.index].id
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-private-rt-us-${count.index + 1}-${local.suffix}"
   })
@@ -302,7 +302,7 @@ resource "aws_vpc" "eu_vpc" {
   cidr_block           = local.eu_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-vpc-eu-${local.suffix}"
   })
@@ -312,7 +312,7 @@ resource "aws_vpc" "eu_vpc" {
 resource "aws_internet_gateway" "eu_igw" {
   provider = aws.eu_central_1
   vpc_id   = aws_vpc.eu_vpc.id
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-igw-eu-${local.suffix}"
   })
@@ -326,7 +326,7 @@ resource "aws_subnet" "eu_public" {
   cidr_block              = local.eu_public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.eu_central_1.names[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-public-subnet-eu-${count.index + 1}-${local.suffix}"
     Type = "Public"
@@ -340,7 +340,7 @@ resource "aws_subnet" "eu_private" {
   vpc_id            = aws_vpc.eu_vpc.id
   cidr_block        = local.eu_private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.eu_central_1.names[count.index]
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-private-subnet-eu-${count.index + 1}-${local.suffix}"
     Type = "Private"
@@ -352,7 +352,7 @@ resource "aws_eip" "eu_nat" {
   provider = aws.eu_central_1
   count    = 2
   domain   = "vpc"
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-nat-eip-eu-${count.index + 1}-${local.suffix}"
   })
@@ -364,11 +364,11 @@ resource "aws_nat_gateway" "eu_nat" {
   count         = 2
   allocation_id = aws_eip.eu_nat[count.index].id
   subnet_id     = aws_subnet.eu_public[count.index].id
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-nat-eu-${count.index + 1}-${local.suffix}"
   })
-
+  
   depends_on = [aws_internet_gateway.eu_igw]
 }
 
@@ -376,12 +376,12 @@ resource "aws_nat_gateway" "eu_nat" {
 resource "aws_route_table" "eu_public" {
   provider = aws.eu_central_1
   vpc_id   = aws_vpc.eu_vpc.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.eu_igw.id
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-public-rt-eu-${local.suffix}"
   })
@@ -392,12 +392,12 @@ resource "aws_route_table" "eu_private" {
   provider = aws.eu_central_1
   count    = 2
   vpc_id   = aws_vpc.eu_vpc.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.eu_nat[count.index].id
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-private-rt-eu-${count.index + 1}-${local.suffix}"
   })
@@ -424,12 +424,12 @@ resource "aws_route_table_association" "eu_private" {
 
 # VPC Peering Connection Request from US to EU
 resource "aws_vpc_peering_connection" "us_to_eu" {
-  provider    = aws.us_east_1
-  vpc_id      = aws_vpc.us_vpc.id
-  peer_vpc_id = aws_vpc.eu_vpc.id
-  peer_region = var.secondary_region
-  auto_accept = false
-
+  provider      = aws.us_east_1
+  vpc_id        = aws_vpc.us_vpc.id
+  peer_vpc_id   = aws_vpc.eu_vpc.id
+  peer_region   = var.secondary_region
+  auto_accept   = false
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-peering-us-to-eu-${local.suffix}"
   })
@@ -440,7 +440,7 @@ resource "aws_vpc_peering_connection_accepter" "eu_accept" {
   provider                  = aws.eu_central_1
   vpc_peering_connection_id = aws_vpc_peering_connection.us_to_eu.id
   auto_accept               = true
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-peering-accepter-eu-${local.suffix}"
   })
@@ -488,7 +488,7 @@ resource "aws_security_group" "us_alb" {
   name        = "${var.app_name}-alb-sg-us-${local.suffix}"
   description = "Security group for ALB in US"
   vpc_id      = aws_vpc.us_vpc.id
-
+  
   ingress {
     description = "HTTP from anywhere"
     from_port   = 80
@@ -496,7 +496,7 @@ resource "aws_security_group" "us_alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   ingress {
     description = "HTTPS from anywhere"
     from_port   = 443
@@ -504,7 +504,7 @@ resource "aws_security_group" "us_alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -512,7 +512,7 @@ resource "aws_security_group" "us_alb" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-alb-sg-us-${local.suffix}"
   })
@@ -524,7 +524,7 @@ resource "aws_security_group" "us_ec2" {
   name        = "${var.app_name}-ec2-sg-us-${local.suffix}"
   description = "Security group for EC2 instances in US"
   vpc_id      = aws_vpc.us_vpc.id
-
+  
   ingress {
     description     = "HTTP from ALB"
     from_port       = 80
@@ -532,7 +532,7 @@ resource "aws_security_group" "us_ec2" {
     protocol        = "tcp"
     security_groups = [aws_security_group.us_alb.id]
   }
-
+  
   ingress {
     description = "SSH from VPC"
     from_port   = 22
@@ -540,7 +540,7 @@ resource "aws_security_group" "us_ec2" {
     protocol    = "tcp"
     cidr_blocks = [local.us_vpc_cidr, local.eu_vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -548,7 +548,7 @@ resource "aws_security_group" "us_ec2" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-ec2-sg-us-${local.suffix}"
   })
@@ -560,7 +560,7 @@ resource "aws_security_group" "us_rds" {
   name        = "${var.app_name}-rds-sg-us-${local.suffix}"
   description = "Security group for RDS in US"
   vpc_id      = aws_vpc.us_vpc.id
-
+  
   ingress {
     description     = "PostgreSQL from EC2"
     from_port       = 5432
@@ -568,7 +568,7 @@ resource "aws_security_group" "us_rds" {
     protocol        = "tcp"
     security_groups = [aws_security_group.us_ec2.id]
   }
-
+  
   ingress {
     description = "PostgreSQL from EU for replication"
     from_port   = 5432
@@ -576,7 +576,7 @@ resource "aws_security_group" "us_rds" {
     protocol    = "tcp"
     cidr_blocks = [local.eu_vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -584,7 +584,7 @@ resource "aws_security_group" "us_rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-rds-sg-us-${local.suffix}"
   })
@@ -596,7 +596,7 @@ resource "aws_security_group" "eu_alb" {
   name        = "${var.app_name}-alb-sg-eu-${local.suffix}"
   description = "Security group for ALB in EU"
   vpc_id      = aws_vpc.eu_vpc.id
-
+  
   ingress {
     description = "HTTP from anywhere"
     from_port   = 80
@@ -604,7 +604,7 @@ resource "aws_security_group" "eu_alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   ingress {
     description = "HTTPS from anywhere"
     from_port   = 443
@@ -612,7 +612,7 @@ resource "aws_security_group" "eu_alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -620,7 +620,7 @@ resource "aws_security_group" "eu_alb" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-alb-sg-eu-${local.suffix}"
   })
@@ -632,7 +632,7 @@ resource "aws_security_group" "eu_ec2" {
   name        = "${var.app_name}-ec2-sg-eu-${local.suffix}"
   description = "Security group for EC2 instances in EU"
   vpc_id      = aws_vpc.eu_vpc.id
-
+  
   ingress {
     description     = "HTTP from ALB"
     from_port       = 80
@@ -640,7 +640,7 @@ resource "aws_security_group" "eu_ec2" {
     protocol        = "tcp"
     security_groups = [aws_security_group.eu_alb.id]
   }
-
+  
   ingress {
     description = "SSH from VPC"
     from_port   = 22
@@ -648,7 +648,7 @@ resource "aws_security_group" "eu_ec2" {
     protocol    = "tcp"
     cidr_blocks = [local.eu_vpc_cidr, local.us_vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -656,7 +656,7 @@ resource "aws_security_group" "eu_ec2" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-ec2-sg-eu-${local.suffix}"
   })
@@ -668,7 +668,7 @@ resource "aws_security_group" "eu_rds" {
   name        = "${var.app_name}-rds-sg-eu-${local.suffix}"
   description = "Security group for RDS in EU"
   vpc_id      = aws_vpc.eu_vpc.id
-
+  
   ingress {
     description     = "PostgreSQL from EC2"
     from_port       = 5432
@@ -676,7 +676,7 @@ resource "aws_security_group" "eu_rds" {
     protocol        = "tcp"
     security_groups = [aws_security_group.eu_ec2.id]
   }
-
+  
   ingress {
     description = "PostgreSQL from US for replication"
     from_port   = 5432
@@ -684,7 +684,7 @@ resource "aws_security_group" "eu_rds" {
     protocol    = "tcp"
     cidr_blocks = [local.us_vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -692,7 +692,7 @@ resource "aws_security_group" "eu_rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-rds-sg-eu-${local.suffix}"
   })
@@ -710,11 +710,11 @@ resource "aws_lb" "us_alb" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.us_alb.id]
   subnets            = aws_subnet.us_public[*].id
-
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-alb-us-${local.suffix}"
   })
@@ -728,7 +728,7 @@ resource "aws_lb_target_group" "us_tg" {
   protocol    = "HTTP"
   vpc_id      = aws_vpc.us_vpc.id
   target_type = "instance"
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -738,9 +738,9 @@ resource "aws_lb_target_group" "us_tg" {
     path                = "/"
     matcher             = "200"
   }
-
+  
   deregistration_delay = 300
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-tg-us-${local.suffix}"
   })
@@ -752,7 +752,7 @@ resource "aws_lb_listener" "us_http" {
   load_balancer_arn = aws_lb.us_alb.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.us_tg.arn
@@ -767,11 +767,11 @@ resource "aws_lb" "eu_alb" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.eu_alb.id]
   subnets            = aws_subnet.eu_public[*].id
-
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-alb-eu-${local.suffix}"
   })
@@ -785,7 +785,7 @@ resource "aws_lb_target_group" "eu_tg" {
   protocol    = "HTTP"
   vpc_id      = aws_vpc.eu_vpc.id
   target_type = "instance"
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -795,9 +795,9 @@ resource "aws_lb_target_group" "eu_tg" {
     path                = "/"
     matcher             = "200"
   }
-
+  
   deregistration_delay = 300
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-tg-eu-${local.suffix}"
   })
@@ -809,7 +809,7 @@ resource "aws_lb_listener" "eu_http" {
   load_balancer_arn = aws_lb.eu_alb.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.eu_tg.arn
@@ -823,7 +823,7 @@ resource "aws_lb_listener" "eu_http" {
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "${var.app_name}-ec2-role-${local.suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -836,7 +836,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -881,25 +881,25 @@ locals {
 
 # Launch Template for US-EAST-1
 resource "aws_launch_template" "us_lt" {
-  provider               = aws.us_east_1
-  name_prefix            = "${var.app_name}-lt-us-${local.suffix}-"
-  image_id               = data.aws_ami.amazon_linux_us.id
-  instance_type          = var.instance_type
+  provider              = aws.us_east_1
+  name_prefix           = "${var.app_name}-lt-us-${local.suffix}-"
+  image_id              = data.aws_ami.amazon_linux_us.id
+  instance_type         = var.instance_type
   vpc_security_group_ids = [aws_security_group.us_ec2.id]
-
+  
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
+  
   user_data = base64encode(local.user_data_script)
-
+  
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.us_tags, {
       Name = "${var.app_name}-instance-us-${local.suffix}"
     })
   }
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -907,25 +907,25 @@ resource "aws_launch_template" "us_lt" {
 
 # Launch Template for EU-CENTRAL-1
 resource "aws_launch_template" "eu_lt" {
-  provider               = aws.eu_central_1
-  name_prefix            = "${var.app_name}-lt-eu-${local.suffix}-"
-  image_id               = data.aws_ami.amazon_linux_eu.id
-  instance_type          = var.instance_type
+  provider              = aws.eu_central_1
+  name_prefix           = "${var.app_name}-lt-eu-${local.suffix}-"
+  image_id              = data.aws_ami.amazon_linux_eu.id
+  instance_type         = var.instance_type
   vpc_security_group_ids = [aws_security_group.eu_ec2.id]
-
+  
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
+  
   user_data = base64encode(local.user_data_script)
-
+  
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.eu_tags, {
       Name = "${var.app_name}-instance-eu-${local.suffix}"
     })
   }
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -937,33 +937,33 @@ resource "aws_launch_template" "eu_lt" {
 
 # Auto Scaling Group for US-EAST-1
 resource "aws_autoscaling_group" "us_asg" {
-  provider                  = aws.us_east_1
-  name                      = "${var.app_name}-asg-us-${local.suffix}"
-  vpc_zone_identifier       = aws_subnet.us_private[*].id
-  target_group_arns         = [aws_lb_target_group.us_tg.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_east_1
+  name                = "${var.app_name}-asg-us-${local.suffix}"
+  vpc_zone_identifier = aws_subnet.us_private[*].id
+  target_group_arns   = [aws_lb_target_group.us_tg.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size                  = var.min_size
-  max_size                  = var.max_size
-  desired_capacity          = var.desired_capacity
-
+  min_size            = var.min_size
+  max_size            = var.max_size
+  desired_capacity    = var.desired_capacity
+  
   launch_template {
     id      = aws_launch_template.us_lt.id
     version = "$Latest"
   }
-
+  
   tag {
     key                 = "Name"
     value               = "${var.app_name}-asg-instance-us-${local.suffix}"
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "Environment"
     value               = var.environment
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "MigrationPhase"
     value               = var.migration_phase
@@ -973,33 +973,33 @@ resource "aws_autoscaling_group" "us_asg" {
 
 # Auto Scaling Group for EU-CENTRAL-1
 resource "aws_autoscaling_group" "eu_asg" {
-  provider                  = aws.eu_central_1
-  name                      = "${var.app_name}-asg-eu-${local.suffix}"
-  vpc_zone_identifier       = aws_subnet.eu_private[*].id
-  target_group_arns         = [aws_lb_target_group.eu_tg.arn]
-  health_check_type         = "ELB"
+  provider            = aws.eu_central_1
+  name                = "${var.app_name}-asg-eu-${local.suffix}"
+  vpc_zone_identifier = aws_subnet.eu_private[*].id
+  target_group_arns   = [aws_lb_target_group.eu_tg.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size                  = var.min_size
-  max_size                  = var.max_size
-  desired_capacity          = var.desired_capacity
-
+  min_size            = var.min_size
+  max_size            = var.max_size
+  desired_capacity    = var.desired_capacity
+  
   launch_template {
     id      = aws_launch_template.eu_lt.id
     version = "$Latest"
   }
-
+  
   tag {
     key                 = "Name"
     value               = "${var.app_name}-asg-instance-eu-${local.suffix}"
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "Environment"
     value               = var.environment
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "MigrationPhase"
     value               = var.migration_phase
@@ -1013,20 +1013,20 @@ resource "aws_autoscaling_group" "eu_asg" {
 
 # DB Subnet Groups
 resource "aws_db_subnet_group" "us_db_subnet" {
-  provider   = aws.us_east_1
-  name       = "${var.app_name}-db-subnet-us-${local.suffix}"
-  subnet_ids = aws_subnet.us_private[*].id
-
+  provider    = aws.us_east_1
+  name        = "${var.app_name}-db-subnet-us-${local.suffix}"
+  subnet_ids  = aws_subnet.us_private[*].id
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-db-subnet-us-${local.suffix}"
   })
 }
 
 resource "aws_db_subnet_group" "eu_db_subnet" {
-  provider   = aws.eu_central_1
-  name       = "${var.app_name}-db-subnet-eu-${local.suffix}"
-  subnet_ids = aws_subnet.eu_private[*].id
-
+  provider    = aws.eu_central_1
+  name        = "${var.app_name}-db-subnet-eu-${local.suffix}"
+  subnet_ids  = aws_subnet.eu_private[*].id
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-db-subnet-eu-${local.suffix}"
   })
@@ -1034,33 +1034,33 @@ resource "aws_db_subnet_group" "eu_db_subnet" {
 
 # RDS PostgreSQL Primary in US-EAST-1
 resource "aws_db_instance" "us_primary" {
-  provider          = aws.us_east_1
-  identifier        = "${var.app_name}-db-us-${local.suffix}"
-  engine            = "postgres"
-  engine_version    = "17.6"
-  instance_class    = var.db_instance_class
-  allocated_storage = var.db_allocated_storage
-  storage_encrypted = true
-  storage_type      = "gp3"
-
+  provider               = aws.us_east_1
+  identifier             = "${var.app_name}-db-us-${local.suffix}"
+  engine                 = "postgres"
+  engine_version         = "17.6"
+  instance_class         = var.db_instance_class
+  allocated_storage      = var.db_allocated_storage
+  storage_encrypted      = true
+  storage_type           = "gp3"
+  
   db_name  = "${var.app_name}db"
   username = "dbadmin"
   password = random_password.rds_password.result
-
+  
   vpc_security_group_ids = [aws_security_group.us_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.us_db_subnet.name
-
+  
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "mon:04:00-mon:05:00"
-
-  multi_az                  = true
-  publicly_accessible       = false
-  skip_final_snapshot       = false
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "mon:04:00-mon:05:00"
+  
+  multi_az               = true
+  publicly_accessible    = false
+  skip_final_snapshot    = false
   final_snapshot_identifier = "${var.app_name}-db-us-final-${local.suffix}-${formatdate("YYYY-MM-DD", timestamp())}"
-
+  
   enabled_cloudwatch_logs_exports = ["postgresql"]
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-db-us-${local.suffix}"
   })
@@ -1094,7 +1094,7 @@ resource "aws_db_instance" "us_primary" {
 resource "aws_s3_bucket" "us_bucket" {
   provider = aws.us_east_1
   bucket   = "${var.app_name}-assets-use1-${local.suffix}"
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-assets-use1-${local.suffix}"
   })
@@ -1104,7 +1104,7 @@ resource "aws_s3_bucket" "us_bucket" {
 resource "aws_s3_bucket_versioning" "us_versioning" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.us_bucket.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -1114,7 +1114,7 @@ resource "aws_s3_bucket_versioning" "us_versioning" {
 resource "aws_s3_bucket" "eu_bucket" {
   provider = aws.eu_central_1
   bucket   = "${var.app_name}-assets-euc1-${local.suffix}"
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-assets-euc1-${local.suffix}"
   })
@@ -1124,7 +1124,7 @@ resource "aws_s3_bucket" "eu_bucket" {
 resource "aws_s3_bucket_versioning" "eu_versioning" {
   provider = aws.eu_central_1
   bucket   = aws_s3_bucket.eu_bucket.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -1133,7 +1133,7 @@ resource "aws_s3_bucket_versioning" "eu_versioning" {
 # IAM Role for S3 Replication
 resource "aws_iam_role" "s3_replication_role" {
   name = "${var.app_name}-s3-replication-role-${local.suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1146,7 +1146,7 @@ resource "aws_iam_role" "s3_replication_role" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -1154,7 +1154,7 @@ resource "aws_iam_role" "s3_replication_role" {
 resource "aws_iam_role_policy" "s3_replication_policy" {
   name = "${var.app_name}-s3-replication-policy-${local.suffix}"
   role = aws_iam_role.s3_replication_role.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1193,23 +1193,23 @@ resource "aws_s3_bucket_replication_configuration" "us_to_eu" {
   provider = aws.us_east_1
   role     = aws_iam_role.s3_replication_role.arn
   bucket   = aws_s3_bucket.us_bucket.id
-
+  
   rule {
     id     = "replicate-all"
     status = "Enabled"
-
+    
     filter {}
-
+    
     delete_marker_replication {
       status = "Enabled"
     }
-
+    
     destination {
       bucket        = aws_s3_bucket.eu_bucket.arn
       storage_class = "STANDARD"
     }
   }
-
+  
   depends_on = [aws_s3_bucket_versioning.eu_versioning]
 }
 
@@ -1228,12 +1228,12 @@ resource "aws_cloudfront_distribution" "cdn" {
   is_ipv6_enabled     = true
   comment             = "${var.app_name}-cdn-${local.suffix}"
   default_root_object = "index.html"
-
+  
   # Origin for US ALB
   origin {
     domain_name = aws_lb.us_alb.dns_name
     origin_id   = "alb-us-${local.suffix}"
-
+    
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -1241,12 +1241,12 @@ resource "aws_cloudfront_distribution" "cdn" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
-
+  
   # Origin for EU ALB
   origin {
     domain_name = aws_lb.eu_alb.dns_name
     origin_id   = "alb-eu-${local.suffix}"
-
+    
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -1254,54 +1254,54 @@ resource "aws_cloudfront_distribution" "cdn" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
-
+  
   # Origin Group for failover
   origin_group {
     origin_id = "alb-group-${local.suffix}"
-
+    
     failover_criteria {
       status_codes = [500, 502, 503, 504]
     }
-
+    
     member {
       origin_id = "alb-us-${local.suffix}"
     }
-
+    
     member {
       origin_id = "alb-eu-${local.suffix}"
     }
   }
-
+  
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "alb-group-${local.suffix}"
-
+    
     forwarded_values {
       query_string = true
       headers      = ["Host", "Origin", "Access-Control-Request-Headers", "Access-Control-Request-Method"]
-
+      
       cookies {
         forward = "all"
       }
     }
-
+    
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
   }
-
+  
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
-
+  
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-cdn-${local.suffix}"
   })
@@ -1314,7 +1314,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 # Route53 Hosted Zone
 resource "aws_route53_zone" "main" {
   name = var.domain_name
-
+  
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-zone-${local.suffix}"
   })
@@ -1328,7 +1328,7 @@ resource "aws_route53_health_check" "us_alb_health" {
   resource_path     = "/"
   failure_threshold = 3
   request_interval  = 30
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-health-us-alb-${local.suffix}"
   })
@@ -1342,7 +1342,7 @@ resource "aws_route53_health_check" "eu_alb_health" {
   resource_path     = "/"
   failure_threshold = 3
   request_interval  = 30
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-health-eu-alb-${local.suffix}"
   })
@@ -1354,11 +1354,11 @@ resource "aws_route53_record" "us_weighted" {
   name    = "app.${var.domain_name}"
   type    = "CNAME"
   ttl     = 60
-
+  
   weighted_routing_policy {
     weight = 50
   }
-
+  
   set_identifier  = "us-east-1-${local.suffix}"
   records         = [aws_lb.us_alb.dns_name]
   health_check_id = aws_route53_health_check.us_alb_health.id
@@ -1370,11 +1370,11 @@ resource "aws_route53_record" "eu_weighted" {
   name    = "app.${var.domain_name}"
   type    = "CNAME"
   ttl     = 60
-
+  
   weighted_routing_policy {
     weight = 50
   }
-
+  
   set_identifier  = "eu-central-1-${local.suffix}"
   records         = [aws_lb.eu_alb.dns_name]
   health_check_id = aws_route53_health_check.eu_alb_health.id
@@ -1385,7 +1385,7 @@ resource "aws_route53_record" "main" {
   zone_id = aws_route53_zone.main.zone_id
   name    = var.domain_name
   type    = "A"
-
+  
   alias {
     name                   = aws_cloudfront_distribution.cdn.domain_name
     zone_id                = aws_cloudfront_distribution.cdn.hosted_zone_id
@@ -1401,7 +1401,7 @@ resource "aws_route53_record" "main" {
 resource "aws_sns_topic" "us_alerts" {
   provider = aws.us_east_1
   name     = "${var.app_name}-alerts-us-${local.suffix}"
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-alerts-us-${local.suffix}"
   })
@@ -1411,7 +1411,7 @@ resource "aws_sns_topic" "us_alerts" {
 resource "aws_sns_topic" "eu_alerts" {
   provider = aws.eu_central_1
   name     = "${var.app_name}-alerts-eu-${local.suffix}"
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-alerts-eu-${local.suffix}"
   })
@@ -1450,11 +1450,11 @@ resource "aws_cloudwatch_metric_alarm" "us_ec2_cpu_high" {
   threshold           = "80"
   alarm_description   = "This metric monitors EC2 cpu utilization in US"
   alarm_actions       = [aws_sns_topic.us_alerts.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.us_asg.name
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-ec2-cpu-high-us-${local.suffix}"
   })
@@ -1473,11 +1473,11 @@ resource "aws_cloudwatch_metric_alarm" "eu_ec2_cpu_high" {
   threshold           = "80"
   alarm_description   = "This metric monitors EC2 cpu utilization in EU"
   alarm_actions       = [aws_sns_topic.eu_alerts.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.eu_asg.name
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-ec2-cpu-high-eu-${local.suffix}"
   })
@@ -1496,11 +1496,11 @@ resource "aws_cloudwatch_metric_alarm" "us_rds_cpu" {
   threshold           = "75"
   alarm_description   = "This metric monitors RDS cpu utilization in US"
   alarm_actions       = [aws_sns_topic.us_alerts.arn]
-
+  
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.us_primary.identifier
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-rds-cpu-us-${local.suffix}"
   })
@@ -1543,12 +1543,12 @@ resource "aws_cloudwatch_metric_alarm" "us_alb_unhealthy_hosts" {
   threshold           = "0"
   alarm_description   = "Alert when we have unhealthy targets in US"
   alarm_actions       = [aws_sns_topic.us_alerts.arn]
-
+  
   dimensions = {
     TargetGroup  = aws_lb_target_group.us_tg.arn_suffix
     LoadBalancer = aws_lb.us_alb.arn_suffix
   }
-
+  
   tags = merge(local.us_tags, {
     Name = "${var.app_name}-alb-unhealthy-us-${local.suffix}"
   })
@@ -1567,12 +1567,12 @@ resource "aws_cloudwatch_metric_alarm" "eu_alb_unhealthy_hosts" {
   threshold           = "0"
   alarm_description   = "Alert when we have unhealthy targets in EU"
   alarm_actions       = [aws_sns_topic.eu_alerts.arn]
-
+  
   dimensions = {
     TargetGroup  = aws_lb_target_group.eu_tg.arn_suffix
     LoadBalancer = aws_lb.eu_alb.arn_suffix
   }
-
+  
   tags = merge(local.eu_tags, {
     Name = "${var.app_name}-alb-unhealthy-eu-${local.suffix}"
   })
@@ -1814,12 +1814,12 @@ output "s3_replication_role_arn" {
   value       = aws_iam_role.s3_replication_role.arn
 }
 
-output "aws_primary_region" {
+output "aws_primary_region"{
   description = "aws primary region"
   value       = var.primary_region
 }
 
-output "aws_secondary_region" {
+output "aws_secondary_region"{
   description = "aws secondary region"
   value       = var.secondary_region
 }

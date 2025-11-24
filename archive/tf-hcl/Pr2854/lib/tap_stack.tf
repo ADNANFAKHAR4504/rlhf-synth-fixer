@@ -65,7 +65,7 @@ locals {
 
   # Availability zones
   primary_azs   = ["${var.primary_region}a", "${var.primary_region}b", "${var.primary_region}c"]
-  secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}c", "${var.secondary_region}b"]
+  secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}c","${var.secondary_region}b"]
 
   # Subnet CIDR blocks for primary region
   primary_public_subnets  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
@@ -170,11 +170,11 @@ resource "random_string" "secondary_db_username" {
 
 # Random password for secondary RDS
 resource "random_password" "secondary_db_password" {
-  length           = 16
-  upper            = true
-  lower            = true
-  numeric          = true
-  special          = true
+  length  = 16
+  upper   = true
+  lower   = true
+  numeric = true
+  special = true
   override_special = "!#$%&*()-_=+[]{}|;:,.<>?"
 
   keepers = {
@@ -1120,18 +1120,18 @@ resource "aws_db_instance" "primary_rds" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   # Updates and monitoring
-  auto_minor_version_upgrade      = true
-  monitoring_interval             = 60
+  auto_minor_version_upgrade = true
+  monitoring_interval        = 60
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Deletion protection
-  skip_final_snapshot      = true
-  delete_automated_backups = true
-  deletion_protection      = false
+  skip_final_snapshot       = true
+  delete_automated_backups  = true
+  deletion_protection       = false
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-rds-instance"
@@ -1181,18 +1181,18 @@ resource "aws_db_instance" "secondary_rds" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   # Updates and monitoring
-  auto_minor_version_upgrade      = true
-  monitoring_interval             = 60
+  auto_minor_version_upgrade = true
+  monitoring_interval        = 60
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Deletion protection
-  skip_final_snapshot      = true
-  delete_automated_backups = true
-  deletion_protection      = false
+  skip_final_snapshot       = true
+  delete_automated_backups  = true
+  deletion_protection       = false
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-rds-instance"
@@ -1208,7 +1208,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "/tmp/lambda_function.zip"
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import logging
 
@@ -1242,11 +1242,11 @@ resource "aws_lambda_function" "app_lambda" {
   provider         = aws.us_east_2
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${local.primary_prefix}-lambda-function"
-  role             = aws_iam_role.lambda_execution_role.arn
-  handler          = "lambda_function.lambda_handler"
+  role            = aws_iam_role.lambda_execution_role.arn
+  handler         = "lambda_function.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
-  timeout          = 30
+  runtime         = "python3.9"
+  timeout         = 30
 
   vpc_config {
     subnet_ids         = aws_subnet.primary_private_subnets[*].id
@@ -1527,8 +1527,8 @@ resource "aws_cloudtrail" "app_cloudtrail" {
   kms_key_id                    = aws_kms_key.primary_kms_key.arn
 
   event_selector {
-    read_write_type                  = "All"
-    include_management_events        = true
+    read_write_type                 = "All"
+    include_management_events       = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -1603,8 +1603,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_alarm" {
 
 # SNS topic for alerts
 resource "aws_sns_topic" "alerts" {
-  provider          = aws.us_east_2
-  name              = "${local.primary_prefix}-alerts"
+  provider         = aws.us_east_2
+  name             = "${local.primary_prefix}-alerts"
   kms_master_key_id = aws_kms_key.primary_kms_key.arn
 
   tags = merge(local.common_tags, {
@@ -1681,7 +1681,7 @@ resource "aws_s3_bucket_policy" "config_bucket_policy" {
         Resource = "${aws_s3_bucket.config_bucket.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "s3:x-amz-acl"     = "bucket-owner-full-control"
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
           }
         }
@@ -1692,10 +1692,10 @@ resource "aws_s3_bucket_policy" "config_bucket_policy" {
 
 # Config delivery channel
 resource "aws_config_delivery_channel" "app_config_delivery_channel" {
-  provider       = aws.us_east_2
-  name           = "${local.primary_prefix}-delivery-channel"
-  s3_bucket_name = aws_s3_bucket.config_bucket.bucket
-  s3_key_prefix  = "config"
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-delivery-channel"
+  s3_bucket_name     = aws_s3_bucket.config_bucket.bucket
+  s3_key_prefix      = "config"
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"
   }

@@ -1,7 +1,7 @@
 resource "aws_dynamodb_table" "search_data" {
-  name         = "${var.app_name}-search-data"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
+  name           = "${var.app_name}-search-data"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "id"
 
   attribute {
     name = "id"
@@ -14,11 +14,11 @@ resource "aws_dynamodb_table" "search_data" {
   }
 
   global_secondary_index {
-    name            = "QueryIndex"
-    hash_key        = "query"
-    projection_type = "ALL"
-    write_capacity  = 0
-    read_capacity   = 0
+    name               = "QueryIndex"
+    hash_key           = "query"
+    projection_type    = "ALL"
+    write_capacity     = 0
+    read_capacity      = 0
   }
 
   tags = {

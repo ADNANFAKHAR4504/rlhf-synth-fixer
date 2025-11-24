@@ -66,18 +66,18 @@ locals {
   # Naming conventions
   primary_prefix   = "${var.project_name}-${var.environment}-primary"
   secondary_prefix = "${var.project_name}-${var.environment}-secondary"
-
-  primary_alb_name   = "${var.project_name}-prod-pri-alb" # 21 characters
+  
+  primary_alb_name   = "${var.project_name}-prod-pri-alb"    # 21 characters
   secondary_alb_name = "${var.project_name}-prod-sec-alb"
 
   # Network configuration
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-
+  
   # Subnet CIDRs
   primary_public_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-
+  
   secondary_public_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_cidrs = ["10.1.10.0/24", "10.1.20.0/24"]
 }
@@ -164,8 +164,8 @@ resource "random_string" "secondary_db_username" {
 
 # Random master password for secondary RDS
 resource "random_password" "secondary_db_password" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
   override_special = "!#$%&*+-=?^_|~"
 }
 
@@ -752,15 +752,15 @@ resource "aws_db_instance" "primary" {
   parameter_group_name   = "default.mysql8.0"
   db_subnet_group_name   = aws_db_subnet_group.primary.name
   vpc_security_group_ids = [aws_security_group.primary_rds.id]
-
+  
   # High availability and maintenance settings
-  multi_az                   = true
+  multi_az               = true
   auto_minor_version_upgrade = true
-  publicly_accessible        = false
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
-
+  publicly_accessible    = false
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Disable deletion protection for this demo
   deletion_protection = false
   skip_final_snapshot = true
@@ -789,15 +789,15 @@ resource "aws_db_instance" "secondary" {
   parameter_group_name   = "default.mysql8.0"
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
   vpc_security_group_ids = [aws_security_group.secondary_rds.id]
-
+  
   # High availability and maintenance settings
-  multi_az                   = true
+  multi_az               = true
   auto_minor_version_upgrade = true
-  publicly_accessible        = false
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
-
+  publicly_accessible    = false
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Disable deletion protection for this demo
   deletion_protection = false
   skip_final_snapshot = true
@@ -1455,11 +1455,11 @@ resource "aws_launch_template" "secondary" {
 
 # Auto Scaling Group for primary region
 resource "aws_autoscaling_group" "primary" {
-  provider                  = aws.us_east_2
-  name                      = "${local.primary_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.primary_private[*].id
-  target_group_arns         = [aws_lb_target_group.primary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_east_2
+  name                = "${local.primary_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.primary_private[*].id
+  target_group_arns   = [aws_lb_target_group.primary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -1489,11 +1489,11 @@ resource "aws_autoscaling_group" "primary" {
 
 # Auto Scaling Group for secondary region
 resource "aws_autoscaling_group" "secondary" {
-  provider                  = aws.us_west_1
-  name                      = "${local.secondary_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
-  target_group_arns         = [aws_lb_target_group.secondary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_west_1
+  name                = "${local.secondary_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.secondary_private[*].id
+  target_group_arns   = [aws_lb_target_group.secondary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -1527,41 +1527,41 @@ resource "aws_autoscaling_group" "secondary" {
 
 # Scale up policy for primary region
 resource "aws_autoscaling_policy" "primary_scale_up" {
-  provider               = aws.us_east_2
-  name                   = "${local.primary_prefix}-scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-scale-up"
+  scaling_adjustment = 1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Scale down policy for primary region
 resource "aws_autoscaling_policy" "primary_scale_down" {
-  provider               = aws.us_east_2
-  name                   = "${local.primary_prefix}-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-scale-down"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Scale up policy for secondary region
 resource "aws_autoscaling_policy" "secondary_scale_up" {
-  provider               = aws.us_west_1
-  name                   = "${local.secondary_prefix}-scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_west_1
+  name               = "${local.secondary_prefix}-scale-up"
+  scaling_adjustment = 1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
 # Scale down policy for secondary region
 resource "aws_autoscaling_policy" "secondary_scale_down" {
-  provider               = aws.us_west_1
-  name                   = "${local.secondary_prefix}-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_west_1
+  name               = "${local.secondary_prefix}-scale-down"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
@@ -1668,13 +1668,13 @@ resource "aws_route53_zone" "main" {
 
 # Route 53 health check for primary ALB
 resource "aws_route53_health_check" "primary" {
-  provider          = aws.us_east_2
-  fqdn              = aws_lb.primary.dns_name
-  port              = 80
-  type              = "HTTP"
-  resource_path     = "/"
-  failure_threshold = "5"
-  request_interval  = "30"
+  provider                      = aws.us_east_2
+  fqdn                          = aws_lb.primary.dns_name
+  port                          = 80
+  type                          = "HTTP"
+  resource_path                 = "/"
+  failure_threshold             = "5"
+  request_interval              = "30"
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-health-check"
@@ -1683,13 +1683,13 @@ resource "aws_route53_health_check" "primary" {
 
 # Route 53 health check for secondary ALB
 resource "aws_route53_health_check" "secondary" {
-  provider          = aws.us_west_1
-  fqdn              = aws_lb.secondary.dns_name
-  port              = 80
-  type              = "HTTP"
-  resource_path     = "/"
-  failure_threshold = "5"
-  request_interval  = "30"
+  provider                      = aws.us_west_1
+  fqdn                          = aws_lb.secondary.dns_name
+  port                          = 80
+  type                          = "HTTP"
+  resource_path                 = "/"
+  failure_threshold             = "5"
+  request_interval              = "30"
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-health-check"
@@ -1698,10 +1698,10 @@ resource "aws_route53_health_check" "secondary" {
 
 # Route 53 record for primary region (weighted routing)
 resource "aws_route53_record" "primary" {
-  zone_id         = aws_route53_zone.main.zone_id
-  name            = var.domain_name
-  type            = "A"
-  set_identifier  = "primary"
+  zone_id        = aws_route53_zone.main.zone_id
+  name           = var.domain_name
+  type           = "A"
+  set_identifier = "primary"
   health_check_id = aws_route53_health_check.primary.id
 
   weighted_routing_policy {
@@ -1717,10 +1717,10 @@ resource "aws_route53_record" "primary" {
 
 # Route 53 record for secondary region (weighted routing)
 resource "aws_route53_record" "secondary" {
-  zone_id         = aws_route53_zone.main.zone_id
-  name            = var.domain_name
-  type            = "A"
-  set_identifier  = "secondary"
+  zone_id        = aws_route53_zone.main.zone_id
+  name           = var.domain_name
+  type           = "A"
+  set_identifier = "secondary"
   health_check_id = aws_route53_health_check.secondary.id
 
   weighted_routing_policy {
@@ -1736,10 +1736,10 @@ resource "aws_route53_record" "secondary" {
 
 # Route 53 record for www subdomain (primary)
 resource "aws_route53_record" "www_primary" {
-  zone_id         = aws_route53_zone.main.zone_id
-  name            = "www.${var.domain_name}"
-  type            = "A"
-  set_identifier  = "www-primary"
+  zone_id        = aws_route53_zone.main.zone_id
+  name           = "www.${var.domain_name}"
+  type           = "A"
+  set_identifier = "www-primary"
   health_check_id = aws_route53_health_check.primary.id
 
   weighted_routing_policy {
@@ -1755,10 +1755,10 @@ resource "aws_route53_record" "www_primary" {
 
 # Route 53 record for www subdomain (secondary)
 resource "aws_route53_record" "www_secondary" {
-  zone_id         = aws_route53_zone.main.zone_id
-  name            = "www.${var.domain_name}"
-  type            = "A"
-  set_identifier  = "www-secondary"
+  zone_id        = aws_route53_zone.main.zone_id
+  name           = "www.${var.domain_name}"
+  type           = "A"
+  set_identifier = "www-secondary"
   health_check_id = aws_route53_health_check.secondary.id
 
   weighted_routing_policy {

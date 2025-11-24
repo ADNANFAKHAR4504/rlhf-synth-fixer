@@ -1,31 +1,31 @@
 # main.tf
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
-  tags       = { Name = "web-app-vpc-274802" }
+  tags = { Name = "web-app-vpc-274802" }
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "main-igw-274802" }
+  tags = { Name = "main-igw-274802" }
 }
 
 resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = "${var.aws_region}a"
-  tags              = { Name = "public-subnet-274802" }
+  tags = { Name = "public-subnet-274802" }
 }
 
 resource "aws_subnet" "public_secondary" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "${var.aws_region}b"
-  tags              = { Name = "public-subnet-secondary-274802" }
+  tags = { Name = "public-subnet-secondary-274802" }
 }
 
 resource "aws_route_table" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "main-rt-274802" }
+  tags = { Name = "main-rt-274802" }
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -108,7 +108,7 @@ data "aws_region" "current" {}
 
 resource "aws_s3_bucket" "app" {
   bucket = "webapp-bucket-274802"
-  tags   = { Name = "webapp-s3-274802" }
+  tags = { Name = "webapp-s3-274802" }
 }
 
 resource "aws_s3_bucket_ownership_controls" "app" {
@@ -195,8 +195,8 @@ resource "aws_iam_role" "ecs_task" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
     }]
   })
@@ -207,9 +207,9 @@ resource "aws_iam_policy" "s3_read" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action   = ["s3:GetObject", "s3:GetObjectVersion"]
+      Action = ["s3:GetObject", "s3:GetObjectVersion"]
       Resource = "${aws_s3_bucket.app.arn}/*"
-      Effect   = "Allow"
+      Effect = "Allow"
     }]
   })
 }
@@ -221,12 +221,12 @@ resource "aws_iam_role_policy_attachment" "s3_read" {
 
 resource "aws_cloudtrail" "main" {
   name                          = "web-app-trail-274802"
-  s3_bucket_name                = aws_s3_bucket.app.bucket
-  s3_key_prefix                 = "cloudtrail-logs"
+  s3_bucket_name               = aws_s3_bucket.app.bucket
+  s3_key_prefix                = "cloudtrail-logs"
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-  enable_log_file_validation    = true
+  is_multi_region_trail        = true
+  enable_logging               = true
+  enable_log_file_validation   = true
 
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
@@ -398,6 +398,6 @@ output "cloudwatch_alarms" {
   description = "CloudWatch alarm names for security monitoring"
   value = {
     unauthorized_access = aws_cloudwatch_metric_alarm.unauthorized_access.alarm_name
-    iam_violations      = aws_cloudwatch_metric_alarm.iam_violations.alarm_name
+    iam_violations     = aws_cloudwatch_metric_alarm.iam_violations.alarm_name
   }
 }

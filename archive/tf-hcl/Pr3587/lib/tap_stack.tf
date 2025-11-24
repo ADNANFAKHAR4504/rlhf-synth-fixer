@@ -75,7 +75,7 @@ locals {
   public_subnets  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   private_subnets = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
   db_subnets      = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
-
+  
   common_tags = {
     Environment = var.environment
     Project     = var.project_name
@@ -492,7 +492,7 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2               = true
+  enable_http2              = true
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb"
@@ -601,14 +601,14 @@ resource "aws_launch_template" "main" {
 # ==========================================
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.project_name}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name               = "${var.project_name}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size                  = 2
-  max_size                  = 4
-  desired_capacity          = 2
+  min_size           = 2
+  max_size           = 4
+  desired_capacity   = 2
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -636,7 +636,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -645,7 +645,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -669,26 +669,26 @@ resource "aws_db_instance" "main" {
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
-
-  allocated_storage = 20
-  storage_type      = "gp2"
-  storage_encrypted = true
-
+  
+  allocated_storage     = 20
+  storage_type         = "gp2"
+  storage_encrypted    = true
+  
   db_name  = "${var.project_name}db"
   username = "a${random_string.rds_username_suffix.result}"
   password = random_password.rds_password.result
-
+  
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  multi_az                   = true
-  publicly_accessible        = false
+  
+  multi_az               = true
+  publicly_accessible    = false
   auto_minor_version_upgrade = true
-
+  
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   skip_final_snapshot = true
   deletion_protection = false
 

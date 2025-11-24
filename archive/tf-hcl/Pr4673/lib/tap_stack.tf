@@ -48,7 +48,7 @@ variable "environment" {
   description = "Deployment environment (prod/staging)"
   type        = string
   default     = "prod"
-
+  
   validation {
     condition     = contains(["prod", "staging"], var.environment)
     error_message = "Environment must be prod or staging"
@@ -104,54 +104,54 @@ variable "state_lock_table" {
 locals {
   # Resource naming conventions
   resource_prefix = "${var.environment}-iac56232"
-
+  
   # Common tags
   common_tags = {
     Environment     = var.environment
     ComplianceScope = "financial-services"
     iac-rlhf-amazon = "true"
-    team            = 2
+    team = 2
   }
-
+  
   # Network configuration
   az_count = 3
-
+  
   primary_azs   = data.aws_availability_zones.primary.names
   secondary_azs = data.aws_availability_zones.secondary.names
-
+  
   # Subnet calculations
   primary_subnet_cidrs = {
     public  = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr_blocks.primary, 4, i)]
     private = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr_blocks.primary, 4, i + 3)]
     db      = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr_blocks.primary, 4, i + 6)]
   }
-
+  
   secondary_subnet_cidrs = {
     public  = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr_blocks.secondary, 4, i)]
     private = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr_blocks.secondary, 4, i + 3)]
     db      = [for i in range(local.az_count) : cidrsubnet(var.vpc_cidr_blocks.secondary, 4, i + 6)]
   }
-
+  
   # Feature toggles
-  enable_flow_logs           = var.environment == "prod"
-  enable_guardduty           = var.environment == "prod"
+  enable_flow_logs      = var.environment == "prod"
+  enable_guardduty      = var.environment == "prod"
   enable_detailed_monitoring = var.environment == "prod"
-
+  
   # Database configuration
   db_cluster_identifier = "${local.resource_prefix}-aurora-global"
-  db_name               = "tradingdb"
-  db_master_username    = "admin"
-  db_port               = 3306
-
+  db_name              = "tradingdb"
+  db_master_username   = "admin"
+  db_port             = 3306
+  
   # Lambda configuration
   lambda_runtime = "python3.11"
   lambda_timeout = 60
-
+  
   # Health check configuration
   health_check_interval = 10
   health_check_timeout  = 5
-  health_threshold      = 2
-  unhealthy_threshold   = 2
+  health_threshold     = 2
+  unhealthy_threshold  = 2
 
   # Application bootstrap artifacts
   app_user_data_template = "${path.module}/runtime/app_user_data.sh.tmpl"
@@ -179,12 +179,12 @@ data "aws_caller_identity" "current" {}
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -195,12 +195,12 @@ data "aws_ami" "amazon_linux_secondary" {
   provider    = aws.secondary
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -215,7 +215,7 @@ resource "aws_kms_key" "primary" {
   description             = "KMS key for ${local.resource_prefix} - Primary Region"
   deletion_window_in_days = var.kms_deletion_window
   enable_key_rotation     = true
-
+  
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-kms-primary"
     Region = "primary"
@@ -232,7 +232,7 @@ resource "aws_kms_key" "secondary" {
   description             = "KMS key for ${local.resource_prefix} - Secondary Region"
   deletion_window_in_days = var.kms_deletion_window
   enable_key_rotation     = true
-
+  
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-kms-secondary"
     Region = "secondary"
@@ -253,7 +253,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = var.vpc_cidr_blocks.primary
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-vpc-primary"
     Region = "primary"
@@ -266,7 +266,7 @@ resource "aws_subnet" "primary_public" {
   cidr_block              = local.primary_subnet_cidrs.public[count.index]
   availability_zone       = local.primary_azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-public-subnet-${count.index + 1}"
     Type = "public"
@@ -278,7 +278,7 @@ resource "aws_subnet" "primary_private" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.primary_subnet_cidrs.private[count.index]
   availability_zone = local.primary_azs[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-private-subnet-${count.index + 1}"
     Type = "private"
@@ -290,7 +290,7 @@ resource "aws_subnet" "primary_db" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.primary_subnet_cidrs.db[count.index]
   availability_zone = local.primary_azs[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-db-subnet-${count.index + 1}"
     Type = "database"
@@ -299,7 +299,7 @@ resource "aws_subnet" "primary_db" {
 
 resource "aws_internet_gateway" "primary" {
   vpc_id = aws_vpc.primary.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-igw-primary"
   })
@@ -308,7 +308,7 @@ resource "aws_internet_gateway" "primary" {
 resource "aws_eip" "primary_nat" {
   count  = local.az_count
   domain = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-nat-eip-${count.index + 1}"
   })
@@ -318,7 +318,7 @@ resource "aws_nat_gateway" "primary" {
   count         = local.az_count
   allocation_id = aws_eip.primary_nat[count.index].id
   subnet_id     = aws_subnet.primary_public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-nat-${count.index + 1}"
   })
@@ -326,12 +326,12 @@ resource "aws_nat_gateway" "primary" {
 
 resource "aws_route_table" "primary_public" {
   vpc_id = aws_vpc.primary.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-public-rt"
   })
@@ -340,12 +340,12 @@ resource "aws_route_table" "primary_public" {
 resource "aws_route_table" "primary_private" {
   count  = local.az_count
   vpc_id = aws_vpc.primary.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-private-rt-${count.index + 1}"
   })
@@ -378,7 +378,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = var.vpc_cidr_blocks.secondary
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-vpc-secondary"
     Region = "secondary"
@@ -392,7 +392,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = local.secondary_subnet_cidrs.public[count.index]
   availability_zone       = local.secondary_azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-public-subnet-${count.index + 1}"
     Type = "public"
@@ -405,7 +405,7 @@ resource "aws_subnet" "secondary_private" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_subnet_cidrs.private[count.index]
   availability_zone = local.secondary_azs[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-private-subnet-${count.index + 1}"
     Type = "private"
@@ -418,7 +418,7 @@ resource "aws_subnet" "secondary_db" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_subnet_cidrs.db[count.index]
   availability_zone = local.secondary_azs[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-db-subnet-${count.index + 1}"
     Type = "database"
@@ -428,7 +428,7 @@ resource "aws_subnet" "secondary_db" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.secondary
   vpc_id   = aws_vpc.secondary.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-igw-secondary"
   })
@@ -438,7 +438,7 @@ resource "aws_eip" "secondary_nat" {
   provider = aws.secondary
   count    = local.az_count
   domain   = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-nat-eip-${count.index + 1}"
   })
@@ -449,7 +449,7 @@ resource "aws_nat_gateway" "secondary" {
   count         = local.az_count
   allocation_id = aws_eip.secondary_nat[count.index].id
   subnet_id     = aws_subnet.secondary_public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-nat-${count.index + 1}"
   })
@@ -458,12 +458,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "secondary_public" {
   provider = aws.secondary
   vpc_id   = aws_vpc.secondary.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-public-rt"
   })
@@ -473,12 +473,12 @@ resource "aws_route_table" "secondary_private" {
   provider = aws.secondary
   count    = local.az_count
   vpc_id   = aws_vpc.secondary.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-private-rt-${count.index + 1}"
   })
@@ -512,7 +512,7 @@ resource "aws_route_table_association" "secondary_db" {
 resource "aws_security_group" "alb_primary" {
   name_prefix = "${local.resource_prefix}-alb-"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -520,7 +520,7 @@ resource "aws_security_group" "alb_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS from Internet"
   }
-
+  
   ingress {
     from_port   = 80
     to_port     = 80
@@ -528,7 +528,7 @@ resource "aws_security_group" "alb_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP from Internet"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -536,7 +536,7 @@ resource "aws_security_group" "alb_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-alb-sg-primary"
   })
@@ -546,7 +546,7 @@ resource "aws_security_group" "alb_secondary" {
   provider    = aws.secondary
   name_prefix = "${local.resource_prefix}-alb-"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -554,7 +554,7 @@ resource "aws_security_group" "alb_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS from Internet"
   }
-
+  
   ingress {
     from_port   = 80
     to_port     = 80
@@ -562,7 +562,7 @@ resource "aws_security_group" "alb_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP from Internet"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -570,7 +570,7 @@ resource "aws_security_group" "alb_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-alb-sg-secondary"
   })
@@ -579,7 +579,7 @@ resource "aws_security_group" "alb_secondary" {
 resource "aws_security_group" "ec2_primary" {
   name_prefix = "${local.resource_prefix}-ec2-"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     from_port       = 80
     to_port         = 80
@@ -587,7 +587,7 @@ resource "aws_security_group" "ec2_primary" {
     security_groups = [aws_security_group.alb_primary.id]
     description     = "HTTP from ALB"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -595,7 +595,7 @@ resource "aws_security_group" "ec2_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-sg-primary"
   })
@@ -605,7 +605,7 @@ resource "aws_security_group" "ec2_secondary" {
   provider    = aws.secondary
   name_prefix = "${local.resource_prefix}-ec2-"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     from_port       = 80
     to_port         = 80
@@ -613,7 +613,7 @@ resource "aws_security_group" "ec2_secondary" {
     security_groups = [aws_security_group.alb_secondary.id]
     description     = "HTTP from ALB"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -621,7 +621,7 @@ resource "aws_security_group" "ec2_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-sg-secondary"
   })
@@ -630,7 +630,7 @@ resource "aws_security_group" "ec2_secondary" {
 resource "aws_security_group" "rds_primary" {
   name_prefix = "${local.resource_prefix}-rds-"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     from_port       = local.db_port
     to_port         = local.db_port
@@ -638,7 +638,7 @@ resource "aws_security_group" "rds_primary" {
     security_groups = [aws_security_group.ec2_primary.id, aws_security_group.lambda_primary.id]
     description     = "MySQL/Aurora from application"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -646,7 +646,7 @@ resource "aws_security_group" "rds_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-sg-primary"
   })
@@ -656,7 +656,7 @@ resource "aws_security_group" "rds_secondary" {
   provider    = aws.secondary
   name_prefix = "${local.resource_prefix}-rds-"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     from_port       = local.db_port
     to_port         = local.db_port
@@ -664,7 +664,7 @@ resource "aws_security_group" "rds_secondary" {
     security_groups = [aws_security_group.ec2_secondary.id, aws_security_group.lambda_secondary.id]
     description     = "MySQL/Aurora from application"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -672,7 +672,7 @@ resource "aws_security_group" "rds_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-sg-secondary"
   })
@@ -681,7 +681,7 @@ resource "aws_security_group" "rds_secondary" {
 resource "aws_security_group" "lambda_primary" {
   name_prefix = "${local.resource_prefix}-lambda-"
   vpc_id      = aws_vpc.primary.id
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -689,7 +689,7 @@ resource "aws_security_group" "lambda_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-lambda-sg-primary"
   })
@@ -699,7 +699,7 @@ resource "aws_security_group" "lambda_secondary" {
   provider    = aws.secondary
   name_prefix = "${local.resource_prefix}-lambda-"
   vpc_id      = aws_vpc.secondary.id
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -707,7 +707,7 @@ resource "aws_security_group" "lambda_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-lambda-sg-secondary"
   })
@@ -718,7 +718,7 @@ resource "aws_security_group" "lambda_secondary" {
 # ==========================================
 
 resource "random_password" "db_password" {
-  length           = 32
+  length  = 32
   special          = true
   override_special = "!#$&*()-_=+"
 }
@@ -728,12 +728,12 @@ resource "aws_secretsmanager_secret" "db_credentials" {
   description             = "Aurora database master credentials"
   kms_key_id              = aws_kms_key.primary.arn
   recovery_window_in_days = 0
-
+  
   replica {
     region     = var.secondary_region
     kms_key_id = aws_kms_key.secondary.arn
   }
-
+  
   tags = local.common_tags
 }
 
@@ -756,7 +756,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 resource "aws_db_subnet_group" "primary" {
   name       = "${local.resource_prefix}-db-subnet-primary"
   subnet_ids = aws_subnet.primary_db[*].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-db-subnet-primary"
   })
@@ -766,7 +766,7 @@ resource "aws_db_subnet_group" "secondary" {
   provider   = aws.secondary
   name       = "${local.resource_prefix}-db-subnet-secondary"
   subnet_ids = aws_subnet.secondary_db[*].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-db-subnet-secondary"
   })
@@ -775,10 +775,10 @@ resource "aws_db_subnet_group" "secondary" {
 resource "aws_rds_global_cluster" "main" {
   global_cluster_identifier = local.db_cluster_identifier
   engine                    = "aurora-mysql"
-  engine_version            = "8.0.mysql_aurora.3.04.0"
-  database_name             = local.db_name
-  storage_encrypted         = true
-  deletion_protection       = false
+  engine_version           = "8.0.mysql_aurora.3.04.0"
+  database_name            = local.db_name
+  storage_encrypted        = true
+  deletion_protection      = false
 }
 
 resource "aws_rds_cluster" "primary" {
@@ -790,18 +790,18 @@ resource "aws_rds_cluster" "primary" {
   master_username                 = local.db_master_username
   master_password                 = random_password.db_password.result
   database_name                   = local.db_name
-  db_subnet_group_name            = aws_db_subnet_group.primary.name
-  vpc_security_group_ids          = [aws_security_group.rds_primary.id]
-  backup_retention_period         = var.backup_retention_period
-  preferred_backup_window         = "03:00-04:00"
-  preferred_maintenance_window    = "sun:04:00-sun:05:00"
+  db_subnet_group_name           = aws_db_subnet_group.primary.name
+  vpc_security_group_ids         = [aws_security_group.rds_primary.id]
+  backup_retention_period        = var.backup_retention_period
+  preferred_backup_window        = "03:00-04:00"
+  preferred_maintenance_window   = "sun:04:00-sun:05:00"
   enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
-  storage_encrypted               = true
-  kms_key_id                      = aws_kms_key.primary.arn
-  deletion_protection             = false
-  skip_final_snapshot             = true
-  final_snapshot_identifier       = "${local.db_cluster_identifier}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-
+  storage_encrypted              = true
+  kms_key_id                     = aws_kms_key.primary.arn
+  deletion_protection            = false
+  skip_final_snapshot            = true
+  final_snapshot_identifier      = "${local.db_cluster_identifier}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-aurora-primary"
     Region = "primary"
@@ -812,13 +812,13 @@ resource "aws_rds_cluster_instance" "primary" {
   count                        = 2
   identifier                   = "${local.db_cluster_identifier}-primary-${count.index + 1}"
   cluster_identifier           = aws_rds_cluster.primary.id
-  instance_class               = var.database_instance_class
-  engine                       = aws_rds_cluster.primary.engine
-  engine_version               = aws_rds_cluster.primary.engine_version
+  instance_class              = var.database_instance_class
+  engine                      = aws_rds_cluster.primary.engine
+  engine_version              = aws_rds_cluster.primary.engine_version
   performance_insights_enabled = true
-  monitoring_interval          = local.enable_detailed_monitoring ? 60 : 0
-  monitoring_role_arn          = local.enable_detailed_monitoring ? aws_iam_role.rds_monitoring.arn : null
-
+  monitoring_interval         = local.enable_detailed_monitoring ? 60 : 0
+  monitoring_role_arn         = local.enable_detailed_monitoring ? aws_iam_role.rds_monitoring.arn : null
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-aurora-instance-primary-${count.index + 1}"
   })
@@ -831,22 +831,22 @@ resource "aws_rds_cluster" "secondary" {
   engine_version                  = aws_rds_global_cluster.main.engine_version
   engine_mode                     = "provisioned"
   global_cluster_identifier       = aws_rds_global_cluster.main.id
-  db_subnet_group_name            = aws_db_subnet_group.secondary.name
-  vpc_security_group_ids          = [aws_security_group.rds_secondary.id]
-  backup_retention_period         = var.backup_retention_period
-  preferred_backup_window         = "03:00-04:00"
-  preferred_maintenance_window    = "sun:04:00-sun:05:00"
+  db_subnet_group_name           = aws_db_subnet_group.secondary.name
+  vpc_security_group_ids         = [aws_security_group.rds_secondary.id]
+  backup_retention_period        = var.backup_retention_period
+  preferred_backup_window        = "03:00-04:00"
+  preferred_maintenance_window   = "sun:04:00-sun:05:00"
   enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
-  storage_encrypted               = true
-  kms_key_id                      = aws_kms_key.secondary.arn
-  deletion_protection             = false
-  skip_final_snapshot             = true
-  final_snapshot_identifier       = "${local.db_cluster_identifier}-final3-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-
+  storage_encrypted              = true
+  kms_key_id                     = aws_kms_key.secondary.arn
+  deletion_protection            = false
+  skip_final_snapshot            = true
+  final_snapshot_identifier      = "${local.db_cluster_identifier}-final3-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  
   depends_on = [
     aws_rds_cluster_instance.primary
   ]
-
+  
   tags = merge(local.common_tags, {
     Name   = "${local.resource_prefix}-aurora-secondary"
     Region = "secondary"
@@ -858,13 +858,13 @@ resource "aws_rds_cluster_instance" "secondary" {
   count                        = 2
   identifier                   = "${local.db_cluster_identifier}-secondary-${count.index + 1}"
   cluster_identifier           = aws_rds_cluster.secondary.id
-  instance_class               = var.database_instance_class
-  engine                       = aws_rds_cluster.secondary.engine
-  engine_version               = aws_rds_cluster.secondary.engine_version
+  instance_class              = var.database_instance_class
+  engine                      = aws_rds_cluster.secondary.engine
+  engine_version              = aws_rds_cluster.secondary.engine_version
   performance_insights_enabled = true
-  monitoring_interval          = local.enable_detailed_monitoring ? 60 : 0
-  monitoring_role_arn          = local.enable_detailed_monitoring ? aws_iam_role.rds_monitoring.arn : null
-
+  monitoring_interval         = local.enable_detailed_monitoring ? 60 : 0
+  monitoring_role_arn         = local.enable_detailed_monitoring ? aws_iam_role.rds_monitoring.arn : null
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-aurora-instance-secondary-${count.index + 1}"
   })
@@ -879,12 +879,12 @@ resource "aws_lb" "primary" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_primary.id]
-  subnets            = aws_subnet.primary_public[*].id
-
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  subnets           = aws_subnet.primary_public[*].id
+  
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-alb-primary"
   })
@@ -896,12 +896,12 @@ resource "aws_lb" "secondary" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_secondary.id]
-  subnets            = aws_subnet.secondary_public[*].id
-
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  subnets           = aws_subnet.secondary_public[*].id
+  
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-alb-secondary"
   })
@@ -912,7 +912,7 @@ resource "aws_lb_target_group" "primary" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = local.health_threshold
@@ -922,15 +922,15 @@ resource "aws_lb_target_group" "primary" {
     path                = "/health"
     matcher             = "200"
   }
-
+  
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400
     enabled         = true
   }
-
+  
   deregistration_delay = 30
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-tg-primary"
   })
@@ -942,7 +942,7 @@ resource "aws_lb_target_group" "secondary" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = local.health_threshold
@@ -952,15 +952,15 @@ resource "aws_lb_target_group" "secondary" {
     path                = "/health"
     matcher             = "200"
   }
-
+  
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400
     enabled         = true
   }
-
+  
   deregistration_delay = 30
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-tg-secondary"
   })
@@ -970,7 +970,7 @@ resource "aws_lb_listener" "primary" {
   load_balancer_arn = aws_lb.primary.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.primary.arn
@@ -982,7 +982,7 @@ resource "aws_lb_listener" "secondary" {
   load_balancer_arn = aws_lb.secondary.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secondary.arn
@@ -995,7 +995,7 @@ resource "aws_lb_listener" "secondary" {
 
 resource "aws_iam_role" "ec2" {
   name = "${local.resource_prefix}-ec2-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1008,7 +1008,7 @@ resource "aws_iam_role" "ec2" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -1132,7 +1132,7 @@ resource "aws_cloudwatch_log_group" "ec2" {
 }
 
 resource "aws_cloudwatch_log_group" "ec2_secondary" {
-  provider          = aws.secondary
+  provider         = aws.secondary
   name              = local.log_group_name
   retention_in_days = 30
   tags              = local.common_tags
@@ -1150,7 +1150,7 @@ resource "aws_instance" "primary" {
   subnet_id              = aws_subnet.primary_private[count.index % local.az_count].id
   vpc_security_group_ids = [aws_security_group.ec2_primary.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
-
+  
   user_data = templatefile(local.app_user_data_template, {
     app_source    = local.app_source
     region        = var.primary_region
@@ -1161,12 +1161,12 @@ resource "aws_instance" "primary" {
     app_port      = 80
   })
   user_data_replace_on_change = true
-
+  
   root_block_device {
-    encrypted  = true
+    encrypted = true
     kms_key_id = aws_kms_key.primary.arn
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-primary-${count.index + 1}"
   })
@@ -1185,7 +1185,7 @@ resource "aws_instance" "secondary" {
   subnet_id              = aws_subnet.secondary_private[count.index % local.az_count].id
   vpc_security_group_ids = [aws_security_group.ec2_secondary.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_secondary.name
-
+  
   user_data = templatefile(local.app_user_data_template, {
     app_source    = local.app_source
     region        = var.secondary_region
@@ -1201,12 +1201,12 @@ resource "aws_instance" "secondary" {
     app_port  = 80
   })
   user_data_replace_on_change = true
-
+  
   root_block_device {
-    encrypted  = true
+    encrypted = true
     kms_key_id = aws_kms_key.secondary.arn
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-secondary-${count.index + 1}"
   })
@@ -1233,7 +1233,7 @@ resource "aws_lb_target_group_attachment" "secondary" {
 
 resource "aws_route53_zone" "main" {
   name = var.route53_domain
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-hosted-zone"
   })
@@ -1246,7 +1246,7 @@ resource "aws_route53_health_check" "primary" {
   resource_path     = "/health"
   failure_threshold = "2"
   request_interval  = "10"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-health-check-primary"
   })
@@ -1256,18 +1256,18 @@ resource "aws_route53_record" "primary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.route53_domain}"
   type    = "A"
-
+  
   set_identifier = "Primary"
   failover_routing_policy {
     type = "PRIMARY"
   }
-
+  
   alias {
     name                   = aws_lb.primary.dns_name
     zone_id                = aws_lb.primary.zone_id
     evaluate_target_health = true
   }
-
+  
   health_check_id = aws_route53_health_check.primary.id
 }
 
@@ -1275,12 +1275,12 @@ resource "aws_route53_record" "secondary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.route53_domain}"
   type    = "A"
-
+  
   set_identifier = "Secondary"
   failover_routing_policy {
     type = "SECONDARY"
   }
-
+  
   alias {
     name                   = aws_lb.secondary.dns_name
     zone_id                = aws_lb.secondary.zone_id
@@ -1294,7 +1294,7 @@ resource "aws_route53_record" "secondary" {
 
 resource "aws_iam_role" "lambda_failover" {
   name = "${local.resource_prefix}-lambda-failover-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1307,14 +1307,14 @@ resource "aws_iam_role" "lambda_failover" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
 resource "aws_iam_role_policy" "lambda_failover" {
   name = "${local.resource_prefix}-lambda-failover-policy"
   role = aws_iam_role.lambda_failover.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1407,12 +1407,12 @@ resource "aws_lambda_function" "failover" {
   filename         = data.archive_file.failover_lambda.output_path
   source_code_hash = data.archive_file.failover_lambda.output_base64sha256
   function_name    = "${local.resource_prefix}-failover-orchestrator"
-  role             = aws_iam_role.lambda_failover.arn
-  handler          = "failover_lambda.handler"
-  runtime          = local.lambda_runtime
-  timeout          = local.lambda_timeout
-  memory_size      = 512
-
+  role            = aws_iam_role.lambda_failover.arn
+  handler         = "failover_lambda.handler"
+  runtime         = local.lambda_runtime
+  timeout         = local.lambda_timeout
+  memory_size     = 512
+  
   environment {
     variables = {
       GLOBAL_CLUSTER_ID = aws_rds_global_cluster.main.id
@@ -1423,16 +1423,16 @@ resource "aws_lambda_function" "failover" {
       ENVIRONMENT       = var.environment
     }
   }
-
+  
   vpc_config {
     subnet_ids         = aws_subnet.primary_private[*].id
     security_group_ids = [aws_security_group.lambda_primary.id]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-failover-lambda"
   })
-
+  
   depends_on = [
     aws_iam_role_policy_attachment.lambda_vpc_execution
   ]
@@ -1445,7 +1445,7 @@ resource "aws_lambda_function" "failover" {
 resource "aws_cloudwatch_event_rule" "health_check_failure" {
   name        = "${local.resource_prefix}-health-check-failure"
   description = "Trigger failover on health check failure"
-
+  
   event_pattern = jsonencode({
     source      = ["aws.route53"]
     detail-type = ["Route 53 Health Check State Change"]
@@ -1454,7 +1454,7 @@ resource "aws_cloudwatch_event_rule" "health_check_failure" {
       newState        = ["UNHEALTHY"]
     }
   })
-
+  
   tags = local.common_tags
 }
 
@@ -1478,7 +1478,7 @@ resource "aws_lambda_permission" "allow_eventbridge_health" {
 
 resource "aws_iam_role" "rds_monitoring" {
   name = "${local.resource_prefix}-rds-monitoring"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1491,7 +1491,7 @@ resource "aws_iam_role" "rds_monitoring" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 

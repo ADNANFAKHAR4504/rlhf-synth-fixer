@@ -66,12 +66,12 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 # CloudTrail
 resource "aws_cloudtrail" "main" {
   name                          = "${var.name_prefix}-trail-${var.environment}"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name               = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-  enable_log_file_validation    = true
-  kms_key_id                    = var.kms_key_id
+  is_multi_region_trail        = true
+  enable_logging               = true
+  enable_log_file_validation   = true
+  kms_key_id                  = var.kms_key_id
 
   event_selector {
     read_write_type           = "All"
@@ -84,7 +84,7 @@ resource "aws_cloudtrail" "main" {
   }
 
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch.arn
+  cloud_watch_logs_role_arn = aws_iam_role.cloudtrail_cloudwatch.arn
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-trail-${var.environment}"
@@ -95,7 +95,7 @@ resource "aws_cloudtrail" "main" {
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${var.name_prefix}-${var.environment}"
   retention_in_days = var.log_retention_days
-  kms_key_id        = var.kms_key_id
+  kms_key_id       = var.kms_key_id
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-cloudtrail-logs-${var.environment}"
@@ -147,12 +147,12 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_unauthorized" {
   alarm_name          = "${var.name_prefix}-cloudtrail-unauthorized-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name         = "UnauthorizedAttemptCount"
-  namespace           = "CloudTrailMetrics"
-  period              = "300"
-  statistic           = "Sum"
-  threshold           = "1"
-  alarm_description   = "This metric monitors unauthorized API calls"
+  metric_name        = "UnauthorizedAttemptCount"
+  namespace          = "CloudTrailMetrics"
+  period             = "300"
+  statistic          = "Sum"
+  threshold          = "1"
+  alarm_description  = "This metric monitors unauthorized API calls"
 
   alarm_actions = var.alarm_actions
 

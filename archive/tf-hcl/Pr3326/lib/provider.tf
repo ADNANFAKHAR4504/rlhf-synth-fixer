@@ -17,7 +17,7 @@ terraform {
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
-
+  
   default_tags {
     tags = var.default_tags
   }

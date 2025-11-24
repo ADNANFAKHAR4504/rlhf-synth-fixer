@@ -81,10 +81,10 @@ locals {
   deployment_id       = var.deployment_id != null ? var.deployment_id : random_string.deployment_suffix.result
   deployment_suffix   = var.deployment_suffix != null ? var.deployment_suffix : random_string.unique_deployment.result
   unique_project_name = "${local.project_name}-${local.deployment_id}"
-
+  
   # Create a unique deployment identifier that's short but unique (max 32 chars)
   unique_deployment_id = var.unique_deployment_id != null ? var.unique_deployment_id : "${substr(local.deployment_id, 0, 4)}-${local.deployment_suffix}"
-
+  
   # Create a very short ASG identifier to stay under 32 chars
   asg_identifier = "${substr(local.deployment_id, 0, 3)}-${random_string.asg_unique.result}"
 
@@ -171,7 +171,7 @@ resource "aws_subnet" "database" {
 
 # NAT EIPs and Gateways
 resource "aws_eip" "nat" {
-  count  = length(local.availability_zones)
+  count = length(local.availability_zones)
   domain = "vpc"
   tags   = merge(local.common_tags, { Name = "${local.unique_project_name}-nat-eip-${count.index + 1}" })
 }
@@ -195,7 +195,7 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table" "private" {
-  count  = length(local.availability_zones)
+  count = length(local.availability_zones)
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
@@ -337,7 +337,7 @@ resource "aws_kms_key" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
+        Effect = "Allow"
         Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
         Action    = "kms:*"
         Resource  = "*"
@@ -368,9 +368,9 @@ resource "aws_iam_role" "ec2_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect    = "Allow"
+      Effect = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
+      Action  = "sts:AssumeRole"
     }]
   })
   tags = local.common_tags
@@ -432,31 +432,31 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # Load Balancer
 resource "aws_lb" "main" {
-  name                       = "${local.unique_project_name}-alb-${random_string.alb_suffix.result}"
-  internal                   = false
-  load_balancer_type         = "application"
-  security_groups            = [aws_security_group.alb.id]
-  subnets                    = aws_subnet.public[*].id
+  name                   = "${local.unique_project_name}-alb-${random_string.alb_suffix.result}"
+  internal               = false
+  load_balancer_type     = "application"
+  security_groups        = [aws_security_group.alb.id]
+  subnets                = aws_subnet.public[*].id
   enable_deletion_protection = false
-  tags                       = merge(local.common_tags, { Name = "${local.unique_project_name}-alb" })
+  tags = merge(local.common_tags, { Name = "${local.unique_project_name}-alb" })
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${local.unique_project_name}-tg-${random_string.tg_suffix.result}"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name       = "${local.unique_project_name}-tg-${random_string.tg_suffix.result}"
+  port       = 80
+  protocol   = "HTTP"
+  vpc_id     = aws_vpc.main.id
 
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 15 # Faster checks every 15 seconds
+    interval            = 15     # Faster checks every 15 seconds
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5 # Shorter timeout
-    unhealthy_threshold = 2 # Fewer failures before marking unhealthy
+    timeout             = 5      # Shorter timeout
+    unhealthy_threshold = 2      # Fewer failures before marking unhealthy
   }
 
   tags = merge(local.common_tags, { Name = "${local.unique_project_name}-target-group" })
@@ -591,7 +591,7 @@ resource "aws_db_subnet_group" "main" {
   name       = "${local.unique_project_name}-${local.unique_deployment_id}-db-subnet"
   subnet_ids = aws_subnet.database[*].id
   tags       = merge(local.common_tags, { Name = "${local.unique_project_name}-db-subnet" })
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -599,33 +599,33 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier              = "${local.unique_project_name}-${local.unique_deployment_id}-database"
-  allocated_storage       = 20
-  max_allocated_storage   = 100
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  kms_key_id              = aws_kms_key.main.arn
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = "db.t3.micro"
-  db_name                 = "appdb"
-  username                = "admin"
-  password                = "changeme123!"
-  publicly_accessible     = false
-  vpc_security_group_ids  = [aws_security_group.rds.id]
-  db_subnet_group_name    = aws_db_subnet_group.main.name
+  identifier           = "${local.unique_project_name}-${local.unique_deployment_id}-database"
+  allocated_storage    = 20
+  max_allocated_storage = 100
+  storage_type         = "gp3"
+  storage_encrypted    = true
+  kms_key_id           = aws_kms_key.main.arn
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = "db.t3.micro"
+  db_name              = "appdb"
+  username             = "admin"
+  password             = "changeme123!"
+  publicly_accessible  = false
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-  skip_final_snapshot     = true
-  deletion_protection     = false
-  tags                    = merge(local.common_tags, { Name = "${local.unique_project_name}-database" })
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  skip_final_snapshot    = true
+  deletion_protection    = false
+  tags = merge(local.common_tags, { Name = "${local.unique_project_name}-database" })
+  
   depends_on = [aws_db_subnet_group.main]
-
+  
   lifecycle {
     create_before_destroy = false
-    replace_triggered_by  = [aws_db_subnet_group.main.name]
+    replace_triggered_by = [aws_db_subnet_group.main.name]
   }
 }
 

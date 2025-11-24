@@ -1,1 +1,0 @@
-# Lambda test package

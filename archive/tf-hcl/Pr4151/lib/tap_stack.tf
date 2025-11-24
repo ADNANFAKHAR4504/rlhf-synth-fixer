@@ -99,15 +99,15 @@ locals {
 
   # Resource naming conventions
   name_prefix = "${var.project_name}-${var.environment}"
-
+  
   # Network configuration
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 3) # Use 3 AZs for HA
-
+  
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
-
+  
   # RDS configuration
   db_name = replace("${var.project_name}${var.environment}db", "-", "")
 }
@@ -307,18 +307,18 @@ resource "aws_security_group" "eb_ec2" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
+    description = "HTTP from ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     security_groups = [aws_security_group.eb_alb.id]
   }
 
   ingress {
-    description     = "HTTPS from ALB"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
+    description = "HTTPS from ALB"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     security_groups = [aws_security_group.eb_alb.id]
   }
 
@@ -414,14 +414,14 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
 
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
-
-  skip_final_snapshot      = true
-  delete_automated_backups = true
-  deletion_protection      = false
+  
+  skip_final_snapshot       = true
+  delete_automated_backups  = true
+  deletion_protection       = false
 
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 

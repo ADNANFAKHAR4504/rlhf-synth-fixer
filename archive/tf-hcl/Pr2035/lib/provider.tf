@@ -23,7 +23,7 @@ provider "aws" {
 provider "aws" {
   alias  = "primary"
   region = "us-east-1"
-
+  
   default_tags {
     tags = {
       Project     = "tap-multi-region"
@@ -36,7 +36,7 @@ provider "aws" {
 provider "aws" {
   alias  = "secondary"
   region = "us-west-2"
-
+  
   default_tags {
     tags = {
       Project     = "tap-multi-region"

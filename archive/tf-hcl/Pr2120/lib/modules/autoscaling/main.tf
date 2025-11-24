@@ -6,7 +6,7 @@ resource "aws_launch_template" "app" {
 
   network_interface {
     associate_public_ip_address = false
-    security_groups             = [var.security_group_id]
+    security_groups            = [var.security_group_id]
   }
 
   iam_instance_profile {
@@ -23,9 +23,9 @@ resource "aws_launch_template" "app" {
     device_name = "/dev/xvda"
     ebs {
       volume_size           = var.root_volume_size
-      volume_type           = "gp3"
-      encrypted             = true
-      kms_key_id            = var.kms_key_id
+      volume_type          = "gp3"
+      encrypted            = true
+      kms_key_id          = var.kms_key_id
       delete_on_termination = true
     }
   }
@@ -55,13 +55,13 @@ resource "aws_launch_template" "app" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "app" {
-  name                      = "${var.name_prefix}-${var.environment}-${var.color}-asg"
-  desired_capacity          = var.desired_capacity
-  max_size                  = var.max_size
-  min_size                  = var.min_size
-  target_group_arns         = [var.target_group_arn]
-  vpc_zone_identifier       = var.subnet_ids
-  health_check_type         = "ELB"
+  name                = "${var.name_prefix}-${var.environment}-${var.color}-asg"
+  desired_capacity    = var.desired_capacity
+  max_size           = var.max_size
+  min_size           = var.min_size
+  target_group_arns  = [var.target_group_arn]
+  vpc_zone_identifier = var.subnet_ids
+  health_check_type  = "ELB"
   health_check_grace_period = 300
 
   launch_template {
@@ -73,7 +73,7 @@ resource "aws_autoscaling_group" "app" {
     strategy = "Rolling"
     preferences {
       min_healthy_percentage = 50
-      instance_warmup        = 300
+      instance_warmup       = 300
     }
   }
 
@@ -100,7 +100,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.name_prefix}-${var.environment}-${var.color}-scale-up"
   autoscaling_group_name = aws_autoscaling_group.app.name
   adjustment_type        = "ChangeInCapacity"
-  policy_type            = "TargetTrackingScaling"
+  policy_type           = "TargetTrackingScaling"
 
   target_tracking_configuration {
     predefined_metric_specification {
@@ -115,13 +115,13 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${var.name_prefix}-${var.environment}-${var.color}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "This metric monitors EC2 CPU utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/EC2"
+  period             = "300"
+  statistic          = "Average"
+  threshold          = 80
+  alarm_description  = "This metric monitors EC2 CPU utilization"
+  alarm_actions      = [aws_autoscaling_policy.scale_up.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.app.name
@@ -133,12 +133,12 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
   alarm_name          = "${var.name_prefix}-${var.environment}-${var.color}-unhealthy-hosts"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "UnHealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = 1
-  alarm_description   = "Monitors unhealthy hosts in target group"
+  metric_name        = "UnHealthyHostCount"
+  namespace          = "AWS/ApplicationELB"
+  period             = "300"
+  statistic          = "Average"
+  threshold          = 1
+  alarm_description  = "Monitors unhealthy hosts in target group"
 
   dimensions = {
     TargetGroup  = var.target_group_arn

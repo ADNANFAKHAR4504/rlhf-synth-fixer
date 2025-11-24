@@ -78,7 +78,7 @@ data "aws_caller_identity" "current" {}
 # Random suffix for each environment
 resource "random_string" "env_suffix" {
   for_each = toset(var.environments)
-
+  
   length  = 4
   special = false
   upper   = false
@@ -93,17 +93,17 @@ resource "random_string" "env_suffix" {
 locals {
   # Common tags for all resources
   common_tags = {
-    ManagedBy = "Terraform"
-    Project   = "tap-stack"
-    Region    = var.region
+    ManagedBy   = "Terraform"
+    Project     = "tap-stack"
+    Region      = var.region
   }
 
   # Subnet CIDR calculations
   public_subnet_cidrs = [
-    cidrsubnet(var.vpc_cidr, 8, 0), # 10.0.0.0/24
-    cidrsubnet(var.vpc_cidr, 8, 1)  # 10.0.1.0/24
+    cidrsubnet(var.vpc_cidr, 8, 0),  # 10.0.0.0/24
+    cidrsubnet(var.vpc_cidr, 8, 1)   # 10.0.1.0/24
   ]
-
+  
   private_subnet_cidrs = [
     cidrsubnet(var.vpc_cidr, 8, 10), # 10.0.10.0/24
     cidrsubnet(var.vpc_cidr, 8, 11)  # 10.0.11.0/24
@@ -143,11 +143,11 @@ locals {
 # KMS key for S3 bucket encryption per environment
 resource "aws_kms_key" "s3_encryption" {
   for_each = toset(var.environments)
-
+  
   description             = "KMS key for S3 bucket encryption - ${each.key}"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -160,7 +160,7 @@ resource "aws_kms_key" "s3_encryption" {
 # KMS key alias per environment
 resource "aws_kms_alias" "s3_encryption" {
   for_each = toset(var.environments)
-
+  
   name          = "alias/${local.resource_names.kms_key}-${each.key}-${local.env_suffixes[each.key]}"
   target_key_id = aws_kms_key.s3_encryption[each.key].key_id
 }
@@ -174,7 +174,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -186,7 +186,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -198,12 +198,12 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 resource "aws_subnet" "public" {
   count = 2
-
+  
   vpc_id                  = aws_vpc.main.id
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -216,11 +216,11 @@ resource "aws_subnet" "public" {
 # Private Subnets
 resource "aws_subnet" "private" {
   count = 2
-
+  
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.available.names[count.index]
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -233,45 +233,45 @@ resource "aws_subnet" "private" {
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
   count = 2
-
+  
   domain = "vpc"
-
+  
   tags = merge(
     local.common_tags,
     {
       Name = "${local.resource_names.eip}-${count.index + 1}"
     }
   )
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
   count = 2
-
+  
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-
+  
   tags = merge(
     local.common_tags,
     {
       Name = "${local.resource_names.nat_gateway}-${count.index + 1}"
     }
   )
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -283,14 +283,14 @@ resource "aws_route_table" "public" {
 # Private Route Tables
 resource "aws_route_table" "private" {
   count = 2
-
+  
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -302,7 +302,7 @@ resource "aws_route_table" "private" {
 # Public Subnet Route Table Associations
 resource "aws_route_table_association" "public" {
   count = 2
-
+  
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
@@ -310,7 +310,7 @@ resource "aws_route_table_association" "public" {
 # Private Subnet Route Table Associations
 resource "aws_route_table_association" "private" {
   count = 2
-
+  
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
@@ -322,11 +322,11 @@ resource "aws_route_table_association" "private" {
 # Security Group for EC2 instances per environment
 resource "aws_security_group" "ec2" {
   for_each = toset(var.environments)
-
+  
   name        = "${local.resource_names.security_group}-${each.key}-${local.env_suffixes[each.key]}"
   description = "Security group for EC2 instances in ${each.key} environment"
   vpc_id      = aws_vpc.main.id
-
+  
   # SSH access (restrict in production)
   ingress {
     from_port   = 22
@@ -335,7 +335,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = each.key == "prod" ? ["10.0.0.0/16"] : ["0.0.0.0/0"]
     description = "SSH access"
   }
-
+  
   # HTTP access
   ingress {
     from_port   = 80
@@ -344,7 +344,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
-
+  
   # HTTPS access
   ingress {
     from_port   = 443
@@ -353,7 +353,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS access"
   }
-
+  
   # Outbound traffic
   egress {
     from_port   = 0
@@ -362,7 +362,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -379,9 +379,9 @@ resource "aws_security_group" "ec2" {
 # IAM role for EC2 instances per environment
 resource "aws_iam_role" "ec2_role" {
   for_each = toset(var.environments)
-
+  
   name = "${local.resource_names.iam_role}-${each.key}-${local.env_suffixes[each.key]}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -394,7 +394,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -407,10 +407,10 @@ resource "aws_iam_role" "ec2_role" {
 # IAM policy for S3 access per environment (Least Privilege)
 resource "aws_iam_policy" "s3_access" {
   for_each = toset(var.environments)
-
+  
   name        = "${local.resource_names.iam_policy}-${each.key}-${local.env_suffixes[each.key]}"
   description = "Policy for EC2 to access S3 bucket in ${each.key} environment"
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -443,7 +443,7 @@ resource "aws_iam_policy" "s3_access" {
 # Attach S3 policy to EC2 role
 resource "aws_iam_role_policy_attachment" "s3_access" {
   for_each = toset(var.environments)
-
+  
   role       = aws_iam_role.ec2_role[each.key].name
   policy_arn = aws_iam_policy.s3_access[each.key].arn
 }
@@ -451,7 +451,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 # CloudWatch Logs policy attachment
 resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
   for_each = toset(var.environments)
-
+  
   role       = aws_iam_role.ec2_role[each.key].name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
@@ -459,7 +459,7 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
 # SSM policy for EC2 management
 resource "aws_iam_role_policy_attachment" "ssm_managed" {
   for_each = toset(var.environments)
-
+  
   role       = aws_iam_role.ec2_role[each.key].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
@@ -467,10 +467,10 @@ resource "aws_iam_role_policy_attachment" "ssm_managed" {
 # Instance profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
   for_each = toset(var.environments)
-
+  
   name = "${local.resource_names.iam_role}-profile-${each.key}-${local.env_suffixes[each.key]}"
   role = aws_iam_role.ec2_role[each.key].name
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -487,9 +487,9 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # S3 bucket for each environment
 resource "aws_s3_bucket" "environment" {
   for_each = toset(var.environments)
-
+  
   bucket = "${local.resource_names.s3_bucket}-${each.key}-${local.env_suffixes[each.key]}"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -502,9 +502,9 @@ resource "aws_s3_bucket" "environment" {
 # Block public access for S3 buckets
 resource "aws_s3_bucket_public_access_block" "environment" {
   for_each = toset(var.environments)
-
+  
   bucket = aws_s3_bucket.environment[each.key].id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -514,9 +514,9 @@ resource "aws_s3_bucket_public_access_block" "environment" {
 # Enable versioning for S3 buckets
 resource "aws_s3_bucket_versioning" "environment" {
   for_each = toset(var.environments)
-
+  
   bucket = aws_s3_bucket.environment[each.key].id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -525,9 +525,9 @@ resource "aws_s3_bucket_versioning" "environment" {
 # Server-side encryption for S3 buckets
 resource "aws_s3_bucket_server_side_encryption_configuration" "environment" {
   for_each = toset(var.environments)
-
+  
   bucket = aws_s3_bucket.environment[each.key].id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_encryption[each.key].arn
@@ -539,7 +539,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "environment" {
 # S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${local.resource_names.s3_bucket}-cloudtrail-${random_string.env_suffix["dev"].result}"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -552,7 +552,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 # CloudTrail bucket policy
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -590,16 +590,16 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 # EC2 instances for each environment
 resource "aws_instance" "environment" {
   for_each = toset(var.environments)
-
+  
   ami                    = data.aws_ami.amazon_linux_2.id
   instance_type          = var.instance_type[each.key]
-  subnet_id              = aws_subnet.private[0].id # Place in first private subnet
+  subnet_id              = aws_subnet.private[0].id  # Place in first private subnet
   vpc_security_group_ids = [aws_security_group.ec2[each.key].id]
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile[each.key].name
-
+  
   # Enable monitoring
   monitoring = true
-
+  
   # User data script for CloudWatch agent installation
   user_data = <<-EOF
     #!/bin/bash
@@ -653,14 +653,14 @@ resource "aws_instance" "environment" {
       -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
       -s
   EOF
-
+  
   root_block_device {
     volume_type           = "gp3"
     volume_size           = each.key == "prod" ? 50 : 20
     encrypted             = true
     delete_on_termination = true
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -677,10 +677,10 @@ resource "aws_instance" "environment" {
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   for_each = toset(var.environments)
-
+  
   name              = "/aws/cloudtrail/${each.key}-${local.env_suffixes[each.key]}"
   retention_in_days = each.key == "prod" ? 90 : 30
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -693,7 +693,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 # IAM role for CloudTrail
 resource "aws_iam_role" "cloudtrail" {
   name = "${local.resource_names.iam_role}-cloudtrail-${random_string.env_suffix["dev"].result}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -706,7 +706,7 @@ resource "aws_iam_role" "cloudtrail" {
       }
     ]
   })
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -719,7 +719,7 @@ resource "aws_iam_role" "cloudtrail" {
 resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
   name = "cloudtrail-cloudwatch-logs-policy"
   role = aws_iam_role.cloudtrail.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -738,27 +738,27 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
 # CloudTrail for each environment
 resource "aws_cloudtrail" "environment" {
   for_each = toset(var.environments)
-
+  
   name                          = "${local.resource_names.cloudtrail}-${each.key}-${local.env_suffixes[each.key]}"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
   s3_key_prefix                 = each.key
   include_global_service_events = true
   is_multi_region_trail         = false
   enable_logging                = true
-
+  
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail[each.key].arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
-
+  
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
+    
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.environment[each.key].arn}/"]
     }
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -766,7 +766,7 @@ resource "aws_cloudtrail" "environment" {
       Environment = each.key
     }
   )
-
+  
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
 
@@ -777,9 +777,9 @@ resource "aws_cloudtrail" "environment" {
 # SNS Topic for alerts per environment
 resource "aws_sns_topic" "alerts" {
   for_each = toset(var.environments)
-
+  
   name = "${local.resource_names.sns_topic}-${each.key}-${local.env_suffixes[each.key]}"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -792,7 +792,7 @@ resource "aws_sns_topic" "alerts" {
 # SNS Topic subscription
 resource "aws_sns_topic_subscription" "alerts_email" {
   for_each = toset(var.environments)
-
+  
   topic_arn = aws_sns_topic.alerts[each.key].arn
   protocol  = "email"
   endpoint  = var.alert_email
@@ -801,7 +801,7 @@ resource "aws_sns_topic_subscription" "alerts_email" {
 # CloudWatch Alarms for EC2 CPU utilization
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   for_each = toset(var.environments)
-
+  
   alarm_name          = "high-cpu-${each.key}-${local.env_suffixes[each.key]}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -812,11 +812,11 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   threshold           = each.key == "prod" ? "80" : "90"
   alarm_description   = "This metric monitors EC2 CPU utilization in ${each.key}"
   alarm_actions       = [aws_sns_topic.alerts[each.key].arn]
-
+  
   dimensions = {
     InstanceId = aws_instance.environment[each.key].id
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -829,7 +829,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 # CloudWatch Alarms for EC2 status check
 resource "aws_cloudwatch_metric_alarm" "instance_status_check" {
   for_each = toset(var.environments)
-
+  
   alarm_name          = "instance-status-${each.key}-${local.env_suffixes[each.key]}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -840,11 +840,11 @@ resource "aws_cloudwatch_metric_alarm" "instance_status_check" {
   threshold           = "0"
   alarm_description   = "This metric monitors EC2 instance status check in ${each.key}"
   alarm_actions       = [aws_sns_topic.alerts[each.key].arn]
-
+  
   dimensions = {
     InstanceId = aws_instance.environment[each.key].id
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -857,9 +857,9 @@ resource "aws_cloudwatch_metric_alarm" "instance_status_check" {
 # CloudWatch Dashboard for each environment
 resource "aws_cloudwatch_dashboard" "environment" {
   for_each = toset(var.environments)
-
+  
   dashboard_name = "tap-dashboard-${each.key}-${local.env_suffixes[each.key]}"
-
+  
   dashboard_body = jsonencode({
     widgets = [
       {

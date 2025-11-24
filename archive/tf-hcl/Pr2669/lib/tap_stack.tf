@@ -2,7 +2,7 @@ variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
   default     = "us-west-2"
-}
+} 
 # tap_stack.tf
 
 # Local variables for common tags and configuration
@@ -13,11 +13,11 @@ locals {
     ManagedBy   = "Terraform"
     CostCenter  = "Engineering"
   }
-
+  
   lambda_function_name = "tap-s3-processor"
-  s3_bucket_name       = "tap-serverless-bucket-${random_id.bucket_suffix.hex}"
-  api_name             = "tap-serverless-api"
-  dynamodb_table_name  = "tap-serverless-table"
+  s3_bucket_name      = "tap-serverless-bucket-${random_id.bucket_suffix.hex}"
+  api_name            = "tap-serverless-api"
+  dynamodb_table_name = "tap-serverless-table"
 }
 
 # Random ID for unique S3 bucket naming
@@ -119,11 +119,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
 # Lambda function
 resource "aws_lambda_function" "main" {
   function_name = local.lambda_function_name
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
-  timeout       = 30
-  tags          = local.common_tags
+  role         = aws_iam_role.lambda_role.arn
+  handler      = "index.handler"
+  runtime      = "python3.9"
+  timeout      = 30
+  tags         = local.common_tags
 
   filename         = "lambda_function.zip"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
@@ -131,7 +131,7 @@ resource "aws_lambda_function" "main" {
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.main.name
-      S3_BUCKET_NAME      = aws_s3_bucket.main.bucket
+      S3_BUCKET_NAME     = aws_s3_bucket.main.bucket
     }
   }
 
@@ -145,9 +145,9 @@ resource "aws_lambda_function" "main" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "lambda_function.zip"
-
+  
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os
@@ -314,8 +314,8 @@ resource "aws_api_gateway_integration" "get_items" {
   http_method = aws_api_gateway_method.get_items.http_method
 
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.api_lambda.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.api_lambda.invoke_arn
 }
 
 # API Gateway Integration Response
@@ -386,11 +386,11 @@ resource "aws_api_gateway_integration_response" "options_items_200" {
 # API Lambda function (separate from S3 trigger Lambda)
 resource "aws_lambda_function" "api_lambda" {
   function_name = "${local.lambda_function_name}-api"
-  role          = aws_iam_role.api_lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "python3.9"
-  timeout       = 30
-  tags          = local.common_tags
+  role         = aws_iam_role.api_lambda_role.arn
+  handler      = "index.handler"
+  runtime      = "python3.9"
+  timeout      = 30
+  tags         = local.common_tags
 
   filename         = "api_lambda_function.zip"
   source_code_hash = data.archive_file.api_lambda_zip.output_base64sha256
@@ -411,9 +411,9 @@ resource "aws_lambda_function" "api_lambda" {
 data "archive_file" "api_lambda_zip" {
   type        = "zip"
   output_path = "api_lambda_function.zip"
-
+  
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os

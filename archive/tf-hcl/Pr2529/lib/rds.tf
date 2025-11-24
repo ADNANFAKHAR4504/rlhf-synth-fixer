@@ -8,12 +8,12 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier            = "main-database"
-  allocated_storage     = 20
-  max_allocated_storage = 100
-  storage_type          = "gp2"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.rds_encryption.arn
+  identifier             = "main-database"
+  allocated_storage      = 20
+  max_allocated_storage  = 100
+  storage_type           = "gp2"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds_encryption.arn
 
   engine         = "mysql"
   engine_version = "8.0"

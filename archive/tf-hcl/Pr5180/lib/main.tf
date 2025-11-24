@@ -45,7 +45,7 @@ resource "aws_rds_cluster" "aurora_serverless" {
   engine_version  = var.aurora_mysql_version
   database_name   = var.database_name
   master_username = "admin"
-
+  
   # Use AWS Secrets Manager for secure credential management
   # RDS will automatically create and manage the secret with naming convention: rds-db-credentials/cluster-<cluster-identifier>/<random-suffix>
   # When manage_master_user_password is true, you CANNOT specify master_password

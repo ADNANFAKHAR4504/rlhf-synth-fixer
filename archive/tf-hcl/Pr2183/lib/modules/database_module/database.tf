@@ -5,13 +5,13 @@ resource "random_password" "db_password" {
   count   = var.db_password == null ? 1 : 0
   length  = 16
   special = true
-
+  
   # Ensure password meets MySQL requirements
   min_lower   = 1
   min_upper   = 1
   min_numeric = 1
   min_special = 1
-
+  
   # Exclude problematic characters for MySQL
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
@@ -109,7 +109,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = var.allocated_storage * 2
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id            = var.kms_key_id
+  kms_key_id           = var.kms_key_id
 
   # Database Configuration
   db_name  = var.db_name
@@ -125,12 +125,12 @@ resource "aws_db_instance" "main" {
   # High Availability & Backup
   multi_az                = var.multi_az
   backup_retention_period = var.backup_retention
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Deletion Protection
   deletion_protection       = var.deletion_protection
-  skip_final_snapshot       = !var.deletion_protection
+  skip_final_snapshot      = !var.deletion_protection
   final_snapshot_identifier = var.deletion_protection ? "${var.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   # Performance Insights (not available for t3.micro)

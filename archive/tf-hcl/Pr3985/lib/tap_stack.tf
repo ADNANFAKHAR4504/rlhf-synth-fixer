@@ -363,9 +363,9 @@ resource "aws_db_subnet_group" "prod_db_subnet_group" {
 
 # Generate random password for RDS
 resource "random_password" "rds_password" {
-  count            = var.use_secrets_manager ? 1 : 0
-  length           = 16
-  special          = true
+  count   = var.use_secrets_manager ? 1 : 0
+  length  = 16
+  special = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 

@@ -34,20 +34,20 @@ variable "environment" {
 locals {
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-
+  
   # Naming conventions
   resource_prefix = "tap-stack"
-
+  
   # Common tags
   common_tags = {
     Environment  = var.environment
     ownership    = "self"
     departmental = "businessunit"
   }
-
+  
   # Subnet configurations
-  primary_public_subnet_cidrs    = ["10.0.1.0/24", "10.0.2.0/24"]
-  primary_private_subnet_cidrs   = ["10.0.10.0/24", "10.0.11.0/24"]
+  primary_public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+  primary_private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
   secondary_public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnet_cidrs = ["10.1.10.0/24", "10.1.11.0/24"]
 }
@@ -73,12 +73,12 @@ data "aws_ami" "primary_amazon_linux" {
   provider    = aws.us_east_2
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -90,12 +90,12 @@ data "aws_ami" "secondary_amazon_linux" {
   provider    = aws.us_west_1
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -134,8 +134,8 @@ resource "random_string" "secondary_rds_username" {
 
 # Generate random password for secondary RDS
 resource "random_password" "secondary_rds_password" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
   override_special = "!#$%&*+-.:=?[]^_{|}~"
 }
 
@@ -151,7 +151,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = local.primary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-vpc-primary"
   })
@@ -161,7 +161,7 @@ resource "aws_vpc" "primary" {
 resource "aws_internet_gateway" "primary" {
   provider = aws.us_east_2
   vpc_id   = aws_vpc.primary.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-igw-primary"
   })
@@ -175,7 +175,7 @@ resource "aws_subnet" "primary_public" {
   cidr_block              = local.primary_public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.primary.names[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-public-subnet-primary-${count.index + 1}"
     Type = "Public"
@@ -189,7 +189,7 @@ resource "aws_subnet" "primary_private" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.primary_private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.primary.names[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-private-subnet-primary-${count.index + 1}"
     Type = "Private"
@@ -201,7 +201,7 @@ resource "aws_eip" "primary_nat" {
   provider = aws.us_east_2
   count    = length(local.primary_public_subnet_cidrs)
   domain   = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-eip-nat-primary-${count.index + 1}"
   })
@@ -213,11 +213,11 @@ resource "aws_nat_gateway" "primary" {
   count         = length(aws_subnet.primary_public)
   allocation_id = aws_eip.primary_nat[count.index].id
   subnet_id     = aws_subnet.primary_public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-nat-primary-${count.index + 1}"
   })
-
+  
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -225,12 +225,12 @@ resource "aws_nat_gateway" "primary" {
 resource "aws_route_table" "primary_public" {
   provider = aws.us_east_2
   vpc_id   = aws_vpc.primary.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rt-public-primary"
   })
@@ -241,12 +241,12 @@ resource "aws_route_table" "primary_private" {
   provider = aws.us_east_2
   count    = length(aws_subnet.primary_private)
   vpc_id   = aws_vpc.primary.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rt-private-primary-${count.index + 1}"
   })
@@ -276,7 +276,7 @@ resource "aws_security_group" "primary_ec2" {
   name        = "${local.resource_prefix}-ec2-sg-primary"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     description = "SSH from allowed CIDR"
     from_port   = 22
@@ -284,7 +284,7 @@ resource "aws_security_group" "primary_ec2" {
     protocol    = "tcp"
     cidr_blocks = [var.ssh_allowed_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -292,7 +292,7 @@ resource "aws_security_group" "primary_ec2" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-sg-primary"
   })
@@ -305,7 +305,7 @@ resource "aws_instance" "primary" {
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.primary_public[0].id
   vpc_security_group_ids = [aws_security_group.primary_ec2.id]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-primary"
   })
@@ -319,15 +319,15 @@ resource "aws_security_group" "primary_rds" {
   name        = "${local.resource_prefix}-rds-sg-primary"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
-    description = "PostgreSQL from VPC"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [local.primary_vpc_cidr]
+    description     = "PostgreSQL from VPC"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    cidr_blocks     = [local.primary_vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -335,7 +335,7 @@ resource "aws_security_group" "primary_rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-sg-primary"
   })
@@ -347,7 +347,7 @@ resource "aws_db_subnet_group" "primary" {
   name        = "${local.resource_prefix}-db-subnet-group-primary"
   description = "Database subnet group for RDS"
   subnet_ids  = aws_subnet.primary_private[*].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-db-subnet-group-primary"
   })
@@ -355,29 +355,29 @@ resource "aws_db_subnet_group" "primary" {
 
 # RDS PostgreSQL Instance in Primary Region
 resource "aws_db_instance" "primary" {
-  provider                   = aws.us_east_2
-  identifier                 = "${local.resource_prefix}-postgres-primary"
-  engine                     = "postgres"
-  engine_version             = "17.6"
-  instance_class             = "db.t3.micro"
-  allocated_storage          = 20
-  storage_type               = "gp3"
-  storage_encrypted          = true
-  db_name                    = "tapdb"
-  username                   = "a${random_string.primary_rds_username.result}"
-  password                   = random_password.primary_rds_password.result
-  parameter_group_name       = "default.postgres17"
-  db_subnet_group_name       = aws_db_subnet_group.primary.name
-  vpc_security_group_ids     = [aws_security_group.primary_rds.id]
-  publicly_accessible        = false
-  multi_az                   = true
-  auto_minor_version_upgrade = true
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
-  skip_final_snapshot        = true
-  deletion_protection        = false
-
+  provider                    = aws.us_east_2
+  identifier                  = "${local.resource_prefix}-postgres-primary"
+  engine                      = "postgres"
+  engine_version              = "17.6"
+  instance_class              = "db.t3.micro"
+  allocated_storage           = 20
+  storage_type                = "gp3"
+  storage_encrypted           = true
+  db_name                     = "tapdb"
+  username                    = "a${random_string.primary_rds_username.result}"
+  password                    = random_password.primary_rds_password.result
+  parameter_group_name        = "default.postgres17"
+  db_subnet_group_name        = aws_db_subnet_group.primary.name
+  vpc_security_group_ids      = [aws_security_group.primary_rds.id]
+  publicly_accessible         = false
+  multi_az                    = true
+  auto_minor_version_upgrade  = true
+  backup_retention_period     = 7
+  backup_window               = "03:00-04:00"
+  maintenance_window          = "sun:04:00-sun:05:00"
+  skip_final_snapshot         = true
+  deletion_protection         = false
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-postgres-primary"
   })
@@ -389,7 +389,7 @@ resource "aws_secretsmanager_secret" "primary_rds" {
   name                    = "${local.resource_prefix}-rds-credentials-primary"
   description             = "RDS master credentials for primary region"
   recovery_window_in_days = 0
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-secret-primary"
   })
@@ -416,7 +416,7 @@ resource "aws_cloudwatch_log_group" "primary_flow_logs" {
   provider          = aws.us_east_2
   name              = "/aws/vpc/${local.resource_prefix}-primary"
   retention_in_days = 7
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-flow-logs-primary"
   })
@@ -426,7 +426,7 @@ resource "aws_cloudwatch_log_group" "primary_flow_logs" {
 resource "aws_iam_role" "flow_logs" {
   provider = aws.us_east_2
   name     = "${local.resource_prefix}-flow-logs-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -437,7 +437,7 @@ resource "aws_iam_role" "flow_logs" {
       }
     }]
   })
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-flow-logs-role"
   })
@@ -448,7 +448,7 @@ resource "aws_iam_role_policy" "flow_logs" {
   provider = aws.us_east_2
   name     = "${local.resource_prefix}-flow-logs-policy"
   role     = aws_iam_role.flow_logs.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -467,12 +467,12 @@ resource "aws_iam_role_policy" "flow_logs" {
 
 # VPC Flow Logs for Primary VPC
 resource "aws_flow_log" "primary" {
-  provider        = aws.us_east_2
-  iam_role_arn    = aws_iam_role.flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.primary_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.primary.id
-
+  provider             = aws.us_east_2
+  iam_role_arn         = aws_iam_role.flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.primary_flow_logs.arn
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.primary.id
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-flow-log-primary"
   })
@@ -490,7 +490,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = local.secondary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-vpc-secondary"
   })
@@ -500,7 +500,7 @@ resource "aws_vpc" "secondary" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.us_west_1
   vpc_id   = aws_vpc.secondary.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-igw-secondary"
   })
@@ -514,7 +514,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = local.secondary_public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.secondary.names[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-public-subnet-secondary-${count.index + 1}"
     Type = "Public"
@@ -528,7 +528,7 @@ resource "aws_subnet" "secondary_private" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.secondary.names[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-private-subnet-secondary-${count.index + 1}"
     Type = "Private"
@@ -540,7 +540,7 @@ resource "aws_eip" "secondary_nat" {
   provider = aws.us_west_1
   count    = length(local.secondary_public_subnet_cidrs)
   domain   = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-eip-nat-secondary-${count.index + 1}"
   })
@@ -552,11 +552,11 @@ resource "aws_nat_gateway" "secondary" {
   count         = length(aws_subnet.secondary_public)
   allocation_id = aws_eip.secondary_nat[count.index].id
   subnet_id     = aws_subnet.secondary_public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-nat-secondary-${count.index + 1}"
   })
-
+  
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -564,12 +564,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "secondary_public" {
   provider = aws.us_west_1
   vpc_id   = aws_vpc.secondary.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rt-public-secondary"
   })
@@ -580,12 +580,12 @@ resource "aws_route_table" "secondary_private" {
   provider = aws.us_west_1
   count    = length(aws_subnet.secondary_private)
   vpc_id   = aws_vpc.secondary.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rt-private-secondary-${count.index + 1}"
   })
@@ -615,7 +615,7 @@ resource "aws_security_group" "secondary_ec2" {
   name        = "${local.resource_prefix}-ec2-sg-secondary"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     description = "SSH from allowed CIDR"
     from_port   = 22
@@ -623,7 +623,7 @@ resource "aws_security_group" "secondary_ec2" {
     protocol    = "tcp"
     cidr_blocks = [var.ssh_allowed_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -631,7 +631,7 @@ resource "aws_security_group" "secondary_ec2" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-sg-secondary"
   })
@@ -644,7 +644,7 @@ resource "aws_instance" "secondary" {
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.secondary_public[0].id
   vpc_security_group_ids = [aws_security_group.secondary_ec2.id]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-ec2-secondary"
   })
@@ -658,15 +658,15 @@ resource "aws_security_group" "secondary_rds" {
   name        = "${local.resource_prefix}-rds-sg-secondary"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
-    description = "PostgreSQL from VPC"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [local.secondary_vpc_cidr]
+    description     = "PostgreSQL from VPC"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    cidr_blocks     = [local.secondary_vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -674,7 +674,7 @@ resource "aws_security_group" "secondary_rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-sg-secondary"
   })
@@ -686,7 +686,7 @@ resource "aws_db_subnet_group" "secondary" {
   name        = "${local.resource_prefix}-db-subnet-group-secondary"
   description = "Database subnet group for RDS"
   subnet_ids  = aws_subnet.secondary_private[*].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-db-subnet-group-secondary"
   })
@@ -694,29 +694,29 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS PostgreSQL Instance in Secondary Region
 resource "aws_db_instance" "secondary" {
-  provider                   = aws.us_west_1
-  identifier                 = "${local.resource_prefix}-postgres-secondary"
-  engine                     = "postgres"
-  engine_version             = "17.6"
-  instance_class             = "db.t3.micro"
-  allocated_storage          = 20
-  storage_type               = "gp3"
-  storage_encrypted          = true
-  db_name                    = "tapdb"
-  username                   = "b${random_string.secondary_rds_username.result}"
-  password                   = random_password.secondary_rds_password.result
-  parameter_group_name       = "default.postgres17"
-  db_subnet_group_name       = aws_db_subnet_group.secondary.name
-  vpc_security_group_ids     = [aws_security_group.secondary_rds.id]
-  publicly_accessible        = false
-  multi_az                   = true
-  auto_minor_version_upgrade = true
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
-  skip_final_snapshot        = true
-  deletion_protection        = false
-
+  provider                    = aws.us_west_1
+  identifier                  = "${local.resource_prefix}-postgres-secondary"
+  engine                      = "postgres"
+  engine_version              = "17.6"
+  instance_class              = "db.t3.micro"
+  allocated_storage           = 20
+  storage_type                = "gp3"
+  storage_encrypted           = true
+  db_name                     = "tapdb"
+  username                    = "b${random_string.secondary_rds_username.result}"
+  password                    = random_password.secondary_rds_password.result
+  parameter_group_name        = "default.postgres17"
+  db_subnet_group_name        = aws_db_subnet_group.secondary.name
+  vpc_security_group_ids      = [aws_security_group.secondary_rds.id]
+  publicly_accessible         = false
+  multi_az                    = true
+  auto_minor_version_upgrade  = true
+  backup_retention_period     = 7
+  backup_window               = "03:00-04:00"
+  maintenance_window          = "sun:04:00-sun:05:00"
+  skip_final_snapshot         = true
+  deletion_protection         = false
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-postgres-secondary"
   })
@@ -728,7 +728,7 @@ resource "aws_secretsmanager_secret" "secondary_rds" {
   name                    = "${local.resource_prefix}-rds-credentials-secondary"
   description             = "RDS master credentials for secondary region"
   recovery_window_in_days = 0
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-secret-secondary"
   })
@@ -755,7 +755,7 @@ resource "aws_cloudwatch_log_group" "secondary_flow_logs" {
   provider          = aws.us_west_1
   name              = "/aws/vpc/${local.resource_prefix}-secondary"
   retention_in_days = 7
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-flow-logs-secondary"
   })
@@ -763,12 +763,12 @@ resource "aws_cloudwatch_log_group" "secondary_flow_logs" {
 
 # VPC Flow Logs for Secondary VPC
 resource "aws_flow_log" "secondary" {
-  provider        = aws.us_west_1
-  iam_role_arn    = aws_iam_role.flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.secondary_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.secondary.id
-
+  provider             = aws.us_west_1
+  iam_role_arn         = aws_iam_role.flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.secondary_flow_logs.arn
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.secondary.id
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-flow-log-secondary"
   })
@@ -784,7 +784,7 @@ resource "aws_flow_log" "secondary" {
 resource "aws_s3_bucket" "rds_backups" {
   provider = aws.us_east_2
   bucket   = "${local.resource_prefix}-rds-backups-${data.aws_caller_identity.current.account_id}"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-rds-backups"
   })
@@ -794,7 +794,7 @@ resource "aws_s3_bucket" "rds_backups" {
 resource "aws_s3_bucket_versioning" "rds_backups" {
   provider = aws.us_east_2
   bucket   = aws_s3_bucket.rds_backups.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -804,7 +804,7 @@ resource "aws_s3_bucket_versioning" "rds_backups" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "rds_backups" {
   provider = aws.us_east_2
   bucket   = aws_s3_bucket.rds_backups.id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -816,7 +816,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "rds_backups" {
 resource "aws_s3_bucket_public_access_block" "rds_backups" {
   provider = aws.us_east_2
   bucket   = aws_s3_bucket.rds_backups.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -829,7 +829,7 @@ resource "aws_s3_bucket_public_access_block" "rds_backups" {
 resource "aws_s3_bucket" "cloudtrail" {
   provider = aws.us_east_2
   bucket   = "${local.resource_prefix}-cloudtrail-${data.aws_caller_identity.current.account_id}"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-cloudtrail"
   })
@@ -839,7 +839,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 resource "aws_s3_bucket_policy" "cloudtrail" {
   provider = aws.us_east_2
   bucket   = aws_s3_bucket.cloudtrail.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -878,21 +878,21 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_logging                = true
-
+  
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
+    
     data_resource {
       type   = "AWS::S3::Object"
       values = ["arn:aws:s3:::*/*"]
     }
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-trail"
   })
-
+  
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
 
@@ -902,7 +902,7 @@ resource "aws_cloudtrail" "main" {
 resource "aws_sns_topic" "security_alerts_primary" {
   provider = aws.us_east_2
   name     = "${local.resource_prefix}-security-alerts-primary"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-security-alerts-primary"
   })
@@ -912,7 +912,7 @@ resource "aws_sns_topic" "security_alerts_primary" {
 resource "aws_sns_topic" "security_alerts_secondary" {
   provider = aws.us_west_1
   name     = "${local.resource_prefix}-security-alerts-secondary"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-security-alerts-secondary"
   })
@@ -924,7 +924,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_access_primary" {
   name           = "${local.resource_prefix}-unauthorized-access-primary"
   pattern        = "[version, account, eni, source, destination, srcport, destport, protocol, packets, bytes, windowstart, windowend, action=REJECT, flowlogstatus]"
   log_group_name = aws_cloudwatch_log_group.primary_flow_logs.name
-
+  
   metric_transformation {
     name      = "UnauthorizedAccessAttempts"
     namespace = "VPCFlowLogs"
@@ -945,7 +945,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_access_primary" {
   threshold           = "10"
   alarm_description   = "Alert on unauthorized access attempts"
   alarm_actions       = [aws_sns_topic.security_alerts_primary.arn]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-unauthorized-alarm-primary"
   })
@@ -958,7 +958,7 @@ resource "aws_iam_policy" "dynamodb_access" {
   provider    = aws.us_east_2
   name        = "${local.resource_prefix}-dynamodb-policy"
   description = "Policy for DynamoDB access with least privilege"
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -987,7 +987,7 @@ resource "aws_iam_policy" "dynamodb_access" {
       }
     ]
   })
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-dynamodb-policy"
   })
@@ -997,7 +997,7 @@ resource "aws_iam_policy" "dynamodb_access" {
 resource "aws_iam_role" "application" {
   provider = aws.us_east_2
   name     = "${local.resource_prefix}-application-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -1008,7 +1008,7 @@ resource "aws_iam_role" "application" {
       }
     }]
   })
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-application-role"
   })

@@ -9,9 +9,9 @@ resource "aws_security_group" "redis_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 6379
-    to_port         = 6379
-    protocol        = "tcp"
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
     security_groups = [aws_security_group.lambda_sg.id]
   }
 

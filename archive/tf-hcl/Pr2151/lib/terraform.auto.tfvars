@@ -7,5 +7,5 @@ tags = {
 }
 
 # Prevent conflicts in accounts where these are already set up
-enable_guardduty  = false
-enable_aws_config = false
+enable_guardduty   = false
+enable_aws_config  = false
