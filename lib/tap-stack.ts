@@ -3,7 +3,10 @@ import * as aws from '@pulumi/aws';
 
 // Load configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+
+// Get environmentSuffix from Pulumi config first, fall back to environment variable
+const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 const createDms = config.getBoolean('createDms') || false;
 const createVpn = config.getBoolean('createVpn') || false;
 const oracleEndpoint =
