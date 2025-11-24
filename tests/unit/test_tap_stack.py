@@ -47,10 +47,19 @@ class TestTapStack(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+        # Clear environment variables that might interfere with tests
+        self.original_env = os.environ.get('ENVIRONMENT_SUFFIX')
+        if 'ENVIRONMENT_SUFFIX' in os.environ:
+            del os.environ['ENVIRONMENT_SUFFIX']
         pulumi.runtime.set_mocks(MyMocks(), project='test-project', stack='test-stack', preview=False)
 
     def tearDown(self):
         """Clean up after tests."""
+        # Restore original environment variable if it existed
+        if self.original_env is not None:
+            os.environ['ENVIRONMENT_SUFFIX'] = self.original_env
+        elif 'ENVIRONMENT_SUFFIX' in os.environ:
+            del os.environ['ENVIRONMENT_SUFFIX']
         pulumi.runtime.set_mocks(None)
 
     @async_test_helper
@@ -58,7 +67,7 @@ class TestTapStack(unittest.TestCase):
         """Test stack initialization with full configuration."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             # Mock configuration
@@ -87,7 +96,7 @@ class TestTapStack(unittest.TestCase):
         """Test stack initialization with default values."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             # Mock configuration returning None
@@ -111,7 +120,7 @@ class TestTapStack(unittest.TestCase):
         """Test common tags have required fields."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -137,7 +146,7 @@ class TestTapStack(unittest.TestCase):
         """Test VPC and subnet creation."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -173,7 +182,7 @@ class TestTapStack(unittest.TestCase):
         """Test ECR repository creation."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -192,7 +201,7 @@ class TestTapStack(unittest.TestCase):
         """Test Secrets Manager secret and version."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -213,7 +222,7 @@ class TestTapStack(unittest.TestCase):
         """Test Aurora MySQL cluster with writer and readers."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -244,7 +253,7 @@ class TestTapStack(unittest.TestCase):
         """Test IAM role creation for ECS and DMS."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -271,7 +280,7 @@ class TestTapStack(unittest.TestCase):
         """Test Application Load Balancer configuration."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -302,7 +311,7 @@ class TestTapStack(unittest.TestCase):
         """Test ECS Fargate cluster and service."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -341,7 +350,7 @@ class TestTapStack(unittest.TestCase):
         """Test DMS replication resources."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -374,7 +383,7 @@ class TestTapStack(unittest.TestCase):
         """Test CloudWatch dashboard and alarms."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -399,7 +408,7 @@ class TestTapStack(unittest.TestCase):
         """Test Route53 record not created for placeholder domain."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
@@ -421,7 +430,7 @@ class TestTapStack(unittest.TestCase):
         """Test CPU tracking scaling policy configuration."""
         from lib.tap_stack import TapStack
 
-        with patch('pulumi.Config') as mock_config, \
+        with patch('lib.tap_stack.pulumi.Config') as mock_config, \
              patch('pulumi_aws.get_availability_zones') as mock_azs:
 
             mock_config_inst = Mock()
