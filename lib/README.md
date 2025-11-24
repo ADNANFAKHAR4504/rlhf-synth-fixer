@@ -29,7 +29,7 @@ This CloudFormation template deploys a serverless architecture for processing cr
 ```bash
 aws cloudformation create-stack \
   --stack-name crypto-alert-system \
-  --template-body file://lib/crypto-alert-stack.json \
+  --template-body file://lib/TapStack.json \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1

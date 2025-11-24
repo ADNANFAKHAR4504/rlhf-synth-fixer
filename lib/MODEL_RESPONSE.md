@@ -2,7 +2,7 @@
 
 This implementation provides a complete CloudFormation template for the cryptocurrency price alert system with Lambda functions for processing webhooks, checking alerts, sending notifications, and cleaning up old data.
 
-## File: lib/crypto-alert-stack.json
+## File: lib/TapStack.json
 
 ```json
 {
@@ -1000,7 +1000,7 @@ This CloudFormation template deploys a serverless architecture for processing cr
 ```bash
 aws cloudformation create-stack \
   --stack-name crypto-alert-system \
-  --template-body file://lib/crypto-alert-stack.json \
+  --template-body file://lib/TapStack.json \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
@@ -1096,7 +1096,7 @@ aws cloudformation delete-stack \
 
 ## Deployment Instructions
 
-1. Save the CloudFormation template to `lib/crypto-alert-stack.json`
+1. Save the CloudFormation template to `lib/TapStack.json`
 2. Create Lambda function code files in `lib/lambda/` directory
 3. Install AWS SDK v3 dependencies in the lambda directory:
    ```bash

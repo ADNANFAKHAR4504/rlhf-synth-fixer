@@ -177,7 +177,7 @@ This implementation provides a complete CloudFormation template for the cryptocu
         "FunctionName": {
           "Fn::Sub": "ProcessWebhook-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["ProcessWebhookRole", "Arn"]
@@ -275,7 +275,7 @@ This implementation provides a complete CloudFormation template for the cryptocu
         "FunctionName": {
           "Fn::Sub": "CheckAlerts-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["CheckAlertsRole", "Arn"]
@@ -370,7 +370,7 @@ This implementation provides a complete CloudFormation template for the cryptocu
         "FunctionName": {
           "Fn::Sub": "SendNotification-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["SendNotificationRole", "Arn"]
@@ -461,7 +461,7 @@ This implementation provides a complete CloudFormation template for the cryptocu
         "FunctionName": {
           "Fn::Sub": "CleanupHistory-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": ["CleanupHistoryRole", "Arn"]
