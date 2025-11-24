@@ -15,7 +15,6 @@ import {
   EventBridgeClient,
   DescribeRuleCommand,
 } from "@aws-sdk/client-eventbridge";
-import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
 describe("Terraform Fraud Detection System - Integration Tests", () => {
   let outputs: Record<string, string>;
@@ -316,19 +315,6 @@ describe("Terraform Fraud Detection System - Integration Tests", () => {
 
       const response = await eventBridgeClient.send(command);
       expect(response.ScheduleExpression).toBe("rate(5 minutes)");
-    });
-
-  });
-
-  describe("CloudWatch Logs", () => {
-    let logsClient: CloudWatchLogsClient;
-
-    beforeAll(() => {
-      logsClient = new CloudWatchLogsClient({ region });
-    });
-
-    afterAll(() => {
-      logsClient.destroy();
     });
 
   });

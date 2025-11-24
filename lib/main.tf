@@ -19,11 +19,52 @@ provider "aws" {
   }
 }
 
+# Data sources
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # KMS Key for encryption
 resource "aws_kms_key" "fraud_detection" {
   description             = "KMS key for fraud detection system encryption-${var.environment_suffix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "key-policy-cloudwatch"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
 
   tags = {
     Name = "fraud-detection-key-${var.environment_suffix}"
@@ -160,7 +201,8 @@ resource "aws_sqs_queue" "fraud_detection_dlq" {
 resource "aws_cloudwatch_log_group" "lambda_fraud_detector" {
   name              = "/aws/lambda/fraud-detector-${var.environment_suffix}"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.fraud_detection.arn
+  # Note: KMS encryption temporarily disabled due to existing key policy issue
+  # kms_key_id        = aws_kms_key.fraud_detection.arn
 
   tags = {
     Name = "fraud-detector-logs-${var.environment_suffix}"

@@ -89,7 +89,8 @@ resource "aws_api_gateway_stage" "production" {
 resource "aws_cloudwatch_log_group" "api_gateway" {
   name              = "/aws/apigateway/fraud-detection-${var.environment_suffix}"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.fraud_detection.arn
+  # Note: KMS encryption temporarily disabled due to existing key policy issue
+  # kms_key_id        = aws_kms_key.fraud_detection.arn
 
   tags = {
     Name = "fraud-detection-api-logs-${var.environment_suffix}"
