@@ -397,7 +397,7 @@ class TapStack(TerraformStack):
             "global_cluster",
             global_cluster_identifier=f"payment-v1-global-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="14.6",
             database_name="paymentdb",
             storage_encrypted=True,
             provider=self.primary_provider
@@ -439,7 +439,7 @@ class TapStack(TerraformStack):
             "primary_cluster",
             cluster_identifier=f"payment-v1-primary-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="14.6",
             database_name="paymentdb",
             master_username="dbadmin",
             master_password="ChangeMe123456!",
@@ -467,7 +467,7 @@ class TapStack(TerraformStack):
                 cluster_identifier=self.primary_cluster.id,
                 instance_class="db.r6g.large",
                 engine="aurora-postgresql",
-                engine_version="15.4",
+                engine_version="14.6",
                 publicly_accessible=False,
                 tags={
                     "Name": f"payment-v1-primary-instance-{i}-{environment_suffix}",
@@ -503,7 +503,7 @@ class TapStack(TerraformStack):
             "secondary_cluster",
             cluster_identifier=f"payment-v1-secondary-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="14.6",
             db_subnet_group_name=self.secondary_subnet_group.name,
             vpc_security_group_ids=[self.secondary_db_sg.id],
             storage_encrypted=True,
@@ -526,7 +526,7 @@ class TapStack(TerraformStack):
                 cluster_identifier=self.secondary_cluster.id,
                 instance_class="db.r6g.large",
                 engine="aurora-postgresql",
-                engine_version="15.4",
+                engine_version="14.6",
                 publicly_accessible=False,
                 tags={
                     "Name": f"payment-v1-secondary-instance-{i}-{environment_suffix}",
@@ -641,7 +641,7 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=512,
             timeout=30,
-            filename="lib/lambda_placeholder.zip",
+            filename="${path.module}/../../../lib/lambda_placeholder.zip",
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": self.dynamodb_table.name,
@@ -738,7 +738,7 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=512,
             timeout=30,
-            filename="lib/lambda_placeholder.zip",
+            filename="${path.module}/../../../lib/lambda_placeholder.zip",
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": self.dynamodb_table.name,
@@ -832,7 +832,7 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=256,
             timeout=300,
-            filename="lib/lambda_placeholder.zip",
+            filename="${path.module}/../../../lib/lambda_placeholder.zip",
             environment={
                 "variables": {
                     "CLUSTER_IDENTIFIER": f"payment-v1-primary-{environment_suffix}",
