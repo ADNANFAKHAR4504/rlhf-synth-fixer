@@ -22,6 +22,8 @@ from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 
 # Lambda and DynamoDB
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTableReplica
@@ -366,6 +368,47 @@ class TapStack(TerraformStack):
         )
 
         # ===== DATABASE =====
+        # KMS Keys for encryption
+        self.primary_kms_key = KmsKey(
+            self,
+            "primary_rds_kms_key",
+            description=f"KMS key for RDS encryption in primary region - {environment_suffix}",
+            enable_key_rotation=True,
+            tags={
+                "Name": f"payment-v1-rds-key-primary-{environment_suffix}",
+                "Environment": environment_suffix
+            },
+            provider=self.primary_provider
+        )
+
+        KmsAlias(
+            self,
+            "primary_rds_kms_alias",
+            name=f"alias/payment-v1-rds-primary-{environment_suffix}",
+            target_key_id=self.primary_kms_key.key_id,
+            provider=self.primary_provider
+        )
+
+        self.secondary_kms_key = KmsKey(
+            self,
+            "secondary_rds_kms_key",
+            description=f"KMS key for RDS encryption in secondary region - {environment_suffix}",
+            enable_key_rotation=True,
+            tags={
+                "Name": f"payment-v1-rds-key-secondary-{environment_suffix}",
+                "Environment": environment_suffix
+            },
+            provider=self.secondary_provider
+        )
+
+        KmsAlias(
+            self,
+            "secondary_rds_kms_alias",
+            name=f"alias/payment-v1-rds-secondary-{environment_suffix}",
+            target_key_id=self.secondary_kms_key.key_id,
+            provider=self.secondary_provider
+        )
+
         # DB Subnet Groups
         self.primary_subnet_group = DbSubnetGroup(
             self,
@@ -446,6 +489,7 @@ class TapStack(TerraformStack):
             db_subnet_group_name=self.primary_subnet_group.name,
             vpc_security_group_ids=[self.primary_db_sg.id],
             storage_encrypted=True,
+            kms_key_id=self.primary_kms_key.arn,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
@@ -507,6 +551,7 @@ class TapStack(TerraformStack):
             db_subnet_group_name=self.secondary_subnet_group.name,
             vpc_security_group_ids=[self.secondary_db_sg.id],
             storage_encrypted=True,
+            kms_key_id=self.secondary_kms_key.arn,
             skip_final_snapshot=True,
             global_cluster_identifier=self.global_cluster.id,
             depends_on=[self.primary_cluster],
@@ -987,6 +1032,29 @@ class TapStack(TerraformStack):
             provider=self.primary_provider
         )
 
+        # Secondary SNS Topic for secondary region alerts
+        self.sns_topic_secondary = SnsTopic(
+            self,
+            "alerts_topic_secondary",
+            name=f"payment-v1-alerts-secondary-{environment_suffix}",
+            display_name="Payment System Alerts - Secondary Region",
+            tags={
+                "Name": f"payment-v1-alerts-secondary-{environment_suffix}",
+                "Environment": environment_suffix
+            },
+            provider=self.secondary_provider
+        )
+
+        # Secondary SNS subscription (email)
+        SnsTopicSubscription(
+            self,
+            "alerts_subscription_secondary",
+            topic_arn=self.sns_topic_secondary.arn,
+            protocol="email",
+            endpoint="ops-team@example.com",
+            provider=self.secondary_provider
+        )
+
         # Primary Aurora CPU alarm
         CloudwatchMetricAlarm(
             self,
@@ -1024,7 +1092,7 @@ class TapStack(TerraformStack):
             statistic="Average",
             threshold=80,
             alarm_description="Alert when secondary database CPU exceeds 80%",
-            alarm_actions=[self.sns_topic.arn],
+            alarm_actions=[self.sns_topic_secondary.arn],
             dimensions={
                 "DBClusterIdentifier": self.secondary_cluster.id
             },
@@ -1072,7 +1140,7 @@ class TapStack(TerraformStack):
             statistic="Sum",
             threshold=10,
             alarm_description="Alert when secondary Lambda errors exceed threshold",
-            alarm_actions=[self.sns_topic.arn],
+            alarm_actions=[self.sns_topic_secondary.arn],
             dimensions={
                 "FunctionName": self.secondary_payment_lambda.function_name
             },
@@ -1120,7 +1188,7 @@ class TapStack(TerraformStack):
             statistic="Maximum",
             threshold=5000,
             alarm_description="Alert when Aurora replication lag exceeds 5 seconds",
-            alarm_actions=[self.sns_topic.arn],
+            alarm_actions=[self.sns_topic_secondary.arn],
             dimensions={
                 "DBClusterIdentifier": self.secondary_cluster.id
             },
