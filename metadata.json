@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349093",
+  "team": "3",
+  "startedAt": "2025-11-24T09:46:15.148Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "MigrationConfig",
+    "MigrationConfigLoaderLambda",
+    "MigrationConfigLoaderLambdaRole",
+    "MigrationLogGroup",
+    "MigrationLogThrottlingMetric",
+    "MigrationLogFailureMetric",
+    "MigrationOrchestratorRole",
+    "ValidationLambdaRole",
+    "ValidationLambda",
+    "MigrationLambdaRole",
+    "MigrationLambda",
+    "RollbackLambdaRole",
+    "RollbackLambda",
+    "MigrationStateMachineRole",
+    "MigrationStateMachine",
+    "MigrationFailureAlarm",
+    "ThrottlingAlarm",
+    "LogThrottlingAlarm",
+    "LogFailureAlarm"
+  ]
+}
