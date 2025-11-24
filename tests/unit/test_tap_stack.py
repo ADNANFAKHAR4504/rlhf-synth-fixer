@@ -35,6 +35,11 @@ class MyMocks(pulumi.runtime.Mocks):
     def call(self, args: pulumi.runtime.MockCallArgs):
         """Mock function calls."""
         return {}
+    
+    def get_secret(self, key: str):
+        """Mock get_secret to return an Output for testing."""
+        # Return None to use defaults, which will be wrapped in Output.from_input()
+        return None
 
 
 def async_test_helper(func):
@@ -81,6 +86,7 @@ class TestTapStack(unittest.TestCase):
                 'hostedZoneId': 'Z1234567890ABC',
                 'domainName': 'app.test.com'
             }.get(key)
+            mock_config_inst.get_secret.return_value = None  # Return None to use defaults
             mock_config.return_value = mock_config_inst
 
             # Mock AZs
@@ -105,6 +111,7 @@ class TestTapStack(unittest.TestCase):
             # Mock configuration returning None
             mock_config_inst = Mock()
             mock_config_inst.get.return_value = None
+            mock_config_inst.get_secret.return_value = None  # Return None to use defaults
             mock_config.return_value = mock_config_inst
 
             # Mock AZs
@@ -128,6 +135,7 @@ class TestTapStack(unittest.TestCase):
 
             mock_config_inst = Mock()
             mock_config_inst.get.side_effect = lambda key: 'testenv' if key == 'environmentSuffix' else None
+            mock_config_inst.get_secret.return_value = None  # Return None to use defaults
             mock_config.return_value = mock_config_inst
             mock_azs.return_value = MagicMock(names=['us-west-2a', 'us-west-2b', 'us-west-2c'])
 
@@ -154,6 +162,7 @@ class TestTapStack(unittest.TestCase):
 
             mock_config_inst = Mock()
             mock_config_inst.get.return_value = 'dev'
+            mock_config_inst.get_secret.return_value = None  # Return None to use defaults
             mock_config.return_value = mock_config_inst
             mock_azs.return_value = MagicMock(names=['us-west-2a', 'us-west-2b', 'us-west-2c'])
 
@@ -420,6 +429,7 @@ class TestTapStack(unittest.TestCase):
                 'hostedZoneId': 'Z1234567890ABC',  # Placeholder
                 'domainName': 'migration.example.com'  # Placeholder
             }.get(key)
+            mock_config_inst.get_secret.return_value = None  # Return None to use defaults
             mock_config.return_value = mock_config_inst
             mock_azs.return_value = MagicMock(names=['us-west-2a', 'us-west-2b', 'us-west-2c'])
 

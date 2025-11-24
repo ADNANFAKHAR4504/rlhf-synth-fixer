@@ -22,11 +22,14 @@ class TapStack:
         
         # Get secrets from config (marked as secrets for security)
         # In production, set these via: pulumi config set --secret dbPassword <value>
-        # For testing, defaults are provided but should be overridden in production
-        # Note: Using get() instead of get_secret() to allow defaults for testing
-        # In production, these should be set as secrets: pulumi config set --secret dbPassword <value>
-        self.db_password = config.get("dbPassword") or "ChangeMe123456!"
-        self.dms_source_password = config.get("dmsSourcePassword") or "SourcePassword123!"
+        # get_secret() returns an Output[str] when secret exists (marked as secret), or None when it doesn't
+        # For defaults, we use plain strings to avoid Output complexity in resources that need strings
+        # When secrets are set via get_secret(), they're automatically marked as secrets in Pulumi state
+        db_password_secret = config.get_secret("dbPassword")
+        self.db_password = db_password_secret if db_password_secret is not None else "ChangeMe123456!"
+        
+        dms_source_password_secret = config.get_secret("dmsSourcePassword")
+        self.dms_source_password = dms_source_password_secret if dms_source_password_secret is not None else "SourcePassword123!"
 
         # Common tags for all resources
         self.common_tags = {
@@ -234,16 +237,6 @@ class TapStack:
 
     def _create_secrets(self):
         """Create Secrets Manager secret for database credentials."""
-        # Use secret password from config
-        db_secret_value = {
-            "username": "admin",
-            "password": self.db_password,
-            "engine": "mysql",
-            "host": "placeholder",
-            "port": 3306,
-            "dbname": "appdb"
-        }
-
         # Generate a unique random suffix for the secret name to avoid conflicts
         secret_suffix = random.RandomString(
             f"db-secret-suffix-{self.environment_suffix}",
@@ -263,10 +256,22 @@ class TapStack:
             tags=self.common_tags
         )
 
+        # Create secret value with Output handling for password
+        # Always wrap password in Output to handle both secret and default cases
+        password_output = self.db_password if isinstance(self.db_password, pulumi.Output) else pulumi.Output.from_input(self.db_password)
         self.db_secret_version = aws.secretsmanager.SecretVersion(
             f"migration-db-secret-version-{self.environment_suffix}",
             secret_id=self.db_secret.id,
-            secret_string=pulumi.Output.all().apply(lambda _: json.dumps(db_secret_value))
+            secret_string=password_output.apply(
+                lambda pwd: json.dumps({
+                    "username": "admin",
+                    "password": str(pwd),  # Ensure it's a string
+                    "engine": "mysql",
+                    "host": "placeholder",
+                    "port": 3306,
+                    "dbname": "appdb"
+                })
+            )
         )
 
     def _create_aurora(self):
@@ -315,7 +320,8 @@ class TapStack:
             engine_mode="provisioned",
             database_name="appdb",
             master_username="admin",
-            master_password=self.db_password,
+            master_password=(self.db_password.apply(lambda p: str(p)) if isinstance(self.db_password, pulumi.Output) 
+                            else pulumi.Output.from_input(str(self.db_password))),
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.aurora_sg.id],
             backup_retention_period=1,
@@ -757,7 +763,8 @@ class TapStack:
             port=3306,
             database_name="appdb",
             username="admin",
-            password=self.dms_source_password,
+            password=(self.dms_source_password.apply(lambda p: str(p)) if isinstance(self.dms_source_password, pulumi.Output) 
+                     else pulumi.Output.from_input(str(self.dms_source_password))),
             ssl_mode="none",
             tags=self.common_tags
         )
@@ -772,7 +779,8 @@ class TapStack:
             port=3306,
             database_name="appdb",
             username="admin",
-            password=self.db_password,
+            password=(self.db_password.apply(lambda p: str(p)) if isinstance(self.db_password, pulumi.Output) 
+                     else pulumi.Output.from_input(str(self.db_password))),
             ssl_mode="none",
             tags=self.common_tags
         )

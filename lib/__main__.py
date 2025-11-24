@@ -1,6 +1,6 @@
 """Pulumi program entry point for infrastructure migration."""  # pragma: no cover
 import pulumi  # pragma: no cover
-from tap_stack import TapStack  # pragma: no cover
+from lib.tap_stack import TapStack  # pragma: no cover
 
 # Create the infrastructure stack  # pragma: no cover
 stack = TapStack("migration-stack")  # pragma: no cover
