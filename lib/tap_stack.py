@@ -22,6 +22,7 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
     CloudwatchMetricAlarm
 )
 import json
+import os
 
 
 class TapStack(TerraformStack):
@@ -118,13 +119,19 @@ class TapStack(TerraformStack):
         # IAM Role for Lambda
         self.lambda_role = self._create_lambda_role()
 
+        # Get absolute path to lambda_function.zip
+        lambda_zip_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "lambda_function.zip"
+        )
+
         # Lambda Function
         self.lambda_function = LambdaFunction(self, "data_processor",
             function_name=f"data-processor-{environment_suffix}",
             runtime="python3.11",
             handler="index.handler",
-            filename="lambda_function.zip",
-            source_code_hash=Fn.filebase64sha256("lambda_function.zip"),
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             role=self.lambda_role.arn,
             memory_size=3072,
             timeout=60,
