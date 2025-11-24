@@ -1,4 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { AlbAsgConstruct } from '../lib/constructs/alb-asg-construct';
 import { CloudFrontConstruct } from '../lib/constructs/cloudfront-construct';
@@ -147,6 +149,27 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
+    // API Gateway with Lambda integration
+    const api = new apigateway.RestApi(this, 'ApiGateway', {
+      restApiName: `${environment}-${region}-api-${uniqueSuffix}`,
+      description: 'API Gateway for integration testing',
+    });
+
+    const lambdaIntegration = new apigateway.LambdaIntegration(
+      lambdaConstruct.lambdaFunction
+    );
+    api.root.addMethod('GET', lambdaIntegration);
+    api.root.addMethod('POST', lambdaIntegration);
+
+    const apiResource = api.root.addResource('api');
+    apiResource.addMethod('GET', lambdaIntegration);
+    apiResource.addMethod('POST', lambdaIntegration);
+
+    // SQS Queue
+    const queue = new sqs.Queue(this, 'SqsQueue', {
+      queueName: `${environment}-${region}-queue-${uniqueSuffix}`,
+    });
+
     // Comprehensive outputs for flat-outputs.json discovery
     this.createOutputs(
       environmentSuffix,
@@ -158,7 +181,9 @@ export class TapStack extends cdk.Stack {
       albAsgConstruct,
       route53Construct,
       cloudfrontConstruct,
-      monitoringConstruct
+      monitoringConstruct,
+      api,
+      queue
     );
   }
 
@@ -172,7 +197,9 @@ export class TapStack extends cdk.Stack {
     albAsgConstruct: AlbAsgConstruct,
     route53Construct: Route53Construct,
     cloudfrontConstruct: CloudFrontConstruct,
-    monitoringConstruct: MonitoringConstruct
+    monitoringConstruct: MonitoringConstruct,
+    api: apigateway.RestApi,
+    queue: sqs.Queue
   ) {
     // VPC Outputs
     new cdk.CfnOutput(this, `VpcId${environmentSuffix}${region}`, {
@@ -286,5 +313,19 @@ export class TapStack extends cdk.Stack {
         exportName: `AutoScalingGroupName-${environmentSuffix}-${region}`,
       }
     );
+
+    // API Gateway Output
+    new cdk.CfnOutput(this, `ApiGatewayUrl${environmentSuffix}${region}`, {
+      value: api.url,
+      description: 'API Gateway URL',
+      exportName: `ApiGatewayUrl-${environmentSuffix}-${region}`,
+    });
+
+    // SQS Queue Output
+    new cdk.CfnOutput(this, `SqsQueueUrl${environmentSuffix}${region}`, {
+      value: queue.queueUrl,
+      description: 'SQS Queue URL',
+      exportName: `SqsQueueUrl-${environmentSuffix}-${region}`,
+    });
   }
 }

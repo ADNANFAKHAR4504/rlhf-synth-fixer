@@ -6,6 +6,8 @@ This document aggregates the full contents of the key TypeScript sources under `
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { AlbAsgConstruct } from '../lib/constructs/alb-asg-construct';
 import { CloudFrontConstruct } from '../lib/constructs/cloudfront-construct';
@@ -30,7 +32,13 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, environment, region, suffix, ec2InstanceCountPerRegion } = props;
+    const {
+      environmentSuffix,
+      environment,
+      region,
+      suffix,
+      ec2InstanceCountPerRegion,
+    } = props;
 
     // Generate timestamp for unique resource names if needed
     const timestamp = Date.now().toString().slice(-6);
@@ -104,27 +112,35 @@ export class TapStack extends cdk.Stack {
     });
 
     // 10. CloudFront with multi-region origin groups
-    const cloudfrontConstruct = new CloudFrontConstruct(this, 'CloudFrontConstruct', {
-      environment,
-      region,
-      suffix: uniqueSuffix,
-      environmentSuffix,
-      alb: albAsgConstruct.alb,
-      route53: route53Construct,
-    });
+    const cloudfrontConstruct = new CloudFrontConstruct(
+      this,
+      'CloudFrontConstruct',
+      {
+        environment,
+        region,
+        suffix: uniqueSuffix,
+        environmentSuffix,
+        alb: albAsgConstruct.alb,
+        route53: route53Construct,
+      }
+    );
 
     // 8 & 12. Monitoring with cross-environment SNS
-    const monitoringConstruct = new MonitoringConstruct(this, 'MonitoringConstruct', {
-      environment,
-      region,
-      suffix: uniqueSuffix,
-      environmentSuffix,
-      autoScalingGroup: albAsgConstruct.autoScalingGroup,
-      lambdaFunction: lambdaConstruct.lambdaFunction,
-      alb: albAsgConstruct.alb,
-    });
+    const monitoringConstruct = new MonitoringConstruct(
+      this,
+      'MonitoringConstruct',
+      {
+        environment,
+        region,
+        suffix: uniqueSuffix,
+        environmentSuffix,
+        autoScalingGroup: albAsgConstruct.autoScalingGroup,
+        lambdaFunction: lambdaConstruct.lambdaFunction,
+        alb: albAsgConstruct.alb,
+      }
+    );
 
-    // 13. Compliance with proper Config rules
+    // 13. Compliance with proper Config rules (Config rules commented out - no admin access)
     new ComplianceConstruct(this, 'ComplianceConstruct', {
       environment,
       region,
@@ -140,6 +156,27 @@ export class TapStack extends cdk.Stack {
       environmentSuffix,
     });
 
+    // API Gateway with Lambda integration
+    const api = new apigateway.RestApi(this, 'ApiGateway', {
+      restApiName: `${environment}-${region}-api-${uniqueSuffix}`,
+      description: 'API Gateway for integration testing',
+    });
+
+    const lambdaIntegration = new apigateway.LambdaIntegration(
+      lambdaConstruct.lambdaFunction
+    );
+    api.root.addMethod('GET', lambdaIntegration);
+    api.root.addMethod('POST', lambdaIntegration);
+
+    const apiResource = api.root.addResource('api');
+    apiResource.addMethod('GET', lambdaIntegration);
+    apiResource.addMethod('POST', lambdaIntegration);
+
+    // SQS Queue
+    const queue = new sqs.Queue(this, 'SqsQueue', {
+      queueName: `${environment}-${region}-queue-${uniqueSuffix}`,
+    });
+
     // Comprehensive outputs for flat-outputs.json discovery
     this.createOutputs(
       environmentSuffix,
@@ -151,7 +188,9 @@ export class TapStack extends cdk.Stack {
       albAsgConstruct,
       route53Construct,
       cloudfrontConstruct,
-      monitoringConstruct
+      monitoringConstruct,
+      api,
+      queue
     );
   }
 
@@ -165,7 +204,9 @@ export class TapStack extends cdk.Stack {
     albAsgConstruct: AlbAsgConstruct,
     route53Construct: Route53Construct,
     cloudfrontConstruct: CloudFrontConstruct,
-    monitoringConstruct: MonitoringConstruct
+    monitoringConstruct: MonitoringConstruct,
+    api: apigateway.RestApi,
+    queue: sqs.Queue
   ) {
     // VPC Outputs
     new cdk.CfnOutput(this, `VpcId${environmentSuffix}${region}`, {
@@ -246,11 +287,15 @@ export class TapStack extends cdk.Stack {
       exportName: `CloudFrontDomain-${environmentSuffix}-${region}`,
     });
 
-    new cdk.CfnOutput(this, `CloudFrontDistributionId${environmentSuffix}${region}`, {
-      value: cloudfrontConstruct.distribution.distributionId,
-      description: 'CloudFront Distribution ID',
-      exportName: `CloudFrontDistributionId-${environmentSuffix}-${region}`,
-    });
+    new cdk.CfnOutput(
+      this,
+      `CloudFrontDistributionId${environmentSuffix}${region}`,
+      {
+        value: cloudfrontConstruct.distribution.distributionId,
+        description: 'CloudFront Distribution ID',
+        exportName: `CloudFrontDistributionId-${environmentSuffix}-${region}`,
+      }
+    );
 
     // Monitoring Outputs
     new cdk.CfnOutput(this, `ErrorTopicArn${environmentSuffix}${region}`, {
@@ -266,10 +311,28 @@ export class TapStack extends cdk.Stack {
     });
 
     // Auto Scaling Group Output
-    new cdk.CfnOutput(this, `AutoScalingGroupName${environmentSuffix}${region}`, {
-      value: albAsgConstruct.autoScalingGroup.autoScalingGroupName,
-      description: 'Auto Scaling Group Name',
-      exportName: `AutoScalingGroupName-${environmentSuffix}-${region}`,
+    new cdk.CfnOutput(
+      this,
+      `AutoScalingGroupName${environmentSuffix}${region}`,
+      {
+        value: albAsgConstruct.autoScalingGroup.autoScalingGroupName,
+        description: 'Auto Scaling Group Name',
+        exportName: `AutoScalingGroupName-${environmentSuffix}-${region}`,
+      }
+    );
+
+    // API Gateway Output
+    new cdk.CfnOutput(this, `ApiGatewayUrl${environmentSuffix}${region}`, {
+      value: api.url,
+      description: 'API Gateway URL',
+      exportName: `ApiGatewayUrl-${environmentSuffix}-${region}`,
+    });
+
+    // SQS Queue Output
+    new cdk.CfnOutput(this, `SqsQueueUrl${environmentSuffix}${region}`, {
+      value: queue.queueUrl,
+      description: 'SQS Queue URL',
+      exportName: `SqsQueueUrl-${environmentSuffix}-${region}`,
     });
   }
 }
