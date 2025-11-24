@@ -483,7 +483,7 @@ class TapStack(cdk.Stack):
             ),
             update_policy=autoscaling.UpdatePolicy.rolling_update(
                 max_batch_size=1,
-                min_instances_in_service=1,
+                min_instances_in_service=0,  # Must be 0 when max_capacity=1 to allow rolling updates
                 pause_time=Duration.minutes(5),
             ),
         )
