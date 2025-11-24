@@ -1,6 +1,6 @@
 ---
 name: iac-task-selector
-description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Passes task data to task-coordinator for worktree setup and file creation.
+description: Selects a task to perform from .claude/tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
 color: yellow
 model: sonnet
 ---
@@ -49,114 +49,61 @@ If `.claude/tasks.csv` is present:
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
-   # Returns complete JSON with all fields needed, eliminating redundant CSV reads
+   #
+   # Built-in race condition protections:
+   # - Protection #1: Checks if worktree already exists
+   # - Protection #2: Verifies CSV status before update (under lock)
+   # - Protection #3: Verifies CSV status after update (under lock)
+   #
    echo "🔍 Selecting next available task..."
    TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
-   
+
    # Verify selection was successful
    if [ $? -ne 0 ] || [ -z "$TASK_JSON" ]; then
        echo "❌ ERROR: Task selection failed"
-       echo "   Exit code: $?"
-       echo "   JSON length: ${#TASK_JSON}"
-       echo "   CSV status: $([ -f .claude/tasks.csv ] && echo 'exists' || echo 'missing')"
+       echo "   Possible reasons:"
+       echo "   - No pending tasks available"
+       echo "   - Another agent selected the same task (race condition detected)"
+       echo "   - Worktree already exists for selected task"
+       echo "   - CSV lock timeout"
        exit 1
    fi
-   
-   # Extract task_id once (used throughout this workflow)
+
+   # Extract task_id and other fields
    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-   
-   # Validate TASK_ID was successfully extracted
-   if [ -z "$TASK_ID" ]; then
-       echo "❌ ERROR: Could not extract task_id from JSON"
-       echo "   JSON content: $TASK_JSON"
-       exit 1
-   fi
-   
-   # Display selected task info (optional - for logging)
-   echo "✅ Selected and locked task: $TASK_ID"
+   SUBTASK=$(echo "$TASK_JSON" | grep -o '"subtask":"[^"]*"' | cut -d'"' -f4)
+   PLATFORM=$(echo "$TASK_JSON" | grep -o '"platform":"[^"]*"' | cut -d'"' -f4)
+   LANGUAGE=$(echo "$TASK_JSON" | grep -o '"language":"[^"]*"' | cut -d'"' -f4)
+   DIFFICULTY=$(echo "$TASK_JSON" | grep -o '"difficulty":"[^"]*"' | cut -d'"' -f4)
+
+   echo "✅ Selected and locked task: $TASK_ID ($PLATFORM-$LANGUAGE, $DIFFICULTY)"
+   echo "📋 Subtask: $SUBTASK"
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
-   # NOTE: No verification step needed - select-and-update is atomic and guaranteed to update status
+   echo "🛡️  Race condition protections: PASSED (worktree check ✓, pre-update check ✓, post-update check ✓)"
+
+   # NOTE: Verification is now handled INSIDE the lock by task-manager.sh
+   # No need for external verification - the select-and-update command guarantees atomicity
    ```
 
-2. **Check task status distribution** (optional - for monitoring):
+2. **Get full task details** (if you need all fields):
+   ```bash
+   # Get complete task data including all available fields
+   TASK_DETAILS=$(./.claude/scripts/task-manager.sh get "$TASK_ID")
+   
+   # Save to temporary file for create-task-files.sh
+   echo "$TASK_DETAILS" > /tmp/task_${TASK_ID}.json
+   ```
+
+3. **Check task status distribution** (optional - for monitoring):
    ```bash
    ./.claude/scripts/task-manager.sh status
    ```
 
-3. **Store task JSON for task-coordinator**:
+4. **Create metadata.json and PROMPT.md**:
    ```bash
-   # Validate .claude directory exists
-   if [ ! -d ".claude" ]; then
-       echo "❌ ERROR: .claude directory not found"
-       echo "   This should exist in the repository root"
-       # Rollback task status to pending
-       ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: .claude directory missing" 2>/dev/null || true
-       exit 1
-   fi
-   
-   # Store TASK_JSON in a temporary file for task-coordinator to use
-   # Use PID to ensure unique filename across parallel agents (prevents race conditions)
-   # This ensures task-coordinator can create metadata.json and PROMPT.md after worktree creation
-   TASK_JSON_FILE=".claude/task-${TASK_ID}-$$.json"
-   
-   if ! echo "$TASK_JSON" > "$TASK_JSON_FILE"; then
-       echo "❌ ERROR: Failed to create task JSON file: $TASK_JSON_FILE"
-       echo "   Check .claude/ directory permissions"
-       # Rollback task status to pending
-       if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON file creation error" 2>/dev/null; then
-           echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
-           echo "   Task $TASK_ID may remain in 'in_progress' state"
-       fi
-       exit 1
-   fi
-   
-   # Verify file was written and has content
-   if [ ! -s "$TASK_JSON_FILE" ]; then
-       echo "❌ ERROR: Task JSON file is empty or was not created"
-       echo "   File: $TASK_JSON_FILE"
-       rm -f "$TASK_JSON_FILE"
-       # Rollback task status to pending
-       if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: Empty JSON file" 2>/dev/null; then
-           echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
-           echo "   Task $TASK_ID may remain in 'in_progress' state"
-       fi
-       exit 1
-   fi
-   
-   # CRITICAL: Validate JSON is well-formed (if python3 is available)
-   if command -v python3 >/dev/null 2>&1; then
-       if ! python3 -c "import json; json.load(open('$TASK_JSON_FILE'))" 2>/dev/null; then
-           echo "❌ ERROR: Generated JSON is malformed"
-           echo "   File: $TASK_JSON_FILE"
-           echo "   Content preview: $(head -c 200 $TASK_JSON_FILE)"
-           rm -f "$TASK_JSON_FILE"
-           # Rollback task status to pending
-           if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON validation error" 2>/dev/null; then
-               echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
-               echo "   Task $TASK_ID may remain in 'in_progress' state"
-           fi
-           exit 1
-       fi
-       echo "✅ JSON syntax validation passed"
-   else
-       echo "⚠️  WARNING: python3 not available - skipping JSON syntax validation"
-       echo "   Proceeding with basic validation only"
-   fi
-   
-   # Check for redacted service names (common data quality issue)
-   if echo "$TASK_JSON" | grep -qE '\(CORE: \)|\(OPTIONAL: \)'; then
-       echo "⚠️  WARNING: Detected redacted service names in task description"
-       echo "   This may cause incomplete infrastructure generation"
-       echo "   Affected fields: problem, environment, or constraints"
-       echo "   Task will proceed but may require manual service identification"
-   fi
-   
-   echo "✅ Stored task data in $TASK_JSON_FILE"
-   echo "✅ JSON validation passed"
-   echo "📋 Task ID: $TASK_ID"
-   echo "🔄 Ready for handoff to task-coordinator"
-   echo ""
-   echo "⚠️  Note: Temporary file will be cleaned up by task-coordinator"
+   # Use the optimized script to generate both files
+   # This is much faster than Python equivalents
+   ./.claude/scripts/create-task-files.sh /tmp/task_${TASK_ID}.json worktree/synth-${TASK_ID}
    ```
 
 **Benefits of task-manager.sh:**
@@ -169,60 +116,26 @@ If `.claude/tasks.csv` is present:
 - **Better error handling** - clear colored output and exit codes
 - **Parallel-ready** - run multiple Claude agents simultaneously without conflicts
 
-4. **Hand off to task-coordinator for worktree setup**:
-   - The task-coordinator will:
-     1. Find the most recent task JSON file in `.claude/task-*-[PID].json` (PID-based naming prevents race conditions)
-     2. Extract task ID from the filename (removing PID suffix)
-     3. Check if worktree already exists (another agent may have claimed this task)
-     4. Validate the JSON file and verify task_id matches
-     5. Create git worktree: `git worktree add worktree/synth-${TASK_ID} -b synth-${TASK_ID}`
-     6. Verify worktree was created successfully
-     7. Create metadata.json and PROMPT.md inside the worktree using `create-task-files.sh`
-     8. Clean up temporary task JSON file
-     9. Verify worktree setup with `verify-worktree.sh`
-   - **CRITICAL**: Do NOT create the worktree directory or files before handoff - git worktree add requires an empty/non-existent directory
-   - **NOTE**: PID-based filenames (task-{id}-{pid}.json) ensure each agent has a unique file, preventing parallel agents from processing the same task
+6. **Follow instructions in `task-coordinator` to set up the worktree**:
+   - Use EXACT format: `worktree/synth-{task_id}`
+   - Validation will fail if naming is incorrect
 
 ### Option 2: Direct Task Input
 If `.claude/tasks.csv` is not present:
-
-**Note**: This agent runs in the main repository root. If you're in a worktree context, paths will be different.
-
-1. **Check for existing task files** (in current directory or worktree):
-   - If in main repo root: Check for `worktree/synth-*/lib/PROMPT.md` or ask user for task location
-   - If in worktree: Check for `lib/PROMPT.md` in current directory
-   
-2. **If PROMPT.md missing or incomplete**, report BLOCKED status and ask the user to:
-   - Provide the task location (worktree path or main repo location)
-   - Fill `lib/PROMPT.md` with:
-     - Clear infrastructure requirements
-     - AWS services needed
-     - Architecture details
-     - Any specific constraints or preferences
-
-3. **Validate metadata.json exists** with required fields:
-   - If in main repo: Check `worktree/synth-*/metadata.json`
-   - If in worktree: Check `metadata.json` in current directory
-   
-4. **If metadata.json is missing**, report BLOCKED status and request user to provide:
-   - Platform (cdk, cdktf, cfn, tf, pulumi)
-   - Language (ts, py, js, yaml, json, hcl, go)
-   - Complexity (medium, hard, expert)
-   - Task ID (if available)
-
-5. **Proceed with workflow** once requirements are properly defined and validated
+1. Check if `lib/PROMPT.md` exists and contains proper task requirements
+2. If missing or incomplete, report BLOCKED status and ask the user to fill `lib/PROMPT.md` with:
+    - Clear infrastructure requirements
+    - AWS services needed
+    - Architecture details
+    - Any specific constraints or preferences
+3. Validate that `metadata.json` exists with required fields
+4. If `metadata.json` is missing, report BLOCKED status and request user to provide platform/language info
+5. Proceed with the workflow once requirements are properly defined and validated
 
 ## Error Recovery
 - If any step fails, report specific BLOCKED status with resolution steps
-- **Automatic rollback**: If JSON file creation fails, task status is automatically rolled back to `pending` in CSV
-- **Clean up temporary task JSON files** if handoff to task-coordinator fails:
-  ```bash
-  # Clean up PID-based JSON files for this task
-  rm -f ".claude/task-${TASK_ID}-"*.json 2>/dev/null || true
-  ```
 - Maintain clean worktree state - cleanup on failures
 - Provide clear handoff status to coordinator for next agent
-- **Note**: If task-coordinator never starts after JSON file creation, task remains `in_progress` - manual intervention may be needed to reset to `pending`
 
 ## Debugging Parallel Execution Issues
 
@@ -237,37 +150,24 @@ If you suspect duplicate task selection in parallel execution:
    find .claude/tasks.csv.lock -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null
    ```
 
-2. **Check for stale JSON files**:
-   ```bash
-   # List all task JSON files (PID-based naming)
-   ls -lah .claude/task-*-*.json 2>/dev/null || echo "No JSON files found"
-   
-   # Clean up old JSON files (older than 1 hour)
-   find .claude/task-*.json -type f -mmin +60 -delete 2>/dev/null
-   
-   # Count JSON files per task
-   for task_id in $(ls .claude/task-*.json 2>/dev/null | sed 's/.*task-//;s/-[0-9]*\.json$//' | sort -u); do
-       count=$(ls .claude/task-${task_id}-*.json 2>/dev/null | wc -l)
-       echo "Task $task_id: $count JSON file(s)"
-   done
-   ```
-
-3. **Verify task status distribution**:
+2. **Verify task status distribution**:
    ```bash
    # Check how many tasks are in each status
    ./.claude/scripts/task-manager.sh status
    ```
 
-4. **Check which tasks are currently in_progress**:
+3. **Check which tasks are currently in_progress**:
    ```bash
-   # Use task-manager.sh status to safely check task distribution
-   # This avoids direct CSV reads and respects locking
-   ./.claude/scripts/task-manager.sh status | grep -i "in_progress" || echo "No in_progress tasks"
+   # List all in_progress tasks
+   awk -F',' 'NR>1 && tolower($2) == "in_progress" {print $1, $5}' .claude/tasks.csv
    ```
 
-5. **Test lock mechanism**:
+4. **Test lock mechanism and race condition protections**:
    ```bash
-   # Run 3 agents simultaneously and verify different tasks selected
+   # Run comprehensive test suite with 10 parallel agents
+   bash .claude/scripts/test-race-conditions.sh 10
+
+   # Or quick test with 3 agents
    echo "Testing parallel selection..."
    (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
    (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
@@ -276,16 +176,38 @@ If you suspect duplicate task selection in parallel execution:
    echo "Check above - should show 3 different task IDs"
    ```
 
-6. **Verify this agent is NOT using deprecated methods**:
+5. **Verify this agent is NOT using deprecated methods**:
    - Confirm you executed `select-and-update` (not just `select`)
-   - Confirm you did NOT read .claude/tasks.csv directly (including in debugging commands)
+   - Confirm you did NOT read .claude/tasks.csv directly
    - Confirm you did NOT call find-next-task.py
-   - Confirm you used TASK_JSON directly instead of calling `get` command
-   - Confirm you did NOT use AWK or other tools to parse CSV directly
 
-**If duplicate selection still occurs**, capture these details and report:
+## Race Condition Protections (Enhanced)
+
+The `select-and-update` command includes **three layers of protection** against race conditions:
+
+### Protection Layer #1: Worktree Existence Check
+- **When**: After task selection, before CSV update (under lock)
+- **What**: Checks if `worktree/synth-{task_id}` already exists
+- **Why**: Catches race condition where another agent already created worktree
+- **Outcome**: If worktree exists, selection fails immediately with error
+
+### Protection Layer #2: Pre-Update CSV Status Verification
+- **When**: After worktree check, before CSV update (under lock)
+- **What**: Reads CSV to verify task status is still "pending" or empty
+- **Why**: Catches race condition where another agent already updated CSV
+- **Outcome**: If status is "in_progress" or "done", selection fails with race detection error
+
+### Protection Layer #3: Post-Update CSV Status Verification
+- **When**: After CSV update, before lock release (under lock)
+- **What**: Re-reads CSV to verify task status is now "in_progress"
+- **Why**: Ensures the CSV update actually succeeded
+- **Outcome**: If status is not "in_progress", fails with critical error
+
+All three checks happen **under lock**, ensuring atomicity. The lock uses `mkdir` which is atomic across all processes.
+
+**If duplicate selection still occurs**, this indicates a bug. Capture and report:
 - Which task ID was selected by multiple agents
 - Timestamps of when each agent selected it
+- Full stderr output from both agents showing protection layer results
 - Contents of .claude/tasks.csv.lock directory during the duplicate selection
-- List of JSON files present: `ls -lah .claude/task-*.json`
-- Check if worktrees exist: `git worktree list`
+- Output of: `bash .claude/scripts/test-race-conditions.sh 20`

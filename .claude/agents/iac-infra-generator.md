@@ -21,7 +21,7 @@ All file operations are relative to this directory.
 - Review `.claude/lessons_learnt.md` for common patterns and pitfalls
 - Review `.claude/docs/references/metadata-requirements.md` for strict metadata validation rules
 - Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
-- Review `.claude/docs/guides/validation_and_testing_guide.md` PHASE 1 for quality requirements
+- Review `.claude/validation_and_testing_guide.md` PHASE 1 for quality requirements
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
 
