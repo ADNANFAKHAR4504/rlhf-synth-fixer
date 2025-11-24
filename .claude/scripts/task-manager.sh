@@ -336,48 +336,81 @@ get_task() {
     grep "^$task_id," "$CSV_FILE" | head -1
 }
 
-# Atomic select and update with file locking
+# Atomic select and update with file locking and race condition protection
 select_and_update() {
     local task_json
     local task_id
     local exit_code=0
-    
+
     # Acquire exclusive lock
     if ! acquire_lock; then
         log_error "Could not acquire lock for select_and_update"
         exit 1
     fi
-    
+
     # Ensure lock is released on exit
     trap "release_lock" EXIT INT TERM
-    
+
     # Critical section - select and update atomically
     task_json=$(select_task) || exit_code=$?
-    
+
     if [ $exit_code -ne 0 ]; then
         release_lock
         exit $exit_code
     fi
-    
+
     task_id=$(echo "$task_json" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
-    
+
+    # RACE PROTECTION #1: Check if worktree already exists (catches parallel creation race)
+    if [ -d "$REPO_ROOT/worktree/synth-$task_id" ]; then
+        log_error "🚨 RACE DETECTED: Worktree already exists for task $task_id"
+        log_warn "Another agent likely started this task. Releasing lock and exiting."
+        release_lock
+        exit 1
+    fi
+
+    # RACE PROTECTION #2: Pre-update verification (check CSV status under lock)
+    local current_status
+    current_status=$(awk -F',' -v tid="$task_id" 'NR>1 && $1==tid {print $2; exit}' "$CSV_FILE")
+    if [ "$current_status" = "in_progress" ] || [ "$current_status" = "done" ]; then
+        log_error "🚨 RACE DETECTED: Task $task_id already has status '$current_status' in CSV"
+        log_warn "Another agent updated CSV first. Releasing lock and exiting."
+        release_lock
+        exit 1
+    fi
+
     # Set flag to indicate lock is already held (avoid nested locking)
     export LOCK_HELD=1
-    
+
     # Update status while holding lock
     update_status "$task_id" "in_progress" || exit_code=$?
-    
+
     # Clear flag
     unset LOCK_HELD
-    
+
+    if [ $exit_code -ne 0 ]; then
+        release_lock
+        exit $exit_code
+    fi
+
+    # RACE PROTECTION #3: Post-update verification (ensure write succeeded under lock)
+    local verify_status
+    verify_status=$(awk -F',' -v tid="$task_id" 'NR>1 && $1==tid {print $2; exit}' "$CSV_FILE")
+    if [ "$verify_status" != "in_progress" ]; then
+        log_error "🚨 CRITICAL: Post-update verification failed!"
+        log_error "Expected status 'in_progress', found '$verify_status'"
+        log_warn "CSV update may have failed. Releasing lock and exiting."
+        release_lock
+        exit 1
+    fi
+
+    log_info "✅ Verified under lock: Task $task_id status = 'in_progress'"
+    log_info "🔒 Task $task_id is now exclusively locked for this agent (PID: $$)"
+
     # Release lock
     release_lock
     trap - EXIT INT TERM
-    
-    if [ $exit_code -ne 0 ]; then
-        exit $exit_code
-    fi
-    
+
     # Return with updated status
     echo "$task_json" | sed 's/"status":"[^"]*"/"status":"in_progress"/'
 }
