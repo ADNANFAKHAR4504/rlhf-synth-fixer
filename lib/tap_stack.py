@@ -177,7 +177,7 @@ class TapStack(pulumi.ComponentResource):
             ],
             hash_key="transaction_id",
             range_key="timestamp",
-            billing_mode="ON_DEMAND",
+            billing_mode="PAY_PER_REQUEST",
             point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
             server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(
                 enabled=True,
@@ -203,7 +203,7 @@ class TapStack(pulumi.ComponentResource):
                 aws.dynamodb.TableAttributeArgs(name="risk_score", type="N"),
             ],
             hash_key="transaction_id",
-            billing_mode="ON_DEMAND",
+            billing_mode="PAY_PER_REQUEST",
             point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(enabled=True),
             server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(
                 enabled=True,
