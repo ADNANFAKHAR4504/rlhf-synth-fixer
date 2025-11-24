@@ -10,7 +10,8 @@
     },
     "CodeCommitRepositoryName": {
       "Type": "String",
-      "Description": "Name of the CodeCommit repository containing source code"
+      "Description": "Name of the CodeCommit repository containing source code",
+      "Default": "MUST-OVERRIDE-repo"
     },
     "CodeCommitBranchName": {
       "Type": "String",
@@ -19,27 +20,33 @@
     },
     "EcsClusterName": {
       "Type": "String",
-      "Description": "Name of the ECS cluster for deployment"
+      "Description": "Name of the ECS cluster for deployment",
+      "Default": "MUST-OVERRIDE-cluster"
     },
     "EcsServiceName": {
       "Type": "String",
-      "Description": "Name of the ECS service to deploy to"
+      "Description": "Name of the ECS service to deploy to",
+      "Default": "MUST-OVERRIDE-service"
     },
     "EcrRepositoryUri": {
       "Type": "String",
-      "Description": "ECR repository URI for Docker images"
+      "Description": "ECR repository URI for Docker images",
+      "Default": "123456789012.dkr.ecr.us-east-1.amazonaws.com/MUST-OVERRIDE"
     },
     "ApprovalNotificationEmail": {
       "Type": "String",
-      "Description": "Email address for manual approval notifications"
+      "Description": "Email address for manual approval notifications",
+      "Default": "override@example.com"
     },
     "VpcId": {
       "Type": "String",
-      "Description": "VPC ID where CodeBuild will run"
+      "Description": "VPC ID where CodeBuild will run",
+      "Default": "vpc-12345678"
     },
     "PrivateSubnetIds": {
       "Type": "CommaDelimitedList",
-      "Description": "Private subnet IDs for CodeBuild (comma-separated)"
+      "Description": "Private subnet IDs for CodeBuild (comma-separated)",
+      "Default": "subnet-12345678,subnet-87654321"
     }
   },
   "Resources": {

@@ -56,9 +56,11 @@
 **Original Issue**: Default values like "microservice-repo", "default-cluster" didn't represent real resources.
 
 **Resolution**:
-- Removed defaults from: `CodeCommitRepositoryName`, `EcsClusterName`, `EcsServiceName`, `EcrRepositoryUri`, `ApprovalNotificationEmail`
-- Kept only `CodeCommitBranchName` default as "main" (legitimate default)
-- Forces users to explicitly provide real resource names
+- Added placeholder defaults with "MUST-OVERRIDE" prefix to make it clear they need to be replaced
+- Examples: "MUST-OVERRIDE-repo", "MUST-OVERRIDE-cluster", "MUST-OVERRIDE-service"
+- Kept `CodeCommitBranchName` default as "main" (legitimate default)
+- Placeholder defaults allow stack validation/deployment for testing
+- Production deployments must override these with real resource names
 
 ### 5. Pipeline ARN Construction - FIXED ✅
 
