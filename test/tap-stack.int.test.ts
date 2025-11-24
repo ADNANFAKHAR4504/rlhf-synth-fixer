@@ -313,7 +313,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
       const albEndpoint = mappedOutputs.AlbEndpoint;
 
       if (!albArn && !albEndpoint) {
-        console.log('ALB outputs not found, skipping ALB configuration test');
+        console.log('ALB outputs not found - ALB not deployed');
         return;
       }
 
@@ -350,7 +350,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
       const targetGroupArn = mappedOutputs.TargetGroupArn;
 
       if (!albArn && !targetGroupArn) {
-        console.log('Target group outputs not found, skipping target group test');
+        console.log('Target group outputs not found - target group not deployed');
         return;
       }
 
@@ -390,7 +390,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
     test('should have auto scaling group with running instances', async () => {
       const asgName = mappedOutputs.AutoScalingGroupName;
       if (!asgName) {
-        console.log('Auto Scaling Group name not found in outputs, skipping ASG test');
+        console.log('Auto Scaling Group name not found - ASG not deployed');
         return;
       }
 
@@ -1235,7 +1235,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
           fullStackResults.cloudfront_origin.success = [200, 403, 404].includes(cfResponse.status);
         } else {
-          fullStackResults.cloudfront_origin.success = true; // Skip if not configured
+          fullStackResults.cloudfront_origin.success = false; // CloudFront not configured
         }
       } catch (error) {
         fullStackResults.cloudfront_origin.error = error instanceof Error ? error.message : String(error);
@@ -1282,7 +1282,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
 
           fullStackResults.alb_target_health.success = hasHealthyTargets || targetGroups.length > 0;
         } else {
-          fullStackResults.alb_target_health.success = true; // Skip if not configured
+          fullStackResults.alb_target_health.success = false; // ALB not configured
         }
       } catch (error) {
         fullStackResults.alb_target_health.error = error instanceof Error ? error.message : String(error);
@@ -1302,7 +1302,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
           const instances = instanceResponse.Reservations?.flatMap(r => r.Instances || []) || [];
           fullStackResults.ec2_connectivity.success = instances.length > 0;
         } else {
-          fullStackResults.ec2_connectivity.success = true; // Skip if VPC not found
+          fullStackResults.ec2_connectivity.success = false; // VPC not configured
         }
       } catch (error) {
         fullStackResults.ec2_connectivity.error = error instanceof Error ? error.message : String(error);
@@ -1335,7 +1335,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
           fullStackResults.rds_accessibility.success = dbResponse.StatusCode === 200 &&
             !dbResponse.FunctionError?.includes('timeout');
         } else {
-          fullStackResults.rds_accessibility.success = true; // Skip if not configured
+          fullStackResults.rds_accessibility.success = false; // RDS not configured
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -1369,7 +1369,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
           const vpcResponse = await lambdaClient.send(vpcCommand);
           fullStackResults.lambda_vpc_integration.success = vpcResponse.StatusCode === 200;
         } else {
-          fullStackResults.lambda_vpc_integration.success = true; // Skip if not configured
+          fullStackResults.lambda_vpc_integration.success = false; // Lambda not configured
         }
       } catch (error) {
         fullStackResults.lambda_vpc_integration.error = error instanceof Error ? error.message : String(error);
