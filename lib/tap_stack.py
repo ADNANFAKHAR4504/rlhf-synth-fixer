@@ -188,6 +188,13 @@ class TapStack(cdk.Stack):
         # Setup EC2 Auto Scaling Group with placement groups
         self.asg = self._create_compute_cluster()
 
+        # Allow compute instances to connect to Aurora
+        self.aurora_cluster.connections.allow_from(
+            self.asg.connections,
+            ec2.Port.tcp(5432),
+            "Allow compute instances to connect to Aurora PostgreSQL"
+        )
+
         # Deploy ElastiCache Redis cluster-mode
         self.redis_cluster = self._create_redis_cluster()
 
