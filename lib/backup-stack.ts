@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface BackupStackArgs {
   environmentSuffix: string;
@@ -30,6 +30,28 @@ export class BackupStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // DR vault in us-west-2 (must be created before backup plan to reference its ARN)
+    const drProvider = new aws.Provider(
+      `dr-provider-${environmentSuffix}`,
+      {
+        region: 'us-west-2',
+      },
+      { parent: this }
+    );
+
+    const drBackupVault = new aws.backup.Vault(
+      `payment-backup-vault-${environmentSuffix}-dr`,
+      {
+        name: `payment-backup-vault-${environmentSuffix}-dr`,
+        tags: pulumi.output(tags).apply(t => ({
+          ...t,
+          Name: `payment-backup-vault-${environmentSuffix}-dr`,
+          Region: 'us-west-2',
+        })),
+      },
+      { parent: this, provider: drProvider }
+    );
+
     // Backup plan
     const backupPlan = new aws.backup.Plan(
       `payment-backup-plan-${environmentSuffix}`,
@@ -45,11 +67,7 @@ export class BackupStack extends pulumi.ComponentResource {
             },
             copyActions: [
               {
-                destinationVaultArn: `arn:aws:backup:us-west-2:${aws
-                  .getCallerIdentity()
-                  .then(
-                    id => id.accountId
-                  )}:backup-vault:payment-backup-vault-${environmentSuffix}-dr`,
+                destinationVaultArn: drBackupVault.arn,
                 lifecycle: {
                   deleteAfter: 30,
                 },
@@ -121,28 +139,6 @@ export class BackupStack extends pulumi.ComponentResource {
         resources: [clusterArn],
       },
       { parent: this }
-    );
-
-    // DR vault in us-west-2 (referenced in copy action)
-    const drProvider = new aws.Provider(
-      `dr-provider-${environmentSuffix}`,
-      {
-        region: 'us-west-2',
-      },
-      { parent: this }
-    );
-
-    const drBackupVault = new aws.backup.Vault(
-      `payment-backup-vault-${environmentSuffix}-dr`,
-      {
-        name: `payment-backup-vault-${environmentSuffix}-dr`,
-        tags: pulumi.output(tags).apply(t => ({
-          ...t,
-          Name: `payment-backup-vault-${environmentSuffix}-dr`,
-          Region: 'us-west-2',
-        })),
-      },
-      { parent: this, provider: drProvider }
     );
 
     this.registerOutputs({
