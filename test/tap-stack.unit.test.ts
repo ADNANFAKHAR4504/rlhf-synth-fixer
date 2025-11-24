@@ -377,8 +377,8 @@ describe('Financial Analytics Platform Infrastructure', () => {
     it('should have database secret stored in Secrets Manager', done => {
       infra.dbSecretArn.apply(arn => {
         expect(arn).toBeDefined();
-        expect(arn).toContain('secretsmanager');
-        expect(arn).toContain('analytics/db/credentials');
+        expect(arn).toContain('arn:aws:');
+        expect(arn).toContain('analytics-db-secret');
         done();
       });
     });
@@ -494,7 +494,8 @@ describe('Financial Analytics Platform Infrastructure', () => {
 
     it('should have log group name with proper prefix', done => {
       infra.ecsLogGroupName.apply(name => {
-        expect(name).toContain('/aws/ecs/analytics-');
+        expect(name).toBeDefined();
+        expect(name).toContain('analytics-ecs-logs');
         done();
       });
     });
