@@ -1,0 +1,7 @@
+name: financial-analytics-platform
+runtime: nodejs
+description: Production-ready infrastructure for financial analytics platform
+config:
+  environmentSuffix:
+    type: string
+    description: Unique suffix for resource naming to prevent conflicts
