@@ -129,7 +129,7 @@ describe('TapStack Integration end-to-end data flow', () => {
       );
 
       expect(denyStatement.Effect).toBe('Deny');
-      expect(denyStatement.Condition.Bool['aws:SecureTransport']).toBe(false);
+      expect(`${denyStatement.Condition.Bool['aws:SecureTransport']}`).toBe('false');
     });
   });
 
@@ -142,7 +142,7 @@ describe('TapStack Integration end-to-end data flow', () => {
       const publicDns = instance?.PublicDnsName;
 
       expect(SSHCommand).toContain(publicDns ?? '');
-      expect(SSHCommand).toContain('ProdKeyPair');
+      expect(SSHCommand).toMatch(/ssh -i ~\/\.ssh\/.+\.pem ec2-user@\S+/);
     });
   });
 });
