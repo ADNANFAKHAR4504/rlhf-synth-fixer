@@ -359,8 +359,18 @@ class TestPrimaryVPCInfrastructure:
             vpc = vpcs[0]
             assert vpc['State'] == 'available'
             assert vpc['CidrBlock'] == '10.0.0.0/16'
-            assert vpc['EnableDnsHostnames'] is True
-            assert vpc['EnableDnsSupport'] is True
+
+            # Check DNS attributes using describe_vpc_attribute
+            vpc_id = vpc['VpcId']
+            dns_hostnames = aws_clients['ec2'].describe_vpc_attribute(
+                VpcId=vpc_id, Attribute='enableDnsHostnames'
+            )
+            dns_support = aws_clients['ec2'].describe_vpc_attribute(
+                VpcId=vpc_id, Attribute='enableDnsSupport'
+            )
+
+            assert dns_hostnames['EnableDnsHostnames']['Value'] is True
+            assert dns_support['EnableDnsSupport']['Value'] is True
         except ClientError as e:
             pytest.skip(f"Could not verify VPC: {e}")
 

@@ -434,6 +434,9 @@ class TestResourceNamingConventions:
     def test_resource_names_include_version_v2(self, stack_outputs):
         """Test that resource names include version v2."""
         for key, value in stack_outputs.items():
+            # Skip KMS key ARNs as they contain GUIDs, not aliases
+            if 'kms_key_arn' in key.lower():
+                continue
             if 'name' in key.lower() or 'arn' in key.lower():
                 assert 'v2' in value or 'V2' in value.upper(), \
                     f"Resource {key} should include version v2"
@@ -448,6 +451,9 @@ class TestResourceNamingConventions:
             pytest.skip("Could not determine environment suffix")
 
         for key, value in stack_outputs.items():
+            # Skip KMS key ARNs as they contain GUIDs, not aliases
+            if 'kms_key_arn' in key.lower():
+                continue
             if value:
                 assert env_suffix in value, \
                     f"Resource {key} should include environment suffix {env_suffix}"
