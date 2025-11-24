@@ -15,6 +15,7 @@ import { MicroserviceConstruct } from '../constructs/microservice';
 
 export interface EcsMicroservicesStackProps extends cdk.StackProps {
   isLocalStack?: boolean;
+  environmentSuffix?: string;
 }
 
 export class EcsMicroservicesStack extends cdk.Stack {
@@ -29,6 +30,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
   private httpListener!: elbv2.ApplicationListener;
   private isLocalStack: boolean;
   private isCiCd: boolean;
+  private environmentSuffix: string;
 
   constructor(
     scope: Construct,
@@ -37,6 +39,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
   ) {
     super(scope, id, props);
     this.isLocalStack = props?.isLocalStack ?? false;
+    this.environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Detect simplified mode for resource-constrained environments
     this.isCiCd =
@@ -387,7 +390,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
         this,
         `${serviceConfig.name}Repository`,
         {
-          repositoryName: serviceConfig.name,
+          repositoryName: `${serviceConfig.name}-${this.environmentSuffix}`,
           imageScanOnPush: true,
           imageTagMutability: ecr.TagMutability.MUTABLE,
           lifecycleRules: [
