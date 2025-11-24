@@ -55,7 +55,7 @@ export class S3Component extends pulumi.ComponentResource {
     }
 
     // Encryption
-    new aws.s3.BucketServerSideEncryptionConfiguration(
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
       `bucket-encryption-${args.environmentSuffix}`,
       {
         bucket: this.bucket.id,
@@ -98,7 +98,7 @@ export class S3Component extends pulumi.ComponentResource {
       }
 
       if (rules.length > 0) {
-        new aws.s3.BucketLifecycleConfiguration(
+        new aws.s3.BucketLifecycleConfigurationV2(
           `bucket-lifecycle-${args.environmentSuffix}`,
           {
             bucket: this.bucket.id,

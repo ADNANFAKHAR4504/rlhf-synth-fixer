@@ -23,34 +23,84 @@ export interface EnvironmentConfig {
 }
 
 export function getConfig(): EnvironmentConfig {
-  const config = new pulumi.Config();
+  // Use explicit project name to match Pulumi.yaml
+  const config = new pulumi.Config('TapStack');
   const stack = pulumi.getStack();
 
+  // Get environment suffix from environment variable, config, or stack name
+  let environmentSuffix =
+    process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix');
+
+  // If not set, extract from stack name (e.g., "TapStackpr7159" -> "pr7159")
+  if (!environmentSuffix && stack) {
+    // Handle test environment where stack might be "stack" or "dev"
+    if (stack === 'stack' || stack === 'dev') {
+      environmentSuffix = 'dev';
+    } else {
+      environmentSuffix = stack.replace(/^TapStack/, '') || 'dev';
+    }
+  }
+
+  // Final fallback
+  if (!environmentSuffix) {
+    environmentSuffix = 'dev';
+  }
+
+  // Determine environment type from suffix
+  const envType = environmentSuffix.toLowerCase();
+  const isDev =
+    envType.includes('dev') || envType === 'dev' || envType === 'stack';
+  const isStaging = envType.includes('staging') || envType === 'staging';
+
   return {
-    environment: config.require('environment'),
-    region: config.get('region') || 'us-east-1',
-    vpcCidr: config.require('vpcCidr'),
-    availabilityZones: config.requireObject<string[]>('availabilityZones'),
-    ecsTaskCount: config.requireNumber('ecsTaskCount'),
-    ecsTaskCpu: config.require('ecsTaskCpu'),
-    ecsTaskMemory: config.require('ecsTaskMemory'),
-    rdsInstanceClass: config.require('rdsInstanceClass'),
+    environment:
+      config.get('environment') || (isDev ? 'dev' : environmentSuffix),
+    region: config.get('region') || process.env.AWS_REGION || 'us-east-1',
+    vpcCidr:
+      config.get('vpcCidr') ||
+      (isDev ? '10.0.0.0/16' : isStaging ? '10.1.0.0/16' : '10.2.0.0/16'),
+    availabilityZones: config.getObject<string[]>('availabilityZones') || [
+      'us-east-1a',
+      'us-east-1b',
+      'us-east-1c',
+    ],
+    ecsTaskCount:
+      config.getNumber('ecsTaskCount') || (isDev ? 1 : isStaging ? 2 : 4),
+    ecsTaskCpu:
+      config.get('ecsTaskCpu') || (isDev ? '256' : isStaging ? '512' : '1024'),
+    ecsTaskMemory:
+      config.get('ecsTaskMemory') ||
+      (isDev ? '512' : isStaging ? '1024' : '2048'),
+    rdsInstanceClass:
+      config.get('rdsInstanceClass') ||
+      (isDev ? 'db.t3.medium' : isStaging ? 'db.r5.large' : 'db.r5.xlarge'),
     rdsEngineMode: config.get('rdsEngineMode'),
-    enableAutoScaling: config.requireBoolean('enableAutoScaling'),
+    enableAutoScaling: config.getBoolean('enableAutoScaling') ?? !isDev,
     sslCertificateArn: config.get('sslCertificateArn'),
     tags: {
-      Environment: config.require('environment'),
-      Owner: config.get('owner') || 'platform-team',
+      Environment:
+        config.get('environment') || (isDev ? 'dev' : environmentSuffix),
+      Owner:
+        config.get('owner') || process.env.COMMIT_AUTHOR || 'platform-team',
       CostCenter: config.get('costCenter') || 'engineering',
       ManagedBy: 'pulumi',
       Stack: stack,
+      Repository: process.env.REPOSITORY || 'unknown',
+      PRNumber: process.env.PR_NUMBER || 'unknown',
+      Team: process.env.TEAM || 'synth',
     },
     s3LifecycleRules: {
-      enabled: config.requireBoolean('s3LifecycleEnabled'),
-      transitionDays: config.getNumber('s3TransitionDays'),
-      expirationDays: config.getNumber('s3ExpirationDays'),
+      enabled: config.getBoolean('s3LifecycleEnabled') ?? true,
+      transitionDays:
+        config.getNumber('s3TransitionDays') ||
+        (isDev ? 30 : isStaging ? 60 : 90),
+      expirationDays:
+        config.getNumber('s3ExpirationDays') ||
+        (isDev ? 90 : isStaging ? 180 : 365),
     },
-    rdsBackupRetentionDays: config.getNumber('rdsBackupRetentionDays') || 7,
+    rdsBackupRetentionDays:
+      config.getNumber('rdsBackupRetentionDays') ||
+      (isDev ? 1 : isStaging ? 7 : 14),
     permissionBoundaryArn: config.get('permissionBoundaryArn'),
   };
 }

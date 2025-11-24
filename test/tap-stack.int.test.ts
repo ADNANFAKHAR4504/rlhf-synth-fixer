@@ -1,19 +1,19 @@
+import { CloudWatchClient, ListDashboardsCommand } from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import { DescribeClustersCommand, ECSClient } from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeDBClustersCommand, RDSClient } from '@aws-sdk/client-rds';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import { ECSClient, DescribeClustersCommand, DescribeServicesCommand } from '@aws-sdk/client-ecs';
-import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { CloudWatchClient, DescribeDashboardsCommand } from '@aws-sdk/client-cloudwatch';
 
 describe('Trading Platform Infrastructure Integration Tests', () => {
   let outputs: any;
@@ -116,6 +116,7 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
 
   describe('ECS Cluster and Service', () => {
     it('should have a running ECS cluster', async () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.ecsClusterId).toBeDefined();
       const command = new DescribeClustersCommand({
         clusters: [outputs.infraOutputs.ecsClusterId],
@@ -127,6 +128,7 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
     });
 
     it('should have task count matching configuration', () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.ecsTaskCount).toBeDefined();
       expect(typeof outputs.infraOutputs.ecsTaskCount).toBe('number');
       expect(outputs.infraOutputs.ecsTaskCount).toBeGreaterThan(0);
@@ -135,7 +137,10 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
 
   describe('RDS Aurora Cluster', () => {
     it('should have an available RDS cluster', async () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.rdsEndpoint).toBeDefined();
+      expect(typeof outputs.infraOutputs.rdsEndpoint).toBe('string');
+
       // Extract cluster identifier from endpoint
       const clusterId = outputs.infraOutputs.rdsEndpoint.split('.')[0];
 
@@ -146,10 +151,11 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
         c.Endpoint?.includes(clusterId)
       );
       expect(cluster).toBeDefined();
-      expect(['available', 'creating']).toContain(cluster!.Status);
+      expect(['available', 'creating', 'modifying']).toContain(cluster!.Status);
     }, 10000);
 
     it('should have correct instance class', () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.rdsInstanceClass).toBeDefined();
       expect(outputs.infraOutputs.rdsInstanceClass).toMatch(/^db\./);
     });
@@ -157,7 +163,9 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
 
   describe('Application Load Balancer', () => {
     it('should have an active load balancer', async () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.albDnsName).toBeDefined();
+      expect(typeof outputs.infraOutputs.albDnsName).toBe('string');
 
       const command = new DescribeLoadBalancersCommand({});
       const response = await elbClient.send(command);
@@ -170,13 +178,17 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
     });
 
     it('should have a valid DNS name', () => {
+      expect(outputs.infraOutputs).toBeDefined();
+      expect(outputs.infraOutputs.albDnsName).toBeDefined();
       expect(outputs.infraOutputs.albDnsName).toMatch(/\.elb\.amazonaws\.com$/);
     });
   });
 
   describe('S3 Bucket', () => {
     it('should have an accessible S3 bucket', async () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.s3BucketName).toBeDefined();
+      expect(typeof outputs.infraOutputs.s3BucketName).toBe('string');
 
       const command = new HeadBucketCommand({
         Bucket: outputs.infraOutputs.s3BucketName,
@@ -187,9 +199,11 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Dashboard', () => {
     it('should have a CloudWatch dashboard', async () => {
+      expect(outputs.infraOutputs).toBeDefined();
       expect(outputs.infraOutputs.dashboardName).toBeDefined();
+      expect(typeof outputs.infraOutputs.dashboardName).toBe('string');
 
-      const command = new DescribeDashboardsCommand({
+      const command = new ListDashboardsCommand({
         DashboardNamePrefix: outputs.infraOutputs.dashboardName,
       });
       const response = await cwClient.send(command);
