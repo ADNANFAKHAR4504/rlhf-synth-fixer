@@ -1,0 +1,7 @@
+encryptionsalt: v1:eLgT4Q2n920=:v1:lX77iuvBRvuWPGSk:rmV1KcRVR3yP8Az6mlf1c2fKLRr9xQ==
+config:
+  TapStack:githubToken:
+    secure: v1:DQyWO79adAu6b+t+:7fa1eH4yqUlMuqlgof6MDhm5wd2384o0jNdrtR+XXnHD+Mlmznzz0dOz54ISLA==
+  TapStack:githubOwner: test-org
+  TapStack:githubRepo: test-repo
+  TapStack:githubBranch: main

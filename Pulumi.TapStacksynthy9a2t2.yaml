@@ -1,0 +1,8 @@
+encryptionsalt: v1:RCVG9S92D+s=:v1:jObkTb0iLnpibdzZ:gUTY8No7KM+Rpf/GpGQCw8/tEp8Kvw==
+config:
+  aws:defaultTags: '{"tags":{"Environment":"synthy9a2t2","Repository":"synth-y9a2t2","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-11-24T14:24:18Z","ManagedBy":"pulumi"}}'
+  TapStack:githubToken:
+    secure: v1:BiPpKsSeRq9rHiw5:CwDMX6PnqZiAKwcunTx/a2RQBW4//qqXq7Fuw3dmYrOt981OwUcvJMHFhFg3Fw==
+  TapStack:githubOwner: test-org
+  TapStack:githubRepo: test-repo
+  TapStack:githubBranch: main
