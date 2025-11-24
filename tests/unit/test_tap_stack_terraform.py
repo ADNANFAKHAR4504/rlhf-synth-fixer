@@ -2,6 +2,8 @@
 import json
 import os
 import pytest
+from cdktf import App
+from lib.tap_stack import TapStack
 
 
 class TestTapStackTerraform:
@@ -9,11 +11,12 @@ class TestTapStackTerraform:
 
     @pytest.fixture(scope="class")
     def terraform_json(self):
-        """Load synthesized Terraform JSON configuration."""
+        """Load or generate synthesized Terraform JSON configuration."""
         # CDKTF synthesizes to cdktf.out/stacks/<stack-name>/cdk.tf.json
         stack_name = "TapStackdev"  # Default from tap.py
         terraform_path = f"cdktf.out/stacks/{stack_name}/cdk.tf.json"
 
+        # If file doesn't exist, generate it
         if not os.path.exists(terraform_path):
             # Try to find any stack directory
             stacks_dir = "cdktf.out/stacks"
@@ -22,8 +25,23 @@ class TestTapStackTerraform:
                 if stack_dirs:
                     terraform_path = f"{stacks_dir}/{stack_dirs[0]}/cdk.tf.json"
 
+        # If still not found, synthesize the stack
         if not os.path.exists(terraform_path):
-            pytest.fail(f"Terraform JSON not found at {terraform_path}. Run 'pipenv run python tap.py' first.")
+            app = App()
+            TapStack(
+                app,
+                stack_name,
+                environment_suffix='dev',
+                state_bucket='iac-rlhf-tf-states',
+                state_bucket_region='us-east-1',
+                aws_region='us-east-1',
+                default_tags={'Environment': 'dev'}
+            )
+            app.synth()
+            
+            # Check if file was created
+            if not os.path.exists(terraform_path):
+                pytest.fail(f"Failed to synthesize Terraform JSON at {terraform_path}")
 
         with open(terraform_path, 'r', encoding='utf-8') as f:
             return json.load(f)
