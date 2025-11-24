@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface DatabaseStackArgs {
   environmentSuffix: string;
@@ -12,6 +12,7 @@ export interface DatabaseStackArgs {
 export class DatabaseStack extends pulumi.ComponentResource {
   public readonly clusterEndpoint: pulumi.Output<string>;
   public readonly clusterArn: pulumi.Output<string>;
+  public readonly secretArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -22,10 +23,40 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags, vpcId, privateSubnetIds, kmsKeyId } = args;
 
-    // For production, use AWS Secrets Manager to store the password
-    // For testing/demo purposes, we use a simple password
-    // NOTE: This should be replaced with proper secret management in production
-    const dbPassword = `TempPassword${environmentSuffix}123!`;
+    // Create a Secrets Manager secret for the database password
+    // Using the same password format initially to avoid forcing DB recreation
+    // Password can be rotated after deployment using AWS Secrets Manager rotation
+    const dbSecret = new aws.secretsmanager.Secret(
+      `payment-db-secret-${environmentSuffix}`,
+      {
+        name: `payment-db-master-password-${environmentSuffix}`,
+        description: `Master password for payment processing database - ${environmentSuffix}`,
+        kmsKeyId: kmsKeyId,
+        tags: pulumi.output(tags).apply(t => ({
+          ...t,
+          Name: `payment-db-secret-${environmentSuffix}`,
+        })),
+      },
+      { parent: this }
+    );
+
+    // Store the initial password value in the secret
+    // This uses the same password format as before to avoid DB recreation
+    // After deployment, rotate the password using AWS Secrets Manager
+    const dbSecretVersion = new aws.secretsmanager.SecretVersion(
+      `payment-db-secret-version-${environmentSuffix}`,
+      {
+        secretId: dbSecret.id,
+        secretString: pulumi.interpolate`{"username":"dbadmin","password":"TempPassword${environmentSuffix}123!"}`,
+      },
+      { parent: dbSecret }
+    );
+
+    // Extract password from secret for RDS cluster
+    const dbPassword = dbSecretVersion.secretString.apply(secretString => {
+      const parsed = JSON.parse(secretString);
+      return parsed.password;
+    });
 
     // Security group for RDS
     const dbSecurityGroup = new aws.ec2.SecurityGroup(
@@ -193,11 +224,13 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     this.clusterEndpoint = cluster.endpoint;
     this.clusterArn = cluster.arn;
+    this.secretArn = dbSecret.arn;
 
     this.registerOutputs({
       clusterEndpoint: this.clusterEndpoint,
       clusterArn: this.clusterArn,
       readerEndpoint: cluster.readerEndpoint,
+      secretArn: this.secretArn,
     });
   }
 }

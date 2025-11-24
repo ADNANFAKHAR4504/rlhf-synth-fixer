@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface ComputeStackArgs {
   environmentSuffix: string;
@@ -302,6 +302,9 @@ export class ComputeStack extends pulumi.ComponentResource {
             JSON.stringify([
               {
                 name: 'payment-app',
+                // NOTE: This is a placeholder image for infrastructure provisioning.
+                // Replace with actual payment application image from ECR in production:
+                // image: '${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/payment-app:latest'
                 image: 'nginx:latest',
                 essential: true,
                 readonlyRootFilesystem: true,

@@ -228,26 +228,40 @@ export class SecurityStack extends pulumi.ComponentResource {
       {
         description:
           'Custom policy for ECS task execution with ECR and CloudWatch',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'ecr:GetAuthorizationToken',
-                'ecr:BatchCheckLayerAvailability',
-                'ecr:GetDownloadUrlForLayer',
-                'ecr:BatchGetImage',
-              ],
-              Resource: '*',
-            },
-            {
-              Effect: 'Allow',
-              Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: pulumi.output(currentCallerIdentity).apply(identity =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['ecr:GetAuthorizationToken'],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:RequestedRegion': 'us-east-1',
+                  },
+                },
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'ecr:BatchCheckLayerAvailability',
+                  'ecr:GetDownloadUrlForLayer',
+                  'ecr:BatchGetImage',
+                ],
+                Resource: `arn:aws:ecr:us-east-1:${identity.accountId}:repository/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                Resource: [
+                  `arn:aws:logs:us-east-1:${identity.accountId}:log-group:/ecs/payment-app-${environmentSuffix}:*`,
+                  `arn:aws:logs:us-east-1:${identity.accountId}:log-group:/audit/payment-app-${environmentSuffix}:*`,
+                ],
+              },
+            ],
+          })
+        ),
         tags: pulumi.output(tags).apply(t => ({
           ...t,
           Name: `payment-ecs-exec-custom-policy-${environmentSuffix}`,
@@ -289,12 +303,12 @@ export class SecurityStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Task role policy for S3 and RDS access (least privilege)
+    // Task role policy for S3, RDS, and Secrets Manager access (least privilege)
     const ecsTaskPolicy = new aws.iam.Policy(
       `payment-ecs-task-policy-${environmentSuffix}`,
       {
-        description: 'Policy for ECS tasks to access S3 and RDS',
-        policy: this.s3KmsKey.arn.apply(kmsArn =>
+        description: 'Policy for ECS tasks to access S3, RDS, and Secrets Manager',
+        policy: pulumi.all([this.s3KmsKey.arn, currentCallerIdentity]).apply(([kmsArn, identity]) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -323,6 +337,13 @@ export class SecurityStack extends pulumi.ComponentResource {
                 Action: ['rds:DescribeDBClusters', 'rds:DescribeDBInstances'],
                 Resource: [
                   `arn:aws:rds:us-east-1:*:cluster:payment-cluster-${environmentSuffix}`,
+                ],
+              },
+              {
+                Effect: 'Allow',
+                Action: ['secretsmanager:GetSecretValue'],
+                Resource: [
+                  `arn:aws:secretsmanager:us-east-1:${identity.accountId}:secret:payment-db-master-password-${environmentSuffix}-*`,
                 ],
               },
             ],
