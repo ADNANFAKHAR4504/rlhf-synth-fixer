@@ -400,7 +400,7 @@ class TapStack:
             tags=self.common_tags
         )
 
-        aws.iam.RolePolicyAttachment(
+        self.dms_vpc_policy_attachment = aws.iam.RolePolicyAttachment(
             f"dms-vpc-policy-{self.environment_suffix}",
             role=self.dms_vpc_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
@@ -681,12 +681,15 @@ class TapStack:
     def _create_dms(self):
         """Create DMS resources for database migration."""
         # Create DMS subnet group
+        # Note: Must depend on dms_vpc_role and policy attachment to ensure IAM role is fully 
+        # configured and propagated in AWS DMS service before creating subnet group
         self.dms_subnet_group = aws.dms.ReplicationSubnetGroup(
             f"migration-dms-subnet-group-{self.environment_suffix}",
             replication_subnet_group_id=f"migration-dms-subnet-group-{self.environment_suffix}",
             replication_subnet_group_description="Subnet group for DMS replication instance",
             subnet_ids=[subnet.id for subnet in self.private_subnets_dms],
-            tags=self.common_tags
+            tags=self.common_tags,
+            opts=pulumi.ResourceOptions(depends_on=[self.dms_vpc_role, self.dms_vpc_policy_attachment])
         )
 
         # Create security group for DMS
