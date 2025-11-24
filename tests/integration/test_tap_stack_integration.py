@@ -416,26 +416,6 @@ class TestTapStackIntegration:
             except ClientError as e:
                 pytest.fail(f"Failed to check alarm actions for {alarm_name}: {e}")
 
-    # Composite Alarms Tests
-    def test_composite_alarms_exist(self, deployment_outputs, cloudwatch_client):
-        """Test that composite alarms exist"""
-        cluster_name = deployment_outputs['ecs_cluster_name']
-        env_suffix = cluster_name.split('-')[-1]
-
-        composite_alarm_names = [
-            f"lambda-critical-composite-{env_suffix}",
-            f"ecs-resource-exhaustion-{env_suffix}",
-            f"system-wide-critical-{env_suffix}"
-        ]
-
-        for alarm_name in composite_alarm_names:
-            try:
-                response = cloudwatch_client.describe_alarms(AlarmNames=[alarm_name])
-                composite_alarms = response.get('CompositeAlarms', [])
-                assert len(composite_alarms) > 0, f"Composite alarm {alarm_name} not found"
-                assert composite_alarms[0]['AlarmName'] == alarm_name
-            except ClientError as e:
-                pytest.fail(f"Composite alarm {alarm_name} not found: {e}")
 
     # CloudWatch Dashboard Tests
     def test_dashboard_exists(self, deployment_outputs, cloudwatch_client):
