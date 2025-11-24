@@ -9,16 +9,19 @@
       "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
     },
     "VpcId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID where CodeBuild will run"
+      "Type": "String",
+      "Description": "VPC ID where CodeBuild will run",
+      "Default": ""
     },
     "PrivateSubnetIds": {
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "Private subnet IDs for CodeBuild (no internet access)"
+      "Type": "CommaDelimitedList",
+      "Description": "Private subnet IDs for CodeBuild (no internet access)",
+      "Default": ""
     },
     "CodeCommitRepositoryName": {
       "Type": "String",
-      "Description": "Name of the CodeCommit repository containing source code"
+      "Description": "Name of the CodeCommit repository containing source code",
+      "Default": ""
     },
     "CodeCommitBranchName": {
       "Type": "String",
@@ -27,20 +30,89 @@
     },
     "EcsClusterName": {
       "Type": "String",
-      "Description": "Name of the ECS cluster for deployment"
+      "Description": "Name of the ECS cluster for deployment",
+      "Default": ""
     },
     "EcsServiceName": {
       "Type": "String",
-      "Description": "Name of the ECS service to deploy to"
+      "Description": "Name of the ECS service to deploy to",
+      "Default": ""
     },
     "EcrRepositoryUri": {
       "Type": "String",
-      "Description": "ECR repository URI for Docker images"
+      "Description": "ECR repository URI for Docker images",
+      "Default": ""
     },
     "ApprovalNotificationEmail": {
       "Type": "String",
       "Description": "Email address for manual approval notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      "Default": "noreply@example.com"
+    }
+  },
+  "Conditions": {
+    "HasVpc": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "VpcId"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasCodeCommit": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CodeCommitRepositoryName"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasEcs": {
+      "Fn::And": [
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "EcsClusterName"
+                },
+                ""
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "EcsServiceName"
+                },
+                ""
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "HasEcr": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EcrRepositoryUri"
+            },
+            ""
+          ]
+        }
+      ]
     }
   },
   "Resources": {

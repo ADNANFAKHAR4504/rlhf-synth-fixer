@@ -4,6 +4,8 @@
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "startedAt": "2025-11-24T06:15:00-05:00",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
