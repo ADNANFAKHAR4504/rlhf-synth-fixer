@@ -1,47 +1,57 @@
 """Multi-region disaster recovery TAP Stack for payment processing system."""
 
-from cdktf import TerraformStack, S3Backend, Fn, TerraformOutput
-from constructs import Construct
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
+import json
+
+from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.backup_plan import (BackupPlan, BackupPlanRule,
+                                                  BackupPlanRuleLifecycle)
+from cdktf_cdktf_provider_aws.backup_selection import (
+    BackupSelection, BackupSelectionSelectionTag)
+from cdktf_cdktf_provider_aws.backup_vault import BackupVault
+from cdktf_cdktf_provider_aws.cloudwatch_event_rule import CloudwatchEventRule
+from cdktf_cdktf_provider_aws.cloudwatch_event_target import \
+    CloudwatchEventTarget
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
-from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfigurationA,
-    S3BucketReplicationConfigurationRule,
-    S3BucketReplicationConfigurationRuleDestination,
-    S3BucketReplicationConfigurationRuleFilter,
-)
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
-from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
-from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
-from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
-from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
-from cdktf_cdktf_provider_aws.route53_record import Route53Record
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
-from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
-from cdktf_cdktf_provider_aws.cloudwatch_event_rule import CloudwatchEventRule
-from cdktf_cdktf_provider_aws.cloudwatch_event_target import CloudwatchEventTarget
-from cdktf_cdktf_provider_aws.backup_vault import BackupVault
-from cdktf_cdktf_provider_aws.backup_plan import BackupPlan, BackupPlanRule, BackupPlanRuleLifecycle
-from cdktf_cdktf_provider_aws.backup_selection import BackupSelection, BackupSelectionSelectionTag
-from cdktf_cdktf_provider_aws.vpc_peering_connection import VpcPeeringConnection
-from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import VpcPeeringConnectionAccepterA
 from cdktf_cdktf_provider_aws.route import Route
-import json
+from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
+from cdktf_cdktf_provider_aws.route53_record import Route53Record
+from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
+    S3BucketReplicationConfigurationA, S3BucketReplicationConfigurationRule,
+    S3BucketReplicationConfigurationRuleDestination,
+    S3BucketReplicationConfigurationRuleFilter)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
+from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.vpc_peering_connection import \
+    VpcPeeringConnection
+from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import \
+    VpcPeeringConnectionAccepterA
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -865,8 +875,8 @@ def handler(event, context):
             runtime="python3.11",
             memory_size=1024,
             timeout=60,
-            filename="lambda_function.zip",  # Would be created by build process
-            source_code_hash=Fn.filebase64sha256("lambda_function.zip"),
+            filename="lib/lambda/lambda_function.zip",  # Would be created by build process
+            source_code_hash=Fn.filebase64sha256("lib/lambda/lambda_function.zip"),
             vpc_config={
                 "subnet_ids": [
                     primary_private_subnet_1.id,
@@ -902,8 +912,8 @@ def handler(event, context):
             runtime="python3.11",
             memory_size=1024,
             timeout=60,
-            filename="lambda_function.zip",
-            source_code_hash=Fn.filebase64sha256("lambda_function.zip"),
+            filename="lib/lambda/lambda_function.zip",
+            source_code_hash=Fn.filebase64sha256("lib/lambda/lambda_function.zip"),
             vpc_config={
                 "subnet_ids": [
                     secondary_private_subnet_1.id,
