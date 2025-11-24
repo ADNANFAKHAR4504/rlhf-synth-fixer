@@ -49,6 +49,20 @@
       "Default": "subnet-12345678,subnet-87654321"
     }
   },
+  "Conditions": {
+    "HasVpcConfig": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "VpcId"
+            },
+            "vpc-12345678"
+          ]
+        }
+      ]
+    }
+  },
   "Resources": {
     "ArtifactEncryptionKey": {
       "Type": "AWS::KMS::Key",
@@ -266,6 +280,7 @@
     },
     "CodeBuildSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "HasVpcConfig",
       "Properties": {
         "GroupDescription": "Security group for CodeBuild project - no internet access",
         "GroupName": {
@@ -356,20 +371,6 @@
                       "Arn"
                     ]
                   }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ec2:CreateNetworkInterface",
-                    "ec2:DescribeNetworkInterfaces",
-                    "ec2:DeleteNetworkInterface",
-                    "ec2:DescribeSubnets",
-                    "ec2:DescribeSecurityGroups",
-                    "ec2:DescribeDhcpOptions",
-                    "ec2:DescribeVpcs",
-                    "ec2:CreateNetworkInterfacePermission"
-                  ],
-                  "Resource": "*"
                 }
               ]
             }
@@ -439,19 +440,6 @@
           "Fn::GetAtt": [
             "ArtifactEncryptionKey",
             "Arn"
-          ]
-        },
-        "VpcConfig": {
-          "VpcId": {
-            "Ref": "VpcId"
-          },
-          "Subnets": {
-            "Ref": "PrivateSubnetIds"
-          },
-          "SecurityGroupIds": [
-            {
-              "Ref": "CodeBuildSecurityGroup"
-            }
           ]
         }
       }
