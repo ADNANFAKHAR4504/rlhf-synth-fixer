@@ -9,6 +9,7 @@ and manages environment-specific configurations for an asynchronous transaction 
 """
 
 import os
+import json
 from typing import Optional
 
 import pulumi
@@ -336,10 +337,10 @@ class TapStack(pulumi.ComponentResource):
             queue_url=self.transaction_queue.url,
             redrive_policy=pulumi.Output.all(
                 self.dead_letter_queue.arn
-            ).apply(lambda args: f"""{{{
-                "deadLetterTargetArn": "{args[0]}",
+            ).apply(lambda args: json.dumps({
+                "deadLetterTargetArn": args[0],
                 "maxReceiveCount": 3
-            }}}"""),
+            })),
             opts=ResourceOptions(parent=self)
         )
 
@@ -401,10 +402,10 @@ class TapStack(pulumi.ComponentResource):
                 self.sns_alerts_topic.arn,
                 self.fraud_alerts_topic.arn,
                 self.kms_key.arn
-            ).apply(lambda args: f"""{{{
+            ).apply(lambda args: """{
                 "Version": "2012-10-17",
                 "Statement": [
-                    {{
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "sqs:ReceiveMessage",
@@ -413,12 +414,12 @@ class TapStack(pulumi.ComponentResource):
                             "sqs:SendMessage"
                         ],
                         "Resource": [
-                            "{args[0]}",
-                            "{args[1]}",
-                            "{args[2]}"
+                            """ + f'"{args[0]}"' + """,
+                            """ + f'"{args[1]}"' + """,
+                            """ + f'"{args[2]}"' + """
                         ]
-                    }},
-                    {{
+                    },
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "dynamodb:GetItem",
@@ -429,48 +430,48 @@ class TapStack(pulumi.ComponentResource):
                             "dynamodb:Scan"
                         ],
                         "Resource": [
-                            "{args[3]}",
-                            "{args[3]}/index/*",
-                            "{args[4]}",
-                            "{args[4]}/index/*"
+                            """ + f'"{args[3]}"' + """,
+                            """ + f'"{args[3]}/index/*"' + """,
+                            """ + f'"{args[4]}"' + """,
+                            """ + f'"{args[4]}/index/*"' + """
                         ]
-                    }},
-                    {{
+                    },
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "s3:GetObject",
                             "s3:PutObject",
                             "s3:DeleteObject"
                         ],
-                        "Resource": "{args[5]}/*"
-                    }},
-                    {{
+                        "Resource": """ + f'"{args[5]}/*"' + """
+                    },
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "sns:Publish"
                         ],
                         "Resource": [
-                            "{args[6]}",
-                            "{args[7]}"
+                            """ + f'"{args[6]}"' + """,
+                            """ + f'"{args[7]}"' + """
                         ]
-                    }},
-                    {{
+                    },
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "kms:Decrypt",
                             "kms:GenerateDataKey"
                         ],
-                        "Resource": "{args[8]}"
-                    }},
-                    {{
+                        "Resource": """ + f'"{args[8]}"' + """
+                    },
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "events:PutEvents"
                         ],
                         "Resource": "*"
-                    }}
+                    }
                 ]
-            }}}"""),
+            }"""),
             opts=ResourceOptions(parent=self)
         )
 
@@ -646,70 +647,70 @@ def create_layer():
             definition=pulumi.Output.all(
                 self.transaction_processor.arn,
                 self.fraud_alerts_topic.arn
-            ).apply(lambda args: f"""{{{
+            ).apply(lambda args: json.dumps({
                 "Comment": "Fraud detection workflow for transaction processing",
                 "StartAt": "ValidateTransaction",
-                "States": {{
-                    "ValidateTransaction": {{
+                "States": {
+                    "ValidateTransaction": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "Parameters": {{
-                            "FunctionName": "{args[0]}",
+                        "Parameters": {
+                            "FunctionName": args[0],
                             "Payload.$": "$"
-                        }},
+                        },
                         "Retry": [
-                            {{
+                            {
                                 "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
                                 "IntervalSeconds": 2,
                                 "MaxAttempts": 6,
                                 "BackoffRate": 2
-                            }}
+                            }
                         ],
                         "Next": "CheckRiskScore"
-                    }},
-                    "CheckRiskScore": {{
+                    },
+                    "CheckRiskScore": {
                         "Type": "Choice",
                         "Choices": [
-                            {{
+                            {
                                 "Variable": "$.riskScore",
                                 "NumericGreaterThan": 80,
                                 "Next": "HighRiskAlert"
-                            }},
-                            {{
+                            },
+                            {
                                 "Variable": "$.riskScore",
                                 "NumericGreaterThan": 50,
                                 "Next": "MediumRiskReview"
-                            }}
+                            }
                         ],
                         "Default": "LowRiskApprove"
-                    }},
-                    "HighRiskAlert": {{
+                    },
+                    "HighRiskAlert": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::sns:publish",
-                        "Parameters": {{
-                            "TopicArn": "{args[1]}",
+                        "Parameters": {
+                            "TopicArn": args[1],
                             "Message.$": "$.transactionId",
                             "Subject": "High Risk Transaction Alert"
-                        }},
-                        "End": true
-                    }},
-                    "MediumRiskReview": {{
+                        },
+                        "End": True
+                    },
+                    "MediumRiskReview": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::sns:publish",
-                        "Parameters": {{
-                            "TopicArn": "{args[1]}",
+                        "Parameters": {
+                            "TopicArn": args[1],
                             "Message.$": "$.transactionId",
                             "Subject": "Medium Risk Transaction Review"
-                        }},
-                        "End": true
-                    }},
-                    "LowRiskApprove": {{
+                        },
+                        "End": True
+                    },
+                    "LowRiskApprove": {
                         "Type": "Pass",
                         "Result": "Transaction approved",
-                        "End": true
-                    }}
-                }}
-            }}}"""),
+                        "End": True
+                    }
+                }
+            })),
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
@@ -721,25 +722,25 @@ def create_layer():
             policy=pulumi.Output.all(
                 self.transaction_processor.arn,
                 self.fraud_alerts_topic.arn
-            ).apply(lambda args: f"""{{{
+            ).apply(lambda args: json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
-                    {{
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "lambda:InvokeFunction"
                         ],
-                        "Resource": "{args[0]}"
-                    }},
-                    {{
+                        "Resource": args[0]
+                    },
+                    {
                         "Effect": "Allow",
                         "Action": [
                             "sns:Publish"
                         ],
-                        "Resource": "{args[1]}"
-                    }}
+                        "Resource": args[1]
+                    }
                 ]
-            }}}"""),
+            })),
             opts=ResourceOptions(parent=self)
         )
 
