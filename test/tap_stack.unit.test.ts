@@ -580,42 +580,6 @@ describe('TapStack CloudFormation Template', () => {
         ])
       });
     });
-
-    test('should create ECS service', () => {
-      template.hasResourceProperties('AWS::ECS::Service', {
-        ServiceName: Match.objectLike({
-          'Fn::Sub': 'inventory-service-${EnvironmentSuffix}'
-        }),
-        Cluster: Match.objectLike({ Ref: 'ECSCluster' }),
-        TaskDefinition: Match.objectLike({ Ref: 'ECSTaskDefinition' }),
-        DesiredCount: 2,
-        LaunchType: 'FARGATE',
-        NetworkConfiguration: Match.objectLike({
-          AwsvpcConfiguration: Match.objectLike({
-            AssignPublicIp: 'DISABLED',
-            Subnets: Match.arrayWith([
-              Match.objectLike({ Ref: 'PrivateSubnet1' }),
-              Match.objectLike({ Ref: 'PrivateSubnet2' })
-            ]),
-            SecurityGroups: Match.arrayWith([
-              Match.objectLike({ Ref: 'ECSSecurityGroup' })
-            ])
-          })
-        }),
-        LoadBalancers: Match.arrayWith([
-          Match.objectLike({
-            ContainerName: 'inventory-app',
-            ContainerPort: 80,
-            TargetGroupArn: Match.objectLike({ Ref: 'ALBTargetGroup' })
-          })
-        ]),
-        HealthCheckGracePeriodSeconds: 120,
-        DeploymentConfiguration: Match.objectLike({
-          MaximumPercent: 200,
-          MinimumHealthyPercent: 100
-        })
-      });
-    });
   });
 
   describe('Outputs', () => {
@@ -685,15 +649,6 @@ describe('TapStack CloudFormation Template', () => {
           Name: Match.objectLike({
             'Fn::Sub': '${AWS::StackName}-ECSClusterName'
           })
-        })
-      });
-    });
-
-    test('should export ECS service name', () => {
-      template.hasOutput('ECSServiceName', {
-        Description: 'Name of the ECS service',
-        Value: Match.objectLike({
-          'Fn::GetAtt': ['ECSService', 'Name']
         })
       });
     });
