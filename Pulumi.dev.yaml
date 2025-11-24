@@ -1,0 +1,7 @@
+config:
+  aws:region: eu-west-1
+  payment-processing-infrastructure:vpcCidr: 10.0.0.0/16
+  payment-processing-infrastructure:region: eu-west-1
+  payment-processing-infrastructure:dbInstanceClass: db.t3.medium
+  payment-processing-infrastructure:scalingCpuThreshold: 50
+  payment-processing-infrastructure:availabilityZoneCount: 3
