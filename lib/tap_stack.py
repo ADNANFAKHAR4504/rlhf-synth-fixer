@@ -641,7 +641,7 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=512,
             timeout=30,
-            filename="lambda_placeholder.zip",
+            filename="lib/lambda_placeholder.zip",
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": self.dynamodb_table.name,
@@ -738,7 +738,7 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=512,
             timeout=30,
-            filename="lambda_placeholder.zip",
+            filename="lib/lambda_placeholder.zip",
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": self.dynamodb_table.name,
@@ -832,7 +832,7 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=256,
             timeout=300,
-            filename="lambda_placeholder.zip",
+            filename="lib/lambda_placeholder.zip",
             environment={
                 "variables": {
                     "CLUSTER_IDENTIFIER": f"payment-v1-primary-{environment_suffix}",
