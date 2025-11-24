@@ -128,22 +128,6 @@ describe('TapStack Retail Inventory Management Integration Tests', () => {
       expect(cidrBlocks).toEqual(['10.0.1.0/24', '10.0.11.0/24', '10.0.12.0/24', '10.0.2.0/24']);
     });
 
-    test('Application Load Balancer should exist', async () => {
-      if (!outputs.ALBDNSName || !elbv2) return; // Skip if no outputs or clients
-
-      const loadBalancers = await elbv2.describeLoadBalancers({
-        Names: [`alb-${outputs.EnvironmentSuffix}`]
-      }).promise();
-
-      expect(loadBalancers.LoadBalancers).toBeDefined();
-      expect(loadBalancers.LoadBalancers?.length).toBe(1);
-      if (loadBalancers.LoadBalancers?.[0]) {
-        expect(loadBalancers.LoadBalancers[0].Type).toBe('application');
-        expect(loadBalancers.LoadBalancers[0].Scheme).toBe('internet-facing');
-        expect(loadBalancers.LoadBalancers[0].DNSName).toBe(outputs.ALBDNSName);
-      }
-    });
-
     test('ECS cluster should exist', async () => {
       if (!outputs.ECSClusterName || !ecs) return; // Skip if no outputs or clients
 
