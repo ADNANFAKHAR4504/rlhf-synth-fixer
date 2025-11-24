@@ -2,7 +2,10 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Get configuration - prioritize environment variables, then Pulumi config, then default to 'dev'
+// This matches the pattern from Pr6886 and allows the deploy script to set ENVIRONMENT_SUFFIX
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 
 // Common tags for all resources
 const commonTags = {

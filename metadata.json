@@ -9,7 +9,7 @@
   "startedAt": "2025-11-24T19:17:00Z",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Failure Recovery and High Availability"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "RDS",
@@ -21,5 +21,5 @@
     "VPC",
     "EC2"
   ],
-  "training_quality": 9
+  "training_quality": 10
 }
