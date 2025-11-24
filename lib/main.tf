@@ -7,6 +7,11 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Random suffix to avoid name collisions for resources that may already exist
+resource "random_id" "suffix" {
+  byte_length = 2
+}
+
 # KMS key for EKS node EBS encryption
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.cluster_name}-${var.pr_number} EBS encryption"
@@ -25,7 +30,7 @@ resource "aws_kms_key" "main" {
 
 # KMS key alias
 resource "aws_kms_alias" "main" {
-  name          = "alias/${var.cluster_name}-${var.pr_number}"
+  name          = "alias/${var.cluster_name}-${var.pr_number}-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -49,7 +54,7 @@ resource "aws_kms_key_policy" "main" {
         Sid    = "Allow EKS nodes to use the key for EBS"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.cluster_name}-node-role-${var.pr_number}"
+          AWS = aws_iam_role.eks_nodes.arn
         }
         Action = [
           "kms:Decrypt",
@@ -278,7 +283,7 @@ resource "aws_route_table_association" "private" {
 
 # EKS Cluster IAM Role
 resource "aws_iam_role" "eks_cluster" {
-  name = "${var.cluster_name}-cluster-role-${var.pr_number}"
+  name = "${var.cluster_name}-cluster-role-${var.pr_number}-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -294,7 +299,7 @@ resource "aws_iam_role" "eks_cluster" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-cluster-role-${var.pr_number}"
+      Name     = "${var.cluster_name}-cluster-role-${var.pr_number}-${random_id.suffix.hex}"
       PRNumber = var.pr_number
     }
   )
@@ -437,7 +442,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
 
 # IAM Role for Node Groups
 resource "aws_iam_role" "eks_nodes" {
-  name = "${var.cluster_name}-node-role-${var.pr_number}"
+  name = "${var.cluster_name}-node-role-${var.pr_number}-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -453,7 +458,7 @@ resource "aws_iam_role" "eks_nodes" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-node-role-${var.pr_number}"
+      Name     = "${var.cluster_name}-node-role-${var.pr_number}-${random_id.suffix.hex}"
       PRNumber = var.pr_number
     }
   )
@@ -736,7 +741,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
 
 # IAM Policy for Cluster Autoscaler
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name        = "${var.cluster_name}-cluster-autoscaler-policy-${var.pr_number}"
+  name        = "${var.cluster_name}-cluster-autoscaler-policy-${var.pr_number}-${random_id.suffix.hex}"
   description = "Policy for EKS Cluster Autoscaler"
 
   policy = jsonencode({

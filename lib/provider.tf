@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/tls"
       version = ">= 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time

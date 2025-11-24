@@ -65,3 +65,58 @@ output "kms_key_alias" {
   description = "Alias of the KMS key"
   value       = aws_kms_alias.main.name
 }
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "nat_gateway_ids" {
+  description = "IDs of the NAT gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "internet_gateway_id" {
+  description = "ID of the internet gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "cluster_version" {
+  description = "Kubernetes version of the EKS cluster"
+  value       = aws_eks_cluster.main.version
+}
+
+output "cluster_status" {
+  description = "Status of the EKS cluster"
+  value       = aws_eks_cluster.main.status
+}
+
+output "cluster_arn" {
+  description = "ARN of the EKS cluster"
+  value       = aws_eks_cluster.main.arn
+}
+
+output "eks_cluster_role_arn" {
+  description = "ARN of the EKS cluster IAM role"
+  value       = aws_iam_role.eks_cluster.arn
+}
+
+output "eks_node_role_arn" {
+  description = "ARN of the EKS node IAM role"
+  value       = aws_iam_role.eks_nodes.arn
+}
