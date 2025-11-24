@@ -58,4 +58,3 @@ export const vpcId = stack.vpcId;
 export const albDnsName = stack.albDnsName;
 export const ecsClusterName = stack.ecsClusterName;
 export const rdsEndpoint = stack.rdsEndpoint;
-
