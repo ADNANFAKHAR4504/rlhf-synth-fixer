@@ -13,8 +13,8 @@ def main():
     # Get environment configuration
     environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
     aws_region = os.environ.get('AWS_REGION', 'us-east-1')
-    state_bucket = os.environ.get('STATE_BUCKET', 'iac-rlhf-tf-states')
-    state_bucket_region = os.environ.get('STATE_BUCKET_REGION', 'us-east-1')
+    state_bucket = os.environ.get('TERRAFORM_STATE_BUCKET', 'iac-rlhf-tf-states')
+    state_bucket_region = os.environ.get('TERRAFORM_STATE_BUCKET_REGION', 'us-east-1')
 
     # Default tags for all resources
     default_tags = {
