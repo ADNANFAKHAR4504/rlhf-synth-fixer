@@ -564,7 +564,7 @@ export class TapStack extends cdk.Stack {
       const auroraCluster = new rds.DatabaseCluster(this, `${envKey}Aurora`, {
         clusterIdentifier: this.formatName(envKey, 'aurora'),
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_05_2,
+          version: rds.AuroraMysqlEngineVersion.VER_3_05_1,
         }),
         credentials: rds.Credentials.fromGeneratedSecret('admin'),
         defaultDatabaseName: 'tradingdb',
