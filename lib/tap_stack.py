@@ -156,7 +156,7 @@ class TapStack(TerraformStack):
         kwargs = {
             "description": f"KMS key for healthcare DR {region_name} - {self.environment_suffix}",
             "enable_key_rotation": True,
-            "tags": {**self.common_tags, "Name": f"healthcare-dr-kms-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"healthcare-dr-kms-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -168,7 +168,7 @@ class TapStack(TerraformStack):
         )
 
         alias_kwargs = {
-            "name": f"alias/healthcare-dr-{region_name}-v1-{self.environment_suffix}",
+            "name": f"alias/healthcare-dr-{region_name}-v2-{self.environment_suffix}",
             "target_key_id": kms_key.key_id
         }
         if provider:
@@ -188,7 +188,7 @@ class TapStack(TerraformStack):
             "cidr_block": cidr_block,
             "enable_dns_hostnames": True,
             "enable_dns_support": True,
-            "tags": {**self.common_tags, "Name": f"healthcare-dr-vpc-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"healthcare-dr-vpc-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -210,7 +210,7 @@ class TapStack(TerraformStack):
                 "cidr_block": f"{cidr_prefix}.{i}.0/24",
                 "availability_zone": f"{region}{az}",
                 "map_public_ip_on_launch": True,
-                "tags": {**self.common_tags, "Name": f"healthcare-dr-subnet-{region_name}-v1-{az}-{self.environment_suffix}"}
+                "tags": {**self.common_tags, "Name": f"healthcare-dr-subnet-{region_name}-v2-{az}-{self.environment_suffix}"}
             }
             if provider:
                 kwargs["provider"] = provider
@@ -228,7 +228,7 @@ class TapStack(TerraformStack):
         """Create Internet Gateway."""
         kwargs = {
             "vpc_id": vpc.id,
-            "tags": {**self.common_tags, "Name": f"healthcare-dr-igw-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"healthcare-dr-igw-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -243,7 +243,7 @@ class TapStack(TerraformStack):
         """Create route table with internet gateway route."""
         rt_kwargs = {
             "vpc_id": vpc.id,
-            "tags": {**self.common_tags, "Name": f"healthcare-dr-rt-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"healthcare-dr-rt-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             rt_kwargs["provider"] = provider
@@ -288,7 +288,7 @@ class TapStack(TerraformStack):
     def _create_security_group(self, region_name: str, vpc: Vpc, provider = None) -> SecurityGroup:
         """Create security group for Lambda."""
         kwargs = {
-            "name": f"healthcare-dr-lambda-sg-{region_name}-v1-{self.environment_suffix}",
+            "name": f"healthcare-dr-lambda-sg-{region_name}-v2-{self.environment_suffix}",
             "description": "Security group for Lambda functions",
             "vpc_id": vpc.id,
             "egress": [SecurityGroupEgress(
@@ -303,7 +303,7 @@ class TapStack(TerraformStack):
                 protocol="tcp",
                 cidr_blocks=["0.0.0.0/0"]
             )],
-            "tags": {**self.common_tags, "Name": f"healthcare-dr-lambda-sg-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"healthcare-dr-lambda-sg-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -317,9 +317,9 @@ class TapStack(TerraformStack):
     def _create_s3_bucket(self, region_name: str, provider = None) -> S3Bucket:
         """Create S3 bucket for medical documents."""
         kwargs = {
-            "bucket": f"healthcare-medical-docs-{region_name}-v1-{self.environment_suffix}",
+            "bucket": f"healthcare-medical-docs-{region_name}-v2-{self.environment_suffix}",
             "force_destroy": True,
-            "tags": {**self.common_tags, "Name": f"medical-docs-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"medical-docs-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -381,9 +381,9 @@ class TapStack(TerraformStack):
         }
 
         role_kwargs = {
-            "name": f"healthcare-dr-lambda-role-{region_name}-v1-{self.environment_suffix}",
+            "name": f"healthcare-dr-lambda-role-{region_name}-v2-{self.environment_suffix}",
             "assume_role_policy": json.dumps(assume_role_policy),
-            "tags": {**self.common_tags, "Name": f"lambda-role-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"lambda-role-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             role_kwargs["provider"] = provider
@@ -396,7 +396,7 @@ class TapStack(TerraformStack):
 
         # Custom policy for cross-region access
         policy_kwargs = {
-            "name": f"healthcare-dr-lambda-policy-{region_name}-v1-{self.environment_suffix}",
+            "name": f"healthcare-dr-lambda-policy-{region_name}-v2-{self.environment_suffix}",
             "policy": json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -480,7 +480,7 @@ class TapStack(TerraformStack):
     def _create_lambda_function(self, region_name: str, lambda_role: IamRole, provider = None) -> LambdaFunction:
         """Create Lambda function for API endpoints."""
         kwargs = {
-            "function_name": f"healthcare-dr-api-{region_name}-v1-{self.environment_suffix}",
+            "function_name": f"healthcare-dr-api-{region_name}-v2-{self.environment_suffix}",
             "role": lambda_role.arn,
             "handler": "api_handler.handler",
             "runtime": "python3.11",
@@ -494,7 +494,7 @@ class TapStack(TerraformStack):
                     "STAGE": region_name
                 }
             },
-            "tags": {**self.common_tags, "Name": f"api-{region_name}-v1-{self.environment_suffix}"}
+            "tags": {**self.common_tags, "Name": f"api-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -508,8 +508,8 @@ class TapStack(TerraformStack):
     def _create_sns_topic(self, region_name: str, provider = None) -> SnsTopic:
         """Create SNS topic for failover notifications."""
         kwargs = {
-            "name": f"healthcare-dr-failover-{region_name}-v1-{self.environment_suffix}",
-            "tags": {**self.common_tags, "Name": f"failover-topic-{region_name}-v1-{self.environment_suffix}"}
+            "name": f"healthcare-dr-failover-{region_name}-v2-{self.environment_suffix}",
+            "tags": {**self.common_tags, "Name": f"failover-topic-{region_name}-v2-{self.environment_suffix}"}
         }
         if provider:
             kwargs["provider"] = provider
@@ -544,7 +544,7 @@ class TapStack(TerraformStack):
         }
 
         kwargs = {
-            "dashboard_name": f"healthcare-dr-{region_name}-v1-{self.environment_suffix}",
+            "dashboard_name": f"healthcare-dr-{region_name}-v2-{self.environment_suffix}",
             "dashboard_body": json.dumps(dashboard_body)
         }
         if provider:
@@ -561,7 +561,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             f"lambda_error_alarm_{region_name}",
-            alarm_name=f"healthcare-dr-lambda-errors-{region_name}-v1-{self.environment_suffix}",
+            alarm_name=f"healthcare-dr-lambda-errors-{region_name}-v2-{self.environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="Errors",
@@ -574,7 +574,7 @@ class TapStack(TerraformStack):
             dimensions={
                 "FunctionName": lambda_func.function_name
             },
-            tags={**self.common_tags, "Name": f"lambda-error-alarm-{region_name}-v1-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"lambda-error-alarm-{region_name}-v2-{self.environment_suffix}"}
         )
 
     def _create_dynamodb_global_tables(self):
@@ -584,7 +584,7 @@ class TapStack(TerraformStack):
         patient_records = DynamodbTable(
             self,
             "patient_records",
-            name=f"healthcare-patient-records-v1-{self.environment_suffix}",
+            name=f"healthcare-patient-records-v2-{self.environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="patient_id",
             range_key="record_timestamp",
@@ -598,14 +598,14 @@ class TapStack(TerraformStack):
             point_in_time_recovery=DynamodbTablePointInTimeRecovery(enabled=True),
             stream_enabled=True,
             stream_view_type="NEW_AND_OLD_IMAGES",
-            tags={**self.common_tags, "Name": f"patient-records-v1-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"patient-records-v2-{self.environment_suffix}"}
         )
 
         # Audit Logs Table
         audit_logs = DynamodbTable(
             self,
             "audit_logs",
-            name=f"healthcare-audit-logs-v1-{self.environment_suffix}",
+            name=f"healthcare-audit-logs-v2-{self.environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="audit_id",
             range_key="timestamp",
@@ -619,7 +619,7 @@ class TapStack(TerraformStack):
             point_in_time_recovery=DynamodbTablePointInTimeRecovery(enabled=True),
             stream_enabled=True,
             stream_view_type="NEW_AND_OLD_IMAGES",
-            tags={**self.common_tags, "Name": f"audit-logs-v1-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"audit-logs-v2-{self.environment_suffix}"}
         )
 
     def _create_route53_infrastructure(self):
@@ -629,8 +629,8 @@ class TapStack(TerraformStack):
         hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"healthcare-dr-v1-{self.environment_suffix}.com",
-            tags={**self.common_tags, "Name": f"healthcare-dr-zone-v1-{self.environment_suffix}"}
+            name=f"healthcare-dr-v2-{self.environment_suffix}.com",
+            tags={**self.common_tags, "Name": f"healthcare-dr-zone-v2-{self.environment_suffix}"}
         )
 
         # Weighted routing policy: 70% primary, 30% secondary
@@ -640,7 +640,7 @@ class TapStack(TerraformStack):
             self,
             "primary_record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.healthcare-dr-v1-{self.environment_suffix}.com",
+            name=f"api.healthcare-dr-v2-{self.environment_suffix}.com",
             type="A",
             ttl=60,
             records=["192.0.2.1"],  # Placeholder IP - replace with actual API Gateway/ALB endpoint
@@ -654,7 +654,7 @@ class TapStack(TerraformStack):
             self,
             "secondary_record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.healthcare-dr-v1-{self.environment_suffix}.com",
+            name=f"api.healthcare-dr-v2-{self.environment_suffix}.com",
             type="A",
             ttl=60,
             records=["192.0.2.2"],  # Placeholder IP - replace with actual API Gateway/ALB endpoint
