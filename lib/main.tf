@@ -35,6 +35,8 @@ resource "aws_kms_alias" "main" {
 }
 
 # KMS key policy
+# Note: We use a two-stage approach to avoid circular dependency
+# Initial policy allows root and services, node role will be added via grant
 resource "aws_kms_key_policy" "main" {
   key_id = aws_kms_key.main.id
 
@@ -49,29 +51,6 @@ resource "aws_kms_key_policy" "main" {
         }
         Action   = "kms:*"
         Resource = "*"
-      },
-      {
-        Sid    = "Allow EKS nodes to use the key for EBS"
-        Effect = "Allow"
-        Principal = {
-          AWS = aws_iam_role.eks_nodes.arn
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:CreateGrant",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = [
-              "ec2.${var.aws_region}.amazonaws.com"
-            ]
-          }
-        }
       },
       {
         Sid    = "Allow EC2 service to use the key"
@@ -125,6 +104,32 @@ resource "aws_kms_key_policy" "main" {
       }
     ]
   })
+}
+
+# KMS Grant for EKS node role (created after node role exists)
+# This allows the node role to use the KMS key for EBS encryption
+resource "aws_kms_grant" "eks_nodes" {
+  key_id            = aws_kms_key.main.id
+  grantee_principal = aws_iam_role.eks_nodes.arn
+  operations = [
+    "Decrypt",
+    "Encrypt",
+    "ReEncryptFrom",
+    "ReEncryptTo",
+    "GenerateDataKey",
+    "GenerateDataKeyWithoutPlaintext",
+    "CreateGrant",
+    "DescribeKey"
+  ]
+
+  # Allow via EC2 service
+  grant_creation_tokens = ["eks-node-ebs-encryption"]
+
+  depends_on = [
+    aws_iam_role.eks_nodes,
+    aws_iam_role_policy_attachment.eks_worker_node_policy,
+    aws_kms_key_policy.main
+  ]
 }
 
 # Create VPC
@@ -409,8 +414,16 @@ resource "aws_eks_cluster" "main" {
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_policy,
-    aws_iam_role_policy_attachment.eks_vpc_resource_controller
+    aws_iam_role_policy_attachment.eks_vpc_resource_controller,
+    aws_security_group_rule.nodes_to_cluster
   ]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      version
+    ]
+  }
 
   tags = merge(
     var.common_tags,
@@ -554,6 +567,15 @@ resource "aws_launch_template" "critical" {
     http_put_response_hop_limit = 1
   }
 
+  depends_on = [
+    aws_kms_key.main,
+    aws_kms_key_policy.main
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(
     var.common_tags,
     {
@@ -599,8 +621,16 @@ resource "aws_eks_node_group" "general" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
-    aws_kms_key.main
+    aws_launch_template.general,
+    aws_kms_grant.eks_nodes
   ]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
 
   tags = merge(
     var.common_tags,
@@ -631,6 +661,15 @@ resource "aws_launch_template" "general" {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
+  }
+
+  depends_on = [
+    aws_kms_key.main,
+    aws_kms_key_policy.main
+  ]
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(
