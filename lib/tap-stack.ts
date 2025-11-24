@@ -351,6 +351,11 @@ export class TapStack extends cdk.Stack {
     this.dashboard = new cloudwatch.Dashboard(this, 'TapDashboard', {
       dashboardName: `${this.config.serviceName}-${environmentSuffix}-dashboard`,
     });
+    this.dashboard.node.children.forEach(child => {
+      if (child instanceof cdk.CfnResource) {
+        child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      }
+    });
 
     this.applyGlobalTags();
     this.createEnvironments();
@@ -464,25 +469,41 @@ export class TapStack extends cdk.Stack {
             cidrMask: 24,
           },
         ],
+        restrictDefaultSecurityGroup: false,
       });
-      vpc.addGatewayEndpoint(`${envKey}S3Endpoint`, {
+      // Ensure VPC and all child resources are deleted
+      vpc.node.children.forEach(child => {
+        if (child instanceof cdk.CfnResource) {
+          child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+        }
+      });
+      const s3Endpoint = vpc.addGatewayEndpoint(`${envKey}S3Endpoint`, {
         service: ec2.GatewayVpcEndpointAwsService.S3,
       });
-      vpc.addInterfaceEndpoint(`${envKey}CloudWatchLogsEndpoint`, {
+      const cwLogsEndpoint = vpc.addInterfaceEndpoint(`${envKey}CloudWatchLogsEndpoint`, {
         service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
         privateDnsEnabled: true,
       });
-      vpc.addInterfaceEndpoint(`${envKey}RDSEndpoint`, {
+      const rdsEndpoint = vpc.addInterfaceEndpoint(`${envKey}RDSEndpoint`, {
         service: ec2.InterfaceVpcEndpointAwsService.RDS,
       });
-      vpc.addInterfaceEndpoint(`${envKey}SecretsManagerEndpoint`, {
+      const secretsEndpoint = vpc.addInterfaceEndpoint(`${envKey}SecretsManagerEndpoint`, {
         service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      });
+      // Apply removal policy to endpoints
+      [s3Endpoint, cwLogsEndpoint, rdsEndpoint, secretsEndpoint].forEach(endpoint => {
+        endpoint.node.children.forEach(child => {
+          if (child instanceof cdk.CfnResource) {
+            child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+          }
+        });
       });
 
       const replicationRole = new iam.Role(this, `${envKey}ReplicationRole`, {
         roleName: this.roleName(envKey, 's3-replication'),
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
       });
+      replicationRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
       const dataBucket = new s3.Bucket(this, `${envKey}DataBucket`, {
         bucketName: this.formatName(envKey, 'data-bucket'),
@@ -532,8 +553,10 @@ export class TapStack extends cdk.Stack {
         {
           vpc,
           description: `${envKey} Aurora access`,
+          allowAllOutbound: true,
         }
       );
+      databaseSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       databaseSecurityGroup.addIngressRule(
         ec2.Peer.ipv4(settings.vpcCidr),
         ec2.Port.tcp(3306),
@@ -546,8 +569,10 @@ export class TapStack extends cdk.Stack {
         {
           vpc,
           description: `${envKey} Lambda access`,
+          allowAllOutbound: true,
         }
       );
+      lambdaSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       databaseSecurityGroup.addIngressRule(
         lambdaSecurityGroup,
         ec2.Port.tcp(3306),
@@ -653,6 +678,7 @@ export class TapStack extends cdk.Stack {
         ),
       ],
     });
+    handlerRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     handlerRole.addToPolicy(
       new iam.PolicyStatement({
         actions: [
@@ -730,11 +756,12 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    new events.Rule(this, `${envKey}SnapshotSchedule`, {
+    const snapshotSchedule = new events.Rule(this, `${envKey}SnapshotSchedule`, {
       description: `${envKey} snapshot replication schedule`,
       schedule: events.Schedule.expression(settings.snapshotSchedule),
       targets: [new targets.SfnStateMachine(stateMachine)],
     });
+    snapshotSchedule.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     return stateMachine;
   }
@@ -787,6 +814,7 @@ export class TapStack extends cdk.Stack {
         `),
         tracing: lambda.Tracing.ACTIVE,
       });
+      fn.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       bucket.grantReadWrite(fn);
       key.grantEncryptDecrypt(fn);
       cluster.grantDataApiAccess(fn);
@@ -849,6 +877,11 @@ export class TapStack extends cdk.Stack {
       },
       cloudWatchRole: true,
     });
+    api.node.children.forEach(child => {
+      if (child instanceof cdk.CfnResource) {
+        child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      }
+    });
 
     const usagePlan = api.addUsagePlan(`${envKey}UsagePlan`, {
       name: this.formatName(envKey, 'usage-plan'),
@@ -878,6 +911,7 @@ export class TapStack extends cdk.Stack {
       displayName: `${envKey.toUpperCase()} deployment notifications`,
       masterKey: key,
     });
+    topic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     const emails = settings.emails.length
       ? settings.emails
       : ['alerts@example.com'];
@@ -978,7 +1012,7 @@ export class TapStack extends cdk.Stack {
         const envB = ENVIRONMENT_ORDER[j];
         const vpcA = this.artifacts[envA].vpc;
         const vpcB = this.artifacts[envB].vpc;
-        new ec2.CfnVPCPeeringConnection(this, `${envA}${envB}Peering`, {
+        const peering = new ec2.CfnVPCPeeringConnection(this, `${envA}${envB}Peering`, {
           vpcId: vpcA.vpcId,
           peerVpcId: vpcB.vpcId,
           peerRegion: this.config.environments[envB].region,
@@ -989,6 +1023,7 @@ export class TapStack extends cdk.Stack {
             },
           ],
         });
+        peering.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       }
     }
   }
@@ -1020,6 +1055,7 @@ export class TapStack extends cdk.Stack {
             alarmName: this.formatName(envKey, `${family}-errors`),
           }
         );
+        alarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
         alarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
       });
 
@@ -1034,6 +1070,7 @@ export class TapStack extends cdk.Stack {
           alarmName: this.formatName(envKey, 'api-latency'),
         }
       );
+      apiLatencyAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       apiLatencyAlarm.addAlarmAction(
         new cloudwatchActions.SnsAction(alarmTopic)
       );
@@ -1057,6 +1094,7 @@ export class TapStack extends cdk.Stack {
           alarmName: this.formatName(envKey, 'rds-connections'),
         }
       );
+      rdsConnectionsAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       rdsConnectionsAlarm.addAlarmAction(
         new cloudwatchActions.SnsAction(alarmTopic)
       );
