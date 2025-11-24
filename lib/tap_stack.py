@@ -507,7 +507,7 @@ class TapStack(pulumi.ComponentResource):
             layer_name=f"tap-common-dependencies-{self.environment_suffix}",
             description="Common dependencies for TAP transaction processing",
             compatible_runtimes=["python3.11"],
-            code=pulumi.FileArchive("./lambda"),
+            code=pulumi.FileArchive("./lib/lambda"),
             opts=ResourceOptions(parent=self)
         )
 
@@ -533,7 +533,7 @@ class TapStack(pulumi.ComponentResource):
                 }
             ),
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
-            code=pulumi.FileArchive("./lambda"),
+            code=pulumi.FileArchive("./lib/lambda"),
             dead_letter_config=aws.lambda_.FunctionDeadLetterConfigArgs(
                 target_arn=self.dead_letter_queue.arn
             ),
@@ -573,7 +573,7 @@ class TapStack(pulumi.ComponentResource):
                 }
             ),
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
-            code=pulumi.FileArchive("./lambda"),
+            code=pulumi.FileArchive("./lib/lambda"),
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
