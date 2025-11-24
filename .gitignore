@@ -150,4 +150,4 @@ lib/.terraform/
 **/.terraform/
 
 # Synth Files
-tasks.csvcoverage.json
+tasks.csv
