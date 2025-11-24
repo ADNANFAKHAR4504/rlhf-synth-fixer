@@ -3,7 +3,7 @@
  * Tests actual AWS resources using deployment outputs
  */
 
-import fs from 'fs';
+import * as fs from 'fs';
 import {
   S3Client,
   PutObjectCommand,
@@ -51,8 +51,26 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 import { describe, it, expect, beforeAll } from '@jest/globals';
 
+interface StackOutputs {
+  DataBucketName: string;
+  MetadataTableName: string;
+  CSVProcessorFunctionArn: string;
+  CSVProcessorFunctionName: string;
+  VPCId: string;
+  LambdaExecutionRoleArn: string;
+  LambdaSecurityGroupId: string;
+  PolicyComplianceTopicArn: string;
+  DriftDetectionTopicArn: string;
+  ServiceCatalogPortfolioId: string;
+  DashboardURL: string;
+  PublicSubnet1Id: string;
+  PublicSubnet2Id: string;
+  PrivateSubnet1Id: string;
+  PrivateSubnet2Id: string;
+}
+
 describe('CloudFormation TapStack Integration Tests', () => {
-  let outputs;
+  let outputs: StackOutputs;
   const region = process.env.AWS_REGION || 'us-east-1';
 
   // AWS SDK Clients
@@ -69,7 +87,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
     const outputsPath = 'cfn-outputs/flat-outputs.json';
     expect(fs.existsSync(outputsPath)).toBe(true);
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    outputs = JSON.parse(outputsContent);
+    outputs = JSON.parse(outputsContent) as StackOutputs;
   });
 
   describe('Deployment Outputs', () => {
@@ -129,7 +147,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await s3Client.send(command);
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(response.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(response.ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
     });
 
     it('should have lifecycle policy for Glacier transition', async () => {
@@ -139,10 +157,10 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await s3Client.send(command);
       expect(response.Rules).toBeDefined();
-      const glacierRule = response.Rules.find(r => r.ID === 'TransitionToGlacier');
+      const glacierRule = response.Rules?.find(r => r.ID === 'TransitionToGlacier');
       expect(glacierRule).toBeDefined();
-      expect(glacierRule.Transitions[0].Days).toBe(90);
-      expect(glacierRule.Transitions[0].StorageClass).toBe('GLACIER');
+      expect(glacierRule?.Transitions?.[0].Days).toBe(90);
+      expect(glacierRule?.Transitions?.[0].StorageClass).toBe('GLACIER');
     });
   });
 
@@ -154,7 +172,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await dynamoClient.send(command);
       expect(response.Table).toBeDefined();
-      expect(response.Table.TableName).toBe(outputs.MetadataTableName);
+      expect(response.Table?.TableName).toBe(outputs.MetadataTableName);
     });
 
     it('should use on-demand billing mode', async () => {
@@ -163,7 +181,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await dynamoClient.send(command);
-      expect(response.Table.BillingModeSummary.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
     it('should have proper key schema', async () => {
@@ -172,9 +190,9 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await dynamoClient.send(command);
-      expect(response.Table.KeySchema).toBeDefined();
-      expect(response.Table.KeySchema[0].AttributeName).toBe('file_id');
-      expect(response.Table.KeySchema[0].KeyType).toBe('HASH');
+      expect(response.Table?.KeySchema).toBeDefined();
+      expect(response.Table?.KeySchema?.[0].AttributeName).toBe('file_id');
+      expect(response.Table?.KeySchema?.[0].KeyType).toBe('HASH');
     });
 
     it('should have global secondary index', async () => {
@@ -183,9 +201,9 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await dynamoClient.send(command);
-      expect(response.Table.GlobalSecondaryIndexes).toBeDefined();
-      expect(response.Table.GlobalSecondaryIndexes.length).toBeGreaterThan(0);
-      expect(response.Table.GlobalSecondaryIndexes[0].IndexName).toBe('timestamp-index');
+      expect(response.Table?.GlobalSecondaryIndexes).toBeDefined();
+      expect(response.Table?.GlobalSecondaryIndexes?.length).toBeGreaterThan(0);
+      expect(response.Table?.GlobalSecondaryIndexes?.[0].IndexName).toBe('timestamp-index');
     });
 
     it('should be in ACTIVE state', async () => {
@@ -194,7 +212,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await dynamoClient.send(command);
-      expect(response.Table.TableStatus).toBe('ACTIVE');
+      expect(response.Table?.TableStatus).toBe('ACTIVE');
     });
   });
 
@@ -206,7 +224,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration.FunctionName).toBe(outputs.CSVProcessorFunctionName);
+      expect(response.Configuration?.FunctionName).toBe(outputs.CSVProcessorFunctionName);
     });
 
     it('should use Python 3.9 runtime', async () => {
@@ -242,9 +260,9 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await lambdaClient.send(command);
-      expect(response.Environment.Variables).toBeDefined();
-      expect(response.Environment.Variables.DYNAMODB_TABLE).toBe(outputs.MetadataTableName);
-      expect(response.Environment.Variables.ENVIRONMENT_TYPE).toBeDefined();
+      expect(response.Environment?.Variables).toBeDefined();
+      expect(response.Environment?.Variables?.DYNAMODB_TABLE).toBe(outputs.MetadataTableName);
+      expect(response.Environment?.Variables?.ENVIRONMENT_TYPE).toBeDefined();
     });
 
     it('should be in VPC', async () => {
@@ -254,9 +272,9 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.VpcConfig).toBeDefined();
-      expect(response.VpcConfig.VpcId).toBe(outputs.VPCId);
-      expect(response.VpcConfig.SubnetIds.length).toBeGreaterThan(0);
-      expect(response.VpcConfig.SecurityGroupIds).toContain(outputs.LambdaSecurityGroupId);
+      expect(response.VpcConfig?.VpcId).toBe(outputs.VPCId);
+      expect(response.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
+      expect(response.VpcConfig?.SecurityGroupIds).toContain(outputs.LambdaSecurityGroupId);
     });
 
     it('should have proper IAM role', async () => {
@@ -277,8 +295,8 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await ec2Client.send(command);
       expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs.length).toBe(1);
-      expect(response.Vpcs[0].VpcId).toBe(outputs.VPCId);
+      expect(response.Vpcs?.length).toBe(1);
+      expect(response.Vpcs?.[0].VpcId).toBe(outputs.VPCId);
     });
 
     it('should have correct CIDR block', async () => {
@@ -287,7 +305,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await ec2Client.send(command);
-      expect(response.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
+      expect(response.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
     });
 
     it('should have DNS support and hostnames enabled', async () => {
@@ -296,8 +314,8 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await ec2Client.send(command);
-      expect(response.Vpcs[0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs[0].EnableDnsHostnames).toBe(true);
+      expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
+      expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
     });
 
     it('should have subnets created', async () => {
@@ -312,7 +330,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await ec2Client.send(command);
       expect(response.Subnets).toBeDefined();
-      expect(response.Subnets.length).toBeGreaterThanOrEqual(4);
+      expect(response.Subnets?.length).toBeGreaterThanOrEqual(4);
     });
 
     it('should have public and private subnets', async () => {
@@ -324,7 +342,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await ec2Client.send(command);
-      expect(response.Subnets.length).toBe(4);
+      expect(response.Subnets?.length).toBe(4);
     });
 
     it('should have security group created', async () => {
@@ -334,8 +352,8 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups).toBeDefined();
-      expect(response.SecurityGroups.length).toBe(1);
-      expect(response.SecurityGroups[0].GroupId).toBe(outputs.LambdaSecurityGroupId);
+      expect(response.SecurityGroups?.length).toBe(1);
+      expect(response.SecurityGroups?.[0].GroupId).toBe(outputs.LambdaSecurityGroupId);
     });
 
     it('should have VPC endpoints for S3 and DynamoDB', async () => {
@@ -350,11 +368,11 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await ec2Client.send(command);
       expect(response.VpcEndpoints).toBeDefined();
-      expect(response.VpcEndpoints.length).toBeGreaterThanOrEqual(2);
+      expect(response.VpcEndpoints?.length).toBeGreaterThanOrEqual(2);
 
-      const serviceNames = response.VpcEndpoints.map(ep => ep.ServiceName);
-      expect(serviceNames.some(name => name.includes('s3'))).toBe(true);
-      expect(serviceNames.some(name => name.includes('dynamodb'))).toBe(true);
+      const serviceNames = response.VpcEndpoints?.map(ep => ep.ServiceName) || [];
+      expect(serviceNames.some(name => name?.includes('s3'))).toBe(true);
+      expect(serviceNames.some(name => name?.includes('dynamodb'))).toBe(true);
     });
   });
 
@@ -367,7 +385,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await iamClient.send(command);
       expect(response.Role).toBeDefined();
-      expect(response.Role.RoleName).toBe(roleName);
+      expect(response.Role?.RoleName).toBe(roleName);
     });
 
     it('should have trust relationship with Lambda service', async () => {
@@ -377,7 +395,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await iamClient.send(command);
-      const trustPolicy = JSON.parse(decodeURIComponent(response.Role.AssumeRolePolicyDocument));
+      const trustPolicy = JSON.parse(decodeURIComponent(response.Role?.AssumeRolePolicyDocument || ''));
       expect(trustPolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
     });
 
@@ -389,7 +407,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await iamClient.send(command);
       expect(response.PolicyNames).toBeDefined();
-      expect(response.PolicyNames.length).toBeGreaterThan(0);
+      expect(response.PolicyNames?.length).toBeGreaterThan(0);
       expect(response.PolicyNames).toContain('S3Access');
       expect(response.PolicyNames).toContain('DynamoDBAccess');
     });
@@ -403,7 +421,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await snsClient.send(command);
       expect(response.Attributes).toBeDefined();
-      expect(response.Attributes.TopicArn).toBe(outputs.PolicyComplianceTopicArn);
+      expect(response.Attributes?.TopicArn).toBe(outputs.PolicyComplianceTopicArn);
     });
 
     it('should have drift detection SNS topic created', async () => {
@@ -413,7 +431,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await snsClient.send(command);
       expect(response.Attributes).toBeDefined();
-      expect(response.Attributes.TopicArn).toBe(outputs.DriftDetectionTopicArn);
+      expect(response.Attributes?.TopicArn).toBe(outputs.DriftDetectionTopicArn);
     });
 
     it('should have proper topic names with environment suffix', async () => {
@@ -430,7 +448,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await serviceCatalogClient.send(command);
       expect(response.PortfolioDetail).toBeDefined();
-      expect(response.PortfolioDetail.Id).toBe(outputs.ServiceCatalogPortfolioId);
+      expect(response.PortfolioDetail?.Id).toBe(outputs.ServiceCatalogPortfolioId);
     });
 
     it('should have proper portfolio display name', async () => {
@@ -439,7 +457,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await serviceCatalogClient.send(command);
-      expect(response.PortfolioDetail.DisplayName).toContain('Analytics-Platform-dev');
+      expect(response.PortfolioDetail?.DisplayName).toContain('Analytics-Platform-dev');
     });
   });
 
@@ -462,7 +480,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       });
 
       const response = await cloudWatchClient.send(command);
-      const dashboardBody = JSON.parse(response.DashboardBody);
+      const dashboardBody = JSON.parse(response.DashboardBody || '{}');
       expect(dashboardBody.widgets).toBeDefined();
       expect(dashboardBody.widgets.length).toBeGreaterThan(0);
     });
@@ -496,7 +514,7 @@ describe('CloudFormation TapStack Integration Tests', () => {
       const response = await s3Client.send(command);
       expect(response.$metadata.httpStatusCode).toBe(200);
 
-      const content = await response.Body.transformToString();
+      const content = await response.Body?.transformToString();
       expect(content).toBe(testCSVContent);
     });
 
@@ -512,9 +530,9 @@ describe('CloudFormation TapStack Integration Tests', () => {
 
       const response = await dynamoClient.send(command);
       expect(response.Item).toBeDefined();
-      expect(response.Item.file_id.S).toBe(testFileName);
-      expect(response.Item.processing_status.S).toBe('completed');
-      expect(response.Item.row_count.N).toBe('3');
+      expect(response.Item?.file_id.S).toBe(testFileName);
+      expect(response.Item?.processing_status.S).toBe('completed');
+      expect(response.Item?.row_count.N).toBe('3');
     }, 30000);
   });
 

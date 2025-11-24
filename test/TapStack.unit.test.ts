@@ -3,12 +3,12 @@
  * Tests template structure, resource configuration, and CloudFormation best practices
  */
 
-import fs from 'fs';
+import * as fs from 'fs';
 import { describe, it, expect, beforeAll } from '@jest/globals';
 
 describe('CloudFormation TapStack Template Unit Tests', () => {
-  let template;
-  let templatePath;
+  let template: any;
+  let templatePath: string;
 
   beforeAll(() => {
     templatePath = 'lib/TapStack.json';
@@ -89,7 +89,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
     });
 
     it('should have VPC with proper name tag including EnvironmentSuffix', () => {
-      const nameTag = template.Resources.VPC.Properties.Tags.find(tag => tag.Key === 'Name');
+      const nameTag = template.Resources.VPC.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag).toBeDefined();
       expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
@@ -160,7 +160,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
 
     it('should have S3 access policy', () => {
       const policies = template.Resources.LambdaExecutionRole.Properties.Policies;
-      const s3Policy = policies.find(p => p.PolicyName === 'S3Access');
+      const s3Policy = policies.find((p: any) => p.PolicyName === 'S3Access');
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:PutObject');
@@ -168,7 +168,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
 
     it('should have DynamoDB access policy', () => {
       const policies = template.Resources.LambdaExecutionRole.Properties.Policies;
-      const dynamoPolicy = policies.find(p => p.PolicyName === 'DynamoDBAccess');
+      const dynamoPolicy = policies.find((p: any) => p.PolicyName === 'DynamoDBAccess');
       expect(dynamoPolicy).toBeDefined();
       expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:PutItem');
       expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:GetItem');
@@ -196,7 +196,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
       const rules = template.Resources.AnalyticsDataBucket.Properties.LifecycleConfiguration.Rules;
       expect(rules).toBeDefined();
       expect(rules.length).toBeGreaterThan(0);
-      const glacierRule = rules.find(r => r.Id === 'TransitionToGlacier');
+      const glacierRule = rules.find((r: any) => r.Id === 'TransitionToGlacier');
       expect(glacierRule).toBeDefined();
       expect(glacierRule.Transitions[0].TransitionInDays).toBe(90);
       expect(glacierRule.Transitions[0].StorageClass).toBe('GLACIER');
@@ -211,11 +211,11 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
       expect(template.Resources.AnalyticsDataBucketPolicy).toBeDefined();
       const statements = template.Resources.AnalyticsDataBucketPolicy.Properties.PolicyDocument.Statement;
 
-      const denyUnencrypted = statements.find(s => s.Sid === 'DenyUnencryptedObjectUploads');
+      const denyUnencrypted = statements.find((s: any) => s.Sid === 'DenyUnencryptedObjectUploads');
       expect(denyUnencrypted).toBeDefined();
       expect(denyUnencrypted.Effect).toBe('Deny');
 
-      const denyInsecure = statements.find(s => s.Sid === 'DenyInsecureTransport');
+      const denyInsecure = statements.find((s: any) => s.Sid === 'DenyInsecureTransport');
       expect(denyInsecure).toBeDefined();
       expect(denyInsecure.Effect).toBe('Deny');
     });
@@ -454,7 +454,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
         } else if (props.TopicName && props.TopicName['Fn::Sub']) {
           hasEnvironmentSuffix = props.TopicName['Fn::Sub'].includes('${EnvironmentSuffix}');
         } else if (props.Tags) {
-          const nameTag = props.Tags.find(t => t.Key === 'Name');
+          const nameTag = props.Tags.find((t: any) => t.Key === 'Name');
           if (nameTag && nameTag.Value['Fn::Sub']) {
             hasEnvironmentSuffix = nameTag.Value['Fn::Sub'].includes('${EnvironmentSuffix}');
           }
@@ -483,7 +483,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
       taggableResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        const envTag = resource.Properties.Tags.find(t => t.Key === 'Environment');
+        const envTag = resource.Properties.Tags.find((t: any) => t.Key === 'Environment');
         if (!envTag) {
           console.log(`Missing Environment tag on resource: ${resourceName}`);
           console.log(`Tags:`, JSON.stringify(resource.Properties.Tags, null, 2));
@@ -502,7 +502,7 @@ describe('CloudFormation TapStack Template Unit Tests', () => {
 
   describe('CloudFormation Intrinsic Functions', () => {
     it('should use Fn::Sub for string substitution', () => {
-      const vpcName = template.Resources.VPC.Properties.Tags.find(t => t.Key === 'Name');
+      const vpcName = template.Resources.VPC.Properties.Tags.find((t: any) => t.Key === 'Name');
       expect(vpcName.Value['Fn::Sub']).toBeDefined();
     });
 
