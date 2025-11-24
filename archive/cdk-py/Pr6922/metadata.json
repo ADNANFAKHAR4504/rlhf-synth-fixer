@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-19T12:00:00-08:00",
+  "subtask": "Provisioning Of Infrastructure Environment",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "n3f5l8",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudWatch Logs",
+    "Lambda",
+    "EventBridge",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

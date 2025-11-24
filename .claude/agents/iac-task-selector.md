@@ -49,32 +49,40 @@ If `.claude/tasks.csv` is present:
    ```bash
    # Select next pending task and mark as in_progress atomically
    # This is thread-safe and can be run from multiple agents simultaneously
+   #
+   # Built-in race condition protections:
+   # - Protection #1: Checks if worktree already exists
+   # - Protection #2: Verifies CSV status before update (under lock)
+   # - Protection #3: Verifies CSV status after update (under lock)
+   #
    echo "🔍 Selecting next available task..."
    TASK_JSON=$(./.claude/scripts/task-manager.sh select-and-update)
-   
+
    # Verify selection was successful
    if [ $? -ne 0 ] || [ -z "$TASK_JSON" ]; then
        echo "❌ ERROR: Task selection failed"
+       echo "   Possible reasons:"
+       echo "   - No pending tasks available"
+       echo "   - Another agent selected the same task (race condition detected)"
+       echo "   - Worktree already exists for selected task"
+       echo "   - CSV lock timeout"
        exit 1
    fi
-   
+
    # Extract task_id and other fields
    TASK_ID=$(echo "$TASK_JSON" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
    SUBTASK=$(echo "$TASK_JSON" | grep -o '"subtask":"[^"]*"' | cut -d'"' -f4)
    PLATFORM=$(echo "$TASK_JSON" | grep -o '"platform":"[^"]*"' | cut -d'"' -f4)
    LANGUAGE=$(echo "$TASK_JSON" | grep -o '"language":"[^"]*"' | cut -d'"' -f4)
    DIFFICULTY=$(echo "$TASK_JSON" | grep -o '"difficulty":"[^"]*"' | cut -d'"' -f4)
-   
+
    echo "✅ Selected and locked task: $TASK_ID ($PLATFORM-$LANGUAGE, $DIFFICULTY)"
    echo "📋 Subtask: $SUBTASK"
    echo "🔒 Task status updated to 'in_progress' - other agents will skip this task"
-   
-   # Verify task was actually marked as in_progress in CSV
-   VERIFY_STATUS=$(grep "^$TASK_ID," .claude/tasks.csv | cut -d',' -f2)
-   if [ "$VERIFY_STATUS" != "in_progress" ]; then
-       echo "⚠️ WARNING: Task $TASK_ID status verification failed! Current status: '$VERIFY_STATUS'"
-       echo "⚠️ This may indicate a race condition or CSV corruption"
-   fi
+   echo "🛡️  Race condition protections: PASSED (worktree check ✓, pre-update check ✓, post-update check ✓)"
+
+   # NOTE: Verification is now handled INSIDE the lock by task-manager.sh
+   # No need for external verification - the select-and-update command guarantees atomicity
    ```
 
 2. **Get full task details** (if you need all fields):
@@ -154,9 +162,12 @@ If you suspect duplicate task selection in parallel execution:
    awk -F',' 'NR>1 && tolower($2) == "in_progress" {print $1, $5}' .claude/tasks.csv
    ```
 
-4. **Test lock mechanism**:
+4. **Test lock mechanism and race condition protections**:
    ```bash
-   # Run 3 agents simultaneously and verify different tasks selected
+   # Run comprehensive test suite with 10 parallel agents
+   bash .claude/scripts/test-race-conditions.sh 10
+
+   # Or quick test with 3 agents
    echo "Testing parallel selection..."
    (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
    (./.claude/scripts/task-manager.sh select-and-update | grep task_id &)
@@ -170,8 +181,33 @@ If you suspect duplicate task selection in parallel execution:
    - Confirm you did NOT read .claude/tasks.csv directly
    - Confirm you did NOT call find-next-task.py
 
-**If duplicate selection still occurs**, capture these details and report:
+## Race Condition Protections (Enhanced)
+
+The `select-and-update` command includes **three layers of protection** against race conditions:
+
+### Protection Layer #1: Worktree Existence Check
+- **When**: After task selection, before CSV update (under lock)
+- **What**: Checks if `worktree/synth-{task_id}` already exists
+- **Why**: Catches race condition where another agent already created worktree
+- **Outcome**: If worktree exists, selection fails immediately with error
+
+### Protection Layer #2: Pre-Update CSV Status Verification
+- **When**: After worktree check, before CSV update (under lock)
+- **What**: Reads CSV to verify task status is still "pending" or empty
+- **Why**: Catches race condition where another agent already updated CSV
+- **Outcome**: If status is "in_progress" or "done", selection fails with race detection error
+
+### Protection Layer #3: Post-Update CSV Status Verification
+- **When**: After CSV update, before lock release (under lock)
+- **What**: Re-reads CSV to verify task status is now "in_progress"
+- **Why**: Ensures the CSV update actually succeeded
+- **Outcome**: If status is not "in_progress", fails with critical error
+
+All three checks happen **under lock**, ensuring atomicity. The lock uses `mkdir` which is atomic across all processes.
+
+**If duplicate selection still occurs**, this indicates a bug. Capture and report:
 - Which task ID was selected by multiple agents
 - Timestamps of when each agent selected it
-- Whether the verification step (line 70-74) showed any warnings
+- Full stderr output from both agents showing protection layer results
 - Contents of .claude/tasks.csv.lock directory during the duplicate selection
+- Output of: `bash .claude/scripts/test-race-conditions.sh 20`
