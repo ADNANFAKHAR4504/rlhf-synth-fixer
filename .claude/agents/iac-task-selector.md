@@ -110,22 +110,41 @@ If `.claude/tasks.csv` is present:
        exit 1
    fi
    
-   # CRITICAL: Validate JSON is well-formed
-   if ! python3 -c "import json; json.load(open('$TASK_JSON_FILE'))" 2>/dev/null; then
-       echo "❌ ERROR: Generated JSON is malformed"
+   # Verify file was written and has content
+   if [ ! -s "$TASK_JSON_FILE" ]; then
+       echo "❌ ERROR: Task JSON file is empty or was not created"
        echo "   File: $TASK_JSON_FILE"
-       echo "   Content preview: $(head -c 200 $TASK_JSON_FILE)"
        rm -f "$TASK_JSON_FILE"
        # Rollback task status to pending
-       if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON validation error" 2>/dev/null; then
+       if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: Empty JSON file" 2>/dev/null; then
            echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
            echo "   Task $TASK_ID may remain in 'in_progress' state"
        fi
        exit 1
    fi
    
+   # CRITICAL: Validate JSON is well-formed (if python3 is available)
+   if command -v python3 >/dev/null 2>&1; then
+       if ! python3 -c "import json; json.load(open('$TASK_JSON_FILE'))" 2>/dev/null; then
+           echo "❌ ERROR: Generated JSON is malformed"
+           echo "   File: $TASK_JSON_FILE"
+           echo "   Content preview: $(head -c 200 $TASK_JSON_FILE)"
+           rm -f "$TASK_JSON_FILE"
+           # Rollback task status to pending
+           if ! ./.claude/scripts/task-manager.sh update "$TASK_ID" "pending" "Failed: JSON validation error" 2>/dev/null; then
+               echo "⚠️  WARNING: Failed to rollback task status - manual intervention may be needed"
+               echo "   Task $TASK_ID may remain in 'in_progress' state"
+           fi
+           exit 1
+       fi
+       echo "✅ JSON syntax validation passed"
+   else
+       echo "⚠️  WARNING: python3 not available - skipping JSON syntax validation"
+       echo "   Proceeding with basic validation only"
+   fi
+   
    # Check for redacted service names (common data quality issue)
-   if echo "$TASK_JSON" | grep -q '(CORE: )\\|(OPTIONAL: )'; then
+   if echo "$TASK_JSON" | grep -qE '\(CORE: \)|\(OPTIONAL: \)'; then
        echo "⚠️  WARNING: Detected redacted service names in task description"
        echo "   This may cause incomplete infrastructure generation"
        echo "   Affected fields: problem, environment, or constraints"
@@ -196,9 +215,10 @@ If `.claude/tasks.csv` is not present:
 ## Error Recovery
 - If any step fails, report specific BLOCKED status with resolution steps
 - **Automatic rollback**: If JSON file creation fails, task status is automatically rolled back to `pending` in CSV
-- **Clean up temporary task JSON file** if handoff to task-coordinator fails:
+- **Clean up temporary task JSON files** if handoff to task-coordinator fails:
   ```bash
-  rm -f ".claude/task-${TASK_ID}.json" 2>/dev/null || true
+  # Clean up PID-based JSON files for this task
+  rm -f ".claude/task-${TASK_ID}-"*.json 2>/dev/null || true
   ```
 - Maintain clean worktree state - cleanup on failures
 - Provide clear handoff status to coordinator for next agent
@@ -217,20 +237,35 @@ If you suspect duplicate task selection in parallel execution:
    find .claude/tasks.csv.lock -type d -mmin +5 -exec rm -rf {} \; 2>/dev/null
    ```
 
-2. **Verify task status distribution**:
+2. **Check for stale JSON files**:
+   ```bash
+   # List all task JSON files (PID-based naming)
+   ls -lah .claude/task-*-*.json 2>/dev/null || echo "No JSON files found"
+   
+   # Clean up old JSON files (older than 1 hour)
+   find .claude/task-*.json -type f -mmin +60 -delete 2>/dev/null
+   
+   # Count JSON files per task
+   for task_id in $(ls .claude/task-*.json 2>/dev/null | sed 's/.*task-//;s/-[0-9]*\.json$//' | sort -u); do
+       count=$(ls .claude/task-${task_id}-*.json 2>/dev/null | wc -l)
+       echo "Task $task_id: $count JSON file(s)"
+   done
+   ```
+
+3. **Verify task status distribution**:
    ```bash
    # Check how many tasks are in each status
    ./.claude/scripts/task-manager.sh status
    ```
 
-3. **Check which tasks are currently in_progress**:
+4. **Check which tasks are currently in_progress**:
    ```bash
    # Use task-manager.sh status to safely check task distribution
    # This avoids direct CSV reads and respects locking
    ./.claude/scripts/task-manager.sh status | grep -i "in_progress" || echo "No in_progress tasks"
    ```
 
-4. **Test lock mechanism**:
+5. **Test lock mechanism**:
    ```bash
    # Run 3 agents simultaneously and verify different tasks selected
    echo "Testing parallel selection..."
@@ -241,7 +276,7 @@ If you suspect duplicate task selection in parallel execution:
    echo "Check above - should show 3 different task IDs"
    ```
 
-5. **Verify this agent is NOT using deprecated methods**:
+6. **Verify this agent is NOT using deprecated methods**:
    - Confirm you executed `select-and-update` (not just `select`)
    - Confirm you did NOT read .claude/tasks.csv directly (including in debugging commands)
    - Confirm you did NOT call find-next-task.py
@@ -252,3 +287,5 @@ If you suspect duplicate task selection in parallel execution:
 - Which task ID was selected by multiple agents
 - Timestamps of when each agent selected it
 - Contents of .claude/tasks.csv.lock directory during the duplicate selection
+- List of JSON files present: `ls -lah .claude/task-*.json`
+- Check if worktrees exist: `git worktree list`
