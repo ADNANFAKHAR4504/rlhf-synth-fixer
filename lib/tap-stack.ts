@@ -347,8 +347,7 @@ export class TapStack extends pulumi.ComponentResource {
       `eks-container-registry-policy-${environmentSuffix}`,
       {
         role: nodeGroupRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
+        policyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
       },
       { parent: this }
     );
@@ -419,7 +418,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create OIDC provider for IRSA
-    const oidcProvider = new aws.iam.OpenIdConnectProvider(
+    const _oidcProvider = new aws.iam.OpenIdConnectProvider(
       `eks-oidc-provider-${environmentSuffix}`,
       {
         url: eksCluster.identities[0].oidcs[0].issuer,
@@ -499,7 +498,7 @@ export class TapStack extends pulumi.ComponentResource {
     */
 
     // Create Kubernetes provider using the EKS cluster
-    const k8sProvider = new k8s.Provider(
+    const _k8sProvider = new k8s.Provider(
       `k8s-provider-${environmentSuffix}`,
       {
         kubeconfig: pulumi
@@ -508,61 +507,56 @@ export class TapStack extends pulumi.ComponentResource {
             eksCluster.endpoint,
             eksCluster.certificateAuthority,
           ])
-          .apply(
-            ([name, endpoint, ca]: [
-              string,
-              string,
-              { data: string },
-            ]) => {
-              return JSON.stringify({
-                apiVersion: 'v1',
-                kind: 'Config',
-                clusters: [
-                  {
-                    cluster: {
-                      server: endpoint,
-                      'certificate-authority-data': ca.data,
-                    },
-                    name: 'kubernetes',
+          .apply(([name, endpoint, ca]: [string, string, { data: string }]) => {
+            return JSON.stringify({
+              apiVersion: 'v1',
+              kind: 'Config',
+              clusters: [
+                {
+                  cluster: {
+                    server: endpoint,
+                    'certificate-authority-data': ca.data,
                   },
-                ],
-                contexts: [
-                  {
-                    context: {
-                      cluster: 'kubernetes',
-                      user: 'aws',
-                    },
-                    name: 'aws',
+                  name: 'kubernetes',
+                },
+              ],
+              contexts: [
+                {
+                  context: {
+                    cluster: 'kubernetes',
+                    user: 'aws',
                   },
-                ],
-                'current-context': 'aws',
-                users: [
-                  {
-                    name: 'aws',
-                    user: {
-                      exec: {
-                        apiVersion: 'client.authentication.k8s.io/v1beta1',
-                        command: 'aws',
-                        args: [
-                          'eks',
-                          'get-token',
-                          '--cluster-name',
-                          name,
-                          '--region',
-                          region,
-                        ],
-                      },
+                  name: 'aws',
+                },
+              ],
+              'current-context': 'aws',
+              users: [
+                {
+                  name: 'aws',
+                  user: {
+                    exec: {
+                      apiVersion: 'client.authentication.k8s.io/v1beta1',
+                      command: 'aws',
+                      args: [
+                        'eks',
+                        'get-token',
+                        '--cluster-name',
+                        name,
+                        '--region',
+                        region,
+                      ],
                     },
                   },
-                ],
-              });
-            }
-          ),
+                },
+              ],
+            });
+          }),
       },
       { parent: this }
     );
 
     // Install EKS add-ons
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _coreDnsAddon = new aws.eks.Addon(
       `coredns-addon-${environmentSuffix}`,
       {
@@ -576,6 +570,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _kubeProxyAddon = new aws.eks.Addon(
       `kube-proxy-addon-${environmentSuffix}`,
       {
@@ -589,6 +584,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _vpcCniAddon = new aws.eks.Addon(
       `vpc-cni-addon-${environmentSuffix}`,
       {
