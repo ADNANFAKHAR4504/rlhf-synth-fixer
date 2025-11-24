@@ -22,7 +22,8 @@ def handler(event, context):
 
     reports_bucket = os.environ.get('REPORTS_BUCKET')
     environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'unknown')
-    aws_region = os.environ.get('AWS_REGION', 'us-east-1')
+    # Use REGION instead of AWS_REGION (AWS_REGION is reserved by Lambda)
+    aws_region = os.environ.get('REGION', os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
 
     # Initialize AWS clients
     ec2_client = boto3.client('ec2', region_name=aws_region)

@@ -161,7 +161,7 @@ class ComplianceValidator(Construct):
                 "variables": {
                     "REPORTS_BUCKET": self.reports_bucket.id,
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "AWS_REGION": aws_region
+                    "REGION": aws_region
                 }
             },
             filename=zip_path
