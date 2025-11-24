@@ -8,12 +8,7 @@
   "startedAt": "2025-11-24T13:58:00+05:30",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "All data must be encrypted at rest using AWS KMS customer-managed keys",
-    "RDS instances must use encrypted snapshots with cross-region replication",
-    "Application containers must run with read-only root filesystems",
-    "All S3 buckets must have versioning enabled and lifecycle policies configured",
-    "VPC Endpoints must be used for all AWS service communications",
-    "CloudWatch Logs must retain audit logs for exactly 365 days"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "vpc",
