@@ -261,7 +261,7 @@ class TapStack(pulumi.ComponentResource):
                     days=90
                 ),
                 aws.s3.BucketIntelligentTieringConfigurationTieringArgs(
-                    access_tier="DEEP_ARCHIVE_ACCESS", 
+                    access_tier="DEEP_ARCHIVE_ACCESS",
                     days=180
                 )
             ],
@@ -300,6 +300,18 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_sqs_queues(self):
         """Create SQS FIFO queues for transaction processing."""
+        # Dead letter queue for failed transactions (created first)
+        self.dead_letter_queue = aws.sqs.Queue(
+            f"tap-transactions-dlq-{self.environment_suffix}.fifo",
+            name=f"tap-transactions-dlq-{self.environment_suffix}.fifo",
+            fifo_queue=True,
+            content_based_deduplication=True,
+            kms_master_key_id=self.kms_key.key_id,
+            message_retention_seconds=1209600,  # 14 days
+            tags=self.tags,
+            opts=ResourceOptions(parent=self)
+        )
+
         # Main transaction processing queue
         self.transaction_queue = aws.sqs.Queue(
             f"tap-transactions-{self.environment_suffix}.fifo",
@@ -311,18 +323,12 @@ class TapStack(pulumi.ComponentResource):
             kms_master_key_id=self.kms_key.key_id,
             visibility_timeout_seconds=300,  # 5 minutes
             message_retention_seconds=1209600,  # 14 days
-            tags=self.tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Dead letter queue for failed transactions
-        self.dead_letter_queue = aws.sqs.Queue(
-            f"tap-transactions-dlq-{self.environment_suffix}.fifo",
-            name=f"tap-transactions-dlq-{self.environment_suffix}.fifo",
-            fifo_queue=True,
-            content_based_deduplication=True,
-            kms_master_key_id=self.kms_key.key_id,
-            message_retention_seconds=1209600,  # 14 days
+            redrive_policy=pulumi.Output.all(
+                self.dead_letter_queue.arn
+            ).apply(lambda args: json.dumps({
+                "deadLetterTargetArn": args[0],
+                "maxReceiveCount": 3
+            })),
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
@@ -339,19 +345,6 @@ class TapStack(pulumi.ComponentResource):
             visibility_timeout_seconds=180,  # 3 minutes for priority processing
             message_retention_seconds=1209600,
             tags=self.tags,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Redrive policy for main queue to DLQ
-        aws.sqs.QueueRedrivePolicy(
-            f"tap-transactions-redrive-{self.environment_suffix}",
-            queue_url=self.transaction_queue.url,
-            redrive_policy=pulumi.Output.all(
-                self.dead_letter_queue.arn
-            ).apply(lambda args: json.dumps({
-                "deadLetterTargetArn": args[0],
-                "maxReceiveCount": 3
-            })),
             opts=ResourceOptions(parent=self)
         )
 
