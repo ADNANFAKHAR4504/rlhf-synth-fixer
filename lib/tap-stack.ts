@@ -480,33 +480,41 @@ export class TapStack extends cdk.Stack {
       const s3Endpoint = vpc.addGatewayEndpoint(`${envKey}S3Endpoint`, {
         service: ec2.GatewayVpcEndpointAwsService.S3,
       });
-      const cwLogsEndpoint = vpc.addInterfaceEndpoint(`${envKey}CloudWatchLogsEndpoint`, {
-        service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-        privateDnsEnabled: true,
-      });
+      const cwLogsEndpoint = vpc.addInterfaceEndpoint(
+        `${envKey}CloudWatchLogsEndpoint`,
+        {
+          service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+          privateDnsEnabled: true,
+        }
+      );
       const rdsEndpoint = vpc.addInterfaceEndpoint(`${envKey}RDSEndpoint`, {
         service: ec2.InterfaceVpcEndpointAwsService.RDS,
       });
-      const secretsEndpoint = vpc.addInterfaceEndpoint(`${envKey}SecretsManagerEndpoint`, {
-        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      });
+      const secretsEndpoint = vpc.addInterfaceEndpoint(
+        `${envKey}SecretsManagerEndpoint`,
+        {
+          service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+        }
+      );
       // Apply removal policy to endpoints
-      [s3Endpoint, cwLogsEndpoint, rdsEndpoint, secretsEndpoint].forEach(endpoint => {
-        endpoint.node.children.forEach(child => {
-          if (child instanceof cdk.CfnResource) {
-            child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-          }
-        });
-      });
+      [s3Endpoint, cwLogsEndpoint, rdsEndpoint, secretsEndpoint].forEach(
+        endpoint => {
+          endpoint.node.children.forEach(child => {
+            if (child instanceof cdk.CfnResource) {
+              child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+            }
+          });
+        }
+      );
 
       const replicationRole = new iam.Role(this, `${envKey}ReplicationRole`, {
-        roleName: this.roleName(envKey, 's3-replication'),
+        // roleName removed to let CloudFormation auto-generate (avoids conflicts)
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
       });
       replicationRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
       const dataBucket = new s3.Bucket(this, `${envKey}DataBucket`, {
-        bucketName: this.formatName(envKey, 'data-bucket'),
+        // bucketName removed to let CloudFormation auto-generate (avoids conflicts on re-deploy)
         versioned: true,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: kmsKey,
@@ -539,7 +547,7 @@ export class TapStack extends cdk.Stack {
       );
 
       const stateBucket = new s3.Bucket(this, `${envKey}StateBucket`, {
-        bucketName: this.formatName(envKey, settings.stateBucketPrefix),
+        // bucketName removed to let CloudFormation auto-generate (avoids conflicts on re-deploy)
         versioned: true,
         encryption: s3.BucketEncryption.S3_MANAGED,
         enforceSSL: true,
@@ -587,7 +595,7 @@ export class TapStack extends cdk.Stack {
       });
 
       const auroraCluster = new rds.DatabaseCluster(this, `${envKey}Aurora`, {
-        clusterIdentifier: this.formatName(envKey, 'aurora'),
+        // clusterIdentifier removed to let CloudFormation auto-generate (avoids conflicts)
         engine: rds.DatabaseClusterEngine.auroraMysql({
           version: rds.AuroraMysqlEngineVersion.VER_3_05_1,
         }),
@@ -603,7 +611,7 @@ export class TapStack extends cdk.Stack {
           vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
           securityGroups: [databaseSecurityGroup],
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.R6G,
+            ec2.InstanceClass.R5,
             envKey === 'prod' ? ec2.InstanceSize.LARGE : ec2.InstanceSize.MEDIUM
           ),
         },
@@ -670,7 +678,7 @@ export class TapStack extends cdk.Stack {
     settings: EnvironmentSettings
   ): stepfunctions.StateMachine {
     const handlerRole = new iam.Role(this, `${envKey}SnapshotHandlerRole`, {
-      roleName: this.roleName(envKey, 'snapshot'),
+      // roleName removed to let CloudFormation auto-generate (avoids conflicts)
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -692,7 +700,7 @@ export class TapStack extends cdk.Stack {
     key.grantEncryptDecrypt(handlerRole);
 
     const handler = new lambda.Function(this, `${envKey}SnapshotHandler`, {
-      functionName: this.formatName(envKey, 'snapshot-manager'),
+      // functionName removed to let CloudFormation auto-generate (avoids conflicts)
       code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         exports.handler = async () => {
@@ -750,17 +758,21 @@ export class TapStack extends cdk.Stack {
       `${envKey}SnapshotStateMachine`,
       {
         definition,
-        stateMachineName: this.formatName(envKey, 'snapshot-sm'),
+        // stateMachineName removed to let CloudFormation auto-generate (avoids conflicts)
         timeout: cdk.Duration.hours(1),
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
-    const snapshotSchedule = new events.Rule(this, `${envKey}SnapshotSchedule`, {
-      description: `${envKey} snapshot replication schedule`,
-      schedule: events.Schedule.expression(settings.snapshotSchedule),
-      targets: [new targets.SfnStateMachine(stateMachine)],
-    });
+    const snapshotSchedule = new events.Rule(
+      this,
+      `${envKey}SnapshotSchedule`,
+      {
+        description: `${envKey} snapshot replication schedule`,
+        schedule: events.Schedule.expression(settings.snapshotSchedule),
+        targets: [new targets.SfnStateMachine(stateMachine)],
+      }
+    );
     snapshotSchedule.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     return stateMachine;
@@ -783,7 +795,7 @@ export class TapStack extends cdk.Stack {
 
     this.config.lambdaFamilies.forEach(family => {
       const fn = new lambda.Function(this, `${envKey}${family}Fn`, {
-        functionName: this.formatName(envKey, `${family}-fn`),
+        // functionName removed to let CloudFormation auto-generate (avoids conflicts)
         runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'index.handler',
         vpc,
@@ -907,7 +919,7 @@ export class TapStack extends cdk.Stack {
     key: kms.Key
   ): sns.Topic {
     const topic = new sns.Topic(this, `${envKey}DeploymentTopic`, {
-      topicName: this.formatName(envKey, 'notifications'),
+      // topicName removed to let CloudFormation auto-generate (avoids conflicts)
       displayName: `${envKey.toUpperCase()} deployment notifications`,
       masterKey: key,
     });
@@ -1012,17 +1024,21 @@ export class TapStack extends cdk.Stack {
         const envB = ENVIRONMENT_ORDER[j];
         const vpcA = this.artifacts[envA].vpc;
         const vpcB = this.artifacts[envB].vpc;
-        const peering = new ec2.CfnVPCPeeringConnection(this, `${envA}${envB}Peering`, {
-          vpcId: vpcA.vpcId,
-          peerVpcId: vpcB.vpcId,
-          peerRegion: this.config.environments[envB].region,
-          tags: [
-            {
-              key: 'Name',
-              value: `${this.config.serviceName}-${envA}-${envB}-peering`,
-            },
-          ],
-        });
+        const peering = new ec2.CfnVPCPeeringConnection(
+          this,
+          `${envA}${envB}Peering`,
+          {
+            vpcId: vpcA.vpcId,
+            peerVpcId: vpcB.vpcId,
+            peerRegion: this.config.environments[envB].region,
+            tags: [
+              {
+                key: 'Name',
+                value: `${this.config.serviceName}-${envA}-${envB}-peering`,
+              },
+            ],
+          }
+        );
         peering.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       }
     }
