@@ -181,7 +181,7 @@
         "MemorySize": 1024,
         "Timeout": 30,
         "Architectures": ["arm64"],
-        "ReservedConcurrentExecutions": 20,
+        "ReservedConcurrentExecutions": 5,
         "Environment": {
           "Variables": {
             "PRICE_HISTORY_TABLE": {
@@ -279,7 +279,7 @@
         "MemorySize": 512,
         "Timeout": 60,
         "Architectures": ["arm64"],
-        "ReservedConcurrentExecutions": 10,
+        "ReservedConcurrentExecutions": 3,
         "Environment": {
           "Variables": {
             "PRICE_ALERTS_TABLE": {
@@ -374,7 +374,7 @@
         "MemorySize": 256,
         "Timeout": 30,
         "Architectures": ["arm64"],
-        "ReservedConcurrentExecutions": 5,
+        "ReservedConcurrentExecutions": 2,
         "KmsKeyArn": {
           "Fn::GetAtt": ["KmsKey", "Arn"]
         }
@@ -465,7 +465,7 @@
         "MemorySize": 256,
         "Timeout": 300,
         "Architectures": ["arm64"],
-        "ReservedConcurrentExecutions": 2,
+        "ReservedConcurrentExecutions": 1,
         "Environment": {
           "Variables": {
             "PRICE_HISTORY_TABLE": {

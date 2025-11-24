@@ -121,7 +121,7 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(func.MemorySize).toBe(1024);
       expect(func.Timeout).toBe(30);
       expect(func.Architectures).toEqual(['arm64']);
-      expect(func.ReservedConcurrentExecutions).toBe(20);
+      expect(func.ReservedConcurrentExecutions).toBe(5);
     });
 
     test('should have CheckAlertsFunction', () => {
@@ -133,7 +133,7 @@ describe('CloudFormation Template Unit Tests', () => {
       const func = template.Resources.CheckAlertsFunction.Properties;
       expect(func.MemorySize).toBe(512);
       expect(func.Timeout).toBe(60);
-      expect(func.ReservedConcurrentExecutions).toBe(10);
+      expect(func.ReservedConcurrentExecutions).toBe(3);
     });
 
     test('should have SendNotificationFunction', () => {
@@ -316,12 +316,12 @@ describe('CloudFormation Template Unit Tests', () => {
 
       resourcesWithNames.forEach((resourceName) => {
         const resource = template.Resources[resourceName];
-        if (resource.Properties.TableName || resource.Properties.FunctionName || 
-            resource.Properties.TopicName || resource.Properties.Name) {
-          const nameProp = resource.Properties.TableName || 
-                          resource.Properties.FunctionName || 
-                          resource.Properties.TopicName || 
-                          resource.Properties.Name;
+        if (resource.Properties.TableName || resource.Properties.FunctionName ||
+          resource.Properties.TopicName || resource.Properties.Name) {
+          const nameProp = resource.Properties.TableName ||
+            resource.Properties.FunctionName ||
+            resource.Properties.TopicName ||
+            resource.Properties.Name;
           if (nameProp && nameProp['Fn::Sub']) {
             expect(nameProp['Fn::Sub']).toContain('${EnvironmentSuffix}');
           }
