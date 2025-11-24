@@ -63,7 +63,7 @@ variable "kube_proxy_version" {
 variable "pr_number" {
   description = "PR number for resource identification"
   type        = string
-  default     = "pr7198"
+  default     = "pr7198dev"
 }
 
 variable "common_tags" {
