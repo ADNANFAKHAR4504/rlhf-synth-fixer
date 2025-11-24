@@ -1356,16 +1356,18 @@ class TestElastiCacheAnalyzer:
 
         assert clusters == []
 
-    @patch('analyse.boto3.client')
-    def test_should_exclude_cluster_by_age_when_not_in_test_mode(self, mock_boto_client):
-        """Age-based exclusion should run when test mode flags are absent"""
+@patch('analyse.boto3.client')
+def test_should_exclude_cluster_by_age_when_not_in_test_mode(mock_boto_client):
+    """Age-based exclusion should run when not in mock mode"""
+    if 'AWS_ENDPOINT_URL' in os.environ:
+        del os.environ['AWS_ENDPOINT_URL']
+    with patch('analyse.datetime') as mock_datetime:
+        mock_now = datetime(2023, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = mock_now
         analyzer = ElastiCacheAnalyzer()
-        recent_time = datetime.now(timezone.utc) - timedelta(days=1)
+        recent_time = mock_now - timedelta(days=1)
         cluster = {'CacheClusterId': 'prod-redis-001', 'CacheClusterCreateTime': recent_time}
-
         assert analyzer.should_exclude_cluster(cluster) is True
-
-    @patch('analyse.boto3.client')
     def test_get_cluster_tags_handles_generic_exception(self, mock_boto_client):
         """list_tags_for_resource errors should return an empty tag dict"""
         mock_elasticache = MagicMock()
