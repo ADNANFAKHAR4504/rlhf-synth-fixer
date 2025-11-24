@@ -307,48 +307,51 @@ export class SecurityStack extends pulumi.ComponentResource {
     const ecsTaskPolicy = new aws.iam.Policy(
       `payment-ecs-task-policy-${environmentSuffix}`,
       {
-        description: 'Policy for ECS tasks to access S3, RDS, and Secrets Manager',
-        policy: pulumi.all([this.s3KmsKey.arn, currentCallerIdentity]).apply(([kmsArn, identity]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
-                Resource: [
-                  `arn:aws:s3:::payment-static-${environmentSuffix}`,
-                  `arn:aws:s3:::payment-static-${environmentSuffix}/*`,
-                ],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['s3:PutObject'],
-                Resource: [
-                  `arn:aws:s3:::payment-audit-logs-${environmentSuffix}/*`,
-                ],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
-                Resource: [kmsArn],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['rds:DescribeDBClusters', 'rds:DescribeDBInstances'],
-                Resource: [
-                  `arn:aws:rds:us-east-1:*:cluster:payment-cluster-${environmentSuffix}`,
-                ],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: [
-                  `arn:aws:secretsmanager:us-east-1:${identity.accountId}:secret:payment-db-master-password-${environmentSuffix}-*`,
-                ],
-              },
-            ],
-          })
-        ),
+        description:
+          'Policy for ECS tasks to access S3, RDS, and Secrets Manager',
+        policy: pulumi
+          .all([this.s3KmsKey.arn, currentCallerIdentity])
+          .apply(([kmsArn, identity]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+                  Resource: [
+                    `arn:aws:s3:::payment-static-${environmentSuffix}`,
+                    `arn:aws:s3:::payment-static-${environmentSuffix}/*`,
+                  ],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:PutObject'],
+                  Resource: [
+                    `arn:aws:s3:::payment-audit-logs-${environmentSuffix}/*`,
+                  ],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+                  Resource: [kmsArn],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['rds:DescribeDBClusters', 'rds:DescribeDBInstances'],
+                  Resource: [
+                    `arn:aws:rds:us-east-1:*:cluster:payment-cluster-${environmentSuffix}`,
+                  ],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: [
+                    `arn:aws:secretsmanager:us-east-1:${identity.accountId}:secret:payment-db-master-password-${environmentSuffix}-*`,
+                  ],
+                },
+              ],
+            })
+          ),
         tags: pulumi.output(tags).apply(t => ({
           ...t,
           Name: `payment-ecs-task-policy-${environmentSuffix}`,

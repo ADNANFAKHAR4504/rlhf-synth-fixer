@@ -57,7 +57,10 @@ export class DatabaseStack extends pulumi.ComponentResource {
       if (!secretString) {
         throw new Error('Secret string is undefined');
       }
-      const parsed = JSON.parse(secretString) as { username: string; password: string };
+      const parsed = JSON.parse(secretString) as {
+        username: string;
+        password: string;
+      };
       return parsed.password;
     });
 
