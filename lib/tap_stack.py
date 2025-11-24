@@ -77,6 +77,9 @@ class TapStack(Stack):
         # Create VPN Connection
         self.vpn_connection = self._create_vpn_connection()
 
+        # Create DMS prerequisite IAM roles (must be created before DMS resources)
+        self._create_dms_prerequisite_roles()
+
         # Create DMS resources for database migration
         self.dms_replication_subnet_group = self._create_dms_subnet_group()
         self.dms_replication_instance = self._create_dms_replication_instance()
@@ -241,6 +244,48 @@ class TapStack(Stack):
 
         return vpn_connection
 
+    def _create_dms_prerequisite_roles(self) -> None:
+        """Create DMS prerequisite IAM roles required for DMS to manage VPC resources.
+        
+        AWS DMS requires a service-linked role named exactly 'dms-vpc-role' to access
+        VPC resources. This role must exist before creating DMS subnet groups or
+        replication instances.
+        """
+        # Create DMS VPC management role
+        # IMPORTANT: The role name MUST be exactly "dms-vpc-role" without any suffix
+        # AWS DMS service looks for this specific role name
+        dms_vpc_role = iam.Role(
+            self,
+            "DmsVpcRole",
+            role_name="dms-vpc-role",  # Must be exactly this name - no suffix
+            assumed_by=iam.ServicePrincipal("dms.amazonaws.com"),
+            description="IAM role for DMS to manage VPC resources",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonDMSVPCManagementRole"
+                )
+            ],
+        )
+
+        # Create DMS CloudWatch Logs role (optional but recommended for logging)
+        # IMPORTANT: The role name MUST be exactly "dms-cloudwatch-logs-role" without any suffix
+        dms_cloudwatch_logs_role = iam.Role(
+            self,
+            "DmsCloudWatchLogsRole",
+            role_name="dms-cloudwatch-logs-role",  # Must be exactly this name - no suffix
+            assumed_by=iam.ServicePrincipal("dms.amazonaws.com"),
+            description="IAM role for DMS to write CloudWatch logs",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonDMSCloudWatchLogsRole"
+                )
+            ],
+        )
+
+        # Store references for potential use in other resources
+        self.dms_vpc_role = dms_vpc_role
+        self.dms_cloudwatch_logs_role = dms_cloudwatch_logs_role
+
     def _create_dms_subnet_group(self) -> dms.CfnReplicationSubnetGroup:
         """Create DMS replication subnet group.
 
@@ -259,6 +304,10 @@ class TapStack(Stack):
                 cdk.CfnTag(key="Name", value=f"dms-subnet-group-{self.environment_suffix}"),
             ],
         )
+        # Ensure DMS VPC role exists before creating subnet group
+        # DMS requires the dms-vpc-role to be configured before it can access VPC resources
+        if hasattr(self, 'dms_vpc_role'):
+            subnet_group.node.add_dependency(self.dms_vpc_role)
         return subnet_group
 
     def _create_dms_replication_instance(self) -> dms.CfnReplicationInstance:
