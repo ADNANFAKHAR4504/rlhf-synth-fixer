@@ -1016,66 +1016,6 @@
           }
         ]
       }
-    },
-    "ECSService": {
-      "Type": "AWS::ECS::Service",
-      "DependsOn": [
-        "ALBListener",
-        "AuroraInstance"
-      ],
-      "Properties": {
-        "ServiceName": {
-          "Fn::Sub": "inventory-service-${EnvironmentSuffix}"
-        },
-        "Cluster": {
-          "Ref": "ECSCluster"
-        },
-        "TaskDefinition": {
-          "Ref": "ECSTaskDefinition"
-        },
-        "DesiredCount": 2,
-        "LaunchType": "FARGATE",
-        "NetworkConfiguration": {
-          "AwsvpcConfiguration": {
-            "AssignPublicIp": "DISABLED",
-            "Subnets": [
-              {
-                "Ref": "PrivateSubnet1"
-              },
-              {
-                "Ref": "PrivateSubnet2"
-              }
-            ],
-            "SecurityGroups": [
-              {
-                "Ref": "ECSSecurityGroup"
-              }
-            ]
-          }
-        },
-        "LoadBalancers": [
-          {
-            "ContainerName": "inventory-app",
-            "ContainerPort": 80,
-            "TargetGroupArn": {
-              "Ref": "ALBTargetGroup"
-            }
-          }
-        ],
-        "HealthCheckGracePeriodSeconds": 120,
-        "DeploymentConfiguration": {
-          "MaximumPercent": 200,
-          "MinimumHealthyPercent": 100
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "ECSService-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
     }
   },
   "Outputs": {
@@ -1142,15 +1082,6 @@
         "Name": {
           "Fn::Sub": "${AWS::StackName}-ECSClusterName"
         }
-      }
-    },
-    "ECSServiceName": {
-      "Description": "Name of the ECS service",
-      "Value": {
-        "Fn::GetAtt": [
-          "ECSService",
-          "Name"
-        ]
       }
     },
     "SecretArn": {

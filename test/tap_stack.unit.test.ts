@@ -1,528 +1,720 @@
-/**
- * Unit tests for CloudFormation template validation
- * Tests template structure, resources, parameters, and outputs using validator module
- */
+import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as fs from 'fs';
+import * as path from 'path';
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
-import {
-  loadTemplate,
-  validateTemplateStructure,
-  validateParameters,
-  getResourcesByType,
-  validateVPCResources,
-  validateNetworkingResources,
-  validateSecurityGroups,
-  validateECSResources,
-  validateLoadBalancerResources,
-  validateRDSResources,
-  validateSecretsManagerResources,
-  validateIAMResources,
-  checkEnvironmentSuffixUsage,
-  validateResourceCount,
-  validateDeletionPolicies,
-  validateAll,
-} from '../lib/template-validator.mjs';
+describe('TapStack CloudFormation Template', () => {
+  let template: Template;
 
-describe('CloudFormation Template Unit Tests', () => {
-  let template;
-
-  beforeAll(() => {
-    template = loadTemplate();
+  beforeEach(() => {
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    const templateJson = JSON.parse(templateContent);
+    template = Template.fromJSON(templateJson);
   });
 
-  describe('Template Loading', () => {
-    it('should load template successfully', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-  });
-
-  describe('Template Structure Validation', () => {
-    it('should have valid template structure', () => {
-      const result = validateTemplateStructure(template);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+  describe('Parameters', () => {
+    test('should have EnvironmentSuffix parameter', () => {
+      template.hasParameter('EnvironmentSuffix', {
+        Type: 'String',
+        Default: 'dev',
+        Description: Match.stringLikeRegexp('Environment suffix'),
+        AllowedPattern: '^[a-zA-Z0-9]+$',
+        ConstraintDescription: Match.stringLikeRegexp('alphanumeric'),
+      });
     });
 
-    it('should detect missing AWSTemplateFormatVersion', () => {
-      const invalidTemplate = { Description: 'test', Parameters: {}, Resources: {} };
-      const result = validateTemplateStructure(invalidTemplate);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing AWSTemplateFormatVersion');
+    test('should have ContainerImage parameter', () => {
+      template.hasParameter('ContainerImage', {
+        Type: 'String',
+        Default: 'nginx:latest',
+        Description: Match.stringLikeRegexp('Docker container image'),
+      });
     });
 
-    it('should detect missing Description', () => {
-      const invalidTemplate = { AWSTemplateFormatVersion: '2010-09-09', Parameters: {}, Resources: {} };
-      const result = validateTemplateStructure(invalidTemplate);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing or empty Description');
-    });
-
-    it('should detect missing Parameters', () => {
-      const invalidTemplate = { AWSTemplateFormatVersion: '2010-09-09', Description: 'test', Resources: {} };
-      const result = validateTemplateStructure(invalidTemplate);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing or invalid Parameters section');
-    });
-
-    it('should detect missing Resources', () => {
-      const invalidTemplate = { AWSTemplateFormatVersion: '2010-09-09', Description: 'test', Parameters: {} };
-      const result = validateTemplateStructure(invalidTemplate);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing or invalid Resources section');
+    test('should have DBUsername parameter', () => {
+      template.hasParameter('DBUsername', {
+        Type: 'String',
+        Default: 'admin',
+        Description: Match.stringLikeRegexp('Master username'),
+        MinLength: '1',
+        MaxLength: '16',
+        AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*',
+        ConstraintDescription: Match.stringLikeRegexp('alphanumeric'),
+      });
     });
   });
 
-  describe('Parameters Validation', () => {
-    it('should have valid parameters', () => {
-      const result = validateParameters(template.Parameters);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+  describe('VPC Resources', () => {
+    test('should create VPC with correct properties', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'VPC-${EnvironmentSuffix}'
+            })
+          }),
+          Match.objectLike({
+            Key: 'Environment',
+            Value: Match.objectLike({
+              Ref: 'EnvironmentSuffix'
+            })
+          })
+        ])
+      });
     });
 
-    it('should detect missing EnvironmentSuffix', () => {
-      const params = { ContainerImage: {Type: 'String'}, DBUsername: {Type: 'String'} };
-      const result = validateParameters(params);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing required parameter: EnvironmentSuffix');
+    test('should create public subnets', () => {
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        CidrBlock: '10.0.1.0/24',
+        AvailabilityZone: Match.objectLike({
+          'Fn::Select': [0, Match.objectLike({ 'Fn::GetAZs': '' })]
+        }),
+        MapPublicIpOnLaunch: true,
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'PublicSubnet1-${EnvironmentSuffix}'
+            })
+          }),
+          Match.objectLike({
+            Key: 'Type',
+            Value: 'Public'
+          })
+        ])
+      });
+
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        CidrBlock: '10.0.2.0/24',
+        AvailabilityZone: Match.objectLike({
+          'Fn::Select': [1, Match.objectLike({ 'Fn::GetAZs': '' })]
+        }),
+        MapPublicIpOnLaunch: true,
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'PublicSubnet2-${EnvironmentSuffix}'
+            })
+          }),
+          Match.objectLike({
+            Key: 'Type',
+            Value: 'Public'
+          })
+        ])
+      });
     });
 
-    it('should detect missing ContainerImage', () => {
-      const params = { EnvironmentSuffix: {Type: 'String'}, DBUsername: {Type: 'String'} };
-      const result = validateParameters(params);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing required parameter: ContainerImage');
+    test('should create private subnets', () => {
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        CidrBlock: '10.0.11.0/24',
+        AvailabilityZone: Match.objectLike({
+          'Fn::Select': [0, Match.objectLike({ 'Fn::GetAZs': '' })]
+        }),
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'PrivateSubnet1-${EnvironmentSuffix}'
+            })
+          }),
+          Match.objectLike({
+            Key: 'Type',
+            Value: 'Private'
+          })
+        ])
+      });
+
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        CidrBlock: '10.0.12.0/24',
+        AvailabilityZone: Match.objectLike({
+          'Fn::Select': [1, Match.objectLike({ 'Fn::GetAZs': '' })]
+        }),
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'PrivateSubnet2-${EnvironmentSuffix}'
+            })
+          }),
+          Match.objectLike({
+            Key: 'Type',
+            Value: 'Private'
+          })
+        ])
+      });
     });
 
-    it('should detect missing DBUsername', () => {
-      const params = { EnvironmentSuffix: {Type: 'String'}, ContainerImage: {Type: 'String'} };
-      const result = validateParameters(params);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Missing required parameter: DBUsername');
+    test('should create internet gateway', () => {
+      template.hasResourceProperties('AWS::EC2::InternetGateway', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'IGW-${EnvironmentSuffix}'
+            })
+          })
+        ])
+      });
     });
 
-    it('should detect wrong type for EnvironmentSuffix', () => {
-      const params = {
-        EnvironmentSuffix: {Type: 'Number', AllowedPattern: '[a-z0-9-]+'},
-        ContainerImage: {Type: 'String'},
-        DBUsername: {Type: 'String'}
-      };
-      const result = validateParameters(params);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('EnvironmentSuffix must be of type String');
-    });
+    test('should create NAT gateways', () => {
+      template.hasResourceProperties('AWS::EC2::NatGateway', {
+        AllocationId: Match.objectLike({
+          'Fn::GetAtt': ['NATGateway1EIP', 'AllocationId']
+        }),
+        SubnetId: Match.objectLike({ Ref: 'PublicSubnet1' }),
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'NATGW1-${EnvironmentSuffix}'
+            })
+          })
+        ])
+      });
 
-    it('should detect missing AllowedPattern', () => {
-      const params = {
-        EnvironmentSuffix: {Type: 'String'},
-        ContainerImage: {Type: 'String'},
-        DBUsername: {Type: 'String'}
-      };
-      const result = validateParameters(params);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('EnvironmentSuffix missing AllowedPattern');
-    });
-  });
-
-  describe('VPC Resources Validation', () => {
-    it('should have valid VPC resources', () => {
-      const result = validateVPCResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should detect missing VPC', () => {
-      const result = validateVPCResources({});
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('No VPC resource found');
-    });
-
-    it('should detect multiple VPCs', () => {
-      const resources = {
-        VPC1: { Type: 'AWS::EC2::VPC', Properties: {CidrBlock: '10.0.0.0/16', EnableDnsHostnames: true, EnableDnsSupport: true} },
-        VPC2: { Type: 'AWS::EC2::VPC', Properties: {CidrBlock: '10.1.0.0/16', EnableDnsHostnames: true, EnableDnsSupport: true} }
-      };
-      const result = validateVPCResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Multiple VPC resources found');
-    });
-
-    it('should detect missing DNS hostnames', () => {
-      const resources = {
-        VPC: { Type: 'AWS::EC2::VPC', Properties: {CidrBlock: '10.0.0.0/16', EnableDnsHostnames: false, EnableDnsSupport: true} }
-      };
-      const result = validateVPCResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('VPC DNS hostnames not enabled');
-    });
-
-    it('should detect missing DNS support', () => {
-      const resources = {
-        VPC: { Type: 'AWS::EC2::VPC', Properties: {CidrBlock: '10.0.0.0/16', EnableDnsHostnames: true, EnableDnsSupport: false} }
-      };
-      const result = validateVPCResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('VPC DNS support not enabled');
-    });
-
-    it('should detect wrong CIDR block', () => {
-      const resources = {
-        VPC: { Type: 'AWS::EC2::VPC', Properties: {CidrBlock: '172.16.0.0/16', EnableDnsHostnames: true, EnableDnsSupport: true} }
-      };
-      const result = validateVPCResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('VPC CIDR block is not 10.0.0.0/16');
-    });
-  });
-
-  describe('Networking Resources Validation', () => {
-    it('should have valid networking resources', () => {
-      const result = validateNetworkingResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should detect wrong number of subnets', () => {
-      const resources = {
-        Subnet1: { Type: 'AWS::EC2::Subnet', Properties: {} }
-      };
-      const result = validateNetworkingResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 4 subnets, found 1');
-    });
-
-    it('should detect wrong number of NAT gateways', () => {
-      const resources = {
-        Subnet1: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        Subnet2: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        Subnet3: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        Subnet4: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        NAT1: { Type: 'AWS::EC2::NatGateway', Properties: {} },
-        IGW: { Type: 'AWS::EC2::InternetGateway', Properties: {} }
-      };
-      const result = validateNetworkingResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 2 NAT gateways, found 1');
-    });
-
-    it('should detect wrong number of Internet Gateways', () => {
-      const resources = {
-        Subnet1: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        Subnet2: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        Subnet3: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        Subnet4: { Type: 'AWS::EC2::Subnet', Properties: {} },
-        NAT1: { Type: 'AWS::EC2::NatGateway', Properties: {} },
-        NAT2: { Type: 'AWS::EC2::NatGateway', Properties: {} }
-      };
-      const result = validateNetworkingResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 Internet gateway, found 0');
-    });
-  });
-
-  describe('Security Groups Validation', () => {
-    it('should have valid security groups', () => {
-      const result = validateSecurityGroups(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should detect insufficient security groups', () => {
-      const resources = {
-        SG1: { Type: 'AWS::EC2::SecurityGroup', Properties: {} }
-      };
-      const result = validateSecurityGroups(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected at least 3 security groups, found 1');
+      template.hasResourceProperties('AWS::EC2::NatGateway', {
+        AllocationId: Match.objectLike({
+          'Fn::GetAtt': ['NATGateway2EIP', 'AllocationId']
+        }),
+        SubnetId: Match.objectLike({ Ref: 'PublicSubnet2' }),
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.objectLike({
+              'Fn::Sub': 'NATGW2-${EnvironmentSuffix}'
+            })
+          })
+        ])
+      });
     });
   });
 
-  describe('ECS Resources Validation', () => {
-    it('should have valid ECS resources', () => {
-      const result = validateECSResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+  describe('Security Groups', () => {
+    test('should create ALB security group', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: Match.objectLike({
+          'Fn::Sub': 'ALBSecurityGroup-${EnvironmentSuffix}'
+        }),
+        GroupDescription: 'Security group for Application Load Balancer',
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            CidrIp: '0.0.0.0/0'
+          }),
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0'
+          })
+        ]),
+        SecurityGroupEgress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: '-1',
+            CidrIp: '0.0.0.0/0'
+          })
+        ])
+      });
     });
 
-    it('should detect missing ECS cluster', () => {
-      const resources = {
-        Service: { Type: 'AWS::ECS::Service', Properties: {} },
-        TaskDef: { Type: 'AWS::ECS::TaskDefinition', Properties: {RequiresCompatibilities: ['FARGATE']} }
-      };
-      const result = validateECSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 ECS cluster, found 0');
+    test('should create ECS security group', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: Match.objectLike({
+          'Fn::Sub': 'ECSSecurityGroup-${EnvironmentSuffix}'
+        }),
+        GroupDescription: 'Security group for ECS tasks',
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 80,
+            ToPort: 80,
+            SourceSecurityGroupId: Match.objectLike({ Ref: 'ALBSecurityGroup' })
+          }),
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 3000,
+            ToPort: 3000,
+            SourceSecurityGroupId: Match.objectLike({ Ref: 'ALBSecurityGroup' })
+          })
+        ])
+      });
     });
 
-    it('should detect missing ECS service', () => {
-      const resources = {
-        Cluster: { Type: 'AWS::ECS::Cluster', Properties: {} },
-        TaskDef: { Type: 'AWS::ECS::TaskDefinition', Properties: {RequiresCompatibilities: ['FARGATE']} }
-      };
-      const result = validateECSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 ECS service, found 0');
-    });
-
-    it('should detect missing task definition', () => {
-      const resources = {
-        Cluster: { Type: 'AWS::ECS::Cluster', Properties: {} },
-        Service: { Type: 'AWS::ECS::Service', Properties: {} }
-      };
-      const result = validateECSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 task definition, found 0');
-    });
-
-    it('should detect missing Fargate compatibility', () => {
-      const resources = {
-        Cluster: { Type: 'AWS::ECS::Cluster', Properties: {} },
-        Service: { Type: 'AWS::ECS::Service', Properties: {} },
-        TaskDef: { Type: 'AWS::ECS::TaskDefinition', Properties: {RequiresCompatibilities: ['EC2']} }
-      };
-      const result = validateECSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Task definition must support FARGATE');
-    });
-  });
-
-  describe('Load Balancer Resources Validation', () => {
-    it('should have valid load balancer resources', () => {
-      const result = validateLoadBalancerResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should detect missing ALB', () => {
-      const resources = {
-        TG: { Type: 'AWS::ElasticLoadBalancingV2::TargetGroup', Properties: {TargetType: 'ip'} },
-        Listener: { Type: 'AWS::ElasticLoadBalancingV2::Listener', Properties: {} }
-      };
-      const result = validateLoadBalancerResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 ALB, found 0');
-    });
-
-    it('should detect missing target group', () => {
-      const resources = {
-        ALB: { Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer', Properties: {} },
-        Listener: { Type: 'AWS::ElasticLoadBalancingV2::Listener', Properties: {} }
-      };
-      const result = validateLoadBalancerResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 target group, found 0');
-    });
-
-    it('should detect wrong target type', () => {
-      const resources = {
-        ALB: { Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer', Properties: {} },
-        TG: { Type: 'AWS::ElasticLoadBalancingV2::TargetGroup', Properties: {TargetType: 'instance'} },
-        Listener: { Type: 'AWS::ElasticLoadBalancingV2::Listener', Properties: {} }
-      };
-      const result = validateLoadBalancerResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Target group must have TargetType of ip for Fargate');
-    });
-
-    it('should detect missing listener', () => {
-      const resources = {
-        ALB: { Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer', Properties: {} },
-        TG: { Type: 'AWS::ElasticLoadBalancingV2::TargetGroup', Properties: {TargetType: 'ip'} }
-      };
-      const result = validateLoadBalancerResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 listener, found 0');
+    test('should create RDS security group', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: Match.objectLike({
+          'Fn::Sub': 'RDSSecurityGroup-${EnvironmentSuffix}'
+        }),
+        GroupDescription: 'Security group for RDS Aurora cluster',
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 3306,
+            ToPort: 3306,
+            SourceSecurityGroupId: Match.objectLike({ Ref: 'ECSSecurityGroup' })
+          })
+        ])
+      });
     });
   });
 
-  describe('RDS Resources Validation', () => {
-    it('should have valid RDS resources', () => {
-      const result = validateRDSResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+  describe('Load Balancer', () => {
+    test('should create application load balancer', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+        Name: Match.objectLike({
+          'Fn::Sub': 'ALB-${EnvironmentSuffix}'
+        }),
+        Type: 'application',
+        Scheme: 'internet-facing',
+        IpAddressType: 'ipv4',
+        Subnets: Match.arrayWith([
+          Match.objectLike({ Ref: 'PublicSubnet1' }),
+          Match.objectLike({ Ref: 'PublicSubnet2' })
+        ]),
+        SecurityGroups: Match.arrayWith([
+          Match.objectLike({ Ref: 'ALBSecurityGroup' })
+        ])
+      });
     });
 
-    it('should detect missing DB cluster', () => {
-      const resources = {
-        Instance: { Type: 'AWS::RDS::DBInstance', Properties: {} },
-        SubnetGroup: { Type: 'AWS::RDS::DBSubnetGroup', Properties: {} }
-      };
-      const result = validateRDSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 DB cluster, found 0');
+    test('should create target group', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+        Name: Match.objectLike({
+          'Fn::Sub': 'ALBTargetGroup-${EnvironmentSuffix}'
+        }),
+        Port: 80,
+        Protocol: 'HTTP',
+        TargetType: 'ip',
+        VpcId: Match.objectLike({ Ref: 'VPC' }),
+        HealthCheckEnabled: true,
+        HealthCheckPath: '/health',
+        HealthCheckProtocol: 'HTTP',
+        HealthCheckIntervalSeconds: 30,
+        HealthCheckTimeoutSeconds: 5,
+        HealthyThresholdCount: 2,
+        UnhealthyThresholdCount: 3,
+        Matcher: Match.objectLike({
+          HttpCode: '200'
+        })
+      });
     });
 
-    it('should detect wrong engine type', () => {
-      const resources = {
-        Cluster: { Type: 'AWS::RDS::DBCluster', Properties: {Engine: 'postgres'} },
-        Instance: { Type: 'AWS::RDS::DBInstance', Properties: {} },
-        SubnetGroup: { Type: 'AWS::RDS::DBSubnetGroup', Properties: {} }
-      };
-      const result = validateRDSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('DB cluster must use aurora-mysql engine');
+    test('should create ALB listener', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        LoadBalancerArn: Match.objectLike({ Ref: 'ApplicationLoadBalancer' }),
+        Port: 80,
+        Protocol: 'HTTP',
+        DefaultActions: Match.arrayWith([
+          Match.objectLike({
+            Type: 'forward',
+            TargetGroupArn: Match.objectLike({ Ref: 'ALBTargetGroup' })
+          })
+        ])
+      });
     });
 
-    it('should detect missing DB instance', () => {
-      const resources = {
-        Cluster: { Type: 'AWS::RDS::DBCluster', Properties: {Engine: 'aurora-mysql'} },
-        SubnetGroup: { Type: 'AWS::RDS::DBSubnetGroup', Properties: {} }
-      };
-      const result = validateRDSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 DB instance, found 0');
-    });
+    test('should create listener rules', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
+        ListenerArn: Match.objectLike({ Ref: 'ALBListener' }),
+        Priority: 1,
+        Conditions: Match.arrayWith([
+          Match.objectLike({
+            Field: 'path-pattern',
+            Values: ['/api/*']
+          })
+        ]),
+        Actions: Match.arrayWith([
+          Match.objectLike({
+            Type: 'forward',
+            TargetGroupArn: Match.objectLike({ Ref: 'ALBTargetGroup' })
+          })
+        ])
+      });
 
-    it('should detect missing DB subnet group', () => {
-      const resources = {
-        Cluster: { Type: 'AWS::RDS::DBCluster', Properties: {Engine: 'aurora-mysql'} },
-        Instance: { Type: 'AWS::RDS::DBInstance', Properties: {} }
-      };
-      const result = validateRDSResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 DB subnet group, found 0');
-    });
-  });
-
-  describe('Secrets Manager Resources Validation', () => {
-    it('should have valid secrets manager resources', () => {
-      const result = validateSecretsManagerResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should detect missing secret', () => {
-      const resources = {
-        Attachment: { Type: 'AWS::SecretsManager::SecretTargetAttachment', Properties: {} }
-      };
-      const result = validateSecretsManagerResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 secret, found 0');
-    });
-
-    it('should detect missing secret attachment', () => {
-      const resources = {
-        Secret: { Type: 'AWS::SecretsManager::Secret', Properties: {} }
-      };
-      const result = validateSecretsManagerResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 1 secret attachment, found 0');
-    });
-  });
-
-  describe('IAM Resources Validation', () => {
-    it('should have valid IAM resources', () => {
-      const result = validateIAMResources(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should detect insufficient IAM roles', () => {
-      const resources = {
-        Role1: { Type: 'AWS::IAM::Role', Properties: {AssumeRolePolicyDocument: {Statement: [{Principal: {Service: ['ecs-tasks.amazonaws.com']}}]}} }
-      };
-      const result = validateIAMResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected at least 2 IAM roles, found 1');
-    });
-
-    it('should detect insufficient ECS task roles', () => {
-      const resources = {
-        Role1: { Type: 'AWS::IAM::Role', Properties: {AssumeRolePolicyDocument: {Statement: [{Principal: {Service: ['ecs-tasks.amazonaws.com']}}]}} },
-        Role2: { Type: 'AWS::IAM::Role', Properties: {AssumeRolePolicyDocument: {Statement: [{Principal: {Service: ['lambda.amazonaws.com']}}]}} }
-      };
-      const result = validateIAMResources(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected at least 2 ECS task-related IAM roles');
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::ListenerRule', {
+        ListenerArn: Match.objectLike({ Ref: 'ALBListener' }),
+        Priority: 2,
+        Conditions: Match.arrayWith([
+          Match.objectLike({
+            Field: 'path-pattern',
+            Values: ['/health']
+          })
+        ]),
+        Actions: Match.arrayWith([
+          Match.objectLike({
+            Type: 'forward',
+            TargetGroupArn: Match.objectLike({ Ref: 'ALBTargetGroup' })
+          })
+        ])
+      });
     });
   });
 
-  describe('Resource Count Validation', () => {
-    it('should have valid resource count', () => {
-      const result = validateResourceCount(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.count).toBe(40);
+  describe('Database Resources', () => {
+    test('should create DB subnet group', () => {
+      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
+        DBSubnetGroupName: Match.objectLike({
+          'Fn::Sub': 'DBSubnetGroup-${EnvironmentSuffix}'
+        }),
+        DBSubnetGroupDescription: 'Subnet group for RDS Aurora cluster',
+        SubnetIds: Match.arrayWith([
+          Match.objectLike({ Ref: 'PrivateSubnet1' }),
+          Match.objectLike({ Ref: 'PrivateSubnet2' })
+        ])
+      });
     });
 
-    it('should detect wrong resource count', () => {
-      const resources = {
-        Resource1: { Type: 'AWS::EC2::VPC', Properties: {} }
-      };
-      const result = validateResourceCount(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Expected 40 resources, found 1');
+    test('should create database secret', () => {
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Name: Match.objectLike({
+          'Fn::Sub': Match.stringLikeRegexp('DBSecret-')
+        }),
+        Description: 'Database credentials for Aurora cluster',
+        GenerateSecretString: Match.objectLike({
+          SecretStringTemplate: Match.objectLike({
+            'Fn::Sub': Match.stringLikeRegexp('username')
+          }),
+          GenerateStringKey: 'password',
+          PasswordLength: 32,
+          ExcludeCharacters: '"@/\\'
+        })
+      });
+    });
+
+    test('should create Aurora cluster', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        DBClusterIdentifier: Match.objectLike({
+          'Fn::Sub': 'aurora-cluster-${EnvironmentSuffix}'
+        }),
+        Engine: 'aurora-mysql',
+        EngineVersion: '8.0.mysql_aurora.3.04.0',
+        MasterUsername: Match.objectLike({
+          'Fn::Sub': '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+        }),
+        MasterUserPassword: Match.objectLike({
+          'Fn::Sub': '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+        }),
+        DatabaseName: 'inventorydb',
+        DBSubnetGroupName: Match.objectLike({ Ref: 'DBSubnetGroup' }),
+        VpcSecurityGroupIds: Match.arrayWith([
+          Match.objectLike({ Ref: 'RDSSecurityGroup' })
+        ]),
+        DeletionProtection: false,
+        BackupRetentionPeriod: 7,
+        PreferredBackupWindow: '03:00-04:00',
+        PreferredMaintenanceWindow: 'mon:04:00-mon:05:00',
+        EnableCloudwatchLogsExports: Match.arrayWith(['error', 'general', 'slowquery'])
+      });
+    });
+
+    test('should create Aurora instance', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        DBInstanceIdentifier: Match.objectLike({
+          'Fn::Sub': 'aurora-instance-${EnvironmentSuffix}'
+        }),
+        DBClusterIdentifier: Match.objectLike({ Ref: 'AuroraCluster' }),
+        Engine: 'aurora-mysql',
+        DBInstanceClass: 'db.t3.medium',
+        PubliclyAccessible: false
+      });
     });
   });
 
-  describe('Deletion Policies Validation', () => {
-    it('should not have Retain deletion policies', () => {
-      const result = validateDeletionPolicies(template.Resources);
-      expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
+  describe('ECS Resources', () => {
+    test('should create ECS cluster', () => {
+      template.hasResourceProperties('AWS::ECS::Cluster', {
+        ClusterName: Match.objectLike({
+          'Fn::Sub': 'ECSCluster-${EnvironmentSuffix}'
+        }),
+        ClusterSettings: Match.arrayWith([
+          Match.objectLike({
+            Name: 'containerInsights',
+            Value: 'enabled'
+          })
+        ])
+      });
     });
 
-    it('should detect Retain deletion policy', () => {
-      const resources = {
-        Bucket: { Type: 'AWS::S3::Bucket', Properties: {}, DeletionPolicy: 'Retain' }
-      };
-      const result = validateDeletionPolicies(resources);
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Resource Bucket has DeletionPolicy=Retain');
+    test('should create ECS task execution role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.objectLike({
+          'Fn::Sub': 'ECSTaskExecutionRole-${EnvironmentSuffix}'
+        }),
+        AssumeRolePolicyDocument: Match.objectLike({
+          Version: '2012-10-17',
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: Match.objectLike({
+                Service: 'ecs-tasks.amazonaws.com'
+              }),
+              Action: 'sts:AssumeRole'
+            })
+          ])
+        }),
+        ManagedPolicyArns: Match.arrayWith([
+          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+        ])
+      });
     });
 
-    it('should warn about Retain update replace policy', () => {
-      const resources = {
-        Bucket: { Type: 'AWS::S3::Bucket', Properties: {}, UpdateReplacePolicy: 'Retain' }
-      };
-      const result = validateDeletionPolicies(resources);
-      expect(result.valid).toBe(true);
-      expect(result.warnings).toContain('Resource Bucket has UpdateReplacePolicy=Retain');
+    test('should create ECS task role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: Match.objectLike({
+          'Fn::Sub': 'ECSTaskRole-${EnvironmentSuffix}'
+        }),
+        AssumeRolePolicyDocument: Match.objectLike({
+          Version: '2012-10-17',
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: Match.objectLike({
+                Service: 'ecs-tasks.amazonaws.com'
+              }),
+              Action: 'sts:AssumeRole'
+            })
+          ])
+        })
+      });
+    });
+
+    test('should create CloudWatch log group', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.objectLike({
+          'Fn::Sub': '/ecs/inventory-app-${EnvironmentSuffix}'
+        }),
+        RetentionInDays: 7
+      });
+    });
+
+    test('should create ECS task definition', () => {
+      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+        Family: Match.objectLike({
+          'Fn::Sub': 'inventory-app-${EnvironmentSuffix}'
+        }),
+        NetworkMode: 'awsvpc',
+        RequiresCompatibilities: Match.arrayWith(['FARGATE']),
+        Cpu: '1024',
+        Memory: '2048',
+        ExecutionRoleArn: Match.objectLike({
+          'Fn::GetAtt': ['ECSTaskExecutionRole', 'Arn']
+        }),
+        TaskRoleArn: Match.objectLike({
+          'Fn::GetAtt': ['ECSTaskRole', 'Arn']
+        }),
+        ContainerDefinitions: Match.arrayWith([
+          Match.objectLike({
+            Name: 'inventory-app',
+            Image: Match.objectLike({ Ref: 'ContainerImage' }),
+            Essential: true,
+            PortMappings: Match.arrayWith([
+              Match.objectLike({
+                ContainerPort: 80,
+                Protocol: 'tcp'
+              })
+            ]),
+            Environment: Match.arrayWith([
+              Match.objectLike({
+                Name: 'DB_HOST',
+                Value: Match.objectLike({
+                  'Fn::GetAtt': ['AuroraCluster', 'Endpoint.Address']
+                })
+              }),
+              Match.objectLike({
+                Name: 'DB_PORT',
+                Value: '3306'
+              }),
+              Match.objectLike({
+                Name: 'DB_NAME',
+                Value: 'inventorydb'
+              })
+            ]),
+            Secrets: Match.arrayWith([
+              Match.objectLike({
+                Name: 'DB_USERNAME',
+                ValueFrom: Match.objectLike({
+                  'Fn::Sub': '${DBSecret}:username::'
+                })
+              }),
+              Match.objectLike({
+                Name: 'DB_PASSWORD',
+                ValueFrom: Match.objectLike({
+                  'Fn::Sub': '${DBSecret}:password::'
+                })
+              })
+            ]),
+            LogConfiguration: Match.objectLike({
+              LogDriver: 'awslogs',
+              Options: Match.objectLike({
+                'awslogs-group': Match.objectLike({ Ref: 'CloudWatchLogGroup' }),
+                'awslogs-region': Match.objectLike({ Ref: 'AWS::Region' }),
+                'awslogs-stream-prefix': 'ecs'
+              })
+            }),
+            HealthCheck: Match.objectLike({
+              Command: Match.arrayWith([
+                'CMD-SHELL',
+                'curl -f http://localhost/health || exit 1'
+              ]),
+              Interval: 30,
+              Timeout: 5,
+              Retries: 3,
+              StartPeriod: 60
+            })
+          })
+        ])
+      });
+    });
+
+    test('should create ECS service', () => {
+      template.hasResourceProperties('AWS::ECS::Service', {
+        ServiceName: Match.objectLike({
+          'Fn::Sub': 'inventory-service-${EnvironmentSuffix}'
+        }),
+        Cluster: Match.objectLike({ Ref: 'ECSCluster' }),
+        TaskDefinition: Match.objectLike({ Ref: 'ECSTaskDefinition' }),
+        DesiredCount: 2,
+        LaunchType: 'FARGATE',
+        NetworkConfiguration: Match.objectLike({
+          AwsvpcConfiguration: Match.objectLike({
+            AssignPublicIp: 'DISABLED',
+            Subnets: Match.arrayWith([
+              Match.objectLike({ Ref: 'PrivateSubnet1' }),
+              Match.objectLike({ Ref: 'PrivateSubnet2' })
+            ]),
+            SecurityGroups: Match.arrayWith([
+              Match.objectLike({ Ref: 'ECSSecurityGroup' })
+            ])
+          })
+        }),
+        LoadBalancers: Match.arrayWith([
+          Match.objectLike({
+            ContainerName: 'inventory-app',
+            ContainerPort: 80,
+            TargetGroupArn: Match.objectLike({ Ref: 'ALBTargetGroup' })
+          })
+        ]),
+        HealthCheckGracePeriodSeconds: 120,
+        DeploymentConfiguration: Match.objectLike({
+          MaximumPercent: 200,
+          MinimumHealthyPercent: 100
+        })
+      });
     });
   });
 
-  describe('Environment Suffix Usage', () => {
-    it('should use EnvironmentSuffix in resource names', () => {
-      const usage = checkEnvironmentSuffixUsage(template.Resources);
-      expect(usage.totalNamingPoints).toBeGreaterThan(0);
-      expect(usage.usingSuffix).toBeGreaterThan(0);
+  describe('Outputs', () => {
+    test('should export VPC ID', () => {
+      template.hasOutput('VPCId', {
+        Description: 'VPC ID',
+        Value: Match.objectLike({ Ref: 'VPC' }),
+        Export: Match.objectLike({
+          Name: Match.objectLike({
+            'Fn::Sub': '${AWS::StackName}-VPCId'
+          })
+        })
+      });
     });
 
-    it('should calculate zero percentage for empty resources', () => {
-      const usage = checkEnvironmentSuffixUsage({});
-      expect(usage.totalNamingPoints).toBe(0);
-      expect(usage.usingSuffix).toBe(0);
-      expect(usage.percentage).toBe(0);
+    test('should export ALB DNS name', () => {
+      template.hasOutput('ALBDNSName', {
+        Description: 'DNS name of the Application Load Balancer',
+        Value: Match.objectLike({
+          'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName']
+        }),
+        Export: Match.objectLike({
+          Name: Match.objectLike({
+            'Fn::Sub': '${AWS::StackName}-ALBDNSName'
+          })
+        })
+      });
     });
-  });
 
-  describe('Get Resources By Type', () => {
-    it('should get resources by type', () => {
-      const vpcs = getResourcesByType(template.Resources, 'AWS::EC2::VPC');
-      expect(vpcs.length).toBeGreaterThan(0);
-      expect(vpcs[0].name).toBe('VPC');
+    test('should export ALB URL', () => {
+      template.hasOutput('ALBUrl', {
+        Description: 'URL of the Application Load Balancer',
+        Value: Match.objectLike({
+          'Fn::Sub': 'http://${ApplicationLoadBalancer.DNSName}'
+        })
+      });
     });
 
-    it('should return empty array for non-existent type', () => {
-      const resources = getResourcesByType(template.Resources, 'AWS::NonExistent::Resource');
-      expect(resources.length).toBe(0);
+    test('should export RDS endpoint', () => {
+      template.hasOutput('RDSEndpoint', {
+        Description: 'RDS Aurora cluster endpoint',
+        Value: Match.objectLike({
+          'Fn::GetAtt': ['AuroraCluster', 'Endpoint.Address']
+        }),
+        Export: Match.objectLike({
+          Name: Match.objectLike({
+            'Fn::Sub': '${AWS::StackName}-RDSEndpoint'
+          })
+        })
+      });
     });
-  });
 
-  describe('Comprehensive Validation', () => {
-    it('should have all validation categories', () => {
-      const result = validateAll(template);
-      expect(result.results.structure).toBeDefined();
-      expect(result.results.parameters).toBeDefined();
-      expect(result.results.vpc).toBeDefined();
-      expect(result.results.networking).toBeDefined();
-      expect(result.results.securityGroups).toBeDefined();
-      expect(result.results.ecs).toBeDefined();
-      expect(result.results.loadBalancer).toBeDefined();
-      expect(result.results.rds).toBeDefined();
-      expect(result.results.secretsManager).toBeDefined();
-      expect(result.results.iam).toBeDefined();
-      expect(result.results.resourceCount).toBeDefined();
-      expect(result.results.deletionPolicies).toBeDefined();
+    test('should export RDS port', () => {
+      template.hasOutput('RDSPort', {
+        Description: 'RDS Aurora cluster port',
+        Value: Match.objectLike({
+          'Fn::GetAtt': ['AuroraCluster', 'Endpoint.Port']
+        })
+      });
+    });
+
+    test('should export ECS cluster name', () => {
+      template.hasOutput('ECSClusterName', {
+        Description: 'Name of the ECS cluster',
+        Value: Match.objectLike({ Ref: 'ECSCluster' }),
+        Export: Match.objectLike({
+          Name: Match.objectLike({
+            'Fn::Sub': '${AWS::StackName}-ECSClusterName'
+          })
+        })
+      });
+    });
+
+    test('should export ECS service name', () => {
+      template.hasOutput('ECSServiceName', {
+        Description: 'Name of the ECS service',
+        Value: Match.objectLike({
+          'Fn::GetAtt': ['ECSService', 'Name']
+        })
+      });
+    });
+
+    test('should export secret ARN', () => {
+      template.hasOutput('SecretArn', {
+        Description: 'ARN of the database credentials secret',
+        Value: Match.objectLike({ Ref: 'DBSecret' }),
+        Export: Match.objectLike({
+          Name: Match.objectLike({
+            'Fn::Sub': '${AWS::StackName}-SecretArn'
+          })
+        })
+      });
+    });
+
+    test('should export environment suffix', () => {
+      template.hasOutput('EnvironmentSuffix', {
+        Description: 'Environment suffix used for this deployment',
+        Value: Match.objectLike({ Ref: 'EnvironmentSuffix' })
+      });
     });
   });
 });

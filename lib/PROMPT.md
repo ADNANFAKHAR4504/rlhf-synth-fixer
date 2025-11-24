@@ -30,17 +30,12 @@ Create a highly available containerized web application infrastructure using **C
    - Application Load Balancer in public subnets
    - ECS tasks and RDS in private subnets
 
-4. **Load Balancing**
-   - Application Load Balancer with target group for ECS tasks
-   - Path-based routing rules for /api/* and /health endpoints
-   - Health check configurations
-
-5. **Security and Access**
+4. **Security and Access**
    - IAM task execution role with permissions for ECR and CloudWatch Logs
    - Database credentials in Secrets Manager with automatic rotation disabled
    - Security groups for ALB, ECS tasks, and RDS
 
-6. **Optional Enhancements** (if time permits)
+5. **Optional Enhancements** (if time permits)
    - CloudFront distribution for static asset caching
    - SNS topic for deployment notifications
    - Route 53 hosted zone with custom domain

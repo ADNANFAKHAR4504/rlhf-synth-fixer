@@ -16,27 +16,28 @@ This solution provides a complete CloudFormation template in JSON format for dep
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "ECS Fargate with RDS Aurora MySQL infrastructure for inventory management application",
+  "Description": "Retail Inventory Management - ECS Fargate with RDS Aurora MySQL",
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Environment suffix for unique resource naming",
       "Default": "dev",
-      "AllowedPattern": "[a-z0-9-]+",
-      "ConstraintDescription": "Must contain only lowercase alphanumeric characters and hyphens"
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
     },
     "ContainerImage": {
       "Type": "String",
-      "Description": "Docker image for the application",
-      "Default": "nginx:latest"
+      "Default": "nginx:latest",
+      "Description": "Docker container image for the ECS task"
     },
     "DBUsername": {
       "Type": "String",
-      "Description": "Database master username",
-      "Default": "dbadmin",
-      "MinLength": 1,
-      "MaxLength": 16,
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+      "Default": "admin",
+      "Description": "Master username for RDS Aurora cluster",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     }
   },
   "Resources": {
@@ -50,7 +51,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-${EnvironmentSuffix}"
+              "Fn::Sub": "VPC-${EnvironmentSuffix}"
             }
           },
           {
@@ -58,10 +59,6 @@ This solution provides a complete CloudFormation template in JSON format for dep
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "inventory-management"
           }
         ]
       }
@@ -73,13 +70,13 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "igw-${EnvironmentSuffix}"
+              "Fn::Sub": "IGW-${EnvironmentSuffix}"
             }
           }
         ]
       }
     },
-    "AttachGateway": {
+    "VPCGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
         "VpcId": {
@@ -110,7 +107,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
+              "Fn::Sub": "PublicSubnet1-${EnvironmentSuffix}"
             }
           },
           {
@@ -140,7 +137,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
+              "Fn::Sub": "PublicSubnet2-${EnvironmentSuffix}"
             }
           },
           {
@@ -169,7 +166,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+              "Fn::Sub": "PrivateSubnet1-${EnvironmentSuffix}"
             }
           },
           {
@@ -198,7 +195,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+              "Fn::Sub": "PrivateSubnet2-${EnvironmentSuffix}"
             }
           },
           {
@@ -218,7 +215,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-rt-${EnvironmentSuffix}"
+              "Fn::Sub": "PublicRouteTable-${EnvironmentSuffix}"
             }
           }
         ]
@@ -226,7 +223,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
     },
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
-      "DependsOn": "AttachGateway",
+      "DependsOn": "VPCGatewayAttachment",
       "Properties": {
         "RouteTableId": {
           "Ref": "PublicRouteTable"
@@ -259,42 +256,42 @@ This solution provides a complete CloudFormation template in JSON format for dep
         }
       }
     },
-    "NatGateway1EIP": {
+    "NATGateway1EIP": {
       "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
+      "DependsOn": "VPCGatewayAttachment",
       "Properties": {
         "Domain": "vpc",
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"
+              "Fn::Sub": "NATGWEIP1-${EnvironmentSuffix}"
             }
           }
         ]
       }
     },
-    "NatGateway2EIP": {
+    "NATGateway2EIP": {
       "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
+      "DependsOn": "VPCGatewayAttachment",
       "Properties": {
         "Domain": "vpc",
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"
+              "Fn::Sub": "NATGWEIP2-${EnvironmentSuffix}"
             }
           }
         ]
       }
     },
-    "NatGateway1": {
+    "NATGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
-            "NatGateway1EIP",
+            "NATGateway1EIP",
             "AllocationId"
           ]
         },
@@ -305,18 +302,18 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
+              "Fn::Sub": "NATGW1-${EnvironmentSuffix}"
             }
           }
         ]
       }
     },
-    "NatGateway2": {
+    "NATGateway2": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
-            "NatGateway2EIP",
+            "NATGateway2EIP",
             "AllocationId"
           ]
         },
@@ -327,7 +324,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"
+              "Fn::Sub": "NATGW2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -343,7 +340,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-1-${EnvironmentSuffix}"
+              "Fn::Sub": "PrivateRouteTable1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -357,7 +354,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
         },
         "DestinationCidrBlock": "0.0.0.0/0",
         "NatGatewayId": {
-          "Ref": "NatGateway1"
+          "Ref": "NATGateway1"
         }
       }
     },
@@ -382,7 +379,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-2-${EnvironmentSuffix}"
+              "Fn::Sub": "PrivateRouteTable2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -396,7 +393,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
         },
         "DestinationCidrBlock": "0.0.0.0/0",
         "NatGatewayId": {
-          "Ref": "NatGateway2"
+          "Ref": "NATGateway2"
         }
       }
     },
@@ -411,181 +408,11 @@ This solution provides a complete CloudFormation template in JSON format for dep
         }
       }
     },
-    "DBSecret": {
-      "Type": "AWS::SecretsManager::Secret",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "db-credentials-${EnvironmentSuffix}"
-        },
-        "Description": "Database credentials for RDS Aurora cluster",
-        "GenerateSecretString": {
-          "SecretStringTemplate": {
-            "Fn::Sub": "{\"username\":\"${DBUsername}\"}"
-          },
-          "GenerateStringKey": "password",
-          "PasswordLength": 32,
-          "ExcludeCharacters": "\"@/\\"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "db-secret-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          }
-        ]
-      }
-    },
-    "DBSubnetGroup": {
-      "Type": "AWS::RDS::DBSubnetGroup",
-      "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
-        },
-        "DBSubnetGroupDescription": "Subnet group for RDS Aurora cluster",
-        "SubnetIds": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "DBSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {
-          "Fn::Sub": "db-sg-${EnvironmentSuffix}"
-        },
-        "GroupDescription": "Security group for RDS Aurora cluster",
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {
-              "Ref": "ECSTaskSecurityGroup"
-            },
-            "Description": "Allow MySQL access from ECS tasks"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "db-sg-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "DBCluster": {
-      "Type": "AWS::RDS::DBCluster",
-      "DependsOn": "DBSecret",
-      "Properties": {
-        "DBClusterIdentifier": {
-          "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
-        },
-        "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.04.0",
-        "MasterUsername": {
-          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
-        },
-        "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
-        },
-        "DatabaseName": "inventorydb",
-        "DBSubnetGroupName": {
-          "Ref": "DBSubnetGroup"
-        },
-        "VpcSecurityGroupIds": [
-          {
-            "Ref": "DBSecurityGroup"
-          }
-        ],
-        "DeletionProtection": false,
-        "BackupRetentionPeriod": 7,
-        "PreferredBackupWindow": "03:00-04:00",
-        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "StorageEncrypted": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "inventory-management"
-          }
-        ]
-      }
-    },
-    "DBInstance1": {
-      "Type": "AWS::RDS::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": {
-          "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
-        },
-        "DBClusterIdentifier": {
-          "Ref": "DBCluster"
-        },
-        "Engine": "aurora-mysql",
-        "DBInstanceClass": "db.t3.small",
-        "PubliclyAccessible": false,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "SecretAttachment": {
-      "Type": "AWS::SecretsManager::SecretTargetAttachment",
-      "Properties": {
-        "SecretId": {
-          "Ref": "DBSecret"
-        },
-        "TargetId": {
-          "Ref": "DBCluster"
-        },
-        "TargetType": "AWS::RDS::DBCluster"
-      }
-    },
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+          "Fn::Sub": "ALBSecurityGroup-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
@@ -597,31 +424,38 @@ This solution provides a complete CloudFormation template in JSON format for dep
             "FromPort": 80,
             "ToPort": 80,
             "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTP from internet"
+            "Description": "Allow HTTP traffic from internet"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
             "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTPS from internet"
+            "Description": "Allow HTTPS traffic from internet"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+              "Fn::Sub": "ALBSecurityGroup-${EnvironmentSuffix}"
             }
           }
         ]
       }
     },
-    "ECSTaskSecurityGroup": {
+    "ECSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "ecs-task-sg-${EnvironmentSuffix}"
+          "Fn::Sub": "ECSSecurityGroup-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for ECS tasks",
         "VpcId": {
@@ -635,14 +469,68 @@ This solution provides a complete CloudFormation template in JSON format for dep
             "SourceSecurityGroupId": {
               "Ref": "ALBSecurityGroup"
             },
-            "Description": "Allow HTTP from ALB"
+            "Description": "Allow traffic from ALB"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3000,
+            "ToPort": 3000,
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            },
+            "Description": "Allow traffic from ALB on port 3000"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-sg-${EnvironmentSuffix}"
+              "Fn::Sub": "ECSSecurityGroup-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "RDSSecurityGroup-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for RDS Aurora cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "ECSSecurityGroup"
+            },
+            "Description": "Allow MySQL traffic from ECS tasks"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "RDSSecurityGroup-${EnvironmentSuffix}"
             }
           }
         ]
@@ -650,9 +538,10 @@ This solution provides a complete CloudFormation template in JSON format for dep
     },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "DependsOn": "VPCGatewayAttachment",
       "Properties": {
         "Name": {
-          "Fn::Sub": "alb-${EnvironmentSuffix}"
+          "Fn::Sub": "ALB-${EnvironmentSuffix}"
         },
         "Type": "application",
         "Scheme": "internet-facing",
@@ -674,33 +563,27 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Fn::Sub": "ALB-${EnvironmentSuffix}"
             }
           }
         ]
       }
     },
-    "TargetGroup": {
+    "ALBTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "tg-${EnvironmentSuffix}"
+          "Fn::Sub": "ALBTargetGroup-${EnvironmentSuffix}"
         },
         "Port": 80,
         "Protocol": "HTTP",
+        "TargetType": "ip",
         "VpcId": {
           "Ref": "VPC"
         },
-        "TargetType": "ip",
         "HealthCheckEnabled": true,
-        "HealthCheckProtocol": "HTTP",
         "HealthCheckPath": "/health",
+        "HealthCheckProtocol": "HTTP",
         "HealthCheckIntervalSeconds": 30,
         "HealthCheckTimeoutSeconds": 5,
         "HealthyThresholdCount": 2,
@@ -712,7 +595,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "tg-${EnvironmentSuffix}"
+              "Fn::Sub": "ALBTargetGroup-${EnvironmentSuffix}"
             }
           }
         ]
@@ -730,7 +613,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Type": "forward",
             "TargetGroupArn": {
-              "Ref": "TargetGroup"
+              "Ref": "ALBTargetGroup"
             }
           }
         ]
@@ -755,7 +638,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Type": "forward",
             "TargetGroupArn": {
-              "Ref": "TargetGroup"
+              "Ref": "ALBTargetGroup"
             }
           }
         ]
@@ -780,7 +663,123 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Type": "forward",
             "TargetGroupArn": {
-              "Ref": "TargetGroup"
+              "Ref": "ALBTargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "DBSubnetGroup-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for RDS Aurora cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "DBSubnetGroup-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "DBSecret-${EnvironmentSuffix}"
+        },
+        "Description": "Database credentials for Aurora cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DBUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "DBSecret-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+        },
+        "DatabaseName": "inventorydb",
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "RDSSecurityGroup"
+          }
+        ],
+        "DeletionProtection": false,
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "AuroraCluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.t3.medium",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "AuroraInstance-${EnvironmentSuffix}"
             }
           }
         ]
@@ -790,30 +789,19 @@ This solution provides a complete CloudFormation template in JSON format for dep
       "Type": "AWS::ECS::Cluster",
       "Properties": {
         "ClusterName": {
-          "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
+          "Fn::Sub": "ECSCluster-${EnvironmentSuffix}"
         },
-        "CapacityProviders": [
-          "FARGATE",
-          "FARGATE_SPOT"
-        ],
-        "DefaultCapacityProviderStrategy": [
+        "ClusterSettings": [
           {
-            "CapacityProvider": "FARGATE",
-            "Weight": 1,
-            "Base": 1
+            "Name": "containerInsights",
+            "Value": "enabled"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Fn::Sub": "ECSCluster-${EnvironmentSuffix}"
             }
           }
         ]
@@ -823,7 +811,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+          "Fn::Sub": "ECSTaskExecutionRole-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -849,8 +837,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "secretsmanager:GetSecretValue",
-                    "secretsmanager:DescribeSecret"
+                    "secretsmanager:GetSecretValue"
                   ],
                   "Resource": {
                     "Ref": "DBSecret"
@@ -864,7 +851,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+              "Fn::Sub": "ECSTaskExecutionRole-${EnvironmentSuffix}"
             }
           }
         ]
@@ -874,7 +861,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+          "Fn::Sub": "ECSTaskRole-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -890,7 +877,23 @@ This solution provides a complete CloudFormation template in JSON format for dep
         },
         "Policies": [
           {
-            "PolicyName": "ApplicationPermissions",
+            "PolicyName": "RDSAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:DescribeDBClusters",
+                    "rds:DescribeDBInstances"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "SecretsManagerAccess",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -911,7 +914,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+              "Fn::Sub": "ECSTaskRole-${EnvironmentSuffix}"
             }
           }
         ]
@@ -968,7 +971,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
                 "Name": "DB_HOST",
                 "Value": {
                   "Fn::GetAtt": [
-                    "DBCluster",
+                    "AuroraCluster",
                     "Endpoint.Address"
                   ]
                 }
@@ -1024,91 +1027,25 @@ This solution provides a complete CloudFormation template in JSON format for dep
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "task-def-${EnvironmentSuffix}"
+              "Fn::Sub": "ECSTaskDefinition-${EnvironmentSuffix}"
             }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          }
-        ]
-      }
-    },
-    "ECSService": {
-      "Type": "AWS::ECS::Service",
-      "DependsOn": "ALBListener",
-      "Properties": {
-        "ServiceName": {
-          "Fn::Sub": "inventory-service-${EnvironmentSuffix}"
-        },
-        "Cluster": {
-          "Ref": "ECSCluster"
-        },
-        "TaskDefinition": {
-          "Ref": "ECSTaskDefinition"
-        },
-        "DesiredCount": 2,
-        "LaunchType": "FARGATE",
-        "NetworkConfiguration": {
-          "AwsvpcConfiguration": {
-            "AssignPublicIp": "DISABLED",
-            "Subnets": [
-              {
-                "Ref": "PrivateSubnet1"
-              },
-              {
-                "Ref": "PrivateSubnet2"
-              }
-            ],
-            "SecurityGroups": [
-              {
-                "Ref": "ECSTaskSecurityGroup"
-              }
-            ]
-          }
-        },
-        "LoadBalancers": [
-          {
-            "ContainerName": "inventory-app",
-            "ContainerPort": 80,
-            "TargetGroupArn": {
-              "Ref": "TargetGroup"
-            }
-          }
-        ],
-        "HealthCheckGracePeriodSeconds": 60,
-        "DeploymentConfiguration": {
-          "MaximumPercent": 200,
-          "MinimumHealthyPercent": 100,
-          "DeploymentCircuitBreaker": {
-            "Enable": true,
-            "Rollback": true
-          }
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "ecs-service-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "inventory-management"
           }
         ]
       }
     }
   },
   "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
     "ALBDNSName": {
       "Description": "DNS name of the Application Load Balancer",
       "Value": {
@@ -1123,11 +1060,17 @@ This solution provides a complete CloudFormation template in JSON format for dep
         }
       }
     },
+    "ALBUrl": {
+      "Description": "URL of the Application Load Balancer",
+      "Value": {
+        "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+      }
+    },
     "RDSEndpoint": {
       "Description": "RDS Aurora cluster endpoint",
       "Value": {
         "Fn::GetAtt": [
-          "DBCluster",
+          "AuroraCluster",
           "Endpoint.Address"
         ]
       },
@@ -1137,6 +1080,15 @@ This solution provides a complete CloudFormation template in JSON format for dep
         }
       }
     },
+    "RDSPort": {
+      "Description": "RDS Aurora cluster port",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Port"
+        ]
+      }
+    },
     "ECSClusterName": {
       "Description": "Name of the ECS cluster",
       "Value": {
@@ -1144,44 +1096,25 @@ This solution provides a complete CloudFormation template in JSON format for dep
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-ECSCluster"
+          "Fn::Sub": "${AWS::StackName}-ECSClusterName"
         }
       }
     },
-    "ECSServiceName": {
-      "Description": "Name of the ECS service",
-      "Value": {
-        "Fn::GetAtt": [
-          "ECSService",
-          "Name"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ECSService"
-        }
-      }
-    },
-    "DBSecretArn": {
+    "SecretArn": {
       "Description": "ARN of the database credentials secret",
       "Value": {
         "Ref": "DBSecret"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+          "Fn::Sub": "${AWS::StackName}-SecretArn"
         }
       }
     },
-    "VPCId": {
-      "Description": "VPC ID",
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
       "Value": {
-        "Ref": "VPC"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-VPCId"
-        }
+        "Ref": "EnvironmentSuffix"
       }
     }
   }

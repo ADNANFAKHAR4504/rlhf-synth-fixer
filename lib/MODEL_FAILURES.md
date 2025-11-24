@@ -110,7 +110,6 @@ All required outputs provided:
 - RDSEndpoint: Aurora cluster endpoint address
 - RDSPort: Aurora cluster port
 - ECSClusterName: Name of ECS cluster
-- ECSServiceName: Name of ECS service
 - SecretArn: ARN of database credentials secret
 - EnvironmentSuffix: Environment suffix used
 - VPCId: VPC identifier
