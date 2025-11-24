@@ -1,4 +1,4 @@
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -28,14 +28,23 @@ import json
 
 
 class PrimaryStack(TerraformStack):
-    def __init__(self, scope: Construct, id: str, region: str, environment_suffix: str):
+    def __init__(self, scope: Construct, id: str, region: str, environment_suffix: str,
+                 state_bucket: str, state_bucket_region: str, default_tags: dict):
         super().__init__(scope, id)
 
         self.region = region
         self.environment_suffix = environment_suffix
 
+        # Configure S3 Backend for remote state
+        S3Backend(self,
+            bucket=state_bucket,
+            key=f"healthcare-dr/primary/{environment_suffix}/terraform.tfstate",
+            region=state_bucket_region,
+            encrypt=True
+        )
+
         # AWS Provider
-        AwsProvider(self, "aws", region=region)
+        AwsProvider(self, "aws", region=region, default_tags=[default_tags])
 
         # Common tags
         self.common_tags = {
@@ -99,13 +108,13 @@ class PrimaryStack(TerraformStack):
             "kms_key",
             description=f"KMS key for healthcare DR - {self.environment_suffix}",
             enable_key_rotation=True,
-            tags={**self.common_tags, "Name": f"healthcare-dr-kms-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-kms-v1-{self.environment_suffix}"}
         )
 
         KmsAlias(
             self,
             "kms_alias",
-            name=f"alias/healthcare-dr-{self.environment_suffix}",
+            name=f"alias/healthcare-dr-v1-{self.environment_suffix}",
             target_key_id=kms_key.key_id
         )
 
@@ -119,7 +128,7 @@ class PrimaryStack(TerraformStack):
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={**self.common_tags, "Name": f"healthcare-dr-vpc-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-vpc-v1-{self.environment_suffix}"}
         )
 
     def _create_subnets(self) -> list:
@@ -135,7 +144,7 @@ class PrimaryStack(TerraformStack):
                 cidr_block=f"10.0.{i}.0/24",
                 availability_zone=f"{self.region}{az}",
                 map_public_ip_on_launch=True,
-                tags={**self.common_tags, "Name": f"healthcare-dr-subnet-{az}-{self.environment_suffix}"}
+                tags={**self.common_tags, "Name": f"healthcare-dr-subnet-v1-{az}-{self.environment_suffix}"}
             )
             subnets.append(subnet)
 
@@ -147,7 +156,7 @@ class PrimaryStack(TerraformStack):
             self,
             "igw",
             vpc_id=self.vpc.id,
-            tags={**self.common_tags, "Name": f"healthcare-dr-igw-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-igw-v1-{self.environment_suffix}"}
         )
 
     def _create_route_table(self) -> RouteTable:
@@ -156,7 +165,7 @@ class PrimaryStack(TerraformStack):
             self,
             "route_table",
             vpc_id=self.vpc.id,
-            tags={**self.common_tags, "Name": f"healthcare-dr-rt-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-rt-v1-{self.environment_suffix}"}
         )
 
         # FIX #4: Specify destination_cidr_block parameter for route
@@ -184,7 +193,7 @@ class PrimaryStack(TerraformStack):
         return SecurityGroup(
             self,
             "lambda_sg",
-            name=f"healthcare-dr-lambda-sg-{self.environment_suffix}",
+            name=f"healthcare-dr-lambda-sg-v1-{self.environment_suffix}",
             description="Security group for Lambda functions",
             vpc_id=self.vpc.id,
             egress=[SecurityGroupEgress(
@@ -199,7 +208,7 @@ class PrimaryStack(TerraformStack):
                 protocol="tcp",
                 cidr_blocks=["0.0.0.0/0"]
             )],
-            tags={**self.common_tags, "Name": f"healthcare-dr-lambda-sg-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-lambda-sg-v1-{self.environment_suffix}"}
         )
 
     def _create_s3_bucket(self) -> S3Bucket:
@@ -208,9 +217,9 @@ class PrimaryStack(TerraformStack):
         return S3Bucket(
             self,
             "medical_docs_bucket",
-            bucket=f"healthcare-medical-docs-primary-{self.environment_suffix}",
+            bucket=f"healthcare-medical-docs-primary-v1-{self.environment_suffix}",
             force_destroy=True,
-            tags={**self.common_tags, "Name": f"medical-docs-primary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"medical-docs-primary-v1-{self.environment_suffix}"}
         )
 
     def _enable_s3_versioning(self) -> S3BucketVersioningA:
@@ -254,16 +263,16 @@ class PrimaryStack(TerraformStack):
         lambda_role = IamRole(
             self,
             "lambda_role",
-            name=f"healthcare-dr-lambda-role-primary-{self.environment_suffix}",
+            name=f"healthcare-dr-lambda-role-primary-v1-{self.environment_suffix}",
             assume_role_policy=json.dumps(assume_role_policy),
-            tags={**self.common_tags, "Name": f"lambda-role-primary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"lambda-role-primary-v1-{self.environment_suffix}"}
         )
 
         # Custom policy for cross-region access
         lambda_policy = IamPolicy(
             self,
             "lambda_policy",
-            name=f"healthcare-dr-lambda-policy-primary-{self.environment_suffix}",
+            name=f"healthcare-dr-lambda-policy-primary-v1-{self.environment_suffix}",
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -334,21 +343,21 @@ class PrimaryStack(TerraformStack):
         return LambdaFunction(
             self,
             "api_lambda",
-            function_name=f"healthcare-dr-api-primary-{self.environment_suffix}",
+            function_name=f"healthcare-dr-api-primary-v1-{self.environment_suffix}",
             role=self.lambda_role.arn,
             handler="api_handler.handler",
             runtime="python3.11",
             memory_size=3072,  # 3GB as required
             timeout=30,  # 30 seconds as required
-            filename="../../../lib/lambda/lambda_function.zip",
-            source_code_hash="${filebase64sha256(\"../../../lib/lambda/lambda_function.zip\")}",
+            filename="lib/lambda_function.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda_function.zip\")}",
             environment={
                 "variables": {
                     "ENVIRONMENT": "production",
                     "STAGE": "primary"
                 }
             },
-            tags={**self.common_tags, "Name": f"api-primary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"api-primary-v1-{self.environment_suffix}"}
         )
 
     def _create_sns_topic(self) -> SnsTopic:
@@ -356,8 +365,8 @@ class PrimaryStack(TerraformStack):
         return SnsTopic(
             self,
             "failover_topic",
-            name=f"healthcare-dr-failover-primary-{self.environment_suffix}",
-            tags={**self.common_tags, "Name": f"failover-topic-primary-{self.environment_suffix}"}
+            name=f"healthcare-dr-failover-primary-v1-{self.environment_suffix}",
+            tags={**self.common_tags, "Name": f"failover-topic-primary-v1-{self.environment_suffix}"}
         )
 
     def _create_cloudwatch_dashboard(self) -> None:
@@ -397,7 +406,7 @@ class PrimaryStack(TerraformStack):
         CloudwatchDashboard(
             self,
             "monitoring_dashboard",
-            dashboard_name=f"healthcare-dr-primary-{self.environment_suffix}",
+            dashboard_name=f"healthcare-dr-primary-v1-{self.environment_suffix}",
             dashboard_body=json.dumps(dashboard_body)
         )
 
@@ -406,7 +415,7 @@ class PrimaryStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             "lambda_error_alarm",
-            alarm_name=f"healthcare-dr-lambda-errors-primary-{self.environment_suffix}",
+            alarm_name=f"healthcare-dr-lambda-errors-primary-v1-{self.environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="Errors",
@@ -419,5 +428,5 @@ class PrimaryStack(TerraformStack):
             dimensions={
                 "FunctionName": self.lambda_function.function_name
             },
-            tags={**self.common_tags, "Name": f"lambda-error-alarm-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"lambda-error-alarm-v1-{self.environment_suffix}"}
         )

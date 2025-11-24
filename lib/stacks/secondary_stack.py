@@ -1,4 +1,4 @@
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -34,7 +34,10 @@ class SecondaryStack(TerraformStack):
         region: str,
         environment_suffix: str,
         primary_bucket_arn: str,
-        primary_kms_key_arn: str
+        primary_kms_key_arn: str,
+        state_bucket: str,
+        state_bucket_region: str,
+        default_tags: dict
     ):
         super().__init__(scope, id)
 
@@ -43,8 +46,16 @@ class SecondaryStack(TerraformStack):
         self.primary_bucket_arn = primary_bucket_arn
         self.primary_kms_key_arn = primary_kms_key_arn
 
+        # Configure S3 Backend for remote state
+        S3Backend(self,
+            bucket=state_bucket,
+            key=f"healthcare-dr/secondary/{environment_suffix}/terraform.tfstate",
+            region=state_bucket_region,
+            encrypt=True
+        )
+
         # AWS Provider
-        AwsProvider(self, "aws", region=region)
+        AwsProvider(self, "aws", region=region, default_tags=[default_tags])
 
         # Common tags
         self.common_tags = {
@@ -102,13 +113,13 @@ class SecondaryStack(TerraformStack):
             "kms_key",
             description=f"KMS key for healthcare DR secondary - {self.environment_suffix}",
             enable_key_rotation=True,
-            tags={**self.common_tags, "Name": f"healthcare-dr-kms-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-kms-secondary-v1-{self.environment_suffix}"}
         )
 
         KmsAlias(
             self,
             "kms_alias",
-            name=f"alias/healthcare-dr-secondary-{self.environment_suffix}",
+            name=f"alias/healthcare-dr-secondary-v1-{self.environment_suffix}",
             target_key_id=kms_key.key_id
         )
 
@@ -122,7 +133,7 @@ class SecondaryStack(TerraformStack):
             cidr_block="10.1.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={**self.common_tags, "Name": f"healthcare-dr-vpc-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-vpc-secondary-v1-{self.environment_suffix}"}
         )
 
     def _create_subnets(self) -> list:
@@ -138,7 +149,7 @@ class SecondaryStack(TerraformStack):
                 cidr_block=f"10.1.{i}.0/24",
                 availability_zone=f"{self.region}{az}",
                 map_public_ip_on_launch=True,
-                tags={**self.common_tags, "Name": f"healthcare-dr-subnet-{az}-secondary-{self.environment_suffix}"}
+                tags={**self.common_tags, "Name": f"healthcare-dr-subnet-v1-{az}-secondary-{self.environment_suffix}"}
             )
             subnets.append(subnet)
 
@@ -150,7 +161,7 @@ class SecondaryStack(TerraformStack):
             self,
             "igw",
             vpc_id=self.vpc.id,
-            tags={**self.common_tags, "Name": f"healthcare-dr-igw-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-igw-secondary-v1-{self.environment_suffix}"}
         )
 
     def _create_route_table(self) -> RouteTable:
@@ -159,7 +170,7 @@ class SecondaryStack(TerraformStack):
             self,
             "route_table",
             vpc_id=self.vpc.id,
-            tags={**self.common_tags, "Name": f"healthcare-dr-rt-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-rt-secondary-v1-{self.environment_suffix}"}
         )
 
         # FIX #4: Specify destination_cidr_block parameter for route
@@ -187,7 +198,7 @@ class SecondaryStack(TerraformStack):
         return SecurityGroup(
             self,
             "lambda_sg",
-            name=f"healthcare-dr-lambda-sg-secondary-{self.environment_suffix}",
+            name=f"healthcare-dr-lambda-sg-secondary-v1-{self.environment_suffix}",
             description="Security group for Lambda functions",
             vpc_id=self.vpc.id,
             egress=[SecurityGroupEgress(
@@ -202,7 +213,7 @@ class SecondaryStack(TerraformStack):
                 protocol="tcp",
                 cidr_blocks=["0.0.0.0/0"]
             )],
-            tags={**self.common_tags, "Name": f"healthcare-dr-lambda-sg-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"healthcare-dr-lambda-sg-secondary-v1-{self.environment_suffix}"}
         )
 
     def _create_s3_bucket(self) -> S3Bucket:
@@ -210,9 +221,9 @@ class SecondaryStack(TerraformStack):
         return S3Bucket(
             self,
             "medical_docs_bucket",
-            bucket=f"healthcare-medical-docs-secondary-{self.environment_suffix}",
+            bucket=f"healthcare-medical-docs-secondary-v1-{self.environment_suffix}",
             force_destroy=True,
-            tags={**self.common_tags, "Name": f"medical-docs-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"medical-docs-secondary-v1-{self.environment_suffix}"}
         )
 
     def _enable_s3_versioning(self) -> S3BucketVersioningA:
@@ -257,16 +268,16 @@ class SecondaryStack(TerraformStack):
         lambda_role = IamRole(
             self,
             "lambda_role",
-            name=f"healthcare-dr-lambda-role-secondary-{self.environment_suffix}",
+            name=f"healthcare-dr-lambda-role-secondary-v1-{self.environment_suffix}",
             assume_role_policy=json.dumps(assume_role_policy),
-            tags={**self.common_tags, "Name": f"lambda-role-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"lambda-role-secondary-v1-{self.environment_suffix}"}
         )
 
         # Custom policy for cross-region access
         lambda_policy = IamPolicy(
             self,
             "lambda_policy",
-            name=f"healthcare-dr-lambda-policy-secondary-{self.environment_suffix}",
+            name=f"healthcare-dr-lambda-policy-secondary-v1-{self.environment_suffix}",
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -336,21 +347,21 @@ class SecondaryStack(TerraformStack):
         return LambdaFunction(
             self,
             "api_lambda",
-            function_name=f"healthcare-dr-api-secondary-{self.environment_suffix}",
+            function_name=f"healthcare-dr-api-secondary-v1-{self.environment_suffix}",
             role=self.lambda_role.arn,
             handler="api_handler.handler",
             runtime="python3.11",
             memory_size=3072,
             timeout=30,
-            filename="../../../lib/lambda/lambda_function.zip",
-            source_code_hash="${filebase64sha256(\"../../../lib/lambda/lambda_function.zip\")}",
+            filename="lib/lambda_function.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda_function.zip\")}",
             environment={
                 "variables": {
                     "ENVIRONMENT": "production",
                     "STAGE": "secondary"
                 }
             },
-            tags={**self.common_tags, "Name": f"api-secondary-{self.environment_suffix}"}
+            tags={**self.common_tags, "Name": f"api-secondary-v1-{self.environment_suffix}"}
         )
 
     def _create_sns_topic(self) -> SnsTopic:
@@ -358,8 +369,8 @@ class SecondaryStack(TerraformStack):
         return SnsTopic(
             self,
             "failover_topic",
-            name=f"healthcare-dr-failover-secondary-{self.environment_suffix}",
-            tags={**self.common_tags, "Name": f"failover-topic-secondary-{self.environment_suffix}"}
+            name=f"healthcare-dr-failover-secondary-v1-{self.environment_suffix}",
+            tags={**self.common_tags, "Name": f"failover-topic-secondary-v1-{self.environment_suffix}"}
         )
 
     def _create_cloudwatch_dashboard(self) -> None:
@@ -386,6 +397,6 @@ class SecondaryStack(TerraformStack):
         CloudwatchDashboard(
             self,
             "monitoring_dashboard",
-            dashboard_name=f"healthcare-dr-secondary-{self.environment_suffix}",
+            dashboard_name=f"healthcare-dr-secondary-v1-{self.environment_suffix}",
             dashboard_body=json.dumps(dashboard_body)
         )

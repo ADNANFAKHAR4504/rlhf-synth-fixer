@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "python3 main.py",
+  "app": "python3 tap.py",
   "projectId": "healthcare-dr-infrastructure",
   "sendCrashReports": "false",
   "terraformProviders": [

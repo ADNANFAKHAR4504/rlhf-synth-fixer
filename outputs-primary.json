@@ -1,7 +1,0 @@
-{
-  "healthcare-dr-primary": {
-    "api_endpoint": "healthcare-dr-api-primary-prod-dr",
-    "kms_key_arn": "arn:aws:kms:us-east-1:342597974367:key/112b83aa-c89a-4cf5-865e-7a4f92623cc3",
-    "medical_docs_bucket_arn": "arn:aws:s3:::healthcare-medical-docs-primary-prod-dr"
-  }
-}
