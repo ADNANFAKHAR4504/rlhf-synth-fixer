@@ -10,6 +10,7 @@ export interface VpcComponentArgs {
 
 export class VpcComponent extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
+  public readonly vpcCidr: pulumi.Output<string>;
   public readonly publicSubnetIds: pulumi.Output<string>[];
   public readonly privateSubnetIds: pulumi.Output<string>[];
   public readonly vpc: aws.ec2.Vpc;
@@ -40,6 +41,7 @@ export class VpcComponent extends pulumi.ComponentResource {
     );
 
     this.vpcId = this.vpc.id;
+    this.vpcCidr = this.vpc.cidrBlock;
 
     // Create Internet Gateway
     this.internetGateway = new aws.ec2.InternetGateway(
@@ -165,6 +167,7 @@ export class VpcComponent extends pulumi.ComponentResource {
 
     this.registerOutputs({
       vpcId: this.vpcId,
+      vpcCidr: this.vpcCidr,
       publicSubnetIds: this.publicSubnetIds,
       privateSubnetIds: this.privateSubnetIds,
     });

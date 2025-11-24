@@ -36,7 +36,24 @@ export function validateCidrOverlap(
     return (network1 & mask) === (network2 & mask);
   };
 
-  // Validate current CIDR against all other environments
+  // Find the expected CIDR for the current environment
+  const expectedConfig = allCidrs.find(config => config.env === currentEnv);
+
+  // If environment not found in CIDR list, throw error
+  if (!expectedConfig) {
+    throw new Error(
+      `Environment '${currentEnv}' not found in CIDR configuration list`
+    );
+  }
+
+  // If current CIDR doesn't match expected CIDR for this environment, throw error
+  if (currentCidr !== expectedConfig.cidr) {
+    throw new Error(
+      `CIDR mismatch: ${currentEnv} expected ${expectedConfig.cidr} but got ${currentCidr}`
+    );
+  }
+
+  // Validate current CIDR against all other environments for overlaps
   for (const config of allCidrs) {
     if (config.env !== currentEnv && cidrsOverlap(currentCidr, config.cidr)) {
       throw new Error(

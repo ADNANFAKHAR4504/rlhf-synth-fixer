@@ -287,9 +287,16 @@ describe('AlbComponent', () => {
       });
     });
 
-    it('should have appropriate idle timeout', (done) => {
-      pulumi.all([alb.alb.idleTimeout]).apply(([timeout]) => {
-        expect(timeout).toBeGreaterThanOrEqual(60);
+    it('should enable HTTP/2', (done) => {
+      pulumi.all([alb.alb.enableHttp2]).apply(([enabled]) => {
+        expect(enabled).toBe(true);
+        done();
+      });
+    });
+
+    it('should be application load balancer type', (done) => {
+      pulumi.all([alb.alb.loadBalancerType]).apply(([type]) => {
+        expect(type).toBe('application');
         done();
       });
     });

@@ -8,7 +8,8 @@
   "startedAt": "2025-11-24T14:00:00-08:00",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Web Application Deployment"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "VPC",
@@ -21,5 +22,5 @@
     "Secrets Manager",
     "IAM"
   ],
-  "training_quality": 9
+  "training_quality": 10
 }

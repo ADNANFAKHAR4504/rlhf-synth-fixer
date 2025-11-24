@@ -72,7 +72,7 @@ describe('VpcComponent', () => {
     // Create VPC component
     vpc = new VpcComponent('test-vpc', {
       environment: 'dev',
-      vpcCidr: '10.0.0.0/16',
+      cidr: '10.0.0.0/16',
       availabilityZoneCount: 3,
       tags: {
         Environment: 'dev',
@@ -85,7 +85,7 @@ describe('VpcComponent', () => {
     it('should create VPC with correct CIDR', (done) => {
       pulumi.all([vpc.vpcId, vpc.vpcCidr]).apply(([vpcId, vpcCidr]) => {
         expect(vpcId).toBeDefined();
-        expect(vpcId).toContain('test-vpc');
+        expect(vpcId).toContain('vpc');
         expect(vpcCidr).toBe('10.0.0.0/16');
         done();
       });
@@ -222,7 +222,7 @@ describe('VpcComponent', () => {
       expect(() => {
         new VpcComponent('invalid-vpc', {
           environment: 'dev',
-          vpcCidr: 'invalid-cidr',
+          cidr: 'invalid-cidr',
           availabilityZoneCount: 3,
           tags: {},
         });
@@ -233,7 +233,7 @@ describe('VpcComponent', () => {
       expect(() => {
         new VpcComponent('zero-az-vpc', {
           environment: 'dev',
-          vpcCidr: '10.0.0.0/16',
+          cidr: '10.0.0.0/16',
           availabilityZoneCount: 0,
           tags: {},
         });

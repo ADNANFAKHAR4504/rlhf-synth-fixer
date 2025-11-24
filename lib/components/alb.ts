@@ -191,4 +191,9 @@ export class AlbComponent extends pulumi.ComponentResource {
       securityGroupId: this.securityGroupId,
     });
   }
+
+  // Helper method to get security group ID
+  public getSecurityGroupId(): pulumi.Output<string> {
+    return this.securityGroupId;
+  }
 }

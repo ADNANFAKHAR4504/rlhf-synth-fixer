@@ -19,6 +19,10 @@ export class EcsComponent extends pulumi.ComponentResource {
   public readonly service: aws.ecs.Service;
   public readonly taskRole: aws.iam.Role;
   public readonly executionRole: aws.iam.Role;
+  public readonly taskExecutionRole: aws.iam.Role; // Alias for executionRole for test compatibility
+  public readonly logGroup: aws.cloudwatch.LogGroup;
+  public readonly scalingTarget: aws.appautoscaling.Target;
+  public readonly scalingPolicy: aws.appautoscaling.Policy;
   private readonly securityGroup: aws.ec2.SecurityGroup;
 
   constructor(
@@ -153,7 +157,7 @@ export class EcsComponent extends pulumi.ComponentResource {
     );
 
     // Create CloudWatch log group
-    const logGroup = new aws.cloudwatch.LogGroup(
+    this.logGroup = new aws.cloudwatch.LogGroup(
       `${args.environment}-payment-logs`,
       {
         name: `/ecs/${args.environment}-payment-processor`,
@@ -201,7 +205,7 @@ export class EcsComponent extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': logGroup.name,
+                    'awslogs-group': this.logGroup.name,
                     'awslogs-region': aws.getRegionOutput().name,
                     'awslogs-stream-prefix': 'ecs',
                   },
@@ -254,7 +258,7 @@ export class EcsComponent extends pulumi.ComponentResource {
     );
 
     // Create auto-scaling target
-    const scalingTarget = new aws.appautoscaling.Target(
+    this.scalingTarget = new aws.appautoscaling.Target(
       `${args.environment}-payment-scaling-target`,
       {
         maxCapacity: 10,
@@ -267,14 +271,14 @@ export class EcsComponent extends pulumi.ComponentResource {
     );
 
     // Create auto-scaling policy
-    new aws.appautoscaling.Policy(
+    this.scalingPolicy = new aws.appautoscaling.Policy(
       `${args.environment}-payment-scaling-policy`,
       {
         name: `${args.environment}-payment-cpu-scaling`,
         policyType: 'TargetTrackingScaling',
-        resourceId: scalingTarget.resourceId,
-        scalableDimension: scalingTarget.scalableDimension,
-        serviceNamespace: scalingTarget.serviceNamespace,
+        resourceId: this.scalingTarget.resourceId,
+        scalableDimension: this.scalingTarget.scalableDimension,
+        serviceNamespace: this.scalingTarget.serviceNamespace,
         targetTrackingScalingPolicyConfiguration: {
           targetValue: args.scalingCpuThreshold,
           predefinedMetricSpecification: {
@@ -287,9 +291,17 @@ export class EcsComponent extends pulumi.ComponentResource {
       resourceOpts
     );
 
+    // Alias for test compatibility
+    this.taskExecutionRole = this.executionRole;
+
     this.registerOutputs({
       taskDefinitionArn: this.taskDefinition.arn,
       serviceArn: this.service.id,
     });
+  }
+
+  // Helper method to get security group ID
+  public getSecurityGroupId(): pulumi.Output<string> {
+    return this.securityGroup.id;
   }
 }
