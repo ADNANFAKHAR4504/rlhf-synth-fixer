@@ -66,7 +66,7 @@ The model used `id` as a parameter name, which shadows Python's built-in `id()` 
 def __init__(
     self,
     scope: Construct,
-    id: str,  # ❌ Shadows Python built-in
+    id: str,  #  Shadows Python built-in
     environment_suffix: str,
     ...
 ):
@@ -78,7 +78,7 @@ def __init__(
 def __init__(
     self,
     scope: Construct,
-    stack_id: str,  # ✅ Renamed to avoid conflict
+    stack_id: str,  #  Renamed to avoid conflict
     environment_suffix: str,
     ...
 ):
@@ -104,13 +104,13 @@ The model attempted to import non-existent nested WAF rule statement classes. CD
 from cdktf_cdktf_provider_aws.wafv2_web_acl import (
     Wafv2WebAcl,
     Wafv2WebAclRule,
-    Wafv2WebAclRuleStatement,  # ❌ Does not exist
-    Wafv2WebAclRuleStatementIpSetReferenceStatement,  # ❌ Does not exist
-    Wafv2WebAclRuleStatementRateBasedStatement,  # ❌ Does not exist
-    Wafv2WebAclRuleStatementManagedRuleGroupStatement,  # ❌ Does not exist
-    Wafv2WebAclRuleStatementSqliMatchStatement,  # ❌ Does not exist
-    Wafv2WebAclRuleStatementGeoMatchStatement,  # ❌ Does not exist
-    Wafv2WebAclRuleStatementNotStatement,  # ❌ Does not exist
+    Wafv2WebAclRuleStatement,  #  Does not exist
+    Wafv2WebAclRuleStatementIpSetReferenceStatement,  #  Does not exist
+    Wafv2WebAclRuleStatementRateBasedStatement,  #  Does not exist
+    Wafv2WebAclRuleStatementManagedRuleGroupStatement,  #  Does not exist
+    Wafv2WebAclRuleStatementSqliMatchStatement,  #  Does not exist
+    Wafv2WebAclRuleStatementGeoMatchStatement,  #  Does not exist
+    Wafv2WebAclRuleStatementNotStatement,  #  Does not exist
     ...
 )
 ```
@@ -123,7 +123,7 @@ from cdktf_cdktf_provider_aws.wafv2_web_acl import (
     Wafv2WebAclRuleAction,
     Wafv2WebAclRuleActionBlock,
     Wafv2WebAclRuleActionAllow,
-    Wafv2WebAclRuleVisibilityConfig,  # ✅ Correct class
+    Wafv2WebAclRuleVisibilityConfig,  #  Correct class
     Wafv2WebAclDefaultAction,
     Wafv2WebAclVisibilityConfig,
 )
@@ -132,7 +132,7 @@ from cdktf_cdktf_provider_aws.wafv2_web_acl import (
 **Statement Configuration** (uses dictionaries):
 ```python
 statement={
-    "ip_set_reference_statement": {  # ✅ Dictionary, not class
+    "ip_set_reference_statement": {  #  Dictionary, not class
         "arn": self.ip_allowlist.arn,
     },
 }
@@ -154,7 +154,7 @@ The model used `Wafv2WebAclVisibilityConfig` (WebACL-level class) for rule-level
 
 **MODEL_RESPONSE**:
 ```python
-visibility_config=Wafv2WebAclVisibilityConfig(  # ❌ Wrong class
+visibility_config=Wafv2WebAclVisibilityConfig(  #  Wrong class
     cloudwatch_metrics_enabled=True,
     metric_name="IPAllowlistRule",
     sampled_requests_enabled=True,
@@ -163,7 +163,7 @@ visibility_config=Wafv2WebAclVisibilityConfig(  # ❌ Wrong class
 
 **IDEAL_RESPONSE** (Fixed):
 ```python
-visibility_config=Wafv2WebAclRuleVisibilityConfig(  # ✅ Correct class for rules
+visibility_config=Wafv2WebAclRuleVisibilityConfig(  #  Correct class for rules
     cloudwatch_metrics_enabled=True,
     metric_name="IPAllowlistRule",
     sampled_requests_enabled=True,
@@ -187,12 +187,12 @@ Used f-string prefix on strings that don't contain interpolation.
 **MODEL_RESPONSE** (Line 228):
 ```python
 name=f"aws-waf-logs-{self.environment_suffix}",  # Correct - has interpolation
-description=f"Office IP addresses"  # ❌ No interpolation needed
+description=f"Office IP addresses"  #  No interpolation needed
 ```
 
 **IDEAL_RESPONSE** (Fixed):
 ```python
-description="Office IP addresses for allowlisting"  # ✅ Removed unnecessary f prefix
+description="Office IP addresses for allowlisting"  #  Removed unnecessary f prefix
 ```
 
 **Impact**: LOW - Minor code style issue, no functional impact
@@ -224,7 +224,7 @@ Test files instantiated TapStack without required parameters.
 
 **MODEL_RESPONSE** (test files):
 ```python
-stack = TapStack(app, "test")  # ❌ Missing required parameters
+stack = TapStack(app, "test")  #  Missing required parameters
 ```
 
 **IDEAL_RESPONSE** (Fixed):
