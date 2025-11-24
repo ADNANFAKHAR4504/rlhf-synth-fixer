@@ -1,5 +1,9 @@
 # Multi-Region Disaster Recovery Solution - IDEAL RESPONSE
 
+**⚠️ IMPORTANT: CI/CD Pipeline Update Required**
+
+The code has been updated to use `payment-system-demo.com` instead of the reserved `payment-system.example.com` domain. However, if your CI/CD pipeline is explicitly passing `HostedZoneName=payment-system.example.com` as a parameter, you must update it to use `HostedZoneName=payment-system-demo.com` or your actual domain name.
+
 This document represents the corrected CloudFormation implementation for the multi-region disaster recovery solution, addressing all issues found in MODEL_RESPONSE.
 
 ## Implementation Overview

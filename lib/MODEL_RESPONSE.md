@@ -52,7 +52,7 @@ This implementation provides a complete CloudFormation template in JSON format f
     "HostedZoneName": {
       "Type": "String",
       "Description": "Route 53 hosted zone name (e.g., example.com)",
-      "Default": "payment-system.example.com"
+      "Default": "payment-system-demo.com"
     },
     "LambdaReservedConcurrency": {
       "Type": "Number",
@@ -65,15 +65,14 @@ This implementation provides a complete CloudFormation template in JSON format f
 
   "Conditions": {
     "IsPrimary": {
-      "Fn::Equals": [{"Ref": "IsPrimaryRegion"}, "true"]
+      "Fn::Equals": [{ "Ref": "IsPrimaryRegion" }, "true"]
     },
     "IsSecondary": {
-      "Fn::Not": [{"Condition": "IsPrimary"}]
+      "Fn::Not": [{ "Condition": "IsPrimary" }]
     }
   },
 
   "Resources": {
-
     "PaymentProcessingTable": {
       "Type": "AWS::DynamoDB::GlobalTable",
       "Properties": {
@@ -135,7 +134,7 @@ This implementation provides a complete CloudFormation template in JSON format f
             "Tags": [
               {
                 "Key": "Environment",
-                "Value": {"Ref": "EnvironmentName"}
+                "Value": { "Ref": "EnvironmentName" }
               },
               {
                 "Key": "Region",
@@ -148,18 +147,18 @@ This implementation provides a complete CloudFormation template in JSON format f
             ]
           },
           {
-            "Region": {"Ref": "SecondaryRegion"},
+            "Region": { "Ref": "SecondaryRegion" },
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
             },
             "Tags": [
               {
                 "Key": "Environment",
-                "Value": {"Ref": "EnvironmentName"}
+                "Value": { "Ref": "EnvironmentName" }
               },
               {
                 "Key": "Region",
-                "Value": {"Ref": "SecondaryRegion"}
+                "Value": { "Ref": "SecondaryRegion" }
               },
               {
                 "Key": "Service",
@@ -216,11 +215,11 @@ This implementation provides a complete CloudFormation template in JSON format f
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": { "Ref": "AWS::Region" }
           }
         ]
       }
@@ -253,10 +252,7 @@ This implementation provides a complete CloudFormation template in JSON format f
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "s3:GetReplicationConfiguration",
-                    "s3:ListBucket"
-                  ],
+                  "Action": ["s3:GetReplicationConfiguration", "s3:ListBucket"],
                   "Resource": {
                     "Fn::GetAtt": ["TransactionLogsBucket", "Arn"]
                   }
@@ -290,7 +286,7 @@ This implementation provides a complete CloudFormation template in JSON format f
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           }
         ]
       }
@@ -301,7 +297,7 @@ This implementation provides a complete CloudFormation template in JSON format f
       "Condition": "IsPrimary",
       "DependsOn": ["ReplicationRole"],
       "Properties": {
-        "Bucket": {"Ref": "TransactionLogsBucket"},
+        "Bucket": { "Ref": "TransactionLogsBucket" },
         "Role": {
           "Fn::GetAtt": ["ReplicationRole", "Arn"]
         },
@@ -351,20 +347,20 @@ This implementation provides a complete CloudFormation template in JSON format f
             "IsPrimary",
             [
               {
-                "Region": {"Ref": "SecondaryRegion"}
+                "Region": { "Ref": "SecondaryRegion" }
               }
             ],
-            {"Ref": "AWS::NoValue"}
+            { "Ref": "AWS::NoValue" }
           ]
         },
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": { "Ref": "AWS::Region" }
           }
         ]
       }
@@ -443,10 +439,7 @@ This implementation provides a complete CloudFormation template in JSON format f
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "s3:PutObject",
-                    "s3:PutObjectAcl"
-                  ],
+                  "Action": ["s3:PutObject", "s3:PutObjectAcl"],
                   "Resource": {
                     "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
                   }
@@ -458,7 +451,7 @@ This implementation provides a complete CloudFormation template in JSON format f
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           }
         ]
       }
@@ -477,11 +470,11 @@ This implementation provides a complete CloudFormation template in JSON format f
         },
         "Timeout": 30,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": {"Ref": "LambdaReservedConcurrency"},
+        "ReservedConcurrentExecutions": { "Ref": "LambdaReservedConcurrency" },
         "Environment": {
           "Variables": {
-            "REGION": {"Ref": "AWS::Region"},
-            "ENVIRONMENT": {"Ref": "EnvironmentName"},
+            "REGION": { "Ref": "AWS::Region" },
+            "ENVIRONMENT": { "Ref": "EnvironmentName" },
             "TABLE_NAME": {
               "Ref": "PaymentProcessingTable"
             },
@@ -491,7 +484,7 @@ This implementation provides a complete CloudFormation template in JSON format f
             "LOGS_BUCKET": {
               "Ref": "TransactionLogsBucket"
             },
-            "IS_PRIMARY": {"Ref": "IsPrimaryRegion"}
+            "IS_PRIMARY": { "Ref": "IsPrimaryRegion" }
           }
         },
         "Code": {
@@ -502,11 +495,11 @@ This implementation provides a complete CloudFormation template in JSON format f
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": { "Ref": "AWS::Region" }
           }
         ]
       }
@@ -554,7 +547,7 @@ This implementation provides a complete CloudFormation template in JSON format f
         "MemorySize": 256,
         "Environment": {
           "Variables": {
-            "REGION": {"Ref": "AWS::Region"},
+            "REGION": { "Ref": "AWS::Region" },
             "TABLE_NAME": {
               "Ref": "PaymentProcessingTable"
             }
@@ -566,11 +559,11 @@ This implementation provides a complete CloudFormation template in JSON format f
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": { "Ref": "AWS::Region" }
           }
         ]
       }
@@ -602,14 +595,14 @@ This implementation provides a complete CloudFormation template in JSON format f
       "Type": "AWS::Route53::HostedZone",
       "Condition": "IsPrimary",
       "Properties": {
-        "Name": {"Ref": "HostedZoneName"},
+        "Name": { "Ref": "HostedZoneName" },
         "HostedZoneConfig": {
           "Comment": "Hosted zone for multi-region payment processing system"
         },
         "HostedZoneTags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           },
           {
             "Key": "Service",
@@ -626,7 +619,15 @@ This implementation provides a complete CloudFormation template in JSON format f
           "Type": "HTTPS",
           "ResourcePath": "/",
           "FullyQualifiedDomainName": {
-            "Fn::Select": [2, {"Fn::Split": ["/", {"Fn::GetAtt": ["HealthCheckUrl", "FunctionUrl"]}]}]
+            "Fn::Select": [
+              2,
+              {
+                "Fn::Split": [
+                  "/",
+                  { "Fn::GetAtt": ["HealthCheckUrl", "FunctionUrl"] }
+                ]
+              }
+            ]
           },
           "Port": 443,
           "RequestInterval": 30,
@@ -641,7 +642,7 @@ This implementation provides a complete CloudFormation template in JSON format f
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": { "Ref": "AWS::Region" }
           }
         ]
       }
@@ -667,7 +668,15 @@ This implementation provides a complete CloudFormation template in JSON format f
         "TTL": "60",
         "ResourceRecords": [
           {
-            "Fn::Select": [2, {"Fn::Split": ["/", {"Fn::GetAtt": ["FunctionUrl", "FunctionUrl"]}]}]
+            "Fn::Select": [
+              2,
+              {
+                "Fn::Split": [
+                  "/",
+                  { "Fn::GetAtt": ["FunctionUrl", "FunctionUrl"] }
+                ]
+              }
+            ]
           }
         ],
         "HealthCheckId": {
@@ -685,18 +694,18 @@ This implementation provides a complete CloudFormation template in JSON format f
         "DisplayName": "Payment Processing Alerts",
         "Subscription": [
           {
-            "Endpoint": {"Ref": "AlertEmail"},
+            "Endpoint": { "Ref": "AlertEmail" },
             "Protocol": "email"
           }
         ],
         "Tags": [
           {
             "Key": "Environment",
-            "Value": {"Ref": "EnvironmentName"}
+            "Value": { "Ref": "EnvironmentName" }
           },
           {
             "Key": "Region",
-            "Value": {"Ref": "AWS::Region"}
+            "Value": { "Ref": "AWS::Region" }
           }
         ]
       }
@@ -996,7 +1005,7 @@ This implementation provides a complete CloudFormation template in JSON format f
 
 ## File: lib/README.md
 
-```markdown
+````markdown
 # Multi-Region Disaster Recovery Solution
 
 This CloudFormation template implements a comprehensive disaster recovery solution for a payment processing system spanning multiple AWS regions.
@@ -1038,11 +1047,12 @@ aws cloudformation create-stack \
     ParameterKey=IsPrimaryRegion,ParameterValue=true \
     ParameterKey=SecondaryRegion,ParameterValue=us-west-2 \
     ParameterKey=AlertEmail,ParameterValue=ops@example.com \
-    ParameterKey=HostedZoneName,ParameterValue=payment-system.example.com \
+    ParameterKey=HostedZoneName,ParameterValue=payment-system-demo.com \
     ParameterKey=LambdaReservedConcurrency,ParameterValue=100 \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
 ```
+````
 
 ### Deploy Secondary Region (us-west-2)
 
@@ -1056,7 +1066,7 @@ aws cloudformation create-stack \
     ParameterKey=IsPrimaryRegion,ParameterValue=false \
     ParameterKey=SecondaryRegion,ParameterValue=us-west-2 \
     ParameterKey=AlertEmail,ParameterValue=ops@example.com \
-    ParameterKey=HostedZoneName,ParameterValue=payment-system.example.com \
+    ParameterKey=HostedZoneName,ParameterValue=payment-system-demo.com \
     ParameterKey=LambdaReservedConcurrency,ParameterValue=100 \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-west-2
@@ -1207,7 +1217,7 @@ Update Route 53 weighted routing:
 ```bash
 # Get hosted zone ID
 ZONE_ID=$(aws route53 list-hosted-zones \
-  --query 'HostedZones[?Name==`payment-system.example.com.`].Id' \
+  --query 'HostedZones[?Name==`payment-system-demo.com.`].Id' \
   --output text)
 
 # Update weights (increase secondary, decrease primary)
@@ -1274,6 +1284,7 @@ aws s3 rm s3://transaction-logs-us-west-2-prod-001 --recursive --region us-west-
 ### Lambda Function Not Receiving Requests
 
 Check:
+
 1. Lambda function URL is accessible
 2. Function has correct IAM permissions
 3. Reserved concurrency is not set to 0
@@ -1282,6 +1293,7 @@ Check:
 ### DynamoDB Replication Issues
 
 Check:
+
 1. Global table status in both regions
 2. Table streams are enabled
 3. IAM permissions for replication
@@ -1290,6 +1302,7 @@ Check:
 ### S3 Replication Not Working
 
 Check:
+
 1. Replication role has correct permissions
 2. Versioning enabled on both buckets
 3. Destination bucket exists and is accessible
@@ -1298,6 +1311,7 @@ Check:
 ### Health Check Failing
 
 Check:
+
 1. Health check Lambda function is running
 2. Function URL is accessible over HTTPS
 3. Function timeout is adequate
@@ -1322,10 +1336,12 @@ All critical resource identifiers are exported as stack outputs:
 ## Support
 
 For issues or questions:
+
 1. Check CloudWatch logs for Lambda functions
 2. Review CloudWatch alarms for triggered alerts
 3. Verify SNS email notifications
 4. Check AWS Health Dashboard for service issues
+
 ```
 
 ## Deployment Validation
@@ -1369,3 +1385,4 @@ The template has been designed to satisfy all requirements:
 - On-demand billing prevents over-provisioning
 
 This implementation provides a production-ready disaster recovery solution that can be deployed immediately using standard AWS CloudFormation commands.
+```

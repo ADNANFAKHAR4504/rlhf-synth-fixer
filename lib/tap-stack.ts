@@ -327,7 +327,7 @@ def lambda_handler(event, context):
         body = json.loads(event.get('body', '{}'))
         
         # Retrieve API credentials from Secrets Manager
-        secret = secrets_client.get_secret_value(SecretArn=secret_arn)
+        secret = secrets_client.get_secret_value(SecretId=secret_arn)
         credentials = json.loads(secret['SecretString'])
         
         # Generate transaction ID

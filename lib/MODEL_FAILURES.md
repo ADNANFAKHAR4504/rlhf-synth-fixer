@@ -42,6 +42,7 @@ This document analyzes infrastructure generation issues in the original MODEL_RE
 **AWS Documentation Reference**: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-replicationconfiguration.html
 
 **Cost/Security/Performance Impact**:
+
 - Deployment blocker - stack creation would fail immediately with validation error
 - No cost impact as resources never created
 - Prevented disaster recovery solution from being deployable
@@ -67,6 +68,7 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
 **AWS Documentation Reference**: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/secretsmanager/client/get_secret_value.html
 
 **Cost/Security/Performance Impact**:
+
 - Lambda function failures - every invocation would throw parameter validation error
 - Security risk - application cannot retrieve credentials, preventing secure access to payment gateway
 - Cost impact: wasted Lambda invocations (each failure still billed)
@@ -77,6 +79,7 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: Created circular dependency between `TransactionLogsBucket` and `ReplicationRole`:
+
 - Bucket depended on ReplicationRole (via DependsOn)
 - ReplicationRole referenced Bucket ARN in IAM policy
 
@@ -106,6 +109,7 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
 **AWS Documentation Reference**: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dependson.html
 
 **Cost/Security/Performance Impact**:
+
 - Deployment blocker - stack creation fails with circular dependency error
 - No cost until issue fixed
 - Delays disaster recovery implementation
@@ -124,13 +128,18 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
 }
 ```
 
-**IDEAL_RESPONSE Fix**: Changed to a valid test domain that can be created.
+**IDEAL_RESPONSE Fix**: Changed to a valid test domain `payment-system-demo.com` that can be created.
 
 ```json
 "HostedZoneName": {
-  "Default": "payment-synth-test.net"
+  "Default": "payment-system-demo.com"
 }
 ```
+
+"Default": "payment-synth-test.net"
+}
+
+````
 
 **Root Cause**: Model used common documentation placeholder domain without considering AWS's restriction on creating hosted zones for reserved TLDs. While `example.com` is appropriate in documentation, it cannot be used in actual Route 53 hosted zone creation.
 
@@ -159,13 +168,14 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
   "Condition": "IsSecondary",
   ...
 }
-```
+````
 
 **Root Cause**: Model attempted to configure cross-region replication in a single-region deployment without ensuring destination bucket existence. CloudFormation cannot reference resources that don't exist in the current stack or region.
 
 **AWS Documentation Reference**: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference-conditions.html
 
 **Cost/Security/Performance Impact**:
+
 - Deployment complexity requiring multi-stage deployment
 - Increased testing and validation effort
 - Replication setup delayed until both regions deployed
@@ -191,6 +201,7 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
 **Root Cause**: Model didn't fully account for conditional resource existence when creating cross-references. Resources with conditions require conditional referencing to prevent "resource not found" errors during stack operations.
 
 **Cost/Security/Performance Impact**:
+
 - Secondary region deployment failures
 - Incomplete disaster recovery setup
 - Manual fixes required for each deployment
@@ -208,6 +219,7 @@ secret = secrets_client.get_secret_value(SecretId=secret_arn)
 **Root Cause**: Model over-engineered the replication setup beyond PROMPT requirements. While technically accurate, the complexity made initial deployment more fragile. A simpler approach of creating buckets first, then configuring replication separately, would be more robust.
 
 **Cost/Security/Performance Impact**:
+
 - Added S3 Replication Time Control cost (~$0.015 per GB)
 - Increased deployment complexity
 - Minor performance benefit (15-minute SLA)
