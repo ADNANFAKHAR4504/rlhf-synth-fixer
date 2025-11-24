@@ -49,7 +49,7 @@
     "HostedZoneName": {
       "Type": "String",
       "Description": "Route 53 hosted zone name (e.g., example.com)",
-      "Default": "payment-system.example.com"
+      "Default": "payment-system-demo.com"
     },
     "LambdaReservedConcurrency": {
       "Type": "Number",
