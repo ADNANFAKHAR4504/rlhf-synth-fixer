@@ -1,12 +1,12 @@
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
+import { BackupStack } from './backup-stack';
+import { ComputeStack } from './compute-stack';
+import { DatabaseStack } from './database-stack';
+import { MonitoringStack } from './monitoring-stack';
 import { NetworkStack } from './network-stack';
 import { SecurityStack } from './security-stack';
-import { DatabaseStack } from './database-stack';
-import { ComputeStack } from './compute-stack';
 import { StorageStack } from './storage-stack';
-import { MonitoringStack } from './monitoring-stack';
-import { BackupStack } from './backup-stack';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -45,7 +45,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environmentSuffix,
         tags,
-        kmsKeyId: securityStack.s3KmsKey.id,
+        kmsKeyId: securityStack.s3KmsKey.arn,
       },
       { parent: this }
     );
@@ -58,7 +58,7 @@ export class TapStack extends pulumi.ComponentResource {
         tags,
         vpcId: networkStack.vpcId,
         privateSubnetIds: networkStack.privateSubnetIds,
-        kmsKeyId: securityStack.rdsKmsKey.id,
+        kmsKeyId: securityStack.rdsKmsKey.arn,
       },
       { parent: this }
     );
@@ -69,7 +69,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environmentSuffix,
         tags,
-        kmsKeyId: securityStack.cloudwatchKmsKey.id,
+        kmsKeyId: securityStack.cloudwatchKmsKey.arn,
       },
       { parent: this }
     );
