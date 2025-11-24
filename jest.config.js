@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.unit.test.js', '**/*.int.test.js'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
@@ -18,10 +18,14 @@ module.exports = {
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
+    '<rootDir>/lib/**/*.json',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
+    '!<rootDir>/lib/**/MODEL_*.md',
+    '!<rootDir>/lib/**/PROMPT*.md',
+    '!<rootDir>/lib/**/IDEAL_*.md',
     '!<rootDir>/node_modules/**',
   ],
   coverageReporters: ['text', 'lcov', 'json-summary'],

@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "t2b3p1c4",
+  "team": "synth",
+  "startedAt": "2025-11-25T00:40:55+05:30",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "RDS",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "CloudFormation",
+    "ECR",
+    "SSM",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "IAM"
+  ],
+  "training_quality": 10
+}
