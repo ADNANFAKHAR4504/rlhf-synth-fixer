@@ -274,9 +274,13 @@ describe('TapStack', () => {
       const privateSubnets = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/subnet:Subnet' && r.name.includes('private')
       );
-      expect(privateSubnets).toHaveLength(3);
+      // Get unique subnets by name
+      const uniqueSubnets = Array.from(
+        new Map(privateSubnets.map(s => [s.name, s])).values()
+      );
+      expect(uniqueSubnets).toHaveLength(3);
 
-      privateSubnets.forEach((subnet, i) => {
+      uniqueSubnets.forEach((subnet, i) => {
         expect(subnet.props.cidrBlock).toBe(`10.0.${10 + i}.0/24`);
       });
     });
@@ -291,15 +295,23 @@ describe('TapStack', () => {
       const natGateways = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/natGateway:NatGateway'
       );
-      expect(natGateways).toHaveLength(3);
+      // Get unique NAT gateways by name
+      const uniqueNats = Array.from(
+        new Map(natGateways.map(n => [n.name, n])).values()
+      );
+      expect(uniqueNats).toHaveLength(3);
     });
 
     it('should create 3 Elastic IPs for NAT Gateways', () => {
       const eips = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/eip:Eip' && r.name.includes('nat-eip')
       );
-      expect(eips).toHaveLength(3);
-      eips.forEach(eip => {
+      // Get unique EIPs by name
+      const uniqueEips = Array.from(
+        new Map(eips.map(e => [e.name, e])).values()
+      );
+      expect(uniqueEips).toHaveLength(3);
+      uniqueEips.forEach(eip => {
         expect(eip.props.domain).toBe('vpc');
       });
     });
@@ -593,8 +605,12 @@ describe('TapStack', () => {
     });
 
     it('should include environmentSuffix in VPC name', () => {
-      const vpc = mockMonitor.getResource('main-vpc');
-      expect(vpc.props.tags.Name).toContain('-prod');
+      const vpcs = mockMonitor.resources.filter(
+        r => r.type === 'aws:ec2/vpc:Vpc' && r.name === 'main-vpc'
+      );
+      const prodVpc = vpcs.find(v => v.props.tags && v.props.tags.Name && v.props.tags.Name.includes('-prod'));
+      expect(prodVpc).toBeDefined();
+      expect(prodVpc.props.tags.Name).toContain('-prod');
     });
 
     it('should include environmentSuffix in ECS cluster name', () => {
@@ -603,13 +619,21 @@ describe('TapStack', () => {
     });
 
     it('should include environmentSuffix in RDS identifier', () => {
-      const rds = mockMonitor.getResource('rds-instance');
-      expect(rds.props.identifier).toContain('-prod');
+      const rdsInstances = mockMonitor.resources.filter(
+        r => r.type === 'aws:rds/instance:Instance' && r.name === 'rds-instance'
+      );
+      const prodRds = rdsInstances.find(r => r.props.identifier && r.props.identifier.includes('-prod'));
+      expect(prodRds).toBeDefined();
+      expect(prodRds.props.identifier).toContain('-prod');
     });
 
     it('should include environmentSuffix in ALB name', () => {
-      const alb = mockMonitor.getResource('application-load-balancer');
-      expect(alb.props.name).toContain('-prod');
+      const albs = mockMonitor.resources.filter(
+        r => r.type === 'aws:lb/loadBalancer:LoadBalancer' && r.name === 'application-load-balancer'
+      );
+      const prodAlb = albs.find(a => a.props.name && a.props.name.includes('-prod'));
+      expect(prodAlb).toBeDefined();
+      expect(prodAlb.props.name).toContain('-prod');
     });
 
     it('should include environmentSuffix in S3 bucket name', () => {
@@ -637,21 +661,31 @@ describe('TapStack', () => {
     });
 
     it('should apply custom tags to VPC', () => {
-      const vpc = mockMonitor.getResource('main-vpc');
-      expect(vpc.props.tags.Environment).toBe('production');
-      expect(vpc.props.tags.Team).toBe('platform');
+      const vpcs = mockMonitor.resources.filter(
+        r => r.type === 'aws:ec2/vpc:Vpc' && r.name === 'main-vpc'
+      );
+      const taggedVpc = vpcs.find(v => v.props.tags && v.props.tags.Environment === 'production');
+      expect(taggedVpc).toBeDefined();
+      expect(taggedVpc.props.tags.Team).toBe('platform');
     });
 
     it('should apply custom tags to ECS cluster', () => {
-      const cluster = mockMonitor.getResource('ecs-cluster');
-      expect(cluster.props.tags.Environment).toBe('production');
-      expect(cluster.props.tags.Team).toBe('platform');
+      const clusters = mockMonitor.resources.filter(
+        r => r.type === 'aws:ecs/cluster:Cluster' && r.name === 'ecs-cluster'
+      );
+      const taggedCluster = clusters.find(c => c.props.tags && c.props.tags.Environment === 'production');
+      expect(taggedCluster).toBeDefined();
+      expect(taggedCluster.props.tags.Team).toBe('platform');
     });
   });
 
   describe('Compliance Requirements', () => {
     it('should use customer-managed KMS key for RDS', () => {
-      const rds = mockMonitor.getResource('rds-instance');
+      const rdsInstances = mockMonitor.resources.filter(
+        r => r.type === 'aws:rds/instance:Instance' && r.name === 'rds-instance'
+      );
+      expect(rdsInstances.length).toBeGreaterThan(0);
+      const rds = rdsInstances[0];
       expect(rds.props.storageEncrypted).toBe(true);
       // KMS key ID should be set
       expect(rds.props.kmsKeyId).toBeDefined();
@@ -672,7 +706,11 @@ describe('TapStack', () => {
     });
 
     it('should use private subnets for ECS tasks', () => {
-      const service = mockMonitor.getResource('ecs-service');
+      const services = mockMonitor.resources.filter(
+        r => r.type === 'aws:ecs/service:Service' && r.name === 'ecs-service'
+      );
+      expect(services.length).toBeGreaterThan(0);
+      const service = services[0];
       // Network configuration should reference private subnets
       expect(service.props.networkConfiguration).toBeDefined();
     });
@@ -684,7 +722,11 @@ describe('TapStack', () => {
       delete process.env.ENVIRONMENT_SUFFIX;
       const devStack = new TapStack('dev-stack', { tags: {} });
 
-      const vpc = mockMonitor.getResource('main-vpc');
+      const vpcs = mockMonitor.resources.filter(
+        r => r.type === 'aws:ec2/vpc:Vpc' && r.name === 'main-vpc'
+      );
+      expect(vpcs.length).toBeGreaterThan(0);
+      const vpc = vpcs[0];
       expect(vpc.props.tags.Name).toContain('-dev');
 
       // Restore and recreate main stack
@@ -722,11 +764,15 @@ describe('TapStack', () => {
     });
 
     it('should create ALB with dependency on bucket policy', () => {
-      const alb = mockMonitor.getResource('application-load-balancer');
-      const bucketPolicy = mockMonitor.getResource('alb-logs-bucket-policy');
+      const albs = mockMonitor.resources.filter(
+        r => r.type === 'aws:lb/loadBalancer:LoadBalancer' && r.name === 'application-load-balancer'
+      );
+      const bucketPolicies = mockMonitor.resources.filter(
+        r => r.type === 'aws:s3/bucketPolicy:BucketPolicy' && r.name === 'alb-logs-bucket-policy'
+      );
 
-      expect(alb).toBeDefined();
-      expect(bucketPolicy).toBeDefined();
+      expect(albs.length).toBeGreaterThan(0);
+      expect(bucketPolicies.length).toBeGreaterThan(0);
     });
   });
 

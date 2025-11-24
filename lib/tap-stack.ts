@@ -574,7 +574,7 @@ export class TapStack extends pulumi.ComponentResource {
     const rdsSubnetGroup = new aws.rds.SubnetGroup(
       'rds-subnet-group',
       {
-        name: `fintech-rds-subnet-${environmentSuffix}`,
+        name: `fintech-rds-subnet-group-${environmentSuffix}`,
         subnetIds: privateSubnets.map(s => s.id),
         tags: {
           Name: `fintech-rds-subnet-${environmentSuffix}`,
@@ -683,7 +683,7 @@ export class TapStack extends pulumi.ComponentResource {
         targetType: 'ip',
         healthCheck: {
           enabled: true,
-          path: '/',
+          path: '/health',
           protocol: 'HTTP',
           matcher: '200-299',
           interval: 30,
