@@ -1,0 +1,10 @@
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: "dev2577"
+  TapStack:createDms: "false"
+  TapStack:createVpn: "false"
+  TapStack:oracleEndpoint: "onprem-oracle.example.com"
+  TapStack:customerGatewayIp: "203.0.113.1"
+  TapStack:dbPassword:
+    secure: v1:je22GS4qJn9WEDXt:eUAzsaA5stDjEtZ/+AWMgOE5mPjssQr3Lijlug==
+encryptionsalt: v1:Ws4kjXmYgjo=:v1:xxEtuaxR+CKb/lA2:xq8gLq+xPm0qpqDttSOfk26NPPpkUA==
