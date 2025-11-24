@@ -1,4 +1,8 @@
 """Pulumi program entry point for infrastructure migration."""  # pragma: no cover
+import sys  # pragma: no cover
+import os  # pragma: no cover
+# Add project root to path to allow imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # pragma: no cover
 import pulumi  # pragma: no cover
 from lib.tap_stack import TapStack  # pragma: no cover
 
