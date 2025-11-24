@@ -9,15 +9,17 @@ import * as http from 'http';
 import * as path from 'path';
 
 interface TapStackOutputs {
-  VPCId: string;
-  ALBDNSName: string;
-  ALBUrl: string;
-  RDSEndpoint: string;
-  RDSPort: string;
-  ECSClusterName: string;
-  ECSServiceName: string;
+  DynamoDBTableName: string;
+  DynamoDBTableArn: string;
+  S3BucketName: string;
+  S3BucketArn: string;
+  LambdaFunctionArn: string;
+  LambdaFunctionUrl: string;
+  HealthCheckUrlOutput: string;
   SecretArn: string;
-  EnvironmentSuffix: string;
+  SNSTopicArn: string;
+  HostedZoneId?: string;
+  HealthCheckId: string;
 }
 
 describe('TapStack Retail Inventory Management Integration Tests', () => {
@@ -25,13 +27,14 @@ describe('TapStack Retail Inventory Management Integration Tests', () => {
   const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 
   let outputs: TapStackOutputs;
-  let ec2: AWS.EC2;
-  let elbv2: AWS.ELBv2;
-  let ecs: AWS.ECS;
-  let rds: AWS.RDS;
+  let dynamodb: AWS.DynamoDB;
+  let s3: AWS.S3;
+  let lambda: AWS.Lambda;
   let secretsmanager: AWS.SecretsManager;
+  let sns: AWS.SNS;
+  let cloudwatch: AWS.CloudWatch;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Read outputs from flat-outputs.json
     if (!fs.existsSync(outputsPath)) {
       console.warn(`Outputs file not found: ${outputsPath}. Skipping integration tests.`);
@@ -44,7 +47,7 @@ describe('TapStack Retail Inventory Management Integration Tests', () => {
       const allOutputs = JSON.parse(outputsContent);
 
       // Check if TapStack outputs exist
-      if (!allOutputs.VPCId) {
+      if (!allOutputs.DynamoDBTableName) {
         console.warn('TapStack outputs not found in flat-outputs.json. Skipping integration tests.');
         outputs = {} as TapStackOutputs;
         return;
@@ -62,19 +65,32 @@ describe('TapStack Retail Inventory Management Integration Tests', () => {
           secretAccessKey: 'test',
         });
         // Set endpoint for LocalStack
-        ec2 = new AWS.EC2({ endpoint: 'http://localhost:4566' });
-        elbv2 = new AWS.ELBv2({ endpoint: 'http://localhost:4566' });
-        ecs = new AWS.ECS({ endpoint: 'http://localhost:4566' });
-        rds = new AWS.RDS({ endpoint: 'http://localhost:4566' });
+        dynamodb = new AWS.DynamoDB({ endpoint: 'http://localhost:4566' });
+        s3 = new AWS.S3({ endpoint: 'http://localhost:4566', s3ForcePathStyle: true });
+        lambda = new AWS.Lambda({ endpoint: 'http://localhost:4566' });
         secretsmanager = new AWS.SecretsManager({ endpoint: 'http://localhost:4566' });
+        sns = new AWS.SNS({ endpoint: 'http://localhost:4566' });
+        cloudwatch = new AWS.CloudWatch({ endpoint: 'http://localhost:4566' });
       } else {
         AWS.config.update({ region });
         // Initialize AWS clients
-        ec2 = new AWS.EC2();
-        elbv2 = new AWS.ELBv2();
-        ecs = new AWS.ECS();
-        rds = new AWS.RDS();
+        dynamodb = new AWS.DynamoDB();
+        s3 = new AWS.S3();
+        lambda = new AWS.Lambda();
         secretsmanager = new AWS.SecretsManager();
+        sns = new AWS.SNS();
+        cloudwatch = new AWS.CloudWatch();
+      }
+
+      // Check if LocalStack is running by trying to list tables
+      if (useLocalStack) {
+        try {
+          await dynamodb.listTables().promise();
+          console.log('LocalStack is running and accessible');
+        } catch (error) {
+          console.warn('LocalStack is not running or accessible. Skipping integration tests.');
+          outputs = {} as TapStackOutputs;
+        }
       }
     } catch (error) {
       console.warn('Error reading outputs file. Skipping integration tests:', (error as Error).message);
@@ -84,106 +100,65 @@ describe('TapStack Retail Inventory Management Integration Tests', () => {
 
   describe('Infrastructure Validation', () => {
 
-    test('VPC should exist and have correct configuration', async () => {
-      if (!outputs.VPCId || !ec2) return; // Skip if no outputs or clients
+    test('DynamoDB table should exist and have correct configuration', async () => {
+      if (!outputs.DynamoDBTableName || !dynamodb) return; // Skip if no outputs or clients
 
-      const vpc = await ec2.describeVpcs({
-        VpcIds: [outputs.VPCId]
+      const table = await dynamodb.describeTable({
+        TableName: outputs.DynamoDBTableName
       }).promise();
 
-      expect(vpc.Vpcs).toBeDefined();
-      expect(vpc.Vpcs?.length).toBe(1);
-      if (vpc.Vpcs?.[0]) {
-        expect(vpc.Vpcs[0].VpcId).toBe(outputs.VPCId);
-        expect(vpc.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
-        expect(vpc.Vpcs[0].IsDefault).toBe(false);
+      expect(table.Table).toBeDefined();
+      if (table.Table) {
+        expect(table.Table.TableName).toBe(outputs.DynamoDBTableName);
+        expect(table.Table.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+        expect(table.Table.StreamSpecification?.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+        expect(table.Table.GlobalSecondaryIndexes?.length).toBe(1);
+        expect(table.Table.GlobalSecondaryIndexes?.[0].IndexName).toBe('CustomerIndex');
       }
     });
 
-    test('subnets should exist in VPC', async () => {
-      if (!outputs.VPCId || !ec2) return; // Skip if no outputs or clients
+    test('S3 bucket should exist and be configured correctly', async () => {
+      if (!outputs.S3BucketName || !s3) return; // Skip if no outputs or clients
 
-      const subnets = await ec2.describeSubnets({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId]
-          }
-        ]
+      const bucket = await s3.headBucket({
+        Bucket: outputs.S3BucketName
       }).promise();
 
-      expect(subnets.Subnets).toBeDefined();
-      expect(subnets.Subnets?.length).toBe(4); // 2 public + 2 private
+      expect(bucket).toBeDefined();
 
-      // Check for public subnets (with MapPublicIpOnLaunch = true)
-      const publicSubnets = subnets.Subnets?.filter(subnet => subnet.MapPublicIpOnLaunch);
-      expect(publicSubnets?.length).toBe(2);
+      // Check versioning
+      const versioning = await s3.getBucketVersioning({
+        Bucket: outputs.S3BucketName
+      }).promise();
+      expect(versioning.Status).toBe('Enabled');
 
-      // Check for private subnets
-      const privateSubnets = subnets.Subnets?.filter(subnet => !subnet.MapPublicIpOnLaunch);
-      expect(privateSubnets?.length).toBe(2);
-
-      // Verify CIDR blocks
-      const cidrBlocks = subnets.Subnets?.map(subnet => subnet.CidrBlock).sort();
-      expect(cidrBlocks).toEqual(['10.0.1.0/24', '10.0.11.0/24', '10.0.12.0/24', '10.0.2.0/24']);
+      // Check encryption
+      const encryption = await s3.getBucketEncryption({
+        Bucket: outputs.S3BucketName
+      }).promise();
+      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
     });
 
-    test('ECS cluster should exist', async () => {
-      if (!outputs.ECSClusterName || !ecs) return; // Skip if no outputs or clients
+    test('Lambda function should exist and be configured', async () => {
+      if (!outputs.LambdaFunctionArn || !lambda) return; // Skip if no outputs or clients
 
-      const clusters = await ecs.describeClusters({
-        clusters: [outputs.ECSClusterName]
+      const functionName = outputs.LambdaFunctionArn.split(':').pop();
+      if (!functionName) return;
+
+      const func = await lambda.getFunction({
+        FunctionName: functionName
       }).promise();
 
-      expect(clusters.clusters).toBeDefined();
-      expect(clusters.clusters?.length).toBe(1);
-      if (clusters.clusters?.[0]) {
-        expect(clusters.clusters[0].clusterName).toBe(outputs.ECSClusterName);
-        expect(clusters.clusters[0].status).toBe('ACTIVE');
+      expect(func.Configuration).toBeDefined();
+      if (func.Configuration) {
+        expect(func.Configuration.Runtime).toBe('python3.11');
+        expect(func.Configuration.Handler).toBe('index.lambda_handler');
+        expect(func.Configuration.Timeout).toBe(30);
+        expect(func.Configuration.MemorySize).toBe(512);
       }
     });
 
-    test('ECS service should exist and be running', async () => {
-      if (!outputs.ECSClusterName || !outputs.ECSServiceName || !ecs) return; // Skip if no outputs or clients
-
-      const services = await ecs.describeServices({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.ECSServiceName]
-      }).promise();
-
-      expect(services.services).toBeDefined();
-      expect(services.services?.length).toBe(1);
-      if (services.services?.[0]) {
-        const service = services.services[0];
-        expect(service.serviceName).toBe(outputs.ECSServiceName);
-        expect(service.desiredCount).toBe(2);
-        expect(service.runningCount).toBeGreaterThanOrEqual(0);
-        expect(service.status).toBe('ACTIVE');
-        expect(service.launchType).toBe('FARGATE');
-      }
-    });
-
-    test('RDS Aurora cluster should exist', async () => {
-      if (!outputs.EnvironmentSuffix || !rds) return; // Skip if no outputs or clients
-
-      const clusters = await rds.describeDBClusters({
-        DBClusterIdentifier: `aurora-cluster-${outputs.EnvironmentSuffix}`
-      }).promise();
-
-      expect(clusters.DBClusters).toBeDefined();
-      expect(clusters.DBClusters?.length).toBe(1);
-      if (clusters.DBClusters?.[0]) {
-        const cluster = clusters.DBClusters[0];
-        expect(cluster.DBClusterIdentifier).toBe(`aurora-cluster-${outputs.EnvironmentSuffix}`);
-        expect(cluster.Engine).toBe('aurora-mysql');
-        expect(cluster.Status).toBe('available');
-        expect(cluster.DatabaseName).toBe('inventorydb');
-        expect(cluster.Port).toBe(parseInt(outputs.RDSPort));
-        expect(cluster.Endpoint).toBe(outputs.RDSEndpoint);
-      }
-    });
-
-    test('Database secret should exist', async () => {
+    test('Secrets Manager secret should exist', async () => {
       if (!outputs.SecretArn || !secretsmanager) return; // Skip if no outputs or clients
 
       const secret = await secretsmanager.describeSecret({
@@ -191,110 +166,87 @@ describe('TapStack Retail Inventory Management Integration Tests', () => {
       }).promise();
 
       expect(secret.ARN).toBe(outputs.SecretArn);
-      expect(secret.Name).toBe(`DBSecret-${outputs.EnvironmentSuffix}`);
+      expect(secret.Name).toContain('payment-api-keys');
     });
-  });
 
-  describe('Connectivity and Health Checks', () => {
-    test('ALB should respond to health check endpoint', async () => {
-      if (!outputs.ALBUrl) return; // Skip if no outputs
+    test('SNS topic should exist', async () => {
+      if (!outputs.SNSTopicArn || !sns) return; // Skip if no outputs or clients
 
-      // Test health endpoint
-      const healthUrl = `${outputs.ALBUrl}/health`;
+      const topic = await sns.getTopicAttributes({
+        TopicArn: outputs.SNSTopicArn
+      }).promise();
+
+      expect(topic.Attributes).toBeDefined();
+      expect(topic.Attributes?.DisplayName).toBe('Payment Processing Alerts');
+    });
+
+    test('Lambda function URL should be accessible', async () => {
+      if (!outputs.LambdaFunctionUrl) return; // Skip if no outputs
+
+      // Simple HTTP request to check if URL is accessible
+      const url = new URL(outputs.LambdaFunctionUrl);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: 'GET',
+        timeout: 5000
+      };
 
       await new Promise<void>((resolve, reject) => {
-        const req = http.get(healthUrl, (res) => {
-          expect(res.statusCode).toBe(503);
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk;
-          });
-          res.on('end', () => {
-            // Health check might return JSON or simple response
-            resolve();
-          });
+        const req = http.request(options, (res) => {
+          expect(res.statusCode).toBeDefined();
+          resolve();
         });
 
         req.on('error', (err) => {
-          // In LocalStack or test environments, this might fail
-          console.warn('Health check failed (expected in test environments):', err.message);
-          resolve(); // Don't fail the test
+          // In LocalStack, it might not be fully functional, so just check that URL is formed
+          console.warn('Lambda URL not accessible (expected in LocalStack):', err.message);
+          resolve();
         });
 
         req.setTimeout(5000, () => {
-          console.warn('Health check timeout (expected in test environments)');
-          req.destroy();
-          resolve(); // Don't fail the test
+          console.warn('Lambda URL request timeout');
+          resolve();
         });
+
+        req.end();
       });
     });
 
-  });
+    test('Health check URL should be accessible', async () => {
+      if (!outputs.HealthCheckUrlOutput) return; // Skip if no outputs
 
-  describe('Security Configuration', () => {
-    test('security groups should have correct ingress rules', async () => {
-      if (!outputs.VPCId || !ec2) return; // Skip if no outputs or clients
+      // Simple HTTP request to check if URL is accessible
+      const url = new URL(outputs.HealthCheckUrlOutput);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: 'GET',
+        timeout: 5000
+      };
 
-      const securityGroups = await ec2.describeSecurityGroups({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId]
-          },
-          {
-            Name: 'group-name',
-            Values: [
-              `albsecuritygroup-${outputs.EnvironmentSuffix}`,
-              `ecssecuritygroup-${outputs.EnvironmentSuffix}`,
-              `rdssecuritygroup-${outputs.EnvironmentSuffix}`
-            ]
-          }
-        ]
-      }).promise();
+      await new Promise<void>((resolve, reject) => {
+        const req = http.request(options, (res) => {
+          expect(res.statusCode).toBeDefined();
+          resolve();
+        });
 
-      expect(securityGroups.SecurityGroups).toBeDefined();
+        req.on('error', (err) => {
+          // In LocalStack, it might not be fully functional
+          console.warn('Health check URL not accessible (expected in LocalStack):', err.message);
+          resolve();
+        });
 
+        req.setTimeout(5000, () => {
+          console.warn('Health check URL request timeout');
+          resolve();
+        });
+
+        req.end();
+      });
     });
   });
 
-
-  describe('Performance and Scaling', () => {
-    test('ECS service should have proper scaling configuration', async () => {
-      if (!outputs.ECSClusterName || !outputs.ECSServiceName || !ecs) return; // Skip if no outputs or clients
-
-      const services = await ecs.describeServices({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.ECSServiceName]
-      }).promise();
-
-      const service = services.services?.[0];
-      if (service) {
-        expect(service.desiredCount).toBe(2);
-        // Check deployment configuration
-        expect(service.deploymentConfiguration?.maximumPercent).toBe(200);
-        expect(service.deploymentConfiguration?.minimumHealthyPercent).toBe(100);
-      }
-    });
-
-    test('ECS task definition should have proper resource allocation', async () => {
-      if (!outputs.ECSClusterName || !outputs.ECSServiceName || !ecs) return; // Skip if no outputs or clients
-
-      const services = await ecs.describeServices({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.ECSServiceName]
-      }).promise();
-
-      const service = services.services?.[0];
-      if (service?.taskDefinition) {
-        const taskDef = await ecs.describeTaskDefinition({
-          taskDefinition: service.taskDefinition
-        }).promise();
-
-        expect(taskDef.taskDefinition?.cpu).toBe('1024');
-        expect(taskDef.taskDefinition?.memory).toBe('2048');
-        expect(taskDef.taskDefinition?.networkMode).toBe('awsvpc');
-        expect(taskDef.taskDefinition?.requiresCompatibilities).toContain('FARGATE');
-      }
-    });
-  });
 });

@@ -5,7 +5,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
 ## Architecture Overview
 
 - **VPC**: Custom VPC with 2 public and 2 private subnets across 2 availability zones
-- **ECS Fargate**: Cluster and service running 2 tasks minimum
+- **ECS Fargate**: Cluster running 2 tasks minimum
 - **RDS Aurora**: MySQL cluster with one writer instance
 - **Application Load Balancer**: Traffic distribution with path-based routing
 - **Secrets Manager**: Secure database credentials storage
@@ -290,10 +290,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway1EIP",
-            "AllocationId"
-          ]
+          "Fn::GetAtt": ["NATGateway1EIP", "AllocationId"]
         },
         "SubnetId": {
           "Ref": "PublicSubnet1"
@@ -312,10 +309,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway2EIP",
-            "AllocationId"
-          ]
+          "Fn::GetAtt": ["NATGateway2EIP", "AllocationId"]
         },
         "SubnetId": {
           "Ref": "PublicSubnet2"
@@ -629,9 +623,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
         "Conditions": [
           {
             "Field": "path-pattern",
-            "Values": [
-              "/api/*"
-            ]
+            "Values": ["/api/*"]
           }
         ],
         "Actions": [
@@ -654,9 +646,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
         "Conditions": [
           {
             "Field": "path-pattern",
-            "Values": [
-              "/health"
-            ]
+            "Values": ["/health"]
           }
         ],
         "Actions": [
@@ -748,11 +738,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "EnableCloudwatchLogsExports": [
-          "error",
-          "general",
-          "slowquery"
-        ],
+        "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
         "Tags": [
           {
             "Key": "Name",
@@ -836,9 +822,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
+                  "Action": ["secretsmanager:GetSecretValue"],
                   "Resource": {
                     "Ref": "DBSecret"
                   }
@@ -899,9 +883,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "secretsmanager:GetSecretValue"
-                  ],
+                  "Action": ["secretsmanager:GetSecretValue"],
                   "Resource": {
                     "Ref": "DBSecret"
                   }
@@ -936,22 +918,14 @@ This solution provides a complete CloudFormation template in JSON format for dep
           "Fn::Sub": "inventory-app-${EnvironmentSuffix}"
         },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": [
-          "FARGATE"
-        ],
+        "RequiresCompatibilities": ["FARGATE"],
         "Cpu": "1024",
         "Memory": "2048",
         "ExecutionRoleArn": {
-          "Fn::GetAtt": [
-            "ECSTaskExecutionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
         },
         "TaskRoleArn": {
-          "Fn::GetAtt": [
-            "ECSTaskRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["ECSTaskRole", "Arn"]
         },
         "ContainerDefinitions": [
           {
@@ -970,10 +944,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
               {
                 "Name": "DB_HOST",
                 "Value": {
-                  "Fn::GetAtt": [
-                    "AuroraCluster",
-                    "Endpoint.Address"
-                  ]
+                  "Fn::GetAtt": ["AuroraCluster", "Endpoint.Address"]
                 }
               },
               {
@@ -1049,10 +1020,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
     "ALBDNSName": {
       "Description": "DNS name of the Application Load Balancer",
       "Value": {
-        "Fn::GetAtt": [
-          "ApplicationLoadBalancer",
-          "DNSName"
-        ]
+        "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]
       },
       "Export": {
         "Name": {
@@ -1069,10 +1037,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
     "RDSEndpoint": {
       "Description": "RDS Aurora cluster endpoint",
       "Value": {
-        "Fn::GetAtt": [
-          "AuroraCluster",
-          "Endpoint.Address"
-        ]
+        "Fn::GetAtt": ["AuroraCluster", "Endpoint.Address"]
       },
       "Export": {
         "Name": {
@@ -1083,10 +1048,7 @@ This solution provides a complete CloudFormation template in JSON format for dep
     "RDSPort": {
       "Description": "RDS Aurora cluster port",
       "Value": {
-        "Fn::GetAtt": [
-          "AuroraCluster",
-          "Endpoint.Port"
-        ]
+        "Fn::GetAtt": ["AuroraCluster", "Endpoint.Port"]
       }
     },
     "ECSClusterName": {

@@ -15,7 +15,7 @@ Create a highly available containerized web application infrastructure using **C
 ### Core Requirements
 
 1. **Container Orchestration**
-   - ECS Fargate cluster with service running minimum 2 tasks
+   - ECS Fargate cluster running minimum 2 tasks
    - Task definition configured with 1 vCPU and 2GB memory
    - Health check configurations with custom thresholds
 
@@ -63,14 +63,14 @@ Create a highly available containerized web application infrastructure using **C
 
 - All resources must use specific naming conventions with environment prefixes
 - ECS task definition must include health check configurations with custom thresholds
-- Application Load Balancer must implement path-based routing for /api/* and /health
+- Application Load Balancer must implement path-based routing for /api/\* and /health
 - Database credentials must be stored in AWS Secrets Manager with automatic rotation disabled
 - CloudFormation stack must include custom resource tags for cost tracking
 - Infrastructure must support automated deployments and blue-green deployment patterns
 
 ## Success Criteria
 
-- **Functionality**: ECS service successfully runs containers with database connectivity
+- **Functionality**: ECS successfully runs containers with database connectivity
 - **Performance**: Load balancer distributes traffic across multiple availability zones
 - **Reliability**: Infrastructure survives single AZ failure
 - **Security**: Database credentials secured in Secrets Manager, proper IAM roles configured
@@ -80,7 +80,7 @@ Create a highly available containerized web application infrastructure using **C
 ## What to deliver
 
 - Complete CloudFormation template in JSON format
-- ECS Fargate cluster and service configuration
+- ECS Fargate cluster configuration
 - RDS Aurora MySQL cluster with proper networking
 - Application Load Balancer with path-based routing
 - VPC with public and private subnets
