@@ -188,9 +188,7 @@ class TapStack(pulumi.ComponentResource):
                     name="customer-timestamp-index",
                     hash_key="customer_id",
                     range_key="timestamp",
-                    projection=aws.dynamodb.TableGlobalSecondaryIndexProjectionArgs(
-                        projection_type="ALL"
-                    )
+                    projection_type="ALL"
                 )
             ],
             tags=self.tags,
@@ -215,9 +213,7 @@ class TapStack(pulumi.ComponentResource):
                 aws.dynamodb.TableGlobalSecondaryIndexArgs(
                     name="risk-score-index",
                     hash_key="risk_score",
-                    projection=aws.dynamodb.TableGlobalSecondaryIndexProjectionArgs(
-                        projection_type="ALL"
-                    )
+                    projection_type="ALL"
                 )
             ],
             tags=self.tags,
