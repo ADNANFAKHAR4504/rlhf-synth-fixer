@@ -17,8 +17,9 @@ variable "primary_region" {
 }
 
 variable "notification_email" {
-  description = "Email address for compliance notifications"
+  description = "Email address for compliance notifications (optional - if not provided, no email subscription will be created)"
   type        = string
+  default     = null
 }
 
 variable "config_delivery_frequency" {

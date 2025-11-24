@@ -39,8 +39,9 @@ resource "aws_sns_topic_policy" "compliance_notifications" {
   })
 }
 
-# Email subscription
+# Email subscription (only created if notification_email is provided)
 resource "aws_sns_topic_subscription" "compliance_email" {
+  count     = var.notification_email != null ? 1 : 0
   provider  = aws.primary
   topic_arn = aws_sns_topic.compliance_notifications.arn
   protocol  = "email"
