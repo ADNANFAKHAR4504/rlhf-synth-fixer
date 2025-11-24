@@ -1,7 +1,8 @@
 """TAP Stack module for CDKTF Python serverless webhook processing infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn
+from cdktf import TerraformStack, S3Backend, Fn, TerraformAsset, AssetType
 from constructs import Construct
+import os
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
@@ -409,15 +410,25 @@ class TapStack(TerraformStack):
         )
 
         # ===================================================================
-        # Lambda Function: Webhook Validator (Container Image)
+        # Lambda Function: Webhook Validator (Placeholder - update to container later)
         # ===================================================================
+        # Create placeholder Lambda code asset
+        webhook_asset = TerraformAsset(
+            self,
+            "webhook_validator_asset",
+            path=os.path.join(os.path.dirname(__file__), "..", "lambda_placeholder"),
+            type=AssetType.ARCHIVE
+        )
+        
         webhook_validator = LambdaFunction(
             self,
             "webhook_validator",
             function_name=f"webhook-validator-{environment_suffix}",
             role=lambda_role.arn,
-            package_type="Image",
-            image_uri=f"{webhook_validator_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            filename=webhook_asset.path,
+            source_code_hash=webhook_asset.asset_hash,
             memory_size=1024,
             timeout=30,
             architectures=["arm64"],  # ARM-based Graviton2
@@ -433,21 +444,31 @@ class TapStack(TerraformStack):
                 "mode": "Active"  # Enable X-Ray tracing
             },
             lifecycle={
-                "ignore_changes": ["image_uri"]
+                "ignore_changes": ["filename", "source_code_hash"]
             },
             depends_on=[webhook_validator_logs]
         )
 
         # ===================================================================
-        # Lambda Function: Fraud Detector (Container Image)
+        # Lambda Function: Fraud Detector (Placeholder - update to container later)
         # ===================================================================
+        # Create placeholder Lambda code asset
+        fraud_asset = TerraformAsset(
+            self,
+            "fraud_detector_asset",
+            path=os.path.join(os.path.dirname(__file__), "..", "lambda_placeholder"),
+            type=AssetType.ARCHIVE
+        )
+        
         fraud_detector = LambdaFunction(
             self,
             "fraud_detector",
             function_name=f"fraud-detector-{environment_suffix}",
             role=lambda_role.arn,
-            package_type="Image",
-            image_uri=f"{fraud_detector_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            filename=fraud_asset.path,
+            source_code_hash=fraud_asset.asset_hash,
             memory_size=512,
             timeout=60,
             architectures=["arm64"],  # ARM-based Graviton2
@@ -461,21 +482,31 @@ class TapStack(TerraformStack):
                 "mode": "Active"  # Enable X-Ray tracing
             },
             lifecycle={
-                "ignore_changes": ["image_uri"]
+                "ignore_changes": ["filename", "source_code_hash"]
             },
             depends_on=[fraud_detector_logs]
         )
 
         # ===================================================================
-        # Lambda Function: Transaction Archival
+        # Lambda Function: Transaction Archival (Placeholder - update to container later)
         # ===================================================================
+        # Create placeholder Lambda code asset
+        archival_asset = TerraformAsset(
+            self,
+            "archival_function_asset",
+            path=os.path.join(os.path.dirname(__file__), "..", "lambda_placeholder"),
+            type=AssetType.ARCHIVE
+        )
+        
         archival_function = LambdaFunction(
             self,
             "transaction_archival",
             function_name=f"transaction-archival-{environment_suffix}",
             role=lambda_role.arn,
-            package_type="Image",
-            image_uri=f"{archival_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            filename=archival_asset.path,
+            source_code_hash=archival_asset.asset_hash,
             memory_size=512,
             timeout=300,  # 5 minutes for batch processing
             architectures=["arm64"],  # ARM-based Graviton2
@@ -489,7 +520,7 @@ class TapStack(TerraformStack):
                 "mode": "Active"  # Enable X-Ray tracing
             },
             lifecycle={
-                "ignore_changes": ["image_uri"]
+                "ignore_changes": ["filename", "source_code_hash"]
             },
             depends_on=[archival_logs]
         )
