@@ -108,10 +108,63 @@ resource "aws_kms_key_policy" "main" {
           "kms:GenerateDataKey*",
           "kms:GenerateDataKeyWithoutPlaintext",
           "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
           "kms:RetireGrant",
           "kms:DescribeKey"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "ec2.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      },
+      {
+        Sid    = "Allow Auto Scaling service to create grants for AWS resources"
+        Effect = "Allow"
+        Principal = {
+          Service = "autoscaling.amazonaws.com"
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
+          "kms:RetireGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "Allow Auto Scaling service-linked role to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
+          "kms:RetireGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
       },
       {
         Sid    = "Allow EBS service to use the key"
@@ -566,7 +619,7 @@ resource "aws_launch_template" "critical" {
       volume_size           = 20
       volume_type           = "gp3"
       encrypted             = true
-      kms_key_id            = aws_kms_key.main.arn
+      kms_key_id            = aws_kms_key.main.id
       delete_on_termination = true
     }
   }
@@ -662,7 +715,7 @@ resource "aws_launch_template" "general" {
       volume_size           = 20
       volume_type           = "gp3"
       encrypted             = true
-      kms_key_id            = aws_kms_key.main.arn
+      kms_key_id            = aws_kms_key.main.id
       delete_on_termination = true
     }
   }
