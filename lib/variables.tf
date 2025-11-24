@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming (REQUIRED for uniqueness)"
   type        = string
+  default     = "default"
 
   validation {
     condition     = length(var.environment_suffix) > 0
