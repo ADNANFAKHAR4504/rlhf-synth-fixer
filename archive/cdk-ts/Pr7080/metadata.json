@@ -22,5 +22,11 @@
     "CloudWatch Logs",
     "X-Ray",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
