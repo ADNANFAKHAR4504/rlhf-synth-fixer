@@ -1,0 +1,23 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "p7e5c1n7",
+  "team": "synth",
+  "startedAt": "2025-11-25T01:49:00-08:00",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Use nested stacks with a master template that orchestrates environment deployments",
+    "Implement parameter mappings for environment-specific values without hardcoding",
+    "All S3 buckets must have versioning enabled and lifecycle policies for 30-day transitions to Glacier",
+    "RDS instances must use encrypted storage with automated backups retained for 7 days minimum",
+    "Lambda functions must use environment variables for configuration, never hardcoded values",
+    "VPC CIDR blocks must not overlap between environments (10.0.0.0/16 for dev, 10.1.0.0/16 for staging, 10.2.0.0/16 for prod)",
+    "All resources must be tagged with Environment, Project, and CostCenter tags",
+    "Use Conditions to control resource creation based on environment type",
+    "Implement CloudFormation StackSets for cross-region replication capability"
+  ],
+  "aws_services": ["VPC", "RDS", "Lambda", "S3", "DynamoDB", "CloudWatch", "SNS", "NAT Gateway", "IAM", "Secrets Manager"],
+  "training_quality": 10
+}
