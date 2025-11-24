@@ -4,6 +4,8 @@
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "startedAt": "2025-11-24T06:20:50+00:00",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [

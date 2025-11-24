@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid conflicts"
   type        = string
+  default     = "dev"
 }
 
 variable "primary_region" {
