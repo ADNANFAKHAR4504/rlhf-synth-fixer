@@ -14,6 +14,12 @@ outputs_path = Path.cwd() / "cfn-outputs" / "flat-outputs.json"
 with open(outputs_path, "r", encoding="utf-8") as f:
     outputs = json.load(f)
 
+# Handle nested CDKTF output structure (e.g., {"TapStackpr7101": {...}})
+# If outputs has a single key that looks like a stack name, use its value
+if len(outputs) == 1 and list(outputs.keys())[0].startswith("TapStack"):
+    stack_name = list(outputs.keys())[0]
+    outputs = outputs[stack_name]
+
 # Extract outputs
 vpc_id = outputs["vpc_id"]
 aurora_cluster_id = outputs["aurora_cluster_id"]
