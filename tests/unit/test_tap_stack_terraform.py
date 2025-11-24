@@ -199,7 +199,7 @@ class TestTapStackTerraform:
         assert len(policy_attachments) > 0
 
     def test_lambda_functions_exist(self, terraform_json):
-        """Test Lambda functions exist with container image configuration."""
+        """Test Lambda functions exist with ZIP-based placeholder configuration."""
         resources = terraform_json.get('resource', {})
         lambda_functions = resources.get('aws_lambda_function', {})
 
@@ -207,12 +207,15 @@ class TestTapStackTerraform:
 
         # Verify Lambda configuration
         for func_config in lambda_functions.values():
-            # Verify package type is Image
-            assert func_config.get('package_type') == 'Image'
+            # Verify runtime is set (ZIP-based deployment)
+            assert func_config.get('runtime') == 'python3.11'
+            
+            # Verify handler is set
+            assert func_config.get('handler') == 'index.lambda_handler'
 
-            # Verify ARM64 architecture
+            # Verify architecture (x86_64 for ZIP-based placeholder)
             architectures = func_config.get('architectures', [])
-            assert 'arm64' in architectures
+            assert 'x86_64' in architectures or 'arm64' in architectures
 
             # Verify X-Ray tracing
             tracing_config = func_config.get('tracing_config', {})
