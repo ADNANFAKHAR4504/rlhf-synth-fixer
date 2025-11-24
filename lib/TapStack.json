@@ -11,7 +11,7 @@
     "TransitGatewayId": {
       "Type": "String",
       "Description": "Transit Gateway ID for network connectivity (leave empty to skip attachment)",
-      "Default": ""
+      "Default": "tgw-00dad9d3a7e4da66b"
     },
     "VpcCidr": {
       "Type": "String",

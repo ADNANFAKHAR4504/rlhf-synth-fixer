@@ -20,7 +20,7 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
     "TransitGatewayId": {
       "Type": "String",
       "Description": "Transit Gateway ID for network connectivity (leave empty to skip attachment)",
-      "Default": ""
+      "Default": "tgw-00dad9d3a7e4da66b"
     },
     "VpcCidr": {
       "Type": "String",
@@ -439,12 +439,19 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           "Fn::Sub": "firewall-policy-${EnvironmentSuffix}"
         },
         "FirewallPolicy": {
-          "StatelessDefaultActions": ["aws:forward_to_sfe"],
-          "StatelessFragmentDefaultActions": ["aws:forward_to_sfe"],
+          "StatelessDefaultActions": [
+            "aws:forward_to_sfe"
+          ],
+          "StatelessFragmentDefaultActions": [
+            "aws:forward_to_sfe"
+          ],
           "StatefulRuleGroupReferences": [
             {
               "ResourceArn": {
-                "Fn::GetAtt": ["NetworkFirewallRuleGroup", "RuleGroupArn"]
+                "Fn::GetAtt": [
+                  "NetworkFirewallRuleGroup",
+                  "RuleGroupArn"
+                ]
               }
             }
           ]
@@ -466,7 +473,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           "Fn::Sub": "network-firewall-${EnvironmentSuffix}"
         },
         "FirewallPolicyArn": {
-          "Fn::GetAtt": ["NetworkFirewallPolicy", "FirewallPolicyArn"]
+          "Fn::GetAtt": [
+            "NetworkFirewallPolicy",
+            "FirewallPolicyArn"
+          ]
         },
         "VpcId": {
           "Ref": "VPC"
@@ -614,7 +624,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "Principal": {
                 "Service": "s3.amazonaws.com"
               },
-              "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
               "Resource": "*"
             },
             {
@@ -623,7 +636,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "Principal": {
                 "Service": "vpc-flow-logs.amazonaws.com"
               },
-              "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
               "Resource": "*"
             },
             {
@@ -632,7 +648,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "Principal": {
                 "Service": "config.amazonaws.com"
               },
-              "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
               "Resource": "*"
             }
           ]
@@ -746,14 +765,19 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": ["s3:GetObject", "s3:PutObject"],
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
                   "Resource": {
                     "Fn::Sub": "arn:aws:s3:::payment-processing-${EnvironmentSuffix}/*"
                   }
                 },
                 {
                   "Effect": "Allow",
-                  "Action": ["s3:ListBucket"],
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
                   "Resource": {
                     "Fn::Sub": "arn:aws:s3:::payment-processing-${EnvironmentSuffix}"
                   }
@@ -768,13 +792,22 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": ["EBSKMSKey", "Arn"]
+                      "Fn::GetAtt": [
+                        "EBSKMSKey",
+                        "Arn"
+                      ]
                     },
                     {
-                      "Fn::GetAtt": ["S3KMSKey", "Arn"]
+                      "Fn::GetAtt": [
+                        "S3KMSKey",
+                        "Arn"
+                      ]
                     }
                   ]
                 }
@@ -817,7 +850,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
                 "KMSMasterKeyID": {
-                  "Fn::GetAtt": ["S3KMSKey", "Arn"]
+                  "Fn::GetAtt": [
+                    "S3KMSKey",
+                    "Arn"
+                  ]
                 }
               }
             }
@@ -885,7 +921,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               },
               "Action": "s3:GetBucketAcl",
               "Resource": {
-                "Fn::GetAtt": ["VPCFlowLogsBucket", "Arn"]
+                "Fn::GetAtt": [
+                  "VPCFlowLogsBucket",
+                  "Arn"
+                ]
               }
             }
           ]
@@ -903,7 +942,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
         "TrafficType": "ALL",
         "LogDestinationType": "s3",
         "LogDestination": {
-          "Fn::GetAtt": ["VPCFlowLogsBucket", "Arn"]
+          "Fn::GetAtt": [
+            "VPCFlowLogsBucket",
+            "Arn"
+          ]
         },
         "Tags": [
           {
@@ -927,7 +969,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
                 "KMSMasterKeyID": {
-                  "Fn::GetAtt": ["S3KMSKey", "Arn"]
+                  "Fn::GetAtt": [
+                    "S3KMSKey",
+                    "Arn"
+                  ]
                 }
               }
             }
@@ -970,7 +1015,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               },
               "Action": "s3:GetBucketAcl",
               "Resource": {
-                "Fn::GetAtt": ["ConfigBucket", "Arn"]
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
               }
             },
             {
@@ -981,7 +1029,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
               },
               "Action": "s3:ListBucket",
               "Resource": {
-                "Fn::GetAtt": ["ConfigBucket", "Arn"]
+                "Fn::GetAtt": [
+                  "ConfigBucket",
+                  "Arn"
+                ]
               }
             },
             {
@@ -1040,7 +1091,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": ["ConfigBucket", "Arn"]
+                      "Fn::GetAtt": [
+                        "ConfigBucket",
+                        "Arn"
+                      ]
                     },
                     {
                       "Fn::Sub": "${ConfigBucket.Arn}/*"
@@ -1068,7 +1122,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
           "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
         },
         "RoleARN": {
-          "Fn::GetAtt": ["ConfigRole", "Arn"]
+          "Fn::GetAtt": [
+            "ConfigRole",
+            "Arn"
+          ]
         },
         "RecordingGroup": {
           "AllSupported": true,
@@ -1287,7 +1344,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
     "EBSKMSKeyArn": {
       "Description": "EBS KMS Key ARN",
       "Value": {
-        "Fn::GetAtt": ["EBSKMSKey", "Arn"]
+        "Fn::GetAtt": [
+          "EBSKMSKey",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -1298,7 +1358,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
     "S3KMSKeyArn": {
       "Description": "S3 KMS Key ARN",
       "Value": {
-        "Fn::GetAtt": ["S3KMSKey", "Arn"]
+        "Fn::GetAtt": [
+          "S3KMSKey",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -1309,7 +1372,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
     "RDSKMSKeyArn": {
       "Description": "RDS KMS Key ARN",
       "Value": {
-        "Fn::GetAtt": ["RDSKMSKey", "Arn"]
+        "Fn::GetAtt": [
+          "RDSKMSKey",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -1320,7 +1386,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
     "EC2InstanceRoleArn": {
       "Description": "EC2 Instance Role ARN",
       "Value": {
-        "Fn::GetAtt": ["EC2InstanceRole", "Arn"]
+        "Fn::GetAtt": [
+          "EC2InstanceRole",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -1331,7 +1400,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
     "EC2InstanceProfileArn": {
       "Description": "EC2 Instance Profile ARN",
       "Value": {
-        "Fn::GetAtt": ["EC2InstanceProfile", "Arn"]
+        "Fn::GetAtt": [
+          "EC2InstanceProfile",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -1357,7 +1429,10 @@ I'll help you create a comprehensive zero-trust security infrastructure for paym
         "Fn::Select": [
           0,
           {
-            "Fn::GetAtt": ["SSMEndpoint", "DnsEntries"]
+            "Fn::GetAtt": [
+              "SSMEndpoint",
+              "DnsEntries"
+            ]
           }
         ]
       }
