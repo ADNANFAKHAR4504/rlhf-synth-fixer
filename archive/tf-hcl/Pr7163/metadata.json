@@ -25,5 +25,11 @@
   "regions": [
     "us-east-1",
     "us-west-2"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
