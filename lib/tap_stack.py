@@ -55,6 +55,7 @@ from cdktf_cdktf_provider_aws.sfn_state_machine import (
 )
 from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
 from cdktf_cdktf_provider_aws.cloudwatch_event_target import CloudwatchEventTargetEcsTarget
+from cdktf import TerraformOutput
 import json
 
 
@@ -1062,4 +1063,192 @@ class TapStack(TerraformStack):
             "transaction_dashboard",
             dashboard_name=f"transaction-metrics-{environment_suffix}",
             dashboard_body=json.dumps(dashboard_body)
+        )
+
+        # ==================== Outputs ====================
+
+        # API Gateway Outputs
+        TerraformOutput(
+            self,
+            "api_gateway_url",
+            value=f"https://{webhook_api.id}.execute-api.{aws_region}.amazonaws.com/{api_stage.stage_name}",
+            description="API Gateway URL for webhook endpoint"
+        )
+
+        TerraformOutput(
+            self,
+            "api_gateway_id",
+            value=webhook_api.id,
+            description="API Gateway REST API ID"
+        )
+
+        # Lambda Function Outputs
+        TerraformOutput(
+            self,
+            "webhook_validator_function_name",
+            value=webhook_validator.function_name,
+            description="Webhook Validator Lambda Function Name"
+        )
+
+        TerraformOutput(
+            self,
+            "webhook_validator_function_arn",
+            value=webhook_validator.arn,
+            description="Webhook Validator Lambda Function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "fraud_detector_function_name",
+            value=fraud_detector.function_name,
+            description="Fraud Detector Lambda Function Name"
+        )
+
+        TerraformOutput(
+            self,
+            "fraud_detector_function_arn",
+            value=fraud_detector.arn,
+            description="Fraud Detector Lambda Function ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "archival_function_name",
+            value=archival_function.function_name,
+            description="Transaction Archival Lambda Function Name"
+        )
+
+        TerraformOutput(
+            self,
+            "archival_function_arn",
+            value=archival_function.arn,
+            description="Transaction Archival Lambda Function ARN"
+        )
+
+        # DynamoDB Outputs
+        TerraformOutput(
+            self,
+            "dynamodb_table_name",
+            value=transactions_table.name,
+            description="DynamoDB Transactions Table Name"
+        )
+
+        TerraformOutput(
+            self,
+            "dynamodb_table_arn",
+            value=transactions_table.arn,
+            description="DynamoDB Transactions Table ARN"
+        )
+
+        # S3 Outputs
+        TerraformOutput(
+            self,
+            "s3_audit_bucket_name",
+            value=audit_bucket.bucket,
+            description="S3 Audit Logs Bucket Name"
+        )
+
+        TerraformOutput(
+            self,
+            "s3_audit_bucket_arn",
+            value=audit_bucket.arn,
+            description="S3 Audit Logs Bucket ARN"
+        )
+
+        # SNS Outputs
+        TerraformOutput(
+            self,
+            "sns_topic_arn",
+            value=alerts_topic.arn,
+            description="SNS Transaction Alerts Topic ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "sns_topic_name",
+            value=alerts_topic.name,
+            description="SNS Transaction Alerts Topic Name"
+        )
+
+        # EventBridge Outputs
+        TerraformOutput(
+            self,
+            "eventbridge_bus_name",
+            value=payment_event_bus.name,
+            description="EventBridge Payment Events Bus Name"
+        )
+
+        TerraformOutput(
+            self,
+            "eventbridge_bus_arn",
+            value=payment_event_bus.arn,
+            description="EventBridge Payment Events Bus ARN"
+        )
+
+        # Step Functions Outputs
+        TerraformOutput(
+            self,
+            "step_functions_state_machine_arn",
+            value=transaction_workflow.arn,
+            description="Step Functions Transaction Workflow State Machine ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "step_functions_state_machine_name",
+            value=transaction_workflow.name,
+            description="Step Functions Transaction Workflow State Machine Name"
+        )
+
+        # ECR Outputs
+        TerraformOutput(
+            self,
+            "webhook_validator_ecr_repository_url",
+            value=webhook_validator_ecr.repository_url,
+            description="Webhook Validator ECR Repository URL"
+        )
+
+        TerraformOutput(
+            self,
+            "fraud_detector_ecr_repository_url",
+            value=fraud_detector_ecr.repository_url,
+            description="Fraud Detector ECR Repository URL"
+        )
+
+        TerraformOutput(
+            self,
+            "archival_ecr_repository_url",
+            value=archival_ecr.repository_url,
+            description="Transaction Archival ECR Repository URL"
+        )
+
+        # SQS Outputs
+        TerraformOutput(
+            self,
+            "sqs_dlq_url",
+            value=dlq.url,
+            description="SQS Dead Letter Queue URL"
+        )
+
+        TerraformOutput(
+            self,
+            "sqs_dlq_arn",
+            value=dlq.arn,
+            description="SQS Dead Letter Queue ARN"
+        )
+
+        # CloudWatch Outputs
+        TerraformOutput(
+            self,
+            "cloudwatch_dashboard_name",
+            value=f"transaction-metrics-{environment_suffix}",
+            description="CloudWatch Dashboard Name"
+        )
+
+        # Environment Suffix Output
+        TerraformOutput(
+            self,
+            "environment_suffix",
+            value=environment_suffix,
+            description="Environment Suffix"
         )
