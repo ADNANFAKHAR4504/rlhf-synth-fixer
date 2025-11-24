@@ -20,6 +20,12 @@ class TestTapStackIntegration:
         with open(outputs_file, 'r', encoding='utf-8') as f:
             outputs = json.load(f)
 
+        # Handle nested structure - if outputs have a stack name key, extract it
+        if len(outputs) == 1 and isinstance(list(outputs.values())[0], dict):
+            # Outputs are nested under stack name, extract the inner dict
+            stack_key = list(outputs.keys())[0]
+            return outputs[stack_key]
+
         return outputs
 
     @pytest.fixture
@@ -173,7 +179,10 @@ class TestTapStackIntegration:
         assert eks["version"] == "1.29"
         assert "vpc_config" in eks
 
-        vpc_config = eks["vpc_config"][0]
+        # vpc_config can be a dict or list, handle both
+        vpc_config = eks["vpc_config"]
+        if isinstance(vpc_config, list):
+            vpc_config = vpc_config[0]
         assert vpc_config["endpoint_private_access"] is True
         assert vpc_config["endpoint_public_access"] is True
 
@@ -265,7 +274,10 @@ class TestTapStackIntegration:
         assert on_demand["capacity_type"] == "ON_DEMAND"
         assert "t3.medium" in on_demand["instance_types"]
 
-        scaling = on_demand["scaling_config"][0]
+        # scaling_config can be a dict or list, handle both
+        scaling = on_demand["scaling_config"]
+        if isinstance(scaling, list):
+            scaling = scaling[0]
         assert scaling["desired_size"] == 2
         assert scaling["min_size"] == 2
         assert scaling["max_size"] == 5
@@ -279,7 +291,10 @@ class TestTapStackIntegration:
         assert spot["capacity_type"] == "SPOT"
         assert "t3.medium" in spot["instance_types"]
 
-        scaling = spot["scaling_config"][0]
+        # scaling_config can be a dict or list, handle both
+        scaling = spot["scaling_config"]
+        if isinstance(scaling, list):
+            scaling = scaling[0]
         assert scaling["desired_size"] == 3
         assert scaling["min_size"] == 3
         assert scaling["max_size"] == 10
