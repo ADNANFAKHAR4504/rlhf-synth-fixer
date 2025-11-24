@@ -104,7 +104,10 @@ class TapStack(TerraformStack):
                         "Resource": "*",
                         "Condition": {
                             "ArnLike": {
-                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{aws_region}:{current_account.account_id}:*"
+                                "kms:EncryptionContext:aws:logs:arn": (
+                                    f"arn:aws:logs:{aws_region}:"
+                                    f"{current_account.account_id}:*"
+                                )
                             }
                         }
                     }
@@ -767,4 +770,3 @@ exports.handler = async () => {
             value=payment_dashboard.dashboard_name,
             description="CloudWatch dashboard name"
         )
-

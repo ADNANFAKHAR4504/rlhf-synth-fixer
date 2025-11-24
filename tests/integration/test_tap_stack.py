@@ -19,4 +19,3 @@ class TestTurnAroundPromptAPIIntegrationTests:
 
         # Verify basic structure
         assert stack is not None
-

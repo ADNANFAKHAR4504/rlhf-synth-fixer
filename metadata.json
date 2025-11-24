@@ -8,7 +8,9 @@
   "turn_type": "single",
   "startedAt": "2025-11-24T08:30:03.000Z",
   "subtask": "Security, Compliance, and Governance",
-  "subject_labels": [],
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "CloudWatch Logs",
     "CloudWatch Alarms",
