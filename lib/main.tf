@@ -153,11 +153,21 @@ resource "aws_kms_key_policy" "main" {
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
           "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow Auto Scaling service-linked role to manage grants"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
           "kms:CreateGrant",
           "kms:ListGrants",
           "kms:RevokeGrant",
-          "kms:RetireGrant",
-          "kms:DescribeKey"
+          "kms:RetireGrant"
         ]
         Resource = "*"
         Condition = {
