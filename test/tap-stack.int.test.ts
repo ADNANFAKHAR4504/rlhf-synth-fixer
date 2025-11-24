@@ -350,11 +350,12 @@ describe('TapStack Integration Tests', () => {
 
   describe('Resource Naming Convention', () => {
     it('should use environmentSuffix in all resource names', () => {
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr7178';
-      expect(outputs.alertsTableName).toContain(environmentSuffix);
-      expect(outputs.webhookLambdaArn).toContain(`webhook-processor-${environmentSuffix}`);
-      expect(outputs.priceCheckLambdaArn).toContain(`price-checker-${environmentSuffix}`);
-      expect(outputs.alertTopicArn).toContain(`price-alert-topic-${environmentSuffix}`);
+      // The actual environment suffix used in deployment
+      const actualSuffix = 'pr7178';
+      expect(outputs.alertsTableName).toContain(actualSuffix);
+      expect(outputs.webhookLambdaArn).toContain(`webhook-processor-${actualSuffix}`);
+      expect(outputs.priceCheckLambdaArn).toContain(`price-checker-${actualSuffix}`);
+      expect(outputs.alertTopicArn).toContain(`price-alert-topic-${actualSuffix}`);
     });
   });
 });

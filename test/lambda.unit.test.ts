@@ -3,67 +3,60 @@
  * Tests webhook-handler.js and price-checker.js logic
  */
 
-// Mock AWS SDK and X-Ray before importing handlers
-jest.mock('aws-sdk', () => {
-  const mockDocumentClient = {
-    put: jest.fn().mockReturnValue({
-      promise: jest.fn().mockResolvedValue({}),
-    }),
-    scan: jest.fn().mockReturnValue({
-      promise: jest.fn().mockResolvedValue({
-        Items: [
-          {
-            userId: 'user1',
-            alertId: 'alert1',
-            cryptocurrency: 'BTC',
-            targetPrice: 50000,
-            status: 'active',
-          },
-        ],
-      }),
-    }),
-  };
+// Mock AWS SDK v3 before importing handlers
+const mockPutCommand = jest.fn();
+const mockScanCommand = jest.fn();
+const mockPublishCommand = jest.fn();
+const mockDynamoDBSend = jest.fn();
+const mockSNSSend = jest.fn();
 
-  const mockSNS = {
-    publish: jest.fn().mockReturnValue({
-      promise: jest.fn().mockResolvedValue({}),
-    }),
-  };
-
-  return {
-    DynamoDB: {
-      DocumentClient: jest.fn(() => mockDocumentClient),
-    },
-    SNS: jest.fn(() => mockSNS),
-  };
-});
-
-jest.mock('aws-xray-sdk-core', () => ({
-  getSegment: jest.fn(() => ({
-    addNewSubsegment: jest.fn(() => ({
-      addAnnotation: jest.fn(),
-      addError: jest.fn(),
-      close: jest.fn(),
-    })),
+jest.mock('@aws-sdk/client-dynamodb', () => ({
+  DynamoDBClient: jest.fn(() => ({
+    send: mockDynamoDBSend,
   })),
+}));
+
+jest.mock('@aws-sdk/lib-dynamodb', () => ({
+  DynamoDBDocumentClient: {
+    from: jest.fn(() => ({
+      send: mockDynamoDBSend,
+    })),
+  },
+  PutCommand: jest.fn((params) => {
+    mockPutCommand(params);
+    return params;
+  }),
+  ScanCommand: jest.fn((params) => {
+    mockScanCommand(params);
+    return params;
+  }),
+}));
+
+jest.mock('@aws-sdk/client-sns', () => ({
+  SNSClient: jest.fn(() => ({
+    send: mockSNSSend,
+  })),
+  PublishCommand: jest.fn((params) => {
+    mockPublishCommand(params);
+    return params;
+  }),
 }));
 
 describe('Webhook Handler Lambda', () => {
   let handler: any;
-  let mockDocumentClient: any;
-  let mockXRay: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.ALERTS_TABLE_NAME = 'test-alerts-table';
+    process.env.AWS_REGION = 'us-east-1';
+
+    // Reset mocks
+    mockDynamoDBSend.mockResolvedValue({});
+    mockPutCommand.mockClear();
 
     // Require handler after mocks are set up
     delete require.cache[require.resolve('../lib/lambda/webhook-handler.js')];
     handler = require('../lib/lambda/webhook-handler.js').handler;
-
-    const AWS = require('aws-sdk');
-    mockDocumentClient = new AWS.DynamoDB.DocumentClient();
-    mockXRay = require('aws-xray-sdk-core');
   });
 
   describe('Successful webhook processing', () => {
@@ -82,7 +75,7 @@ describe('Webhook Handler Lambda', () => {
 
       expect(response.statusCode).toBe(200);
       expect(JSON.parse(response.body).message).toBe('Webhook processed successfully');
-      expect(mockDocumentClient.put).toHaveBeenCalled();
+      expect(mockPutCommand).toHaveBeenCalled();
     });
 
     it('should store alert in DynamoDB with correct structure', async () => {
@@ -98,7 +91,7 @@ describe('Webhook Handler Lambda', () => {
 
       await handler(event);
 
-      expect(mockDocumentClient.put).toHaveBeenCalledWith(
+      expect(mockPutCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           TableName: 'test-alerts-table',
           Item: expect.objectContaining({
@@ -126,25 +119,9 @@ describe('Webhook Handler Lambda', () => {
 
       await handler(event);
 
-      const putCall = mockDocumentClient.put.mock.calls[0][0];
+      const putCall = mockPutCommand.mock.calls[0][0];
       expect(putCall.Item.timestamp).toBeDefined();
       expect(new Date(putCall.Item.timestamp).getTime()).toBeGreaterThan(0);
-    });
-
-    it('should create X-Ray subsegment for tracing', async () => {
-      const event = {
-        body: JSON.stringify({
-          userId: 'user123',
-          alertId: 'alert456',
-          cryptocurrency: 'BTC',
-          targetPrice: 50000,
-          currentPrice: 45000,
-        }),
-      };
-
-      await handler(event);
-
-      expect(mockXRay.getSegment).toHaveBeenCalled();
     });
   });
 
@@ -154,7 +131,8 @@ describe('Webhook Handler Lambda', () => {
 
       const response = await handler(event);
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.body).error).toBe('Missing required fields');
     });
 
     it('should handle invalid JSON in body', async () => {
@@ -169,9 +147,7 @@ describe('Webhook Handler Lambda', () => {
     });
 
     it('should handle DynamoDB errors', async () => {
-      mockDocumentClient.put.mockReturnValueOnce({
-        promise: jest.fn().mockRejectedValue(new Error('DynamoDB error')),
-      });
+      mockDynamoDBSend.mockRejectedValueOnce(new Error('DynamoDB error'));
 
       const event = {
         body: JSON.stringify({
@@ -220,36 +196,66 @@ describe('Webhook Handler Lambda', () => {
       const response = await handler(event);
 
       expect(response.statusCode).toBe(200);
+      expect(mockPutCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Item: expect.objectContaining({
+            currentPrice: 0, // Default value
+          }),
+        })
+      );
+    });
+
+    it('should return 400 for missing required fields', async () => {
+      const event = {
+        body: JSON.stringify({
+          cryptocurrency: 'BTC',
+          targetPrice: 50000,
+        }),
+      };
+
+      const response = await handler(event);
+
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.body).error).toBe('Missing required fields');
     });
   });
 });
 
 describe('Price Checker Lambda', () => {
   let handler: any;
-  let mockDocumentClient: any;
-  let mockSNS: any;
-  let mockXRay: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.ALERTS_TABLE_NAME = 'test-alerts-table';
     process.env.ALERT_TOPIC_ARN = 'arn:aws:sns:us-east-1:123456789012:test-topic';
+    process.env.AWS_REGION = 'us-east-1';
 
-    // Mock Math.random for predictable testing
-    jest.spyOn(Math, 'random').mockReturnValue(0.6);
+    // Reset mocks
+    mockDynamoDBSend.mockResolvedValue({
+      Items: [
+        {
+          userId: 'user1',
+          alertId: 'alert1',
+          cryptocurrency: 'BTC',
+          targetPrice: 50000,
+          status: 'active',
+        },
+      ],
+    });
+    mockSNSSend.mockResolvedValue({});
+    mockScanCommand.mockClear();
+    mockPublishCommand.mockClear();
+
+    // Mock Math.random to return predictable values
+    jest.spyOn(Math, 'random').mockReturnValue(0.6); // Will generate price > 50000
 
     // Require handler after mocks are set up
     delete require.cache[require.resolve('../lib/lambda/price-checker.js')];
     handler = require('../lib/lambda/price-checker.js').handler;
-
-    const AWS = require('aws-sdk');
-    mockDocumentClient = new AWS.DynamoDB.DocumentClient();
-    mockSNS = new AWS.SNS();
-    mockXRay = require('aws-xray-sdk-core');
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    jest.spyOn(Math, 'random').mockRestore();
   });
 
   describe('Successful price checking', () => {
@@ -258,7 +264,7 @@ describe('Price Checker Lambda', () => {
 
       await handler(event);
 
-      expect(mockDocumentClient.scan).toHaveBeenCalledWith(
+      expect(mockScanCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           TableName: 'test-alerts-table',
           FilterExpression: '#status = :active',
@@ -276,14 +282,11 @@ describe('Price Checker Lambda', () => {
     });
 
     it('should send SNS notification when price target is met', async () => {
-      // Mock random to return high price
-      jest.spyOn(Math, 'random').mockReturnValue(0.9);
-
       const event = {};
 
       await handler(event);
 
-      expect(mockSNS.publish).toHaveBeenCalledWith(
+      expect(mockPublishCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           TopicArn: 'arn:aws:sns:us-east-1:123456789012:test-topic',
           Subject: 'Crypto Price Alert Triggered',
@@ -292,53 +295,41 @@ describe('Price Checker Lambda', () => {
     });
 
     it('should not send notification when price target is not met', async () => {
-      // Mock random to return low price
-      jest.spyOn(Math, 'random').mockReturnValue(0.1);
+      jest.spyOn(Math, 'random').mockReturnValue(0.3); // Will generate price < 50000
 
       const event = {};
 
       await handler(event);
 
-      expect(mockSNS.publish).not.toHaveBeenCalled();
-    });
-
-    it('should create X-Ray subsegment for tracing', async () => {
-      const event = {};
-
-      await handler(event);
-
-      expect(mockXRay.getSegment).toHaveBeenCalled();
+      expect(mockPublishCommand).not.toHaveBeenCalled();
     });
   });
 
   describe('Error handling', () => {
     it('should handle DynamoDB scan errors', async () => {
-      mockDocumentClient.scan.mockReturnValueOnce({
-        promise: jest.fn().mockRejectedValue(new Error('DynamoDB scan error')),
-      });
+      mockDynamoDBSend.mockRejectedValueOnce(new Error('DynamoDB scan error'));
 
       const event = {};
 
-      await expect(handler(event)).rejects.toThrow('DynamoDB scan error');
+      const response = await handler(event);
+
+      expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.body).error).toBe('Internal server error');
     });
 
     it('should handle SNS publish errors', async () => {
-      // Mock high price to trigger notification
-      jest.spyOn(Math, 'random').mockReturnValue(0.9);
-
-      mockSNS.publish.mockReturnValueOnce({
-        promise: jest.fn().mockRejectedValue(new Error('SNS error')),
-      });
+      mockSNSSend.mockRejectedValueOnce(new Error('SNS error'));
 
       const event = {};
 
-      await expect(handler(event)).rejects.toThrow('SNS error');
+      const response = await handler(event);
+
+      // Should still return 500 but not throw
+      expect(response.statusCode).toBe(500);
     });
 
     it('should handle empty scan results', async () => {
-      mockDocumentClient.scan.mockReturnValueOnce({
-        promise: jest.fn().mockResolvedValue({ Items: [] }),
-      });
+      mockDynamoDBSend.mockResolvedValueOnce({ Items: [] });
 
       const event = {};
 
@@ -351,27 +342,21 @@ describe('Price Checker Lambda', () => {
 
   describe('Notification content', () => {
     it('should include cryptocurrency and prices in notification', async () => {
-      // Mock high price to trigger notification
-      jest.spyOn(Math, 'random').mockReturnValue(0.9);
-
       const event = {};
 
       await handler(event);
 
-      const publishCall = mockSNS.publish.mock.calls[0][0];
+      const publishCall = mockPublishCommand.mock.calls[0][0];
       expect(publishCall.Message).toContain('BTC');
       expect(publishCall.Message).toContain('50000');
     });
 
     it('should format price with 2 decimal places', async () => {
-      // Mock high price to trigger notification
-      jest.spyOn(Math, 'random').mockReturnValue(0.9);
-
       const event = {};
 
       await handler(event);
 
-      const publishCall = mockSNS.publish.mock.calls[0][0];
+      const publishCall = mockPublishCommand.mock.calls[0][0];
       expect(publishCall.Message).toMatch(/\$\d+\.\d{2}/);
     });
   });
