@@ -1,8 +1,10 @@
 """TAP Stack module for CDKTF Python serverless webhook processing infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn, TerraformAsset, AssetType
+from cdktf import TerraformStack, S3Backend, Fn
 from constructs import Construct
+import zipfile
 import os
+import tempfile
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
@@ -58,6 +60,22 @@ import json
 
 class TapStack(TerraformStack):
     """CDKTF Python stack for serverless webhook processing infrastructure."""
+
+    @staticmethod
+    def create_lambda_zip_file() -> str:
+        """Create a ZIP file containing placeholder Lambda code and return the path."""
+        # Placeholder Lambda code
+        code = """def lambda_handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': 'Placeholder function - awaiting container image deployment'
+    }
+"""
+        # Create ZIP file in a temporary location
+        zip_path = os.path.join(tempfile.gettempdir(), 'lambda_placeholder.zip')
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr('index.py', code)
+        return zip_path
 
     def __init__(
         self,
@@ -412,13 +430,8 @@ class TapStack(TerraformStack):
         # ===================================================================
         # Lambda Function: Webhook Validator (Placeholder - update to container later)
         # ===================================================================
-        # Create placeholder Lambda code asset
-        webhook_asset = TerraformAsset(
-            self,
-            "webhook_validator_asset",
-            path=os.path.join(os.path.dirname(__file__), "..", "lambda_placeholder"),
-            type=AssetType.ARCHIVE
-        )
+        # Create placeholder ZIP file
+        lambda_zip_path = self.create_lambda_zip_file()
         
         webhook_validator = LambdaFunction(
             self,
@@ -427,11 +440,11 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=webhook_asset.path,
-            source_code_hash=webhook_asset.asset_hash,
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             memory_size=1024,
             timeout=30,
-            architectures=["arm64"],  # ARM-based Graviton2
+            architectures=["x86_64"],  # Use x86_64 for placeholder
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": transactions_table.name,
@@ -444,7 +457,7 @@ class TapStack(TerraformStack):
                 "mode": "Active"  # Enable X-Ray tracing
             },
             lifecycle={
-                "ignore_changes": ["filename", "source_code_hash"]
+                "ignore_changes": ["filename", "source_code_hash", "image_uri"]
             },
             depends_on=[webhook_validator_logs]
         )
@@ -452,14 +465,6 @@ class TapStack(TerraformStack):
         # ===================================================================
         # Lambda Function: Fraud Detector (Placeholder - update to container later)
         # ===================================================================
-        # Create placeholder Lambda code asset
-        fraud_asset = TerraformAsset(
-            self,
-            "fraud_detector_asset",
-            path=os.path.join(os.path.dirname(__file__), "..", "lambda_placeholder"),
-            type=AssetType.ARCHIVE
-        )
-        
         fraud_detector = LambdaFunction(
             self,
             "fraud_detector",
@@ -467,11 +472,11 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=fraud_asset.path,
-            source_code_hash=fraud_asset.asset_hash,
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             memory_size=512,
             timeout=60,
-            architectures=["arm64"],  # ARM-based Graviton2
+            architectures=["x86_64"],  # Use x86_64 for placeholder
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": transactions_table.name,
@@ -482,7 +487,7 @@ class TapStack(TerraformStack):
                 "mode": "Active"  # Enable X-Ray tracing
             },
             lifecycle={
-                "ignore_changes": ["filename", "source_code_hash"]
+                "ignore_changes": ["filename", "source_code_hash", "image_uri"]
             },
             depends_on=[fraud_detector_logs]
         )
@@ -490,14 +495,6 @@ class TapStack(TerraformStack):
         # ===================================================================
         # Lambda Function: Transaction Archival (Placeholder - update to container later)
         # ===================================================================
-        # Create placeholder Lambda code asset
-        archival_asset = TerraformAsset(
-            self,
-            "archival_function_asset",
-            path=os.path.join(os.path.dirname(__file__), "..", "lambda_placeholder"),
-            type=AssetType.ARCHIVE
-        )
-        
         archival_function = LambdaFunction(
             self,
             "transaction_archival",
@@ -505,11 +502,11 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=archival_asset.path,
-            source_code_hash=archival_asset.asset_hash,
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             memory_size=512,
             timeout=300,  # 5 minutes for batch processing
-            architectures=["arm64"],  # ARM-based Graviton2
+            architectures=["x86_64"],  # Use x86_64 for placeholder
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": transactions_table.name,
@@ -520,7 +517,7 @@ class TapStack(TerraformStack):
                 "mode": "Active"  # Enable X-Ray tracing
             },
             lifecycle={
-                "ignore_changes": ["filename", "source_code_hash"]
+                "ignore_changes": ["filename", "source_code_hash", "image_uri"]
             },
             depends_on=[archival_logs]
         )
