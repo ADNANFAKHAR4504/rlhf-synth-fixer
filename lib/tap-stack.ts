@@ -16,10 +16,51 @@ const commonTags = {
 
 // ===== KMS Keys for Encryption =====
 
+// Get current AWS caller identity and region for KMS policy
+const current = aws.getCallerIdentityOutput({});
+const currentRegion = aws.getRegionOutput({});
+
 const kmsKey = new aws.kms.Key(`analytics-kms-${environmentSuffix}`, {
   description: 'KMS key for encrypting database backups and CloudWatch logs',
   enableKeyRotation: true,
   deletionWindowInDays: 10,
+  policy: pulumi.all([current.accountId, currentRegion.name]).apply(([accountId, regionName]) =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'Enable IAM User Permissions',
+          Effect: 'Allow',
+          Principal: {
+            AWS: `arn:aws:iam::${accountId}:root`,
+          },
+          Action: 'kms:*',
+          Resource: '*',
+        },
+        {
+          Sid: 'Allow CloudWatch Logs',
+          Effect: 'Allow',
+          Principal: {
+            Service: `logs.${regionName}.amazonaws.com`,
+          },
+          Action: [
+            'kms:Encrypt',
+            'kms:Decrypt',
+            'kms:ReEncrypt*',
+            'kms:GenerateDataKey*',
+            'kms:CreateGrant',
+            'kms:DescribeKey',
+          ],
+          Resource: '*',
+          Condition: {
+            ArnLike: {
+              'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${regionName}:${accountId}:log-group:*`,
+            },
+          },
+        },
+      ],
+    })
+  ),
   tags: { ...commonTags, Name: `analytics-kms-${environmentSuffix}` },
 });
 
