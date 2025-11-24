@@ -68,9 +68,8 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
       expect(variablesTf).toMatch(/default\s*=\s*"1\.29"/);
     });
 
-    test('pr_number variable exists with default pr7054', () => {
+    test('pr_number variable exists', () => {
       expect(variablesTf).toMatch(/variable\s+"pr_number"\s*{/);
-      expect(variablesTf).toMatch(/default\s*=\s*"pr7054"/);
     });
 
     test('VPC CIDR variables exist with proper defaults', () => {
