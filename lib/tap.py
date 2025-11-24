@@ -2,66 +2,58 @@
 Multi-Region Payment Infrastructure using CDKTF with Python
 Expert-level implementation with 9 AWS services across 2 regions
 """
-import os
 import json
-from constructs import Construct
-from cdktf import App, TerraformStack, TerraformOutput, Fn
-from cdktf_cdktf_provider_aws.provider import AwsProvider
+import os
+import zipfile
+
+from cdktf import App, Fn, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.api_gateway_api_key import ApiGatewayApiKey
+from cdktf_cdktf_provider_aws.api_gateway_deployment import \
+    ApiGatewayDeployment
+from cdktf_cdktf_provider_aws.api_gateway_integration import \
+    ApiGatewayIntegration
+from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
+from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
+from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
+from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
+from cdktf_cdktf_provider_aws.api_gateway_usage_plan import (
+    ApiGatewayUsagePlan, ApiGatewayUsagePlanApiStages)
+from cdktf_cdktf_provider_aws.api_gateway_usage_plan_key import \
+    ApiGatewayUsagePlanKey
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
+    CloudwatchMetricAlarm, CloudwatchMetricAlarmMetricQuery,
+    CloudwatchMetricAlarmMetricQueryMetric)
 from cdktf_cdktf_provider_aws.dynamodb_table import (
-    DynamodbTable,
-    DynamodbTableAttribute,
-    DynamodbTableGlobalSecondaryIndex,
-    DynamodbTableReplica,
-    DynamodbTablePointInTimeRecovery,
-    DynamodbTableServerSideEncryption
-)
+    DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex,
+    DynamodbTablePointInTimeRecovery, DynamodbTableReplica,
+    DynamodbTableServerSideEncryption)
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
-from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
-from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
-from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
-from cdktf_cdktf_provider_aws.api_gateway_integration import ApiGatewayIntegration
-from cdktf_cdktf_provider_aws.api_gateway_deployment import ApiGatewayDeployment
-from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
-from cdktf_cdktf_provider_aws.api_gateway_api_key import ApiGatewayApiKey
-from cdktf_cdktf_provider_aws.api_gateway_usage_plan import (
-    ApiGatewayUsagePlan,
-    ApiGatewayUsagePlanApiStages
-)
-from cdktf_cdktf_provider_aws.api_gateway_usage_plan_key import ApiGatewayUsagePlanKey
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route53_health_check import (
+    Route53HealthCheck, Route53HealthCheckConfig)
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioningA,
-    S3BucketVersioningVersioningConfiguration
-)
+from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
+    S3BucketLifecycleConfiguration, S3BucketLifecycleConfigurationRule,
+    S3BucketLifecycleConfigurationRuleTransition)
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
-)
-from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
-    S3BucketLifecycleConfiguration,
-    S3BucketLifecycleConfigurationRule,
-    S3BucketLifecycleConfigurationRuleTransition
-)
-from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
-    CloudwatchMetricAlarm,
-    CloudwatchMetricAlarmMetricQuery,
-    CloudwatchMetricAlarmMetricQueryMetric
-)
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
+    S3BucketVersioningA, S3BucketVersioningVersioningConfiguration)
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
-from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
-from cdktf_cdktf_provider_aws.route53_health_check import (
-    Route53HealthCheck,
-    Route53HealthCheckConfig
-)
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
 from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
+from constructs import Construct
 
 
 class PaymentInfrastructureStack(TerraformStack):
@@ -132,6 +124,9 @@ class PaymentInfrastructureStack(TerraformStack):
 
         # Create IAM role for Lambda
         self.lambda_role = self._create_lambda_role()
+
+        # Create Lambda deployment package
+        self._create_lambda_package()
 
         # Create Lambda function
         self.lambda_function = self._create_lambda_function()
@@ -401,6 +396,34 @@ class PaymentInfrastructureStack(TerraformStack):
         )
 
         return role
+
+    def _create_lambda_package(self) -> None:
+        """
+        Create Lambda deployment package by zipping the handler code.
+        This runs during stack synthesis to prepare the Lambda ZIP file.
+        """
+        lib_dir = os.path.dirname(os.path.abspath(__file__))
+        lambda_source_dir = os.path.join(lib_dir, 'lambda', 'payment_processor')
+        handler_file = 'handler.py'
+        zip_file_name = 'payment_processor.zip'
+        target_zip_path = os.path.join(lib_dir, zip_file_name)
+        
+        # Only create if source exists
+        if not os.path.isdir(lambda_source_dir):
+            print(f"ℹ️ Lambda source directory not found at {lambda_source_dir}. Skipping package creation.")
+            return
+        
+        handler_path = os.path.join(lambda_source_dir, handler_file)
+        if not os.path.isfile(handler_path):
+            print(f"❌ Error: Lambda handler file not found at {handler_path}")
+            return
+
+        # Create ZIP file
+        with zipfile.ZipFile(target_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(handler_path, os.path.basename(handler_path))
+        
+        zip_size = os.path.getsize(target_zip_path)
+        print(f"✅ Created Lambda package: {target_zip_path} ({zip_size:,} bytes)")
 
     def _create_lambda_function(self) -> LambdaFunction:
         """
