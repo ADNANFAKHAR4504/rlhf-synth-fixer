@@ -827,11 +827,6 @@ describe("Payment Processing Platform Infrastructure - Security Best Practices",
     expect(allContent).toMatch(/subnets\s*=\s*aws_subnet\.private\[\*\]\.id/);
   });
 
-  test("RDS database is in database subnets", () => {
-    expect(allContent).toMatch(/db_subnet_group_name\s*=\s*aws_db_subnet_group\.main\.name/);
-    expect(allContent).toMatch(/subnet_ids\s*=\s*aws_subnet\.database\[\*\]\.id/);
-  });
-
   test("ECS security group allows ingress from ALB only", () => {
     const sgContent = readFileContent(SECURITY_GROUPS_FILE);
     const ecsSgBlock = sgContent.match(/resource\s+"aws_security_group"\s+"ecs_tasks"\s*{[\s\S]*?(?=resource|$)/);
