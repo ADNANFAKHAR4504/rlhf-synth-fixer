@@ -1,10 +1,9 @@
 {
-  "task_id": "c0c6w2",
   "platform": "tf",
   "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "infrastructure",
+  "po_id": "c0c6w2",
   "team": "synth",
   "startedAt": "2025-11-24T09:15:00.000Z",
   "subtask": "Failure Recovery and High Availability",
