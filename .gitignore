@@ -153,7 +153,3 @@ lib/.terraform/
 
 # Synth Files
 tasks.csv
-
-# Lock files and test scripts
-Pipfile.lock
-scripts/unit-tests.sh
