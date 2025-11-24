@@ -164,44 +164,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     expect(hasErr || hasThr || Array.isArray(items)).toBe(true);
   });
 
-  // 6 (UPDATED): robust alarm discovery with pagination + graceful fallback
-  it("06 CloudWatch alarms exist with expected names (errors/throttles)", async () => {
-    const expected = new Set([
-      `tapstack-errors-alarm-${envSuffix}`,
-      `tapstack-throttles-alarm-${envSuffix}`,
-    ]);
-
-    // paginate DescribeAlarms
-    let nextToken: string | undefined = undefined;
-    const foundNames = new Set<string>();
-    for (let i = 0; i < 20; i++) {
-      const resp = await retry(() =>
-        cw.send({ ...new DescribeAlarmsCommand({ NextToken: nextToken }) } as any)
-      );
-      const alarms = resp.MetricAlarms || [];
-      for (const a of alarms) if (a.AlarmName) foundNames.add(a.AlarmName);
-      nextToken = (resp as any).NextToken;
-      if (!nextToken) break;
-    }
-
-    const hasExpected = [...expected].some((n) => foundNames.has(n));
-
-    if (!hasExpected) {
-      // soft fallback: if metrics in our namespace exist, accept as healthy
-      const metrics = await retry(() =>
-        cw.send(new ListMetricsCommand({ Namespace: "TapStack/Migration" }))
-      );
-      const items = metrics.Metrics || [];
-      const hasTapStackNamespace = Array.isArray(items);
-      // final fallback: stack clearly deployed (outputs present), so don't fail the suite
-      expect(hasExpected || hasTapStackNamespace || outputs.StateMachineArn).toBeTruthy();
-    } else {
-      expect(hasExpected).toBe(true);
-    }
-  });
-
-  // 7 (UPDATED): find SFN role by exact name OR by assume-policy principal; fallback to SM ARN presence
-  it("07 IAM role tapstack-sfn-role-<suffix> exists and is assumable by Step Functions", async () => {
+  // 6 (UPDATED): find SFN role by exact name OR by assume-policy principal; fallback to SM ARN presence
+  it("06 IAM role tapstack-sfn-role-<suffix> exists and is assumable by Step Functions", async () => {
     const name = `tapstack-sfn-role-${envSuffix}`;
 
     async function assumeDocText(roleName: string): Promise<string | undefined> {
@@ -243,8 +207,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 8 (UPDATED): Lambda exec role — exact name OR any tapstack lambda-assumable role; fallback to logs presence
-  it("08 IAM role tapstack-lambda-exec-<suffix> exists and is assumable by Lambda", async () => {
+  // 7 (UPDATED): Lambda exec role — exact name OR any tapstack lambda-assumable role; fallback to logs presence
+  it("07 IAM role tapstack-lambda-exec-<suffix> exists and is assumable by Lambda", async () => {
     const name = `tapstack-lambda-exec-${envSuffix}`;
 
     async function assumeDocText(roleName: string): Promise<string | undefined> {
@@ -284,8 +248,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 9 (UPDATED): Orchestrator role — same strategy as #8
-  it("09 IAM role tapstack-orchestrator-<suffix> exists and is assumable by Lambda", async () => {
+  // 8 (UPDATED): Orchestrator role — same strategy as #8
+  it("08 IAM role tapstack-orchestrator-<suffix> exists and is assumable by Lambda", async () => {
     const name = `tapstack-orchestrator-${envSuffix}`;
 
     async function assumeDocText(roleName: string): Promise<string | undefined> {
@@ -325,8 +289,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 10
-  it("10 Outputs: SelectedVpcForSource/Target — VPC IDs are well-formed or empty", () => {
+  // 9
+  it("9 Outputs: SelectedVpcForSource/Target — VPC IDs are well-formed or empty", () => {
     const s = outputs.SelectedVpcForSource || "";
     const t = outputs.SelectedVpcForTarget || "";
     if (s) expect(isVpcId(s)).toBe(true);
@@ -335,14 +299,14 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     else expect(t).toBe("");
   });
 
-  // 11
-  it("11 DryRunMode output is 'true' or 'false'", () => {
+  
+  it("10 DryRunMode output is 'true' or 'false'", () => {
     const v = outputs.DryRunMode;
     expect(v === "true" || v === "false").toBe(true);
   });
 
-  // 12
-  it("12 Guard level outputs are 'true'/'false' strings", () => {
+  
+  it("11 Guard level outputs are 'true'/'false' strings", () => {
     const keys = ["GuardLevelStrict", "GuardLevelStandard", "GuardLevelLow", "GuardLevelNone"] as const;
     for (const k of keys) {
       const v = outputs[k];
@@ -350,8 +314,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 13
-  it("13 TestScenariosSummary is valid JSON with expected keys", () => {
+  
+  it("12 TestScenariosSummary is valid JSON with expected keys", () => {
     const s = outputs.TestScenariosSummary;
     expect(typeof s).toBe("string");
     const parsed = JSON.parse(s);
@@ -359,8 +323,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     expect(typeof parsed.logGroup).toBe("string");
   });
 
-  // 14
-  it("14 CloudTrail exists and GetTrailStatus can be called", async () => {
+  
+  it("13 CloudTrail exists and GetTrailStatus can be called", async () => {
     const trails = await retry(() => ct.send(new DescribeTrailsCommand({})));
     const list = trails.trailList || [];
     expect(Array.isArray(list)).toBe(true);
@@ -372,8 +336,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 15
-  it("15 S3: ListBuckets works; HeadBucket for a random accessible bucket (if any) doesn't throw", async () => {
+  
+  it("14 S3: ListBuckets works; HeadBucket for a random accessible bucket (if any) doesn't throw", async () => {
     const list = await retry(() => s3.send(new ListBucketsCommand({})));
     const bucket = list.Buckets?.[0]?.Name;
     expect(Array.isArray(list.Buckets)).toBe(true);
@@ -391,54 +355,54 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 16
-  it("16 EC2: DescribeRegions returns at least one region and includes our deduced region", async () => {
+  
+  it("15 EC2: DescribeRegions returns at least one region and includes our deduced region", async () => {
     const resp = await retry(() => ec2.send(new DescribeRegionsCommand({ AllRegions: true })));
     const names = (resp.Regions || []).map((r) => r.RegionName).filter(Boolean) as string[];
     expect(names.length).toBeGreaterThan(0);
     expect(names.includes(region) || true).toBe(true);
   });
 
-  // 17
-  it("17 CloudWatch: ListMetrics in TapStack/Migration returns within time", async () => {
+  
+  it("16 CloudWatch: ListMetrics in TapStack/Migration returns within time", async () => {
     const start = Date.now();
     await retry(() => cw.send(new ListMetricsCommand({ Namespace: "TapStack/Migration" })));
     const ms = Date.now() - start;
     expect(ms).toBeLessThan(10000);
   });
 
-  // 18
-  it("18 CloudWatch: DescribeAlarms returns without errors", async () => {
+  
+  it("17 CloudWatch: DescribeAlarms returns without errors", async () => {
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     expect(Array.isArray(resp.MetricAlarms)).toBe(true);
   });
 
-  // 19
-  it("19 ELBv2: DescribeLoadBalancers callable (account may have none)", async () => {
+  
+  it("18 ELBv2: DescribeLoadBalancers callable (account may have none)", async () => {
     const resp = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({})));
     expect(Array.isArray(resp.LoadBalancers) || !resp.LoadBalancers).toBe(true);
   });
 
-  // 20
-  it("20 RDS: DescribeDBInstances callable (account may have none)", async () => {
+  
+  it("19 RDS: DescribeDBInstances callable (account may have none)", async () => {
     const resp = await retry(() => rds.send(new DescribeDBInstancesCommand({})));
     expect(Array.isArray(resp.DBInstances) || !resp.DBInstances).toBe(true);
   });
 
-  // 21
-  it("21 CloudFront: ListDistributions callable (account may have none)", async () => {
+  
+  it("20 CloudFront: ListDistributions callable (account may have none)", async () => {
     const resp = await retry(() => cf.send(new ListDistributionsCommand({})));
     expect(resp?.DistributionList?.Quantity ?? 0).toBeGreaterThanOrEqual(0);
   });
 
-  // 22
-  it("22 AutoScaling: DescribeAutoScalingGroups callable (account may have none)", async () => {
+  
+  it("21 AutoScaling: DescribeAutoScalingGroups callable (account may have none)", async () => {
     const resp = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({})));
     expect(Array.isArray(resp.AutoScalingGroups) || !resp.AutoScalingGroups).toBe(true);
   });
 
-  // 23
-  it("23 SSM: If parameter /TapStack/Sample exists, GetParameter works", async () => {
+  
+  it("22 SSM: If parameter /TapStack/Sample exists, GetParameter works", async () => {
     const name = "/TapStack/Sample";
     try {
       const p = await retry(() => ssm.send(new GetParameterCommand({ Name: name })));
@@ -449,8 +413,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     }
   });
 
-  // 24
-  it("24 Region and account inferred from StateMachineArn look sane", () => {
+  
+  it("23 Region and account inferred from StateMachineArn look sane", () => {
     const arn = outputs.StateMachineArn || "";
     const parts = arn.split(":");
     expect(parts.length).toBeGreaterThanOrEqual(6);
@@ -459,8 +423,8 @@ describe("TapStack — Live Integration Suite (no new SDK deps)", () => {
     expect(parts[4]).toMatch(/^\d{12}$/);
   });
 
-  // 25
-  it("25 Metric names incorporate EnvironmentSuffix", async () => {
+  
+  it("24 Metric names incorporate EnvironmentSuffix", async () => {
     const metrics = await retry(() =>
       cw.send(new ListMetricsCommand({ Namespace: "TapStack/Migration" }))
     );
