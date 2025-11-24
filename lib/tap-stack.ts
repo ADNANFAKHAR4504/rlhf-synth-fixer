@@ -9,8 +9,8 @@
  * - CloudWatch logging and monitoring
  * - Comprehensive security and compliance controls
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackProps {
   tags?: { [key: string]: string };
@@ -369,7 +369,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // S3 Bucket Lifecycle Configuration
     new aws.s3.BucketLifecycleConfigurationV2(
-      'alb-logs-lifecycle',
+      'alb-logs-bucket-lifecycle-rule',
       {
         bucket: albLogsBucket.id,
         rules: [
@@ -508,16 +508,18 @@ export class TapStack extends pulumi.ComponentResource {
       'ecs-logs-policy',
       {
         role: ecsTaskExecutionRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-              Resource: ecsLogGroup.arn.apply(arn => `${arn}:*`),
-            },
-          ],
-        }),
+        policy: ecsLogGroup.arn.apply((arn) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                Resource: `${arn}:*`,
+              },
+            ],
+          })
+        ),
       },
       { parent: this }
     );
