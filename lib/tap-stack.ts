@@ -356,7 +356,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Enable versioning on ALB logs bucket
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       'alb-logs-bucket-versioning',
       {
         bucket: albLogsBucket.id,
@@ -368,7 +368,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // S3 Bucket Lifecycle Configuration
-    new aws.s3.BucketLifecycleConfigurationV2(
+    new aws.s3.BucketLifecycleConfiguration(
       'alb-logs-bucket-lifecycle-rule',
       {
         bucket: albLogsBucket.id,
@@ -508,7 +508,7 @@ export class TapStack extends pulumi.ComponentResource {
       'ecs-logs-policy',
       {
         role: ecsTaskExecutionRole.id,
-        policy: ecsLogGroup.arn.apply((arn) =>
+        policy: ecsLogGroup.arn.apply(arn =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -590,7 +590,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         identifier: `fintech-db-${environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '15.4',
+        engineVersion: '16.3',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         storageType: 'gp3',
