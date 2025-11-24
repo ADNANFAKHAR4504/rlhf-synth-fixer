@@ -1,6 +1,7 @@
 """Main infrastructure stack for migration from legacy to containerized architecture."""
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 import json
 
 class TapStack:
@@ -234,9 +235,21 @@ class TapStack:
             "dbname": "appdb"
         }
 
+        # Generate a unique random suffix for the secret name to avoid conflicts
+        secret_suffix = random.RandomString(
+            f"db-secret-suffix-{self.environment_suffix}",
+            length=8,
+            special=False,
+            upper=False,
+            numeric=True
+        )
+
         self.db_secret = aws.secretsmanager.Secret(
             f"migration-db-secret-{self.environment_suffix}",
-            name=f"migration-db-secret-{self.environment_suffix}",
+            name=pulumi.Output.concat(
+                f"migration-db-secret-{self.environment_suffix}-",
+                secret_suffix.result
+            ),
             description="Database credentials for Aurora MySQL cluster",
             tags=self.common_tags
         )
