@@ -1,0 +1,19 @@
+config:
+  trading-platform:environment: staging
+  trading-platform:region: us-east-1
+  trading-platform:vpcCidr: 10.1.0.0/16
+  trading-platform:availabilityZones:
+    - us-east-1a
+    - us-east-1b
+  trading-platform:ecsTaskCount: 2
+  trading-platform:ecsTaskCpu: "512"
+  trading-platform:ecsTaskMemory: "1024"
+  trading-platform:rdsInstanceClass: db.r5.large
+  trading-platform:rdsEngineMode: provisioned
+  trading-platform:rdsBackupRetentionDays: 14
+  trading-platform:enableAutoScaling: true
+  trading-platform:s3LifecycleEnabled: true
+  trading-platform:s3TransitionDays: 60
+  trading-platform:s3ExpirationDays: 180
+  trading-platform:owner: staging-team
+  trading-platform:costCenter: staging

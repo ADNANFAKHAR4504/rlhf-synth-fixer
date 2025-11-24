@@ -1,0 +1,20 @@
+config:
+  trading-platform:environment: prod
+  trading-platform:region: us-east-1
+  trading-platform:vpcCidr: 10.2.0.0/16
+  trading-platform:availabilityZones:
+    - us-east-1a
+    - us-east-1b
+    - us-east-1c
+  trading-platform:ecsTaskCount: 4
+  trading-platform:ecsTaskCpu: "1024"
+  trading-platform:ecsTaskMemory: "2048"
+  trading-platform:rdsInstanceClass: db.r5.xlarge
+  trading-platform:rdsEngineMode: provisioned
+  trading-platform:rdsBackupRetentionDays: 30
+  trading-platform:enableAutoScaling: true
+  trading-platform:s3LifecycleEnabled: true
+  trading-platform:s3TransitionDays: 30
+  trading-platform:s3ExpirationDays: 90
+  trading-platform:owner: platform-team
+  trading-platform:costCenter: production
