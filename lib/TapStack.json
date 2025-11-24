@@ -121,42 +121,6 @@
         }
       }
     },
-    "ProcessWebhookLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/ProcessWebhook-${EnvironmentSuffix}"
-        },
-        "RetentionInDays": 30
-      }
-    },
-    "CheckAlertsLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/CheckAlerts-${EnvironmentSuffix}"
-        },
-        "RetentionInDays": 30
-      }
-    },
-    "SendNotificationLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/SendNotification-${EnvironmentSuffix}"
-        },
-        "RetentionInDays": 30
-      }
-    },
-    "CleanupHistoryLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/CleanupHistory-${EnvironmentSuffix}"
-        },
-        "RetentionInDays": 30
-      }
-    },
     "ProcessWebhookRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
