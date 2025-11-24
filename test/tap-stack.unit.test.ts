@@ -602,23 +602,32 @@ describe('TapStack', () => {
     });
 
     it('should include environmentSuffix in VPC name', () => {
+      expect(prodStack).toBeDefined();
       const vpcs = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/vpc:Vpc' && r.name === 'main-vpc'
       );
+      // Should have at least 2 VPCs (test stack + prod stack)
+      expect(vpcs.length).toBeGreaterThanOrEqual(2);
       const prodVpc = vpcs.find(v => v.props.tags && v.props.tags.Name && v.props.tags.Name.includes('-prod'));
       expect(prodVpc).toBeDefined();
       expect(prodVpc.props.tags.Name).toContain('-prod');
     });
 
     it('should include environmentSuffix in ECS cluster name', () => {
-      const cluster = mockMonitor.getResource('ecs-cluster');
-      expect(cluster.props.name).toContain('-prod');
+      const clusters = mockMonitor.resources.filter(
+        r => r.type === 'aws:ecs/cluster:Cluster' && r.name === 'ecs-cluster'
+      );
+      expect(clusters.length).toBeGreaterThanOrEqual(2);
+      const prodCluster = clusters.find(c => c.props.name && c.props.name.includes('-prod'));
+      expect(prodCluster).toBeDefined();
+      expect(prodCluster.props.name).toContain('-prod');
     });
 
     it('should include environmentSuffix in RDS identifier', () => {
       const rdsInstances = mockMonitor.resources.filter(
         r => r.type === 'aws:rds/instance:Instance' && r.name === 'rds-instance'
       );
+      expect(rdsInstances.length).toBeGreaterThanOrEqual(2);
       const prodRds = rdsInstances.find(r => r.props.identifier && r.props.identifier.includes('-prod'));
       expect(prodRds).toBeDefined();
       expect(prodRds.props.identifier).toContain('-prod');
@@ -628,14 +637,20 @@ describe('TapStack', () => {
       const albs = mockMonitor.resources.filter(
         r => r.type === 'aws:lb/loadBalancer:LoadBalancer' && r.name === 'application-load-balancer'
       );
+      expect(albs.length).toBeGreaterThanOrEqual(2);
       const prodAlb = albs.find(a => a.props.name && a.props.name.includes('-prod'));
       expect(prodAlb).toBeDefined();
       expect(prodAlb.props.name).toContain('-prod');
     });
 
     it('should include environmentSuffix in S3 bucket name', () => {
-      const bucket = mockMonitor.getResource('alb-logs-bucket');
-      expect(bucket.props.bucket).toContain('-prod');
+      const buckets = mockMonitor.resources.filter(
+        r => r.type === 'aws:s3/bucket:Bucket' && r.name === 'alb-logs-bucket'
+      );
+      expect(buckets.length).toBeGreaterThanOrEqual(2);
+      const prodBucket = buckets.find(b => b.props.bucket && b.props.bucket.includes('-prod'));
+      expect(prodBucket).toBeDefined();
+      expect(prodBucket.props.bucket).toContain('-prod');
     });
   });
 
@@ -652,9 +667,11 @@ describe('TapStack', () => {
     });
 
     it('should apply custom tags to VPC', () => {
+      expect(tagStack).toBeDefined();
       const vpcs = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/vpc:Vpc' && r.name === 'main-vpc'
       );
+      expect(vpcs.length).toBeGreaterThanOrEqual(2);
       const taggedVpc = vpcs.find(v => v.props.tags && v.props.tags.Environment === 'production');
       expect(taggedVpc).toBeDefined();
       expect(taggedVpc.props.tags.Team).toBe('platform');
@@ -713,9 +730,11 @@ describe('TapStack', () => {
       delete process.env.ENVIRONMENT_SUFFIX;
       const devStack = new TapStack('dev-stack', { tags: {} });
 
+      expect(devStack).toBeDefined();
       const vpcs = mockMonitor.resources.filter(
         r => r.type === 'aws:ec2/vpc:Vpc' && r.name === 'main-vpc'
       );
+      expect(vpcs.length).toBeGreaterThanOrEqual(2);
       const devVpc = vpcs.find(v => v.props.tags && v.props.tags.Name && v.props.tags.Name.includes('-dev'));
       expect(devVpc).toBeDefined();
       expect(devVpc.props.tags.Name).toContain('-dev');
