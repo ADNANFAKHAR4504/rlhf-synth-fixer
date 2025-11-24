@@ -10,6 +10,11 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Random suffix to avoid name collisions for resources that may already exist
+resource "random_id" "suffix" {
+  byte_length = 2
+}
+
 # KMS key for EKS node EBS encryption
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.cluster_name}-${var.pr_number} EBS encryption"
@@ -28,7 +33,7 @@ resource "aws_kms_key" "main" {
 
 # KMS key alias
 resource "aws_kms_alias" "main" {
-  name          = "alias/${var.cluster_name}-${var.pr_number}"
+  name          = "alias/${var.cluster_name}-${var.pr_number}-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -52,7 +57,7 @@ resource "aws_kms_key_policy" "main" {
         Sid    = "Allow EKS nodes to use the key for EBS"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.cluster_name}-node-role-${var.pr_number}"
+          AWS = aws_iam_role.eks_nodes.arn
         }
         Action = [
           "kms:Decrypt",
@@ -281,7 +286,7 @@ resource "aws_route_table_association" "private" {
 
 # EKS Cluster IAM Role
 resource "aws_iam_role" "eks_cluster" {
-  name = "${var.cluster_name}-cluster-role-${var.pr_number}"
+  name = "${var.cluster_name}-cluster-role-${var.pr_number}-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -297,7 +302,7 @@ resource "aws_iam_role" "eks_cluster" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-cluster-role-${var.pr_number}"
+      Name     = "${var.cluster_name}-cluster-role-${var.pr_number}-${random_id.suffix.hex}"
       PRNumber = var.pr_number
     }
   )
@@ -440,7 +445,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
 
 # IAM Role for Node Groups
 resource "aws_iam_role" "eks_nodes" {
-  name = "${var.cluster_name}-node-role-${var.pr_number}"
+  name = "${var.cluster_name}-node-role-${var.pr_number}-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -456,7 +461,7 @@ resource "aws_iam_role" "eks_nodes" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-node-role-${var.pr_number}"
+      Name     = "${var.cluster_name}-node-role-${var.pr_number}-${random_id.suffix.hex}"
       PRNumber = var.pr_number
     }
   )
@@ -739,7 +744,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
 
 # IAM Policy for Cluster Autoscaler
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name        = "${var.cluster_name}-cluster-autoscaler-policy-${var.pr_number}"
+  name        = "${var.cluster_name}-cluster-autoscaler-policy-${var.pr_number}-${random_id.suffix.hex}"
   description = "Policy for EKS Cluster Autoscaler"
 
   policy = jsonencode({
@@ -856,9 +861,62 @@ output "kms_key_alias" {
   description = "Alias of the KMS key"
   value       = aws_kms_alias.main.name
 }
-```
 
----
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "nat_gateway_ids" {
+  description = "IDs of the NAT gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "internet_gateway_id" {
+  description = "ID of the internet gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "cluster_version" {
+  description = "Kubernetes version of the EKS cluster"
+  value       = aws_eks_cluster.main.version
+}
+
+output "cluster_status" {
+  description = "Status of the EKS cluster"
+  value       = aws_eks_cluster.main.status
+}
+
+output "cluster_arn" {
+  description = "ARN of the EKS cluster"
+  value       = aws_eks_cluster.main.arn
+}
+
+output "eks_cluster_role_arn" {
+  description = "ARN of the EKS cluster IAM role"
+  value       = aws_iam_role.eks_cluster.arn
+}
+
+output "eks_node_role_arn" {
+  description = "ARN of the EKS node IAM role"
+  value       = aws_iam_role.eks_nodes.arn
+}
+```
 
 ## `provider.tf`
 
@@ -877,10 +935,14 @@ terraform {
       source  = "hashicorp/tls"
       version = ">= 4.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
@@ -898,8 +960,6 @@ provider "aws" {
   }
 }
 ```
-
----
 
 ## `variables.tf`
 
@@ -921,7 +981,7 @@ variable "cluster_name" {
 variable "kubernetes_version" {
   description = "Kubernetes version for the EKS cluster"
   type        = string
-  default     = "1.28"
+  default     = "1.32"
 }
 
 variable "vpc_cidr" {
@@ -969,7 +1029,7 @@ variable "kube_proxy_version" {
 variable "pr_number" {
   description = "PR number for resource identification"
   type        = string
-  default     = "pr7190"
+  default     = "pr7197"
 }
 
 variable "common_tags" {
@@ -1006,3 +1066,4 @@ variable "team" {
   default     = "unknown"
 }
 ```
+

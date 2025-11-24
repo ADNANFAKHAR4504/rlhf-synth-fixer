@@ -148,7 +148,7 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
 
     test('KMS key alias is created', () => {
       expect(mainTf).toMatch(/resource\s+"aws_kms_alias"\s+"main"\s*{/);
-      expect(mainTf).toMatch(/name\s*=\s*"alias\/\$\{var\.cluster_name\}-\$\{var\.pr_number\}"/);
+      expect(mainTf).toMatch(/name\s*=\s*"alias\/\$\{var\.cluster_name\}-\$\{var\.pr_number\}(-\$\{random_id\.suffix\.hex\})?"/);
     });
 
     test('KMS key policy allows various AWS services', () => {
@@ -350,7 +350,7 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
     test('Resources have proper naming conventions', () => {
       expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-\$\{var\.pr_number\}"/);
       expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-vpc-\$\{var\.pr_number\}"/);
-      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-cluster-role-\$\{var\.pr_number\}"/);
+      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-cluster-role-\$\{var\.pr_number\}(-\$\{random_id\.suffix\.hex\})?"/);
     });
   });
 });
