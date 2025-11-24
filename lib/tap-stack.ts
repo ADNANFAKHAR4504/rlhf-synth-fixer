@@ -57,6 +57,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _eksKmsKeyAlias = new aws.kms.Alias(
       `eks-secrets-key-alias-${environmentSuffix}`,
       {
@@ -198,6 +199,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _publicRoute = new aws.ec2.Route(
       `eks-public-route-${environmentSuffix}`,
       {
@@ -418,6 +420,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create OIDC provider for IRSA
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _oidcProvider = new aws.iam.OpenIdConnectProvider(
       `eks-oidc-provider-${environmentSuffix}`,
       {
@@ -498,6 +501,7 @@ export class TapStack extends pulumi.ComponentResource {
     */
 
     // Create Kubernetes provider using the EKS cluster
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _k8sProvider = new k8s.Provider(
       `k8s-provider-${environmentSuffix}`,
       {
