@@ -103,4 +103,4 @@ Create a serverless cryptocurrency price alert system using **CloudFormation wit
 - CloudWatch alarms for monitoring
 - EventBridge rule for scheduled cleanup
 - Unit tests for all Lambda functions
-- Documentation and deployment instructions in README
+- Documentation and deployment instructions in README.
