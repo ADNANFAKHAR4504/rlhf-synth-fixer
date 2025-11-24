@@ -5,10 +5,10 @@
   "turn_type": "single",
   "po_id": "y9a2t2",
   "team": "synth",
+  "author": "mayank-turing",
   "startedAt": "2025-11-24T19:21:30+05:30",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "Application Deployment",
     "Web Application Deployment"
   ],
   "aws_services": [

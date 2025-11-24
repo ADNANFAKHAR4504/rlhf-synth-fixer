@@ -20,15 +20,17 @@ const provider = new aws.Provider('aws', {
 });
 
 const config = new pulumi.Config();
-const githubToken = config.requireSecret('githubToken');
+// Make githubToken optional with a dummy default for CI/CD environments
+const githubToken =
+  config.getSecret('githubToken') || pulumi.secret('dummy-token-for-testing');
 
 const stack = new TapStack(
   'cicd-pipeline',
   {
     environmentSuffix,
     tags: defaultTags,
-    githubOwner: config.get('githubOwner') || 'your-org',
-    githubRepo: config.get('githubRepo') || 'your-repo',
+    githubOwner: config.get('githubOwner') || 'TuringGpt',
+    githubRepo: config.get('githubRepo') || 'iac-test-automations',
     githubBranch: config.get('githubBranch') || 'main',
     githubToken,
   },
