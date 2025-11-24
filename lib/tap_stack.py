@@ -199,14 +199,18 @@ class TapStack(Stack):
         )
 
         # Attach VPN Gateway to VPC
-        ec2.CfnVPCGatewayAttachment(
+        # Store attachment in variable to ensure proper dependency ordering
+        vpn_gateway_attachment = ec2.CfnVPCGatewayAttachment(
             self,
             f"VpnGatewayAttachment-{self.environment_suffix}",
             vpc_id=self.vpc.vpc_id,
             vpn_gateway_id=vpn_gateway.ref,
         )
+        # Ensure attachment depends on VPN Gateway
+        vpn_gateway_attachment.add_dependency(vpn_gateway)
 
         # Create VPN Connection
+        # Must wait for VPN Gateway attachment to complete before creating connection
         vpn_connection = ec2.CfnVPNConnection(
             self,
             f"VpnConnection-{self.environment_suffix}",
@@ -218,15 +222,22 @@ class TapStack(Stack):
                 cdk.CfnTag(key="Name", value=f"vpn-connection-{self.environment_suffix}"),
             ],
         )
+        # Add explicit dependencies to ensure proper creation order
+        vpn_connection.add_dependency(vpn_gateway)
+        vpn_connection.add_dependency(vpn_gateway_attachment)
+        vpn_connection.add_dependency(self.customer_gateway)
 
         # Enable route propagation for private subnets
+        # Route propagation must wait for VPN Gateway attachment
         for subnet in self.vpc.private_subnets:
-            ec2.CfnVPNGatewayRoutePropagation(
+            route_propagation = ec2.CfnVPNGatewayRoutePropagation(
                 self,
                 f"VpnRoutePropagation-{subnet.node.id}-{self.environment_suffix}",
                 route_table_ids=[subnet.route_table.route_table_id],
                 vpn_gateway_id=vpn_gateway.ref,
             )
+            # Ensure route propagation waits for attachment
+            route_propagation.add_dependency(vpn_gateway_attachment)
 
         return vpn_connection
 
