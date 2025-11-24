@@ -68,3 +68,23 @@ export const databaseSecurityGroupId = stack.databaseSecurityGroupId;
 export const flowLogsBucketName = stack.flowLogsBucketName;
 export const flowLogsLogGroupName = stack.flowLogsLogGroupName;
 export const s3EndpointId = stack.s3EndpointId;
+
+// EKS Cluster outputs
+export const clusterName = stack.clusterName;
+export const clusterVersion = stack.clusterVersion;
+export const clusterEndpoint = stack.clusterEndpoint;
+export const oidcIssuerUrl = stack.oidcIssuerUrl;
+export const kubeconfig = stack.kubeconfig;
+
+// KMS outputs
+export const kmsKeyId = stack.kmsKeyId;
+export const kmsKeyAliasName = stack.kmsKeyAliasName;
+export const kmsKeyArn = stack.kmsKeyArn;
+
+// Route outputs
+export const publicRouteId = stack.publicRouteId;
+
+// Addon outputs
+export const coreDnsAddonVersion = stack.coreDnsAddonVersion;
+export const kubeProxyAddonVersion = stack.kubeProxyAddonVersion;
+export const vpcCniAddonVersion = stack.vpcCniAddonVersion;

@@ -34,6 +34,26 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly flowLogsLogGroupName: pulumi.Output<string>;
   public readonly s3EndpointId: pulumi.Output<string>;
 
+  // EKS Cluster outputs
+  public readonly clusterName: pulumi.Output<string>;
+  public readonly clusterVersion: pulumi.Output<string>;
+  public readonly clusterEndpoint: pulumi.Output<string>;
+  public readonly oidcIssuerUrl: pulumi.Output<string>;
+  public readonly kubeconfig: pulumi.Output<string>;
+
+  // KMS outputs
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly kmsKeyAliasName: pulumi.Output<string>;
+  public readonly kmsKeyArn: pulumi.Output<string>;
+
+  // Route outputs
+  public readonly publicRouteId: pulumi.Output<string>;
+
+  // Addon outputs
+  public readonly coreDnsAddonVersion: pulumi.Output<string>;
+  public readonly kubeProxyAddonVersion: pulumi.Output<string>;
+  public readonly vpcCniAddonVersion: pulumi.Output<string>;
+
   constructor(
     name: string,
     args: TapStackArgs,
@@ -57,8 +77,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _eksKmsKeyAlias = new aws.kms.Alias(
+    const eksKmsKeyAlias = new aws.kms.Alias(
       `eks-secrets-key-alias-${environmentSuffix}`,
       {
         name: `alias/eks-secrets-${environmentSuffix}`,
@@ -199,8 +218,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _publicRoute = new aws.ec2.Route(
+    const publicRoute = new aws.ec2.Route(
       `eks-public-route-${environmentSuffix}`,
       {
         routeTableId: publicRouteTable.id,
@@ -433,67 +451,68 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create Kubernetes provider using the EKS cluster
+    const kubeconfig = pulumi
+      .all([
+        eksCluster.name,
+        eksCluster.endpoint,
+        eksCluster.certificateAuthority,
+      ])
+      .apply(([name, endpoint, ca]: [string, string, { data: string }]) => {
+        return JSON.stringify({
+          apiVersion: 'v1',
+          kind: 'Config',
+          clusters: [
+            {
+              cluster: {
+                server: endpoint,
+                'certificate-authority-data': ca.data,
+              },
+              name: 'kubernetes',
+            },
+          ],
+          contexts: [
+            {
+              context: {
+                cluster: 'kubernetes',
+                user: 'aws',
+              },
+              name: 'aws',
+            },
+          ],
+          'current-context': 'aws',
+          users: [
+            {
+              name: 'aws',
+              user: {
+                exec: {
+                  apiVersion: 'client.authentication.k8s.io/v1beta1',
+                  command: 'aws',
+                  args: [
+                    'eks',
+                    'get-token',
+                    '--cluster-name',
+                    name,
+                    '--region',
+                    region,
+                  ],
+                },
+              },
+            },
+          ],
+        });
+      });
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _k8sProvider = new k8s.Provider(
       `k8s-provider-${environmentSuffix}`,
       {
-        kubeconfig: pulumi
-          .all([
-            eksCluster.name,
-            eksCluster.endpoint,
-            eksCluster.certificateAuthority,
-          ])
-          .apply(([name, endpoint, ca]: [string, string, { data: string }]) => {
-            return JSON.stringify({
-              apiVersion: 'v1',
-              kind: 'Config',
-              clusters: [
-                {
-                  cluster: {
-                    server: endpoint,
-                    'certificate-authority-data': ca.data,
-                  },
-                  name: 'kubernetes',
-                },
-              ],
-              contexts: [
-                {
-                  context: {
-                    cluster: 'kubernetes',
-                    user: 'aws',
-                  },
-                  name: 'aws',
-                },
-              ],
-              'current-context': 'aws',
-              users: [
-                {
-                  name: 'aws',
-                  user: {
-                    exec: {
-                      apiVersion: 'client.authentication.k8s.io/v1beta1',
-                      command: 'aws',
-                      args: [
-                        'eks',
-                        'get-token',
-                        '--cluster-name',
-                        name,
-                        '--region',
-                        region,
-                      ],
-                    },
-                  },
-                },
-              ],
-            });
-          }),
+        kubeconfig: kubeconfig,
       },
       { parent: this }
     );
 
     // Install EKS add-ons
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _coreDnsAddon = new aws.eks.Addon(
+    const coreDnsAddon = new aws.eks.Addon(
       `coredns-addon-${environmentSuffix}`,
       {
         clusterName: eksCluster.name,
@@ -506,8 +525,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _kubeProxyAddon = new aws.eks.Addon(
+    const kubeProxyAddon = new aws.eks.Addon(
       `kube-proxy-addon-${environmentSuffix}`,
       {
         clusterName: eksCluster.name,
@@ -520,8 +538,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _vpcCniAddon = new aws.eks.Addon(
+    const vpcCniAddon = new aws.eks.Addon(
       `vpc-cni-addon-${environmentSuffix}`,
       {
         clusterName: eksCluster.name,
@@ -555,6 +572,26 @@ export class TapStack extends pulumi.ComponentResource {
     // S3 endpoint - creating placeholder as it doesn't exist
     this.s3EndpointId = pulumi.output('');
 
+    // EKS Cluster outputs
+    this.clusterName = eksCluster.name;
+    this.clusterVersion = eksCluster.version;
+    this.clusterEndpoint = eksCluster.endpoint;
+    this.oidcIssuerUrl = eksCluster.identities[0].oidcs[0].issuer;
+    this.kubeconfig = kubeconfig;
+
+    // KMS outputs
+    this.kmsKeyId = eksKmsKey.id;
+    this.kmsKeyAliasName = eksKmsKeyAlias.name;
+    this.kmsKeyArn = eksKmsKey.arn;
+
+    // Route outputs
+    this.publicRouteId = publicRoute.id;
+
+    // Addon outputs
+    this.coreDnsAddonVersion = coreDnsAddon.addonVersion;
+    this.kubeProxyAddonVersion = kubeProxyAddon.addonVersion;
+    this.vpcCniAddonVersion = vpcCniAddon.addonVersion;
+
     // Register outputs with the component
     super.registerOutputs({
       vpcId: this.vpcId,
@@ -571,6 +608,18 @@ export class TapStack extends pulumi.ComponentResource {
       flowLogsBucketName: this.flowLogsBucketName,
       flowLogsLogGroupName: this.flowLogsLogGroupName,
       s3EndpointId: this.s3EndpointId,
+      clusterName: this.clusterName,
+      clusterVersion: this.clusterVersion,
+      clusterEndpoint: this.clusterEndpoint,
+      oidcIssuerUrl: this.oidcIssuerUrl,
+      kubeconfig: this.kubeconfig,
+      kmsKeyId: this.kmsKeyId,
+      kmsKeyAliasName: this.kmsKeyAliasName,
+      kmsKeyArn: this.kmsKeyArn,
+      publicRouteId: this.publicRouteId,
+      coreDnsAddonVersion: this.coreDnsAddonVersion,
+      kubeProxyAddonVersion: this.kubeProxyAddonVersion,
+      vpcCniAddonVersion: this.vpcCniAddonVersion,
     });
   }
 }
