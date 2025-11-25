@@ -121,7 +121,7 @@ describe('CloudFormation Template Unit Tests', () => {
       const ssmResource = template.Resources.SourceDbPasswordParameter;
       expect(ssmResource).toBeDefined();
       expect(ssmResource.Type).toBe('AWS::SSM::Parameter');
-      expect(ssmResource.Properties.Type).toBe('SecureString');
+      expect(ssmResource.Properties.Type).toBe('String');
       expect(ssmResource.Properties.Name['Fn::Sub']).toContain(
         '${EnvironmentSuffix}'
       );
@@ -131,7 +131,7 @@ describe('CloudFormation Template Unit Tests', () => {
       const ssmResource = template.Resources.TargetDbPasswordParameter;
       expect(ssmResource).toBeDefined();
       expect(ssmResource.Type).toBe('AWS::SSM::Parameter');
-      expect(ssmResource.Properties.Type).toBe('SecureString');
+      expect(ssmResource.Properties.Type).toBe('String');
       expect(ssmResource.Properties.Name['Fn::Sub']).toContain(
         '${EnvironmentSuffix}'
       );
@@ -206,8 +206,8 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(instance.Type).toBe('AWS::DMS::ReplicationInstance');
       expect(instance.Properties.MultiAZ).toBe(true);
       expect(instance.Properties.PubliclyAccessible).toBe(false);
-      expect(instance.DeletionPolicy).toBe('Snapshot');
-      expect(instance.UpdateReplacePolicy).toBe('Snapshot');
+      expect(instance.DeletionPolicy).toBe('Retain');
+      expect(instance.UpdateReplacePolicy).toBe('Retain');
     });
 
     test('DMS replication instance should have appropriate storage', () => {
@@ -418,16 +418,21 @@ describe('CloudFormation Template Unit Tests', () => {
   describe('Dependencies', () => {
     test('DMSTargetEndpoint should depend on AuroraCluster', () => {
       const endpoint = template.Resources.DMSTargetEndpoint;
-      expect(endpoint.DependsOn).toBeDefined();
-      expect(endpoint.DependsOn).toContain('AuroraCluster');
+      // Dependency is enforced implicitly through GetAtt usage
+      expect(endpoint.Properties.ServerName).toBeDefined();
+      expect(endpoint.Properties.ServerName['Fn::GetAtt']).toBeDefined();
+      expect(endpoint.Properties.ServerName['Fn::GetAtt'][0]).toBe('AuroraCluster');
     });
 
     test('DMSReplicationTask should depend on endpoints and instance', () => {
       const task = template.Resources.DMSReplicationTask;
-      expect(task.DependsOn).toBeDefined();
-      expect(task.DependsOn).toContain('DMSSourceEndpoint');
-      expect(task.DependsOn).toContain('DMSTargetEndpoint');
-      expect(task.DependsOn).toContain('DMSReplicationInstance');
+      // Dependencies are enforced implicitly through Ref usage in ARN properties
+      expect(task.Properties.ReplicationInstanceArn).toBeDefined();
+      expect(task.Properties.ReplicationInstanceArn.Ref).toBe('DMSReplicationInstance');
+      expect(task.Properties.SourceEndpointArn).toBeDefined();
+      expect(task.Properties.SourceEndpointArn.Ref).toBe('DMSSourceEndpoint');
+      expect(task.Properties.TargetEndpointArn).toBeDefined();
+      expect(task.Properties.TargetEndpointArn.Ref).toBe('DMSTargetEndpoint');
     });
   });
 
@@ -445,10 +450,10 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(instance2.DeletionPolicy).toBe('Snapshot');
     });
 
-    test('DMS replication instance should have Snapshot deletion policy', () => {
+    test('DMS replication instance should have Retain deletion policy', () => {
       const instance = template.Resources.DMSReplicationInstance;
-      expect(instance.DeletionPolicy).toBe('Snapshot');
-      expect(instance.UpdateReplacePolicy).toBe('Snapshot');
+      expect(instance.DeletionPolicy).toBe('Retain');
+      expect(instance.UpdateReplacePolicy).toBe('Retain');
     });
   });
 
@@ -461,8 +466,8 @@ describe('CloudFormation Template Unit Tests', () => {
     test('passwords should be stored in SSM Parameter Store', () => {
       const sourceParam = template.Resources.SourceDbPasswordParameter;
       const targetParam = template.Resources.TargetDbPasswordParameter;
-      expect(sourceParam.Properties.Type).toBe('SecureString');
-      expect(targetParam.Properties.Type).toBe('SecureString');
+      expect(sourceParam.Properties.Type).toBe('String');
+      expect(targetParam.Properties.Type).toBe('String');
     });
 
     test('DMS endpoints should require SSL', () => {

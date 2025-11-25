@@ -236,7 +236,7 @@
         "Name": {
           "Fn::Sub": "/dms/source-db-password-${EnvironmentSuffix}"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Ref": "SourceDbPassword"
         },
@@ -251,7 +251,7 @@
         "Name": {
           "Fn::Sub": "/aurora/master-password-${EnvironmentSuffix}"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Ref": "TargetDbPassword"
         },
@@ -292,8 +292,8 @@
     },
     "DMSReplicationInstance": {
       "Type": "AWS::DMS::ReplicationInstance",
-      "DeletionPolicy": "Snapshot",
-      "UpdateReplacePolicy": "Snapshot",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "ReplicationInstanceIdentifier": {
           "Fn::Sub": "aurora-migration-replica-instance-${EnvironmentSuffix}"
@@ -325,7 +325,6 @@
     },
     "DMSSourceEndpoint": {
       "Type": "AWS::DMS::Endpoint",
-      "DependsOn": "SourceDbPasswordParameter",
       "Properties": {
         "EndpointIdentifier": {
           "Fn::Sub": "source-postgres-endpoint-${EnvironmentSuffix}"
@@ -373,7 +372,7 @@
         },
         "MasterUsername": "postgres",
         "MasterUserPassword": {
-          "Ref": "TargetDbPassword"
+          "Fn::Sub": "{{resolve:ssm-secure:/aurora/master-password-${EnvironmentSuffix}}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
@@ -455,7 +454,6 @@
     },
     "DMSTargetEndpoint": {
       "Type": "AWS::DMS::Endpoint",
-      "DependsOn": ["AuroraCluster", "TargetDbPasswordParameter"],
       "Properties": {
         "EndpointIdentifier": {
           "Fn::Sub": "target-aurora-endpoint-${EnvironmentSuffix}"
@@ -474,7 +472,7 @@
         },
         "Username": "postgres",
         "Password": {
-          "Ref": "TargetDbPassword"
+          "Fn::Sub": "{{resolve:ssm-secure:/aurora/master-password-${EnvironmentSuffix}}}"
         },
         "SslMode": "require",
         "Tags": [
@@ -489,11 +487,6 @@
     },
     "DMSReplicationTask": {
       "Type": "AWS::DMS::ReplicationTask",
-      "DependsOn": [
-        "DMSSourceEndpoint",
-        "DMSTargetEndpoint",
-        "DMSReplicationInstance"
-      ],
       "Properties": {
         "ReplicationTaskIdentifier": {
           "Fn::Sub": "postgres-to-aurora-migration-${EnvironmentSuffix}"
