@@ -6,7 +6,7 @@ We need to build infrastructure for our retail company's inventory management we
 
 The application needs to run in containers on ECS Fargate, backed by a resilient Aurora MySQL database. The business requires high availability across multiple availability zones and wants to support automated deployments. Traffic needs to be distributed through an Application Load Balancer with path-based routing for API and health check endpoints.
 
-Security is important here - database credentials must be stored in Secrets Manager, and we need proper IAM roles for the ECS tasks to access ECR and CloudWatch Logs. The infrastructure needs to be production-ready and deployed in us-east-1 across three availability zones.
+Security is important here - database credentials must be stored in Secrets Manager, and we need proper IAM roles for the ECS cluster to access ECR and CloudWatch Logs. The infrastructure needs to be production-ready and deployed in us-east-1 across three availability zones.
 
 ## What we need to build
 
@@ -15,7 +15,7 @@ Create a highly available containerized web application infrastructure using **C
 ### Core Requirements
 
 1. **Container Orchestration**
-   - ECS Fargate cluster running minimum 2 tasks
+   - ECS cluster
    - Task definition configured with 1 vCPU and 2GB memory
    - Health check configurations with custom thresholds
 
@@ -28,12 +28,12 @@ Create a highly available containerized web application infrastructure using **C
    - VPC with 2 public and 2 private subnets across different availability zones
    - NAT Gateways for outbound internet access from private subnets
    - Application Load Balancer in public subnets
-   - ECS tasks and RDS in private subnets
+   - ECS cluster and RDS in private subnets
 
 4. **Security and Access**
    - IAM task execution role with permissions for ECR and CloudWatch Logs
    - Database credentials in Secrets Manager with automatic rotation disabled
-   - Security groups for ALB, ECS tasks, and RDS
+   - Security groups for ALB, ECS cluster, and RDS
 
 5. **Optional Enhancements** (if time permits)
    - CloudFront distribution for static asset caching
@@ -62,7 +62,7 @@ Create a highly available containerized web application infrastructure using **C
 ### Constraints
 
 - All resources must use specific naming conventions with environment prefixes
-- ECS task definition must include health check configurations with custom thresholds
+- ECS cluster
 - Application Load Balancer must implement path-based routing for /api/\* and /health
 - Database credentials must be stored in AWS Secrets Manager with automatic rotation disabled
 - CloudFormation stack must include custom resource tags for cost tracking

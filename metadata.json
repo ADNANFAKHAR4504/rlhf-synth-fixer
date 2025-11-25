@@ -7,20 +7,21 @@
   "startedAt": "2025-11-21T12:53:50.309908+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "DynamoDB",
-    "Lambda",
-    "S3",
-    "Route53",
-    "Secrets Manager",
-    "SNS",
-    "CloudWatch"
+    "ECS",
+    "RDS Aurora",
+    "ALB",
+    "VPC",
+    "IAM",
+    "Secrets Manager"
   ],
   "aws_services": [
-    "RDS",
+    "EC2",
+    "ECS",
     "ELB",
-    "SecretsManager",
-    "CloudWatch",
-    "IAM"
+    "IAM",
+    "Logs",
+    "RDS",
+    "Secrets Manager"
   ],
   "po_id": "101912552",
   "training_quality": 10,
