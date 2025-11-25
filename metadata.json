@@ -1,0 +1,30 @@
+{
+  "task_id": "g1l0y0k7",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "synth-training",
+  "team": "synth",
+  "startedAt": "2025-11-25T13:25:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "Config",
+    "SNS",
+    "SSM"
+  ],
+  "subject_labels": [
+    "security",
+    "compliance",
+    "pci-dss",
+    "encryption",
+    "networking",
+    "monitoring"
+  ]
+}
