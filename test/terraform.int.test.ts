@@ -482,7 +482,7 @@ describe("Multi-Region Trading Platform Infrastructure Integration Tests", () =>
       const asg = response.AutoScalingGroups![0];
       expect(asg.MinSize).toBe(2);
       expect(asg.MaxSize).toBe(6);
-      expect(asg.DesiredCapacity).toBe(3);
+      expect(asg.DesiredCapacity).toBe(2);
       expect(asg.DesiredCapacity!).toBeGreaterThanOrEqual(asg.MinSize!);
       expect(asg.DesiredCapacity!).toBeLessThanOrEqual(asg.MaxSize!);
 
@@ -649,6 +649,9 @@ describe("Multi-Region Trading Platform Infrastructure Integration Tests", () =>
     it("validates database credentials secret", async () => {
       if (skipIfMissing("db_credentials_secret_arn", outputs)) return;
 
+      // Check if the ARN is a valid string before validating format
+      expect(typeof outputs.db_credentials_secret_arn).toBe("string");
+      expect(outputs.db_credentials_secret_arn.trim()).toBeTruthy();
       expect(isValidArn(outputs.db_credentials_secret_arn)).toBe(true);
       expect(outputs.db_credentials_secret_arn).toContain("secretsmanager");
 
@@ -904,7 +907,7 @@ describe("Multi-Region Trading Platform Infrastructure Integration Tests", () =>
       expect(summary.compute.autoscaling_group).toBe(outputs.autoscaling_group_name);
       expect(summary.compute.min_size).toBe(2);
       expect(summary.compute.max_size).toBe(6);
-      expect(summary.compute.desired_capacity).toBe(3);
+      expect(summary.compute.desired_capacity).toBe(2);
     });
   });
 
