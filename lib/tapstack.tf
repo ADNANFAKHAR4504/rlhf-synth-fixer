@@ -579,9 +579,9 @@ resource "aws_security_group" "aurora" {
 # VPC Endpoint for DynamoDB (Gateway endpoint - available in all regions)
 resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id            = aws_vpc.main.id
-  service_name       = "com.amazonaws.${var.aws_region}.dynamodb"
-  vpc_endpoint_type  = "Gateway"
-  route_table_ids    = aws_route_table.private[*].id
+  service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = aws_route_table.private[*].id
 
   tags = merge(local.tags, {
     Name = "${local.resource_prefix}-dynamodb-endpoint"
