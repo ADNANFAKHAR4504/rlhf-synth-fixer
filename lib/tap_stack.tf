@@ -414,7 +414,7 @@ resource "aws_launch_template" "main" {
 # Application Load Balancer
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name_prefix        = "${substr(lower(var.project_name), 0, 6)}-"
+  name_prefix        = "${substr(lower(var.project_name), 0, 5)}-"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -431,7 +431,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "main" {
-  name_prefix = "${substr(lower(var.project_name), 0, 6)}-"
+  name_prefix = "${substr(lower(var.project_name), 0, 5)}-"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
@@ -885,7 +885,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           period = 300
           stat   = "Average"
-          region = "us-east-1"
+          region = var.aws_region
           title  = "Application Metrics"
         }
       }
