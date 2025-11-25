@@ -8,7 +8,9 @@
   "startedAt": "2025-11-25T01:48:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Environment Migration"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "CloudFormation StackSets",
