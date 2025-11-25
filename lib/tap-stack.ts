@@ -536,7 +536,7 @@ export class TapStack extends pulumi.ComponentResource {
             dbCluster.masterUsername,
             dbCluster.masterPassword,
           ])
-          .apply(([endpoint, username, password]: [string, string, string]) =>
+          .apply(([endpoint, username, password]: [string, string, string | undefined]) =>
             JSON.stringify({
               host: endpoint,
               port: 5432,
