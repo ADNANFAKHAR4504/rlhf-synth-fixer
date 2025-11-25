@@ -221,9 +221,11 @@ class TapStack(TerraformStack):
                             storage_class="GLACIER"
                         )
                     ],
-                    expiration=S3BucketLifecycleConfigurationRuleExpiration(
-                        days=2555  # 7 years retention for financial data
-                    )
+                    expiration=[
+                        S3BucketLifecycleConfigurationRuleExpiration(
+                            days=2555  # 7 years retention for financial data
+                        )
+                    ]
                 )
             ]
         )
