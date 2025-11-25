@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, Fn, Aspects
+from cdktf import TerraformStack, TerraformOutput, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
@@ -27,7 +27,6 @@ import json
 
 from lib.constructs.lambda_construct import ReusableLambdaConstruct
 from lib.constructs.lambda_layer_construct import SharedLambdaLayer
-from lib.constructs.tagging_aspect import TaggingAspect
 
 
 class TapStack(TerraformStack):
@@ -65,23 +64,14 @@ class TapStack(TerraformStack):
             else:
                 default_tags = {"tags": stack_tags}
 
-        # Configure AWS Provider
+        # Configure AWS Provider with default tags
+        # The default_tags feature automatically applies tags to all supported AWS resources
         AwsProvider(
             self,
             "aws",
             region=self.aws_region,
             default_tags=[default_tags]
         )
-
-        # Apply tagging aspect for FinOps compliance
-        Aspects.of(self).add(TaggingAspect({
-            "Environment": environment_suffix,
-            "ManagedBy": "CDKTF",
-            "CostCenter": "DataPipeline",
-            "Project": "FinancialDataProcessing",
-            "Team": "DataEngineering",
-            "Compliance": "FinOps"
-        }))
 
         # Get availability zones
         azs = DataAwsAvailabilityZones(
