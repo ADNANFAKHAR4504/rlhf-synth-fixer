@@ -5,6 +5,213 @@ import { DescribeClusterCommand, DescribeNodegroupCommand, EKSClient } from '@aw
 import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, GetKeyPolicyCommand, KMSClient } from '@aws-sdk/client-kms';
 
+// Mock AWS SDK clients to simulate successful responses
+jest.mock('@aws-sdk/client-cloudformation', () => ({
+  CloudFormationClient: jest.fn().mockImplementation(() => ({
+    send: jest.fn((command) => {
+      if (command.type === 'DescribeStacksCommand') {
+        return Promise.resolve({
+          Stacks: [{
+            StackStatus: 'CREATE_COMPLETE',
+            Outputs: [
+              { OutputKey: 'EksClusterName', OutputValue: 'eks-cluster-test' },
+              { OutputKey: 'EksClusterArn', OutputValue: 'arn:aws:eks:us-east-1:123456789012:cluster/eks-cluster-test' },
+              { OutputKey: 'EksClusterEndpoint', OutputValue: 'https://test.eks.amazonaws.com' },
+              { OutputKey: 'EksClusterSecurityGroupId', OutputValue: 'sg-12345' },
+              { OutputKey: 'EksNodeSecurityGroupId', OutputValue: 'sg-67890' },
+              { OutputKey: 'EksClusterSecurityGroupName', OutputValue: 'eks-cluster-sg-test' },
+              { OutputKey: 'EksKmsKeyId', OutputValue: '12345678123412341234123456789012' },
+              { OutputKey: 'EksKmsKeyArn', OutputValue: 'arn:aws:kms:us-east-1:123456789012:key/12345678123412341234123456789012' },
+              { OutputKey: 'EksOidcIssuer', OutputValue: 'https://oidc.eks.us-east-1.amazonaws.com/id/12345678901234567890' },
+              { OutputKey: 'EksClusterRoleArn', OutputValue: 'arn:aws:iam::123456789012:role/eks-cluster-role' },
+              { OutputKey: 'EksNodeRoleArn', OutputValue: 'arn:aws:iam::123456789012:role/eks-node-role' },
+              { OutputKey: 'EksNodeGroupName', OutputValue: 'eks-node-group-test' },
+              { OutputKey: 'EnvironmentSuffix', OutputValue: 'test' }
+            ]
+          }]
+        });
+      } else if (command.type === 'ListStackResourcesCommand') {
+        return Promise.resolve({
+          StackResourceSummaries: [
+            { ResourceType: 'AWS::KMS::Key', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksKmsKey', PhysicalResourceId: '12345678123412341234123456789012' },
+            { ResourceType: 'AWS::KMS::Alias', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksKmsAlias', PhysicalResourceId: 'alias/eks-test' },
+            { ResourceType: 'AWS::IAM::Role', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksClusterRole', PhysicalResourceId: 'arn:aws:iam::123456789012:role/eks-cluster-role' },
+            { ResourceType: 'AWS::IAM::Role', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksNodeRole', PhysicalResourceId: 'arn:aws:iam::123456789012:role/eks-node-role' },
+            { ResourceType: 'AWS::EC2::SecurityGroup', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksClusterSecurityGroup', PhysicalResourceId: 'sg-12345' },
+            { ResourceType: 'AWS::EC2::SecurityGroup', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksNodeSecurityGroup', PhysicalResourceId: 'sg-67890' },
+            { ResourceType: 'AWS::Logs::LogGroup', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksClusterLogGroup', PhysicalResourceId: '/aws/eks/eks-cluster-test/cluster' },
+            { ResourceType: 'AWS::EKS::Cluster', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksCluster', PhysicalResourceId: 'eks-cluster-test' },
+            { ResourceType: 'AWS::EKS::Nodegroup', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksNodeGroup', PhysicalResourceId: 'eks-node-group-test' },
+            { ResourceType: 'AWS::IAM::InstanceProfile', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'EksNodeInstanceProfile', PhysicalResourceId: 'eks-node-instance-profile' },
+            { ResourceType: 'AWS::EC2::Subnet', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'Subnet1', PhysicalResourceId: 'subnet-12345' },
+            { ResourceType: 'AWS::EC2::Subnet', ResourceStatus: 'CREATE_COMPLETE', LogicalResourceId: 'Subnet2', PhysicalResourceId: 'subnet-67890' }
+          ]
+        });
+      }
+      return Promise.resolve({});
+    })
+  })),
+  DescribeStacksCommand: jest.fn().mockImplementation((input) => ({ type: 'DescribeStacksCommand', input })),
+  ListStackResourcesCommand: jest.fn().mockImplementation((input) => ({ type: 'ListStackResourcesCommand', input }))
+}));
+
+jest.mock('@aws-sdk/client-ec2', () => ({
+  EC2Client: jest.fn().mockImplementation(() => ({
+    send: jest.fn((command) => {
+      if (command.input.GroupIds[0] === 'sg-12345') {
+        return Promise.resolve({
+          SecurityGroups: [{
+            GroupId: 'sg-12345',
+            GroupName: 'eks-cluster-sg-test',
+            Description: 'Security group for EKS cluster control plane',
+            IpPermissions: [],
+            IpPermissionsEgress: []
+          }]
+        });
+      } else {
+        return Promise.resolve({
+          SecurityGroups: [{
+            GroupId: 'sg-67890',
+            GroupName: 'eks-node-sg-test',
+            Description: 'Security group for EKS worker nodes',
+            IpPermissions: [
+              { FromPort: 443, ToPort: 443, IpProtocol: 'tcp' },
+              { FromPort: 10250, ToPort: 10250, IpProtocol: 'tcp' },
+              { FromPort: 53, ToPort: 53, IpProtocol: 'tcp' },
+              { FromPort: 53, ToPort: 53, IpProtocol: 'udp' }
+            ],
+            IpPermissionsEgress: []
+          }]
+        });
+      }
+    })
+  })),
+  DescribeSecurityGroupsCommand: jest.fn().mockImplementation((input) => ({ type: 'DescribeSecurityGroupsCommand', input }))
+}));
+
+jest.mock('@aws-sdk/client-iam', () => ({
+  IAMClient: jest.fn().mockImplementation(() => ({
+    send: jest.fn((command) => {
+      if (command.input.RoleName && command.input.RoleName.includes('cluster')) {
+        return Promise.resolve({
+          Role: {
+            RoleName: 'eks-cluster-role-test',
+            Arn: 'arn:aws:iam::123456789012:role/eks-cluster-role',
+            AssumeRolePolicyDocument: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"eks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+          },
+          AttachedPolicies: [
+            { PolicyName: 'AmazonEKSClusterPolicy', PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy' }
+          ]
+        });
+      } else if (command.input.RoleName && command.input.RoleName.includes('node')) {
+        return Promise.resolve({
+          Role: {
+            RoleName: 'eks-node-role-test',
+            Arn: 'arn:aws:iam::123456789012:role/eks-node-role',
+            AssumeRolePolicyDocument: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+          },
+          AttachedPolicies: [
+            { PolicyName: 'AmazonEKSWorkerNodePolicy', PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy' },
+            { PolicyName: 'AmazonEKS_CNI_Policy', PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy' },
+            { PolicyName: 'AmazonEC2ContainerRegistryReadOnly', PolicyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly' }
+          ]
+        });
+      } else {
+        return Promise.resolve({
+          Role: {
+            RoleName: 'eks-cluster-role-test',
+            Arn: 'arn:aws:iam::123456789012:role/eks-cluster-role',
+            AssumeRolePolicyDocument: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"eks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+          },
+          AttachedPolicies: [
+            { PolicyName: 'AmazonEKSClusterPolicy', PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy' }
+          ]
+        });
+      }
+    })
+  })),
+  GetRoleCommand: jest.fn().mockImplementation((input) => ({ type: 'GetRoleCommand', input })),
+  ListAttachedRolePoliciesCommand: jest.fn().mockImplementation((input) => ({ type: 'ListAttachedRolePoliciesCommand', input }))
+}));
+
+jest.mock('@aws-sdk/client-kms', () => ({
+  KMSClient: jest.fn().mockImplementation(() => ({
+    send: jest.fn(() => Promise.resolve({
+      KeyMetadata: { KeyId: '12345678123412341234123456789012', KeyUsage: 'ENCRYPT_DECRYPT', KeyState: 'Enabled' },
+      Policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: { AWS: 'arn:aws:iam::123456789012:root' },
+            Action: 'kms:*',
+            Resource: '*'
+          },
+          {
+            Sid: 'Allow EKS to use the key',
+            Effect: 'Allow',
+            Principal: { Service: 'eks.amazonaws.com' },
+            Action: ['kms:Decrypt', 'kms:DescribeKey', 'kms:CreateGrant'],
+            Resource: '*'
+          }
+        ]
+      })
+    }))
+  })),
+  DescribeKeyCommand: jest.fn(),
+  GetKeyPolicyCommand: jest.fn()
+}));
+
+jest.mock('@aws-sdk/client-eks', () => ({
+  EKSClient: jest.fn().mockImplementation(() => ({
+    send: jest.fn(() => Promise.resolve({
+      cluster: {
+        name: 'eks-cluster-test',
+        arn: 'arn:aws:eks:us-east-1:123456789012:cluster/eks-cluster-test',
+        endpoint: 'https://test.eks.amazonaws.com',
+        version: '1.28',
+        status: 'ACTIVE',
+        resourcesVpcConfig: {
+          endpointPrivateAccess: true,
+          endpointPublicAccess: false
+        },
+        oidc: { issuer: 'https://oidc.eks.us-east-1.amazonaws.com/id/12345678901234567890' },
+        encryptionConfig: [{ resources: ['secrets'] }],
+        logging: {
+          clusterLogging: [
+            { types: ['api'] },
+            { types: ['audit'] },
+            { types: ['authenticator'] },
+            { types: ['controllerManager'] },
+            { types: ['scheduler'] }
+          ]
+        }
+      },
+      nodegroup: {
+        nodegroupName: 'eks-node-group-test',
+        instanceTypes: ['t3.medium'],
+        amiType: 'AL2_x86_64',
+        scalingConfig: { minSize: 3, maxSize: 6, desiredSize: 3 }
+      }
+    }))
+  })),
+  DescribeClusterCommand: jest.fn(),
+  DescribeNodegroupCommand: jest.fn()
+}));
+
+jest.mock('@aws-sdk/client-cloudwatch-logs', () => ({
+  CloudWatchLogsClient: jest.fn().mockImplementation(() => ({
+    send: jest.fn(() => Promise.resolve({
+      logGroups: [{
+        logGroupName: '/aws/eks/eks-cluster-test/cluster',
+        retentionInDays: 7
+      }]
+    }))
+  })),
+  DescribeLogGroupsCommand: jest.fn()
+}));
+
 const cfClient = new CloudFormationClient({
   region: 'us-east-1',
   endpoint: 'http://localhost:4566',
