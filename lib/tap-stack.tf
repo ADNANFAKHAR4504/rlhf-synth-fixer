@@ -622,6 +622,7 @@ resource "aws_lambda_function" "transaction_validation" {
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.transactions.name
+      S3_BUCKET      = aws_s3_bucket.transaction_archive.id
       LOG_LEVEL      = "INFO"
     }
   }
