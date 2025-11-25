@@ -29,12 +29,6 @@
       "Description": "Master username for Aurora database",
       "Default": "dbadmin",
       "NoEcho": true
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true,
-      "MinLength": 8
     }
   },
   "Resources": {
@@ -497,7 +491,7 @@
         "EngineVersion": "15.8",
         "DatabaseName": "creditscoring",
         "MasterUsername": {"Ref": "DBMasterUsername"},
-        "MasterUserPassword": {"Ref": "DBMasterPassword"},
+        "ManageMasterUserPassword": true,
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "RDSSecurityGroup"}],
         "StorageEncrypted": true,
