@@ -311,6 +311,13 @@ describe('TapStack', () => {
     expect(Object.keys(buckets).length).toBeGreaterThan(0);
   });
 
+  test('does not enable Data API for provisioned aurora clusters', () => {
+    const { template } = synthStack();
+    template.hasResourceProperties('AWS::RDS::DBCluster', {
+      EnableHttpEndpoint: Match.absent(),
+    });
+  });
+
   test('creates Lambda functions with VPC configuration', () => {
     const { template } = synthStack();
     const lambdas = template.findResources('AWS::Lambda::Function');

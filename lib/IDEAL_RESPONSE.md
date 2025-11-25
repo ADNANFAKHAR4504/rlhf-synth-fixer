@@ -839,7 +839,7 @@ export class TapStack extends cdk.Stack {
       fn.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       bucket.grantReadWrite(fn);
       key.grantEncryptDecrypt(fn);
-      cluster.grantDataApiAccess(fn);
+      cluster.secret?.grantRead(fn);
 
       const stableVersion = fn.currentVersion;
       const canaryVersion = new lambda.Version(

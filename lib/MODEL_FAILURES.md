@@ -84,3 +84,11 @@
 **Fix:** Explicitly set `deletionProtection: false` on all Aurora clusters.
 
 **Impact:** Allows Aurora clusters to be deleted during stack destruction without manual intervention.
+
+## 9. Data API Configuration
+
+**Issue:** The MODEL_RESPONSE enabled Data API access via `grantDataApiAccess`, which forces CloudFormation to set `EnableHttpEndpoint: true`. Provisioned Aurora MySQL clusters running engine versions below 3.07 reject Data API enablement and fail creation.
+
+**Fix:** Removed Data API grants and instead granted Lambda functions read access to the generated cluster secret (`cluster.secret?.grantRead(fn)`).
+
+**Impact:** Prevents `InvalidRequest` errors caused by unsupported Data API endpoints while keeping Lambda access to database credentials.

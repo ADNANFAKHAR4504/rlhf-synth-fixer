@@ -623,7 +623,6 @@ export class TapStack extends cdk.Stack {
         storageEncryptionKey: kmsKey,
         instances: envKey === 'prod' ? 3 : 1,
         subnetGroup,
-        // Note: enableDataApi only works with Aurora Serverless v2, not provisioned clusters
         instanceProps: {
           vpc,
           vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -847,7 +846,7 @@ export class TapStack extends cdk.Stack {
       fn.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       bucket.grantReadWrite(fn);
       key.grantEncryptDecrypt(fn);
-      cluster.grantDataApiAccess(fn);
+      cluster.secret?.grantRead(fn);
 
       const stableVersion = fn.currentVersion;
       const canaryVersion = new lambda.Version(
