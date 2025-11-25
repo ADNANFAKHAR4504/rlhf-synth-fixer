@@ -285,7 +285,7 @@ class TapStack(Stack):
         primary = rds.DatabaseInstance(
             self, "PostgresPrimary",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14
+                version=rds.PostgresEngineVersion.VER_16_3
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.R6G,
@@ -298,8 +298,6 @@ class TapStack(Stack):
             multi_az=True,
             allocated_storage=1000,
             storage_type=rds.StorageType.GP3,
-            iops=5000,
-            storage_throughput=250,
             storage_encrypted=True,
             database_name="tapdb",
             credentials=rds.Credentials.from_generated_secret(

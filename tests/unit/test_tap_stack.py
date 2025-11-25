@@ -178,7 +178,7 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(len(primary_instances), 1)
         primary = primary_instances[0]["Properties"]
         self.assertEqual(primary["Engine"], "postgres")
-        self.assertEqual(primary["EngineVersion"], "14")
+        self.assertEqual(primary["EngineVersion"], "16.3")
         self.assertEqual(primary["DBInstanceClass"], "db.r6g.2xlarge")
         self.assertTrue(primary["StorageEncrypted"])
         self.assertTrue(primary["MultiAZ"])
