@@ -3,11 +3,10 @@
   "platform": "cfn",
   "language": "json",
   "complexity": "expert",
-  "turn_type": "multi",
-  "po_id": "synth-training",
+  "turn_type": "single",
+  "po_id": "g1l0y0k7",
   "team": "synth",
   "author": "mayanksethi-turing",
-  "reviewer": "adnan-turing",
   "startedAt": "2025-11-25T13:25:00Z",
   "subtask": "Security, Compliance, and Governance",
   "aws_services": [
@@ -22,12 +21,7 @@
     "SSM"
   ],
   "subject_labels": [
-    "security",
-    "compliance",
-    "pci-dss",
-    "encryption",
-    "networking",
-    "monitoring"
+    "Security Configuration As Code"
   ],
   "coverage": {
     "lines": 100,
