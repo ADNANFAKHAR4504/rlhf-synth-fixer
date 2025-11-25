@@ -435,7 +435,6 @@ transaction_processor_lambda = aws.lambda_.Function(
     role=lambda_execution_role.arn,
     timeout=60,
     memory_size=1024,
-    reserved_concurrent_executions=100,
     dead_letter_config=aws.lambda_.FunctionDeadLetterConfigArgs(
         target_arn=failure_alert_topic.arn
     ),
@@ -570,7 +569,6 @@ fraud_detector_lambda = aws.lambda_.Function(
     role=lambda_execution_role.arn,
     timeout=30,
     memory_size=512,
-    reserved_concurrent_executions=50,
     environment=aws.lambda_.FunctionEnvironmentArgs(
         variables={
             "FRAUD_TABLE": fraud_detection_table.name,
@@ -1114,8 +1112,7 @@ The implementation includes all required components:
 - **Step Functions**: Complex fraud detection workflow orchestration
 - **CloudWatch**: Comprehensive monitoring and alerting
 
-### 2. **Security Features**
-
+### 2. **Security Features
 - **KMS Encryption**: All data encrypted at rest and in transit
 - **IAM Least Privilege**: Minimal permissions for each service
 - **VPC Support**: Ready for VPC deployment (attachments configurable)
@@ -1124,7 +1121,6 @@ The implementation includes all required components:
 ### 3. **Performance Optimizations**
 
 - **FIFO Ordering**: Maintains transaction order per customer
-- **Reserved Concurrency**: Guarantees processing capacity
 - **Long Polling**: Reduces API calls and latency
 - **Batch Processing**: Efficient message handling
 - **ARM Architecture**: 20% better price-performance with Graviton2

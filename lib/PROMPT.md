@@ -46,7 +46,6 @@ The solution uses an event-driven architecture deployed in the **us-east-1** reg
 - CloudWatch alarms for queue depth exceeding 1,000 messages
 
 #### Compute Resources
-- Lambda functions with reserved concurrency of 100
 - ARM-based Graviton2 architecture for all Lambda functions
 - Lambda destinations for both success and failure scenarios
 - X-Ray tracing enabled for performance monitoring

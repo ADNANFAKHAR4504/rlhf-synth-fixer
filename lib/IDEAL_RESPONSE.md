@@ -567,7 +567,6 @@ class TapStack(pulumi.ComponentResource):
             architectures=["arm64"],  # Graviton2
             handler="transaction_processor.lambda_handler",
             role=self.lambda_role.arn,
-            reserved_concurrent_executions=100,
             timeout=300,
             memory_size=512,
             layers=[self.lambda_layer.arn],
@@ -606,7 +605,6 @@ class TapStack(pulumi.ComponentResource):
             architectures=["arm64"],  # Graviton2
             handler="priority_processor.lambda_handler",
             role=self.lambda_role.arn,
-            reserved_concurrent_executions=50,
             timeout=180,
             memory_size=1024,
             layers=[self.lambda_layer.arn],
