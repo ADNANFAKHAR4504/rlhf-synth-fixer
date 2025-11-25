@@ -34,17 +34,9 @@ pulumi.runtime.setMocks({
 // This must be set before importing the tap-stack module
 // In test mode, Pulumi uses "project" as the default namespace when Pulumi.yaml isn't loaded
 // We set both namespaces to ensure compatibility
-const testPassword = 'test-password-123';
-pulumi.runtime.setConfig('project:dbPassword', testPassword);
-pulumi.runtime.setConfig('TapStack:dbPassword', testPassword);
 pulumi.runtime.setConfig('TapStack:environmentSuffix', 'test');
 
-// Also set it as a secret (Pulumi treats secrets differently)
-// Note: setConfig should work for secrets, but we ensure it's available
-if ((pulumi.runtime as any).setConfigSecret) {
-  (pulumi.runtime as any).setConfigSecret('project:dbPassword', testPassword);
-  (pulumi.runtime as any).setConfigSecret('TapStack:dbPassword', testPassword);
-}
+// Note: dbPassword is now handled via AWS Secrets Manager, so no config needed
 
 // Helper function to reset modules and set environment variable
 function resetModulesAndSetEnv(envSuffix?: string) {
@@ -136,6 +128,13 @@ describe('TapStack Module - Exports', () => {
   test('Module exports secondaryLambdaArn', () => {
     const tapStack = require('../lib/tap-stack');
     expect(tapStack.secondaryLambdaArn).toBeDefined();
+  });
+
+  test('Module exports dbSecretArn', () => {
+    const tapStack = require('../lib/tap-stack');
+    expect(tapStack.dbSecretArn).toBeDefined();
+    // Secret ARN should be a Pulumi Output
+    expect(tapStack.dbSecretArn).toBeDefined();
   });
 });
 
@@ -307,6 +306,7 @@ describe('TapStack Module - Structure', () => {
       'vpcPeeringConnectionId',
       'primaryLambdaArn',
       'secondaryLambdaArn',
+      'dbSecretArn',
     ];
 
     expectedExports.forEach(exportName => {

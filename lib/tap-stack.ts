@@ -1,5 +1,6 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 
 const config = new pulumi.Config();
 // Get configuration - prioritize environment variables, then Pulumi config, then default to 'dev'
@@ -13,6 +14,40 @@ const commonTags = {
   DisasterRecovery: 'enabled',
   ManagedBy: 'Pulumi',
 };
+
+// Generate random password for database
+const dbPassword = new random.RandomPassword(
+  `db-password-${environmentSuffix}`,
+  {
+    length: 32,
+    special: true,
+    overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+  }
+);
+
+// Store password in AWS Secrets Manager
+const dbSecret = new aws.secretsmanager.Secret(
+  `db-secret-${environmentSuffix}`,
+  {
+    name: `aurora-db-password-${environmentSuffix}`,
+    description: 'Aurora MySQL database password',
+    recoveryWindowInDays: 0, // Allow immediate deletion for testing
+    tags: {
+      ...commonTags,
+      Name: `db-secret-${environmentSuffix}`,
+      Purpose: 'DatabasePassword',
+    },
+  }
+);
+
+// Store the password in the secret
+new aws.secretsmanager.SecretVersion(`db-secret-version-${environmentSuffix}`, {
+  secretId: dbSecret.id,
+  secretString: pulumi.interpolate`{"username":"admin","password":"${dbPassword.result}"}`,
+});
+
+// Export the secret ARN for reference
+export const dbSecretArn = dbSecret.arn;
 
 // Primary region provider (us-east-1)
 const primaryProvider = new aws.Provider('primary-provider', {
@@ -456,7 +491,7 @@ const primaryCluster = new aws.rds.Cluster(
     engineVersion: '8.0.mysql_aurora.3.04.0',
     databaseName: 'tradingdb',
     masterUsername: 'admin',
-    masterPassword: config.requireSecret('dbPassword'),
+    masterPassword: dbPassword.result,
     dbSubnetGroupName: primaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [primaryRdsSg.id],
     globalClusterIdentifier: globalCluster.id,
@@ -832,7 +867,7 @@ const primaryLambda = new aws.lambda.Function(
       variables: {
         DB_HOST: primaryCluster.endpoint,
         DB_USER: 'admin',
-        DB_PASSWORD: config.requireSecret('dbPassword'),
+        DB_PASSWORD: dbPassword.result,
         DB_NAME: 'tradingdb',
       },
     },
@@ -865,7 +900,7 @@ const secondaryLambda = new aws.lambda.Function(
       variables: {
         DB_HOST: secondaryCluster.endpoint,
         DB_USER: 'admin',
-        DB_PASSWORD: config.requireSecret('dbPassword'),
+        DB_PASSWORD: dbPassword.result,
         DB_NAME: 'tradingdb',
       },
     },
