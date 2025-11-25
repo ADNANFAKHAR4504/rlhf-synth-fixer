@@ -8,14 +8,7 @@
   "startedAt": "2025-11-25T18:20:56+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Lambda functions must use ARM-based Graviton2 processors for cost optimization",
-    "DynamoDB tables must use point-in-time recovery and encryption at rest",
-    "All Lambda functions must have reserved concurrent executions configured",
-    "Use Pulumi's native AWS provider without AWS SDK imports",
-    "Lambda environment variables must be encrypted with a customer-managed KMS key",
-    "Enable X-Ray tracing on all Lambda functions and API Gateway stages",
-    "Implement exponential backoff retry logic in Step Functions state machine",
-    "All IAM policies must follow least privilege principle with no wildcard actions"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "KMS",
@@ -27,5 +20,6 @@
     "IAM",
     "X-Ray"
   ],
+  "author": "mayanksethi-turing",
   "training_quality": 10
 }
