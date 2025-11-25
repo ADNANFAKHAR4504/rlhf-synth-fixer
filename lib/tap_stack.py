@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, Fn
+from cdktf import TerraformStack, TerraformOutput, Fn, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
@@ -39,6 +39,17 @@ class TapStack(TerraformStack):
         self.state_bucket = state_bucket
         self.state_bucket_region = state_bucket_region
         self.aws_region = aws_region
+        self.version = "v1"  # Version suffix for resource names
+
+        # Configure S3 backend for state management
+        if state_bucket and state_bucket_region:
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"tap-stack/{environment_suffix}/terraform.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
 
         # Merge default tags with stack-specific tags
         if default_tags is None:
@@ -176,14 +187,14 @@ class TapStack(TerraformStack):
 
     def _create_s3_bucket(self) -> S3Bucket:
         """Create S3 bucket with lifecycle policies for Glacier transition."""
-        # Use backward-compatible naming convention
+        # Use backward-compatible naming convention with version suffix
         bucket = S3Bucket(
             self,
             "data-bucket",
-            bucket=f"financial-data-pipeline-{self.environment_suffix}",
+            bucket=f"financial-data-pipeline-{self.environment_suffix}-{self.version}",
             force_destroy=True,  # Allows bucket to be destroyed
             tags={
-                "Name": f"data-bucket-{self.environment_suffix}",
+                "Name": f"data-bucket-{self.environment_suffix}-{self.version}",
                 "Purpose": "RawDataStorage",
                 "Environment": self.environment_suffix
             }
@@ -241,7 +252,7 @@ class TapStack(TerraformStack):
         table = DynamodbTable(
             self,
             "metadata-table",
-            name=f"pipeline-metadata-{self.environment_suffix}",
+            name=f"pipeline-metadata-{self.environment_suffix}-{self.version}",
             billing_mode="PAY_PER_REQUEST",  # On-demand billing
             hash_key="jobId",
             range_key="timestamp",
@@ -259,7 +270,7 @@ class TapStack(TerraformStack):
                 enabled=True  # Enable point-in-time recovery
             ),
             tags={
-                "Name": f"metadata-table-{self.environment_suffix}",
+                "Name": f"metadata-table-{self.environment_suffix}-{self.version}",
                 "Purpose": "MetadataTracking",
                 "Environment": self.environment_suffix
             }
@@ -272,9 +283,9 @@ class TapStack(TerraformStack):
         topic = SnsTopic(
             self,
             "alert-topic",
-            name=f"pipeline-alerts-{self.environment_suffix}",
+            name=f"pipeline-alerts-{self.environment_suffix}-{self.version}",
             tags={
-                "Name": f"alert-topic-{self.environment_suffix}",
+                "Name": f"alert-topic-{self.environment_suffix}-{self.version}",
                 "Purpose": "PipelineAlerting",
                 "Environment": self.environment_suffix
             }
@@ -826,7 +837,7 @@ class TapStack(TerraformStack):
         SsmParameter(
             self,
             "bucket-name-param",
-            name=f"/pipeline/{self.environment_suffix}/bucket-name",
+            name=f"/pipeline/{self.environment_suffix}/{self.version}/bucket-name",
             type="String",
             value=self.data_bucket.bucket,
             tags={
@@ -838,7 +849,7 @@ class TapStack(TerraformStack):
         SsmParameter(
             self,
             "table-name-param",
-            name=f"/pipeline/{self.environment_suffix}/table-name",
+            name=f"/pipeline/{self.environment_suffix}/{self.version}/table-name",
             type="String",
             value=self.metadata_table.name,
             tags={
@@ -863,7 +874,7 @@ class TapStack(TerraformStack):
         SsmParameter(
             self,
             "vpc-id-param",
-            name=f"/pipeline/{self.environment_suffix}/vpc-id",
+            name=f"/pipeline/{self.environment_suffix}/{self.version}/vpc-id",
             type="String",
             value=self.vpc.id,
             tags={
