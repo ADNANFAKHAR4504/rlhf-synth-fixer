@@ -347,11 +347,15 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    # Ensure required project config values are set (some projects require environmentSuffix)
+    pipenv run pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
 
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
+    # Ensure environmentSuffix is configured for the stack before applying other config
+    pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
     echo "Deploying infrastructure ..."
@@ -415,6 +419,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
+    # Ensure required config is present for newly-created stack
+    pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
     
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
