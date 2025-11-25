@@ -679,7 +679,7 @@ class DatabaseStack(Construct):
             cluster_identifier=f'bluegreen-cluster-{environment_suffix}',
             engine='aurora-postgresql',
             engine_mode='provisioned',
-            engine_version='15.4',
+            engine_version='15',
             database_name='appdb',
             master_username='dbadmin',
             master_password=password,
@@ -699,7 +699,7 @@ class DatabaseStack(Construct):
             cluster_identifier=self.rds_cluster.id,
             instance_class='db.serverless',
             engine='aurora-postgresql',
-            engine_version='15.4',
+            engine_version='15',
             tags={'Name': f'bluegreen-instance-{environment_suffix}'}
         )
 
