@@ -153,7 +153,7 @@ The solution implements:
                         "Minutes": 15
                       }
                     },
-                    "StorageClass": "STANDARD_IA"
+                    "StorageClass": "STANDARD"
                   },
                   "DeleteMarkerReplication": {
                     "Status": "Enabled"
@@ -1036,53 +1036,124 @@ The solution implements:
                 "import json",
                 "import boto3",
                 "import os",
+                "import urllib3",
                 "from datetime import datetime",
                 "from decimal import Decimal",
                 "",
                 "dynamodb = boto3.resource('dynamodb')",
                 "cloudwatch = boto3.client('cloudwatch')",
+                "cfn = boto3.client('cloudformation')",
+                "http = urllib3.PoolManager()",
+                "",
+                "def send_response(event, context, response_status, response_data, physical_resource_id=None):",
+                "    response_url = event['ResponseURL']",
+                "    response_body = json.dumps({",
+                "        'Status': response_status,",
+                "        'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',",
+                "        'PhysicalResourceId': physical_resource_id or context.log_stream_name,",
+                "        'StackId': event['StackId'],",
+                "        'RequestId': event['RequestId'],",
+                "        'LogicalResourceId': event['LogicalResourceId'],",
+                "        'Data': response_data",
+                "    })",
+                "    headers = {'content-type': '', 'content-length': str(len(response_body))}",
+                "    http.request('PUT', response_url, body=response_body.encode('utf-8'), headers=headers)",
                 "",
                 "def handler(event, context):",
-                "    table = dynamodb.Table(os.environ['STATE_TABLE'])",
-                "    ",
-                "    migration_id = event.get('migrationId', 'default')",
-                "    status = event.get('status', 'IN_PROGRESS')",
-                "    progress = event.get('progress', 0)",
-                "    ",
-                "    # Update migration state",
-                "    table.put_item(Item={",
-                "        'MigrationId': migration_id,",
-                "        'Timestamp': Decimal(str(datetime.now().timestamp())),",
-                "        'Status': status,",
-                "        'Progress': Decimal(str(progress)),",
-                "        'Region': os.environ['AWS_REGION'],",
-                "        'Details': json.dumps(event.get('details', {}))",
-                "    })",
-                "    ",
-                "    # Publish custom CloudWatch metric",
-                "    cloudwatch.put_metric_data(",
-                "        Namespace='TradingPlatform/Migration',",
-                "        MetricData=[",
-                "            {",
-                "                'MetricName': 'MigrationProgress',",
-                "                'Value': progress,",
-                "                'Unit': 'Percent',",
-                "                'Dimensions': [",
-                "                    {'Name': 'MigrationId', 'Value': migration_id},",
-                "                    {'Name': 'Region', 'Value': os.environ['AWS_REGION']}",
+                "    try:",
+                "        # Handle CloudFormation Custom Resource events",
+                "        if 'RequestType' in event:",
+                "            request_type = event['RequestType']",
+                "            resource_props = event.get('ResourceProperties', {})",
+                "            migration_id = resource_props.get('MigrationId', 'default')",
+                "            ",
+                "            table = dynamodb.Table(os.environ['STATE_TABLE'])",
+                "            ",
+                "            if request_type == 'Create' or request_type == 'Update':",
+                "                status = resource_props.get('Status', 'IN_PROGRESS')",
+                "                progress = resource_props.get('Progress', 0)",
+                "                ",
+                "                # Update migration state",
+                "                table.put_item(Item={",
+                "                    'MigrationId': migration_id,",
+                "                    'Timestamp': Decimal(str(datetime.now().timestamp())),",
+                "                    'Status': status,",
+                "                    'Progress': Decimal(str(progress)),",
+                "                    'Region': os.environ['AWS_REGION'],",
+                "                    'Details': json.dumps(resource_props.get('Details', {}))",
+                "                })",
+                "                ",
+                "                # Publish custom CloudWatch metric",
+                "                cloudwatch.put_metric_data(",
+                "                    Namespace='TradingPlatform/Migration',",
+                "                    MetricData=[",
+                "                        {",
+                "                            'MetricName': 'MigrationProgress',",
+                "                            'Value': progress,",
+                "                            'Unit': 'Percent',",
+                "                            'Dimensions': [",
+                "                                {'Name': 'MigrationId', 'Value': migration_id},",
+                "                                {'Name': 'Region', 'Value': os.environ['AWS_REGION']}",
+                "                            ]",
+                "                        }",
+                "                    ]",
+                "                )",
+                "                ",
+                "                send_response(event, context, 'SUCCESS', {",
+                "                    'MigrationId': migration_id,",
+                "                    'Status': status,",
+                "                    'Progress': str(progress)",
+                "                }, physical_resource_id=migration_id)",
+                "            elif request_type == 'Delete':",
+                "                # Cleanup on delete",
+                "                send_response(event, context, 'SUCCESS', {}, physical_resource_id=migration_id)",
+                "        else:",
+                "            # Handle direct Lambda invocation (backward compatibility)",
+                "            table = dynamodb.Table(os.environ['STATE_TABLE'])",
+                "            ",
+                "            migration_id = event.get('migrationId', 'default')",
+                "            status = event.get('status', 'IN_PROGRESS')",
+                "            progress = event.get('progress', 0)",
+                "            ",
+                "            # Update migration state",
+                "            table.put_item(Item={",
+                "                'MigrationId': migration_id,",
+                "                'Timestamp': Decimal(str(datetime.now().timestamp())),",
+                "                'Status': status,",
+                "                'Progress': Decimal(str(progress)),",
+                "                'Region': os.environ['AWS_REGION'],",
+                "                'Details': json.dumps(event.get('details', {}))",
+                "            })",
+                "            ",
+                "            # Publish custom CloudWatch metric",
+                "            cloudwatch.put_metric_data(",
+                "                Namespace='TradingPlatform/Migration',",
+                "                MetricData=[",
+                "                    {",
+                "                        'MetricName': 'MigrationProgress',",
+                "                        'Value': progress,",
+                "                        'Unit': 'Percent',",
+                "                        'Dimensions': [",
+                "                            {'Name': 'MigrationId', 'Value': migration_id},",
+                "                            {'Name': 'Region', 'Value': os.environ['AWS_REGION']}",
+                "                        ]",
+                "                    }",
                 "                ]",
+                "            )",
+                "            ",
+                "            return {",
+                "                'statusCode': 200,",
+                "                'body': json.dumps({",
+                "                    'migrationId': migration_id,",
+                "                    'status': status,",
+                "                    'progress': progress",
+                "                })",
                 "            }",
-                "        ]",
-                "    )",
-                "    ",
-                "    return {",
-                "        'statusCode': 200,",
-                "        'body': json.dumps({",
-                "            'migrationId': migration_id,",
-                "            'status': status,",
-                "            'progress': progress",
-                "        })",
-                "    }"
+                "    except Exception as e:",
+                "        if 'RequestType' in event:",
+                "            send_response(event, context, 'FAILED', {'Error': str(e)})",
+                "        else:",
+                "            raise"
               ]
             ]
           }
@@ -1145,6 +1216,30 @@ The solution implements:
       }
     },
 
+    "MigrationTrackerCustomResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "MigrationTrackerFunction",
+            "Arn"
+          ]
+        },
+        "MigrationId": {
+          "Fn::Sub": "migration-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "Status": "INITIALIZED",
+        "Progress": 0,
+        "Details": {
+          "Region": {
+            "Ref": "AWS::Region"
+          },
+          "StackName": {
+            "Ref": "AWS::StackName"
+          }
+        }
+      }
+    },
     "MigrationEventRule": {
       "Type": "AWS::Events::Rule",
       "Properties": {
@@ -1321,6 +1416,66 @@ The solution implements:
         ],
         "AlarmActions": [
           { "Ref": "MigrationEventTopic" }
+        ]
+      }
+    },
+    "Route53HealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Condition": "IsSourceRegion",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "CLOUDWATCH_METRIC_ALARM",
+          "AlarmIdentifier": {
+            "Name": {
+              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"
+            },
+            "Region": {
+              "Ref": "AWS::Region"
+            }
+          },
+          "InsufficientDataHealthStatus": "LastKnownStatus"
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "Route53HealthCheckTarget": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Condition": "IsTargetRegion",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "CLOUDWATCH_METRIC_ALARM",
+          "AlarmIdentifier": {
+            "Name": {
+              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"
+            },
+            "Region": {
+              "Ref": "AWS::Region"
+            }
+          },
+          "InsufficientDataHealthStatus": "LastKnownStatus"
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}"
+            }
+          }
         ]
       }
     }
@@ -1596,8 +1751,10 @@ echo "Dashboard URL: https://console.aws.amazon.com/cloudwatch/home?region=us-ea
 
 ### 8. Migration State Tracking
 - DynamoDB table for migration progress tracking
-- Custom Lambda function for state management
+- Custom CloudFormation Resource (MigrationTrackerCustomResource) for automated state management
+- Lambda function that handles both Custom Resource events and direct invocations
 - CloudWatch custom metrics for progress visualization
+- Proper CloudFormation lifecycle management (Create, Update, Delete)
 
 ## Key Improvements Over MODEL_RESPONSE
 
@@ -1610,11 +1767,14 @@ echo "Dashboard URL: https://console.aws.amazon.com/cloudwatch/home?region=us-ea
 7. **CloudWatch Dashboard improvements** - Added comprehensive metrics and proper JSON formatting
 8. **Added AWS Backup** - Complete backup plan with cross-region replication
 9. **Added EventBridge rules** - Migration workflow orchestration
-10. **Added custom CloudFormation resource** - Migration state tracking with Lambda
-11. **Enhanced security** - Added KMS encryption, security groups, and least privilege IAM policies
-12. **Multi-region CIDR blocks** - Different VPC CIDR ranges to avoid conflicts (10.0.0.0/16 vs 10.1.0.0/16)
-13. **Proper tagging** - Comprehensive tagging strategy for cost allocation
-14. **Parameter Store integration** - Centralized configuration management for VPC IDs
+10. **Added custom CloudFormation resource** - MigrationTrackerCustomResource with proper lifecycle management
+11. **Added Route 53 health checks** - Automatic failover configuration for both regions
+12. **Enhanced Custom Resource Lambda** - Handles CloudFormation Custom Resource events with proper response handling
+13. **Enhanced security** - Added KMS encryption, security groups, and least privilege IAM policies
+14. **Multi-region CIDR blocks** - Different VPC CIDR ranges to avoid conflicts (10.0.0.0/16 vs 10.1.0.0/16)
+15. **Proper tagging** - Comprehensive tagging strategy for cost allocation
+16. **Parameter Store integration** - Centralized configuration management for VPC IDs
+17. **IsTargetRegion condition** - Added condition for target region-specific resources
 
 ## Resource Naming Convention
 

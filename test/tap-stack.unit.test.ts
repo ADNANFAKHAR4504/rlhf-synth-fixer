@@ -94,10 +94,9 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(condition).toHaveLength(2);
     });
 
-    test('should not have unused conditions', () => {
-      const conditionNames = Object.keys(template.Conditions);
-      expect(conditionNames).not.toContain('IsTargetRegion');
-      expect(conditionNames).not.toContain('HasDestinationAccount');
+    test('should have IsTargetRegion condition', () => {
+      expect(template.Conditions.IsTargetRegion).toBeDefined();
+      expect(template.Conditions.IsTargetRegion['Fn::Equals']).toBeDefined();
     });
   });
 
@@ -142,6 +141,51 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
     test('should have S3ReplicationRole', () => {
       expect(template.Resources.S3ReplicationRole).toBeDefined();
       expect(template.Resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('S3ReplicationRole should be conditional on IsSourceRegion', () => {
+      const role = template.Resources.S3ReplicationRole;
+      expect(role.Condition).toBe('IsSourceRegion');
+    });
+
+    test('TradingDataBucket should have ReplicationConfiguration', () => {
+      const bucket = template.Resources.TradingDataBucket;
+      expect(bucket.Properties.ReplicationConfiguration).toBeDefined();
+    });
+
+    test('TradingDataBucket ReplicationConfiguration should be conditional', () => {
+      const bucket = template.Resources.TradingDataBucket;
+      const replicationConfig = bucket.Properties.ReplicationConfiguration;
+      expect(replicationConfig['Fn::If']).toBeDefined();
+      expect(replicationConfig['Fn::If'][0]).toBe('IsSourceRegion');
+    });
+
+    test('TradingDataBucket ReplicationConfiguration should have replication rules', () => {
+      const bucket = template.Resources.TradingDataBucket;
+      const replicationConfig = bucket.Properties.ReplicationConfiguration;
+      const config = replicationConfig['Fn::If'][1];
+      expect(config.Role).toBeDefined();
+      expect(config.Rules).toBeDefined();
+      expect(Array.isArray(config.Rules)).toBe(true);
+      expect(config.Rules.length).toBeGreaterThan(0);
+    });
+
+    test('TradingDataBucket ReplicationConfiguration should have ReplicationTime', () => {
+      const bucket = template.Resources.TradingDataBucket;
+      const replicationConfig = bucket.Properties.ReplicationConfiguration;
+      const config = replicationConfig['Fn::If'][1];
+      const rule = config.Rules[0];
+      expect(rule.Destination.ReplicationTime).toBeDefined();
+      expect(rule.Destination.ReplicationTime.Status).toBe('Enabled');
+    });
+
+    test('TradingDataBucket ReplicationConfiguration should have Metrics', () => {
+      const bucket = template.Resources.TradingDataBucket;
+      const replicationConfig = bucket.Properties.ReplicationConfiguration;
+      const config = replicationConfig['Fn::If'][1];
+      const rule = config.Rules[0];
+      expect(rule.Destination.Metrics).toBeDefined();
+      expect(rule.Destination.Metrics.Status).toBe('Enabled');
     });
   });
 
@@ -200,7 +244,18 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       const table = template.Resources.TradingAnalyticsGlobalTable;
       expect(table.Properties.Replicas).toBeDefined();
       expect(Array.isArray(table.Properties.Replicas)).toBe(true);
-      expect(table.Properties.Replicas.length).toBeGreaterThan(0);
+      expect(table.Properties.Replicas.length).toBe(2);
+    });
+
+    test('TradingAnalyticsGlobalTable should have both source and target region replicas', () => {
+      const table = template.Resources.TradingAnalyticsGlobalTable;
+      const replicas = table.Properties.Replicas;
+      const regions = replicas.map((r: any) => r.Region);
+
+      // Check that both SourceRegion and TargetRegion are referenced
+      const replicaRegions = JSON.stringify(regions);
+      expect(replicaRegions).toContain('SourceRegion');
+      expect(replicaRegions).toContain('TargetRegion');
     });
 
     test('TradingAnalyticsGlobalTable replicas should have PITR enabled', () => {
@@ -429,6 +484,45 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(dashboard.Properties.DashboardName['Fn::Sub']).toContain('${EnvironmentSuffix}');
       expect(dashboard.Properties.DashboardName['Fn::Sub']).toContain('${AWS::Region}');
     });
+
+    test('should have HealthCheckAlarm', () => {
+      expect(template.Resources.HealthCheckAlarm).toBeDefined();
+      expect(template.Resources.HealthCheckAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+  });
+
+  describe('Route 53 Resources', () => {
+    test('should have Route53HealthCheck', () => {
+      expect(template.Resources.Route53HealthCheck).toBeDefined();
+      expect(template.Resources.Route53HealthCheck.Type).toBe('AWS::Route53::HealthCheck');
+    });
+
+    test('Route53HealthCheck should be conditional on IsSourceRegion', () => {
+      const healthCheck = template.Resources.Route53HealthCheck;
+      expect(healthCheck.Condition).toBe('IsSourceRegion');
+    });
+
+    test('Route53HealthCheck should have health check config', () => {
+      const healthCheck = template.Resources.Route53HealthCheck;
+      expect(healthCheck.Properties.HealthCheckConfig).toBeDefined();
+      expect(healthCheck.Properties.HealthCheckConfig.Type).toBe('CLOUDWATCH_METRIC_ALARM');
+    });
+
+    test('Route53HealthCheck should reference CloudWatch alarm', () => {
+      const healthCheck = template.Resources.Route53HealthCheck;
+      expect(healthCheck.Properties.HealthCheckConfig.AlarmIdentifier).toBeDefined();
+      expect(healthCheck.Properties.HealthCheckConfig.AlarmIdentifier.Name).toBeDefined();
+    });
+
+    test('should have Route53HealthCheckTarget', () => {
+      expect(template.Resources.Route53HealthCheckTarget).toBeDefined();
+      expect(template.Resources.Route53HealthCheckTarget.Type).toBe('AWS::Route53::HealthCheck');
+    });
+
+    test('Route53HealthCheckTarget should be conditional on IsTargetRegion', () => {
+      const healthCheck = template.Resources.Route53HealthCheckTarget;
+      expect(healthCheck.Condition).toBe('IsTargetRegion');
+    });
   });
 
   describe('Backup Resources', () => {
@@ -508,6 +602,25 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
     test('MigrationStateTable name should include environment suffix', () => {
       const table = template.Resources.MigrationStateTable;
       expect(table.Properties.TableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('should have MigrationTrackerCustomResource', () => {
+      expect(template.Resources.MigrationTrackerCustomResource).toBeDefined();
+      expect(template.Resources.MigrationTrackerCustomResource.Type).toBe('AWS::CloudFormation::CustomResource');
+    });
+
+    test('MigrationTrackerCustomResource should reference MigrationTrackerFunction', () => {
+      const customResource = template.Resources.MigrationTrackerCustomResource;
+      expect(customResource.Properties.ServiceToken).toBeDefined();
+      expect(customResource.Properties.ServiceToken['Fn::GetAtt']).toBeDefined();
+      expect(customResource.Properties.ServiceToken['Fn::GetAtt'][0]).toBe('MigrationTrackerFunction');
+    });
+
+    test('MigrationTrackerCustomResource should have migration properties', () => {
+      const customResource = template.Resources.MigrationTrackerCustomResource;
+      expect(customResource.Properties.MigrationId).toBeDefined();
+      expect(customResource.Properties.Status).toBeDefined();
+      expect(customResource.Properties.Progress).toBeDefined();
     });
   });
 

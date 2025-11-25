@@ -643,47 +643,76 @@ Added complete AWS Backup configuration:
 }
 ```
 
-**Issue**: Created state table but no custom Lambda resource to actually track migration progress.
+**Issue**: Created state table but no custom Lambda resource to actually track migration progress. Missing proper CloudFormation Custom Resource implementation.
 
 **Fix Applied in IDEAL_RESPONSE**:
 
 Added complete custom resource implementation:
 
-1. **Migration Tracker Lambda Function**:
+1. **Migration Tracker Lambda Function** with Custom Resource support:
 ```json
 "MigrationTrackerFunction": {
   "Type": "AWS::Lambda::Function",
   "Properties": {
     "Code": {
       "ZipFile": {
-        // Complete Python code to track migration state
-        // Updates DynamoDB with progress
-        // Publishes CloudWatch custom metrics
+        // Enhanced Python code that handles:
+        // - CloudFormation Custom Resource events (Create, Update, Delete)
+        // - Direct Lambda invocations (backward compatibility)
+        // - Proper response handling via send_response function
+        // - Updates DynamoDB with progress
+        // - Publishes CloudWatch custom metrics
       }
     }
   }
 }
 ```
 
-2. **Migration Tracker IAM Role** with DynamoDB and CloudWatch permissions
+2. **MigrationTrackerCustomResource** - Proper CloudFormation Custom Resource:
+```json
+"MigrationTrackerCustomResource": {
+  "Type": "AWS::CloudFormation::CustomResource",
+  "Properties": {
+    "ServiceToken": {
+      "Fn::GetAtt": ["MigrationTrackerFunction", "Arn"]
+    },
+    "MigrationId": {
+      "Fn::Sub": "migration-${EnvironmentSuffix}-${AWS::Region}"
+    },
+    "Status": "INITIALIZED",
+    "Progress": 0,
+    "Details": {
+      "Region": { "Ref": "AWS::Region" },
+      "StackName": { "Ref": "AWS::StackName" }
+    }
+  }
+}
+```
 
-3. **Enhanced Migration State Table** with sort key for time-series tracking
+3. **Migration Tracker IAM Role** with DynamoDB and CloudWatch permissions
+
+4. **Enhanced Migration State Table** with sort key for time-series tracking
 
 **Lambda Function Capabilities**:
+- Handles CloudFormation Custom Resource lifecycle events (Create, Update, Delete)
+- Proper response handling via `send_response` function with CloudFormation response URL
 - Accepts migration events (migrationId, status, progress, details)
 - Stores state in DynamoDB with timestamp
 - Publishes CloudWatch custom metrics (MigrationProgress)
 - Enables progress visualization in CloudWatch Dashboard
 - Supports multiple concurrent migrations
+- Backward compatible with direct Lambda invocations
 
 **Why This Fix is Necessary**:
 - Task requires "custom CloudFormation resources to track migration progress"
+- Proper Custom Resource implementation enables CloudFormation lifecycle management
 - 500TB migration needs progress tracking and validation
 - CloudWatch custom metrics enable real-time dashboards
 - Supports rollback decisions based on migration state
 - Best practice for complex multi-region migrations
+- Custom Resources integrate with CloudFormation stack lifecycle
 
-**Testing Impact**: Enables progress tracking, validation, and informed rollback decisions.
+**Testing Impact**: Enables progress tracking, validation, informed rollback decisions, and proper CloudFormation resource lifecycle management.
 
 ---
 
