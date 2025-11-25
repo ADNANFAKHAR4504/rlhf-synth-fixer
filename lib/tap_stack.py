@@ -25,6 +25,7 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
+from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 import json
 import base64
 
@@ -81,6 +82,26 @@ class TapStack(TerraformStack):
         # Get current AWS account and region
         current = DataAwsCallerIdentity(self, "current")
         region_data = DataAwsRegion(self, "region")
+
+        # Create DynamoDB table for Terraform state locking
+        # This table is used by the S3 backend for state locking
+        state_lock_table = DynamodbTable(
+            self,
+            "terraform_state_lock",
+            name="iac-rlhf-tf-locks",
+            billing_mode="PAY_PER_REQUEST",
+            hash_key="LockID",
+            attribute=[
+                {
+                    "name": "LockID",
+                    "type": "S"
+                }
+            ],
+            tags={
+                "Name": "terraform-state-lock",
+                "Purpose": "Terraform state locking",
+            },
+        )
 
         # Create VPC
         vpc = Vpc(
@@ -233,7 +254,7 @@ class TapStack(TerraformStack):
                         "Resource": "*",
                         "Condition": {
                             "ArnLike": {
-                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{aws_region}:{current.account_id}:log-group:*"
+                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{aws_region}:{current.account_id}:log-group:*"  # pylint: disable=line-too-long
                             }
                         }
                     }
@@ -293,7 +314,7 @@ class TapStack(TerraformStack):
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
                     bucket_key_enabled=True,
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(  # pylint: disable=line-too-long
                         sse_algorithm="AES256",
                     ),
                 )
