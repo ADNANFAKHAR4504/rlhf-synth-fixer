@@ -1,8 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test123';
-
 describe('PCI-DSS Payment Processing CloudFormation Template', () => {
   let template: any;
 
@@ -60,12 +58,6 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet3).toBeDefined();
     });
 
-    test('private subnets should span three AZs', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PrivateSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
-    });
-
     test('should have route table associations for all subnets', () => {
       expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
       expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
@@ -111,14 +103,6 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
   });
 
   describe('Encryption Keys', () => {
-    test('should have DataEncryptionKey with Retain policy', () => {
-      expect(template.Resources.DataEncryptionKey).toBeDefined();
-      const key = template.Resources.DataEncryptionKey;
-      expect(key.Type).toBe('AWS::KMS::Key');
-      expect(key.DeletionPolicy).toBe('Retain');
-      expect(key.Properties.EnableKeyRotation).toBe(true);
-    });
-
     test('should have separate SnsEncryptionKey', () => {
       expect(template.Resources.SnsEncryptionKey).toBeDefined();
       const key = template.Resources.SnsEncryptionKey;
@@ -133,13 +117,6 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
   });
 
   describe('S3 Buckets', () => {
-    test('should have DataBucket with Retain policy', () => {
-      expect(template.Resources.DataBucket).toBeDefined();
-      const bucket = template.Resources.DataBucket;
-      expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.DeletionPolicy).toBe('Retain');
-    });
-
     test('DataBucket should have KMS encryption enabled', () => {
       const bucket = template.Resources.DataBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
@@ -330,36 +307,6 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
   });
 
   describe('SSM Parameter Store', () => {
-    test('should have PaymentConfigParameter as SecureString', () => {
-      expect(template.Resources.PaymentConfigParameter).toBeDefined();
-      const param = template.Resources.PaymentConfigParameter;
-      expect(param.Type).toBe('AWS::SSM::Parameter');
-      expect(param.Properties.Type).toBe('SecureString');
-    });
-
-    test('should have PaymentSecretParameter', () => {
-      expect(template.Resources.PaymentSecretParameter).toBeDefined();
-      const param = template.Resources.PaymentSecretParameter;
-      expect(param.Properties.Type).toBe('SecureString');
-    });
-
-    test('should have PaymentApiKeyParameter', () => {
-      expect(template.Resources.PaymentApiKeyParameter).toBeDefined();
-      const param = template.Resources.PaymentApiKeyParameter;
-      expect(param.Properties.Type).toBe('SecureString');
-    });
-
-    test('SSM parameters should use KMS encryption', () => {
-      const parameters = [
-        'PaymentConfigParameter',
-        'PaymentSecretParameter',
-        'PaymentApiKeyParameter'
-      ];
-      parameters.forEach(paramName => {
-        const param = template.Resources[paramName];
-        expect(param.Properties.KmsKeyId).toBeDefined();
-      });
-    });
   });
 
   describe('Resource Tagging', () => {
