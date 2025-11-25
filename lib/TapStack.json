@@ -639,7 +639,7 @@
         },
         "Username": "postgres",
         "Password": {
-          "Fn::Sub": "{{resolve:ssm-secure:/aurora/master-password-${EnvironmentSuffix}}}"
+          "Ref": "TargetDbPassword"
         },
         "SslMode": "require",
         "Tags": [
