@@ -188,13 +188,19 @@ class TapStack(TerraformStack):
             self,
             "primary_public_rt",
             vpc_id=primary_vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": primary_igw.id,
-            }],
             tags={
                 "Name": f"dr-primary-public-rt-{environment_suffix}",
             },
+            provider=primary_provider,
+        )
+
+        # Add internet gateway route to primary public route table
+        Route(
+            self,
+            "primary_public_igw_route",
+            route_table_id=primary_public_rt.id,
+            destination_cidr_block="0.0.0.0/0",
+            gateway_id=primary_igw.id,
             provider=primary_provider,
         )
 
@@ -326,13 +332,19 @@ class TapStack(TerraformStack):
             self,
             "secondary_public_rt",
             vpc_id=secondary_vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": secondary_igw.id,
-            }],
             tags={
                 "Name": f"dr-secondary-public-rt-{environment_suffix}",
             },
+            provider=secondary_provider,
+        )
+
+        # Add internet gateway route to secondary public route table
+        Route(
+            self,
+            "secondary_public_igw_route",
+            route_table_id=secondary_public_rt.id,
+            destination_cidr_block="0.0.0.0/0",
+            gateway_id=secondary_igw.id,
             provider=secondary_provider,
         )
 
@@ -611,12 +623,7 @@ class TapStack(TerraformStack):
                 "Statement": [{
                     "Effect": "Allow",
                     "Principal": {"Service": "s3.amazonaws.com"},
-                    "Action": "sts:AssumeRole",
-                    "Condition": {
-                        "StringEquals": {
-                            "sts:ExternalId": f"dr-replication-{environment_suffix}"
-                        }
-                    }
+                    "Action": "sts:AssumeRole"
                 }]
             }),
             tags={
@@ -748,12 +755,7 @@ class TapStack(TerraformStack):
                 "Statement": [{
                     "Effect": "Allow",
                     "Principal": {"Service": "lambda.amazonaws.com"},
-                    "Action": "sts:AssumeRole",
-                    "Condition": {
-                        "StringEquals": {
-                            "sts:ExternalId": f"dr-lambda-{environment_suffix}"
-                        }
-                    }
+                    "Action": "sts:AssumeRole"
                 }]
             }),
             tags={
@@ -1183,14 +1185,14 @@ def handler(event, context):
         # ROUTE 53 HEALTH CHECKS AND FAILOVER
         # ========================================
 
-        # Create a hosted zone (assumes domain exists)
+        # Create a hosted zone (using a test domain)
         hosted_zone = Route53Zone(
             self,
             "payment_hosted_zone",
-            name=f"payment-{environment_suffix}.example.com",
+            name=f"payment-{environment_suffix}-dr-test.com",
             comment="Hosted zone for DR payment system",
             tags={
-                "Name": f"payment-{environment_suffix}.example.com",
+                "Name": f"payment-{environment_suffix}-dr-test.com",
             },
             provider=primary_provider,
         )
@@ -1236,7 +1238,7 @@ def handler(event, context):
             self,
             "primary_failover_record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.example.com",
+            name=f"api.payment-{environment_suffix}-dr-test.com",
             type="CNAME",
             ttl=60,
             records=[primary_aurora_cluster.endpoint],
@@ -1251,7 +1253,7 @@ def handler(event, context):
             self,
             "secondary_failover_record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.example.com",
+            name=f"api.payment-{environment_suffix}-dr-test.com",
             type="CNAME",
             ttl=60,
             records=[secondary_aurora_cluster.endpoint],
@@ -1373,6 +1375,6 @@ def handler(event, context):
         TerraformOutput(
             self,
             "api_endpoint",
-            value=f"api.payment-{environment_suffix}.example.com",
+            value=f"api.payment-{environment_suffix}-dr-test.com",
             description="API Endpoint with Failover",
         )

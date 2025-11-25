@@ -324,7 +324,7 @@ class TestRoute53:
         """Test that API endpoint is configured."""
         api_endpoint = stack_outputs.get("api_endpoint")
         assert api_endpoint is not None, "API endpoint not found in outputs"
-        assert api_endpoint.endswith(".example.com")
+        assert api_endpoint.endswith("-dr-test.com")
 
 
 class TestDisasterRecoveryCapabilities:
