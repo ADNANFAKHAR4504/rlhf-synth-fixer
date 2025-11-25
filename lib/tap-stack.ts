@@ -714,19 +714,8 @@ export class TapStack extends pulumi.ComponentResource {
                     type: 'metric',
                     properties: {
                       metrics: [
-                        [
-                          'AWS/ApplicationELB',
-                          'RequestCount',
-                          { stat: 'Sum', label: 'Primary ALB Requests' },
-                        ],
-                        [
-                          '...',
-                          {
-                            stat: 'Sum',
-                            label: 'DR ALB Requests',
-                            region: 'us-west-2',
-                          },
-                        ],
+                        ['AWS/ApplicationELB', 'RequestCount', { stat: 'Sum', label: 'Primary ALB Requests' }],
+                        ['...', { stat: 'Sum', label: 'DR ALB Requests', region: 'us-west-2' }],
                       ],
                       period: 300,
                       stat: 'Sum',
@@ -738,18 +727,8 @@ export class TapStack extends pulumi.ComponentResource {
                     type: 'metric',
                     properties: {
                       metrics: [
-                        [
-                          'AWS/Lambda',
-                          'Invocations',
-                          { dimensions: { FunctionName: primaryLambda } },
-                        ],
-                        [
-                          '...',
-                          {
-                            dimensions: { FunctionName: drLambda },
-                            region: 'us-west-2',
-                          },
-                        ],
+                        ['AWS/Lambda', 'Invocations', 'FunctionName', primaryLambda],
+                        ['...', 'FunctionName', drLambda, { region: 'us-west-2' }],
                       ],
                       period: 300,
                       stat: 'Sum',
@@ -761,18 +740,8 @@ export class TapStack extends pulumi.ComponentResource {
                     type: 'metric',
                     properties: {
                       metrics: [
-                        [
-                          'AWS/RDS',
-                          'CPUUtilization',
-                          { dimensions: { DBClusterIdentifier: primaryCluster } },
-                        ],
-                        [
-                          '...',
-                          {
-                            dimensions: { DBClusterIdentifier: drCluster },
-                            region: 'us-west-2',
-                          },
-                        ],
+                        ['AWS/RDS', 'CPUUtilization', 'DBClusterIdentifier', primaryCluster],
+                        ['...', 'DBClusterIdentifier', drCluster, { region: 'us-west-2' }],
                       ],
                       period: 300,
                       stat: 'Average',
@@ -784,12 +753,8 @@ export class TapStack extends pulumi.ComponentResource {
                     type: 'metric',
                     properties: {
                       metrics: [
-                        [
-                          'AWS/Route53',
-                          'HealthCheckStatus',
-                          { dimensions: { HealthCheckId: primaryHealthCheck.id } },
-                        ],
-                        ['...', { dimensions: { HealthCheckId: drHealthCheck.id } }],
+                        ['AWS/Route53', 'HealthCheckStatus', 'HealthCheckId', primaryHealthCheck.id],
+                        ['...', 'HealthCheckId', drHealthCheck.id],
                       ],
                       period: 60,
                       stat: 'Minimum',
