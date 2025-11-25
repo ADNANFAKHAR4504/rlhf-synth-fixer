@@ -140,7 +140,7 @@ export class TapStack extends pulumi.ComponentResource {
         handler: 'index.handler',
         role: lambdaRole.arn,
         memorySize: 512,
-        reservedConcurrentExecutions: 100, // Note: This might cause account limit issues
+        // reservedConcurrentExecutions: 100, // REMOVED: Causes account limit issues (requires min 100 unreserved)
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
 exports.handler = async (event) => {
@@ -172,7 +172,7 @@ exports.handler = async (event) => {
         handler: 'index.handler',
         role: lambdaRole.arn,
         memorySize: 512,
-        reservedConcurrentExecutions: 100, // Note: This might cause account limit issues
+        // reservedConcurrentExecutions: 100, // REMOVED: Causes account limit issues (requires min 100 unreserved)
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
 exports.handler = async (event) => {
