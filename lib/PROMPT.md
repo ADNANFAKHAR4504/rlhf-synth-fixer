@@ -52,8 +52,13 @@ Create a zero-trust data processing pipeline using **AWS CDK with Python** that 
 - Use Amazon CloudWatch Logs for encrypted audit logging
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment-suffix}`
-- Deploy to **us-east-1** region
 - Requires CDK 2.x with Python 3.9+
+
+### Deployment Configuration
+
+- **Single Region**: Deploy to a single AWS region (configured via `CDK_DEFAULT_REGION` environment variable)
+- **Single Account**: Deploy to a single AWS account (configured via `CDK_DEFAULT_ACCOUNT` environment variable)
+- No multi-region or cross-account deployment supported
 
 ### Deployment Requirements (CRITICAL)
 
@@ -72,7 +77,7 @@ Create a zero-trust data processing pipeline using **AWS CDK with Python** that 
 - All API calls must be logged to CloudWatch with 90-day retention and encrypted log groups
 - Security groups must follow least-privilege with no 0.0.0.0/0 inbound rules
 - VPC must use private subnets only with no internet gateway
-- Multi-account setup with separate security audit account for CloudTrail logs
+- Single account deployment (no cross-account resources)
 - All resources must be tagged with Environment, DataClassification, and Owner tags
 
 ## Success Criteria

@@ -17,6 +17,10 @@ This stack implements a secure data processing pipeline with:
 - Security groups with least-privilege HTTPS-only rules
 - CloudWatch Logs with encryption and 90-day retention
 - Comprehensive resource tagging for compliance
+
+Deployment Configuration:
+- Single Region: Deploys to a single AWS region (configured via environment)
+- Single Account: Deploys to a single AWS account (no cross-account resources)
 """
 
 from typing import Optional
@@ -534,6 +538,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 This AWS CDK Python application implements a comprehensive zero-trust security architecture for data processing with end-to-end encryption and network isolation.
 
+## Deployment Configuration
+
+- **Single Region**: Deploys to a single AWS region (configured via `CDK_DEFAULT_REGION` environment variable)
+- **Single Account**: Deploys to a single AWS account (configured via `CDK_DEFAULT_ACCOUNT` environment variable)
+- No multi-region or cross-account deployment supported
+
 ## Architecture Overview
 
 The pipeline includes:
@@ -636,7 +646,7 @@ cat response.json
 
 - Uses private subnets without NAT gateways (no NAT costs)
 - VPC endpoints incur hourly charges and data processing fees
-- Consider consolidating endpoints in shared services VPC for multi-account deployments
+- Single region deployment minimizes cross-region data transfer costs
 
 ## Compliance
 

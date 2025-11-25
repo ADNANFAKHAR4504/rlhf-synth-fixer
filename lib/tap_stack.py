@@ -10,6 +10,10 @@ This stack implements a secure data processing pipeline with:
 - Security groups with least-privilege HTTPS-only rules
 - CloudWatch Logs with encryption and 90-day retention
 - Comprehensive resource tagging for compliance
+
+Deployment Configuration:
+- Single Region: Deploys to a single AWS region (configured via environment)
+- Single Account: Deploys to a single AWS account (no cross-account resources)
 """
 
 from typing import Optional
