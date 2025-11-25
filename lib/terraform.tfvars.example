@@ -1,0 +1,25 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and fill in your values
+
+primary_region   = "us-east-1"
+secondary_region = "us-west-2"
+
+environment_suffix = "prod-dr-001"
+
+vpc_cidr_primary   = "10.0.0.0/16"
+vpc_cidr_secondary = "10.1.0.0/16"
+
+db_master_username = "dbadmin"
+db_master_password = "CHANGE_ME_SECURE_PASSWORD"
+db_name            = "transactiondb"
+
+instance_type = "t3.medium"
+
+# AMI IDs - Update these with your region-specific AMIs
+ami_id_primary   = "ami-0c02fb55956c7d316" # Amazon Linux 2023 us-east-1
+ami_id_secondary = "ami-0efcece6bed30fd98" # Amazon Linux 2023 us-west-2
+
+domain_name       = "example.com"
+s3_bucket_prefix  = "transaction-data"
+
+backup_retention_days = 7

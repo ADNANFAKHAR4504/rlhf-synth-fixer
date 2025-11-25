@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "code_review_and_revision",
+  "po_id": "r1z4o2a6",
+  "team": "synth",
+  "startedAt": "2025-11-26T04:44:00.000Z",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": [
+    "Use Aurora Global Database with at least one read replica in the secondary region",
+    "Implement Route 53 health checks with automatic DNS failover between regions",
+    "Configure S3 bucket replication with RTC (Replication Time Control) enabled",
+    "All compute resources must use Auto Scaling with minimum 2 instances per region",
+    "Enable point-in-time recovery for all data stores with 7-day retention",
+    "Use AWS Backup for centralized backup management across both regions",
+    "Implement CloudWatch cross-region alarms for monitoring failover events",
+    "All resources must be tagged with 'Environment', 'Region', and 'DR-Role' tags",
+    "Use terraform workspaces to manage multi-region deployments"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Aurora",
+    "RDS",
+    "S3",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "AWS Backup",
+    "IAM"
+  ],
+  "training_quality": 10
+}
