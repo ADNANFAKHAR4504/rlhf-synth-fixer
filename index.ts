@@ -1,11 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
 
 // Get configuration
 const config = new pulumi.Config();
 const environmentSuffix = config.require('environmentSuffix');
+// Optional config to control creation of public DNS hosted zone (default: false)
+// For CI/PR runs we skip creating public hosted zones by default to avoid reserved
+// domain names (eg: example.com) and accidental global DNS changes.
+const createHostedZone = config.getBoolean('createHostedZone') || false;
 
 // Define regions
 const primaryRegion = 'us-east-1';
@@ -47,6 +51,7 @@ const lambdaRolePrimary = new aws.iam.Role(
   },
   { provider: primaryProvider }
 );
+
 
 // Lambda execution role for secondary region
 const lambdaRoleSecondary = new aws.iam.Role(
@@ -402,12 +407,18 @@ const apiSecondary = new aws.apigateway.RestApi(
 );
 
 // API Gateway resource - primary
+const isPrStack = environmentSuffix && environmentSuffix.startsWith('pr');
+const apiBasePath = isPrStack ? `payment-${environmentSuffix}` : 'payment';
+
+// API Gateway resource - primary
+// Use a PR-safe pathPart when running in PR stacks to avoid conflicts with existing
+// API resources in shared AWS accounts.
 const paymentResourcePrimary = new aws.apigateway.Resource(
   `payment-resource-primary-${environmentSuffix}`,
   {
     restApi: apiPrimary.id,
     parentId: apiPrimary.rootResourceId,
-    pathPart: 'payment',
+    pathPart: isPrStack ? `payment-${environmentSuffix}` : 'payment',
   },
   { provider: primaryProvider }
 );
@@ -418,7 +429,7 @@ const paymentResourceSecondary = new aws.apigateway.Resource(
   {
     restApi: apiSecondary.id,
     parentId: apiSecondary.rootResourceId,
-    pathPart: 'payment',
+    pathPart: isPrStack ? `payment-${environmentSuffix}` : 'payment',
   },
   { provider: secondaryProvider }
 );
@@ -694,18 +705,25 @@ const replicationLagAlarm = new aws.cloudwatch.MetricAlarm(
 // Route 53 - Health Checks and Failover
 // ============================================================================
 
-// Route 53 hosted zone
-const hostedZone = new aws.route53.Zone(
-  `payment-zone-${environmentSuffix}`,
-  {
-    name: `payment-${environmentSuffix}.example.com`,
-    tags: {
-      Name: `payment-zone-${environmentSuffix}`,
-      Environment: environmentSuffix,
+// Only create a public hosted zone if explicitly enabled via config. This avoids
+// creating reserved/owned DNS zones during PR/CI preview runs (eg. example.com).
+let hostedZone: aws.route53.Zone | undefined;
+if (createHostedZone && !isPrStack) {
+  hostedZone = new aws.route53.Zone(
+    `payment-zone-${environmentSuffix}`,
+    {
+      name: `payment-${environmentSuffix}.example.com`,
+      tags: {
+        Name: `payment-zone-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
     },
-  },
-  { provider: primaryProvider }
-);
+    { provider: primaryProvider }
+  );
+} else {
+  // hostedZone remains undefined in PRs / CI unless createHostedZone=true
+  hostedZone = undefined;
+}
 
 // Health check for primary API
 const healthCheckPrimary = new aws.route53.HealthCheck(
@@ -744,49 +762,53 @@ const healthCheckSecondary = new aws.route53.HealthCheck(
 );
 
 // Route 53 record for primary API (failover primary)
-const _primaryRecord = new aws.route53.Record(
-  `api-primary-record-${environmentSuffix}`,
-  {
-    zoneId: hostedZone.zoneId,
-    name: `api.payment-${environmentSuffix}.example.com`,
-    type: 'CNAME',
-    ttl: 60,
-    records: [
-      pulumi.interpolate`${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com`,
-    ],
-    setIdentifier: 'primary',
-    failoverRoutingPolicies: [
-      {
-        type: 'PRIMARY',
-      },
-    ],
-    healthCheckId: healthCheckPrimary.id,
-  },
-  { provider: primaryProvider }
-);
+let _primaryRecord: aws.route53.Record | undefined;
+if (hostedZone) {
+  _primaryRecord = new aws.route53.Record(
+    `api-primary-record-${environmentSuffix}`,
+    {
+      zoneId: hostedZone.zoneId,
+      name: `api.payment-${environmentSuffix}.example.com`,
+      type: 'CNAME',
+      ttl: 60,
+      records: [
+        pulumi.interpolate`${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com`,
+      ],
+      setIdentifier: 'primary',
+      failoverRoutingPolicies: [
+        {
+          type: 'PRIMARY',
+        },
+      ],
+      healthCheckId: healthCheckPrimary.id,
+    },
+    { provider: primaryProvider }
+  );
 
-// Route 53 record for secondary API (failover secondary)
-const _secondaryRecord = new aws.route53.Record(
-  `api-secondary-record-${environmentSuffix}`,
-  {
-    zoneId: hostedZone.zoneId,
-    name: `api.payment-${environmentSuffix}.example.com`,
-    type: 'CNAME',
-    ttl: 60,
-    records: [
-      pulumi.interpolate`${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com`,
-    ],
-    setIdentifier: 'secondary',
-    failoverRoutingPolicies: [
-      {
-        type: 'SECONDARY',
-      },
-    ],
-    healthCheckId: healthCheckSecondary.id,
-  },
-  { provider: primaryProvider }
-);
+  // Route 53 record for secondary API (failover secondary)
+  let _secondaryRecord: aws.route53.Record | undefined;
+  _secondaryRecord = new aws.route53.Record(
+    `api-secondary-record-${environmentSuffix}`,
+    {
+      zoneId: hostedZone.zoneId,
+      name: `api.payment-${environmentSuffix}.example.com`,
+      type: 'CNAME',
+      ttl: 60,
+      records: [
+        pulumi.interpolate`${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com`,
+      ],
+      setIdentifier: 'secondary',
+      failoverRoutingPolicies: [
+        {
+          type: 'SECONDARY',
+        },
+      ],
+      healthCheckId: healthCheckSecondary.id,
+    },
+    { provider: primaryProvider }
+  );
 
+}
 // ============================================================================
 // SSM Parameters
 // ============================================================================
@@ -797,12 +819,13 @@ const _ssmPrimaryEndpoint = new aws.ssm.Parameter(
   {
     name: `/payment/${environmentSuffix}/api/primary/endpoint`,
     type: 'String',
-    value: pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/payment`,
+    value: pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/${apiBasePath}`,
     description: 'Primary region API endpoint',
     tags: {
       Name: `ssm-primary-endpoint-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
+    overwrite: true,
   },
   { provider: primaryProvider }
 );
@@ -813,12 +836,13 @@ const _ssmSecondaryEndpoint = new aws.ssm.Parameter(
   {
     name: `/payment/${environmentSuffix}/api/secondary/endpoint`,
     type: 'String',
-    value: pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/payment`,
+    value: pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/${apiBasePath}`,
     description: 'Secondary region API endpoint',
     tags: {
       Name: `ssm-secondary-endpoint-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
+    overwrite: true,
   },
   { provider: secondaryProvider }
 );
@@ -835,6 +859,7 @@ const _ssmDynamoDbTable = new aws.ssm.Parameter(
       Name: `ssm-dynamodb-table-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
+    overwrite: true,
   },
   { provider: primaryProvider }
 );
@@ -851,6 +876,7 @@ const _ssmS3Primary = new aws.ssm.Parameter(
       Name: `ssm-s3-primary-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
+    overwrite: true,
   },
   { provider: primaryProvider }
 );
@@ -867,6 +893,7 @@ const _ssmS3Secondary = new aws.ssm.Parameter(
       Name: `ssm-s3-secondary-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
+    overwrite: true,
   },
   { provider: secondaryProvider }
 );
@@ -875,11 +902,11 @@ const _ssmS3Secondary = new aws.ssm.Parameter(
 // Outputs
 // ============================================================================
 
-export const primaryApiEndpoint = pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/payment`;
-export const secondaryApiEndpoint = pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/payment`;
-export const failoverDnsName = pulumi.interpolate`api.payment-${environmentSuffix}.example.com`;
-export const primaryHealthCheckUrl = pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/payment`;
-export const secondaryHealthCheckUrl = pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/payment`;
+export const primaryApiEndpoint = pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/${apiBasePath}`;
+export const secondaryApiEndpoint = pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/${apiBasePath}`;
+export const failoverDnsName = (hostedZone ? pulumi.interpolate`api.payment-${environmentSuffix}.example.com` : pulumi.output(''));
+export const primaryHealthCheckUrl = pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/${apiBasePath}`;
+export const secondaryHealthCheckUrl = pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/${apiBasePath}`;
 export const healthCheckPrimaryId = healthCheckPrimary.id;
 export const healthCheckSecondaryId = healthCheckSecondary.id;
 export const replicationLagAlarmArn = replicationLagAlarm.arn;
@@ -888,5 +915,5 @@ export const s3BucketPrimaryName = s3BucketPrimary.bucket;
 export const s3BucketSecondaryName = s3BucketSecondary.bucket;
 export const dlqPrimaryUrl = dlqPrimary.url;
 export const dlqSecondaryUrl = dlqSecondary.url;
-export const hostedZoneId = hostedZone.zoneId;
-export const hostedZoneNameServers = hostedZone.nameServers;
+export const hostedZoneId = hostedZone ? hostedZone.zoneId : pulumi.output('');
+export const hostedZoneNameServers = hostedZone ? hostedZone.nameServers : pulumi.output([]);
