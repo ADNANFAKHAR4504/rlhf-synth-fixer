@@ -24,6 +24,11 @@
   ],
   "training_quality": 8,
   "region": "us-east-1",
-  "author": "mayanksethi-turing",
-  "reviewer": "chriscrsov"
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
