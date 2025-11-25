@@ -100,3 +100,11 @@
 **Fix:** Updated `instanceProps.instanceType` to `ec2.InstanceType.of(ec2.InstanceClass.R5, ec2.InstanceSize.LARGE)` so every environment provisions a supported `db.r5.large` instance class.
 
 **Impact:** Prevents `InvalidRequest` failures during cluster creation and aligns all environments with AWS-supported instance classes.
+
+## 11. Lambda Reserved Concurrency
+
+**Issue:** The MODEL_RESPONSE set `reservedConcurrentExecutions` for every Lambda environment. Sandbox AWS accounts often enforce a minimum unreserved concurrency of 100, so reserving concurrency for dev functions caused `InvalidRequest` errors (`decreases account's UnreservedConcurrentExecution below its minimum value of [100]`).
+
+**Fix:** Removed reserved concurrency for the dev environment by only applying `reservedConcurrentExecutions` when `envKey !== 'dev'`. Production and staging retain their explicit reservations for deterministic capacity planning.
+
+**Impact:** Dev deployments no longer exhaust the account-wide reserve while higher environments keep their concurrency guarantees.

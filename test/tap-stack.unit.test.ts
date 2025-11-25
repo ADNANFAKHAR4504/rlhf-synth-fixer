@@ -319,6 +319,33 @@ describe('TapStack', () => {
     expect(Object.keys(buckets).length).toBeGreaterThan(0);
   });
 
+  test('dev lambda functions do not reserve concurrency', () => {
+    const { template } = synthStack();
+    const functions = template.findResources('AWS::Lambda::Function');
+    Object.values(functions)
+      .filter(
+        (fn: any) =>
+          fn.Properties?.Environment?.Variables?.ENVIRONMENT === 'dev'
+      )
+      .forEach((fn: any) => {
+        expect(fn.Properties.ReservedConcurrentExecutions).toBeUndefined();
+      });
+  });
+
+  test('non-dev lambda functions retain reserved concurrency', () => {
+    const { template } = synthStack();
+    const functions = template.findResources('AWS::Lambda::Function');
+    Object.values(functions)
+      .filter((fn: any) =>
+        ['prod', 'staging'].includes(
+          fn.Properties?.Environment?.Variables?.ENVIRONMENT
+        )
+      )
+      .forEach((fn: any) => {
+        expect(fn.Properties.ReservedConcurrentExecutions).toBeDefined();
+      });
+  });
+
   test('does not enable Data API for provisioned aurora clusters', () => {
     const { template } = synthStack();
     template.hasResourceProperties('AWS::RDS::DBCluster', {

@@ -820,7 +820,6 @@ export class TapStack extends cdk.Stack {
         securityGroups: [lambdaSecurityGroup],
         timeout: cdk.Duration.seconds(settings.lambda.timeout),
         memorySize: settings.lambda.memory,
-        reservedConcurrentExecutions: settings.lambda.concurrency,
         environment: {
           ENVIRONMENT: envKey,
           BUCKET_NAME: bucket.bucketName,
@@ -842,6 +841,9 @@ export class TapStack extends cdk.Stack {
           };
         `),
         tracing: lambda.Tracing.ACTIVE,
+        ...(envKey !== 'dev'
+          ? { reservedConcurrentExecutions: settings.lambda.concurrency }
+          : {}),
       });
       fn.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       bucket.grantReadWrite(fn);
