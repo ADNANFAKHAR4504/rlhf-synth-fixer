@@ -65,7 +65,7 @@ class TapStack(TerraformStack):
         self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Create VPC Construct (Component 1)
-        vpc_construct = VpcConstruct(
+        self.vpc_construct = VpcConstruct(
             self,
             f"vpc-{environment_suffix}",
             environment_suffix=environment_suffix,
@@ -73,114 +73,114 @@ class TapStack(TerraformStack):
         )
 
         # Create Security Construct (Component 8 & 9)
-        security_construct = SecurityConstruct(
+        self.security_construct = SecurityConstruct(
             self,
             f"security-{environment_suffix}",
             environment_suffix=environment_suffix,
-            vpc_id=vpc_construct.get_vpc_id()
+            vpc_id=self.vpc_construct.get_vpc_id()
         )
 
         # Create Database Construct (Component 2)
-        database_construct = DatabaseConstruct(
+        self.database_construct = DatabaseConstruct(
             self,
             f"database-{environment_suffix}",
             environment_suffix=environment_suffix,
-            vpc_id=vpc_construct.get_vpc_id(),
-            private_subnet_ids=vpc_construct.get_private_subnet_ids(),
-            db_security_group_id=security_construct.get_rds_sg_id(),
-            db_secret_arn=security_construct.get_db_secret_arn()
+            vpc_id=self.vpc_construct.get_vpc_id(),
+            private_subnet_ids=self.vpc_construct.get_private_subnet_ids(),
+            db_security_group_id=self.security_construct.get_rds_sg_id(),
+            db_secret_arn=self.security_construct.get_db_secret_arn()
         )
 
         # Create Compute Construct (Component 3)
-        compute_construct = ComputeConstruct(
+        self.compute_construct = ComputeConstruct(
             self,
             f"compute-{environment_suffix}",
             environment_suffix=environment_suffix,
-            lambda_security_group_id=security_construct.get_lambda_sg_id(),
-            private_subnet_ids=vpc_construct.get_private_subnet_ids(),
-            db_secret_arn=security_construct.get_db_secret_arn(),
-            db_endpoint=database_construct.get_cluster_endpoint()
+            lambda_security_group_id=self.security_construct.get_lambda_sg_id(),
+            private_subnet_ids=self.vpc_construct.get_private_subnet_ids(),
+            db_secret_arn=self.security_construct.get_db_secret_arn(),
+            db_endpoint=self.database_construct.get_cluster_endpoint()
         )
 
         # Create Load Balancer Construct (Component 4)
-        load_balancer_construct = LoadBalancerConstruct(
+        self.load_balancer_construct = LoadBalancerConstruct(
             self,
             f"load-balancer-{environment_suffix}",
             environment_suffix=environment_suffix,
-            vpc_id=vpc_construct.get_vpc_id(),
-            public_subnet_ids=vpc_construct.get_public_subnet_ids(),
-            alb_security_group_id=security_construct.get_alb_sg_id(),
-            lambda_arn=compute_construct.get_lambda_arn()
+            vpc_id=self.vpc_construct.get_vpc_id(),
+            public_subnet_ids=self.vpc_construct.get_public_subnet_ids(),
+            alb_security_group_id=self.security_construct.get_alb_sg_id(),
+            lambda_arn=self.compute_construct.get_lambda_arn()
         )
 
         # Create Migration Construct (Component 5)
-        migration_construct = MigrationConstruct(
+        self.migration_construct = MigrationConstruct(
             self,
             f"migration-{environment_suffix}",
             environment_suffix=environment_suffix,
-            private_subnet_ids=vpc_construct.get_private_subnet_ids(),
-            dms_security_group_id=security_construct.get_dms_sg_id(),
-            target_db_endpoint=database_construct.get_cluster_endpoint(),
-            db_secret_arn=security_construct.get_db_secret_arn()
+            private_subnet_ids=self.vpc_construct.get_private_subnet_ids(),
+            dms_security_group_id=self.security_construct.get_dms_sg_id(),
+            target_db_endpoint=self.database_construct.get_cluster_endpoint(),
+            db_secret_arn=self.security_construct.get_db_secret_arn()
         )
 
         # Create Routing Construct (Component 6)
-        routing_construct = RoutingConstruct(
+        self.routing_construct = RoutingConstruct(
             self,
             f"routing-{environment_suffix}",
             environment_suffix=environment_suffix,
-            alb_dns_name=load_balancer_construct.get_alb_dns_name(),
-            alb_zone_id=load_balancer_construct.get_alb_zone_id(),
+            alb_dns_name=self.load_balancer_construct.get_alb_dns_name(),
+            alb_zone_id=self.load_balancer_construct.get_alb_zone_id(),
             domain_name=f"payment-api-{environment_suffix}.example.com"
         )
 
         # Create Monitoring Construct (Component 7)
-        monitoring_construct = MonitoringConstruct(
+        self.monitoring_construct = MonitoringConstruct(
             self,
             f"monitoring-{environment_suffix}",
             environment_suffix=environment_suffix,
-            alb_arn_suffix=load_balancer_construct.get_alb_arn().split(":")[-1],
-            lambda_function_name=compute_construct.get_lambda_function_name(),
-            db_cluster_id=database_construct.get_cluster_id(),
-            dms_task_arn=migration_construct.get_replication_task_arn()
+            alb_arn_suffix=self.load_balancer_construct.get_alb_arn().split(":")[-1],
+            lambda_function_name=self.compute_construct.get_lambda_function_name(),
+            db_cluster_id=self.database_construct.get_cluster_id(),
+            dms_task_arn=self.migration_construct.get_replication_task_arn()
         )
 
         # Create Validation Construct (Component 9 & 10)
-        validation_construct = ValidationConstruct(
+        self.validation_construct = ValidationConstruct(
             self,
             f"validation-{environment_suffix}",
             environment_suffix=environment_suffix,
-            lambda_security_group_id=security_construct.get_lambda_sg_id(),
-            private_subnet_ids=vpc_construct.get_private_subnet_ids(),
-            db_endpoint=database_construct.get_cluster_endpoint(),
-            db_secret_arn=security_construct.get_db_secret_arn()
+            lambda_security_group_id=self.security_construct.get_lambda_sg_id(),
+            private_subnet_ids=self.vpc_construct.get_private_subnet_ids(),
+            db_endpoint=self.database_construct.get_cluster_endpoint(),
+            db_secret_arn=self.security_construct.get_db_secret_arn()
         )
 
         # Add TerraformOutput resources for integration tests
         TerraformOutput(
             self,
             "vpc_id",
-            value=vpc_construct.get_vpc_id(),
+            value=self.vpc_construct.get_vpc_id(),
             description="VPC ID"
         )
 
         TerraformOutput(
             self,
             "alb_dns_name",
-            value=load_balancer_construct.get_alb_dns_name(),
+            value=self.load_balancer_construct.get_alb_dns_name(),
             description="ALB DNS name"
         )
 
         TerraformOutput(
             self,
             "db_cluster_endpoint",
-            value=database_construct.get_cluster_endpoint(),
+            value=self.database_construct.get_cluster_endpoint(),
             description="Aurora cluster endpoint"
         )
 
         TerraformOutput(
             self,
             "lambda_function_name",
-            value=compute_construct.get_lambda_function_name(),
+            value=self.compute_construct.get_lambda_function_name(),
             description="Payment API Lambda function name"
         )

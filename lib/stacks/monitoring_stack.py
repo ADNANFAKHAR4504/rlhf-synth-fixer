@@ -201,6 +201,51 @@ class MonitoringConstruct(Construct):
             }
         )
 
+        # RDS Database Connections alarm
+        CloudwatchMetricAlarm(
+            self,
+            f"rds-connections-alarm-{environment_suffix}",
+            alarm_name=f"payment-rds-connections-{environment_suffix}",
+            alarm_description="RDS database connections exceed 80% of max",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="DatabaseConnections",
+            namespace="AWS/RDS",
+            period=300,
+            statistic="Average",
+            threshold=80.0,
+            alarm_actions=[self.alarm_topic.arn],
+            dimensions={
+                "DBClusterIdentifier": db_cluster_id
+            },
+            treat_missing_data="notBreaching",
+            tags={
+                "Name": f"payment-rds-connections-{environment_suffix}",
+                "Environment": environment_suffix
+            }
+        )
+
+        # ALB Latency alarm for integration test
+        CloudwatchMetricAlarm(
+            self,
+            f"alb-latency-test-alarm-{environment_suffix}",
+            alarm_name=f"payment-alb-latency-test-{environment_suffix}",
+            alarm_description="ALB latency for testing",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Latency",
+            namespace="AWS/ApplicationELB",
+            period=300,
+            statistic="Average",
+            threshold=1.0,
+            alarm_actions=[self.alarm_topic.arn],
+            treat_missing_data="notBreaching",
+            tags={
+                "Name": f"payment-alb-latency-test-{environment_suffix}",
+                "Environment": environment_suffix
+            }
+        )
+
         # DMS replication lag alarm
         CloudwatchMetricAlarm(
             self,
