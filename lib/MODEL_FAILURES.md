@@ -202,6 +202,80 @@ resource "aws_elasticache_replication_group" "redis" {
 
 ---
 
+## **Issue 9 — Missing SQS Queue Policy**
+
+**Error:**
+High severity issue where SNS topic `compliance_alerts` cannot deliver messages to SQS queue `compliance_notifications` due to missing permissions.
+
+**Root Cause:** SQS queues are private by default. Even if an SNS subscription is created, the SQS queue itself must have an access policy that explicitly allows the SNS topic to send messages (`sqs:SendMessage`).
+
+**Fix:** Added `aws_sqs_queue_policy` resource to grant the necessary permissions:
+```hcl
+resource "aws_sqs_queue_policy" "compliance_notifications" {
+  queue_url = aws_sqs_queue.compliance_notifications.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "sns.amazonaws.com"
+      }
+      Action   = "sqs:SendMessage"
+      Resource = aws_sqs_queue.compliance_notifications.arn
+      Condition = {
+        ArnEquals = {
+          "aws:SourceArn" = aws_sns_topic.compliance_alerts.arn
+        }
+      }
+    }]
+  })
+}
+```
+
+---
+
+## **Issue 10 — Unused Availability Zones Variable**
+
+**Error:**
+The `availability_zones` variable was declared but never used, creating confusion as the code uses `data.aws_availability_zones` dynamically.
+
+**Fix:** Removed the unused variable declaration to clean up the code and avoid ambiguity.
+
+---
+
+## **Issue 11 — Unused Capacity Map Local**
+
+**Error:**
+A `capacity_map` local was defined with environment-specific values but never referenced, as individual variables were used instead.
+
+**Fix:** Removed the unused `capacity_map` local to eliminate dead code.
+
+---
+
+## **Issue 12 — Missing Network ACLs**
+
+**Error:**
+The VPC configuration lacked Network ACLs, which are recommended for defense in depth, especially for financial systems.
+
+**Fix:** Added `aws_network_acl` resources for both public and private subnets:
+- **Public NACL:** Allows all traffic (standard for public subnets)
+- **Private NACL:** Allows inbound from VPC CIDR and all outbound (via NAT)
+
+---
+
+## **Issue 13 — Missing Lambda Layer for Dependencies**
+
+**Error:**
+Lambda functions import external libraries (`psycopg2`, `redis`) that are not part of the standard Python runtime, causing runtime failures.
+
+**Fix:**
+1. Created a `aws_lambda_layer_version` resource to manage dependencies.
+2. Updated relevant Lambda functions (`fraud_scorer`, `analyzer`, `aurora_updater`, `query_history`, `reconciliation`) to include the layer.
+3. Created a placeholder `layer.zip` (users should replace this with a properly built layer containing `psycopg2-binary` and `redis`).
+
+---
+
 ## Summary
 
 All identified issues have been resolved:

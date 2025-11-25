@@ -89,11 +89,7 @@ variable "private_subnet_cidrs" {
   default     = ["10.0.10.0/24", "10.0.20.0/24"]
 }
 
-variable "availability_zones" {
-  description = "Availability zones"
-  type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
-}
+
 
 # Kinesis Variables
 variable "kinesis_stream_name" {
@@ -328,32 +324,7 @@ locals {
     }
   )
 
-  capacity_map = {
-    dev = {
-      kinesis_shards = 1
-      dynamodb_rcu   = 5
-      dynamodb_wcu   = 5
-      redis_nodes    = 1
-      aurora_min     = 0.5
-      aurora_max     = 1
-    }
-    staging = {
-      kinesis_shards = 2
-      dynamodb_rcu   = 10
-      dynamodb_wcu   = 10
-      redis_nodes    = 2
-      aurora_min     = 0.5
-      aurora_max     = 2
-    }
-    prod = {
-      kinesis_shards = 5
-      dynamodb_rcu   = 25
-      dynamodb_wcu   = 25
-      redis_nodes    = 2
-      aurora_min     = 1
-      aurora_max     = 4
-    }
-  }
+
 }
 
 # ============================================================================
@@ -470,6 +441,61 @@ resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
+}
+
+# Network ACLs
+resource "aws_network_acl" "public" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.public[*].id
+
+  ingress {
+    protocol   = -1
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  egress {
+    protocol   = -1
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.resource_prefix}-public-nacl"
+  })
+}
+
+resource "aws_network_acl" "private" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.private[*].id
+
+  ingress {
+    protocol   = -1
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = aws_vpc.main.cidr_block
+    from_port  = 0
+    to_port    = 0
+  }
+
+  egress {
+    protocol   = -1
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.resource_prefix}-private-nacl"
+  })
 }
 
 # Security Groups
@@ -1073,6 +1099,27 @@ resource "aws_sns_topic_subscription" "compliance_to_sqs" {
   topic_arn = aws_sns_topic.compliance_alerts.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.compliance_notifications.arn
+}
+
+resource "aws_sqs_queue_policy" "compliance_notifications" {
+  queue_url = aws_sqs_queue.compliance_notifications.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "sns.amazonaws.com"
+      }
+      Action   = "sqs:SendMessage"
+      Resource = aws_sqs_queue.compliance_notifications.arn
+      Condition = {
+        ArnEquals = {
+          "aws:SourceArn" = aws_sns_topic.compliance_alerts.arn
+        }
+      }
+    }]
+  })
 }
 
 # ============================================================================
@@ -1721,6 +1768,15 @@ EOF
   }
 }
 
+# Lambda Layer for dependencies
+resource "aws_lambda_layer_version" "dependencies" {
+  filename            = "layer.zip"
+  layer_name          = "${local.resource_prefix}-dependencies"
+  compatible_runtimes = [var.lambda_runtime]
+
+  description = "Layer containing psycopg2-binary and redis"
+}
+
 # Lambda Functions
 resource "aws_lambda_function" "fraud_scorer" {
   filename         = data.archive_file.fraud_scorer.output_path
@@ -1731,6 +1787,7 @@ resource "aws_lambda_function" "fraud_scorer" {
   runtime          = var.lambda_runtime
   memory_size      = var.fraud_scorer_memory
   timeout          = var.fraud_scorer_timeout
+  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -1757,6 +1814,7 @@ resource "aws_lambda_function" "analyzer" {
   runtime          = var.lambda_runtime
   memory_size      = var.analyzer_memory
   timeout          = var.analyzer_timeout
+  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -1785,6 +1843,7 @@ resource "aws_lambda_function" "aurora_updater" {
   runtime          = var.lambda_runtime
   memory_size      = 256
   timeout          = 30
+  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -1811,6 +1870,7 @@ resource "aws_lambda_function" "query_history" {
   runtime          = var.lambda_runtime
   memory_size      = 256
   timeout          = 30
+  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -1889,6 +1949,7 @@ resource "aws_lambda_function" "reconciliation" {
   runtime          = var.lambda_runtime
   memory_size      = 256
   timeout          = 30
+  layers           = [aws_lambda_layer_version.dependencies.arn]
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
