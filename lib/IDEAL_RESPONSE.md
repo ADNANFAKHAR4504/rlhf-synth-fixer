@@ -125,7 +125,8 @@ export class TapStack extends cdk.Stack {
         memorySize: 512,
         timeout: cdk.Duration.seconds(30),
         architecture: lambda.Architecture.ARM_64, // Graviton2
-        reservedConcurrentExecutions: 50,
+        // Removed reservedConcurrentExecutions to avoid AWS account limit issues
+        // AWS requires at least 100 unreserved concurrent executions
         tracing: lambda.Tracing.ACTIVE,
         layers: [sharedLayer],
         environment: {

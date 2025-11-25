@@ -123,7 +123,7 @@ describe('TapStack', () => {
         MemorySize: 512,
         Timeout: 30,
         Architectures: ['arm64'],
-        ReservedConcurrentExecutions: 50,
+        // ReservedConcurrentExecutions removed to avoid AWS account limit issues
         TracingConfig: {
           Mode: 'Active',
         },

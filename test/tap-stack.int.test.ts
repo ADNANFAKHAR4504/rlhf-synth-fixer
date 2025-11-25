@@ -149,12 +149,14 @@ describe('Stock Pattern Detection System Integration Tests', () => {
       expect(response.Configuration?.MemorySize).toBe(512);
     });
 
-    test('PatternDetector has reserved concurrency', async () => {
+    test('PatternDetector does not have reserved concurrency (to avoid account limit issues)', async () => {
       const functionName = `PatternDetector-${environmentSuffix}`;
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
 
-      expect(response.Concurrency?.ReservedConcurrentExecutions).toBe(50);
+      // Reserved concurrency removed to avoid AWS account limit issues
+      // AWS requires at least 100 unreserved concurrent executions
+      expect(response.Concurrency?.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('PatternDetector has X-Ray tracing enabled', async () => {

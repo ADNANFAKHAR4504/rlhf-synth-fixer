@@ -9,7 +9,17 @@
 3. **Production-Ready Code**: Clean TypeScript implementation with proper error handling, X-Ray tracing, and comprehensive monitoring
 4. **Perfect Test Coverage**: 100% coverage across all metrics with high-quality unit and integration tests
 5. **Security Best Practices**: Implemented IAM least-privilege, encryption, and security configurations correctly
-6. **Cost Optimization**: Properly used ARM64 Graviton2 processors, on-demand billing, and reserved concurrency
+6. **Cost Optimization**: Properly used ARM64 Graviton2 processors, on-demand billing
+
+### Deployment Issue Discovered
+
+1. **Lambda Reserved Concurrency Account Limit**:
+   - Initial implementation included `reservedConcurrentExecutions: 50` for PatternDetector
+   - **Issue**: AWS requires accounts to maintain at least 100 unreserved concurrent executions
+   - **Error**: `Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100]`
+   - **Fix**: Removed reserved concurrency setting to allow function to use unreserved pool
+   - **Impact**: Medium - Function now uses shared unreserved concurrency pool instead of dedicated reservation
+   - **Note**: If reserved concurrency is needed, AWS Support can increase account limits or total concurrency capacity
 
 ### Minor Issues (Why Not 9 or 10)
 
@@ -25,6 +35,12 @@
    - Could have defined stricter types for better type safety
 
    **Impact**: Low - Runtime behavior is correct, but static type checking is weakened.
+
+3. **Lambda Reserved Concurrency Account Limit Issue**:
+   - Initial implementation included `reservedConcurrentExecutions: 50` which caused deployment failures
+   - Model did not account for AWS account-level concurrency limits
+   - **Impact**: Medium - Required code change to remove reserved concurrency setting
+   - **Learning**: Model should be aware of AWS account-level service limits and constraints
 
 ### What Would Achieve 9 or 10
 

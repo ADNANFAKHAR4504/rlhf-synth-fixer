@@ -18,8 +18,8 @@ Create a serverless stock pattern detection system using **AWS CDK with TypeScri
 2. **Pattern Detection Processing**
    - Lambda function 'PatternDetector' with 512MB memory
    - Processes incoming market data from API
-   - Reserved concurrency of exactly 50
    - Uses ARM-based Graviton2 processors for cost optimization
+   - Note: Reserved concurrency removed to avoid AWS account limit issues (AWS requires at least 100 unreserved concurrent executions)
 
 3. **Data Storage**
    - DynamoDB table 'TradingPatterns' for storing detected patterns
@@ -77,7 +77,7 @@ Create a serverless stock pattern detection system using **AWS CDK with TypeScri
 - EventBridge rules must use custom event patterns with at least 3 matching conditions
 - All Lambda functions must have X-Ray tracing enabled with custom segments
 - Lambda functions must use Lambda Layers for shared dependencies with versioning
-- PatternDetector function must have reserved concurrency of exactly 50
+- PatternDetector function does not use reserved concurrency (removed to avoid AWS account limit issues - AWS requires at least 100 unreserved concurrent executions)
 - API Gateway must implement request throttling at 1000 requests per second with burst of 2000
 - DynamoDB tables must use on-demand billing mode with point-in-point recovery enabled
 - AlertProcessor must have DLQ with maximum receive count of 3
