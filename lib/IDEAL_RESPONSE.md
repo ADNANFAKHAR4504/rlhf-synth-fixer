@@ -23,17 +23,27 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
+      "Default": "vpc-09c4bdbdfef55e103",
       "Description": "VPC ID where the EKS cluster will be deployed"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": [
+        "subnet-0db236470c68dc5d6",
+        "subnet-001318554ecc56aca",
+        "subnet-0baa670c5a4b71373"
+      ],
       "Description": "List of private subnet IDs across 3 availability zones"
     },
     "EksVersion": {
       "Type": "String",
       "Description": "EKS cluster version",
       "Default": "1.28",
-      "AllowedValues": ["1.28", "1.29", "1.30"]
+      "AllowedValues": [
+        "1.28",
+        "1.29",
+        "1.30"
+      ]
     },
     "LinuxInstanceType": {
       "Type": "String",
@@ -208,7 +218,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
           "Ref": "EksVersion"
         },
         "RoleArn": {
-          "Fn::GetAtt": ["EksClusterRole", "Arn"]
+          "Fn::GetAtt": [
+            "EksClusterRole",
+            "Arn"
+          ]
         },
         "ResourcesVpcConfig": {
           "EndpointPrivateAccess": true,
@@ -226,10 +239,15 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
           {
             "Provider": {
               "KeyArn": {
-                "Fn::GetAtt": ["EksKmsKey", "Arn"]
+                "Fn::GetAtt": [
+                  "EksKmsKey",
+                  "Arn"
+                ]
               }
             },
-            "Resources": ["secrets"]
+            "Resources": [
+              "secrets"
+            ]
           }
         ],
         "Logging": {
@@ -270,10 +288,17 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
       "Type": "AWS::IAM::OIDCProvider",
       "Properties": {
         "Url": {
-          "Fn::GetAtt": ["EksCluster", "OpenIdConnectIssuerUrl"]
+          "Fn::GetAtt": [
+            "EksCluster",
+            "OpenIdConnectIssuerUrl"
+          ]
         },
-        "ClientIdList": ["sts.amazonaws.com"],
-        "ThumbprintList": ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"],
+        "ClientIdList": [
+          "sts.amazonaws.com"
+        ],
+        "ThumbprintList": [
+          "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+        ],
         "Tags": [
           {
             "Key": "Environment",
@@ -445,7 +470,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
           "Ref": "EksCluster"
         },
         "NodeRole": {
-          "Fn::GetAtt": ["NodeGroupRole", "Arn"]
+          "Fn::GetAtt": [
+            "NodeGroupRole",
+            "Arn"
+          ]
         },
         "Subnets": {
           "Ref": "PrivateSubnetIds"
@@ -479,7 +507,9 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     },
     "WindowsNodeGroup": {
       "Type": "AWS::EKS::Nodegroup",
-      "DependsOn": ["LinuxNodeGroup"],
+      "DependsOn": [
+        "LinuxNodeGroup"
+      ],
       "Properties": {
         "NodegroupName": {
           "Fn::Sub": "windows-nodegroup-${EnvironmentSuffix}"
@@ -488,7 +518,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
           "Ref": "EksCluster"
         },
         "NodeRole": {
-          "Fn::GetAtt": ["NodeGroupRole", "Arn"]
+          "Fn::GetAtt": [
+            "NodeGroupRole",
+            "Arn"
+          ]
         },
         "Subnets": {
           "Ref": "PrivateSubnetIds"
@@ -563,7 +596,9 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     },
     "CoreDnsAddon": {
       "Type": "AWS::EKS::Addon",
-      "DependsOn": ["LinuxNodeGroup"],
+      "DependsOn": [
+        "LinuxNodeGroup"
+      ],
       "Properties": {
         "AddonName": "coredns",
         "ClusterName": {
@@ -598,7 +633,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     "ClusterEndpoint": {
       "Description": "EKS Cluster API Endpoint",
       "Value": {
-        "Fn::GetAtt": ["EksCluster", "Endpoint"]
+        "Fn::GetAtt": [
+          "EksCluster",
+          "Endpoint"
+        ]
       },
       "Export": {
         "Name": {
@@ -609,7 +647,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     "ClusterArn": {
       "Description": "EKS Cluster ARN",
       "Value": {
-        "Fn::GetAtt": ["EksCluster", "Arn"]
+        "Fn::GetAtt": [
+          "EksCluster",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -620,7 +661,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     "OidcIssuerUrl": {
       "Description": "OIDC Provider URL for IRSA",
       "Value": {
-        "Fn::GetAtt": ["EksCluster", "OpenIdConnectIssuerUrl"]
+        "Fn::GetAtt": [
+          "EksCluster",
+          "OpenIdConnectIssuerUrl"
+        ]
       },
       "Export": {
         "Name": {
@@ -642,7 +686,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     "LinuxNodeGroupArn": {
       "Description": "Linux Node Group ARN",
       "Value": {
-        "Fn::GetAtt": ["LinuxNodeGroup", "Arn"]
+        "Fn::GetAtt": [
+          "LinuxNodeGroup",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -653,7 +700,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     "WindowsNodeGroupArn": {
       "Description": "Windows Node Group ARN",
       "Value": {
-        "Fn::GetAtt": ["WindowsNodeGroup", "Arn"]
+        "Fn::GetAtt": [
+          "WindowsNodeGroup",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -664,7 +714,10 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     "KmsKeyArn": {
       "Description": "KMS Key ARN for EKS encryption",
       "Value": {
-        "Fn::GetAtt": ["EksKmsKey", "Arn"]
+        "Fn::GetAtt": [
+          "EksKmsKey",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
