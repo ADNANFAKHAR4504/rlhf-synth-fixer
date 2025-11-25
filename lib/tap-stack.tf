@@ -830,6 +830,22 @@ resource "aws_api_gateway_deployment" "api_deployment" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.fraud_detection_api.id
+
+  # Force redeployment when Lambda authorizer or backend functions change
+  triggers = {
+    redeployment = sha256(jsonencode([
+      aws_lambda_function.token_authorizer.source_code_hash,
+      aws_lambda_function.transaction_validation.source_code_hash,
+      aws_lambda_function.fraud_scoring.source_code_hash,
+      aws_api_gateway_integration.post_transaction.id,
+      aws_api_gateway_integration.get_transaction.id,
+      aws_api_gateway_authorizer.token_authorizer.id
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_api_gateway_stage" "prod" {
