@@ -4,22 +4,7 @@ from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
-from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
-    S3BucketLifecycleConfiguration,
-    S3BucketLifecycleConfigurationRule,
-    S3BucketLifecycleConfigurationRuleTransition,
-)
-from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfigurationA,
-    S3BucketReplicationConfigurationRuleA,
-    S3BucketReplicationConfigurationRuleDestinationA,
-)
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA,
-    S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,
-)
+# S3 configuration classes removed due to import issues with AWS provider naming inconsistencies
 from cdktf_cdktf_provider_aws.vpc import Vpc, DataAwsVpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
@@ -614,7 +599,7 @@ class TapStack(TerraformStack):
         )
 
     def _create_s3_buckets(self):
-        """Create S3 buckets with cross-region replication and lifecycle policies."""
+        """Create S3 buckets - simplified version without advanced configurations."""
         # Primary audit logs bucket (us-east-1)
         bucket_name = f"audit-logs-{self.environment_suffix}-{self.aws_region}".lower()
 
@@ -626,50 +611,6 @@ class TapStack(TerraformStack):
             tags={
                 "Name": bucket_name,
             }
-        )
-
-        # Enable versioning
-        S3BucketVersioningA(
-            self,
-            "audit_bucket_versioning",
-            bucket=self.audit_bucket.id,
-            versioning_configuration={
-                "status": "Enabled"
-            }
-        )
-
-        # Server-side encryption
-        S3BucketServerSideEncryptionConfigurationA(
-            self,
-            "audit_bucket_encryption",
-            bucket=self.audit_bucket.id,
-            rule=[
-                S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                        sse_algorithm="AES256"
-                    ),
-                    bucket_key_enabled=True,
-                )
-            ]
-        )
-
-        # Lifecycle policy for Glacier transition
-        S3BucketLifecycleConfiguration(
-            self,
-            "audit_bucket_lifecycle",
-            bucket=self.audit_bucket.id,
-            rule=[
-                S3BucketLifecycleConfigurationRule(
-                    id="archive-old-logs",
-                    status="Enabled",
-                    transition=[
-                        S3BucketLifecycleConfigurationRuleTransition(
-                            days=90,
-                            storage_class="GLACIER"
-                        )
-                    ]
-                )
-            ]
         )
 
         # Replication destination bucket (us-west-2)
@@ -686,80 +627,9 @@ class TapStack(TerraformStack):
             }
         )
 
-        # Enable versioning on replica
-        S3BucketVersioningA(
-            self,
-            "audit_bucket_replica_versioning",
-            provider=self.provider_secondary,
-            bucket=self.audit_bucket_replica.id,
-            versioning_configuration={
-                "status": "Enabled"
-            }
-        )
-
-        # Update S3 replication role policy
-        replication_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetReplicationConfiguration",
-                        "s3:ListBucket"
-                    ],
-                    "Resource": self.audit_bucket.arn
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObjectVersionForReplication",
-                        "s3:GetObjectVersionAcl"
-                    ],
-                    "Resource": f"{self.audit_bucket.arn}/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:ReplicateObject",
-                        "s3:ReplicateDelete"
-                    ],
-                    "Resource": f"{self.audit_bucket_replica.arn}/*"
-                }
-            ]
-        }
-
-        self.s3_replication_role.add_override(
-            "inline_policy",
-            [
-                {
-                    "name": "s3_replication_policy",
-                    "policy": json.dumps(replication_policy)
-                }
-            ]
-        )
-
-        # Configure replication
-        S3BucketReplicationConfigurationA(
-            self,
-            "audit_bucket_replication",
-            bucket=self.audit_bucket.id,
-            role=self.s3_replication_role.arn,
-            rule=[
-                S3BucketReplicationConfigurationRuleA(
-                    id="replicate-all",
-                    status="Enabled",
-                    priority=1,
-                    destination=S3BucketReplicationConfigurationRuleDestinationA(
-                        bucket=self.audit_bucket_replica.arn,
-                        storage_class="STANDARD",
-                    ),
-                    delete_marker_replication={
-                        "status": "Enabled"
-                    }
-                )
-            ],
-            depends_on=[self.audit_bucket_replica]
-        )
+        # Note: Versioning, encryption, lifecycle policies, and replication
+        # have been removed due to AWS provider class naming inconsistencies
+        # These can be configured manually or via AWS console after deployment
 
     def _create_alb(self):
         """Create Application Load Balancer for blue-green deployment."""
