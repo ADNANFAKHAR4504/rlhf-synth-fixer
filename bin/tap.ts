@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
@@ -8,20 +13,15 @@
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
-/**
- * NOTE: This file is not used for the current Pulumi implementation.
- * The main entry point is lib/tap-stack.ts as specified in Pulumi.yaml
- *
- * This template is kept for reference but all infrastructure is defined
- * in lib/tap-stack.ts which directly exports stack outputs.
- */
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import { TapStack } from '../lib/tap-stack';
 
-// import * as aws from '@pulumi/aws';
-// Commented out - TapStack class not exported from lib/tap-stack.ts
-// import { TapStack } from '../lib/tap-stack';
+// Get configuration
+const config = new pulumi.Config();
 
-// Get the environment suffix from environment variables, defaulting to 'dev'.
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get the environment suffix from Pulumi config or environment variables, defaulting to 'dev'.
+const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
@@ -41,7 +41,71 @@ const defaultTags = {
   CreatedAt: createdAt,
 };
 
-// Export for potential future use
-export { defaultTags };
+// Configure AWS provider with default tags
+const provider = new aws.Provider('aws', {
+  region: process.env.AWS_REGION || 'us-east-1',
+  defaultTags: {
+    tags: defaultTags,
+  },
+});
 
-// NOTE: Infrastructure instantiation happens in lib/tap-stack.ts
+// Instantiate the main stack component for the infrastructure.
+// This encapsulates all the resources for the platform.
+const stack = new TapStack(
+  'pulumi-infra',
+  {
+    environmentSuffix: environmentSuffix,
+    tags: defaultTags,
+  },
+  { provider }
+);
+
+// Export all stack outputs for easy access and testing
+// VPC and Network Outputs
+export const primaryVpcId = stack.primaryVpcId;
+export const drVpcId = stack.drVpcId;
+export const vpcPeeringConnectionId = stack.vpcPeeringConnectionId;
+export const primaryPublicSubnetIds = stack.primaryPublicSubnetIds;
+export const primaryPrivateSubnetIds = stack.primaryPrivateSubnetIds;
+export const drPublicSubnetIds = stack.drPublicSubnetIds;
+export const drPrivateSubnetIds = stack.drPrivateSubnetIds;
+
+// Database Outputs
+export const globalClusterId = stack.globalClusterId;
+export const primaryDbEndpoint = stack.primaryDbEndpoint;
+export const drDbEndpoint = stack.drDbEndpoint;
+export const primaryDbClusterId = stack.primaryDbClusterId;
+export const drDbClusterId = stack.drDbClusterId;
+
+// Compute Outputs
+export const primaryAlbEndpoint = stack.primaryAlbEndpoint;
+export const failoverEndpoint = stack.failoverEndpoint;
+export const primaryAlbDnsName = stack.primaryAlbDnsName;
+export const drAlbDnsName = stack.drAlbDnsName;
+export const primaryLambdaName = stack.primaryLambdaName;
+export const drLambdaName = stack.drLambdaName;
+export const primaryLambdaArn = stack.primaryLambdaArn;
+export const drLambdaArn = stack.drLambdaArn;
+
+// Storage Outputs
+export const primaryBucketName = stack.primaryBucketName;
+export const drBucketName = stack.drBucketName;
+export const primaryBucketArn = stack.primaryBucketArn;
+export const drBucketArn = stack.drBucketArn;
+
+// Route53 and Health Check Outputs
+export const route53ZoneId = stack.route53ZoneId;
+export const primaryEndpoint = stack.primaryEndpoint;
+export const primaryHealthCheckId = stack.primaryHealthCheckId;
+export const drHealthCheckId = stack.drHealthCheckId;
+
+// EventBridge Outputs
+export const primaryEventBusName = stack.primaryEventBusName;
+export const drEventBusName = stack.drEventBusName;
+export const primaryEventBusArn = stack.primaryEventBusArn;
+export const drEventBusArn = stack.drEventBusArn;
+
+// Monitoring Outputs
+export const alarmTopicArn = stack.alarmTopicArn;
+export const dashboardUrl = stack.dashboardUrl;
+export const dashboardName = stack.dashboardName;
