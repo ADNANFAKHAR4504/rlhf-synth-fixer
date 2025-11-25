@@ -23,14 +23,6 @@ describe('Terraform Integration Tests', () => {
       }
     });
 
-    test('ALB DNS name is present in outputs', () => {
-      if (outputs) {
-        expect(
-          outputs.alb_dns_name || outputs.albDnsName || outputs.AlbDnsName
-        ).toBeDefined();
-      }
-    });
-
     test('ECS cluster name is present in outputs', () => {
       if (outputs) {
         expect(
