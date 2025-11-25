@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T00:00:00Z",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "cloud-environment-setup"
+  ],
+  "po_id": "101912368",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora PostgreSQL",
+    "S3",
+    "ECS",
+    "Fargate",
+    "ELB",
+    "Application Load Balancer",
+    "CloudWatch Logs",
+    "Secrets Manager",
+    "IAM",
+    "Auto Scaling",
+    "NAT Gateway"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
