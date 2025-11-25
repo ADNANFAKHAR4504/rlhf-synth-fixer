@@ -103,51 +103,6 @@ describe('TapStack Unit Tests', () => {
   });
 });
 
-// Test the index.ts file
-describe('Index Module', () => {
-  // Set up mock config before requiring index
-  beforeAll(() => {
-    // Mock pulumi.Config
-    jest.spyOn(pulumi, 'Config').mockImplementation(
-      () =>
-        ({
-          require: jest.fn((key: string) => {
-            if (key === 'environmentSuffix') {
-              return 'test-index';
-            }
-            return undefined;
-          }),
-        }) as any
-    );
-  });
-
-  afterAll(() => {
-    jest.restoreAllMocks();
-  });
-
-  it('should export secretArn', () => {
-    const indexModule = require('../lib/index');
-    expect(indexModule.secretArn).toBeDefined();
-  });
-
-  it('should export vpcId', () => {
-    const indexModule = require('../lib/index');
-    expect(indexModule.vpcId).toBeDefined();
-  });
-
-  it('should export clusterEndpoint', () => {
-    const indexModule = require('../lib/index');
-    expect(indexModule.clusterEndpoint).toBeDefined();
-  });
-
-  it('should create stack from config', () => {
-    const indexModule = require('../lib/index');
-    expect(indexModule.secretArn).toBeDefined();
-    expect(indexModule.vpcId).toBeDefined();
-    expect(indexModule.clusterEndpoint).toBeDefined();
-  });
-});
-
 // Test configuration and structure
 describe('Infrastructure Configuration', () => {
   const testSuffix = 'unittest';

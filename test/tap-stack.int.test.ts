@@ -1,39 +1,39 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeVpcEndpointsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
-} from '@aws-sdk/client-kms';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-} from '@aws-sdk/client-lambda';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetKeyRotationStatusCommand,
+  KMSClient
+} from '@aws-sdk/client-kms';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('TapStack Integration Tests', () => {
   let outputs: any;
+  let environmentSuffix: string;
   const region = 'us-east-1';
 
   const secretsClient = new SecretsManagerClient({ region });
@@ -46,6 +46,10 @@ describe('TapStack Integration Tests', () => {
   beforeAll(() => {
     const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+
+    // Extract environment suffix from secret name
+    const secretName = outputs.secretArn.split(':').pop().split('-').slice(0, -1).join('-');
+    environmentSuffix = secretName.replace('db-secret-', '');
   });
 
   describe('Stack Outputs', () => {
@@ -169,16 +173,16 @@ describe('TapStack Integration Tests', () => {
             Name: 'vpc-id',
             Values: [outputs.vpcId],
           },
-          {
-            Name: 'group-name',
-            Values: ['*synthz7j9w8*'],
-          },
         ],
       });
 
       const response = await ec2Client.send(command);
 
-      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(2);
+      // Filter out the default security group
+      const customSecurityGroups = response.SecurityGroups!.filter(
+        sg => sg.GroupName !== 'default'
+      );
+      expect(customSecurityGroups.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should have VPC endpoints for Secrets Manager and KMS', async () => {
@@ -207,7 +211,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -223,7 +227,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -240,7 +244,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -257,7 +261,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -273,7 +277,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -288,7 +292,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -305,7 +309,7 @@ describe('TapStack Integration Tests', () => {
   describe('Lambda Rotation Function', () => {
     it('should have deployed rotation Lambda', async () => {
       const command = new GetFunctionCommand({
-        FunctionName: `rotation-function-synthz7j9w8`,
+        FunctionName: `rotation-function-${environmentSuffix}`,
       });
 
       const response = await lambdaClient.send(command);
@@ -316,7 +320,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should use Node.js 18.x runtime', async () => {
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: `rotation-function-synthz7j9w8`,
+        FunctionName: `rotation-function-${environmentSuffix}`,
       });
 
       const response = await lambdaClient.send(command);
@@ -326,7 +330,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should have appropriate timeout', async () => {
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: `rotation-function-synthz7j9w8`,
+        FunctionName: `rotation-function-${environmentSuffix}`,
       });
 
       const response = await lambdaClient.send(command);
@@ -336,7 +340,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should be deployed in VPC', async () => {
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: `rotation-function-synthz7j9w8`,
+        FunctionName: `rotation-function-${environmentSuffix}`,
       });
 
       const response = await lambdaClient.send(command);
@@ -351,7 +355,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should have environment variables configured', async () => {
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: `rotation-function-synthz7j9w8`,
+        FunctionName: `rotation-function-${environmentSuffix}`,
       });
 
       const response = await lambdaClient.send(command);
@@ -365,20 +369,20 @@ describe('TapStack Integration Tests', () => {
   describe('CloudWatch Logs', () => {
     it('should have log group for Lambda function', async () => {
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/lambda/rotation-function-synthz7j9w8',
+        logGroupNamePrefix: `/aws/lambda/rotation-function-${environmentSuffix}`,
       });
 
       const response = await logsClient.send(command);
 
       expect(response.logGroups).toHaveLength(1);
       expect(response.logGroups![0].logGroupName).toBe(
-        '/aws/lambda/rotation-function-synthz7j9w8'
+        `/aws/lambda/rotation-function-${environmentSuffix}`
       );
     });
 
     it('should have log group encrypted with KMS', async () => {
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/lambda/rotation-function-synthz7j9w8',
+        logGroupNamePrefix: `/aws/lambda/rotation-function-${environmentSuffix}`,
       });
 
       const response = await logsClient.send(command);
@@ -388,7 +392,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should have retention policy configured', async () => {
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/lambda/rotation-function-synthz7j9w8',
+        logGroupNamePrefix: `/aws/lambda/rotation-function-${environmentSuffix}`,
       });
 
       const response = await logsClient.send(command);
@@ -424,7 +428,7 @@ describe('TapStack Integration Tests', () => {
 
       const response = await secretsClient.send(describeSecretCommand);
 
-      expect(response.Name).toContain('synthz7j9w8');
+      expect(response.Name).toContain(environmentSuffix);
     });
   });
 
@@ -434,7 +438,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -452,7 +456,7 @@ describe('TapStack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: ['*synthz7j9w8*'],
+            Values: [`*${environmentSuffix}*`],
           },
         ],
       });
@@ -495,12 +499,12 @@ describe('TapStack Integration Tests', () => {
         // Aurora cluster exists
         rdsClient.send(
           new DescribeDBClustersCommand({
-            Filters: [{ Name: 'db-cluster-id', Values: ['*synthz7j9w8*'] }],
+            Filters: [{ Name: 'db-cluster-id', Values: [`*${environmentSuffix}*`] }],
           })
         ),
         // Lambda exists
         lambdaClient.send(
-          new GetFunctionCommand({ FunctionName: 'rotation-function-synthz7j9w8' })
+          new GetFunctionCommand({ FunctionName: `rotation-function-${environmentSuffix}` })
         ),
       ]);
 
