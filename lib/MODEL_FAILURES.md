@@ -269,6 +269,48 @@ Achieved 100% statement and function coverage.
 
 **Total Failures**: 9
 
+---
+
+### Issue 14: Subnet CIDR Conflict with Existing Subnets - CRITICAL (Post-Deployment Discovery)
+
+**Severity**: CRITICAL
+**Category**: Deployment Blocker
+**Impact**: Subnet creation fails due to CIDR conflicts with existing subnets in the VPC
+
+**Problem Discovered During Deployment**:
+The initial subnet CIDR calculation started public subnets from offset 1 (`10.0.1.0/24`, `10.0.2.0/24`) and private subnets from offset 10 (`10.0.10.0/24`, `10.0.11.0/24`). This caused conflicts when VPCs already had subnets in these ranges.
+
+**Error Encountered**:
+```
+api error InvalidSubnet.Conflict: The CIDR '10.2.1.0/24' conflicts with another subnet
+```
+
+**Fix Applied**:
+Updated subnet CIDR calculation to use safer offsets:
+- **Public subnets**: Start from offset 10 (`10.0.10.0/24`, `10.0.11.0/24`, etc.)
+- **Private subnets**: Start from offset 20 (`10.0.20.0/24`, `10.0.21.0/24`, etc.)
+
+```typescript
+// ✅ FIXED (offset-based conflict avoidance)
+const publicSubnetOffset = 10;
+const privateSubnetOffset = 20;
+
+// Public subnets: 10.0.10.0/24, 10.0.11.0/24, etc.
+const thirdOctet = publicSubnetOffset + index;
+
+// Private subnets: 10.0.20.0/24, 10.0.21.0/24, etc.
+const thirdOctet = privateSubnetOffset + index;
+```
+
+**Why This Fix is Necessary**:
+- VPCs may have existing subnets from previous deployments or manual configurations
+- Lower CIDR ranges (1-9) are commonly used and prone to conflicts
+- Offset-based approach (10 for public, 20 for private) provides buffer zone
+- Ensures successful deployment even when VPC has existing subnets
+- Prevents deployment failures in shared or reused VPCs
+
+**Testing Impact**: Added integration test to validate subnet CIDR uniqueness and prevent future conflicts.
+
 ## Primary Knowledge Gaps
 
 1. **Pulumi API Currency**: Model used deprecated APIs and incorrect property names, suggesting training data from older Pulumi versions

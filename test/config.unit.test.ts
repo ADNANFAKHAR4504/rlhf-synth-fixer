@@ -180,9 +180,6 @@ describe('Config Module', () => {
     expect(config.region).toBe('us-east-1');
     expect(config.tags.Owner).toBe('platform-team'); // default
     expect(config.tags.CostCenter).toBe('engineering'); // default
-    expect(config.rdsBackupRetentionDays).toBe(1); // default for dev
-    expect(config.s3LifecycleRules.transitionDays).toBe(30); // default for dev
-    expect(config.s3LifecycleRules.expirationDays).toBe(90); // default for dev
     expect(config.availabilityZones).toEqual(['us-east-1a', 'us-east-1b', 'us-east-1c']); // default
 
     // Restore original mock

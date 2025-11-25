@@ -67,7 +67,25 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
       expect(response.Subnets!.length).toBe(outputs.publicSubnetIds.length);
       response.Subnets!.forEach((subnet) => {
         expect(subnet.State).toBe('available');
+        expect(subnet.VpcId).toBe(outputs.vpcId);
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
+    });
+
+    it('public subnets should be in different availability zones', async () => {
+      expect(outputs.publicSubnetIds).toBeDefined();
+      expect(Array.isArray(outputs.publicSubnetIds)).toBe(true);
+
+      if (outputs.publicSubnetIds.length > 1) {
+        const command = new DescribeSubnetsCommand({
+          SubnetIds: outputs.publicSubnetIds,
+        });
+        const response = await ec2Client.send(command);
+
+        const azs = response.Subnets!.map(s => s.AvailabilityZone);
+        const uniqueAzs = new Set(azs);
+        expect(uniqueAzs.size).toBe(outputs.publicSubnetIds.length);
+      }
     });
 
     it('should have private subnets', async () => {
@@ -83,7 +101,44 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
       expect(response.Subnets!.length).toBe(outputs.privateSubnetIds.length);
       response.Subnets!.forEach((subnet) => {
         expect(subnet.State).toBe('available');
+        expect(subnet.VpcId).toBe(outputs.vpcId);
+        // Private subnets should not have public IP on launch
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
+    });
+
+    it('private subnets should be in different availability zones', async () => {
+      expect(outputs.privateSubnetIds).toBeDefined();
+      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
+
+      if (outputs.privateSubnetIds.length > 1) {
+        const command = new DescribeSubnetsCommand({
+          SubnetIds: outputs.privateSubnetIds,
+        });
+        const response = await ec2Client.send(command);
+
+        const azs = response.Subnets!.map(s => s.AvailabilityZone);
+        const uniqueAzs = new Set(azs);
+        expect(uniqueAzs.size).toBe(outputs.privateSubnetIds.length);
+      }
+    });
+
+    it('subnet CIDRs should not overlap', async () => {
+      const allSubnetIds = [
+        ...outputs.publicSubnetIds,
+        ...outputs.privateSubnetIds,
+      ];
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: allSubnetIds,
+      });
+      const response = await ec2Client.send(command);
+
+      const cidrBlocks = response.Subnets!.map(s => s.CidrBlock);
+      const uniqueCidrs = new Set(cidrBlocks);
+
+      // All CIDR blocks should be unique
+      expect(uniqueCidrs.size).toBe(cidrBlocks.length);
     });
   });
 

@@ -328,21 +328,36 @@ logConfiguration: {
 Subnet CIDR blocks are now calculated dynamically based on the actual VPC CIDR block, rather than hardcoded values:
 
 ```typescript
-// ✅ CORRECT (dynamic calculation)
+// ✅ CORRECT (dynamic calculation with conflict avoidance)
 const vpcCidrParts = args.vpcCidr.split('/');
 const vpcBase = vpcCidrParts[0].split('.');
 const vpcPrefix = parseInt(vpcCidrParts[1]);
 const subnetSize = 24;
 
-// Public subnets: 10.0.1.0/24, 10.0.2.0/24, etc. (for 10.0.0.0/16 VPC)
-// Private subnets: 10.0.10.0/24, 10.0.11.0/24, etc. (offset by 10)
+// Public subnets: Start from offset 10 to avoid conflicts with existing subnets
+// For /16 VPC: 10.0.0.0/16 -> subnets: 10.0.10.0/24, 10.0.11.0/24, etc.
+const publicSubnetOffset = 10;
 this.publicSubnets = args.availabilityZones.map((az, index) => {
   let cidrBlock: string;
   if (vpcPrefix <= 16) {
-    const thirdOctet = index + 1;  // Start from 1 to avoid 10.0.0.0/24
+    const thirdOctet = publicSubnetOffset + index;  // Start from 10 to avoid conflicts
     cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${thirdOctet}.0/${subnetSize}`;
   } else {
-    const fourthOctet = (index + 1) * 64;
+    const fourthOctet = (publicSubnetOffset + index) * 64;
+    cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${vpcBase[2]}.${fourthOctet}/${subnetSize}`;
+  }
+  return new aws.ec2.Subnet(..., { cidrBlock, ... });
+});
+
+// Private subnets: Start from offset 20 to avoid overlap with public subnets (10-19)
+const privateSubnetOffset = 20;
+this.privateSubnets = args.availabilityZones.map((az, index) => {
+  let cidrBlock: string;
+  if (vpcPrefix <= 16) {
+    const thirdOctet = privateSubnetOffset + index;  // Start from 20
+    cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${thirdOctet}.0/${subnetSize}`;
+  } else {
+    const fourthOctet = (privateSubnetOffset + index) * 64;
     cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${vpcBase[2]}.${fourthOctet}/${subnetSize}`;
   }
   return new aws.ec2.Subnet(..., { cidrBlock, ... });
@@ -353,11 +368,14 @@ this.publicSubnets = args.availabilityZones.map((az, index) => {
 - Hardcoded subnet CIDRs (e.g., `10.${index}.1.0/24`) don't work with different VPC CIDR blocks
 - Staging environments may use `10.1.0.0/16` instead of `10.0.0.0/16`
 - Invalid CIDR errors occur when subnet CIDR doesn't fall within VPC CIDR range
+- **CIDR conflicts occur when subnets overlap with existing subnets in the VPC**
 - Dynamic calculation ensures subnets are always valid for any VPC CIDR configuration
+- **Offset-based approach (10 for public, 20 for private) avoids conflicts with commonly used lower CIDR ranges**
 
 **Example Calculations**:
-- VPC `10.0.0.0/16`: Public subnets `10.0.1.0/24`, `10.0.2.0/24`; Private subnets `10.0.10.0/24`, `10.0.11.0/24`
-- VPC `10.1.0.0/16`: Public subnets `10.1.1.0/24`, `10.1.2.0/24`; Private subnets `10.1.10.0/24`, `10.1.11.0/24`
+- VPC `10.0.0.0/16`: Public subnets `10.0.10.0/24`, `10.0.11.0/24`, `10.0.12.0/24`; Private subnets `10.0.20.0/24`, `10.0.21.0/24`, `10.0.22.0/24`
+- VPC `10.1.0.0/16`: Public subnets `10.1.10.0/24`, `10.1.11.0/24`, `10.1.12.0/24`; Private subnets `10.1.20.0/24`, `10.1.21.0/24`, `10.1.22.0/24`
+- VPC `10.2.0.0/16`: Public subnets `10.2.10.0/24`, `10.2.11.0/24`, `10.2.12.0/24`; Private subnets `10.2.20.0/24`, `10.2.21.0/24`, `10.2.22.0/24`
 
 ## Testing Strategy
 
@@ -427,6 +445,12 @@ expect(cluster.clusters![0].status).toBe('ACTIVE');
 ```
 
 **Note**: The integration tests include robust handling for Pulumi output serialization, where arrays may be serialized as JSON strings when flattened to `flat-outputs.json`. The tests automatically parse these strings back to arrays when needed.
+
+**Enhanced Test Coverage**:
+- **Subnet Validation**: Tests verify subnets are in different availability zones
+- **CIDR Overlap Detection**: Validates that no subnet CIDR blocks overlap
+- **Public vs Private Configuration**: Verifies `MapPublicIpOnLaunch` settings are correct
+- **VPC Association**: Ensures all subnets and security groups belong to the correct VPC
 
 ## Environment Configurations
 
@@ -509,7 +533,7 @@ pulumi stack output --json > cfn-outputs/flat-outputs.json
 7. **Complete Tests**: 100% coverage vs placeholder tests
 8. **Build Success**: All lint/build/test gates pass
 9. **CloudWatch Log Group Validation**: Sanitizes environment suffixes and uses explicit naming to ensure valid log group names
-10. **Dynamic Subnet CIDR Calculation**: Calculates subnet CIDRs based on actual VPC CIDR block, supporting any VPC configuration
+10. **Dynamic Subnet CIDR Calculation**: Calculates subnet CIDRs based on actual VPC CIDR block with offset-based conflict avoidance (public: offset 10, private: offset 20)
 
 ## Conclusion
 
