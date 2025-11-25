@@ -75,7 +75,9 @@ Refactor and optimize our transaction processing infrastructure using **CloudFor
 
 10. **Parameter Validation and Security**
     - Define parameters with AllowedValues for environment types
-    - Use NoEcho for sensitive parameters like database passwords
+    - **Use AWS Secrets Manager for database passwords** (do not use NoEcho parameters)
+    - Implement automatic password generation in Secrets Manager
+    - Use CloudFormation dynamic references to retrieve secrets
     - Implement constraint descriptions for all parameters
     - Validate parameter formats using AllowedPatterns where applicable
 
@@ -89,6 +91,7 @@ Refactor and optimize our transaction processing infrastructure using **CloudFor
 - Use **ECR** repositories for Lambda container images
 - Use **VPC** with 3 availability zones per region
 - Use **Systems Manager Parameter Store** for RDS endpoint storage
+- Use **AWS Secrets Manager** for database password storage and automatic generation
 - Use **Route 53** for multi-region DNS failover
 - Use **CloudWatch** alarms for monitoring and rollback triggers
 - Deploy to **us-east-1** (primary) and **eu-west-1** (secondary) regions
@@ -112,7 +115,8 @@ Refactor and optimize our transaction processing infrastructure using **CloudFor
 - Stack deployment time must not exceed 15 minutes
 - Use only CloudFormation Drift Detection compatible resources
 - Lambda functions must use container images, not inline code or S3 packages
-- Database credentials must be passed via Parameters with NoEcho
+- **Database credentials must be stored in AWS Secrets Manager** (not passed via Parameters)
+- **Use CloudFormation dynamic references** to retrieve secrets (resolves cfn-lint W1011)
 - VPC must use private subnets for RDS Aurora clusters
 - Security groups must follow least privilege principle
 - All resources must support tagging for cost allocation
@@ -130,7 +134,9 @@ Refactor and optimize our transaction processing infrastructure using **CloudFor
 - **Lambda Deployment**: All functions use ECR container images
 - **Monitoring**: CloudWatch alarms configured for RDS and Lambda
 - **Code Quality**: Valid JSON, well-documented, follows CloudFormation best practices
-- **Testing**: All templates validate successfully with cfn-lint
+- **Security**: Database passwords stored in Secrets Manager, not in parameters
+- **Linting**: All templates validate successfully with cfn-lint (zero warnings)
+- **Testing**: Unit and integration tests validate template structure and deployment outputs
 
 ## What to deliver
 
@@ -143,6 +149,8 @@ Refactor and optimize our transaction processing infrastructure using **CloudFor
 - Lambda function code in lib/lambda/validator.py (placeholder)
 - Dockerfile for Lambda container image in lib/lambda/Dockerfile
 - Systems Manager Parameter Store resources for RDS endpoint storage
+- AWS Secrets Manager secret for database password (automatic generation)
+- SecretTargetAttachment for enabling password rotation
 - CloudFormation StackSet configuration for multi-region deployment
 - Comprehensive parameter definitions with validation
 - Stack outputs for all cross-stack references

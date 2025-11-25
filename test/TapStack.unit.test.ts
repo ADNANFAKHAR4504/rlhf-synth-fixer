@@ -51,12 +51,15 @@ describe('TapStack Template', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
       expect(template.Parameters.EnvironmentSuffix.Description).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.AllowedPattern).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.ConstraintDescription).toBeDefined();
     });
 
     test('should have Environment parameter', () => {
       expect(template.Parameters.Environment).toBeDefined();
       expect(template.Parameters.Environment.Type).toBe('String');
       expect(template.Parameters.Environment.AllowedValues).toEqual(['dev', 'staging', 'prod']);
+      expect(template.Parameters.Environment.Default).toBe('dev');
     });
 
     test('should have DBMasterUsername parameter', () => {
@@ -64,28 +67,36 @@ describe('TapStack Template', () => {
       expect(template.Parameters.DBMasterUsername.Type).toBe('String');
       expect(template.Parameters.DBMasterUsername.MinLength).toBe('1');
       expect(template.Parameters.DBMasterUsername.MaxLength).toBe('16');
+      expect(template.Parameters.DBMasterUsername.Default).toBe('admin');
+      expect(template.Parameters.DBMasterUsername.AllowedPattern).toBeDefined();
     });
 
     test('should have DBMasterPassword parameter', () => {
       expect(template.Parameters.DBMasterPassword).toBeDefined();
       expect(template.Parameters.DBMasterPassword.Type).toBe('String');
       expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
+      expect(template.Parameters.DBMasterPassword.MinLength).toBe('8');
+      expect(template.Parameters.DBMasterPassword.MaxLength).toBe('41');
     });
 
     test('should have EnableMultiAZ parameter', () => {
       expect(template.Parameters.EnableMultiAZ).toBeDefined();
       expect(template.Parameters.EnableMultiAZ.Type).toBe('String');
       expect(template.Parameters.EnableMultiAZ.AllowedValues).toEqual(['true', 'false']);
+      expect(template.Parameters.EnableMultiAZ.Default).toBe('true');
     });
 
     test('should have LambdaImageUri parameter', () => {
       expect(template.Parameters.LambdaImageUri).toBeDefined();
       expect(template.Parameters.LambdaImageUri.Type).toBe('String');
+      expect(template.Parameters.LambdaImageUri.Default).toBe('');
     });
 
     test('should have TemplatesBucketName parameter', () => {
       expect(template.Parameters.TemplatesBucketName).toBeDefined();
       expect(template.Parameters.TemplatesBucketName.Type).toBe('String');
+      expect(template.Parameters.TemplatesBucketName.AllowedPattern).toBeDefined();
+      expect(template.Parameters.TemplatesBucketName.ConstraintDescription).toBeDefined();
     });
   });
 
@@ -131,7 +142,16 @@ describe('TapStack Template', () => {
     test('DatabaseStack should reference NetworkStack outputs', () => {
       const params = template.Resources.DatabaseStack.Properties.Parameters;
       expect(params.PrivateSubnet1Id['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.PrivateSubnet1Id']);
+      expect(params.PrivateSubnet2Id['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.PrivateSubnet2Id']);
+      expect(params.PrivateSubnet3Id['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.PrivateSubnet3Id']);
       expect(params.DatabaseSecurityGroupId['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.DatabaseSecurityGroupId']);
+    });
+
+    test('DatabaseStack should pass DBMasterUsername and DBMasterPassword parameters', () => {
+      const params = template.Resources.DatabaseStack.Properties.Parameters;
+      expect(params.DBMasterUsername).toEqual({ Ref: 'DBMasterUsername' });
+      expect(params.DBMasterPassword).toEqual({ Ref: 'DBMasterPassword' });
+      expect(params.EnableMultiAZ).toEqual({ Ref: 'EnableMultiAZ' });
     });
 
     test('should have ComputeStack resource', () => {
@@ -146,7 +166,11 @@ describe('TapStack Template', () => {
     test('ComputeStack should reference both NetworkStack and DatabaseStack outputs', () => {
       const params = template.Resources.ComputeStack.Properties.Parameters;
       expect(params.PrivateSubnet1Id['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.PrivateSubnet1Id']);
+      expect(params.PrivateSubnet2Id['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.PrivateSubnet2Id']);
+      expect(params.LambdaSecurityGroupId['Fn::GetAtt']).toEqual(['NetworkStack', 'Outputs.LambdaSecurityGroupId']);
       expect(params.DBClusterEndpoint['Fn::GetAtt']).toEqual(['DatabaseStack', 'Outputs.DBClusterEndpoint']);
+      expect(params.DBClusterPort['Fn::GetAtt']).toEqual(['DatabaseStack', 'Outputs.DBClusterPort']);
+      expect(params.LambdaImageUri).toEqual({ Ref: 'LambdaImageUri' });
     });
 
     test('should have MonitoringStack resource', () => {
@@ -162,6 +186,7 @@ describe('TapStack Template', () => {
       const params = template.Resources.MonitoringStack.Properties.Parameters;
       expect(params.DBClusterId['Fn::GetAtt']).toEqual(['DatabaseStack', 'Outputs.DBClusterId']);
       expect(params.ValidatorLambdaName['Fn::GetAtt']).toEqual(['ComputeStack', 'Outputs.ValidatorLambdaName']);
+      expect(params.MigrationLambdaName['Fn::GetAtt']).toEqual(['ComputeStack', 'Outputs.MigrationLambdaName']);
     });
   });
 
@@ -176,6 +201,20 @@ describe('TapStack Template', () => {
       expect(tableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
+    test('SessionTable should have PAY_PER_REQUEST billing mode', () => {
+      expect(template.Resources.SessionTable.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    test('SessionTable should have GlobalSecondaryIndexes', () => {
+      expect(template.Resources.SessionTable.Properties.GlobalSecondaryIndexes).toBeDefined();
+      expect(Array.isArray(template.Resources.SessionTable.Properties.GlobalSecondaryIndexes)).toBe(true);
+    });
+
+    test('SessionTable should have PointInTimeRecovery conditionally enabled for prod', () => {
+      const pitr = template.Resources.SessionTable.Properties.PointInTimeRecoverySpecification;
+      expect(pitr.PointInTimeRecoveryEnabled['Fn::If']).toEqual(['IsProd', true, false]);
+    });
+
     test('should have AuditLogsBucket S3 bucket', () => {
       expect(template.Resources.AuditLogsBucket).toBeDefined();
       expect(template.Resources.AuditLogsBucket.Type).toBe('AWS::S3::Bucket');
@@ -186,6 +225,35 @@ describe('TapStack Template', () => {
       expect(bucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
       expect(bucketName['Fn::Sub']).toContain('${AWS::AccountId}');
       expect(bucketName['Fn::Sub']).toContain('${AWS::Region}');
+    });
+
+    test('AuditLogsBucket should have versioning enabled', () => {
+      expect(template.Resources.AuditLogsBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
+
+    test('AuditLogsBucket should have encryption configured', () => {
+      expect(template.Resources.AuditLogsBucket.Properties.BucketEncryption).toBeDefined();
+      expect(template.Resources.AuditLogsBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+    });
+
+    test('AuditLogsBucket should have public access blocked', () => {
+      const publicAccess = template.Resources.AuditLogsBucket.Properties.PublicAccessBlockConfiguration;
+      expect(publicAccess.BlockPublicAcls).toBe(true);
+      expect(publicAccess.BlockPublicPolicy).toBe(true);
+      expect(publicAccess.IgnorePublicAcls).toBe(true);
+      expect(publicAccess.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('AuditLogsBucket should have conditional replication for prod', () => {
+      const replication = template.Resources.AuditLogsBucket.Properties.ReplicationConfiguration;
+      expect(replication['Fn::If']).toBeDefined();
+      expect(replication['Fn::If'][0]).toBe('IsProd');
+    });
+
+    test('should have S3ReplicationRole IAM role', () => {
+      expect(template.Resources.S3ReplicationRole).toBeDefined();
+      expect(template.Resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.S3ReplicationRole.Condition).toBe('IsProd');
     });
   });
 
