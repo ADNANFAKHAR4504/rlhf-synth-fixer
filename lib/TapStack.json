@@ -1,7 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-ready CloudFormation StackSet for cross-region trading analytics platform migration from us-east-1 to eu-central-1 with DynamoDB Global Tables, S3 replication, VPC peering, and comprehensive monitoring",
-
   "Parameters": {
     "EnvironmentSuffix": {
       "Description": "Unique suffix for resource naming to ensure uniqueness across deployments",
@@ -21,15 +20,13 @@
       "Type": "String",
       "Default": "eu-central-1"
     },
-    "DestinationAccountId": {
-      "Description": "AWS Account ID for cross-region resources",
-      "Type": "String",
-      "Default": ""
-    },
     "VpcPeeringEnabled": {
       "Description": "Enable VPC peering between regions",
       "Type": "String",
-      "AllowedValues": ["true", "false"],
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
       "Default": "false"
     },
     "TargetVpcId": {
@@ -38,32 +35,40 @@
       "Default": ""
     }
   },
-
   "Conditions": {
     "IsSourceRegion": {
       "Fn::Equals": [
-        { "Ref": "AWS::Region" },
-        { "Ref": "SourceRegion" }
+        {
+          "Ref": "AWS::Region"
+        },
+        {
+          "Ref": "SourceRegion"
+        }
       ]
     },
     "CreateVPCPeering": {
       "Fn::And": [
         {
           "Fn::Equals": [
-            { "Ref": "VpcPeeringEnabled" },
+            {
+              "Ref": "VpcPeeringEnabled"
+            },
             "true"
           ]
         },
         {
           "Fn::Equals": [
-            { "Ref": "AWS::Region" },
-            { "Ref": "SourceRegion" }
+            {
+              "Ref": "AWS::Region"
+            },
+            {
+              "Ref": "SourceRegion"
+            }
           ]
         }
       ]
     }
   },
-
   "Resources": {
     "TradingDataBucket": {
       "Type": "AWS::S3::Bucket",
@@ -121,16 +126,19 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           },
           {
             "Key": "Region",
-            "Value": { "Ref": "AWS::Region" }
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
     },
-
     "S3ReplicationRole": {
       "Type": "AWS::IAM::Role",
       "Condition": "IsSourceRegion",
@@ -194,7 +202,6 @@
         ]
       }
     },
-
     "TradingAnalyticsGlobalTable": {
       "Type": "AWS::DynamoDB::GlobalTable",
       "Properties": {
@@ -253,7 +260,9 @@
         },
         "Replicas": [
           {
-            "Region": { "Ref": "SourceRegion" },
+            "Region": {
+              "Ref": "SourceRegion"
+            },
             "PointInTimeRecoverySpecification": {
               "PointInTimeRecoveryEnabled": true
             },
@@ -267,7 +276,6 @@
         ]
       }
     },
-
     "AnalyticsFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -276,7 +284,12 @@
         },
         "Runtime": "python3.11",
         "Handler": "index.handler",
-        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
         "Timeout": 300,
         "MemorySize": 512,
         "Code": {
@@ -343,20 +356,27 @@
             "TABLE_NAME": {
               "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"
             },
-            "BUCKET_NAME": { "Ref": "TradingDataBucket" },
-            "REGION": { "Ref": "AWS::Region" },
-            "TOPIC_ARN": { "Ref": "MigrationEventTopic" }
+            "BUCKET_NAME": {
+              "Ref": "TradingDataBucket"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            },
+            "TOPIC_ARN": {
+              "Ref": "MigrationEventTopic"
+            }
           }
         },
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -413,7 +433,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::GetAtt": ["TradingDataBucket", "Arn"]
+                      "Fn::GetAtt": [
+                        "TradingDataBucket",
+                        "Arn"
+                      ]
                     },
                     {
                       "Fn::Sub": "${TradingDataBucket.Arn}/*"
@@ -429,7 +452,10 @@
                     "kinesis:ListStreams"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": ["MarketDataStream", "Arn"]
+                    "Fn::GetAtt": [
+                      "MarketDataStream",
+                      "Arn"
+                    ]
                   }
                 },
                 {
@@ -457,12 +483,21 @@
         ]
       }
     },
-
     "KinesisEventSourceMapping": {
       "Type": "AWS::Lambda::EventSourceMapping",
       "Properties": {
-        "EventSourceArn": { "Fn::GetAtt": ["MarketDataStream", "Arn"] },
-        "FunctionName": { "Fn::GetAtt": ["AnalyticsFunction", "Arn"] },
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "MarketDataStream",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "AnalyticsFunction",
+            "Arn"
+          ]
+        },
         "StartingPosition": "LATEST",
         "BatchSize": 100,
         "MaximumBatchingWindowInSeconds": 10,
@@ -471,7 +506,6 @@
         "MaximumRetryAttempts": 3
       }
     },
-
     "ConfigParameter": {
       "Type": "AWS::SSM::Parameter",
       "Properties": {
@@ -484,20 +518,27 @@
           "Fn::Sub": [
             "{\"region\":\"${Region}\",\"bucket\":\"${Bucket}\",\"table\":\"${Table}\",\"stream\":\"${Stream}\",\"vpc\":\"${VPC}\"}",
             {
-              "Region": { "Ref": "AWS::Region" },
-              "Bucket": { "Ref": "TradingDataBucket" },
+              "Region": {
+                "Ref": "AWS::Region"
+              },
+              "Bucket": {
+                "Ref": "TradingDataBucket"
+              },
               "Table": {
                 "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"
               },
-              "Stream": { "Ref": "MarketDataStream" },
-              "VPC": { "Ref": "TradingVPC" }
+              "Stream": {
+                "Ref": "MarketDataStream"
+              },
+              "VPC": {
+                "Ref": "TradingVPC"
+              }
             }
           ]
         },
         "Description": "Trading platform configuration for region-agnostic access"
       }
     },
-
     "MigrationEventTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
@@ -509,17 +550,20 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "MigrationTopicPolicy": {
       "Type": "AWS::SNS::TopicPolicy",
       "Properties": {
         "Topics": [
-          { "Ref": "MigrationEventTopic" }
+          {
+            "Ref": "MigrationEventTopic"
+          }
         ],
         "PolicyDocument": {
           "Version": "2012-10-17",
@@ -534,13 +578,14 @@
                 ]
               },
               "Action": "SNS:Publish",
-              "Resource": { "Ref": "MigrationEventTopic" }
+              "Resource": {
+                "Ref": "MigrationEventTopic"
+              }
             }
           ]
         }
       }
     },
-
     "MarketDataStream": {
       "Type": "AWS::Kinesis::Stream",
       "Properties": {
@@ -559,12 +604,13 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "TradingVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -586,16 +632,19 @@
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "CidrBlock": {
           "Fn::If": [
             "IsSourceRegion",
@@ -604,7 +653,12 @@
           ]
         },
         "AvailabilityZone": {
-          "Fn::Select": [0, { "Fn::GetAZs": "" }]
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
         },
         "MapPublicIpOnLaunch": true,
         "Tags": [
@@ -617,11 +671,12 @@
         ]
       }
     },
-
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "CidrBlock": {
           "Fn::If": [
             "IsSourceRegion",
@@ -630,7 +685,12 @@
           ]
         },
         "AvailabilityZone": {
-          "Fn::Select": [1, { "Fn::GetAZs": "" }]
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
         },
         "MapPublicIpOnLaunch": true,
         "Tags": [
@@ -643,11 +703,12 @@
         ]
       }
     },
-
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "CidrBlock": {
           "Fn::If": [
             "IsSourceRegion",
@@ -656,7 +717,12 @@
           ]
         },
         "AvailabilityZone": {
-          "Fn::Select": [0, { "Fn::GetAZs": "" }]
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
         },
         "Tags": [
           {
@@ -668,11 +734,12 @@
         ]
       }
     },
-
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "CidrBlock": {
           "Fn::If": [
             "IsSourceRegion",
@@ -681,7 +748,12 @@
           ]
         },
         "AvailabilityZone": {
-          "Fn::Select": [1, { "Fn::GetAZs": "" }]
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
         },
         "Tags": [
           {
@@ -693,7 +765,6 @@
         ]
       }
     },
-
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
@@ -707,19 +778,23 @@
         ]
       }
     },
-
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
-        "InternetGatewayId": { "Ref": "InternetGateway" }
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
-
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -730,33 +805,41 @@
         ]
       }
     },
-
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": { "Ref": "InternetGateway" }
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
-
     "SubnetRouteTableAssociation1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PublicSubnet1" },
-        "RouteTableId": { "Ref": "PublicRouteTable" }
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
-
     "SubnetRouteTableAssociation2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PublicSubnet2" },
-        "RouteTableId": { "Ref": "PublicRouteTable" }
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
-
     "NATGatewayEIP": {
       "Type": "AWS::EC2::EIP",
       "DependsOn": "AttachGateway",
@@ -772,12 +855,18 @@
         ]
       }
     },
-
     "NATGateway": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": { "Fn::GetAtt": ["NATGatewayEIP", "AllocationId"] },
-        "SubnetId": { "Ref": "PublicSubnet1" },
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGatewayEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -788,11 +877,12 @@
         ]
       }
     },
-
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -803,32 +893,40 @@
         ]
       }
     },
-
     "PrivateRoute": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": { "Ref": "NATGateway" }
+        "NatGatewayId": {
+          "Ref": "NATGateway"
+        }
       }
     },
-
     "PrivateSubnetRouteTableAssociation1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet1" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
-
     "PrivateSubnetRouteTableAssociation2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet2" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
-
     "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -836,7 +934,9 @@
           "Fn::Sub": "lambda-sg-${EnvironmentSuffix}-${AWS::Region}"
         },
         "GroupDescription": "Security group for Lambda functions",
-        "VpcId": { "Ref": "TradingVPC" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
         "SecurityGroupEgress": [
           {
             "IpProtocol": "-1",
@@ -853,14 +953,19 @@
         ]
       }
     },
-
     "VPCPeeringConnection": {
       "Type": "AWS::EC2::VPCPeeringConnection",
       "Condition": "CreateVPCPeering",
       "Properties": {
-        "VpcId": { "Ref": "TradingVPC" },
-        "PeerVpcId": { "Ref": "TargetVpcId" },
-        "PeerRegion": { "Ref": "TargetRegion" },
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "PeerVpcId": {
+          "Ref": "TargetVpcId"
+        },
+        "PeerRegion": {
+          "Ref": "TargetRegion"
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -871,7 +976,6 @@
         ]
       }
     },
-
     "MonitoringDashboard": {
       "Type": "AWS::CloudWatch::Dashboard",
       "Properties": {
@@ -882,14 +986,17 @@
           "Fn::Sub": [
             "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"BucketSizeBytes\",{\"stat\":\"Average\",\"label\":\"S3 Bucket Size\"}],[\"AWS/DynamoDB\",\"ConsumedReadCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"DynamoDB Reads\"}],[\"AWS/DynamoDB\",\"ConsumedWriteCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"DynamoDB Writes\"}],[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Lambda Invocations\"}],[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}],[\"AWS/Kinesis\",\"IncomingRecords\",{\"stat\":\"Sum\",\"label\":\"Kinesis Records\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"Trading Platform Metrics - ${Region}\",\"yAxis\":{\"left\":{\"label\":\"Count\"}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"ReplicationLatency\",{\"stat\":\"Average\",\"label\":\"Replication Latency\"}]],\"period\":60,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"S3 Replication Metrics\"}},{\"type\":\"log\",\"properties\":{\"query\":\"SOURCE '/aws/lambda/analytics-processor-${Suffix}-${Region}' | fields @timestamp, @message | sort @timestamp desc | limit 100\",\"region\":\"${Region}\",\"title\":\"Lambda Logs\"}}]}",
             {
-              "Region": { "Ref": "AWS::Region" },
-              "Suffix": { "Ref": "EnvironmentSuffix" }
+              "Region": {
+                "Ref": "AWS::Region"
+              },
+              "Suffix": {
+                "Ref": "EnvironmentSuffix"
+              }
             }
           ]
         }
       }
     },
-
     "MigrationStateTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
@@ -923,12 +1030,13 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "MigrationTrackerFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -937,7 +1045,12 @@
         },
         "Runtime": "python3.11",
         "Handler": "index.handler",
-        "Role": { "Fn::GetAtt": ["MigrationTrackerRole", "Arn"] },
+        "Role": {
+          "Fn::GetAtt": [
+            "MigrationTrackerRole",
+            "Arn"
+          ]
+        },
         "Timeout": 60,
         "Code": {
           "ZipFile": {
@@ -1000,12 +1113,13 @@
         },
         "Environment": {
           "Variables": {
-            "STATE_TABLE": { "Ref": "MigrationStateTable" }
+            "STATE_TABLE": {
+              "Ref": "MigrationStateTable"
+            }
           }
         }
       }
     },
-
     "MigrationTrackerRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -1040,7 +1154,12 @@
                     "dynamodb:GetItem",
                     "dynamodb:Query"
                   ],
-                  "Resource": { "Fn::GetAtt": ["MigrationStateTable", "Arn"] }
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MigrationStateTable",
+                      "Arn"
+                    ]
+                  }
                 },
                 {
                   "Effect": "Allow",
@@ -1055,7 +1174,6 @@
         ]
       }
     },
-
     "MigrationEventRule": {
       "Type": "AWS::Events::Rule",
       "Properties": {
@@ -1064,19 +1182,25 @@
         },
         "Description": "Orchestrate migration workflow events",
         "EventPattern": {
-          "source": ["aws.s3", "aws.dynamodb"],
-          "detail-type": ["AWS API Call via CloudTrail"]
+          "source": [
+            "aws.s3",
+            "aws.dynamodb"
+          ],
+          "detail-type": [
+            "AWS API Call via CloudTrail"
+          ]
         },
         "State": "ENABLED",
         "Targets": [
           {
-            "Arn": { "Ref": "MigrationEventTopic" },
+            "Arn": {
+              "Ref": "MigrationEventTopic"
+            },
             "Id": "MigrationEventTarget"
           }
         ]
       }
     },
-
     "BackupPlan": {
       "Type": "AWS::Backup::BackupPlan",
       "Properties": {
@@ -1087,7 +1211,9 @@
           "BackupPlanRule": [
             {
               "RuleName": "DailyBackup",
-              "TargetBackupVault": { "Ref": "BackupVault" },
+              "TargetBackupVault": {
+                "Ref": "BackupVault"
+              },
               "ScheduleExpression": "cron(0 2 * * ? *)",
               "StartWindowMinutes": 60,
               "CompletionWindowMinutes": 120,
@@ -1096,7 +1222,9 @@
                 "MoveToColdStorageAfterDays": 7
               },
               "RecoveryPointTags": {
-                "Environment": { "Ref": "EnvironmentSuffix" }
+                "Environment": {
+                  "Ref": "EnvironmentSuffix"
+                }
               },
               "CopyActions": [
                 {
@@ -1114,7 +1242,6 @@
         }
       }
     },
-
     "BackupVault": {
       "Type": "AWS::Backup::BackupVault",
       "Properties": {
@@ -1122,11 +1249,13 @@
           "Fn::Sub": "trading-platform-backup-${EnvironmentSuffix}"
         },
         "EncryptionKeyArn": {
-          "Fn::GetAtt": ["BackupKey", "Arn"]
+          "Fn::GetAtt": [
+            "BackupKey",
+            "Arn"
+          ]
         }
       }
     },
-
     "BackupKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -1163,19 +1292,28 @@
         }
       }
     },
-
     "BackupSelection": {
       "Type": "AWS::Backup::BackupSelection",
       "Properties": {
-        "BackupPlanId": { "Ref": "BackupPlan" },
+        "BackupPlanId": {
+          "Ref": "BackupPlan"
+        },
         "BackupSelection": {
           "SelectionName": {
             "Fn::Sub": "trading-resources-${EnvironmentSuffix}"
           },
-          "IamRoleArn": { "Fn::GetAtt": ["BackupRole", "Arn"] },
+          "IamRoleArn": {
+            "Fn::GetAtt": [
+              "BackupRole",
+              "Arn"
+            ]
+          },
           "Resources": [
             {
-              "Fn::GetAtt": ["TradingDataBucket", "Arn"]
+              "Fn::GetAtt": [
+                "TradingDataBucket",
+                "Arn"
+              ]
             },
             {
               "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}"
@@ -1184,7 +1322,6 @@
         }
       }
     },
-
     "BackupRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -1209,7 +1346,6 @@
         ]
       }
     },
-
     "HealthCheckAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -1227,20 +1363,25 @@
         "Dimensions": [
           {
             "Name": "FunctionName",
-            "Value": { "Ref": "AnalyticsFunction" }
+            "Value": {
+              "Ref": "AnalyticsFunction"
+            }
           }
         ],
         "AlarmActions": [
-          { "Ref": "MigrationEventTopic" }
+          {
+            "Ref": "MigrationEventTopic"
+          }
         ]
       }
     }
   },
-
   "Outputs": {
     "TradingDataBucketName": {
       "Description": "Trading data S3 bucket name",
-      "Value": { "Ref": "TradingDataBucket" },
+      "Value": {
+        "Ref": "TradingDataBucket"
+      },
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-DataBucket"
@@ -1249,7 +1390,12 @@
     },
     "TradingDataBucketArn": {
       "Description": "Trading data S3 bucket ARN",
-      "Value": { "Fn::GetAtt": ["TradingDataBucket", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "TradingDataBucket",
+          "Arn"
+        ]
+      }
     },
     "TradingAnalyticsTableName": {
       "Description": "DynamoDB Global Table name for analytics",
@@ -1264,27 +1410,48 @@
     },
     "TradingAnalyticsTableArn": {
       "Description": "DynamoDB Global Table ARN",
-      "Value": { "Fn::GetAtt": ["TradingAnalyticsGlobalTable", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "TradingAnalyticsGlobalTable",
+          "Arn"
+        ]
+      }
     },
     "AnalyticsFunctionArn": {
       "Description": "Analytics Lambda function ARN",
-      "Value": { "Fn::GetAtt": ["AnalyticsFunction", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "AnalyticsFunction",
+          "Arn"
+        ]
+      }
     },
     "MigrationTopicArn": {
       "Description": "SNS topic ARN for migration events",
-      "Value": { "Ref": "MigrationEventTopic" }
+      "Value": {
+        "Ref": "MigrationEventTopic"
+      }
     },
     "MarketDataStreamArn": {
       "Description": "Kinesis stream ARN for market data",
-      "Value": { "Fn::GetAtt": ["MarketDataStream", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "MarketDataStream",
+          "Arn"
+        ]
+      }
     },
     "MarketDataStreamName": {
       "Description": "Kinesis stream name",
-      "Value": { "Ref": "MarketDataStream" }
+      "Value": {
+        "Ref": "MarketDataStream"
+      }
     },
     "VPCId": {
       "Description": "Trading VPC ID",
-      "Value": { "Ref": "TradingVPC" },
+      "Value": {
+        "Ref": "TradingVPC"
+      },
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-VPC"
@@ -1293,35 +1460,57 @@
     },
     "PublicSubnet1Id": {
       "Description": "Public Subnet 1 ID",
-      "Value": { "Ref": "PublicSubnet1" }
+      "Value": {
+        "Ref": "PublicSubnet1"
+      }
     },
     "PublicSubnet2Id": {
       "Description": "Public Subnet 2 ID",
-      "Value": { "Ref": "PublicSubnet2" }
+      "Value": {
+        "Ref": "PublicSubnet2"
+      }
     },
     "PrivateSubnet1Id": {
       "Description": "Private Subnet 1 ID",
-      "Value": { "Ref": "PrivateSubnet1" }
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      }
     },
     "PrivateSubnet2Id": {
       "Description": "Private Subnet 2 ID",
-      "Value": { "Ref": "PrivateSubnet2" }
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      }
     },
     "LambdaSecurityGroupId": {
       "Description": "Lambda Security Group ID",
-      "Value": { "Ref": "LambdaSecurityGroup" }
+      "Value": {
+        "Ref": "LambdaSecurityGroup"
+      }
     },
     "MigrationStateTableName": {
       "Description": "Migration state tracking table name",
-      "Value": { "Ref": "MigrationStateTable" }
+      "Value": {
+        "Ref": "MigrationStateTable"
+      }
     },
     "MigrationTrackerFunctionArn": {
       "Description": "Migration tracker Lambda function ARN",
-      "Value": { "Fn::GetAtt": ["MigrationTrackerFunction", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "MigrationTrackerFunction",
+          "Arn"
+        ]
+      }
     },
     "BackupVaultArn": {
       "Description": "Backup vault ARN",
-      "Value": { "Fn::GetAtt": ["BackupVault", "BackupVaultArn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "BackupVault",
+          "BackupVaultArn"
+        ]
+      }
     },
     "DashboardURL": {
       "Description": "CloudWatch Dashboard URL",

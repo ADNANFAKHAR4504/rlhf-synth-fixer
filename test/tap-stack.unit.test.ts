@@ -70,12 +70,6 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Parameters.TargetVpcId.Default).toBe('');
     });
 
-    test('should have DestinationAccountId parameter', () => {
-      expect(template.Parameters.DestinationAccountId).toBeDefined();
-      expect(template.Parameters.DestinationAccountId.Type).toBe('String');
-      expect(template.Parameters.DestinationAccountId.Default).toBe('');
-    });
-
     test('all parameters should have descriptions', () => {
       Object.keys(template.Parameters).forEach(paramName => {
         expect(template.Parameters[paramName].Description).toBeDefined();
