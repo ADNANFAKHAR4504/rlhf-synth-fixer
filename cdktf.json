@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "pipenv run python lib/tap.py",
+  "app": "pipenv run python tap.py",
   "projectId": "synth-l0s3m1",
   "sendCrashReports": "false",
   "terraformProviders": [

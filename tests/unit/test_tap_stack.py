@@ -197,13 +197,13 @@ class TestDynamoDBTable:
         assert encryption['enabled'] is True
         assert 'kms_key_arn' in encryption
 
-    def test_dynamodb_table_has_tags(self, stack, synthesized_config):
+    def test_dynamodb_table_has_tags(self, stack, synthesized_config, environment_suffix):
         """Test that table has required tags"""
         config = synthesized_config
 
         table = config['resource']['aws_dynamodb_table']['payments_table']
         tags = table.get('tags', {})
-        assert tags.get('Environment') == 'dev'
+        assert tags.get('Environment') == environment_suffix
         assert tags.get('Project') == 'payment-infrastructure'
         assert tags.get('ManagedBy') == 'cdktf'
 
@@ -259,13 +259,13 @@ class TestS3Bucket:
         assert public_access['ignore_public_acls'] is True
         assert public_access['restrict_public_buckets'] is True
 
-    def test_s3_bucket_has_tags(self, stack, synthesized_config):
+    def test_s3_bucket_has_tags(self, stack, synthesized_config, environment_suffix):
         """Test that bucket has required tags"""
         config = synthesized_config
 
         bucket = config['resource']['aws_s3_bucket']['s3_logs']
         tags = bucket.get('tags', {})
-        assert tags.get('Environment') == 'dev'
+        assert tags.get('Environment') == environment_suffix
         assert tags.get('ManagedBy') == 'cdktf'
 
 

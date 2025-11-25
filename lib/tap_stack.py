@@ -6,7 +6,7 @@ import json
 import os
 import zipfile
 
-from cdktf import App, Fn, TerraformOutput, TerraformStack
+from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.api_gateway_api_key import ApiGatewayApiKey
 from cdktf_cdktf_provider_aws.api_gateway_deployment import \
     ApiGatewayDeployment
@@ -62,35 +62,62 @@ class PaymentInfrastructureStack(TerraformStack):
     Includes API Gateway, Lambda, DynamoDB Global Table, Route 53, S3, CloudWatch, IAM, KMS, SSM
     """
 
-    def __init__(self, scope: Construct, stack_id: str, **kwargs):
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        environment_suffix: str,
+        state_bucket: str = None,
+        state_bucket_region: str = "us-east-1",
+        primary_region: str = "us-east-1",
+        default_tags: dict = None,
+        **kwargs
+    ):
         super().__init__(scope, stack_id)
 
-        # Get environment suffix from environment variable or use default
-        self.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'synthl0s3m1')
-        self.primary_region = 'us-east-1'
-        self.secondary_region = 'us-west-2'
+        # Store configuration
+        self.environment_suffix = environment_suffix
+        self.primary_region = primary_region
+        self.secondary_region = 'us-west-2'  # Keep secondary region as us-west-2 for multi-region setup
 
-        # Common tags
+        # Configure S3 backend for remote state (if state_bucket is provided)
+        if state_bucket:
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f'{environment_suffix}/terraform.tfstate',
+                region=state_bucket_region,
+                encrypt=True
+            )
+            print(f'✅ Configured S3 backend: s3://{state_bucket}/{environment_suffix}/terraform.tfstate')
+
+        # Common tags (merge with default_tags if provided)
         self.common_tags = {
-            'Environment': 'dev',
+            'Environment': environment_suffix,
             'Project': 'payment-infrastructure',
             'ManagedBy': 'cdktf',
             'EnvironmentSuffix': self.environment_suffix
         }
+        
+        # Merge with default_tags if provided
+        if default_tags and 'tags' in default_tags:
+            self.common_tags.update(default_tags['tags'])
 
-        # Configure AWS providers for multi-region
+        # Configure AWS providers for multi-region with default tags
         self.primary_provider = AwsProvider(
             self,
             'aws_primary',
             region=self.primary_region,
-            alias='primary'
+            alias='primary',
+            default_tags=[default_tags] if default_tags else None
         )
 
         self.secondary_provider = AwsProvider(
             self,
             'aws_secondary',
             region=self.secondary_region,
-            alias='secondary'
+            alias='secondary',
+            default_tags=[default_tags] if default_tags else None
         )
 
         # Create KMS keys first (needed by other resources)
@@ -808,9 +835,3 @@ class PaymentInfrastructureStack(TerraformStack):
             value=self.sns_topic.arn,
             description='SNS topic ARN for alarms'
         )
-
-
-# App entry point
-app = App()
-PaymentInfrastructureStack(app, f'TapStack{os.environ.get("ENVIRONMENT_SUFFIX", "synthl0s3m1")}')
-app.synth()
