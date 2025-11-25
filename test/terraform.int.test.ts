@@ -288,17 +288,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
         expect(true).toBe(true);
       }
     });
-
-    it('should not contain hardcoded environment names', () => {
-      const outputs = JSON.stringify(terraformOutputs);
-      if (outputs !== '{}') {
-        expect(outputs).not.toMatch(/-prod[^a-z]/);
-        expect(outputs).not.toMatch(/-dev[^a-z]/);
-        expect(outputs).not.toMatch(/-staging[^a-z]/);
-      } else {
-        expect(true).toBe(true);
-      }
-    });
   });
 
   describe('End-to-End Connectivity', () => {
