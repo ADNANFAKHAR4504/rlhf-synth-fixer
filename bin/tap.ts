@@ -8,7 +8,7 @@ const environmentSuffix =
   config.get('environmentSuffix') ||
   'dev';
 const domainName =
-  config.get('domainName') || `dr-${environmentSuffix}.example.com`;
+  config.get('domainName') || `testdomain-${environmentSuffix}.net`;
 
 const stack = new TapStack('tap-stack', {
   environmentSuffix: environmentSuffix,

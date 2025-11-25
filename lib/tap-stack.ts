@@ -522,9 +522,6 @@ export class TapStack extends pulumi.ComponentResource {
       `dr-bucket-secondary-${environmentSuffix}`,
       {
         bucket: secondaryBucketName,
-        versioning: {
-          enabled: true,
-        },
         tags: {
           Name: `dr-storage-${secondaryRegion}-production-secondary`,
           Environment: 'production',
@@ -534,17 +531,36 @@ export class TapStack extends pulumi.ComponentResource {
       { ...opts, provider: secondaryProvider }
     );
 
+    new aws.s3.BucketVersioningV2(
+      `dr-bucket-versioning-secondary-${environmentSuffix}`,
+      {
+        bucket: secondaryBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { ...opts, provider: secondaryProvider }
+    );
+
     const primaryBucket = new aws.s3.Bucket(
       `dr-bucket-primary-${environmentSuffix}`,
       {
         bucket: primaryBucketName,
-        versioning: {
-          enabled: true,
-        },
         tags: {
           Name: `dr-storage-${primaryRegion}-production-primary`,
           Environment: 'production',
           'DR-Role': 'primary',
+        },
+      },
+      { ...opts, provider: primaryProvider }
+    );
+
+    new aws.s3.BucketVersioningV2(
+      `dr-bucket-versioning-primary-${environmentSuffix}`,
+      {
+        bucket: primaryBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
         },
       },
       { ...opts, provider: primaryProvider }
@@ -717,7 +733,7 @@ export class TapStack extends pulumi.ComponentResource {
     const lambdaFunction = new aws.lambda.Function(
       `dr-function-${role}-${environmentSuffix}`,
       {
-        name: `dr-function-${region}-production-${role}`,
+        name: `dr-function-${region}-production-${role}-${environmentSuffix}`,
         runtime: 'nodejs18.x',
         role: lambdaRole.arn,
         handler: 'index.handler',
