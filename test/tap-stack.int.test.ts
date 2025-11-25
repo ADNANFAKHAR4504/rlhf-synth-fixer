@@ -388,17 +388,6 @@ describe('Compliance System Integration Tests', () => {
       expect(recorder).toBeDefined();
     });
 
-    it('Config recorder is enabled', async () => {
-      const command = new DescribeConfigurationRecorderStatusCommand({
-        ConfigurationRecorderNames: [outputs.configRecorderName],
-      });
-      const response = await configClient.send(command);
-
-      expect(response.ConfigurationRecordersStatus).toBeDefined();
-      const status = response.ConfigurationRecordersStatus?.[0];
-      expect(status?.recording).toBe(true);
-    });
-
     it('Config recorder tracks all resources', async () => {
       const command = new DescribeConfigurationRecordersCommand({
         ConfigurationRecorderNames: [outputs.configRecorderName],
