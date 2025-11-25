@@ -158,6 +158,7 @@ class TapStack(TerraformStack):
             event_source_arn=self.sqs_queue.arn,
             function_name=self.lambda_function.function_name,
             batch_size=25,
+            maximum_batching_window_in_seconds=5,
             enabled=True
         )
 
