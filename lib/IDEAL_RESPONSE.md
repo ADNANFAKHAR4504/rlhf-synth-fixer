@@ -407,7 +407,7 @@ artifacts:
           ],
         }),
         managedPolicyArns: [
-          'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambda',
+          'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda',
         ],
         tags: tags,
       },

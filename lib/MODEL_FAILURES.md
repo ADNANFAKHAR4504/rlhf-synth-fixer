@@ -12,11 +12,11 @@ This document outlines the issues encountered in the initial model response and 
 - **Root Cause**: Used `config.requireSecret()` without handling CI/CD environments
 - **Resolution**: Changed to `config.getSecret()` with dummy default for testing
 
-### 2. Inline IAM Policies (RESOLVED)
-**Issue**: CodeDeploy role used inline policies violating requirement
-- **Impact**: Failed constraint of "managed policies only"
-- **Root Cause**: Used inline policy for Lambda permissions
-- **Resolution**: Replaced with `AWSCodeDeployRoleForLambda` managed policy
+### 2. Incorrect IAM Policy ARN (RESOLVED)
+**Issue**: CodeDeploy role used incorrect policy ARN
+- **Impact**: Deployment failed with "Policy does not exist" error
+- **Root Cause**: Used `arn:aws:iam::aws:policy/AWSCodeDeployRole` instead of the correct service-role path
+- **Resolution**: Changed to `arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda`
 
 ### 3. Missing Lambda Aliases (RESOLVED)
 **Issue**: No Lambda aliases for blue-green deployment

@@ -340,23 +340,15 @@ artifacts:
             },
           ],
         }),
-        managedPolicyArns: ['arn:aws:iam::aws:policy/AWSCodeDeployRole'],
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda',
+        ],
         tags: tags,
       },
       { parent: this }
     );
 
-    // Attach Lambda-specific permissions to CodeDeploy role
-    new aws.iam.RolePolicyAttachment(
-      `codedeploy-lambda-${environmentSuffix}`,
-      {
-        role: codeDeployRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/AWSLambda_FullAccess',
-      },
-      { parent: this }
-    );
-
-    // 12. CodeDeploy Application
+    // 11. CodeDeploy Application
     const deployApp = new aws.codedeploy.Application(
       `deploy-app-${environmentSuffix}`,
       {
@@ -367,7 +359,7 @@ artifacts:
       { parent: this }
     );
 
-    // 13. CodeDeploy Deployment Group
+    // 12. CodeDeploy Deployment Group
     const deploymentGroup = new aws.codedeploy.DeploymentGroup(
       `deploy-group-${environmentSuffix}`,
       {
@@ -393,7 +385,7 @@ artifacts:
       { parent: this }
     );
 
-    // 14. CodePipeline Role
+    // 13. CodePipeline Role
     const pipelineRole = new aws.iam.Role(
       `pipeline-role-${environmentSuffix}`,
       {
@@ -418,7 +410,7 @@ artifacts:
       { parent: this }
     );
 
-    // 15. CodePipeline
+    // 14. CodePipeline
     const pipeline = new aws.codepipeline.Pipeline(
       `pipeline-${environmentSuffix}`,
       {
