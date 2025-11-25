@@ -13,6 +13,7 @@
     "EmailAddress": {
       "Type": "String",
       "Description": "Email address for security alert notifications",
+      "Default": "noreply@example.com",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
       "ConstraintDescription": "Must be a valid email address"
     }
