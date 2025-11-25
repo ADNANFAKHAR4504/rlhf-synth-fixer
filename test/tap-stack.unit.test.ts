@@ -7,10 +7,45 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
-    return {
+    const baseState = {
+      ...args.inputs,
       id: `${args.name}_id`,
-      state: args.inputs,
+      arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
+      name: args.inputs.name || args.name,
     };
+
+    // Add type-specific properties
+    switch (args.type) {
+      case 'aws:dynamodb/table:Table':
+        return {
+          id: `${args.name}_id`,
+          state: {
+            ...baseState,
+            arn: `arn:aws:dynamodb:us-east-1:123456789012:table/${args.inputs.name}`,
+          },
+        };
+      case 'aws:s3/bucket:Bucket':
+        return {
+          id: `${args.name}_id`,
+          state: {
+            ...baseState,
+            bucketDomainName: `${args.inputs.bucket}.s3.amazonaws.com`,
+          },
+        };
+      case 'aws:kms/key:Key':
+        return {
+          id: `${args.name}_id`,
+          state: {
+            ...baseState,
+            keyId: `${args.name}_key_id`,
+          },
+        };
+      default:
+        return {
+          id: `${args.name}_id`,
+          state: baseState,
+        };
+    }
   },
   call: function (args: pulumi.runtime.MockCallArgs) {
     return args.inputs;
