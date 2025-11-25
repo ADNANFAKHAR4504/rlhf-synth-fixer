@@ -248,19 +248,20 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       const table = template.Resources.TradingAnalyticsGlobalTable;
       expect(table.Properties.Replicas).toBeDefined();
       expect(Array.isArray(table.Properties.Replicas)).toBe(true);
-      // Only target region should be in replicas array (source region is implicit)
-      expect(table.Properties.Replicas.length).toBe(1);
+      // Both source and target regions must be in replicas array (CloudFormation requires current region to be included)
+      expect(table.Properties.Replicas.length).toBe(2);
     });
 
-    test('TradingAnalyticsGlobalTable should have target region replica', () => {
+    test('TradingAnalyticsGlobalTable should have both source and target region replicas', () => {
       const table = template.Resources.TradingAnalyticsGlobalTable;
       const replicas = table.Properties.Replicas;
       const regions = replicas.map((r: any) => r.Region);
 
-      // Only TargetRegion should be in replicas array (SourceRegion is implicit - the region where the stack is deployed)
+      // Both SourceRegion and TargetRegion must be in replicas array
+      // CloudFormation requires the current deployment region to be explicitly listed
       const replicaRegions = JSON.stringify(regions);
+      expect(replicaRegions).toContain('SourceRegion');
       expect(replicaRegions).toContain('TargetRegion');
-      expect(replicaRegions).not.toContain('SourceRegion');
     });
 
     test('TradingAnalyticsGlobalTable replicas should have PITR enabled', () => {

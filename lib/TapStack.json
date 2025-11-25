@@ -426,7 +426,8 @@
       "Metadata": {
         "AWS::CloudFormation::Designer": {
           "id": "TradingAnalyticsGlobalTable"
-        }
+        },
+        "Note": "Both SourceRegion and TargetRegion must be in Replicas array. CloudFormation requires the current deployment region to be explicitly listed. DeletionPolicy: Retain prevents accidental deletion but AWS enforces a 24-hour cooldown when removing replicas that have been used as sources."
       },
       "Properties": {
         "TableName": {
@@ -483,6 +484,20 @@
           "SSEType": "KMS"
         },
         "Replicas": [
+          {
+            "Region": {
+              "Ref": "SourceRegion"
+            },
+            "PointInTimeRecoverySpecification": {
+              "PointInTimeRecoveryEnabled": true
+            },
+            "Tags": [
+              {
+                "Key": "ReplicaType",
+                "Value": "Source"
+              }
+            ]
+          },
           {
             "Region": {
               "Ref": "TargetRegion"
