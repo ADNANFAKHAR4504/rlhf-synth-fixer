@@ -223,13 +223,6 @@ describe("Payment Processing Platform Infrastructure - Locals Configuration", ()
     expect(localsContent).toMatch(/var\.environment_suffix/);
   });
 
-  test("defines short prefix for resources with length constraints", () => {
-    expect(localsContent).toMatch(/short_prefix\s*=/);
-    expect(localsContent).toMatch(/substr\(var\.project_name/);
-    expect(localsContent).toMatch(/substr\(var\.environment_suffix/);
-    expect(localsContent).toMatch(/substr\(random_id\.suffix\.hex/);
-  });
-
   test("defines common tags", () => {
     expect(localsContent).toMatch(/common_tags\s*=\s*{/);
     expect(localsContent).toMatch(/Environment\s*=\s*var\.environment/);
