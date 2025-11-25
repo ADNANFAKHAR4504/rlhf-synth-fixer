@@ -1,6 +1,0 @@
-TapStackdev
-TapStackdev2
-TapStackdevLambdaStackdevF9E6123C
-TapStackdevEcsStackdev1DD450FA
-TapStackdevVpcStackdev12E42430
-TapStackdevDynamoDBStackdev85D33986

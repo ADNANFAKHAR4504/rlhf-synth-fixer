@@ -8,8 +8,8 @@
   "startedAt": "2025-11-25T12:12:38+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Application Deployment",
-    "Web Application Deployment"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "API Gateway",
@@ -22,5 +22,5 @@
     "X-Ray",
     "IAM"
   ],
-  "training_quality": 8
+  "training_quality": 10
 }
