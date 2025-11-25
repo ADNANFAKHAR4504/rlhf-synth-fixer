@@ -258,7 +258,7 @@ class TapStack(Stack):
         parameter_group = rds.ParameterGroup(
             self, "PostgresParameterGroup",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_16_3
+                version=rds.PostgresEngineVersion.VER_16
             ),
             parameters={
                 "shared_preload_libraries": "pg_stat_statements",
@@ -285,7 +285,7 @@ class TapStack(Stack):
         primary = rds.DatabaseInstance(
             self, "PostgresPrimary",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_16_3
+                version=rds.PostgresEngineVersion.VER_16
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.R6G,
