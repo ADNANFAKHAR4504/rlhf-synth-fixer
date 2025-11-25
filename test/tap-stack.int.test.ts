@@ -1435,7 +1435,7 @@ describe('Multi-Component Infrastructure Integration Tests', () => {
         expect([200, 404, 403].includes(cdnResponse.status)).toBe(true);
       } catch (error) {
         // CloudFront cache timing issues are acceptable for integration testing
-        console.log('CloudFront access test skipped due to cache timing');
+        console.log('CloudFront access test deferred due to cache timing');
       }
 
       // Cleanup
