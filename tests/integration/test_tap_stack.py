@@ -22,7 +22,12 @@ def load_stack_outputs() -> Dict[str, Any]:
         pytest.skip(f"Stack outputs not found at {outputs_path}")
     
     with open(outputs_path, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
+        # Extract the first stack's outputs (the structure is {"StackName": {"output": "value"}})
+        if data:
+            first_stack_key = next(iter(data))
+            return data[first_stack_key]
+        return {}
 
 
 @pytest.fixture(scope="module")
