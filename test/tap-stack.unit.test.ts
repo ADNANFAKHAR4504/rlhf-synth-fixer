@@ -393,7 +393,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should create routes for primary VPC private subnets', () => {
-      const routeCalls = (aws.ec2.Route as jest.Mock).mock.calls.filter(
+      const routeCalls = (aws.ec2.Route as unknown as jest.Mock).mock.calls.filter(
         call => call[0].startsWith('primary-private-peer-route')
       );
       expect(routeCalls.length).toBeGreaterThan(0);
@@ -410,7 +410,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should create routes for DR VPC private subnets', () => {
-      const routeCalls = (aws.ec2.Route as jest.Mock).mock.calls.filter(
+      const routeCalls = (aws.ec2.Route as unknown as jest.Mock).mock.calls.filter(
         call => call[0].startsWith('dr-private-peer-route')
       );
       expect(routeCalls.length).toBeGreaterThan(0);
@@ -742,7 +742,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should configure dashboard with correct widgets', () => {
-      const dashboardCall = (aws.cloudwatch.Dashboard as jest.Mock).mock.calls[0];
+      const dashboardCall = (aws.cloudwatch.Dashboard as unknown as jest.Mock).mock.calls[0];
       expect(dashboardCall).toBeDefined();
       expect(dashboardCall[1]).toHaveProperty('dashboardBody');
     });
@@ -895,7 +895,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should call registerOutputs with all outputs', () => {
-      expect(stack.registerOutputs).toHaveBeenCalledWith(
+      expect((stack as any).registerOutputs).toHaveBeenCalledWith(
         expect.objectContaining({
           primaryVpcId: expect.anything(),
           drVpcId: expect.anything(),
@@ -930,12 +930,12 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should create peering accepter with dependsOn peering connection', () => {
-      const accepterCall = (aws.ec2.VpcPeeringConnectionAccepter as jest.Mock).mock.calls[0];
+      const accepterCall = (aws.ec2.VpcPeeringConnectionAccepter as unknown as jest.Mock).mock.calls[0];
       expect(accepterCall[2]).toHaveProperty('dependsOn');
     });
 
     it('should create replication config with proper dependencies', () => {
-      const replicationCall = (aws.s3.BucketReplicationConfig as jest.Mock).mock.calls[0];
+      const replicationCall = (aws.s3.BucketReplicationConfig as unknown as jest.Mock).mock.calls[0];
       expect(replicationCall[2]).toHaveProperty('dependsOn');
     });
   });
@@ -957,7 +957,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should use DR provider for DR resources', () => {
-      const peeringAccepterCall = (aws.ec2.VpcPeeringConnectionAccepter as jest.Mock).mock.calls[0];
+      const peeringAccepterCall = (aws.ec2.VpcPeeringConnectionAccepter as unknown as jest.Mock).mock.calls[0];
       expect(peeringAccepterCall[2]).toHaveProperty('provider');
     });
   });
@@ -970,7 +970,7 @@ describe('TapStack Unit Tests', () => {
     it('should apply environment tag to all resources', () => {
       stack = new TapStack('test-stack', mockArgs);
 
-      const hostedZoneCall = (aws.route53.Zone as jest.Mock).mock.calls[0];
+      const hostedZoneCall = (aws.route53.Zone as unknown as jest.Mock).mock.calls[0];
       expect(hostedZoneCall[1]).toHaveProperty('tags');
       expect(hostedZoneCall[1].tags).toHaveProperty('Environment', 'test');
     });
@@ -978,14 +978,14 @@ describe('TapStack Unit Tests', () => {
     it('should apply ManagedBy tag to all resources', () => {
       stack = new TapStack('test-stack', mockArgs);
 
-      const hostedZoneCall = (aws.route53.Zone as jest.Mock).mock.calls[0];
+      const hostedZoneCall = (aws.route53.Zone as unknown as jest.Mock).mock.calls[0];
       expect(hostedZoneCall[1].tags).toHaveProperty('ManagedBy', 'Pulumi');
     });
 
     it('should apply custom tags from args', () => {
       stack = new TapStack('test-stack', mockArgs);
 
-      const hostedZoneCall = (aws.route53.Zone as jest.Mock).mock.calls[0];
+      const hostedZoneCall = (aws.route53.Zone as unknown as jest.Mock).mock.calls[0];
       expect(hostedZoneCall[1].tags).toHaveProperty('Team', 'test-team');
       expect(hostedZoneCall[1].tags).toHaveProperty('Project', 'test-project');
     });

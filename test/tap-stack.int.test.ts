@@ -3,275 +3,790 @@
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
 
-import * as pulumi from '@pulumi/pulumi';
-
 /**
- * Integration tests for the TapStack infrastructure
+ * Integration tests for TapStack infrastructure
  *
- * These tests validate that the deployed infrastructure has all required outputs
- * and that the resources are properly configured.
+ * These tests read deployment outputs from cfn-outputs/flat-outputs.json
+ * and perform live AWS resource checks to validate the infrastructure.
+ *
+ * Prerequisites:
+ * - AWS credentials configured (via environment or ~/.aws/credentials)
+ * - Infrastructure deployed via Pulumi
+ * - cfn-outputs/flat-outputs.json file exists with stack outputs
  */
-describe('TAP Stack Integration Tests', () => {
-  let outputs: Record<string, any>;
 
-  beforeAll(async () => {
-    // Get the stack outputs
-    const stackName = pulumi.getStack();
-    const projectName = pulumi.getProject();
+import * as fs from 'fs';
+import * as path from 'path';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcPeeringConnectionsCommand,
+  DescribeRouteTablesCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  RDSClient,
+  DescribeGlobalClustersCommand,
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+} from '@aws-sdk/client-rds';
+import {
+  S3Client,
+  HeadBucketCommand,
+  GetBucketVersioningCommand,
+  GetBucketReplicationCommand,
+} from '@aws-sdk/client-s3';
+import {
+  LambdaClient,
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+} from '@aws-sdk/client-lambda';
+import {
+  ElasticLoadBalancingV2Client,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeListenersCommand,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  Route53Client,
+  GetHostedZoneCommand,
+  ListResourceRecordSetsCommand,
+  GetHealthCheckCommand,
+} from '@aws-sdk/client-route-53';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  GetDashboardCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  EventBridgeClient,
+  DescribeEventBusCommand,
+  ListRulesCommand,
+  ListTargetsByRuleCommand,
+} from '@aws-sdk/client-eventbridge';
+import {
+  SNSClient,
+  GetTopicAttributesCommand,
+} from '@aws-sdk/client-sns';
 
-    // Mock outputs for testing purposes
-    // In a real integration test, you would retrieve these from the deployed stack
-    outputs = {
-      primaryVpcId: 'vpc-12345678',
-      drVpcId: 'vpc-87654321',
-      vpcPeeringConnectionId: 'pcx-12345678',
-      primaryPublicSubnetIds: ['subnet-111', 'subnet-222'],
-      primaryPrivateSubnetIds: ['subnet-333', 'subnet-444'],
-      drPublicSubnetIds: ['subnet-555', 'subnet-666'],
-      drPrivateSubnetIds: ['subnet-777', 'subnet-888'],
-      globalClusterId: 'global-cluster-id',
-      primaryDbEndpoint: 'primary-db.cluster-xxx.us-east-1.rds.amazonaws.com',
-      drDbEndpoint: 'dr-db.cluster-yyy.us-west-2.rds.amazonaws.com',
-      primaryDbClusterId: 'primary-cluster-id',
-      drDbClusterId: 'dr-cluster-id',
-      primaryAlbEndpoint: 'http://primary-alb-xxx.us-east-1.elb.amazonaws.com',
-      failoverEndpoint: 'http://dr-alb-yyy.us-west-2.elb.amazonaws.com',
-      primaryAlbDnsName: 'primary-alb-xxx.us-east-1.elb.amazonaws.com',
-      drAlbDnsName: 'dr-alb-yyy.us-west-2.elb.amazonaws.com',
-      primaryLambdaName: 'primary-lambda-function',
-      drLambdaName: 'dr-lambda-function',
-      primaryLambdaArn: 'arn:aws:lambda:us-east-1:123456789:function:primary',
-      drLambdaArn: 'arn:aws:lambda:us-west-2:123456789:function:dr',
-      primaryBucketName: 'primary-bucket-name',
-      drBucketName: 'dr-bucket-name',
-      primaryBucketArn: 'arn:aws:s3:::primary-bucket-name',
-      drBucketArn: 'arn:aws:s3:::dr-bucket-name',
-      route53ZoneId: 'Z1234567890ABC',
-      primaryEndpoint: 'http://api.dev.testing.local',
-      primaryHealthCheckId: 'hc-primary-12345',
-      drHealthCheckId: 'hc-dr-67890',
-      primaryEventBusName: 'primary-event-bus',
-      drEventBusName: 'dr-event-bus',
-      primaryEventBusArn: 'arn:aws:events:us-east-1:123456789:event-bus/primary',
-      drEventBusArn: 'arn:aws:events:us-west-2:123456789:event-bus/dr',
-      alarmTopicArn: 'arn:aws:sns:us-east-1:123456789:healthcare-alarms',
-      dashboardUrl: 'https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=healthcare-dr-dev',
-      dashboardName: 'healthcare-dr-dev',
-    };
-  });
+// AWS Clients
+const ec2Primary = new EC2Client({ region: 'us-east-1' });
+const ec2DR = new EC2Client({ region: 'us-west-2' });
+const rdsPrimary = new RDSClient({ region: 'us-east-1' });
+const rdsDR = new RDSClient({ region: 'us-west-2' });
+const s3Primary = new S3Client({ region: 'us-east-1' });
+const s3DR = new S3Client({ region: 'us-west-2' });
+const lambdaPrimary = new LambdaClient({ region: 'us-east-1' });
+const lambdaDR = new LambdaClient({ region: 'us-west-2' });
+const elbPrimary = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+const elbDR = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
+const route53 = new Route53Client({ region: 'us-east-1' });
+const cloudwatch = new CloudWatchClient({ region: 'us-east-1' });
+const eventBridgePrimary = new EventBridgeClient({ region: 'us-east-1' });
+const eventBridgeDR = new EventBridgeClient({ region: 'us-west-2' });
+const sns = new SNSClient({ region: 'us-east-1' });
 
-  describe('VPC and Networking', () => {
-    test('should have primary VPC ID', () => {
-      expect(outputs.primaryVpcId).toBeDefined();
-      expect(typeof outputs.primaryVpcId).toBe('string');
-      expect(outputs.primaryVpcId).toMatch(/^vpc-/);
-    });
+// Load deployment outputs
+const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+let outputs: Record<string, any>;
 
-    test('should have DR VPC ID', () => {
-      expect(outputs.drVpcId).toBeDefined();
-      expect(typeof outputs.drVpcId).toBe('string');
-      expect(outputs.drVpcId).toMatch(/^vpc-/);
-    });
+describe('TAP Stack Integration Tests - Live AWS Resources', () => {
+  beforeAll(() => {
+    // Load outputs from deployment
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(
+        `Outputs file not found at ${outputsPath}. Please deploy the stack first.`
+      );
+    }
 
-    test('should have VPC peering connection ID', () => {
-      expect(outputs.vpcPeeringConnectionId).toBeDefined();
-      expect(typeof outputs.vpcPeeringConnectionId).toBe('string');
-      expect(outputs.vpcPeeringConnectionId).toMatch(/^pcx-/);
-    });
+    const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
+    outputs = JSON.parse(outputsContent);
 
-    test('should have primary public subnet IDs', () => {
-      expect(outputs.primaryPublicSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.primaryPublicSubnetIds)).toBe(true);
-      expect(outputs.primaryPublicSubnetIds.length).toBeGreaterThan(0);
-    });
+    // Validate required outputs exist
+    const requiredOutputs = [
+      'primaryVpcId',
+      'drVpcId',
+      'vpcPeeringConnectionId',
+      'globalClusterId',
+      'primaryDbClusterId',
+      'drDbClusterId',
+      'primaryBucketName',
+      'drBucketName',
+      'primaryLambdaName',
+      'drLambdaName',
+      'route53ZoneId',
+    ];
 
-    test('should have primary private subnet IDs', () => {
-      expect(outputs.primaryPrivateSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.primaryPrivateSubnetIds)).toBe(true);
-      expect(outputs.primaryPrivateSubnetIds.length).toBeGreaterThan(0);
-    });
-
-    test('should have DR public subnet IDs', () => {
-      expect(outputs.drPublicSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.drPublicSubnetIds)).toBe(true);
-      expect(outputs.drPublicSubnetIds.length).toBeGreaterThan(0);
-    });
-
-    test('should have DR private subnet IDs', () => {
-      expect(outputs.drPrivateSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.drPrivateSubnetIds)).toBe(true);
-      expect(outputs.drPrivateSubnetIds.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Database', () => {
-    test('should have global cluster ID', () => {
-      expect(outputs.globalClusterId).toBeDefined();
-      expect(typeof outputs.globalClusterId).toBe('string');
-    });
-
-    test('should have primary database endpoint', () => {
-      expect(outputs.primaryDbEndpoint).toBeDefined();
-      expect(typeof outputs.primaryDbEndpoint).toBe('string');
-      expect(outputs.primaryDbEndpoint).toContain('.rds.amazonaws.com');
-    });
-
-    test('should have DR database endpoint', () => {
-      expect(outputs.drDbEndpoint).toBeDefined();
-      expect(typeof outputs.drDbEndpoint).toBe('string');
-      expect(outputs.drDbEndpoint).toContain('.rds.amazonaws.com');
-    });
-
-    test('should have primary database cluster ID', () => {
-      expect(outputs.primaryDbClusterId).toBeDefined();
-      expect(typeof outputs.primaryDbClusterId).toBe('string');
-    });
-
-    test('should have DR database cluster ID', () => {
-      expect(outputs.drDbClusterId).toBeDefined();
-      expect(typeof outputs.drDbClusterId).toBe('string');
+    requiredOutputs.forEach(key => {
+      if (!outputs[key]) {
+        throw new Error(`Required output '${key}' not found in outputs file`);
+      }
     });
   });
 
-  describe('Compute Resources', () => {
-    test('should have primary ALB endpoint', () => {
-      expect(outputs.primaryAlbEndpoint).toBeDefined();
-      expect(typeof outputs.primaryAlbEndpoint).toBe('string');
-      expect(outputs.primaryAlbEndpoint).toMatch(/^http:\/\//);
-    });
+  describe('VPC and Networking - Primary Region (us-east-1)', () => {
+    test('should have primary VPC created', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.primaryVpcId],
+      });
 
-    test('should have failover endpoint', () => {
-      expect(outputs.failoverEndpoint).toBeDefined();
-      expect(typeof outputs.failoverEndpoint).toBe('string');
-      expect(outputs.failoverEndpoint).toMatch(/^http:\/\//);
-    });
+      const response = await ec2Primary.send(command);
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs?.length).toBe(1);
+      expect(response.Vpcs?.[0].VpcId).toBe(outputs.primaryVpcId);
+      expect(response.Vpcs?.[0].State).toBe('available');
+    }, 30000);
 
-    test('should have primary ALB DNS name', () => {
-      expect(outputs.primaryAlbDnsName).toBeDefined();
-      expect(typeof outputs.primaryAlbDnsName).toBe('string');
-      expect(outputs.primaryAlbDnsName).toContain('.elb.amazonaws.com');
-    });
+    test('should have primary VPC with correct CIDR block', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.primaryVpcId],
+      });
 
-    test('should have DR ALB DNS name', () => {
-      expect(outputs.drAlbDnsName).toBeDefined();
-      expect(typeof outputs.drAlbDnsName).toBe('string');
-      expect(outputs.drAlbDnsName).toContain('.elb.amazonaws.com');
-    });
+      const response = await ec2Primary.send(command);
+      expect(response.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
+    }, 30000);
 
-    test('should have primary Lambda function name', () => {
-      expect(outputs.primaryLambdaName).toBeDefined();
-      expect(typeof outputs.primaryLambdaName).toBe('string');
-    });
+    test('should have primary public subnets created', async () => {
+      const subnetIds = outputs.primaryPublicSubnetIds;
+      expect(Array.isArray(subnetIds)).toBe(true);
+      expect(subnetIds.length).toBeGreaterThan(0);
 
-    test('should have DR Lambda function name', () => {
-      expect(outputs.drLambdaName).toBeDefined();
-      expect(typeof outputs.drLambdaName).toBe('string');
-    });
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds,
+      });
 
-    test('should have primary Lambda ARN', () => {
-      expect(outputs.primaryLambdaArn).toBeDefined();
-      expect(typeof outputs.primaryLambdaArn).toBe('string');
-      expect(outputs.primaryLambdaArn).toMatch(/^arn:aws:lambda:/);
-    });
+      const response = await ec2Primary.send(command);
+      expect(response.Subnets?.length).toBe(subnetIds.length);
 
-    test('should have DR Lambda ARN', () => {
-      expect(outputs.drLambdaArn).toBeDefined();
-      expect(typeof outputs.drLambdaArn).toBe('string');
-      expect(outputs.drLambdaArn).toMatch(/^arn:aws:lambda:/);
-    });
+      response.Subnets?.forEach(subnet => {
+        expect(subnet.VpcId).toBe(outputs.primaryVpcId);
+        expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
+    }, 30000);
+
+    test('should have primary private subnets created', async () => {
+      const subnetIds = outputs.primaryPrivateSubnetIds;
+      expect(Array.isArray(subnetIds)).toBe(true);
+      expect(subnetIds.length).toBeGreaterThan(0);
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds,
+      });
+
+      const response = await ec2Primary.send(command);
+      expect(response.Subnets?.length).toBe(subnetIds.length);
+
+      response.Subnets?.forEach(subnet => {
+        expect(subnet.VpcId).toBe(outputs.primaryVpcId);
+        expect(subnet.State).toBe('available');
+      });
+    }, 30000);
   });
 
-  describe('Storage', () => {
-    test('should have primary bucket name', () => {
-      expect(outputs.primaryBucketName).toBeDefined();
-      expect(typeof outputs.primaryBucketName).toBe('string');
-    });
+  describe('VPC and Networking - DR Region (us-west-2)', () => {
+    test('should have DR VPC created', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.drVpcId],
+      });
 
-    test('should have DR bucket name', () => {
-      expect(outputs.drBucketName).toBeDefined();
-      expect(typeof outputs.drBucketName).toBe('string');
-    });
+      const response = await ec2DR.send(command);
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs?.length).toBe(1);
+      expect(response.Vpcs?.[0].VpcId).toBe(outputs.drVpcId);
+      expect(response.Vpcs?.[0].State).toBe('available');
+    }, 30000);
 
-    test('should have primary bucket ARN', () => {
-      expect(outputs.primaryBucketArn).toBeDefined();
-      expect(typeof outputs.primaryBucketArn).toBe('string');
-      expect(outputs.primaryBucketArn).toMatch(/^arn:aws:s3:::/);
-    });
+    test('should have DR VPC with correct CIDR block', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.drVpcId],
+      });
 
-    test('should have DR bucket ARN', () => {
-      expect(outputs.drBucketArn).toBeDefined();
-      expect(typeof outputs.drBucketArn).toBe('string');
-      expect(outputs.drBucketArn).toMatch(/^arn:aws:s3:::/);
-    });
+      const response = await ec2DR.send(command);
+      expect(response.Vpcs?.[0].CidrBlock).toBe('10.1.0.0/16');
+    }, 30000);
+
+    test('should have DR public subnets created', async () => {
+      const subnetIds = outputs.drPublicSubnetIds;
+      expect(Array.isArray(subnetIds)).toBe(true);
+      expect(subnetIds.length).toBeGreaterThan(0);
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds,
+      });
+
+      const response = await ec2DR.send(command);
+      expect(response.Subnets?.length).toBe(subnetIds.length);
+
+      response.Subnets?.forEach(subnet => {
+        expect(subnet.VpcId).toBe(outputs.drVpcId);
+        expect(subnet.State).toBe('available');
+      });
+    }, 30000);
+
+    test('should have DR private subnets created', async () => {
+      const subnetIds = outputs.drPrivateSubnetIds;
+      expect(Array.isArray(subnetIds)).toBe(true);
+      expect(subnetIds.length).toBeGreaterThan(0);
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds,
+      });
+
+      const response = await ec2DR.send(command);
+      expect(response.Subnets?.length).toBe(subnetIds.length);
+
+      response.Subnets?.forEach(subnet => {
+        expect(subnet.VpcId).toBe(outputs.drVpcId);
+        expect(subnet.State).toBe('available');
+      });
+    }, 30000);
   });
 
-  describe('Route53 and Health Checks', () => {
-    test('should have Route53 zone ID', () => {
-      expect(outputs.route53ZoneId).toBeDefined();
-      expect(typeof outputs.route53ZoneId).toBe('string');
-    });
+  describe('VPC Peering', () => {
+    test('should have VPC peering connection active', async () => {
+      const command = new DescribeVpcPeeringConnectionsCommand({
+        VpcPeeringConnectionIds: [outputs.vpcPeeringConnectionId],
+      });
 
-    test('should have primary endpoint', () => {
-      expect(outputs.primaryEndpoint).toBeDefined();
-      expect(typeof outputs.primaryEndpoint).toBe('string');
-      expect(outputs.primaryEndpoint).toMatch(/^http:\/\//);
-    });
+      const response = await ec2Primary.send(command);
+      expect(response.VpcPeeringConnections).toBeDefined();
+      expect(response.VpcPeeringConnections?.length).toBe(1);
 
-    test('should have primary health check ID', () => {
-      expect(outputs.primaryHealthCheckId).toBeDefined();
-      expect(typeof outputs.primaryHealthCheckId).toBe('string');
-    });
+      const peering = response.VpcPeeringConnections?.[0];
+      expect(peering?.Status?.Code).toBe('active');
+      expect(peering?.RequesterVpcInfo?.VpcId).toBe(outputs.primaryVpcId);
+      expect(peering?.AccepterVpcInfo?.VpcId).toBe(outputs.drVpcId);
+    }, 30000);
 
-    test('should have DR health check ID', () => {
-      expect(outputs.drHealthCheckId).toBeDefined();
-      expect(typeof outputs.drHealthCheckId).toBe('string');
-    });
+    test('should have peering routes in primary VPC', async () => {
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.primaryVpcId],
+          },
+        ],
+      });
+
+      const response = await ec2Primary.send(command);
+      const routeTables = response.RouteTables || [];
+
+      // Check that at least one route table has a peering connection route
+      const hasPeeringRoute = routeTables.some(rt =>
+        rt.Routes?.some(
+          route =>
+            route.VpcPeeringConnectionId === outputs.vpcPeeringConnectionId &&
+            route.DestinationCidrBlock === '10.1.0.0/16'
+        )
+      );
+
+      expect(hasPeeringRoute).toBe(true);
+    }, 30000);
+
+    test('should have peering routes in DR VPC', async () => {
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.drVpcId],
+          },
+        ],
+      });
+
+      const response = await ec2DR.send(command);
+      const routeTables = response.RouteTables || [];
+
+      // Check that at least one route table has a peering connection route
+      const hasPeeringRoute = routeTables.some(rt =>
+        rt.Routes?.some(
+          route =>
+            route.VpcPeeringConnectionId === outputs.vpcPeeringConnectionId &&
+            route.DestinationCidrBlock === '10.0.0.0/16'
+        )
+      );
+
+      expect(hasPeeringRoute).toBe(true);
+    }, 30000);
   });
 
-  describe('EventBridge', () => {
-    test('should have primary event bus name', () => {
-      expect(outputs.primaryEventBusName).toBeDefined();
-      expect(typeof outputs.primaryEventBusName).toBe('string');
-    });
+  describe('RDS Global Database Cluster', () => {
+    test('should have global RDS cluster created', async () => {
+      const command = new DescribeGlobalClustersCommand({
+        GlobalClusterIdentifier: outputs.globalClusterId,
+      });
 
-    test('should have DR event bus name', () => {
-      expect(outputs.drEventBusName).toBeDefined();
-      expect(typeof outputs.drEventBusName).toBe('string');
-    });
+      const response = await rdsPrimary.send(command);
+      expect(response.GlobalClusters).toBeDefined();
+      expect(response.GlobalClusters?.length).toBe(1);
 
-    test('should have primary event bus ARN', () => {
-      expect(outputs.primaryEventBusArn).toBeDefined();
-      expect(typeof outputs.primaryEventBusArn).toBe('string');
-      expect(outputs.primaryEventBusArn).toMatch(/^arn:aws:events:/);
-    });
+      const cluster = response.GlobalClusters?.[0];
+      expect(cluster?.GlobalClusterIdentifier).toBe(outputs.globalClusterId);
+      expect(cluster?.Engine).toBe('aurora-postgresql');
+      expect(cluster?.Status).toMatch(/available|modifying/);
+    }, 60000);
 
-    test('should have DR event bus ARN', () => {
-      expect(outputs.drEventBusArn).toBeDefined();
-      expect(typeof outputs.drEventBusArn).toBe('string');
-      expect(outputs.drEventBusArn).toMatch(/^arn:aws:events:/);
-    });
+    test('should have primary RDS cluster', async () => {
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: outputs.primaryDbClusterId,
+      });
+
+      const response = await rdsPrimary.send(command);
+      expect(response.DBClusters).toBeDefined();
+      expect(response.DBClusters?.length).toBe(1);
+
+      const cluster = response.DBClusters?.[0];
+      expect(cluster?.DBClusterIdentifier).toBe(outputs.primaryDbClusterId);
+      expect(cluster?.Engine).toBe('aurora-postgresql');
+      expect(cluster?.Status).toMatch(/available|modifying/);
+      expect(cluster?.Endpoint).toBe(outputs.primaryDbEndpoint);
+    }, 60000);
+
+    test('should have DR RDS cluster', async () => {
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: outputs.drDbClusterId,
+      });
+
+      const response = await rdsDR.send(command);
+      expect(response.DBClusters).toBeDefined();
+      expect(response.DBClusters?.length).toBe(1);
+
+      const cluster = response.DBClusters?.[0];
+      expect(cluster?.DBClusterIdentifier).toBe(outputs.drDbClusterId);
+      expect(cluster?.Engine).toBe('aurora-postgresql');
+      expect(cluster?.Status).toMatch(/available|modifying/);
+      expect(cluster?.Endpoint).toBe(outputs.drDbEndpoint);
+    }, 60000);
+
+    test('should have primary RDS instances', async () => {
+      const command = new DescribeDBInstancesCommand({
+        Filters: [
+          {
+            Name: 'db-cluster-id',
+            Values: [outputs.primaryDbClusterId],
+          },
+        ],
+      });
+
+      const response = await rdsPrimary.send(command);
+      expect(response.DBInstances).toBeDefined();
+      expect(response.DBInstances!.length).toBeGreaterThan(0);
+
+      response.DBInstances?.forEach(instance => {
+        expect(instance.DBClusterIdentifier).toBe(outputs.primaryDbClusterId);
+        expect(instance.DBInstanceStatus).toMatch(/available|modifying|backing-up/);
+      });
+    }, 60000);
+
+    test('should have DR RDS instances', async () => {
+      const command = new DescribeDBInstancesCommand({
+        Filters: [
+          {
+            Name: 'db-cluster-id',
+            Values: [outputs.drDbClusterId],
+          },
+        ],
+      });
+
+      const response = await rdsDR.send(command);
+      expect(response.DBInstances).toBeDefined();
+      expect(response.DBInstances!.length).toBeGreaterThan(0);
+
+      response.DBInstances?.forEach(instance => {
+        expect(instance.DBClusterIdentifier).toBe(outputs.drDbClusterId);
+        expect(instance.DBInstanceStatus).toMatch(/available|modifying|backing-up/);
+      });
+    }, 60000);
   });
 
-  describe('Monitoring', () => {
-    test('should have alarm topic ARN', () => {
-      expect(outputs.alarmTopicArn).toBeDefined();
-      expect(typeof outputs.alarmTopicArn).toBe('string');
-      expect(outputs.alarmTopicArn).toMatch(/^arn:aws:sns:/);
-    });
+  describe('S3 Storage and Replication', () => {
+    test('should have primary S3 bucket accessible', async () => {
+      const command = new HeadBucketCommand({
+        Bucket: outputs.primaryBucketName,
+      });
 
-    test('should have dashboard URL', () => {
-      expect(outputs.dashboardUrl).toBeDefined();
-      expect(typeof outputs.dashboardUrl).toBe('string');
-      expect(outputs.dashboardUrl).toContain('console.aws.amazon.com/cloudwatch');
-    });
+      await expect(s3Primary.send(command)).resolves.not.toThrow();
+    }, 30000);
 
-    test('should have dashboard name', () => {
-      expect(outputs.dashboardName).toBeDefined();
-      expect(typeof outputs.dashboardName).toBe('string');
-    });
+    test('should have DR S3 bucket accessible', async () => {
+      const command = new HeadBucketCommand({
+        Bucket: outputs.drBucketName,
+      });
+
+      await expect(s3DR.send(command)).resolves.not.toThrow();
+    }, 30000);
+
+    test('should have versioning enabled on primary bucket', async () => {
+      const command = new GetBucketVersioningCommand({
+        Bucket: outputs.primaryBucketName,
+      });
+
+      const response = await s3Primary.send(command);
+      expect(response.Status).toBe('Enabled');
+    }, 30000);
+
+    test('should have versioning enabled on DR bucket', async () => {
+      const command = new GetBucketVersioningCommand({
+        Bucket: outputs.drBucketName,
+      });
+
+      const response = await s3DR.send(command);
+      expect(response.Status).toBe('Enabled');
+    }, 30000);
+
+    test('should have replication configured on primary bucket', async () => {
+      const command = new GetBucketReplicationCommand({
+        Bucket: outputs.primaryBucketName,
+      });
+
+      const response = await s3Primary.send(command);
+      expect(response.ReplicationConfiguration).toBeDefined();
+      expect(response.ReplicationConfiguration?.Rules).toBeDefined();
+      expect(response.ReplicationConfiguration!.Rules!.length).toBeGreaterThan(0);
+
+      const rule = response.ReplicationConfiguration?.Rules?.[0];
+      expect(rule?.Status).toBe('Enabled');
+      expect(rule?.Destination?.Bucket).toContain(outputs.drBucketName);
+    }, 30000);
   });
 
-  describe('Multi-Region Configuration', () => {
+  describe('Lambda Functions - Primary Region', () => {
+    test('should have primary Lambda function deployed', async () => {
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.primaryLambdaName,
+      });
+
+      const response = await lambdaPrimary.send(command);
+      expect(response.Configuration).toBeDefined();
+      expect(response.Configuration?.FunctionName).toBe(outputs.primaryLambdaName);
+      expect(response.Configuration?.State).toMatch(/Active|Pending/);
+    }, 30000);
+
+    test('should have primary Lambda function with correct runtime', async () => {
+      const command = new GetFunctionConfigurationCommand({
+        FunctionName: outputs.primaryLambdaName,
+      });
+
+      const response = await lambdaPrimary.send(command);
+      expect(response.Runtime).toMatch(/nodejs|python/);
+      expect(response.Handler).toBeDefined();
+    }, 30000);
+
+    test('should have primary Lambda function ARN matching output', async () => {
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.primaryLambdaName,
+      });
+
+      const response = await lambdaPrimary.send(command);
+      expect(response.Configuration?.FunctionArn).toBe(outputs.primaryLambdaArn);
+    }, 30000);
+  });
+
+  describe('Lambda Functions - DR Region', () => {
+    test('should have DR Lambda function deployed', async () => {
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.drLambdaName,
+      });
+
+      const response = await lambdaDR.send(command);
+      expect(response.Configuration).toBeDefined();
+      expect(response.Configuration?.FunctionName).toBe(outputs.drLambdaName);
+      expect(response.Configuration?.State).toMatch(/Active|Pending/);
+    }, 30000);
+
+    test('should have DR Lambda function with correct runtime', async () => {
+      const command = new GetFunctionConfigurationCommand({
+        FunctionName: outputs.drLambdaName,
+      });
+
+      const response = await lambdaDR.send(command);
+      expect(response.Runtime).toMatch(/nodejs|python/);
+      expect(response.Handler).toBeDefined();
+    }, 30000);
+
+    test('should have DR Lambda function ARN matching output', async () => {
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.drLambdaName,
+      });
+
+      const response = await lambdaDR.send(command);
+      expect(response.Configuration?.FunctionArn).toBe(outputs.drLambdaArn);
+    }, 30000);
+  });
+
+  describe('Application Load Balancers - Primary Region', () => {
+    test('should have primary ALB deployed', async () => {
+      const arnParts = outputs.primaryAlbDnsName.split('.');
+      const elbName = arnParts[0];
+
+      const command = new DescribeLoadBalancersCommand({
+        Names: [elbName],
+      });
+
+      const response = await elbPrimary.send(command);
+      expect(response.LoadBalancers).toBeDefined();
+      expect(response.LoadBalancers!.length).toBeGreaterThan(0);
+
+      const alb = response.LoadBalancers?.[0];
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Scheme).toBe('internet-facing');
+      expect(alb?.Type).toBe('application');
+    }, 30000);
+
+    test('should have primary ALB with listeners', async () => {
+      const arnParts = outputs.primaryAlbDnsName.split('.');
+      const elbName = arnParts[0];
+
+      const describeCommand = new DescribeLoadBalancersCommand({
+        Names: [elbName],
+      });
+      const describeResponse = await elbPrimary.send(describeCommand);
+      const albArn = describeResponse.LoadBalancers?.[0].LoadBalancerArn;
+
+      const listenersCommand = new DescribeListenersCommand({
+        LoadBalancerArn: albArn,
+      });
+      const listenersResponse = await elbPrimary.send(listenersCommand);
+
+      expect(listenersResponse.Listeners).toBeDefined();
+      expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
+    }, 30000);
+  });
+
+  describe('Application Load Balancers - DR Region', () => {
+    test('should have DR ALB deployed', async () => {
+      const arnParts = outputs.drAlbDnsName.split('.');
+      const elbName = arnParts[0];
+
+      const command = new DescribeLoadBalancersCommand({
+        Names: [elbName],
+      });
+
+      const response = await elbDR.send(command);
+      expect(response.LoadBalancers).toBeDefined();
+      expect(response.LoadBalancers!.length).toBeGreaterThan(0);
+
+      const alb = response.LoadBalancers?.[0];
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Scheme).toBe('internet-facing');
+      expect(alb?.Type).toBe('application');
+    }, 30000);
+
+    test('should have DR ALB with listeners', async () => {
+      const arnParts = outputs.drAlbDnsName.split('.');
+      const elbName = arnParts[0];
+
+      const describeCommand = new DescribeLoadBalancersCommand({
+        Names: [elbName],
+      });
+      const describeResponse = await elbDR.send(describeCommand);
+      const albArn = describeResponse.LoadBalancers?.[0].LoadBalancerArn;
+
+      const listenersCommand = new DescribeListenersCommand({
+        LoadBalancerArn: albArn,
+      });
+      const listenersResponse = await elbDR.send(listenersCommand);
+
+      expect(listenersResponse.Listeners).toBeDefined();
+      expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
+    }, 30000);
+  });
+
+  describe('Route53 DNS and Health Checks', () => {
+    test('should have Route53 hosted zone', async () => {
+      const command = new GetHostedZoneCommand({
+        Id: outputs.route53ZoneId,
+      });
+
+      const response = await route53.send(command);
+      expect(response.HostedZone).toBeDefined();
+      expect(response.HostedZone?.Id).toContain(outputs.route53ZoneId);
+    }, 30000);
+
+    test('should have DNS records in hosted zone', async () => {
+      const command = new ListResourceRecordSetsCommand({
+        HostedZoneId: outputs.route53ZoneId,
+      });
+
+      const response = await route53.send(command);
+      expect(response.ResourceRecordSets).toBeDefined();
+      expect(response.ResourceRecordSets!.length).toBeGreaterThan(0);
+
+      // Check for failover records
+      const failoverRecords = response.ResourceRecordSets?.filter(
+        record => record.SetIdentifier
+      );
+      expect(failoverRecords!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have primary health check active', async () => {
+      const command = new GetHealthCheckCommand({
+        HealthCheckId: outputs.primaryHealthCheckId,
+      });
+
+      const response = await route53.send(command);
+      expect(response.HealthCheck).toBeDefined();
+      expect(response.HealthCheck?.HealthCheckConfig?.Type).toBe('HTTP');
+      expect(response.HealthCheck?.HealthCheckConfig?.ResourcePath).toBe('/health');
+      expect(response.HealthCheck?.HealthCheckConfig?.Port).toBe(80);
+    }, 30000);
+
+    test('should have DR health check active', async () => {
+      const command = new GetHealthCheckCommand({
+        HealthCheckId: outputs.drHealthCheckId,
+      });
+
+      const response = await route53.send(command);
+      expect(response.HealthCheck).toBeDefined();
+      expect(response.HealthCheck?.HealthCheckConfig?.Type).toBe('HTTP');
+      expect(response.HealthCheck?.HealthCheckConfig?.ResourcePath).toBe('/health');
+      expect(response.HealthCheck?.HealthCheckConfig?.Port).toBe(80);
+    }, 30000);
+  });
+
+  describe('EventBridge Cross-Region Setup', () => {
+    test('should have primary event bus', async () => {
+      const command = new DescribeEventBusCommand({
+        Name: outputs.primaryEventBusName,
+      });
+
+      const response = await eventBridgePrimary.send(command);
+      expect(response.Name).toBe(outputs.primaryEventBusName);
+      expect(response.Arn).toBe(outputs.primaryEventBusArn);
+    }, 30000);
+
+    test('should have DR event bus', async () => {
+      const command = new DescribeEventBusCommand({
+        Name: outputs.drEventBusName,
+      });
+
+      const response = await eventBridgeDR.send(command);
+      expect(response.Name).toBe(outputs.drEventBusName);
+      expect(response.Arn).toBe(outputs.drEventBusArn);
+    }, 30000);
+
+    test('should have event rules configured on primary bus', async () => {
+      const command = new ListRulesCommand({
+        EventBusName: outputs.primaryEventBusName,
+      });
+
+      const response = await eventBridgePrimary.send(command);
+      expect(response.Rules).toBeDefined();
+      expect(response.Rules!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have cross-region event targets', async () => {
+      const listCommand = new ListRulesCommand({
+        EventBusName: outputs.primaryEventBusName,
+      });
+      const rulesResponse = await eventBridgePrimary.send(listCommand);
+
+      if (rulesResponse.Rules && rulesResponse.Rules.length > 0) {
+        const rule = rulesResponse.Rules[0];
+
+        const targetsCommand = new ListTargetsByRuleCommand({
+          Rule: rule.Name!,
+          EventBusName: outputs.primaryEventBusName,
+        });
+
+        const targetsResponse = await eventBridgePrimary.send(targetsCommand);
+        expect(targetsResponse.Targets).toBeDefined();
+      }
+    }, 30000);
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('should have SNS alarm topic created', async () => {
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.alarmTopicArn,
+      });
+
+      const response = await sns.send(command);
+      expect(response.Attributes).toBeDefined();
+      expect(response.Attributes?.TopicArn).toBe(outputs.alarmTopicArn);
+    }, 30000);
+
+    test('should have CloudWatch alarms configured', async () => {
+      const command = new DescribeAlarmsCommand({
+        MaxRecords: 100,
+      });
+
+      const response = await cloudwatch.send(command);
+      expect(response.MetricAlarms).toBeDefined();
+
+      // Filter alarms related to our stack
+      const stackAlarms = response.MetricAlarms?.filter(
+        alarm =>
+          alarm.AlarmName?.includes('primary-') ||
+          alarm.AlarmName?.includes('dr-') ||
+          alarm.AlarmActions?.includes(outputs.alarmTopicArn)
+      );
+
+      expect(stackAlarms!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have health check alarms', async () => {
+      const command = new DescribeAlarmsCommand({
+        MaxRecords: 100,
+      });
+
+      const response = await cloudwatch.send(command);
+
+      const healthAlarms = response.MetricAlarms?.filter(
+        alarm =>
+          alarm.Namespace === 'AWS/Route53' &&
+          alarm.MetricName === 'HealthCheckStatus'
+      );
+
+      expect(healthAlarms!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have RDS CPU alarms', async () => {
+      const command = new DescribeAlarmsCommand({
+        MaxRecords: 100,
+      });
+
+      const response = await cloudwatch.send(command);
+
+      const rdsAlarms = response.MetricAlarms?.filter(
+        alarm =>
+          alarm.Namespace === 'AWS/RDS' && alarm.MetricName === 'CPUUtilization'
+      );
+
+      expect(rdsAlarms!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have Lambda error alarms', async () => {
+      const command = new DescribeAlarmsCommand({
+        MaxRecords: 100,
+      });
+
+      const response = await cloudwatch.send(command);
+
+      const lambdaAlarms = response.MetricAlarms?.filter(
+        alarm => alarm.Namespace === 'AWS/Lambda' && alarm.MetricName === 'Errors'
+      );
+
+      expect(lambdaAlarms!.length).toBeGreaterThan(0);
+    }, 30000);
+
+    test('should have CloudWatch dashboard', async () => {
+      const command = new GetDashboardCommand({
+        DashboardName: outputs.dashboardName,
+      });
+
+      const response = await cloudwatch.send(command);
+      expect(response.DashboardName).toBe(outputs.dashboardName);
+      expect(response.DashboardBody).toBeDefined();
+
+      // Parse and validate dashboard has widgets
+      const dashboard = JSON.parse(response.DashboardBody!);
+      expect(dashboard.widgets).toBeDefined();
+      expect(dashboard.widgets.length).toBeGreaterThan(0);
+    }, 30000);
+  });
+
+  describe('Multi-Region Validation', () => {
     test('should have different VPC IDs for primary and DR', () => {
       expect(outputs.primaryVpcId).not.toBe(outputs.drVpcId);
     });
@@ -280,15 +795,15 @@ describe('TAP Stack Integration Tests', () => {
       expect(outputs.primaryDbEndpoint).not.toBe(outputs.drDbEndpoint);
     });
 
-    test('should have different ALB endpoints for primary and DR', () => {
-      expect(outputs.primaryAlbEndpoint).not.toBe(outputs.failoverEndpoint);
+    test('should have different ALB DNS names for primary and DR', () => {
+      expect(outputs.primaryAlbDnsName).not.toBe(outputs.drAlbDnsName);
     });
 
     test('should have different Lambda function names for primary and DR', () => {
       expect(outputs.primaryLambdaName).not.toBe(outputs.drLambdaName);
     });
 
-    test('should have different bucket names for primary and DR', () => {
+    test('should have different S3 bucket names for primary and DR', () => {
       expect(outputs.primaryBucketName).not.toBe(outputs.drBucketName);
     });
 
@@ -297,102 +812,25 @@ describe('TAP Stack Integration Tests', () => {
     });
   });
 
-  describe('Infrastructure Validation', () => {
-    test('should have all required outputs defined', () => {
-      const requiredOutputs = [
-        'primaryVpcId',
-        'drVpcId',
-        'vpcPeeringConnectionId',
-        'primaryPublicSubnetIds',
-        'primaryPrivateSubnetIds',
-        'drPublicSubnetIds',
-        'drPrivateSubnetIds',
-        'globalClusterId',
-        'primaryDbEndpoint',
-        'drDbEndpoint',
-        'primaryDbClusterId',
-        'drDbClusterId',
-        'primaryAlbEndpoint',
-        'failoverEndpoint',
-        'primaryAlbDnsName',
-        'drAlbDnsName',
-        'primaryLambdaName',
-        'drLambdaName',
-        'primaryLambdaArn',
-        'drLambdaArn',
-        'primaryBucketName',
-        'drBucketName',
-        'primaryBucketArn',
-        'drBucketArn',
-        'route53ZoneId',
-        'primaryEndpoint',
-        'primaryHealthCheckId',
-        'drHealthCheckId',
-        'primaryEventBusName',
-        'drEventBusName',
-        'primaryEventBusArn',
-        'drEventBusArn',
-        'alarmTopicArn',
-        'dashboardUrl',
-        'dashboardName',
-      ];
+  describe('Infrastructure Connectivity', () => {
+    test('should have primary ALB DNS resolvable', async () => {
+      const dns = require('dns').promises;
+      await expect(dns.resolve4(outputs.primaryAlbDnsName)).resolves.toBeDefined();
+    }, 30000);
 
-      requiredOutputs.forEach(output => {
-        expect(outputs[output]).toBeDefined();
-      });
-    });
+    test('should have DR ALB DNS resolvable', async () => {
+      const dns = require('dns').promises;
+      await expect(dns.resolve4(outputs.drAlbDnsName)).resolves.toBeDefined();
+    }, 30000);
 
-    test('should have valid output types', () => {
-      // String outputs
-      const stringOutputs = [
-        'primaryVpcId',
-        'drVpcId',
-        'vpcPeeringConnectionId',
-        'globalClusterId',
-        'primaryDbEndpoint',
-        'drDbEndpoint',
-        'primaryDbClusterId',
-        'drDbClusterId',
-        'primaryAlbEndpoint',
-        'failoverEndpoint',
-        'primaryAlbDnsName',
-        'drAlbDnsName',
-        'primaryLambdaName',
-        'drLambdaName',
-        'primaryLambdaArn',
-        'drLambdaArn',
-        'primaryBucketName',
-        'drBucketName',
-        'primaryBucketArn',
-        'drBucketArn',
-        'route53ZoneId',
-        'primaryEndpoint',
-        'primaryHealthCheckId',
-        'drHealthCheckId',
-        'primaryEventBusName',
-        'drEventBusName',
-        'primaryEventBusArn',
-        'drEventBusArn',
-        'alarmTopicArn',
-        'dashboardUrl',
-        'dashboardName',
-      ];
+    test('should have primary database endpoint resolvable', async () => {
+      const dns = require('dns').promises;
+      await expect(dns.resolve4(outputs.primaryDbEndpoint)).resolves.toBeDefined();
+    }, 30000);
 
-      stringOutputs.forEach(output => {
-        expect(typeof outputs[output]).toBe('string');
-      });
-
-      // Array outputs
-      const arrayOutputs = [
-        'primaryPublicSubnetIds',
-        'primaryPrivateSubnetIds',
-        'drPublicSubnetIds',
-        'drPrivateSubnetIds',
-      ];
-
-      arrayOutputs.forEach(output => {
-        expect(Array.isArray(outputs[output])).toBe(true);
-      });
-    });
+    test('should have DR database endpoint resolvable', async () => {
+      const dns = require('dns').promises;
+      await expect(dns.resolve4(outputs.drDbEndpoint)).resolves.toBeDefined();
+    }, 30000);
   });
 });
