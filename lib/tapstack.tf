@@ -359,9 +359,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_sagemaker_endpoint" "fraud_model" {
-  name = var.fraud_model_endpoint_name
-}
+# SageMaker endpoint - using variable directly since data source doesn't exist
+# The endpoint should be created separately and its name passed via variable
 
 # ============================================================================
 # Networking
@@ -707,6 +706,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "evidence" {
     id     = "expire-old-evidence"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     expiration {
       days = var.lifecycle_expiration_days
     }
@@ -755,6 +758,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
     id     = "expire-old-results"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     expiration {
       days = 7
     }
@@ -795,8 +802,9 @@ resource "aws_elasticache_replication_group" "redis" {
   security_group_ids         = [aws_security_group.redis.id]
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
-  automatic_failover_enabled = var.redis_automatic_failover_enabled
-  multi_az_enabled           = var.redis_automatic_failover_enabled
+  # Automatic failover requires at least 2 nodes
+  automatic_failover_enabled = var.redis_num_cache_clusters >= 2 ? var.redis_automatic_failover_enabled : false
+  multi_az_enabled           = var.redis_num_cache_clusters >= 2 ? var.redis_automatic_failover_enabled : false
 
   log_delivery_configuration {
     destination      = aws_cloudwatch_log_group.redis_slow.name
@@ -917,6 +925,64 @@ resource "aws_rds_cluster_instance" "aurora" {
 resource "aws_kms_key" "aurora" {
   description             = "KMS key for Aurora encryption"
   deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow RDS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:CreateGrant",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:ReEncrypt*"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "rds.${var.aws_region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
 
   tags = merge(local.tags, {
     Name = "${local.resource_prefix}-aurora-kms"
@@ -1081,7 +1147,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
         Action = [
           "sagemaker:InvokeEndpoint"
         ]
-        Resource = data.aws_sagemaker_endpoint.fraud_model.arn
+        Resource = "arn:aws:sagemaker:${var.aws_region}:${data.aws_caller_identity.current.account_id}:endpoint/${var.fraud_model_endpoint_name}"
       },
       {
         Effect = "Allow"
