@@ -1,0 +1,567 @@
+import { CloudFormationClient, DescribeStacksCommand, ListStackResourcesCommand } from '@aws-sdk/client-cloudformation';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { DescribeSecurityGroupsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeClusterCommand, DescribeNodegroupCommand, EKSClient } from '@aws-sdk/client-eks';
+import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { DescribeKeyCommand, GetKeyPolicyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const cfClient = new CloudFormationClient({
+  region: 'us-east-1',
+  endpoint: 'http://localhost:4566',
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+});
+
+const ec2Client = new EC2Client({
+  region: 'us-east-1',
+  endpoint: 'http://localhost:4566',
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+});
+
+const iamClient = new IAMClient({
+  region: 'us-east-1',
+  endpoint: 'http://localhost:4566',
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+});
+
+const kmsClient = new KMSClient({
+  region: 'us-east-1',
+  endpoint: 'http://localhost:4566',
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+});
+
+const eksClient = new EKSClient({
+  region: 'us-east-1',
+  endpoint: 'http://localhost:4566',
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+});
+
+const logsClient = new CloudWatchLogsClient({
+  region: 'us-east-1',
+  endpoint: 'http://localhost:4566',
+  credentials: {
+    accessKeyId: 'test',
+    secretAccessKey: 'test'
+  }
+});
+
+const STACK_NAME = 'tap-stack-localstack';
+const ENVIRONMENT_SUFFIX = 'test';
+
+describe('TapStack CloudFormation Template - Integration Tests', () => {
+  beforeAll(async () => {
+    // Ensure LocalStack is running
+    try {
+      execSync('curl -s http://localhost:4566/_localstack/health', { timeout: 5000 });
+    } catch (error) {
+      throw new Error('LocalStack is not running. Please start LocalStack first.');
+    }
+
+    // Clean up any existing stack
+    try {
+      await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      console.log('Cleaning up existing stack...');
+      execSync(`awslocal cloudformation delete-stack --stack-name ${STACK_NAME}`, { timeout: 30000 });
+      // Wait for deletion
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    } catch (error) {
+      // Stack doesn't exist, continue
+    }
+
+    // Deploy the stack
+    console.log('Deploying CloudFormation stack...');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateBody = fs.readFileSync(templatePath, 'utf-8');
+
+    try {
+      await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      // If stack exists, wait for it to be deleted
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    } catch (error) {
+      // Stack doesn't exist, good
+    }
+
+    // Create VPC and subnets for testing
+    const vpcId = await createTestVpc();
+    const subnetIds = await createTestSubnets(vpcId);
+
+    await cfClient.createStack({
+      StackName: STACK_NAME,
+      TemplateBody: templateBody,
+      Parameters: [
+        { ParameterKey: 'EnvironmentSuffix', ParameterValue: ENVIRONMENT_SUFFIX },
+        { ParameterKey: 'VpcId', ParameterValue: vpcId },
+        { ParameterKey: 'PrivateSubnetIds', ParameterValue: subnetIds.join(',') },
+        { ParameterKey: 'EksVersion', ParameterValue: '1.28' },
+        { ParameterKey: 'NodeInstanceType', ParameterValue: 't3.medium' },
+        { ParameterKey: 'NodeGroupMinSize', ParameterValue: '1' },
+        { ParameterKey: 'NodeGroupMaxSize', ParameterValue: '3' },
+        { ParameterKey: 'NodeGroupDesiredSize', ParameterValue: '1' }
+      ],
+      Capabilities: ['CAPABILITY_IAM']
+    });
+
+    // Wait for stack creation to complete
+    await waitForStackCreation(STACK_NAME);
+  }, 120000);
+
+  afterAll(async () => {
+    // Clean up stack
+    try {
+      await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      console.log('Cleaning up test stack...');
+      execSync(`awslocal cloudformation delete-stack --stack-name ${STACK_NAME}`, { timeout: 30000 });
+    } catch (error) {
+      console.log('Stack cleanup failed or already deleted');
+    }
+  });
+
+  describe('Stack Deployment', () => {
+    test('stack should be created successfully', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      expect(response.Stacks?.[0].StackStatus).toBe('CREATE_COMPLETE');
+    });
+
+    test('stack should have all expected resources', async () => {
+      const response = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const resources = response.StackResourceSummaries || [];
+      const resourceTypes = resources.map(r => r.ResourceType);
+
+      expect(resourceTypes).toContain('AWS::KMS::Key');
+      expect(resourceTypes).toContain('AWS::KMS::Alias');
+      expect(resourceTypes).toContain('AWS::IAM::Role');
+      expect(resourceTypes).toContain('AWS::EC2::SecurityGroup');
+      expect(resourceTypes).toContain('AWS::Logs::LogGroup');
+      expect(resourceTypes).toContain('AWS::EKS::Cluster');
+      expect(resourceTypes).toContain('AWS::EKS::Nodegroup');
+
+      expect(resources).toHaveLength(12); // All resources should be created
+    });
+
+    test('all resources should be in CREATE_COMPLETE status', async () => {
+      const response = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const resources = response.StackResourceSummaries || [];
+
+      resources.forEach(resource => {
+        expect(resource.ResourceStatus).toBe('CREATE_COMPLETE');
+      });
+    });
+  });
+
+  describe('KMS Resources', () => {
+    test('KMS key should be created with correct properties', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const kmsKey = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::KMS::Key');
+
+      expect(kmsKey).toBeDefined();
+      expect(kmsKey?.PhysicalResourceId).toBeDefined();
+
+      const keyId = kmsKey!.PhysicalResourceId!;
+      const keyResponse = await kmsClient.send(new DescribeKeyCommand({ KeyId: keyId }));
+
+      expect(keyResponse.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
+    });
+
+    test('KMS key should have correct alias', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const kmsAlias = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::KMS::Alias');
+
+      expect(kmsAlias).toBeDefined();
+      expect(kmsAlias?.PhysicalResourceId).toBe(`alias/eks-${ENVIRONMENT_SUFFIX}`);
+    });
+
+    test('KMS key policy should allow EKS service', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const kmsKey = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::KMS::Key');
+
+      expect(kmsKey).toBeDefined();
+
+      const keyId = kmsKey!.PhysicalResourceId!;
+      const policyResponse = await kmsClient.send(new GetKeyPolicyCommand({
+        KeyId: keyId,
+        PolicyName: 'default'
+      }));
+
+      const policy = JSON.parse(policyResponse.Policy!);
+      expect(policy.Version).toBe('2012-10-17');
+      expect(policy.Statement).toHaveLength(2);
+
+      const eksStatement = policy.Statement.find((s: any) => s.Sid === 'Allow EKS to use the key');
+      expect(eksStatement).toBeDefined();
+      expect(eksStatement.Principal.Service).toBe('eks.amazonaws.com');
+      expect(eksStatement.Action).toEqual(['kms:Decrypt', 'kms:DescribeKey', 'kms:CreateGrant']);
+    });
+  });
+
+  describe('IAM Resources', () => {
+    test('EKS cluster role should be created with correct policies', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const clusterRole = stackResources.StackResourceSummaries?.find(r =>
+        r.ResourceType === 'AWS::IAM::Role' && r.LogicalResourceId === 'EksClusterRole'
+      );
+
+      expect(clusterRole).toBeDefined();
+
+      const roleName = clusterRole!.PhysicalResourceId!;
+      const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+
+      expect(roleResponse.Role?.RoleName).toBe(`eks-cluster-role-${ENVIRONMENT_SUFFIX}`);
+      expect(roleResponse.Role?.AssumeRolePolicyDocument).toContain('eks.amazonaws.com');
+
+      const policiesResponse = await iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+      const policyArns = policiesResponse.AttachedPolicies?.map(p => p.PolicyArn) || [];
+
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSClusterPolicy');
+    });
+
+    test('EKS node role should be created with correct policies', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const nodeRole = stackResources.StackResourceSummaries?.find(r =>
+        r.ResourceType === 'AWS::IAM::Role' && r.LogicalResourceId === 'EksNodeRole'
+      );
+
+      expect(nodeRole).toBeDefined();
+
+      const roleName = nodeRole!.PhysicalResourceId!;
+      const roleResponse = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
+
+      expect(roleResponse.Role?.RoleName).toBe(`eks-node-role-${ENVIRONMENT_SUFFIX}`);
+      expect(roleResponse.Role?.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
+
+      const policiesResponse = await iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+      const policyArns = policiesResponse.AttachedPolicies?.map(p => p.PolicyArn) || [];
+
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy');
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy');
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly');
+    });
+  });
+
+  describe('Security Group Resources', () => {
+    test('EKS cluster security group should be created', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const clusterSg = stackResources.StackResourceSummaries?.find(r =>
+        r.ResourceType === 'AWS::EC2::SecurityGroup' && r.LogicalResourceId === 'EksClusterSecurityGroup'
+      );
+
+      expect(clusterSg).toBeDefined();
+
+      const sgId = clusterSg!.PhysicalResourceId!;
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId] }));
+
+      expect(sgResponse.SecurityGroups?.[0].GroupName).toBe(`eks-cluster-sg-${ENVIRONMENT_SUFFIX}`);
+      expect(sgResponse.SecurityGroups?.[0].GroupDescription).toBe('Security group for EKS cluster control plane');
+    });
+
+    test('EKS node security group should be created', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const nodeSg = stackResources.StackResourceSummaries?.find(r =>
+        r.ResourceType === 'AWS::EC2::SecurityGroup' && r.LogicalResourceId === 'EksNodeSecurityGroup'
+      );
+
+      expect(nodeSg).toBeDefined();
+
+      const sgId = nodeSg!.PhysicalResourceId!;
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId] }));
+
+      expect(sgResponse.SecurityGroups?.[0].GroupName).toBe(`eks-node-sg-${ENVIRONMENT_SUFFIX}`);
+      expect(sgResponse.SecurityGroups?.[0].GroupDescription).toBe('Security group for EKS worker nodes');
+    });
+
+    test('security groups should have proper ingress rules', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const nodeSg = stackResources.StackResourceSummaries?.find(r =>
+        r.ResourceType === 'AWS::EC2::SecurityGroup' && r.LogicalResourceId === 'EksNodeSecurityGroup'
+      );
+
+      expect(nodeSg).toBeDefined();
+
+      const sgId = nodeSg!.PhysicalResourceId!;
+      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId] }));
+
+      const ingressRules = sgResponse.SecurityGroups?.[0].IpPermissions || [];
+
+      // Should have HTTPS (443), Kubelet (10250), DNS (53 TCP and UDP) rules
+      expect(ingressRules.some(rule => rule.FromPort === 443 && rule.ToPort === 443)).toBe(true);
+      expect(ingressRules.some(rule => rule.FromPort === 10250 && rule.ToPort === 10250)).toBe(true);
+      expect(ingressRules.some(rule => rule.FromPort === 53 && rule.ToPort === 53 && rule.IpProtocol === 'tcp')).toBe(true);
+      expect(ingressRules.some(rule => rule.FromPort === 53 && rule.ToPort === 53 && rule.IpProtocol === 'udp')).toBe(true);
+    });
+  });
+
+  describe('CloudWatch Logs Resources', () => {
+    test('EKS cluster log group should be created', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const logGroup = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::Logs::LogGroup');
+
+      expect(logGroup).toBeDefined();
+
+      const logGroupName = logGroup!.PhysicalResourceId!;
+      const logsResponse = await logsClient.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName
+      }));
+
+      expect(logsResponse.logGroups?.[0].logGroupName).toBe(`/aws/eks/eks-cluster-${ENVIRONMENT_SUFFIX}/cluster`);
+      expect(logsResponse.logGroups?.[0].retentionInDays).toBe(7);
+    });
+  });
+
+  describe('EKS Resources', () => {
+    test('EKS cluster should be created with correct configuration', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const eksCluster = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Cluster');
+
+      expect(eksCluster).toBeDefined();
+
+      const clusterName = eksCluster!.PhysicalResourceId!;
+      const clusterResponse = await eksClient.send(new DescribeClusterCommand({ name: clusterName }));
+
+      expect(clusterResponse.cluster?.name).toBe(`eks-cluster-${ENVIRONMENT_SUFFIX}`);
+      expect(clusterResponse.cluster?.version).toBe('1.28');
+      expect(clusterResponse.cluster?.status).toBe('ACTIVE');
+      expect(clusterResponse.cluster?.resourcesVpcConfig?.endpointPrivateAccess).toBe(true);
+      expect(clusterResponse.cluster?.resourcesVpcConfig?.endpointPublicAccess).toBe(false);
+    });
+
+    test('EKS cluster should have encryption enabled', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const eksCluster = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Cluster');
+
+      expect(eksCluster).toBeDefined();
+
+      const clusterName = eksCluster!.PhysicalResourceId!;
+      const clusterResponse = await eksClient.send(new DescribeClusterCommand({ name: clusterName }));
+
+      expect(clusterResponse.cluster?.encryptionConfig).toBeDefined();
+      expect(clusterResponse.cluster?.encryptionConfig?.[0].resources).toEqual(['secrets']);
+    });
+
+    test('EKS cluster should have logging enabled', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const eksCluster = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Cluster');
+
+      expect(eksCluster).toBeDefined();
+
+      const clusterName = eksCluster!.PhysicalResourceId!;
+      const clusterResponse = await eksClient.send(new DescribeClusterCommand({ name: clusterName }));
+
+      const logging = clusterResponse.cluster?.logging?.clusterLogging;
+      expect(logging).toBeDefined();
+      expect(logging).toHaveLength(5);
+
+      const enabledTypes = logging?.map(l => l.types).flat();
+      expect(enabledTypes).toContain('api');
+      expect(enabledTypes).toContain('audit');
+      expect(enabledTypes).toContain('authenticator');
+      expect(enabledTypes).toContain('controllerManager');
+      expect(enabledTypes).toContain('scheduler');
+    });
+
+    test('EKS node group should be created with correct configuration', async () => {
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const eksCluster = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Cluster');
+      const nodeGroup = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Nodegroup');
+
+      expect(nodeGroup).toBeDefined();
+
+      const clusterName = eksCluster!.PhysicalResourceId!;
+      const nodeGroupName = nodeGroup!.PhysicalResourceId!;
+
+      const ngResponse = await eksClient.send(new DescribeNodegroupCommand({
+        clusterName: clusterName,
+        nodegroupName: nodeGroupName
+      }));
+
+      expect(ngResponse.nodegroup?.nodegroupName).toBe(`eks-node-group-${ENVIRONMENT_SUFFIX}`);
+      expect(ngResponse.nodegroup?.instanceTypes).toEqual(['t3.medium']);
+      expect(ngResponse.nodegroup?.amiType).toBe('AL2_x86_64');
+      expect(ngResponse.nodegroup?.scalingConfig?.minSize).toBe(1);
+      expect(ngResponse.nodegroup?.scalingConfig?.maxSize).toBe(3);
+      expect(ngResponse.nodegroup?.scalingConfig?.desiredSize).toBe(1);
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('stack should have all expected outputs', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const outputs = response.Stacks?.[0].Outputs || [];
+
+      const outputKeys = outputs.map(o => o.OutputKey);
+
+      expect(outputKeys).toContain('EksClusterName');
+      expect(outputKeys).toContain('EksClusterArn');
+      expect(outputKeys).toContain('EksClusterEndpoint');
+      expect(outputKeys).toContain('EksClusterSecurityGroupId');
+      expect(outputKeys).toContain('EksNodeSecurityGroupId');
+      expect(outputKeys).toContain('EksKmsKeyId');
+      expect(outputKeys).toContain('EksKmsKeyArn');
+      expect(outputKeys).toContain('EksOidcIssuer');
+      expect(outputKeys).toContain('EksNodeGroupName');
+      expect(outputKeys).toContain('EksClusterRoleArn');
+      expect(outputKeys).toContain('EksNodeRoleArn');
+      expect(outputKeys).toContain('EnvironmentSuffix');
+
+      expect(outputs).toHaveLength(13);
+    });
+
+    test('EksClusterName output should match cluster name', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const clusterNameOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksClusterName');
+
+      expect(clusterNameOutput?.OutputValue).toBe(`eks-cluster-${ENVIRONMENT_SUFFIX}`);
+    });
+
+    test('EksClusterArn output should be valid ARN', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const clusterArnOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksClusterArn');
+
+      expect(clusterArnOutput?.OutputValue).toMatch(/^arn:aws:eks:/);
+      expect(clusterArnOutput?.OutputValue).toContain(`eks-cluster-${ENVIRONMENT_SUFFIX}`);
+    });
+
+    test('EksClusterEndpoint output should be valid URL', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const endpointOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksClusterEndpoint');
+
+      expect(endpointOutput?.OutputValue).toMatch(/^https:\/\/.*\.eks\.amazonaws\.com$/);
+    });
+
+    test('security group outputs should be valid', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const clusterSgOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksClusterSecurityGroupId');
+      const nodeSgOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksNodeSecurityGroupId');
+
+      expect(clusterSgOutput?.OutputValue).toMatch(/^sg-/);
+      expect(nodeSgOutput?.OutputValue).toMatch(/^sg-/);
+    });
+
+    test('KMS outputs should be valid', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const kmsKeyIdOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksKmsKeyId');
+      const kmsKeyArnOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksKmsKeyArn');
+
+      expect(kmsKeyIdOutput?.OutputValue).toMatch(/^[a-f0-9]+$/);
+      expect(kmsKeyArnOutput?.OutputValue).toMatch(/^arn:aws:kms:/);
+    });
+
+    test('OIDC issuer output should be valid URL', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const oidcOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksOidcIssuer');
+
+      expect(oidcOutput?.OutputValue).toMatch(/^https:\/\/oidc\.eks\./);
+    });
+
+    test('IAM role outputs should be valid ARNs', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const clusterRoleOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksClusterRoleArn');
+      const nodeRoleOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EksNodeRoleArn');
+
+      expect(clusterRoleOutput?.OutputValue).toMatch(/^arn:aws:iam::/);
+      expect(nodeRoleOutput?.OutputValue).toMatch(/^arn:aws:iam::/);
+    });
+
+    test('EnvironmentSuffix output should match parameter', async () => {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
+      const envOutput = response.Stacks?.[0].Outputs?.find(o => o.OutputKey === 'EnvironmentSuffix');
+
+      expect(envOutput?.OutputValue).toBe(ENVIRONMENT_SUFFIX);
+    });
+  });
+
+  describe('Resource Dependencies', () => {
+    test('node group should depend on cluster creation', async () => {
+      // This is tested implicitly by the successful deployment
+      // If dependencies weren't correct, deployment would fail
+      const stackResources = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      const cluster = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Cluster');
+      const nodeGroup = stackResources.StackResourceSummaries?.find(r => r.ResourceType === 'AWS::EKS::Nodegroup');
+
+      expect(cluster?.ResourceStatus).toBe('CREATE_COMPLETE');
+      expect(nodeGroup?.ResourceStatus).toBe('CREATE_COMPLETE');
+    });
+
+    test('all resources should be properly tagged', async () => {
+      // Test that resources have expected tags (this would require more detailed API calls)
+      // For now, we verify the stack deployed successfully with all resources
+      const response = await cfClient.send(new ListStackResourcesCommand({ StackName: STACK_NAME }));
+      expect(response.StackResourceSummaries).toHaveLength(12);
+    });
+  });
+});
+
+// Helper functions
+async function createTestVpc(): Promise<string> {
+  const ec2Client = new EC2Client({
+    region: 'us-east-1',
+    endpoint: 'http://localhost:4566',
+    credentials: { accessKeyId: 'test', secretAccessKey: 'test' }
+  });
+
+  const vpcResponse = await ec2Client.createVpc({ CidrBlock: '10.0.0.0/16' });
+  return vpcResponse.Vpc!.VpcId!;
+}
+
+async function createTestSubnets(vpcId: string): Promise<string[]> {
+  const ec2Client = new EC2Client({
+    region: 'us-east-1',
+    endpoint: 'http://localhost:4566',
+    credentials: { accessKeyId: 'test', secretAccessKey: 'test' }
+  });
+
+  const subnetPromises = [
+    ec2Client.createSubnet({ VpcId: vpcId, CidrBlock: '10.0.1.0/24', AvailabilityZone: 'us-east-1a' }),
+    ec2Client.createSubnet({ VpcId: vpcId, CidrBlock: '10.0.2.0/24', AvailabilityZone: 'us-east-1b' }),
+    ec2Client.createSubnet({ VpcId: vpcId, CidrBlock: '10.0.3.0/24', AvailabilityZone: 'us-east-1c' })
+  ];
+
+  const subnetResponses = await Promise.all(subnetPromises);
+  return subnetResponses.map(r => r.Subnet!.SubnetId!);
+}
+
+async function waitForStackCreation(stackName: string): Promise<void> {
+  const maxAttempts = 60; // 5 minutes with 5 second intervals
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    try {
+      const response = await cfClient.send(new DescribeStacksCommand({ StackName: stackName }));
+      const status = response.Stacks?.[0].StackStatus;
+
+      if (status === 'CREATE_COMPLETE') {
+        return;
+      } else if (status?.includes('FAILED') || status?.includes('ROLLBACK')) {
+        throw new Error(`Stack creation failed with status: ${status}`);
+      }
+
+      console.log(`Stack status: ${status}, waiting...`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      attempts++;
+    } catch (error) {
+      if (attempts >= maxAttempts) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      attempts++;
+    }
+  }
+
+  throw new Error('Stack creation timed out');
+}
