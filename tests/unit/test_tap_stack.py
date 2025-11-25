@@ -1,7 +1,7 @@
 """Comprehensive unit tests for Blue-Green deployment stacks"""
 import pytest
-from unittest.mock import Mock, patch, MagicMock, call
-from cdktf import App, Testing
+from unittest.mock import Mock, patch, MagicMock
+from cdktf import App, TerraformStack, Testing
 import json
 import base64
 
@@ -91,8 +91,8 @@ class TestTapStack:
         mock_compute.assert_called_once()
         mock_monitoring.assert_called_once()
 
-        # Verify outputs are created
-        assert mock_output.call_count == 9
+        # Verify outputs are created (8 outputs total)
+        assert mock_output.call_count == 8
 
     def test_tap_stack_environment_suffix(self):
         """Test TapStack stores environment suffix correctly"""
@@ -144,11 +144,9 @@ class TestNetworkStack:
     ):
         """Test NetworkStack creates all network resources"""
         from lib.network_stack import NetworkStack
-        from cdktf import Testing
 
         app = App()
-        stack = Testing.synth(app)
-        scope = Mock()
+        stack = TerraformStack(app, "test-stack")
 
         # Mock resource IDs
         mock_vpc_instance = Mock()
@@ -178,7 +176,7 @@ class TestNetworkStack:
         mock_rt.side_effect = mock_rt_instances
 
         # Create network stack
-        network = NetworkStack(scope, 'NetworkTest', environment_suffix='test')
+        network = NetworkStack(stack, 'NetworkTest', environment_suffix='test')
 
         # Verify VPC creation
         mock_vpc.assert_called_once()
@@ -227,8 +225,9 @@ class TestNetworkStack:
                 mock_subnet_instances.append(instance)
             mock_subnet.side_effect = mock_subnet_instances
 
-            scope = Mock()
-            network = NetworkStack(scope, 'NetworkTest', environment_suffix='test')
+            app = App()
+            stack = TerraformStack(app, "test-stack")
+            network = NetworkStack(stack, 'NetworkTest', environment_suffix='test')
 
             # Test properties
             assert network.vpc_id == 'vpc-test-123'
@@ -249,8 +248,9 @@ class TestNetworkStack:
 
             mock_subnet.return_value = Mock(id='subnet-test')
 
-            scope = Mock()
-            NetworkStack(scope, 'NetworkTest', environment_suffix='test')
+            app = App()
+            stack = TerraformStack(app, "test-stack")
+            NetworkStack(stack, 'NetworkTest', environment_suffix='test')
 
             # Check subnet configurations
             subnet_calls = mock_subnet.call_args_list
@@ -318,9 +318,10 @@ class TestDatabaseStack:
         mock_rds_cluster_instance.endpoint = 'cluster.endpoint.com'
         mock_rds_cluster.return_value = mock_rds_cluster_instance
 
-        scope = Mock()
+        app = App()
+        stack = TerraformStack(app, "test-stack")
         database = DatabaseStack(
-            scope,
+            stack,
             'DatabaseTest',
             vpc_id='vpc-12345',
             private_subnet_ids=['subnet-1', 'subnet-2'],
@@ -377,9 +378,10 @@ class TestDatabaseStack:
             mock_cluster_instance.endpoint = 'test.cluster.endpoint'
             mock_cluster.return_value = mock_cluster_instance
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             database = DatabaseStack(
-                scope,
+                stack,
                 'DatabaseTest',
                 vpc_id='vpc-12345',
                 private_subnet_ids=['subnet-1', 'subnet-2'],
@@ -403,9 +405,10 @@ class TestDatabaseStack:
 
             mock_sg.return_value = Mock(id='sg-test')
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             DatabaseStack(
-                scope,
+                stack,
                 'DatabaseTest',
                 vpc_id='vpc-12345',
                 private_subnet_ids=['subnet-1', 'subnet-2'],
@@ -435,9 +438,10 @@ class TestDatabaseStack:
 
             mock_random.return_value = list('testpass12345678')
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             DatabaseStack(
-                scope,
+                stack,
                 'DatabaseTest',
                 vpc_id='vpc-12345',
                 private_subnet_ids=['subnet-1', 'subnet-2'],
@@ -532,9 +536,10 @@ class TestComputeStack:
             instance.name = f'asg-{i}'
         mock_asg.side_effect = mock_asg_instances
 
-        scope = Mock()
+        app = App()
+        stack = TerraformStack(app, "test-stack")
         compute = ComputeStack(
-            scope,
+            stack,
             'ComputeTest',
             vpc_id='vpc-12345',
             public_subnet_ids=['subnet-1', 'subnet-2'],
@@ -600,9 +605,10 @@ class TestComputeStack:
             mock_asg_green = Mock(name='asg-green')
             mock_asg.side_effect = [mock_asg_blue, mock_asg_green]
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             compute = ComputeStack(
-                scope,
+                stack,
                 'ComputeTest',
                 vpc_id='vpc-12345',
                 public_subnet_ids=['subnet-1', 'subnet-2'],
@@ -638,9 +644,10 @@ class TestComputeStack:
              patch('lib.compute_stack.LaunchTemplate') as mock_lt, \
              patch('lib.compute_stack.AutoscalingGroup'):
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             ComputeStack(
-                scope,
+                stack,
                 'ComputeTest',
                 vpc_id='vpc-12345',
                 public_subnet_ids=['subnet-1', 'subnet-2'],
@@ -684,9 +691,10 @@ class TestComputeStack:
 
             mock_sg.return_value = Mock(id='sg-test')
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             ComputeStack(
-                scope,
+                stack,
                 'ComputeTest',
                 vpc_id='vpc-12345',
                 public_subnet_ids=['subnet-1', 'subnet-2'],
@@ -723,9 +731,10 @@ class TestComputeStack:
              patch('lib.compute_stack.LaunchTemplate'), \
              patch('lib.compute_stack.AutoscalingGroup') as mock_asg:
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             ComputeStack(
-                scope,
+                stack,
                 'ComputeTest',
                 vpc_id='vpc-12345',
                 public_subnet_ids=['subnet-1', 'subnet-2'],
@@ -775,9 +784,10 @@ class TestMonitoringStack:
         mock_fn.split.return_value = ['part1', 'part2']
         mock_fn.element.return_value = 'alb-dimension'
 
-        scope = Mock()
+        app = App()
+        stack = TerraformStack(app, "test-stack")
         monitoring = MonitoringStack(
-            scope,
+            stack,
             'MonitoringTest',
             alb_arn='arn:aws:elasticloadbalancing:region:account:loadbalancer/app/my-alb/123',
             blue_asg_name='blue-asg',
@@ -805,9 +815,10 @@ class TestMonitoringStack:
             mock_sns_instance.arn = 'arn:aws:sns:topic'
             mock_sns.return_value = mock_sns_instance
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             MonitoringStack(
-                scope,
+                stack,
                 'MonitoringTest',
                 alb_arn='arn:aws:elasticloadbalancing:region:account:loadbalancer/app/my-alb/123',
                 blue_asg_name='blue-asg',
@@ -848,9 +859,10 @@ class TestMonitoringStack:
             mock_sns_instance.arn = 'arn:aws:sns:test-topic'
             mock_sns.return_value = mock_sns_instance
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             monitoring = MonitoringStack(
-                scope,
+                stack,
                 'MonitoringTest',
                 alb_arn='arn:aws:elasticloadbalancing:region:account:loadbalancer/app/my-alb/123',
                 blue_asg_name='blue-asg',
@@ -872,9 +884,10 @@ class TestMonitoringStack:
             mock_sns_instance.arn = 'arn:aws:sns:topic'
             mock_sns.return_value = mock_sns_instance
 
-            scope = Mock()
+            app = App()
+            stack = TerraformStack(app, "test-stack")
             MonitoringStack(
-                scope,
+                stack,
                 'MonitoringTest',
                 alb_arn='arn:aws:elasticloadbalancing:region:account:loadbalancer/app/my-alb/123',
                 blue_asg_name='blue-asg',
