@@ -1,0 +1,22 @@
+{
+  "dynamodb_table_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "crypto-prices-synthu1u9v9"
+  },
+  "price_enricher_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:lambda:us-east-1:342597974367:function:price-enricher-synthu1u9v9"
+  },
+  "sns_topic_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:sns:us-east-1:342597974367:price-updates-success-synthu1u9v9"
+  },
+  "webhook_processor_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:lambda:us-east-1:342597974367:function:webhook-processor-synthu1u9v9"
+  }
+}
