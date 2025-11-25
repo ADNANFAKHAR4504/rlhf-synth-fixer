@@ -722,12 +722,13 @@ resource "aws_api_gateway_rest_api" "fraud_detection_api" {
 }
 
 resource "aws_api_gateway_authorizer" "token_authorizer" {
-  name                   = "token-authorizer-${var.environment_suffix}"
-  rest_api_id            = aws_api_gateway_rest_api.fraud_detection_api.id
-  authorizer_uri         = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.token_authorizer.arn}/invocations"
-  authorizer_credentials = aws_iam_role.api_gateway_authorizer_role.arn
-  type                   = "TOKEN"
-  identity_source        = "method.request.header.Authorization"
+  name                             = "token-authorizer-${var.environment_suffix}"
+  rest_api_id                      = aws_api_gateway_rest_api.fraud_detection_api.id
+  authorizer_uri                   = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.token_authorizer.arn}/invocations"
+  authorizer_credentials           = aws_iam_role.api_gateway_authorizer_role.arn
+  type                             = "TOKEN"
+  identity_source                  = "method.request.header.Authorization"
+  authorizer_result_ttl_in_seconds = 0 # Disable caching for testing
 }
 
 # IAM role for API Gateway to invoke authorizer
