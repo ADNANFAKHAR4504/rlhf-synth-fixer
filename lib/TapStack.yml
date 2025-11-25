@@ -145,26 +145,19 @@ Parameters:
     
   PostgreSQLVersion:
     Type: String
-    Default: '15.5'
+    Default: '15.15'
     Description: 'PostgreSQL engine version'
     AllowedValues:
-      - '16.3'
-      - '16.2'
-      - '16.1'
-      - '15.6'
-      - '15.5'
-      - '15.4'
-      - '15.3'
-      - '14.11'
-      - '14.10'
-      - '14.9'
-      - '14.8'
-      - '13.12'
+      - '18.1'
+      - '17.7'
+      - '16.11'
+      - '15.15'
+      - '15.14'
       
   EnableMultiAZ:
     Type: String
     Default: 'true'
-    Description: 'Enable Multi-AZ deployment for RDS (recommended for production)'
+    Description: 'Enable Multi-AZ deployment for RDS'
     AllowedValues:
       - 'true'
       - 'false'
