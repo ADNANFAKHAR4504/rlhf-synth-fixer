@@ -847,21 +847,11 @@ export class TapStack extends cdk.Stack {
         lambda: fn,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       });
-      const canaryVersion = new lambda.Version(this, `${envKey}${family}CandidateVersion`, {
-        lambda: fn,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
 
       const alias = new lambda.Alias(this, `${envKey}${family}Alias`, {
         aliasName: envKey,
         version: stableVersion,
-        additionalVersions: [
-          {
-            version: canaryVersion,
-            weight: settings.lambda.canaryWeight,
-          },
-        ],
-        description: `${envKey} weighted alias for ${family}`,
+        description: `${envKey} alias for ${family}`,
       });
 
       lambdaAliases[family] = alias;

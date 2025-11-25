@@ -113,6 +113,6 @@
 
 **Issue:** Using `fn.currentVersion` publishes Lambda versions with a deterministic code hash. After a failed deployment left behind version `1`, re-deployments hit `AlreadyExists` errors when the stack tried to create the same version again.
 
-**Fix:** Replaced `fn.currentVersion` with explicit `lambda.Version` constructs for both stable and canary releases, each configured with `removalPolicy: DESTROY`.
+**Fix:** Replaced `fn.currentVersion` with explicit `lambda.Version` constructs to manage the stable release and removed the automatic creation of duplicate “canary” versions so CloudFormation isn’t forced to publish an identical code artifact twice.
 
-**Impact:** Lambda versions are cleaned up during stack deletion, eliminating `AlreadyExists` failures on subsequent deployments while retaining weighted alias routing.
+**Impact:** Lambda versions are cleaned up during stack deletion, eliminating `AlreadyExists` failures on subsequent deployments while keeping alias routing deterministic across environments.

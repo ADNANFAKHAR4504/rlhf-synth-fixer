@@ -355,6 +355,14 @@ describe('TapStack', () => {
     });
   });
 
+  test('creates lambda aliases without additional canary versions', () => {
+    const { template } = synthStack();
+    const aliases = template.findResources('AWS::Lambda::Alias');
+    Object.values(aliases).forEach((alias: any) => {
+      expect(alias.Properties.AdditionalVersionWeights).toBeUndefined();
+    });
+  });
+
   test('does not enable Data API for provisioned aurora clusters', () => {
     const { template } = synthStack();
     template.hasResourceProperties('AWS::RDS::DBCluster', {
