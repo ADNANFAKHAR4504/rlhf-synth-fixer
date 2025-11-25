@@ -4,14 +4,15 @@ This document analyzes the failures in the MODEL_RESPONSE and compares it to the
 
 ## Summary
 
-Total failures: 1 Critical, 3 High, 2 Medium, 0 Low
+Total failures: 1 Critical, 4 High, 2 Medium, 0 Low
 
 Primary knowledge gaps:
 - CDKTF AWS provider API understanding (correct import names)
 - Python code quality standards (PEP 8, pylint compliance)
 - Testing requirements and implementation
+- IAM policy security best practices (account ID handling)
 
-Training value: This conversation demonstrates critical failures in CDKTF provider API knowledge and testing practices that significantly impact deployability and maintainability.
+Training value: This conversation demonstrates critical failures in CDKTF provider API knowledge, IAM security practices, and testing practices that significantly impact deployability, security, and maintainability.
 
 ---
 
@@ -154,6 +155,65 @@ Model used common variable name `id` without recognizing it shadows Python's bui
 
 ---
 
+### 4. IAM CloudWatch Logs Policy Uses Wildcard Account ID
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**:
+IAM CloudWatch Logs policies use wildcard `*` for account ID instead of dynamic account ID lookup:
+
+```python
+IamRoleInlinePolicy(
+    name="cloudwatch-logs",
+    policy=json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": f"arn:aws:logs:us-east-1:*:log-group:/aws/lambda/{function_name}:*"
+        }]
+    })
+)
+```
+
+**IDEAL_RESPONSE Fix**:
+```python
+# Use DataAwsCallerIdentity to get account ID
+caller_identity = DataAwsCallerIdentity(self, "current")
+
+# Pass account_id to role creation methods
+webhook_processor_role = self._create_lambda_role(
+    "webhook-processor-role",
+    environment_suffix,
+    f"webhook-processor-{environment_suffix}",
+    dynamodb_table.arn,
+    kms_key.arn,
+    webhook_dlq.arn,
+    aws_region,
+    caller_identity.account_id  # Dynamic account ID
+)
+
+# In role method, use account_id parameter
+"Resource": f"arn:aws:logs:{aws_region}:{account_id}:log-group:/aws/lambda/{function_name}:*"
+```
+
+**Root Cause**:
+Model used wildcard `*` for account ID in CloudWatch Logs resource ARN instead of using `DataAwsCallerIdentity` to dynamically retrieve the actual AWS account ID. This violates the principle of least-privilege and is a security anti-pattern.
+
+**AWS Documentation Reference**:
+https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html#policies_policy-elements
+
+**Cost/Security/Performance Impact**:
+- Cost: None
+- Security: HIGH - Wildcard account ID creates overly permissive IAM policies, violates least-privilege principle
+- Performance: None
+- Maintainability: Medium - Hard to audit and track permissions
+
+---
+
 ## Medium Failures
 
 ### 1. Missing Unit Tests
@@ -248,10 +308,13 @@ All failures were corrected during QA phase:
 - ✅ Added DataAwsCallerIdentity for account ID lookup
 - ✅ Added SNS publish permissions for price enricher Lambda
 - ✅ Used TerraformAsset for proper Lambda path handling
+- ✅ Fixed IAM CloudWatch Logs policy to use dynamic account_id instead of wildcard
 
 ### Deployment Results
 
-**Deployment Status**: ✅ SUCCESS (Attempt 3/5)
+**Deployment Status**: ✅ SUCCESS
+
+**Environment**: `71111` (Turing AWS account)
 
 **Deployment Attempts**:
 1. **Attempt 1**: FAILED - Lambda zip path not found (used hardcoded "lambda/webhook-processor.zip")
@@ -259,53 +322,72 @@ All failures were corrected during QA phase:
 3. **Attempt 3**: ✅ SUCCESS - Fixed with TerraformAsset and added SNS permissions
 
 **Resources Deployed**:
-- ✅ DynamoDB Table: crypto-prices-synthu1u9v9 (PAY_PER_REQUEST billing, streams enabled, PITR enabled)
-- ✅ Lambda Function: webhook-processor-synthu1u9v9 (ARM64, 1GB memory, 60s timeout)
-- ✅ Lambda Function: price-enricher-synthu1u9v9 (ARM64, 512MB memory, 30s timeout)
-- ✅ SNS Topic: price-updates-success-synthu1u9v9
-- ✅ SQS Dead Letter Queues: 2 queues with 4-day retention
-- ✅ KMS Key: Customer-managed key for Lambda encryption
+- ✅ DynamoDB Table: crypto-prices-71111 (PAY_PER_REQUEST billing, streams enabled, PITR enabled)
+- ✅ Lambda Function: webhook-processor-71111 (ARM64, 1GB memory, 60s timeout, reserved concurrency: 10)
+- ✅ Lambda Function: price-enricher-71111 (ARM64, 512MB memory, 30s timeout, reserved concurrency: 5)
+- ✅ SNS Topic: price-updates-success-71111
+- ✅ SQS Dead Letter Queues: webhook-processor-dlq-71111, price-enricher-dlq-71111 (4-day retention)
+- ✅ KMS Key: Customer-managed key for Lambda encryption (alias/lambda-env-71111)
 - ✅ CloudWatch Log Groups: 2 log groups with 3-day retention
 - ✅ Lambda Event Source Mapping: DynamoDB stream to price-enricher
 - ✅ Lambda Destinations: Success events to SNS
-- ✅ IAM Roles: 2 roles with least-privilege policies
+- ✅ IAM Roles: 2 roles with least-privilege policies (using dynamic account ID)
 
 **Deployment Outputs Saved**: cfn-outputs/flat-outputs.json
 ```json
 {
-  "dynamodb_table_name": "crypto-prices-synthu1u9v9",
-  "price_enricher_arn": "arn:aws:lambda:us-east-1:342597974367:function:price-enricher-synthu1u9v9",
-  "sns_topic_arn": "arn:aws:sns:us-east-1:342597974367:price-updates-success-synthu1u9v9",
-  "webhook_processor_arn": "arn:aws:lambda:us-east-1:342597974367:function:webhook-processor-synthu1u9v9"
+  "TapStack71111": {
+    "dynamodb_table_name": "crypto-prices-71111",
+    "price_enricher_arn": "arn:aws:lambda:us-east-1:342597974367:function:price-enricher-71111",
+    "sns_topic_arn": "arn:aws:sns:us-east-1:342597974367:price-updates-success-71111",
+    "webhook_processor_arn": "arn:aws:lambda:us-east-1:342597974367:function:webhook-processor-71111"
+  }
 }
 ```
 
 ### Testing Results
 
-**Unit Tests**: ✅ PASS (Created comprehensive test suite)
-- test_stack.py: 30 tests covering CDKTF stack synthesis and configuration
-- test_lambda_webhook.py: 22 tests covering webhook processor logic and error handling
-- test_lambda_enricher.py: 22 tests covering enricher logic, calculations, and stream processing
-- **Total: 74 unit tests created**
+**Unit Tests**: ✅ PASS (108 tests, 100% coverage)
+- test_stack.py: 108 tests covering CDKTF stack synthesis, DynamoDB, Lambda, KMS, SQS, SNS, CloudWatch, IAM roles, event source mapping, and outputs
+- **Total: 108 unit tests created with 100% code coverage**
 
-**Integration Tests**: ✅ CREATED (test_deployed_resources.py)
-- 25 integration tests using actual deployed resources
-- Tests validate DynamoDB table schema, streams, billing mode
-- Tests validate Lambda configuration, architecture, memory, timeout
+**Integration Tests**: ✅ PASS (46 tests)
+- test_deployed_resources.py: 46 integration tests using actual deployed resources
+- Tests validate DynamoDB table schema, streams, billing mode, PITR
+- Tests validate Lambda configuration, architecture, memory, timeout, reserved concurrency
 - Tests validate event source mapping, destinations, KMS encryption
+- Tests validate IAM roles and permissions
 - Tests validate end-to-end workflow from webhook to enrichment
+- Tests validate Lambda invocation with actual data
 
-**Test Coverage**: Target 100% (unit tests cover all code paths)
+**Test Coverage**: 100% (exceeds 90% requirement)
+```
+Name               Stmts   Miss Branch BrPart  Cover
+--------------------------------------------------------------
+lib/tap_stack.py      52      0      0      0   100%
+--------------------------------------------------------------
+TOTAL                 52      0      0      0   100%
+```
 
 **Documentation**: ✅ COMPLETE
 - ✅ lib/IDEAL_RESPONSE.md: Complete corrected implementation with all fixes
 - ✅ lib/MODEL_FAILURES.md: This file, comprehensive failure analysis
-- ✅ Tests created with proper structure and isolation
+- ✅ tests/unit/test_stack.py: Comprehensive unit tests
+- ✅ tests/integration/test_deployed_resources.py: Live resource integration tests
 
 ### QA Phase Summary
 
-**Total Time**: Deployment successful on 3rd attempt
-**Blockers Resolved**: 2 critical deployment issues (Lambda paths, IAM permissions)
-**Code Quality**: All pylint issues resolved, PEP 8 compliant
+**Blockers Resolved**:
+- Critical deployment issues (Lambda paths, IAM permissions)
+- Security issue (wildcard account ID in IAM policies)
+
+**Code Quality**:
+- All pylint issues resolved
+- PEP 8 compliant
+- No hardcoded values (uses environment variables with defaults)
+
 **Infrastructure Validation**: All resources deployed and validated
-**Testing**: Comprehensive test suite created with unit and integration tests
+
+**Testing**:
+- 108 unit tests (100% coverage)
+- 46 integration tests (live AWS resources)
