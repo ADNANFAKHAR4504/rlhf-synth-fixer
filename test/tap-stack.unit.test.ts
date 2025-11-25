@@ -255,7 +255,9 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
     it('should create payment resources', () => {
       expect(indexCode).toContain('payment-resource-primary');
       expect(indexCode).toContain('payment-resource-secondary');
-      expect(indexCode).toContain("pathPart: 'payment'");
+      // The code uses a PR-safe path for PR stacks, or plain 'payment' for non-PRs
+      // e.g. pathPart: isPrStack ? `payment-${environmentSuffix}` : 'payment'
+      expect(indexCode).toMatch(/pathPart:\s*(isPrStack\s*\?|`payment-\$\{environmentSuffix\}`|'payment')/);
     });
 
     it('should create POST methods', () => {
