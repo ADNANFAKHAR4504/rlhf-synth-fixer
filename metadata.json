@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "e8h5f1e1",
+  "team": "synth",
+  "startedAt": "2025-11-25T15:26:52+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Migration must support blue-green deployment pattern with traffic switching capabilities",
+    "All database connections must use SSL/TLS encryption with certificate rotation",
+    "Resource costs must not exceed $3,000/month in the target environment",
+    "Migration rollback must be achievable within 5 minutes using CDKTF state management",
+    "All Python code must follow PEP 8 standards and include type hints"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "ALB",
+    "Route53",
+    "CloudWatch",
+    "DMS",
+    "SecretsManager",
+    "WAF",
+    "KMS",
+    "ACM",
+    "IAM"
+  ],
+  "training_quality": 10
+}
