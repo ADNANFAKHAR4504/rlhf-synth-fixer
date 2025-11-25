@@ -1,0 +1,7 @@
+name: TapStack
+runtime: python
+description: Infrastructure migration from legacy EC2/RDS/ELB to modern ECS Fargate/Aurora/ALB
+main: lib/__main__.py
+config:
+  aws:region:
+    value: us-west-2
