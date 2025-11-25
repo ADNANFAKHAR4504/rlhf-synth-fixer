@@ -1542,9 +1542,10 @@
     "Route53HealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
       "Condition": "IsSourceRegion",
+      "DependsOn": "HealthCheckAlarm",
       "Properties": {
         "HealthCheckConfig": {
-          "Type": "CLOUDWATCH_METRIC_ALARM",
+          "Type": "CLOUDWATCH_METRIC",
           "AlarmIdentifier": {
             "Name": {
               "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"
@@ -1574,9 +1575,10 @@
     "Route53HealthCheckTarget": {
       "Type": "AWS::Route53::HealthCheck",
       "Condition": "IsTargetRegion",
+      "DependsOn": "HealthCheckAlarm",
       "Properties": {
         "HealthCheckConfig": {
-          "Type": "CLOUDWATCH_METRIC_ALARM",
+          "Type": "CLOUDWATCH_METRIC",
           "AlarmIdentifier": {
             "Name": {
               "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"

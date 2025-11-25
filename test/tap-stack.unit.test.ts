@@ -505,7 +505,7 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
     test('Route53HealthCheck should have health check config', () => {
       const healthCheck = template.Resources.Route53HealthCheck;
       expect(healthCheck.Properties.HealthCheckConfig).toBeDefined();
-      expect(healthCheck.Properties.HealthCheckConfig.Type).toBe('CLOUDWATCH_METRIC_ALARM');
+      expect(healthCheck.Properties.HealthCheckConfig.Type).toBe('CLOUDWATCH_METRIC');
     });
 
     test('Route53HealthCheck should reference CloudWatch alarm', () => {
