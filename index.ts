@@ -52,7 +52,6 @@ const lambdaRolePrimary = new aws.iam.Role(
   { provider: primaryProvider }
 );
 
-
 // Lambda execution role for secondary region
 const lambdaRoleSecondary = new aws.iam.Role(
   `payment-lambda-role-secondary-${environmentSuffix}`,
@@ -807,7 +806,6 @@ if (hostedZone) {
     },
     { provider: primaryProvider }
   );
-
 }
 // ============================================================================
 // SSM Parameters
@@ -904,7 +902,9 @@ const _ssmS3Secondary = new aws.ssm.Parameter(
 
 export const primaryApiEndpoint = pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/${apiBasePath}`;
 export const secondaryApiEndpoint = pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/${apiBasePath}`;
-export const failoverDnsName = (hostedZone ? pulumi.interpolate`api.payment-${environmentSuffix}.example.com` : pulumi.output(''));
+export const failoverDnsName = hostedZone
+  ? pulumi.interpolate`api.payment-${environmentSuffix}.example.com`
+  : pulumi.output('');
 export const primaryHealthCheckUrl = pulumi.interpolate`https://${apiPrimary.id}.execute-api.${primaryRegion}.amazonaws.com/prod/${apiBasePath}`;
 export const secondaryHealthCheckUrl = pulumi.interpolate`https://${apiSecondary.id}.execute-api.${secondaryRegion}.amazonaws.com/prod/${apiBasePath}`;
 export const healthCheckPrimaryId = healthCheckPrimary.id;
@@ -916,4 +916,6 @@ export const s3BucketSecondaryName = s3BucketSecondary.bucket;
 export const dlqPrimaryUrl = dlqPrimary.url;
 export const dlqSecondaryUrl = dlqSecondary.url;
 export const hostedZoneId = hostedZone ? hostedZone.zoneId : pulumi.output('');
-export const hostedZoneNameServers = hostedZone ? hostedZone.nameServers : pulumi.output([]);
+export const hostedZoneNameServers = hostedZone
+  ? hostedZone.nameServers
+  : pulumi.output([]);
