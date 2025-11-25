@@ -42,6 +42,11 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
     if (typeof outputs.privateSubnetIds === 'string') {
       outputs.privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
     }
+
+    // Parse infraOutputs if it's a JSON string (Pulumi serializes nested objects as strings)
+    if (typeof outputs.infraOutputs === 'string') {
+      outputs.infraOutputs = JSON.parse(outputs.infraOutputs);
+    }
   });
 
   describe('VPC Infrastructure', () => {
