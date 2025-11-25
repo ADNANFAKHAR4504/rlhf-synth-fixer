@@ -525,7 +525,6 @@ Resources:
             ResponseCode: 403
             ResponsePagePath: '/error.html'
             ErrorCachingMinTTL: 60
-        WebACLId: !GetAtt WAFWebACL.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -544,7 +543,7 @@ Resources:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: !Sub '${AWS::StackName}-WebACL'
-      Scope: CLOUDFRONT
+      Scope: REGIONAL
       DefaultAction:
         Allow: {}
       Rules:
@@ -585,6 +584,12 @@ Resources:
           Value: !Ref ProjectName
         - Key: iac-rlhf-amazon
           Value: 'true'
+          
+  WAFWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer
+      WebACLArn: !GetAtt WAFWebACL.Arn
           
   # ==========================================
   # VPC and Networking Resources
