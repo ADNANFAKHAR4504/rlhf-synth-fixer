@@ -850,12 +850,20 @@ export class TapStack extends cdk.Stack {
       key.grantEncryptDecrypt(fn);
       cluster.secret?.grantRead(fn);
 
-      const stableVersion = fn.currentVersion;
+      const stableVersion = new lambda.Version(
+        this,
+        `${envKey}${family}StableVersion`,
+        {
+          lambda: fn,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        }
+      );
       const canaryVersion = new lambda.Version(
         this,
         `${envKey}${family}CandidateVersion`,
         {
           lambda: fn,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
         }
       );
 

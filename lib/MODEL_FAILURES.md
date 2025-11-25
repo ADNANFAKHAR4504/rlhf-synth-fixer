@@ -108,3 +108,11 @@
 **Fix:** Removed reserved concurrency for the dev environment by only applying `reservedConcurrentExecutions` when `envKey !== 'dev'`. Production and staging retain their explicit reservations for deterministic capacity planning.
 
 **Impact:** Dev deployments no longer exhaust the account-wide reserve while higher environments keep their concurrency guarantees.
+
+## 12. Lambda Version Publishing
+
+**Issue:** Using `fn.currentVersion` publishes Lambda versions with a deterministic code hash. After a failed deployment left behind version `1`, re-deployments hit `AlreadyExists` errors when the stack tried to create the same version again.
+
+**Fix:** Replaced `fn.currentVersion` with explicit `lambda.Version` constructs for both stable and canary releases, each configured with `removalPolicy: DESTROY`.
+
+**Impact:** Lambda versions are cleaned up during stack deletion, eliminating `AlreadyExists` failures on subsequent deployments while retaining weighted alias routing.

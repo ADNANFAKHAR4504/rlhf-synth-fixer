@@ -346,6 +346,15 @@ describe('TapStack', () => {
       });
   });
 
+  test('creates lambda versions with destroy removal policy', () => {
+    const { template } = synthStack();
+    const versions = template.findResources('AWS::Lambda::Version');
+    expect(Object.keys(versions).length).toBeGreaterThan(0);
+    Object.values(versions).forEach((version: any) => {
+      expect(version.DeletionPolicy).toBe('Delete');
+    });
+  });
+
   test('does not enable Data API for provisioned aurora clusters', () => {
     const { template } = synthStack();
     template.hasResourceProperties('AWS::RDS::DBCluster', {
