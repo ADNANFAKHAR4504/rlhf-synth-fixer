@@ -1,0 +1,41 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "synth-e7v2g8b6",
+  "team": "synth",
+  "startedAt": "2025-11-26T04:43:00+00:00",
+  "subtask": "Multi-Region Disaster Recovery Infrastructure",
+  "subject_labels": [
+    "Disaster Recovery",
+    "Multi-Region Architecture",
+    "Database Replication",
+    "High Availability",
+    "Network Configuration",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Backup and Restore",
+    "Global Infrastructure"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2 (Subnets, Internet Gateway, NAT Gateway, Security Groups)",
+    "RDS Aurora Serverless v2 PostgreSQL",
+    "DynamoDB Global Tables",
+    "Lambda",
+    "EventBridge",
+    "Route 53",
+    "CloudWatch (Logs, Alarms, Metrics)",
+    "SNS",
+    "IAM (Roles, Policies)",
+    "VPC Peering"
+  ],
+  "coverage": {
+    "lines": 19,
+    "branches": 0
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
