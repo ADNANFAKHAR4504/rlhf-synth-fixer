@@ -1235,3 +1235,9 @@ class TapStack(TerraformStack):
             "sns_topic_arn",
             value=self.sns_topic.arn
         )
+
+        TerraformOutput(
+            self,
+            "environment_suffix",
+            value=environment_suffix
+        )

@@ -80,7 +80,11 @@ class TestMultiRegionDRIntegration:
         if outputs and len(outputs) == 1:
             first_key = list(outputs.keys())[0]
             if isinstance(outputs[first_key], dict):
-                return outputs[first_key]
+                flattened = outputs[first_key]
+                # Extract environment_suffix from stack name if not present
+                if 'environment_suffix' not in flattened and first_key.startswith('payment-dr-'):
+                    flattened['environment_suffix'] = first_key.replace('payment-dr-', '')
+                return flattened
         
         return outputs
 
@@ -418,13 +422,29 @@ class TestMultiRegionDRIntegration:
         primary_vpc_id = deployment_outputs.get('primary_vpc_id')
         secondary_vpc_id = deployment_outputs.get('secondary_vpc_id')
 
-        primary_vpc = aws_clients['ec2_primary'].describe_vpcs(VpcIds=[primary_vpc_id])['Vpcs'][0]
-        secondary_vpc = aws_clients['ec2_secondary'].describe_vpcs(VpcIds=[secondary_vpc_id])['Vpcs'][0]
+        # Check DNS attributes using describe_vpc_attribute
+        primary_dns_hostnames = aws_clients['ec2_primary'].describe_vpc_attribute(
+            VpcId=primary_vpc_id,
+            Attribute='enableDnsHostnames'
+        )
+        primary_dns_support = aws_clients['ec2_primary'].describe_vpc_attribute(
+            VpcId=primary_vpc_id,
+            Attribute='enableDnsSupport'
+        )
+        
+        secondary_dns_hostnames = aws_clients['ec2_secondary'].describe_vpc_attribute(
+            VpcId=secondary_vpc_id,
+            Attribute='enableDnsHostnames'
+        )
+        secondary_dns_support = aws_clients['ec2_secondary'].describe_vpc_attribute(
+            VpcId=secondary_vpc_id,
+            Attribute='enableDnsSupport'
+        )
 
-        assert primary_vpc['EnableDnsHostnames'] is True
-        assert primary_vpc['EnableDnsSupport'] is True
-        assert secondary_vpc['EnableDnsHostnames'] is True
-        assert secondary_vpc['EnableDnsSupport'] is True
+        assert primary_dns_hostnames['EnableDnsHostnames']['Value'] is True
+        assert primary_dns_support['EnableDnsSupport']['Value'] is True
+        assert secondary_dns_hostnames['EnableDnsHostnames']['Value'] is True
+        assert secondary_dns_support['EnableDnsSupport']['Value'] is True
 
     def test_backup_verification_lambda_scheduled(self, deployment_outputs, aws_clients):
         """Verify backup verification Lambda has CloudWatch Events rule"""
@@ -468,4 +488,6 @@ class TestMultiRegionDRIntegration:
         if primary_vpc_id:
             response = aws_clients['ec2_primary'].describe_vpcs(VpcIds=[primary_vpc_id])
             tags = {tag['Key']: tag['Value'] for tag in response['Vpcs'][0].get('Tags', [])}
-            assert env_suffix in tags.get('Environment', '')
+            # Check if Environment tag exists and matches the environment suffix
+            environment_tag = tags.get('Environment', '')
+            assert environment_tag == env_suffix, f"Expected Environment tag to be '{env_suffix}', but got '{environment_tag}'"
