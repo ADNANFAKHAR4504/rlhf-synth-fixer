@@ -6,19 +6,19 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
-    S3BucketLifecycleConfiguration,
-    S3BucketLifecycleConfigurationRule,
-    S3BucketLifecycleConfigurationRuleTransition,
+    S3BucketLifecycleConfigurationA,
+    S3BucketLifecycleConfigurationRuleA,
+    S3BucketLifecycleConfigurationRuleTransitionA,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfiguration,
-    S3BucketReplicationConfigurationRule,
-    S3BucketReplicationConfigurationRuleDestination,
+    S3BucketReplicationConfigurationA,
+    S3BucketReplicationConfigurationRuleA,
+    S3BucketReplicationConfigurationRuleDestinationA,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfiguration,
-    S3BucketServerSideEncryptionConfigurationRule,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,
 )
 from cdktf_cdktf_provider_aws.vpc import Vpc, DataAwsVpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -639,13 +639,13 @@ class TapStack(TerraformStack):
         )
 
         # Server-side encryption
-        S3BucketServerSideEncryptionConfiguration(
+        S3BucketServerSideEncryptionConfigurationA(
             self,
             "audit_bucket_encryption",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketServerSideEncryptionConfigurationRule(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                S3BucketServerSideEncryptionConfigurationRuleA(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                         sse_algorithm="AES256"
                     ),
                     bucket_key_enabled=True,
@@ -654,16 +654,16 @@ class TapStack(TerraformStack):
         )
 
         # Lifecycle policy for Glacier transition
-        S3BucketLifecycleConfiguration(
+        S3BucketLifecycleConfigurationA(
             self,
             "audit_bucket_lifecycle",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketLifecycleConfigurationRule(
+                S3BucketLifecycleConfigurationRuleA(
                     id="archive-old-logs",
                     status="Enabled",
                     transition=[
-                        S3BucketLifecycleConfigurationRuleTransition(
+                        S3BucketLifecycleConfigurationRuleTransitionA(
                             days=90,
                             storage_class="GLACIER"
                         )
@@ -739,17 +739,17 @@ class TapStack(TerraformStack):
         )
 
         # Configure replication
-        S3BucketReplicationConfiguration(
+        S3BucketReplicationConfigurationA(
             self,
             "audit_bucket_replication",
             bucket=self.audit_bucket.id,
             role=self.s3_replication_role.arn,
             rule=[
-                S3BucketReplicationConfigurationRule(
+                S3BucketReplicationConfigurationRuleA(
                     id="replicate-all",
                     status="Enabled",
                     priority=1,
-                    destination=S3BucketReplicationConfigurationRuleDestination(
+                    destination=S3BucketReplicationConfigurationRuleDestinationA(
                         bucket=self.audit_bucket_replica.arn,
                         storage_class="STANDARD",
                     ),
