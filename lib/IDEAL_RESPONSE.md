@@ -2494,6 +2494,11 @@ output "lambda_reconciliation_arn" {
   value       = aws_lambda_function.reconciliation.arn
 }
 
+output "lambda_layer_arn" {
+  description = "ARN of the Lambda dependencies layer"
+  value       = aws_lambda_layer_version.dependencies.arn
+}
+
 output "step_functions_arn" {
   description = "ARN of the Step Functions state machine"
   value       = aws_sfn_state_machine.fraud_investigation.arn
