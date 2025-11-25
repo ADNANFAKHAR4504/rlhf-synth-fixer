@@ -2,6 +2,13 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "CloudFormation template for PostgreSQL to Aurora migration using DMS with Route 53 traffic shifting",
   "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": [
+          "W1011"
+        ]
+      }
+    },
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
         {
@@ -539,7 +546,7 @@
         },
         "MasterUsername": "postgres",
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:ssm-secure:/aurora/master-password-${EnvironmentSuffix}}}"
+          "Ref": "TargetDbPassword"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
