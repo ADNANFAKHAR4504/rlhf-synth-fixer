@@ -601,8 +601,10 @@ class TestComputeStack:
             mock_tg_green = Mock(arn='arn:tg-green')
             mock_tg.side_effect = [mock_tg_blue, mock_tg_green]
 
-            mock_asg_blue = Mock(name='asg-blue')
-            mock_asg_green = Mock(name='asg-green')
+            mock_asg_blue = Mock()
+            mock_asg_blue.name = 'asg-blue'
+            mock_asg_green = Mock()
+            mock_asg_green.name = 'asg-green'
             mock_asg.side_effect = [mock_asg_blue, mock_asg_green]
 
             app = App()
