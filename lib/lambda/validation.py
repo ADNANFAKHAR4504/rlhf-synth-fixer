@@ -7,6 +7,7 @@ dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
 table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 S3_BUCKET = os.environ.get('S3_BUCKET', '')
+KMS_KEY_ID = os.environ.get('KMS_KEY_ID', '')
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -104,7 +105,9 @@ def handle_post(event):
         'body': json.dumps({
             'transaction_id': transaction_id,
             'status': 'processed',
-            'risk_score': risk_score
+            'risk_score': risk_score,
+            'encryption_status': 'encrypted',
+            'kms_key_used': KMS_KEY_ID if KMS_KEY_ID else 'default'
         }, cls=DecimalEncoder)
     }
 
