@@ -450,10 +450,10 @@ class TapStack(TerraformStack):
         self.primary_secret = SecretsmanagerSecret(
             self,
             "primary_db_secret",
-            name=f"payment-v1-primary-db-creds-{environment_suffix}",
+            name=f"payment-v2-primary-db-creds-{environment_suffix}",
             description="Aurora database credentials for primary region",
             tags={
-                "Name": f"payment-v1-primary-db-creds-{environment_suffix}",
+                "Name": f"payment-v2-primary-db-creds-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.primary_provider
@@ -524,10 +524,10 @@ class TapStack(TerraformStack):
         self.secondary_secret = SecretsmanagerSecret(
             self,
             "secondary_db_secret",
-            name=f"payment-v1-secondary-db-creds-{environment_suffix}",
+            name=f"payment-v2-secondary-db-creds-{environment_suffix}",
             description="Aurora database credentials for secondary region",
             tags={
-                "Name": f"payment-v1-secondary-db-creds-{environment_suffix}",
+                "Name": f"payment-v2-secondary-db-creds-{environment_suffix}",
                 "Environment": environment_suffix
             },
             provider=self.secondary_provider
