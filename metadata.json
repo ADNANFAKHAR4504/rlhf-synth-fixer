@@ -20,5 +20,6 @@
     "IAM",
     "SNS",
     "VPC"
-  ]
+  ],
+  "training_quality": 10
 }

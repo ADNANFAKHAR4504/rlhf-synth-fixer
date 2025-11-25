@@ -55,17 +55,18 @@ const randomId = () => crypto.randomBytes(12).toString('hex');
 describe('Trading platform integration flows', () => {
   jest.setTimeout(120000);
 
-  const prodBucket = getOutput('ProdDataBucketName');
-  const prodRegion = getOutput('ProdRegion');
-  const processorAliasArn = getOutput('ProdprocessorAliasArn');
-  const apiEndpoint = getOutput('ProdApiEndpoint');
-  const snsTopicArn = getOutput('ProdSnsTopicArn');
+  // Use Dev environment outputs (default deployment is dev-only)
+  const devBucket = getOutput('DevDataBucketName');
+  const devRegion = getOutput('DevRegion');
+  const processorAliasArn = getOutput('DevprocessorAliasArn');
+  const apiEndpoint = getOutput('DevApiEndpoint');
+  const snsTopicArn = getOutput('DevSnsTopicArn');
 
-  const s3Client = new S3Client({ region: prodRegion });
-  const lambdaClient = new LambdaClient({ region: prodRegion });
-  const snsClient = new SNSClient({ region: prodRegion });
+  const s3Client = new S3Client({ region: devRegion });
+  const lambdaClient = new LambdaClient({ region: devRegion });
+  const snsClient = new SNSClient({ region: devRegion });
 
-  test('ingests and retrieves trade events through the prod data lake bucket', async () => {
+  test('ingests and retrieves trade events through the dev data lake bucket', async () => {
     const key = `integration-tests/orders/${randomId()}.json`;
     const payload = {
       tradeId: randomId(),
@@ -75,7 +76,7 @@ describe('Trading platform integration flows', () => {
 
     await s3Client.send(
       new PutObjectCommand({
-        Bucket: prodBucket,
+        Bucket: devBucket,
         Key: key,
         Body: JSON.stringify(payload),
       })
@@ -83,7 +84,7 @@ describe('Trading platform integration flows', () => {
 
     const readResult = await s3Client.send(
       new GetObjectCommand({
-        Bucket: prodBucket,
+        Bucket: devBucket,
         Key: key,
       })
     );
@@ -93,7 +94,7 @@ describe('Trading platform integration flows', () => {
 
     await s3Client.send(
       new DeleteObjectCommand({
-        Bucket: prodBucket,
+        Bucket: devBucket,
         Key: key,
       })
     );
@@ -137,7 +138,7 @@ describe('Trading platform integration flows', () => {
     expect(responseBody.status).toBe('OK');
   });
 
-  test('publishes deployment notifications to the prod SNS topic', async () => {
+  test('publishes deployment notifications to the dev SNS topic', async () => {
     const publishResponse = await snsClient.send(
       new PublishCommand({
         TopicArn: snsTopicArn,
@@ -150,5 +151,193 @@ describe('Trading platform integration flows', () => {
       })
     );
     expect(publishResponse.MessageId).toBeDefined();
+  });
+
+  test('processes batch trade orders through the complete data pipeline', async () => {
+    const batchId = randomId();
+    const trades = Array.from({ length: 5 }, (_, i) => ({
+      tradeId: `${batchId}-${i}`,
+      instrument: ['FX-EURUSD', 'FX-GBPUSD', 'FX-USDJPY'][i % 3],
+      amount: (i + 1) * 100000,
+      side: i % 2 === 0 ? 'BUY' : 'SELL',
+      timestamp: new Date().toISOString(),
+    }));
+
+    const batchKey = `integration-tests/batches/${batchId}.json`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: devBucket,
+        Key: batchKey,
+        Body: JSON.stringify({ batchId, trades }),
+        ContentType: 'application/json',
+      })
+    );
+
+    const invocation = await lambdaClient.send(
+      new InvokeCommand({
+        FunctionName: processorAliasArn,
+        Payload: Buffer.from(
+          JSON.stringify({
+            requestId: batchId,
+            action: 'PROCESS_BATCH',
+            batchKey,
+            bucket: devBucket,
+          })
+        ),
+      })
+    );
+
+    expect(invocation.StatusCode).toBe(200);
+    const result = JSON.parse(
+      Buffer.from(invocation.Payload || '{}').toString()
+    );
+    expect(result.statusCode).toBe(200);
+
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: devBucket,
+        Key: batchKey,
+      })
+    );
+  });
+
+  test('handles concurrent API requests for high-frequency trading simulation', async () => {
+    const baseUrl = apiEndpoint.endsWith('/')
+      ? apiEndpoint.slice(0, -1)
+      : apiEndpoint;
+    const concurrentRequests = 10;
+
+    const requests = Array.from({ length: concurrentRequests }, (_, i) =>
+      axios.post(`${baseUrl}/processor`, {
+        requestId: `${randomId()}-${i}`,
+        client: 'hft-simulation',
+        orderType: 'LIMIT',
+        price: 1.085 + i * 0.0001,
+        quantity: 100000,
+      })
+    );
+
+    const responses = await Promise.allSettled(requests);
+    const successful = responses.filter(r => r.status === 'fulfilled');
+    expect(successful.length).toBeGreaterThanOrEqual(concurrentRequests * 0.8);
+  });
+
+  test('validates trade data persistence and retrieval across storage tiers', async () => {
+    const tradeId = randomId();
+    const tradeData = {
+      tradeId,
+      instrument: 'EQUITY-AAPL',
+      quantity: 1000,
+      price: 150.25,
+      executedAt: new Date().toISOString(),
+      metadata: {
+        clientId: 'test-client',
+        strategy: 'momentum',
+        tags: ['automated', 'integration-test'],
+      },
+    };
+
+    const hotKey = `integration-tests/hot/${tradeId}.json`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: devBucket,
+        Key: hotKey,
+        Body: JSON.stringify(tradeData),
+        ContentType: 'application/json',
+        Metadata: {
+          tradeid: tradeId,
+          tier: 'hot',
+        },
+      })
+    );
+
+    const retrieved = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: devBucket,
+        Key: hotKey,
+      })
+    );
+
+    const retrievedData = JSON.parse(
+      await streamToString(retrieved.Body as Readable)
+    );
+    expect(retrievedData.tradeId).toBe(tradeId);
+    expect(retrievedData.metadata.strategy).toBe('momentum');
+
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: devBucket,
+        Key: hotKey,
+      })
+    );
+  });
+
+  test('executes end-to-end trade lifecycle from submission to confirmation', async () => {
+    const orderId = randomId();
+    const baseUrl = apiEndpoint.endsWith('/')
+      ? apiEndpoint.slice(0, -1)
+      : apiEndpoint;
+
+    const submitResponse = await axios.post(`${baseUrl}/processor`, {
+      requestId: orderId,
+      action: 'SUBMIT_ORDER',
+      client: 'lifecycle-test',
+      orderType: 'MARKET',
+      instrument: 'FX-EURUSD',
+      quantity: 500000,
+      side: 'BUY',
+    });
+    expect(submitResponse.status).toBe(200);
+    const submitResult =
+      typeof submitResponse.data === 'string'
+        ? JSON.parse(submitResponse.data)
+        : submitResponse.data;
+    expect(submitResult.status).toBe('OK');
+
+    const confirmKey = `integration-tests/confirmations/${orderId}.json`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: devBucket,
+        Key: confirmKey,
+        Body: JSON.stringify({
+          orderId,
+          status: 'FILLED',
+          fillPrice: 1.0855,
+          fillQuantity: 500000,
+          confirmedAt: new Date().toISOString(),
+        }),
+      })
+    );
+
+    const confirmation = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: devBucket,
+        Key: confirmKey,
+      })
+    );
+    const confirmData = JSON.parse(
+      await streamToString(confirmation.Body as Readable)
+    );
+    expect(confirmData.orderId).toBe(orderId);
+    expect(confirmData.status).toBe('FILLED');
+
+    await snsClient.send(
+      new PublishCommand({
+        TopicArn: snsTopicArn,
+        Subject: 'trade-confirmation',
+        Message: JSON.stringify({
+          orderId,
+          event: 'ORDER_FILLED',
+          details: confirmData,
+        }),
+      })
+    );
+
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: devBucket,
+        Key: confirmKey,
+      })
+    );
   });
 });

@@ -6,14 +6,14 @@
 
 ```typescript
 /**
- * TapStack – Multi-environment financial trading platform
+ * TapStack - Multi-environment financial trading platform
  *
  * Deployment reference:
- *  1. Validate config       → ./scripts/lint.sh
- *  2. Build & synth         → ./scripts/build.sh && ./scripts/synth.sh
- *  3. Deploy (per env)      → ./scripts/deploy.sh
- *  4. Unit / integration    → ./scripts/unit-tests.sh && ./scripts/integration-tests.sh
- *  5. Cleanup / rollback    → ./scripts/destroy.sh (automated rollback occurs via ChangeSets)
+ *  1. Validate config       - ./scripts/lint.sh
+ *  2. Build and synth       - ./scripts/build.sh && ./scripts/synth.sh
+ *  3. Deploy (per env)      - ./scripts/deploy.sh
+ *  4. Unit / integration    - ./scripts/unit-tests.sh && ./scripts/integration-tests.sh
+ *  5. Cleanup / rollback    - ./scripts/destroy.sh (automated rollback occurs via ChangeSets)
  *
  * Required context keys (tapConfig):
  *  - serviceName, costCenter, deploymentDate, kmsAliasBase, lambdaFamilies
@@ -26,24 +26,23 @@
  */
 
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as cr from 'aws-cdk-lib/custom-resources';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import { Construct } from 'constructs';
 
 type EnvironmentKey = 'prod' | 'staging' | 'dev';
 
@@ -100,6 +99,7 @@ interface TapStackConfig {
   replicationMap: Record<EnvironmentKey, EnvironmentKey[]>;
   stageVariables: Record<string, string>;
   environments: Record<EnvironmentKey, EnvironmentSettings>;
+  deployEnvironments?: string;
 }
 
 interface EnvironmentArtifacts {
@@ -253,14 +253,19 @@ const DEFAULT_CONFIG: TapStackConfig = {
   },
   replicationMap: {
     prod: ['staging', 'dev'],
-    staging: ['prod', 'dev'],
-    dev: ['prod', 'staging'],
+    staging: ['dev'],
+    dev: [],
   },
   environments: {
     prod: {
       region: 'us-east-1',
       vpcCidr: '10.10.0.0/16',
-      lambda: { memory: 3072, timeout: 300, concurrency: 1000, canaryWeight: 0.1 },
+      lambda: {
+        memory: 3072,
+        timeout: 300,
+        concurrency: 1000,
+        canaryWeight: 0.1,
+      },
       lifecycle: { transitionAfterDays: 45, expireAfterDays: 365 },
       api: {
         name: 'trading-platform-prod-api',
@@ -272,13 +277,22 @@ const DEFAULT_CONFIG: TapStackConfig = {
       webhookUrls: [],
       snapshotSchedule: 'cron(0 3 * * ? *)',
       logRetentionDays: 30,
-      alarmThresholds: { lambdaErrors: 5, apiLatencyMs: 800, rdsConnections: 200 },
+      alarmThresholds: {
+        lambdaErrors: 5,
+        apiLatencyMs: 800,
+        rdsConnections: 200,
+      },
       stateBucketPrefix: 'state-prod',
     },
     staging: {
       region: 'eu-west-1',
       vpcCidr: '10.20.0.0/16',
-      lambda: { memory: 2048, timeout: 180, concurrency: 200, canaryWeight: 0.15 },
+      lambda: {
+        memory: 2048,
+        timeout: 180,
+        concurrency: 200,
+        canaryWeight: 0.15,
+      },
       lifecycle: { transitionAfterDays: 30, expireAfterDays: 180 },
       api: {
         name: 'trading-platform-staging-api',
@@ -290,13 +304,22 @@ const DEFAULT_CONFIG: TapStackConfig = {
       webhookUrls: [],
       snapshotSchedule: 'cron(0 4 * * ? *)',
       logRetentionDays: 14,
-      alarmThresholds: { lambdaErrors: 3, apiLatencyMs: 900, rdsConnections: 80 },
+      alarmThresholds: {
+        lambdaErrors: 3,
+        apiLatencyMs: 900,
+        rdsConnections: 80,
+      },
       stateBucketPrefix: 'state-staging',
     },
     dev: {
       region: 'ap-southeast-1',
       vpcCidr: '10.30.0.0/16',
-      lambda: { memory: 1536, timeout: 120, concurrency: 50, canaryWeight: 0.2 },
+      lambda: {
+        memory: 1536,
+        timeout: 120,
+        concurrency: 50,
+        canaryWeight: 0.2,
+      },
       lifecycle: { transitionAfterDays: 15, expireAfterDays: 90 },
       api: {
         name: 'trading-platform-dev-api',
@@ -308,7 +331,11 @@ const DEFAULT_CONFIG: TapStackConfig = {
       webhookUrls: [],
       snapshotSchedule: 'cron(0 5 * * ? *)',
       logRetentionDays: 7,
-      alarmThresholds: { lambdaErrors: 2, apiLatencyMs: 1200, rdsConnections: 40 },
+      alarmThresholds: {
+        lambdaErrors: 2,
+        apiLatencyMs: 1200,
+        rdsConnections: 40,
+      },
       stateBucketPrefix: 'state-dev',
     },
   },
@@ -316,10 +343,8 @@ const DEFAULT_CONFIG: TapStackConfig = {
 
 export class TapStack extends cdk.Stack {
   private readonly config: TapStackConfig;
-  private readonly artifacts: Record<EnvironmentKey, EnvironmentArtifacts> = {} as Record<
-    EnvironmentKey,
-    EnvironmentArtifacts
-  >;
+  private readonly artifacts: Record<EnvironmentKey, EnvironmentArtifacts> =
+    {} as Record<EnvironmentKey, EnvironmentArtifacts>;
   private readonly dashboard: cloudwatch.Dashboard;
 
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -330,9 +355,19 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
+    const deployEnvironments = 
+      this.node.tryGetContext('deployEnvironments') || 
+      'dev';
+
     this.config = this.prepareConfig(environmentSuffix);
+    this.config.deployEnvironments = deployEnvironments;
     this.dashboard = new cloudwatch.Dashboard(this, 'TapDashboard', {
       dashboardName: `${this.config.serviceName}-${environmentSuffix}-dashboard`,
+    });
+    this.dashboard.node.children.forEach(child => {
+      if (child instanceof cdk.CfnResource) {
+        child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      }
     });
 
     this.applyGlobalTags();
@@ -359,21 +394,33 @@ export class TapStack extends cdk.Stack {
     if (!config.lambdaFamilies.length) {
       errors.push('lambdaFamilies must contain at least one function family');
     }
-    ENVIRONMENT_ORDER.forEach((env) => {
+    ENVIRONMENT_ORDER.forEach(env => {
       const targets = config.replicationMap[env] || [];
-      if (!targets.length) {
-        errors.push(`replicationMap must contain at least one target for ${env}`);
+      if (!targets.length && env === 'prod') {
+        errors.push(
+          'replicationMap for prod must include at least one replica target'
+        );
       }
-      targets.forEach((target) => {
+      targets.forEach(target => {
         if (!ENVIRONMENT_ORDER.includes(target as EnvironmentKey)) {
-          errors.push(`replicationMap for ${env} references unknown environment ${target}`);
+          errors.push(
+            `replicationMap for ${env} references unknown environment ${target}`
+          );
         }
         if (target === env) {
           errors.push(`replicationMap for ${env} cannot reference itself`);
         }
+        const reverseTargets = config.replicationMap[target as EnvironmentKey];
+        if (reverseTargets?.includes(env)) {
+          errors.push(
+            `replicationMap cannot contain bidirectional replication between ${env} and ${target}`
+          );
+        }
       });
       if (config.environments[env].lambda.canaryWeight >= 0.5) {
-        errors.push(`${env}.lambda.canaryWeight must be < 0.5 for safe routing`);
+        errors.push(
+          `${env}.lambda.canaryWeight must be < 0.5 for safe routing`
+        );
       }
     });
     const aliasPattern = /^alias\//;
@@ -393,10 +440,19 @@ export class TapStack extends cdk.Stack {
   }
 
   private createEnvironments(): void {
-    ENVIRONMENT_ORDER.forEach((envKey) => {
+    const deployEnv = this.config.deployEnvironments || 'dev';
+    const envsToCreate = deployEnv === 'all' 
+      ? ENVIRONMENT_ORDER 
+      : deployEnv.split(',').map(e => e.trim() as EnvironmentKey);
+    
+    envsToCreate.forEach(envKey => {
       const settings = this.config.environments[envKey];
+      if (!settings) {
+        throw new Error(`Environment "${envKey}" not found in configuration`);
+      }
       const kmsKey = new kms.Key(this, `${envKey}KmsKey`, {
-        alias: `${this.config.kmsAliasBase}-${envKey}-${this.config.environmentSuffix}`.toLowerCase(),
+        alias:
+          `${this.config.kmsAliasBase}-${envKey}-${this.config.environmentSuffix}`.toLowerCase(),
         description: `KMS key for ${envKey} data`,
         enableKeyRotation: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -406,9 +462,14 @@ export class TapStack extends cdk.Stack {
         new iam.PolicyStatement({
           sid: `${envKey}CrossRegionReplication`,
           principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
-          actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey*', 'kms:DescribeKey'],
+          actions: [
+            'kms:Decrypt',
+            'kms:Encrypt',
+            'kms:GenerateDataKey*',
+            'kms:DescribeKey',
+          ],
           resources: ['*'],
-        }),
+        })
       );
 
       const vpc = new ec2.Vpc(this, `${envKey}Vpc`, {
@@ -418,31 +479,59 @@ export class TapStack extends cdk.Stack {
         natGateways: envKey === 'prod' ? 2 : 1,
         subnetConfiguration: [
           { name: 'public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 },
-          { name: 'private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 24 },
-          { name: 'database', subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 24 },
+          {
+            name: 'private',
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            cidrMask: 24,
+          },
+          {
+            name: 'database',
+            subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+            cidrMask: 24,
+          },
         ],
+        restrictDefaultSecurityGroup: false,
       });
-      vpc.addGatewayEndpoint(`${envKey}S3Endpoint`, {
+      vpc.node.children.forEach(child => {
+        if (child instanceof cdk.CfnResource) {
+          child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+        }
+      });
+      const s3Endpoint = vpc.addGatewayEndpoint(`${envKey}S3Endpoint`, {
         service: ec2.GatewayVpcEndpointAwsService.S3,
       });
-      vpc.addInterfaceEndpoint(`${envKey}CloudWatchLogsEndpoint`, {
-        service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-        privateDnsEnabled: true,
-      });
-      vpc.addInterfaceEndpoint(`${envKey}RDSEndpoint`, {
+      const cwLogsEndpoint = vpc.addInterfaceEndpoint(
+        `${envKey}CloudWatchLogsEndpoint`,
+        {
+          service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+          privateDnsEnabled: true,
+        }
+      );
+      const rdsEndpoint = vpc.addInterfaceEndpoint(`${envKey}RDSEndpoint`, {
         service: ec2.InterfaceVpcEndpointAwsService.RDS,
       });
-      vpc.addInterfaceEndpoint(`${envKey}SecretsManagerEndpoint`, {
-        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      });
+      const secretsEndpoint = vpc.addInterfaceEndpoint(
+        `${envKey}SecretsManagerEndpoint`,
+        {
+          service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+        }
+      );
+      [s3Endpoint, cwLogsEndpoint, rdsEndpoint, secretsEndpoint].forEach(
+        endpoint => {
+          endpoint.node.children.forEach(child => {
+            if (child instanceof cdk.CfnResource) {
+              child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+            }
+          });
+        }
+      );
 
       const replicationRole = new iam.Role(this, `${envKey}ReplicationRole`, {
-        roleName: this.roleName(envKey, 's3-replication'),
         assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
       });
+      replicationRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
       const dataBucket = new s3.Bucket(this, `${envKey}DataBucket`, {
-        bucketName: this.formatName(envKey, 'data-bucket'),
         versioned: true,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: kmsKey,
@@ -455,7 +544,9 @@ export class TapStack extends cdk.Stack {
             transitions: [
               {
                 storageClass: s3.StorageClass.INTELLIGENT_TIERING,
-                transitionAfter: cdk.Duration.days(settings.lifecycle.transitionAfterDays),
+                transitionAfter: cdk.Duration.days(
+                  settings.lifecycle.transitionAfterDays
+                ),
               },
             ],
             expiration: cdk.Duration.days(settings.lifecycle.expireAfterDays),
@@ -469,11 +560,10 @@ export class TapStack extends cdk.Stack {
           actions: ['s3:*'],
           resources: [dataBucket.bucketArn, dataBucket.arnForObjects('*')],
           conditions: { Bool: { 'aws:SecureTransport': 'false' } },
-        }),
+        })
       );
 
       const stateBucket = new s3.Bucket(this, `${envKey}StateBucket`, {
-        bucketName: this.formatName(envKey, settings.stateBucketPrefix),
         versioned: true,
         encryption: s3.BucketEncryption.S3_MANAGED,
         enforceSSL: true,
@@ -481,24 +571,36 @@ export class TapStack extends cdk.Stack {
         autoDeleteObjects: true,
       });
 
-      const databaseSecurityGroup = new ec2.SecurityGroup(this, `${envKey}DatabaseSg`, {
-        vpc,
-        description: `${envKey} Aurora access`,
-      });
+      const databaseSecurityGroup = new ec2.SecurityGroup(
+        this,
+        `${envKey}DatabaseSg`,
+        {
+          vpc,
+          description: `${envKey} Aurora access`,
+          allowAllOutbound: true,
+        }
+      );
+      databaseSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       databaseSecurityGroup.addIngressRule(
         ec2.Peer.ipv4(settings.vpcCidr),
         ec2.Port.tcp(3306),
-        'allow VPC MySQL access',
+        'allow VPC MySQL access'
       );
 
-      const lambdaSecurityGroup = new ec2.SecurityGroup(this, `${envKey}LambdaSg`, {
-        vpc,
-        description: `${envKey} Lambda access`,
-      });
+      const lambdaSecurityGroup = new ec2.SecurityGroup(
+        this,
+        `${envKey}LambdaSg`,
+        {
+          vpc,
+          description: `${envKey} Lambda access`,
+          allowAllOutbound: true,
+        }
+      );
+      lambdaSecurityGroup.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       databaseSecurityGroup.addIngressRule(
         lambdaSecurityGroup,
         ec2.Port.tcp(3306),
-        'Lambda access to Aurora',
+        'Lambda access to Aurora'
       );
 
       const subnetGroup = new rds.SubnetGroup(this, `${envKey}RdsSubnetGroup`, {
@@ -509,24 +611,22 @@ export class TapStack extends cdk.Stack {
       });
 
       const auroraCluster = new rds.DatabaseCluster(this, `${envKey}Aurora`, {
-        clusterIdentifier: this.formatName(envKey, 'aurora'),
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_05_2,
+          version: rds.AuroraMysqlEngineVersion.VER_3_05_0,
         }),
         credentials: rds.Credentials.fromGeneratedSecret('admin'),
         defaultDatabaseName: 'tradingdb',
         storageEncrypted: true,
         storageEncryptionKey: kmsKey,
         instances: envKey === 'prod' ? 3 : 1,
-        vpc,
         subnetGroup,
         instanceProps: {
           vpc,
           vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
           securityGroups: [databaseSecurityGroup],
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.R6G,
-            envKey === 'prod' ? ec2.InstanceSize.LARGE : ec2.InstanceSize.MEDIUM,
+            ec2.InstanceClass.R5,
+            envKey === 'prod' ? ec2.InstanceSize.LARGE : ec2.InstanceSize.MEDIUM
           ),
         },
         backup: {
@@ -544,7 +644,7 @@ export class TapStack extends cdk.Stack {
         envKey,
         auroraCluster,
         kmsKey,
-        settings,
+        settings
       );
 
       const lambdaArtifacts = this.createWorkloadLambdas(
@@ -554,16 +654,17 @@ export class TapStack extends cdk.Stack {
         lambdaSecurityGroup,
         dataBucket,
         auroraCluster,
-        kmsKey,
+        kmsKey
       );
 
-      const kmsAlias = `${this.config.kmsAliasBase}-${envKey}-${this.config.environmentSuffix}`.toLowerCase();
+      const kmsAlias =
+        `${this.config.kmsAliasBase}-${envKey}-${this.config.environmentSuffix}`.toLowerCase();
       const apiGateway = this.createApiGateway(
         envKey,
         settings,
         lambdaArtifacts.lambdaAliases,
         dataBucket.bucketName,
-        kmsAlias,
+        kmsAlias
       );
 
       const snsTopic = this.createNotificationTopic(envKey, settings, kmsKey);
@@ -588,15 +689,17 @@ export class TapStack extends cdk.Stack {
     envKey: EnvironmentKey,
     cluster: rds.DatabaseCluster,
     key: kms.Key,
-    settings: EnvironmentSettings,
+    settings: EnvironmentSettings
   ): stepfunctions.StateMachine {
     const handlerRole = new iam.Role(this, `${envKey}SnapshotHandlerRole`, {
-      roleName: this.roleName(envKey, 'snapshot'),
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
     });
+    handlerRole.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
     handlerRole.addToPolicy(
       new iam.PolicyStatement({
         actions: [
@@ -605,12 +708,11 @@ export class TapStack extends cdk.Stack {
           'rds:AddTagsToResource',
         ],
         resources: ['*'],
-      }),
+      })
     );
     key.grantEncryptDecrypt(handlerRole);
 
     const handler = new lambda.Function(this, `${envKey}SnapshotHandler`, {
-      functionName: this.formatName(envKey, 'snapshot-manager'),
       code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         exports.handler = async () => {
@@ -647,7 +749,11 @@ export class TapStack extends cdk.Stack {
       environment: {
         CLUSTER_ID: cluster.clusterIdentifier,
         KMS_KEY_ID: key.keyArn,
-        TARGETS: JSON.stringify(this.config.replicationMap[envKey].map((t) => this.config.environments[t].region)),
+        TARGETS: JSON.stringify(
+          this.config.replicationMap[envKey].map(
+            t => this.config.environments[t].region
+          )
+        ),
       },
     });
 
@@ -655,20 +761,30 @@ export class TapStack extends cdk.Stack {
       lambdaFunction: handler,
       outputPath: '$.Payload',
     });
-    const definition = lambdaTask.next(new stepfunctions.Succeed(this, `${envKey}SnapshotSuccess`));
+    const definition = lambdaTask.next(
+      new stepfunctions.Succeed(this, `${envKey}SnapshotSuccess`)
+    );
 
-    const stateMachine = new stepfunctions.StateMachine(this, `${envKey}SnapshotStateMachine`, {
-      definition,
-      stateMachineName: this.formatName(envKey, 'snapshot-sm'),
-      timeout: cdk.Duration.hours(1),
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const stateMachine = new stepfunctions.StateMachine(
+      this,
+      `${envKey}SnapshotStateMachine`,
+      {
+        definition,
+        timeout: cdk.Duration.hours(1),
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
-    new events.Rule(this, `${envKey}SnapshotSchedule`, {
-      description: `${envKey} snapshot replication schedule`,
-      schedule: events.Schedule.expression(settings.snapshotSchedule),
-      targets: [new targets.SfnStateMachine(stateMachine)],
-    });
+    const snapshotSchedule = new events.Rule(
+      this,
+      `${envKey}SnapshotSchedule`,
+      {
+        description: `${envKey} snapshot replication schedule`,
+        schedule: events.Schedule.expression(settings.snapshotSchedule),
+        targets: [new targets.SfnStateMachine(stateMachine)],
+      }
+    );
+    snapshotSchedule.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     return stateMachine;
   }
@@ -680,7 +796,7 @@ export class TapStack extends cdk.Stack {
     lambdaSecurityGroup: ec2.SecurityGroup,
     bucket: s3.Bucket,
     cluster: rds.DatabaseCluster,
-    key: kms.Key,
+    key: kms.Key
   ): {
     lambdaAliases: Record<string, lambda.Alias>;
     lambdaFunctions: Record<string, lambda.Function>;
@@ -688,9 +804,8 @@ export class TapStack extends cdk.Stack {
     const lambdaAliases: Record<string, lambda.Alias> = {};
     const lambdaFunctions: Record<string, lambda.Function> = {};
 
-    this.config.lambdaFamilies.forEach((family) => {
+    this.config.lambdaFamilies.forEach(family => {
       const fn = new lambda.Function(this, `${envKey}${family}Fn`, {
-        functionName: this.formatName(envKey, `${family}-fn`),
         runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'index.handler',
         vpc,
@@ -721,14 +836,19 @@ export class TapStack extends cdk.Stack {
         `),
         tracing: lambda.Tracing.ACTIVE,
       });
+      fn.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       bucket.grantReadWrite(fn);
       key.grantEncryptDecrypt(fn);
       cluster.grantDataApiAccess(fn);
 
       const stableVersion = fn.currentVersion;
-      const canaryVersion = new lambda.Version(this, `${envKey}${family}CandidateVersion`, {
-        lambda: fn,
-      });
+      const canaryVersion = new lambda.Version(
+        this,
+        `${envKey}${family}CandidateVersion`,
+        {
+          lambda: fn,
+        }
+      );
 
       const alias = new lambda.Alias(this, `${envKey}${family}Alias`, {
         aliasName: envKey,
@@ -754,7 +874,7 @@ export class TapStack extends cdk.Stack {
     settings: EnvironmentSettings,
     lambdaAliases: Record<string, lambda.Alias>,
     bucketName: string,
-    kmsAlias: string,
+    kmsAlias: string
   ): apigateway.RestApi {
     const api = new apigateway.RestApi(this, `${envKey}Api`, {
       restApiName: settings.api.name,
@@ -768,6 +888,9 @@ export class TapStack extends cdk.Stack {
         variables: {
           ...this.config.stageVariables,
           environment: envKey,
+          bucketName,
+          kmsAlias,
+          featureFlag: envKey === 'dev' ? 'enable-new-risk-engine' : 'stable',
         },
       },
       defaultCorsPreflightOptions: {
@@ -775,6 +898,11 @@ export class TapStack extends cdk.Stack {
         allowMethods: apigateway.Cors.ALL_METHODS,
       },
       cloudWatchRole: true,
+    });
+    api.node.children.forEach(child => {
+      if (child instanceof cdk.CfnResource) {
+        child.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      }
     });
 
     const usagePlan = api.addUsagePlan(`${envKey}UsagePlan`, {
@@ -792,92 +920,55 @@ export class TapStack extends cdk.Stack {
       resource.addMethod('POST', new apigateway.LambdaIntegration(alias));
     });
 
-    this.injectStageVariables(api, envKey, {
-      bucketName,
-      kmsAlias,
-      featureFlag: envKey === 'dev' ? 'enable-new-risk-engine' : 'stable',
-    });
-
     return api;
   }
 
   private createNotificationTopic(
     envKey: EnvironmentKey,
     settings: EnvironmentSettings,
-    key: kms.Key,
+    key: kms.Key
   ): sns.Topic {
     const topic = new sns.Topic(this, `${envKey}DeploymentTopic`, {
-      topicName: this.formatName(envKey, 'notifications'),
       displayName: `${envKey.toUpperCase()} deployment notifications`,
       masterKey: key,
     });
-    const emails = settings.emails.length ? settings.emails : ['alerts@example.com'];
-    emails.forEach((email) => {
+    topic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+    const emails = settings.emails.length
+      ? settings.emails
+      : ['alerts@example.com'];
+    emails.forEach(email => {
       topic.addSubscription(
         new subscriptions.EmailSubscription(email, {
           json: true,
-        }),
+        })
       );
     });
     settings.webhookUrls?.forEach((url, index) => {
       topic.addSubscription(
         new subscriptions.UrlSubscription(url, {
-          protocol: url.startsWith('https') ? sns.SubscriptionProtocol.HTTPS : sns.SubscriptionProtocol.HTTP,
+          protocol: url.startsWith('https')
+            ? sns.SubscriptionProtocol.HTTPS
+            : sns.SubscriptionProtocol.HTTP,
           rawMessageDelivery: index === 0,
-        }),
+        })
       );
     });
     return topic;
   }
 
-  private injectStageVariables(
-    api: apigateway.RestApi,
-    envKey: EnvironmentKey,
-    variables: Record<string, string>,
-  ): void {
-    new cr.AwsCustomResource(this, `${envKey}StageVariableInjector`, {
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
-      }),
-      onCreate: {
-        service: 'APIGateway',
-        action: 'updateStage',
-        parameters: {
-          restApiId: api.restApiId,
-          stageName: api.deploymentStage.stageName,
-          patchOperations: Object.entries(variables).map(([key, value]) => ({
-            op: 'replace',
-            path: `/variables/${key}`,
-            value,
-          })),
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(this.formatName(envKey, 'stage-vars')),
-      },
-      onUpdate: {
-        service: 'APIGateway',
-        action: 'updateStage',
-        parameters: {
-          restApiId: api.restApiId,
-          stageName: api.deploymentStage.stageName,
-          patchOperations: Object.entries(variables).map(([key, value]) => ({
-            op: 'replace',
-            path: `/variables/${key}`,
-            value,
-          })),
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(this.formatName(envKey, 'stage-vars-update')),
-      },
-    });
-  }
-
   private configureCrossRegionReplication(): void {
-    ENVIRONMENT_ORDER.forEach((envKey) => {
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    createdEnvs.forEach(envKey => {
       const sourceArtifacts = this.artifacts[envKey];
       const targets = this.config.replicationMap[envKey] || [];
       if (!targets.length) {
         return;
       }
-      const rules = targets.map((targetKey, index) => {
+      const validTargets = targets.filter(t => this.artifacts[t]);
+      if (!validTargets.length) {
+        return;
+      }
+      const rules = validTargets.map((targetKey, index) => {
         const targetBucket = this.artifacts[targetKey].dataBucket;
         const targetKeyArn = this.artifacts[targetKey].kmsKey.keyArn;
         sourceArtifacts.replicationRole.addToPolicy(
@@ -891,17 +982,29 @@ export class TapStack extends cdk.Stack {
               's3:GetObjectLegalHold',
               's3:GetObjectRetention',
             ],
-            resources: [sourceArtifacts.dataBucket.bucketArn, sourceArtifacts.dataBucket.arnForObjects('*')],
-          }),
+            resources: [
+              sourceArtifacts.dataBucket.bucketArn,
+              sourceArtifacts.dataBucket.arnForObjects('*'),
+            ],
+          })
         );
         sourceArtifacts.replicationRole.addToPolicy(
           new iam.PolicyStatement({
-            actions: ['s3:ReplicateObject', 's3:ReplicateDelete', 's3:ReplicateTags', 's3:GetObjectVersionTagging'],
+            actions: [
+              's3:ReplicateObject',
+              's3:ReplicateDelete',
+              's3:ReplicateTags',
+              's3:GetObjectVersionTagging',
+            ],
             resources: [targetBucket.arnForObjects('*')],
-          }),
+          })
         );
-        this.artifacts[targetKey].kmsKey.grantEncryptDecrypt(sourceArtifacts.replicationRole);
-        this.artifacts[envKey].kmsKey.grantEncryptDecrypt(sourceArtifacts.replicationRole);
+        this.artifacts[targetKey].kmsKey.grantEncryptDecrypt(
+          sourceArtifacts.replicationRole
+        );
+        this.artifacts[envKey].kmsKey.grantEncryptDecrypt(
+          sourceArtifacts.replicationRole
+        );
         return {
           Destination: {
             Bucket: targetBucket.bucketArn,
@@ -919,32 +1022,41 @@ export class TapStack extends cdk.Stack {
           Priority: index + 1,
         };
       });
-      const cfnBucket = sourceArtifacts.dataBucket.node.defaultChild as s3.CfnBucket;
-      cfnBucket.addPropertyOverride('ReplicationConfiguration', {
-        Role: sourceArtifacts.replicationRole.roleArn,
-        Rules: rules,
-      });
+      if (rules.length) {
+        const cfnBucket = sourceArtifacts.dataBucket.node
+          .defaultChild as s3.CfnBucket;
+        cfnBucket.addPropertyOverride('ReplicationConfiguration', {
+          Role: sourceArtifacts.replicationRole.roleArn,
+          Rules: rules,
+        });
+      }
     });
   }
 
   private createPeeringMesh(): void {
-    for (let i = 0; i < ENVIRONMENT_ORDER.length; i += 1) {
-      for (let j = i + 1; j < ENVIRONMENT_ORDER.length; j += 1) {
-        const envA = ENVIRONMENT_ORDER[i];
-        const envB = ENVIRONMENT_ORDER[j];
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    for (let i = 0; i < createdEnvs.length; i += 1) {
+      for (let j = i + 1; j < createdEnvs.length; j += 1) {
+        const envA = createdEnvs[i];
+        const envB = createdEnvs[j];
         const vpcA = this.artifacts[envA].vpc;
         const vpcB = this.artifacts[envB].vpc;
-        new ec2.CfnVPCPeeringConnection(this, `${envA}${envB}Peering`, {
-          vpcId: vpcA.vpcId,
-          peerVpcId: vpcB.vpcId,
-          peerRegion: this.config.environments[envB].region,
-          tags: [
-            {
-              key: 'Name',
-              value: `${this.config.serviceName}-${envA}-${envB}-peering`,
-            },
-          ],
-        });
+        const peering = new ec2.CfnVPCPeeringConnection(
+          this,
+          `${envA}${envB}Peering`,
+          {
+            vpcId: vpcA.vpcId,
+            peerVpcId: vpcB.vpcId,
+            peerRegion: this.config.environments[envB].region,
+            tags: [
+              {
+                key: 'Name',
+                value: `${this.config.serviceName}-${envA}-${envB}-peering`,
+              },
+            ],
+          }
+        );
+        peering.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
       }
     }
   }
@@ -952,91 +1064,121 @@ export class TapStack extends cdk.Stack {
   private buildDashboardsAndAlarms(): void {
     this.dashboard.addWidgets(
       new cloudwatch.TextWidget({
-        markdown: '# Trading Platform Observability\nAll environments aggregated.',
+        markdown:
+          '# Trading Platform Observability\nAll environments aggregated.',
         width: 24,
         height: 2,
-      }),
+      })
     );
 
-    ENVIRONMENT_ORDER.forEach((envKey) => {
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    createdEnvs.forEach(envKey => {
       const artifacts = this.artifacts[envKey];
       const settings = this.config.environments[envKey];
       const alarmTopic = artifacts.snsTopic;
 
       Object.entries(artifacts.lambdaFunctions).forEach(([family, fn]) => {
-        const alarm = new cloudwatch.Alarm(this, `${envKey}${family}ErrorAlarm`, {
-          metric: fn.metricErrors(),
-          threshold: settings.alarmThresholds.lambdaErrors,
-          evaluationPeriods: 1,
-          datapointsToAlarm: 1,
-          alarmName: this.formatName(envKey, `${family}-errors`),
-        });
+        const alarm = new cloudwatch.Alarm(
+          this,
+          `${envKey}${family}ErrorAlarm`,
+          {
+            metric: fn.metricErrors(),
+            threshold: settings.alarmThresholds.lambdaErrors,
+            evaluationPeriods: 1,
+            datapointsToAlarm: 1,
+            alarmName: this.formatName(envKey, `${family}-errors`),
+          }
+        );
+        alarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
         alarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
       });
 
-      const apiLatencyAlarm = new cloudwatch.Alarm(this, `${envKey}ApiLatencyAlarm`, {
-        metric: artifacts.apiGateway.metricLatency(),
-        threshold: settings.alarmThresholds.apiLatencyMs,
-        evaluationPeriods: 1,
-        datapointsToAlarm: 1,
-        alarmName: this.formatName(envKey, 'api-latency'),
-      });
-      apiLatencyAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+      const apiLatencyAlarm = new cloudwatch.Alarm(
+        this,
+        `${envKey}ApiLatencyAlarm`,
+        {
+          metric: artifacts.apiGateway.metricLatency(),
+          threshold: settings.alarmThresholds.apiLatencyMs,
+          evaluationPeriods: 1,
+          datapointsToAlarm: 1,
+          alarmName: this.formatName(envKey, 'api-latency'),
+        }
+      );
+      apiLatencyAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      apiLatencyAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(alarmTopic)
+      );
 
-      const rdsConnectionsAlarm = new cloudwatch.Alarm(this, `${envKey}RdsConnectionsAlarm`, {
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/RDS',
-          metricName: 'DatabaseConnections',
-          dimensionsMap: {
-            DBClusterIdentifier: artifacts.auroraCluster.clusterIdentifier,
-          },
-          statistic: 'Average',
-          period: cdk.Duration.minutes(5),
-        }),
-        threshold: settings.alarmThresholds.rdsConnections,
-        evaluationPeriods: 1,
-        datapointsToAlarm: 1,
-        alarmName: this.formatName(envKey, 'rds-connections'),
-      });
-      rdsConnectionsAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+      const rdsConnectionsAlarm = new cloudwatch.Alarm(
+        this,
+        `${envKey}RdsConnectionsAlarm`,
+        {
+          metric: new cloudwatch.Metric({
+            namespace: 'AWS/RDS',
+            metricName: 'DatabaseConnections',
+            dimensionsMap: {
+              DBClusterIdentifier: artifacts.auroraCluster.clusterIdentifier,
+            },
+            statistic: 'Average',
+            period: cdk.Duration.minutes(5),
+          }),
+          threshold: settings.alarmThresholds.rdsConnections,
+          evaluationPeriods: 1,
+          datapointsToAlarm: 1,
+          alarmName: this.formatName(envKey, 'rds-connections'),
+        }
+      );
+      rdsConnectionsAlarm.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      rdsConnectionsAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(alarmTopic)
+      );
 
       this.dashboard.addWidgets(
         new cloudwatch.GraphWidget({
-          title: `${envKey.toUpperCase()} – Lambda traffic`,
+          title: `${envKey.toUpperCase()} - Lambda traffic`,
           width: 12,
-          left: Object.values(artifacts.lambdaFunctions).map((fn) => fn.metricInvocations()),
-          right: Object.values(artifacts.lambdaFunctions).map((fn) => fn.metricErrors()),
+          left: Object.values(artifacts.lambdaFunctions).map(fn =>
+            fn.metricInvocations()
+          ),
+          right: Object.values(artifacts.lambdaFunctions).map(fn =>
+            fn.metricErrors()
+          ),
         }),
         new cloudwatch.GraphWidget({
-          title: `${envKey.toUpperCase()} – API latency`,
+          title: `${envKey.toUpperCase()} - API latency`,
           width: 12,
           left: [artifacts.apiGateway.metricLatency()],
           right: [artifacts.apiGateway.metricCount()],
         }),
         new cloudwatch.GraphWidget({
-          title: `${envKey.toUpperCase()} – Aurora health`,
+          title: `${envKey.toUpperCase()} - Aurora health`,
           width: 24,
           left: [
             new cloudwatch.Metric({
               namespace: 'AWS/RDS',
               metricName: 'CPUUtilization',
-              dimensionsMap: { DBClusterIdentifier: artifacts.auroraCluster.clusterIdentifier },
+              dimensionsMap: {
+                DBClusterIdentifier: artifacts.auroraCluster.clusterIdentifier,
+              },
             }),
           ],
           right: [
             new cloudwatch.Metric({
               namespace: 'AWS/RDS',
               metricName: 'FreeableMemory',
-              dimensionsMap: { DBClusterIdentifier: artifacts.auroraCluster.clusterIdentifier },
+              dimensionsMap: {
+                DBClusterIdentifier: artifacts.auroraCluster.clusterIdentifier,
+              },
             }),
           ],
-        }),
+        })
       );
     });
   }
 
   private emitOutputs(): void {
-    ENVIRONMENT_ORDER.forEach((envKey) => {
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    createdEnvs.forEach(envKey => {
       const artifacts = this.artifacts[envKey];
       const prefix = envKey.charAt(0).toUpperCase() + envKey.slice(1);
       new cdk.CfnOutput(this, `${prefix}DataBucketName`, {
@@ -1057,7 +1199,7 @@ export class TapStack extends cdk.Stack {
       });
       Object.entries(artifacts.lambdaAliases).forEach(([family, alias]) => {
         new cdk.CfnOutput(this, `${prefix}${family}AliasArn`, {
-          value: alias.aliasArn,
+          value: alias.functionArn,
           description: `${envKey} ${family} alias`,
         });
       });
@@ -1126,8 +1268,10 @@ function deepMerge<T>(target: T, source: Partial<T>): T {
   if (!source) {
     return target;
   }
-  const output: any = Array.isArray(target) ? [...(target as any)] : { ...(target as any) };
-  Object.keys(source).forEach((key) => {
+  const output: any = Array.isArray(target)
+    ? [...(target as any)]
+    : { ...(target as any) };
+  Object.keys(source).forEach(key => {
     const typedKey = key as keyof T;
     const sourceValue = (source as any)[typedKey];
     if (sourceValue === undefined) {
@@ -1151,7 +1295,12 @@ function deepMerge<T>(target: T, source: Partial<T>): T {
   return output;
 }
 
-function validateAgainstSchema(schema: JsonSchema, data: any, path: string, topLevelErrors: string[]): void {
+function validateAgainstSchema(
+  schema: JsonSchema,
+  data: any,
+  path: string,
+  topLevelErrors: string[]
+): void {
   const errors = topLevelErrors;
   const location = path || 'root';
   if (schema.type === 'object') {
@@ -1159,7 +1308,7 @@ function validateAgainstSchema(schema: JsonSchema, data: any, path: string, topL
       errors.push(`${location} must be an object`);
       return;
     }
-    schema.required?.forEach((key) => {
+    schema.required?.forEach(key => {
       if (!(key in data)) {
         errors.push(`${location}.${key} is required`);
       }
@@ -1195,7 +1344,12 @@ function validateAgainstSchema(schema: JsonSchema, data: any, path: string, topL
     }
     data.forEach((item, index) => {
       if (schema.items) {
-        validateAgainstSchema(schema.items, item, `${location}[${index}]`, errors);
+        validateAgainstSchema(
+          schema.items,
+          item,
+          `${location}[${index}]`,
+          errors
+        );
       }
     });
   }

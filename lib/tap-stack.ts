@@ -92,6 +92,7 @@ interface TapStackConfig {
   replicationMap: Record<EnvironmentKey, EnvironmentKey[]>;
   stageVariables: Record<string, string>;
   environments: Record<EnvironmentKey, EnvironmentSettings>;
+  deployEnvironments?: string; // 'all', 'dev', 'staging', 'prod', or comma-separated
 }
 
 interface EnvironmentArtifacts {
@@ -347,7 +348,13 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
+    // Allow deploying only specific environments
+    // Set to 'all' to deploy all environments, or specify: 'dev', 'staging', 'prod'
+    const deployEnvironments =
+      this.node.tryGetContext('deployEnvironments') || 'dev'; // Default: deploy only dev environment for test deployments
+
     this.config = this.prepareConfig(environmentSuffix);
+    this.config.deployEnvironments = deployEnvironments;
     this.dashboard = new cloudwatch.Dashboard(this, 'TapDashboard', {
       dashboardName: `${this.config.serviceName}-${environmentSuffix}-dashboard`,
     });
@@ -427,8 +434,19 @@ export class TapStack extends cdk.Stack {
   }
 
   private createEnvironments(): void {
-    ENVIRONMENT_ORDER.forEach(envKey => {
+    // Determine which environments to deploy (default: only 'dev' for test environments)
+    // Set deployEnvironments context to 'all' or 'prod,staging,dev' for multi-env deployment
+    const deployEnv = this.config.deployEnvironments || 'dev';
+    const envsToCreate =
+      deployEnv === 'all'
+        ? ENVIRONMENT_ORDER
+        : deployEnv.split(',').map(e => e.trim() as EnvironmentKey);
+
+    envsToCreate.forEach(envKey => {
       const settings = this.config.environments[envKey];
+      if (!settings) {
+        throw new Error(`Environment "${envKey}" not found in configuration`);
+      }
       const kmsKey = new kms.Key(this, `${envKey}KmsKey`, {
         alias:
           `${this.config.kmsAliasBase}-${envKey}-${this.config.environmentSuffix}`.toLowerCase(),
@@ -597,7 +615,7 @@ export class TapStack extends cdk.Stack {
       const auroraCluster = new rds.DatabaseCluster(this, `${envKey}Aurora`, {
         // clusterIdentifier removed to let CloudFormation auto-generate (avoids conflicts)
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_05_1,
+          version: rds.AuroraMysqlEngineVersion.VER_3_05_0,
         }),
         credentials: rds.Credentials.fromGeneratedSecret('admin'),
         defaultDatabaseName: 'tradingdb',
@@ -605,7 +623,7 @@ export class TapStack extends cdk.Stack {
         storageEncryptionKey: kmsKey,
         instances: envKey === 'prod' ? 3 : 1,
         subnetGroup,
-        enableDataApi: true,
+        // Note: enableDataApi only works with Aurora Serverless v2, not provisioned clusters
         instanceProps: {
           vpc,
           vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -948,13 +966,20 @@ export class TapStack extends cdk.Stack {
   }
 
   private configureCrossRegionReplication(): void {
-    ENVIRONMENT_ORDER.forEach(envKey => {
+    // Only configure replication for created environments
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    createdEnvs.forEach(envKey => {
       const sourceArtifacts = this.artifacts[envKey];
       const targets = this.config.replicationMap[envKey] || [];
       if (!targets.length) {
         return;
       }
-      const rules = targets.map((targetKey, index) => {
+      // Filter targets to only include created environments
+      const validTargets = targets.filter(t => this.artifacts[t]);
+      if (!validTargets.length) {
+        return;
+      }
+      const rules = validTargets.map((targetKey, index) => {
         const targetBucket = this.artifacts[targetKey].dataBucket;
         const targetKeyArn = this.artifacts[targetKey].kmsKey.keyArn;
         sourceArtifacts.replicationRole.addToPolicy(
@@ -1008,20 +1033,24 @@ export class TapStack extends cdk.Stack {
           Priority: index + 1,
         };
       });
-      const cfnBucket = sourceArtifacts.dataBucket.node
-        .defaultChild as s3.CfnBucket;
-      cfnBucket.addPropertyOverride('ReplicationConfiguration', {
-        Role: sourceArtifacts.replicationRole.roleArn,
-        Rules: rules,
-      });
+      if (rules.length) {
+        const cfnBucket = sourceArtifacts.dataBucket.node
+          .defaultChild as s3.CfnBucket;
+        cfnBucket.addPropertyOverride('ReplicationConfiguration', {
+          Role: sourceArtifacts.replicationRole.roleArn,
+          Rules: rules,
+        });
+      }
     });
   }
 
   private createPeeringMesh(): void {
-    for (let i = 0; i < ENVIRONMENT_ORDER.length; i += 1) {
-      for (let j = i + 1; j < ENVIRONMENT_ORDER.length; j += 1) {
-        const envA = ENVIRONMENT_ORDER[i];
-        const envB = ENVIRONMENT_ORDER[j];
+    // Only create peering between actually created environments
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    for (let i = 0; i < createdEnvs.length; i += 1) {
+      for (let j = i + 1; j < createdEnvs.length; j += 1) {
+        const envA = createdEnvs[i];
+        const envB = createdEnvs[j];
         const vpcA = this.artifacts[envA].vpc;
         const vpcB = this.artifacts[envB].vpc;
         const peering = new ec2.CfnVPCPeeringConnection(
@@ -1054,7 +1083,9 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    ENVIRONMENT_ORDER.forEach(envKey => {
+    // Only add widgets/alarms for created environments
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    createdEnvs.forEach(envKey => {
       const artifacts = this.artifacts[envKey];
       const settings = this.config.environments[envKey];
       const alarmTopic = artifacts.snsTopic;
@@ -1159,7 +1190,9 @@ export class TapStack extends cdk.Stack {
   }
 
   private emitOutputs(): void {
-    ENVIRONMENT_ORDER.forEach(envKey => {
+    // Only emit outputs for created environments
+    const createdEnvs = Object.keys(this.artifacts) as EnvironmentKey[];
+    createdEnvs.forEach(envKey => {
       const artifacts = this.artifacts[envKey];
       const prefix = envKey.charAt(0).toUpperCase() + envKey.slice(1);
       new cdk.CfnOutput(this, `${prefix}DataBucketName`, {
