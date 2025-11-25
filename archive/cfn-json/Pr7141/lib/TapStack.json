@@ -1,0 +1,888 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CI/CD Pipeline Infrastructure for Microservices with CodePipeline, CodeBuild, and ECS deployment",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness across deployments",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+    },
+    "CodeCommitRepositoryName": {
+      "Type": "String",
+      "Description": "Name of the CodeCommit repository containing source code",
+      "Default": "MUST-OVERRIDE-repo"
+    },
+    "CodeCommitBranchName": {
+      "Type": "String",
+      "Description": "Branch name to trigger pipeline",
+      "Default": "main"
+    },
+    "EcsClusterName": {
+      "Type": "String",
+      "Description": "Name of the ECS cluster for deployment",
+      "Default": "MUST-OVERRIDE-cluster"
+    },
+    "EcsServiceName": {
+      "Type": "String",
+      "Description": "Name of the ECS service to deploy to",
+      "Default": "MUST-OVERRIDE-service"
+    },
+    "EcrRepositoryUri": {
+      "Type": "String",
+      "Description": "ECR repository URI for Docker images",
+      "Default": "123456789012.dkr.ecr.us-east-1.amazonaws.com/MUST-OVERRIDE"
+    },
+    "ApprovalNotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for manual approval notifications",
+      "Default": "override@example.com"
+    },
+    "VpcId": {
+      "Type": "String",
+      "Description": "VPC ID where CodeBuild will run",
+      "Default": "vpc-12345678"
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "Private subnet IDs for CodeBuild (comma-separated)",
+      "Default": "subnet-12345678,subnet-87654321"
+    }
+  },
+  "Conditions": {
+    "HasVpcConfig": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "VpcId"
+            },
+            "vpc-12345678"
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "ArtifactEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for encrypting pipeline artifacts - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CodePipeline to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codepipeline.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "Allow CodeBuild to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow S3 to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ArtifactEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/pipeline-artifacts-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "ArtifactEncryptionKey"
+        }
+      }
+    },
+    "ArtifactBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "ArtifactEncryptionKey",
+                    "Arn"
+                  ]
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldArtifacts",
+              "Status": "Enabled",
+              "ExpirationInDays": 30,
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "ArtifactBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ArtifactBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${ArtifactBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "aws:kms"
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ArtifactBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${ArtifactBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "CodeBuildLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/codebuild/pipeline-build-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "ArtifactEncryptionKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "CodeBuildSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "HasVpcConfig",
+      "Properties": {
+        "GroupDescription": "Security group for CodeBuild project - no internet access",
+        "GroupName": {
+          "Fn::Sub": "codebuild-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/8",
+            "Description": "HTTPS for VPC endpoints"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "codebuild-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "codebuild-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CodeBuildBasePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CodeBuildLogGroup",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ArtifactBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:DescribeKey",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ArtifactEncryptionKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "pipeline-build-${EnvironmentSuffix}"
+        },
+        "Description": "Build Docker images for microservices",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "CodeBuildRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {
+              "Name": "AWS_DEFAULT_REGION",
+              "Value": {
+                "Ref": "AWS::Region"
+              }
+            },
+            {
+              "Name": "AWS_ACCOUNT_ID",
+              "Value": {
+                "Ref": "AWS::AccountId"
+              }
+            },
+            {
+              "Name": "IMAGE_REPO_URI",
+              "Value": {
+                "Ref": "EcrRepositoryUri"
+              }
+            },
+            {
+              "Name": "IMAGE_TAG",
+              "Value": "latest"
+            }
+          ]
+        },
+        "Source": {
+          "Type": "CODEPIPELINE",
+          "BuildSpec": "buildspec.yml"
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "CodeBuildLogGroup"
+            }
+          }
+        },
+        "EncryptionKey": {
+          "Fn::GetAtt": [
+            "ArtifactEncryptionKey",
+            "Arn"
+          ]
+        },
+        "VpcConfig": {
+          "Fn::If": [
+            "HasVpcConfig",
+            {
+              "VpcId": {
+                "Ref": "VpcId"
+              },
+              "Subnets": {
+                "Ref": "PrivateSubnetIds"
+              },
+              "SecurityGroupIds": [
+                {
+                  "Ref": "CodeBuildSecurityGroup"
+                }
+              ]
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        }
+      }
+    },
+    "PipelineRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "pipeline-execution-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codepipeline.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CodePipelineExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:GetObjectVersion",
+                    "s3:GetBucketVersioning"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ArtifactBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ArtifactBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ArtifactEncryptionKey",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:GetBranch",
+                    "codecommit:GetCommit",
+                    "codecommit:UploadArchive",
+                    "codecommit:GetUploadArchiveStatus",
+                    "codecommit:CancelUploadArchive"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:BatchGetBuilds",
+                    "codebuild:StartBuild"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CodeBuildProject",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:DescribeServices",
+                    "ecs:DescribeTaskDefinition",
+                    "ecs:DescribeTasks",
+                    "ecs:ListTasks",
+                    "ecs:RegisterTaskDefinition",
+                    "ecs:UpdateService"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEqualsIfExists": {
+                      "iam:PassedToService": [
+                        "ecs-tasks.amazonaws.com"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "ApprovalTopic"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApprovalTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "pipeline-approval-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Pipeline Manual Approval Notifications",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "ApprovalNotificationEmail"
+            },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
+    "Pipeline": {
+      "Type": "AWS::CodePipeline::Pipeline",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "microservices-pipeline-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "PipelineRole",
+            "Arn"
+          ]
+        },
+        "ArtifactStore": {
+          "Type": "S3",
+          "Location": {
+            "Ref": "ArtifactBucket"
+          },
+          "EncryptionKey": {
+            "Id": {
+              "Fn::GetAtt": [
+                "ArtifactEncryptionKey",
+                "Arn"
+              ]
+            },
+            "Type": "KMS"
+          }
+        },
+        "Stages": [
+          {
+            "Name": "Source",
+            "Actions": [
+              {
+                "Name": "SourceAction",
+                "ActionTypeId": {
+                  "Category": "Source",
+                  "Owner": "AWS",
+                  "Provider": "CodeCommit",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "RepositoryName": {
+                    "Ref": "CodeCommitRepositoryName"
+                  },
+                  "BranchName": {
+                    "Ref": "CodeCommitBranchName"
+                  },
+                  "PollForSourceChanges": true
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Build",
+            "Actions": [
+              {
+                "Name": "BuildAction",
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Provider": "CodeBuild",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildProject"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ],
+                "OutputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Staging",
+            "Actions": [
+              {
+                "Name": "DeployToStaging",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "ECS",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ClusterName": {
+                    "Ref": "EcsClusterName"
+                  },
+                  "ServiceName": {
+                    "Ref": "EcsServiceName"
+                  },
+                  "FileName": "imagedefinitions.json"
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Approval",
+            "Actions": [
+              {
+                "Name": "ManualApproval",
+                "ActionTypeId": {
+                  "Category": "Approval",
+                  "Owner": "AWS",
+                  "Provider": "Manual",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "NotificationArn": {
+                    "Ref": "ApprovalTopic"
+                  },
+                  "CustomData": "Please review the staging deployment and approve for production deployment."
+                }
+              }
+            ]
+          },
+          {
+            "Name": "Production",
+            "Actions": [
+              {
+                "Name": "DeployToProduction",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "ECS",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ClusterName": {
+                    "Ref": "EcsClusterName"
+                  },
+                  "ServiceName": {
+                    "Ref": "EcsServiceName"
+                  },
+                  "FileName": "imagedefinitions.json"
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "PipelineEventRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "pipeline-event-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StartPipelineExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "codepipeline:StartPipelineExecution",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/microservices-pipeline-${EnvironmentSuffix}"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PipelineArn": {
+      "Description": "ARN of the created CodePipeline",
+      "Value": {
+        "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/microservices-pipeline-${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PipelineArn"
+        }
+      }
+    },
+    "PipelineExecutionRoleArn": {
+      "Description": "ARN of the pipeline execution role",
+      "Value": {
+        "Fn::GetAtt": [
+          "PipelineRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PipelineRoleArn"
+        }
+      }
+    },
+    "ArtifactBucketName": {
+      "Description": "Name of the S3 bucket storing pipeline artifacts",
+      "Value": {
+        "Ref": "ArtifactBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ArtifactBucket"
+        }
+      }
+    },
+    "KmsKeyArn": {
+      "Description": "ARN of the KMS key used for artifact encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "ArtifactEncryptionKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KmsKeyArn"
+        }
+      }
+    },
+    "CodeBuildProjectName": {
+      "Description": "Name of the CodeBuild project",
+      "Value": {
+        "Ref": "CodeBuildProject"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CodeBuildProject"
+        }
+      }
+    },
+    "ApprovalTopicArn": {
+      "Description": "ARN of the SNS topic for manual approvals",
+      "Value": {
+        "Ref": "ApprovalTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApprovalTopic"
+        }
+      }
+    }
+  }
+}
