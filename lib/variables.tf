@@ -18,11 +18,7 @@ variable "commit_author" {
   default     = "unknown"
 }
 
-variable "pr_number" {
-  description = "PR number for tagging"
-  type        = string
-  default     = "unknown"
-}
+
 
 variable "team" {
   description = "Team name for tagging"
