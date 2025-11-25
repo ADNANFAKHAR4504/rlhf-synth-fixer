@@ -298,8 +298,8 @@ class TapStack(Stack):
             multi_az=True,
             allocated_storage=1000,
             storage_type=rds.StorageType.GP3,
-            iops=10000,
-            storage_throughput=500,
+            iops=5000,
+            storage_throughput=250,
             storage_encrypted=True,
             database_name="tapdb",
             credentials=rds.Credentials.from_generated_secret(
