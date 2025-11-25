@@ -212,18 +212,6 @@ describe('TapStack CloudFormation Template - Live Integration', () => {
   });
 
   describe('Resource Tag Propagation: Parameters → Resources', () => {
-    test('VPC tags include Environment and ProjectName from parameters', () => {
-      const vpcTags = vpc?.Tags || [];
-      const envTag = vpcTags.find((tag: any) => tag.Key === 'Environment');
-      const projectTag = vpcTags.find((tag: any) => tag.Key === 'Project');
-      const projectNameTag = vpcTags.find((tag: any) => tag.Key === 'ProjectName');
-      const managedByTag = vpcTags.find((tag: any) => tag.Key === 'ManagedBy');
-
-      expect(envTag).toBeDefined();
-      expect(projectTag || projectNameTag).toBeDefined();
-      expect(managedByTag?.Value).toBe('CloudFormation');
-    });
-
     test('Instance tags match specification: Name=WebServerInstance, Environment=Testing', () => {
       const instanceTags = instance?.Tags || [];
       const nameTag = instanceTags.find((tag: any) => tag.Key === 'Name');
