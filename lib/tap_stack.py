@@ -667,7 +667,7 @@ class TapStack(TerraformStack):
                 healthy_threshold=2,
                 unhealthy_threshold=2,
             ),
-            deregistration_delay=30,
+            deregistration_delay="30",
             tags={
                 "Name": f"tg-blue-{self.environment_suffix}",
                 "DeploymentColor": "blue",
@@ -691,7 +691,7 @@ class TapStack(TerraformStack):
                 healthy_threshold=2,
                 unhealthy_threshold=2,
             ),
-            deregistration_delay=30,
+            deregistration_delay="30",
             tags={
                 "Name": f"tg-green-{self.environment_suffix}",
                 "DeploymentColor": "green",
