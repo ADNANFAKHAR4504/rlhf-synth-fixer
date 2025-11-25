@@ -1,33 +1,45 @@
 """Main stack orchestrating Blue-Green deployment infrastructure"""
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from .network_stack import NetworkStack
 from .compute_stack import ComputeStack
 from .database_stack import DatabaseStack
 from .monitoring_stack import MonitoringStack
-import os
 
 
 class TapStack(TerraformStack):
     """Main Terraform stack for Blue-Green deployment"""
 
-    # pylint: disable=redefined-builtin
-    def __init__(self, scope: Construct, id: str):
+    # pylint: disable=redefined-builtin,too-many-arguments
+    def __init__(self, scope: Construct, id: str, environment_suffix: str,
+                 state_bucket: str, state_bucket_region: str,
+                 primary_region: str, secondary_region: str):
         super().__init__(scope, id)
 
-        # Get environment suffix
-        self.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-        region = os.environ.get('AWS_REGION', 'us-east-1')
+        # Store configuration
+        self.environment_suffix = environment_suffix
+        self.primary_region = primary_region
+        self.secondary_region = secondary_region
+
+        # Configure S3 backend for state management
+        S3Backend(self,
+            bucket=state_bucket,
+            key=f"tap-stack-v1/{environment_suffix}/terraform.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+            dynamodb_table=f"terraform-state-lock-v1-{environment_suffix}"
+        )
 
         # AWS Provider
         AwsProvider(self, 'aws',
-            region=region,
+            region=primary_region,
             default_tags=[{
                 'tags': {
-                    'Environment': self.environment_suffix,
+                    'Environment': environment_suffix,
                     'ManagedBy': 'CDKTF',
-                    'Project': 'BlueGreenDeployment'
+                    'Project': 'BlueGreenDeploymentV1',
+                    'Version': 'v1'
                 }
             }]
         )

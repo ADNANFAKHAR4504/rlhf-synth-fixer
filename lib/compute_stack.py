@@ -1,6 +1,6 @@
 """Compute resources for Blue-Green deployment"""
 from constructs import Construct
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
+from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress
 from cdktf_cdktf_provider_aws.lb import Lb
 from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup, LbTargetGroupHealthCheck
 from cdktf_cdktf_provider_aws.lb_listener import (
@@ -20,6 +20,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
     S3BucketServerSideEncryptionConfigurationRuleA,
     S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
 )
+from . import create_allow_all_egress_rule
 import base64
 
 
@@ -34,8 +35,8 @@ class ComputeStack(Construct):
 
         # S3 Bucket for artifacts
         self.artifacts_bucket = S3Bucket(self, 'artifacts_bucket',
-            bucket=f'bluegreen-artifacts-{environment_suffix}',
-            tags={'Name': f'bluegreen-artifacts-{environment_suffix}'}
+            bucket=f'bluegreen-artifacts-v1-{environment_suffix}',
+            tags={'Name': f'bluegreen-artifacts-v1-{environment_suffix}'}
         )
 
         # Enable versioning
@@ -59,8 +60,8 @@ class ComputeStack(Construct):
 
         # ALB Security Group
         self.alb_sg = SecurityGroup(self, 'alb_sg',
-            name=f'bluegreen-alb-sg-{environment_suffix}',
-            description='Security group for Application Load Balancer',
+            name=f'bluegreen-alb-sg-v1-{environment_suffix}',
+            description='Security group for Application Load Balancer v1',
             vpc_id=vpc_id,
             ingress=[
                 SecurityGroupIngress(
@@ -78,22 +79,14 @@ class ComputeStack(Construct):
                     description='Allow HTTPS from internet'
                 )
             ],
-            egress=[
-                SecurityGroupEgress(
-                    from_port=0,
-                    to_port=0,
-                    protocol='-1',
-                    cidr_blocks=['0.0.0.0/0'],
-                    description='Allow all outbound'
-                )
-            ],
-            tags={'Name': f'bluegreen-alb-sg-{environment_suffix}'}
+            egress=[create_allow_all_egress_rule()],
+            tags={'Name': f'bluegreen-alb-sg-v1-{environment_suffix}'}
         )
 
         # EC2 Security Group
         self.ec2_sg = SecurityGroup(self, 'ec2_sg',
-            name=f'bluegreen-ec2-sg-{environment_suffix}',
-            description='Security group for EC2 instances',
+            name=f'bluegreen-ec2-sg-v1-{environment_suffix}',
+            description='Security group for EC2 instances v1',
             vpc_id=vpc_id,
             ingress=[
                 SecurityGroupIngress(
@@ -104,31 +97,23 @@ class ComputeStack(Construct):
                     description='Allow HTTP from ALB'
                 )
             ],
-            egress=[
-                SecurityGroupEgress(
-                    from_port=0,
-                    to_port=0,
-                    protocol='-1',
-                    cidr_blocks=['0.0.0.0/0'],
-                    description='Allow all outbound'
-                )
-            ],
-            tags={'Name': f'bluegreen-ec2-sg-{environment_suffix}'}
+            egress=[create_allow_all_egress_rule()],
+            tags={'Name': f'bluegreen-ec2-sg-v1-{environment_suffix}'}
         )
 
         # Application Load Balancer
         self.alb = Lb(self, 'alb',
-            name=f'bluegreen-alb-{environment_suffix}',
+            name=f'bluegreen-alb-v1-{environment_suffix}',
             internal=False,
             load_balancer_type='application',
             security_groups=[self.alb_sg.id],
             subnets=public_subnet_ids,
-            tags={'Name': f'bluegreen-alb-{environment_suffix}'}
+            tags={'Name': f'bluegreen-alb-v1-{environment_suffix}'}
         )
 
         # Blue Target Group
         self.blue_tg = LbTargetGroup(self, 'blue_tg',
-            name=f'bluegreen-blue-{environment_suffix}',
+            name=f'bluegreen-blue-v1-{environment_suffix}',
             port=80,
             protocol='HTTP',
             vpc_id=vpc_id,
@@ -141,12 +126,12 @@ class ComputeStack(Construct):
                 path='/',
                 protocol='HTTP'
             ),
-            tags={'Name': f'bluegreen-blue-tg-{environment_suffix}'}
+            tags={'Name': f'bluegreen-blue-tg-v1-{environment_suffix}'}
         )
 
         # Green Target Group
         self.green_tg = LbTargetGroup(self, 'green_tg',
-            name=f'bluegreen-green-{environment_suffix}',
+            name=f'bluegreen-green-v1-{environment_suffix}',
             port=80,
             protocol='HTTP',
             vpc_id=vpc_id,
@@ -159,7 +144,7 @@ class ComputeStack(Construct):
                 path='/',
                 protocol='HTTP'
             ),
-            tags={'Name': f'bluegreen-green-tg-{environment_suffix}'}
+            tags={'Name': f'bluegreen-green-tg-v1-{environment_suffix}'}
         )
 
         # ALB Listener - initially forward all traffic to blue
@@ -177,7 +162,7 @@ class ComputeStack(Construct):
 
         # IAM Role for EC2
         self.ec2_role = IamRole(self, 'ec2_role',
-            name=f'bluegreen-ec2-role-{environment_suffix}',
+            name=f'bluegreen-ec2-role-v1-{environment_suffix}',
             assume_role_policy="""{
                 "Version": "2012-10-17",
                 "Statement": [
@@ -190,7 +175,7 @@ class ComputeStack(Construct):
                     }
                 ]
             }""",
-            tags={'Name': f'bluegreen-ec2-role-{environment_suffix}'}
+            tags={'Name': f'bluegreen-ec2-role-v1-{environment_suffix}'}
         )
 
         # Attach policies
@@ -211,7 +196,7 @@ class ComputeStack(Construct):
 
         # Instance Profile
         self.instance_profile = IamInstanceProfile(self, 'instance_profile',
-            name=f'bluegreen-instance-profile-{environment_suffix}',
+            name=f'bluegreen-instance-profile-v1-{environment_suffix}',
             role=self.ec2_role.name
         )
 
@@ -242,7 +227,7 @@ echo "<h1>Blue-Green Deployment - Environment: $ENVIRONMENT</h1>" > /var/www/htm
 
         # Blue Launch Template
         self.blue_lt = LaunchTemplate(self, 'blue_lt',
-            name=f'bluegreen-blue-lt-{environment_suffix}',
+            name=f'bluegreen-blue-lt-v1-{environment_suffix}',
             image_id=self.ami.id,
             instance_type='t3.micro',
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
@@ -250,12 +235,12 @@ echo "<h1>Blue-Green Deployment - Environment: $ENVIRONMENT</h1>" > /var/www/htm
             ),
             vpc_security_group_ids=[self.ec2_sg.id],
             user_data=base64.b64encode(user_data.replace('$ENVIRONMENT', 'BLUE').encode()).decode(),
-            tags={'Name': f'bluegreen-blue-lt-{environment_suffix}'}
+            tags={'Name': f'bluegreen-blue-lt-v1-{environment_suffix}'}
         )
 
         # Blue Auto Scaling Group
         self.blue_asg = AutoscalingGroup(self, 'blue_asg',
-            name=f'bluegreen-blue-asg-{environment_suffix}',
+            name=f'bluegreen-blue-asg-v1-{environment_suffix}',
             min_size=1,
             max_size=4,
             desired_capacity=2,
@@ -266,14 +251,14 @@ echo "<h1>Blue-Green Deployment - Environment: $ENVIRONMENT</h1>" > /var/www/htm
             launch_template={'id': self.blue_lt.id, 'version': '$Latest'},
             tag=[AutoscalingGroupTag(
                 key='Name',
-                value=f'bluegreen-blue-{environment_suffix}',
+                value=f'bluegreen-blue-v1-{environment_suffix}',
                 propagate_at_launch=True
             )]
         )
 
         # Green Launch Template
         self.green_lt = LaunchTemplate(self, 'green_lt',
-            name=f'bluegreen-green-lt-{environment_suffix}',
+            name=f'bluegreen-green-lt-v1-{environment_suffix}',
             image_id=self.ami.id,
             instance_type='t3.micro',
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
@@ -281,12 +266,12 @@ echo "<h1>Blue-Green Deployment - Environment: $ENVIRONMENT</h1>" > /var/www/htm
             ),
             vpc_security_group_ids=[self.ec2_sg.id],
             user_data=base64.b64encode(user_data.replace('$ENVIRONMENT', 'GREEN').encode()).decode(),
-            tags={'Name': f'bluegreen-green-lt-{environment_suffix}'}
+            tags={'Name': f'bluegreen-green-lt-v1-{environment_suffix}'}
         )
 
         # Green Auto Scaling Group
         self.green_asg = AutoscalingGroup(self, 'green_asg',
-            name=f'bluegreen-green-asg-{environment_suffix}',
+            name=f'bluegreen-green-asg-v1-{environment_suffix}',
             min_size=1,
             max_size=4,
             desired_capacity=2,
@@ -297,7 +282,7 @@ echo "<h1>Blue-Green Deployment - Environment: $ENVIRONMENT</h1>" > /var/www/htm
             launch_template={'id': self.green_lt.id, 'version': '$Latest'},
             tag=[AutoscalingGroupTag(
                 key='Name',
-                value=f'bluegreen-green-{environment_suffix}',
+                value=f'bluegreen-green-v1-{environment_suffix}',
                 propagate_at_launch=True
             )]
         )
