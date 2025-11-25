@@ -5,7 +5,8 @@
     "cfn-lint": {
       "config": {
         "ignore_checks": [
-          "W1011"
+          "W1011",
+          "W1030"
         ]
       }
     },
@@ -64,24 +65,24 @@
       "Default": "dev"
     },
     "VpcId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID where resources will be deployed",
-      "Default": "vpc-00000000000000000"
+      "Type": "String",
+      "Description": "VPC ID where resources will be deployed (required when CreateVpc=false)",
+      "Default": ""
     },
     "PrivateSubnet1": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "First private subnet in availability zone 1",
-      "Default": "subnet-00000000000000000"
+      "Type": "String",
+      "Description": "First private subnet in availability zone 1 (required when CreateVpc=false)",
+      "Default": ""
     },
     "PrivateSubnet2": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Second private subnet in availability zone 2",
-      "Default": "subnet-00000000000000001"
+      "Type": "String",
+      "Description": "Second private subnet in availability zone 2 (required when CreateVpc=false)",
+      "Default": ""
     },
     "PrivateSubnet3": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Third private subnet in availability zone 3",
-      "Default": "subnet-00000000000000002"
+      "Type": "String",
+      "Description": "Third private subnet in availability zone 3 (required when CreateVpc=false)",
+      "Default": ""
     },
     "SourceDbHost": {
       "Type": "String",
@@ -761,7 +762,15 @@
         "VPCs": [
           {
             "VPCId": {
-              "Ref": "VpcId"
+              "Fn::If": [
+                "ShouldCreateVpc",
+                {
+                  "Ref": "VPC"
+                },
+                {
+                  "Ref": "VpcId"
+                }
+              ]
             },
             "VPCRegion": {
               "Ref": "AWS::Region"
