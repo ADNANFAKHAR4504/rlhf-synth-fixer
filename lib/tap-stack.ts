@@ -338,7 +338,8 @@ export class TapStack extends pulumi.ComponentResource {
       }
     );
 
-    // Create OIDC provider
+    // Create OIDC provider for IRSA (IAM Roles for Service Accounts)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const oidcProvider = new aws.iam.OpenIdConnectProvider(
       `eks-oidc-${envSuffix}`,
       {
@@ -445,7 +446,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-
     // Install VPC CNI addon
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Installs addon
     const vpcCniAddon = new aws.eks.Addon(
@@ -545,7 +545,6 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         })
       );
-
 
     // Export kubeconfig as string
     this.clusterEndpoint = cluster.endpoint;
