@@ -141,7 +141,7 @@ class TapStack(TerraformStack):
 
         # Get absolute path to lambda_function.zip
         lambda_zip_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            os.path.dirname(os.path.abspath(__file__)),
             "lambda_function.zip"
         )
 

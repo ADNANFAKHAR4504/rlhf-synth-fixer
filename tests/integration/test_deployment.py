@@ -19,7 +19,9 @@ def outputs():
         pytest.skip("Deployment outputs not found. Deploy infrastructure first.")
 
     with open(outputs_file, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        env_suffix = os.getenv("ENVIRONMENT_SUFFIX")
+        output = json.load(f)
+        return output.get(f"TapStack{env_suffix}")
 
 
 @pytest.fixture(scope="module")
@@ -403,3 +405,231 @@ class TestMonitoring:
 
         except logs_client.exceptions.ResourceNotFoundException:
             pytest.fail("CloudWatch Logs group not found")
+
+
+class TestLiveIntegration:
+    """Live integration tests for real-world scenarios"""
+
+    def test_multiple_symbols_high_volume(self, outputs, aws_clients):
+        """Test processing multiple symbols under high volume"""
+        queue_url = outputs['sqs_queue_url']
+        table_name = outputs['dynamodb_table_name']
+
+        # Simulate high volume with different symbols
+        symbols = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA']
+        test_messages = []
+        base_timestamp = int(time.time())
+
+        for i, symbol in enumerate(symbols):
+            test_symbol = f"{symbol}-LIVE-{base_timestamp}-{i}"
+            test_messages.append(test_symbol)
+
+            # Send messages with varying prices (some high, some low, some normal)
+            prices = [180.0, 40.0, 100.0, 160.0, 35.0]
+            message = {
+                'symbol': test_symbol,
+                'price': prices[i]
+            }
+
+            aws_clients['sqs'].send_message(
+                QueueUrl=queue_url,
+                MessageBody=json.dumps(message)
+            )
+
+        # Wait for processing
+        max_wait = 60
+        processed_count = 0
+
+        for _ in range(max_wait):
+            time.sleep(1)
+            processed_count = 0
+
+            for test_symbol in test_messages:
+                response = aws_clients['dynamodb'].query(
+                    TableName=table_name,
+                    KeyConditionExpression='symbol = :symbol',
+                    ExpressionAttributeValues={
+                        ':symbol': {'S': test_symbol}
+                    },
+                    Limit=1
+                )
+
+                if response['Items']:
+                    processed_count += 1
+
+            # We expect 4 alerts (2 high, 2 low) out of 5 messages
+            if processed_count >= 4:
+                break
+
+        assert processed_count >= 4, f"Expected at least 4 alerts, got {processed_count}"
+
+    def test_concurrent_message_processing(self, outputs, aws_clients):
+        """Test Lambda concurrent execution with burst traffic"""
+        queue_url = outputs['sqs_queue_url']
+        table_name = outputs['dynamodb_table_name']
+
+        # Send 20 messages rapidly to test concurrency
+        test_symbols = []
+        burst_size = 20
+        base_timestamp = int(time.time())
+
+        for i in range(burst_size):
+            test_symbol = f"BURST-{base_timestamp}-{i}"
+            test_symbols.append(test_symbol)
+
+            message = {
+                'symbol': test_symbol,
+                'price': 200.0  # All high prices to trigger alerts
+            }
+
+            aws_clients['sqs'].send_message(
+                QueueUrl=queue_url,
+                MessageBody=json.dumps(message)
+            )
+
+        # Wait for all messages to be processed
+        max_wait = 90
+        processed_count = 0
+
+        for _ in range(max_wait):
+            time.sleep(1)
+            processed_count = 0
+
+            for test_symbol in test_symbols:
+                response = aws_clients['dynamodb'].query(
+                    TableName=table_name,
+                    KeyConditionExpression='symbol = :symbol',
+                    ExpressionAttributeValues={
+                        ':symbol': {'S': test_symbol}
+                    },
+                    Limit=1
+                )
+
+                if response['Items']:
+                    processed_count += 1
+
+            if processed_count == burst_size:
+                break
+
+        # Should process all messages (may take longer due to reserved concurrency of 5)
+        assert processed_count == burst_size, \
+            f"Expected {burst_size} messages processed, got {processed_count}"
+
+    def test_lambda_performance_metrics(self, outputs, aws_clients):
+        """Test Lambda performance metrics are within acceptable range"""
+        function_name = outputs['lambda_function_name']
+
+        cloudwatch = boto3.client('cloudwatch', region_name='us-east-1')
+
+        # Get Lambda duration metrics
+        response = cloudwatch.get_metric_statistics(
+            Namespace='AWS/Lambda',
+            MetricName='Duration',
+            Dimensions=[
+                {'Name': 'FunctionName', 'Value': function_name}
+            ],
+            StartTime=time.time() - 3600,  # Last hour
+            EndTime=time.time(),
+            Period=3600,
+            Statistics=['Average', 'Maximum']
+        )
+
+        if response['Datapoints']:
+            datapoint = response['Datapoints'][0]
+            avg_duration = datapoint.get('Average', 0)
+            max_duration = datapoint.get('Maximum', 0)
+
+            # Duration should be well under timeout (60 seconds = 60000ms)
+            assert max_duration < 55000, \
+                f"Lambda execution time too high: {max_duration}ms (max: 55000ms)"
+            assert avg_duration < 10000, \
+                f"Average Lambda execution time too high: {avg_duration}ms (max: 10000ms)"
+
+        # Check error rate
+        error_response = cloudwatch.get_metric_statistics(
+            Namespace='AWS/Lambda',
+            MetricName='Errors',
+            Dimensions=[
+                {'Name': 'FunctionName', 'Value': function_name}
+            ],
+            StartTime=time.time() - 3600,
+            EndTime=time.time(),
+            Period=3600,
+            Statistics=['Sum']
+        )
+
+        if error_response['Datapoints']:
+            error_count = error_response['Datapoints'][0]['Sum']
+            assert error_count == 0, f"Lambda had {error_count} errors in the last hour"
+
+    def test_dynamodb_query_performance(self, outputs, aws_clients):
+        """Test DynamoDB query performance for retrieving alerts"""
+        table_name = outputs['dynamodb_table_name']
+
+        # First, add some test data
+        test_symbol = f"QUERY-PERF-{int(time.time())}"
+
+        for i in range(5):
+            aws_clients['dynamodb'].put_item(
+                TableName=table_name,
+                Item={
+                    'symbol': {'S': test_symbol},
+                    'timestamp': {'S': f"{int(time.time()) + i}"},
+                    'alert_type': {'S': 'HIGH'},
+                    'price': {'N': '200.0'},
+                    'message_id': {'S': f"test-msg-{i}"}
+                }
+            )
+
+        # Measure query performance
+        start_time = time.time()
+
+        response = aws_clients['dynamodb'].query(
+            TableName=table_name,
+            KeyConditionExpression='symbol = :symbol',
+            ExpressionAttributeValues={
+                ':symbol': {'S': test_symbol}
+            },
+            Limit=10
+        )
+
+        query_duration = time.time() - start_time
+
+        # Query should be fast (under 1 second)
+        assert query_duration < 1.0, f"DynamoDB query took {query_duration}s (max: 1s)"
+
+        # Should return all 5 items
+        assert len(response['Items']) == 5, f"Expected 5 items, got {len(response['Items'])}"
+
+    def test_sqs_dlq_functionality(self, outputs, aws_clients):
+        """Test that failed messages go to Dead Letter Queue"""
+        queue_url = outputs['sqs_queue_url']
+
+        # Get DLQ URL from SQS queue attributes
+        queue_attrs = aws_clients['sqs'].get_queue_attributes(
+            QueueUrl=queue_url,
+            AttributeNames=['RedrivePolicy']
+        )
+
+        # Extract DLQ ARN from redrive policy
+        redrive_policy = json.loads(queue_attrs['Attributes']['RedrivePolicy'])
+        dlq_arn = redrive_policy['deadLetterTargetArn']
+        max_receive_count = redrive_policy['maxReceiveCount']
+
+        assert max_receive_count == 3, f"Expected maxReceiveCount of 3, got {max_receive_count}"
+
+        # Verify DLQ exists
+        dlq_name = dlq_arn.split(':')[-1]
+        dlq_url_response = aws_clients['sqs'].get_queue_url(QueueName=dlq_name)
+        dlq_url = dlq_url_response['QueueUrl']
+
+        assert dlq_url is not None, "Dead Letter Queue not found"
+
+        # Check DLQ attributes
+        dlq_attrs = aws_clients['sqs'].get_queue_attributes(
+            QueueUrl=dlq_url,
+            AttributeNames=['MessageRetentionPeriod']
+        )
+
+        # DLQ should have same retention period as main queue
+        assert dlq_attrs['Attributes']['MessageRetentionPeriod'] == '1209600'
