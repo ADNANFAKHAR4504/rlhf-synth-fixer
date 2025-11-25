@@ -739,7 +739,7 @@ resource "aws_db_parameter_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier = "${local.name_prefix}-aurora-cluster"
   engine             = "aurora-postgresql"
-  engine_version     = "15.4"
+  engine_version     = "15.6"
   database_name      = "trading"
   master_username    = "tradingadmin"
   master_password    = random_password.db_password.result
