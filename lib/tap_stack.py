@@ -4,21 +4,21 @@ from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
-    S3BucketLifecycleConfigurationRule,
-    S3BucketLifecycleConfigurationRuleTransition,
+    S3BucketLifecycleConfigurationRuleA,
+    S3BucketLifecycleConfigurationRuleTransitionA,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
     S3BucketReplicationConfiguration,
-    S3BucketReplicationConfigurationRules,
-    S3BucketReplicationConfigurationRulesDestination,
+    S3BucketReplicationConfigurationRuleA,
+    S3BucketReplicationConfigurationRuleDestinationA,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfiguration,
-    S3BucketServerSideEncryptionConfigurationRule,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,
 )
 from cdktf_cdktf_provider_aws.vpc import Vpc, DataAwsVpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -629,7 +629,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning
-        S3BucketVersioning(
+        S3BucketVersioningA(
             self,
             "audit_bucket_versioning",
             bucket=self.audit_bucket.id,
@@ -644,8 +644,8 @@ class TapStack(TerraformStack):
             "audit_bucket_encryption",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketServerSideEncryptionConfigurationRule(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                S3BucketServerSideEncryptionConfigurationRuleA(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                         sse_algorithm="AES256"
                     ),
                     bucket_key_enabled=True,
@@ -659,11 +659,11 @@ class TapStack(TerraformStack):
             "audit_bucket_lifecycle",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketLifecycleConfigurationRule(
+                S3BucketLifecycleConfigurationRuleA(
                     id="archive-old-logs",
                     status="Enabled",
                     transition=[
-                        S3BucketLifecycleConfigurationRuleTransition(
+                        S3BucketLifecycleConfigurationRuleTransitionA(
                             days=90,
                             storage_class="GLACIER"
                         )
@@ -687,7 +687,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning on replica
-        S3BucketVersioning(
+        S3BucketVersioningA(
             self,
             "audit_bucket_replica_versioning",
             provider=self.provider_secondary,
@@ -744,12 +744,12 @@ class TapStack(TerraformStack):
             "audit_bucket_replication",
             bucket=self.audit_bucket.id,
             role=self.s3_replication_role.arn,
-            rules=[
-                S3BucketReplicationConfigurationRules(
+            rule=[
+                S3BucketReplicationConfigurationRuleA(
                     id="replicate-all",
                     status="Enabled",
                     priority=1,
-                    destination=S3BucketReplicationConfigurationRulesDestination(
+                    destination=S3BucketReplicationConfigurationRuleDestinationA(
                         bucket=self.audit_bucket_replica.arn,
                         storage_class="STANDARD",
                     ),
