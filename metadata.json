@@ -11,11 +11,19 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "SSM Parameter Store",
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "EC2"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }

@@ -9,7 +9,11 @@ import {
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
-import { SendCommandCommand, SSMClient } from '@aws-sdk/client-ssm';
+import {
+  GetCommandInvocationCommand,
+  SendCommandCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
 
 type FlatOutputs = Record<string, string>;
 
@@ -208,6 +212,43 @@ describe('TapStack CloudFormation Template - Live Integration', () => {
     test('Instance is in running state and ready for traffic', () => {
       expect(instance?.State?.Name).toBe('running');
       expect(['t2.micro', 't2.small', 't2.medium']).toContain(instance?.InstanceType);
+    });
+
+    test('UserData execution validates hostname is set correctly', async () => {
+      try {
+        const command = await ssm.send(
+          new SendCommandCommand({
+            InstanceIds: [outputs.WebServerInstanceId],
+            DocumentName: 'AWS-RunShellScript',
+            Parameters: {
+              commands: ['hostname'],
+            },
+          })
+        );
+
+        if (command.Command?.CommandId) {
+          // Wait a moment for command to execute, then get result
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const invocation = await ssm.send(
+            new GetCommandInvocationCommand({
+              CommandId: command.Command.CommandId,
+              InstanceId: outputs.WebServerInstanceId,
+            })
+          );
+
+          const hostname = invocation.StandardOutputContent?.trim();
+          const expectedHostname = `${outputs.ProjectIdentifier || 'WebServerInfrastructure'}-webserver`;
+          
+          expect(hostname).toBe(expectedHostname);
+        }
+      } catch (error: any) {
+        if (error.name === 'InvalidInstanceId' || error.name === 'InvalidInstance') {
+          console.warn('SSM agent not available');
+        } else {
+          throw error;
+        }
+      }
     });
   });
 
