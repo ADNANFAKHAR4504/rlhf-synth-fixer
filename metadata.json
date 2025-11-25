@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "synth-q4n7s2j2",
+  "team": "synth",
+  "startedAt": "2025-11-26T00:00:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Monitoring and Threat Detection",
+    "Compliance and Audit Logging",
+    "Network Security and Access Control"
+  ],
+  "aws_services": [
+    "Aurora Serverless v2",
+    "RDS Proxy",
+    "Lambda",
+    "Application Load Balancer",
+    "Route 53",
+    "Auto Scaling",
+    "EC2",
+    "CloudWatch",
+    "SNS",
+    "SQS",
+    "WAF v2",
+    "GuardDuty",
+    "AWS Config",
+    "EventBridge",
+    "X-Ray",
+    "Kinesis Firehose",
+    "Systems Manager Parameter Store",
+    "S3",
+    "KMS",
+    "VPC Flow Logs"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10
+}
