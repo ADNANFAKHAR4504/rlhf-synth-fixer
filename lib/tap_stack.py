@@ -8,7 +8,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfigurationRuleTransition,
     S3BucketLifecycleConfigurationRuleExpiration
 )
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTablePointInTimeRecovery
 from cdktf_cdktf_provider_aws.sfn_state_machine import SfnStateMachine
@@ -175,7 +175,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning
-        S3BucketVersioning(
+        S3BucketVersioningA(
             self,
             "data-bucket-versioning",
             bucket=bucket.id,
