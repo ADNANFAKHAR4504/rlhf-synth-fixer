@@ -229,18 +229,6 @@
                 "kms:GenerateDataKey"
               ],
               "Resource": "*"
-            },
-            {
-              "Sid": "Allow Config to use the key",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
-              "Resource": "*"
             }
           ]
         },
@@ -506,50 +494,6 @@
               "Condition": {
                 "Bool": {
                   "aws:SecureTransport": "false"
-                }
-              }
-            },
-            {
-              "Sid": "AWSConfigBucketPermissionsCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "s3:GetBucketAcl",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "AuditLogBucket",
-                  "Arn"
-                ]
-              }
-            },
-            {
-              "Sid": "AWSConfigBucketExistenceCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "s3:ListBucket",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "AuditLogBucket",
-                  "Arn"
-                ]
-              }
-            },
-            {
-              "Sid": "AWSConfigBucketPutObject",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${AuditLogBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
                 }
               }
             },
@@ -1072,154 +1016,6 @@
         ]
       }
     },
-    "ConfigRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {
-          "Fn::Sub": "ConfigRole-${EnvironmentSuffix}"
-        },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "S3BucketAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetBucketVersioning",
-                    "s3:PutObject",
-                    "s3:GetObject"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": [
-                        "AuditLogBucket",
-                        "Arn"
-                      ]
-                    },
-                    {
-                      "Fn::Sub": "${AuditLogBucket.Arn}/*"
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "ConfigRole-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "DataClassification",
-            "Value": "PCI"
-          },
-          {
-            "Key": "ComplianceScope",
-            "Value": "Payment"
-          }
-        ]
-      }
-    },
-    "ConfigRecorder": {
-      "Type": "AWS::Config::ConfigurationRecorder",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "ConfigRecorder-${EnvironmentSuffix}"
-        },
-        "RoleARN": {
-          "Fn::GetAtt": [
-            "ConfigRole",
-            "Arn"
-          ]
-        },
-        "RecordingGroup": {
-          "AllSupported": true,
-          "IncludeGlobalResourceTypes": true
-        }
-      }
-    },
-    "ConfigDeliveryChannel": {
-      "Type": "AWS::Config::DeliveryChannel",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "ConfigDeliveryChannel-${EnvironmentSuffix}"
-        },
-        "S3BucketName": {
-          "Ref": "AuditLogBucket"
-        }
-      }
-    },
-    "S3EncryptionConfigRule": {
-      "Type": "AWS::Config::ConfigRule",
-      "Properties": {
-        "ConfigRuleName": {
-          "Fn::Sub": "s3-encryption-enabled-${EnvironmentSuffix}"
-        },
-        "Description": "Checks that S3 buckets have server-side encryption enabled",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-        }
-      },
-      "DependsOn": [
-        "ConfigRecorder",
-        "ConfigDeliveryChannel"
-      ]
-    },
-    "VpcFlowLogsConfigRule": {
-      "Type": "AWS::Config::ConfigRule",
-      "Properties": {
-        "ConfigRuleName": {
-          "Fn::Sub": "vpc-flow-logs-enabled-${EnvironmentSuffix}"
-        },
-        "Description": "Checks that VPC Flow Logs are enabled",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "VPC_FLOW_LOGS_ENABLED"
-        }
-      },
-      "DependsOn": [
-        "ConfigRecorder",
-        "ConfigDeliveryChannel"
-      ]
-    },
-    "EncryptedVolumesConfigRule": {
-      "Type": "AWS::Config::ConfigRule",
-      "Properties": {
-        "ConfigRuleName": {
-          "Fn::Sub": "encrypted-volumes-${EnvironmentSuffix}"
-        },
-        "Description": "Checks that EBS volumes are encrypted",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "ENCRYPTED_VOLUMES"
-        }
-      },
-      "DependsOn": [
-        "ConfigRecorder",
-        "ConfigDeliveryChannel"
-      ]
-    },
     "SecurityAlertsTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
@@ -1591,17 +1387,6 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-SnsTopicArn"
-        }
-      }
-    },
-    "ConfigRecorderName": {
-      "Description": "Config recorder name",
-      "Value": {
-        "Ref": "ConfigRecorder"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ConfigRecorder"
         }
       }
     }
