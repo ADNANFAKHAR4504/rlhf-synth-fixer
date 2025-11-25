@@ -19,5 +19,7 @@
     "KMS",
     "CloudWatch"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342"
 }

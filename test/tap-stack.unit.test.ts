@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,13 +22,12 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'EKS Cluster Infrastructure with Hybrid Node Group Architecture - Production Ready'
       );
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should not have metadata section', () => {
+      expect(template.Metadata).toBeUndefined();
     });
   });
 
@@ -46,70 +39,77 @@ describe('TapStack CloudFormation Template', () => {
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+        'Unique suffix for resource naming to avoid conflicts'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+      expect(envSuffixParam.MinLength).toBe(1);
+      expect(envSuffixParam.Default).toBeUndefined();
+      expect(envSuffixParam.AllowedPattern).toBeUndefined();
+      expect(envSuffixParam.ConstraintDescription).toBeUndefined();
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('VPC should be an EC2 VPC', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should have EKSCluster resource', () => {
+      expect(template.Resources.EKSCluster).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('EKSCluster should be an EKS Cluster', () => {
+      const cluster = template.Resources.EKSCluster;
+      expect(cluster.Type).toBe('AWS::EKS::Cluster');
+    });
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('EKSCluster should have correct properties', () => {
+      const cluster = template.Resources.EKSCluster;
+      const properties = cluster.Properties;
+
+      expect(properties.Name).toEqual({
+        'Fn::Sub': 'eks-cluster-${EnvironmentSuffix}',
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(properties.Version).toBe('1.28');
+      expect(properties.ResourcesVpcConfig.EndpointPrivateAccess).toBe(true);
+      expect(properties.ResourcesVpcConfig.EndpointPublicAccess).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have ManagedNodeGroup resource', () => {
+      expect(template.Resources.ManagedNodeGroup).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('ManagedNodeGroup should be an EKS Nodegroup', () => {
+      const nodegroup = template.Resources.ManagedNodeGroup;
+      expect(nodegroup.Type).toBe('AWS::EKS::Nodegroup');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have SelfManagedAutoScalingGroup resource', () => {
+      expect(template.Resources.SelfManagedAutoScalingGroup).toBeDefined();
+    });
+
+    test('SelfManagedAutoScalingGroup should be an AutoScaling Group', () => {
+      const asg = template.Resources.SelfManagedAutoScalingGroup;
+      expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'ClusterName',
+        'ClusterEndpoint',
+        'ClusterArn',
+        'VPCId',
+        'PrivateSubnetIds',
+        'OIDCProviderArn',
+        'NodeRoleArn',
+        'EncryptionKeyArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +117,92 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('ClusterName output should be correct', () => {
+      const output = template.Outputs.ClusterName;
+      expect(output.Description).toBe('Name of the EKS cluster');
+      expect(output.Value).toEqual({ Ref: 'EKSCluster' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-ClusterName',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('ClusterEndpoint output should be correct', () => {
+      const output = template.Outputs.ClusterEndpoint;
+      expect(output.Description).toBe('Endpoint for EKS cluster');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['EKSCluster', 'Endpoint'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-ClusterEndpoint',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+    test('ClusterArn output should be correct', () => {
+      const output = template.Outputs.ClusterArn;
+      expect(output.Description).toBe('ARN of the EKS cluster');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['EKSCluster', 'Arn'],
+      });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-ClusterArn',
+      });
+    });
+
+    test('VPCId output should be correct', () => {
+      const output = template.Outputs.VPCId;
+      expect(output.Description).toBe('VPC ID');
+      expect(output.Value).toEqual({ Ref: 'VPC' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-VPCId',
+      });
+    });
+
+    test('PrivateSubnetIds output should be correct', () => {
+      const output = template.Outputs.PrivateSubnetIds;
+      expect(output.Description).toBe('Private Subnet IDs');
+      expect(output.Value).toEqual({
+        'Fn::Join': [
+          ',',
+          [
+            { Ref: 'PrivateSubnet1' },
+            { Ref: 'PrivateSubnet2' },
+            { Ref: 'PrivateSubnet3' },
+          ],
+        ],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-PrivateSubnetIds',
+      });
+    });
+
+    test('OIDCProviderArn output should be correct', () => {
+      const output = template.Outputs.OIDCProviderArn;
+      expect(output.Description).toBe('ARN of the OIDC Provider');
+      expect(output.Value).toEqual({ Ref: 'OIDCProvider' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-OIDCProviderArn',
+      });
+    });
+
+    test('NodeRoleArn output should be correct', () => {
+      const output = template.Outputs.NodeRoleArn;
+      expect(output.Description).toBe('ARN of the Node IAM Role');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['NodeRole', 'Arn'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-NodeRoleArn',
+      });
+    });
+
+    test('EncryptionKeyArn output should be correct', () => {
+      const output = template.Outputs.EncryptionKeyArn;
+      expect(output.Description).toBe('ARN of the KMS encryption key');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['EncryptionKey', 'Arn'],
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-EncryptionKeyArn',
       });
     });
   });
@@ -172,9 +221,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have exactly twenty-two resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(22);
     });
 
     test('should have exactly one parameter', () => {
@@ -182,19 +231,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have exactly eight outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(8);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('cluster name should follow naming convention with environment suffix', () => {
+      const cluster = template.Resources.EKSCluster;
+      const clusterName = cluster.Properties.Name;
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(clusterName).toEqual({
+        'Fn::Sub': 'eks-cluster-${EnvironmentSuffix}',
       });
     });
 
@@ -208,3 +257,4 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 });
+
