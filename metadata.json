@@ -17,5 +17,7 @@
     "Route 53",
     "CloudWatch"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342"
 }
