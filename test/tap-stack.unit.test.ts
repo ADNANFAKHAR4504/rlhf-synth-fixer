@@ -305,6 +305,14 @@ describe('TapStack', () => {
     });
   });
 
+  test('provisions Aurora instances with supported instance class', () => {
+    const { template } = synthStack();
+    const instances = template.findResources('AWS::RDS::DBInstance');
+    Object.values(instances).forEach((instance: any) => {
+      expect(instance.Properties.DBInstanceClass).toBe('db.r5.large');
+    });
+  });
+
   test('creates S3 buckets with SSL enforcement', () => {
     const { template } = synthStack();
     const buckets = template.findResources('AWS::S3::Bucket');

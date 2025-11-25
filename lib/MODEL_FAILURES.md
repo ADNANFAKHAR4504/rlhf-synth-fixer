@@ -92,3 +92,11 @@
 **Fix:** Removed Data API grants and instead granted Lambda functions read access to the generated cluster secret (`cluster.secret?.grantRead(fn)`).
 
 **Impact:** Prevents `InvalidRequest` errors caused by unsupported Data API endpoints while keeping Lambda access to database credentials.
+
+## 10. Aurora Instance Class
+
+**Issue:** The MODEL_RESPONSE configured Aurora instances with `db.r5.medium`, which is not a supported size for provisioned Aurora MySQL clusters. CloudFormation fails with `Invalid DB Instance class: db.r5.medium`.
+
+**Fix:** Updated `instanceProps.instanceType` to `ec2.InstanceType.of(ec2.InstanceClass.R5, ec2.InstanceSize.LARGE)` so every environment provisions a supported `db.r5.large` instance class.
+
+**Impact:** Prevents `InvalidRequest` failures during cluster creation and aligns all environments with AWS-supported instance classes.

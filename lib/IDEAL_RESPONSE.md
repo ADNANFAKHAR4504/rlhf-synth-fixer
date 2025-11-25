@@ -626,7 +626,7 @@ export class TapStack extends cdk.Stack {
           securityGroups: [databaseSecurityGroup],
           instanceType: ec2.InstanceType.of(
             ec2.InstanceClass.R5,
-            envKey === 'prod' ? ec2.InstanceSize.LARGE : ec2.InstanceSize.MEDIUM
+            ec2.InstanceSize.LARGE
           ),
         },
         backup: {
