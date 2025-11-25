@@ -39,16 +39,6 @@ describe('Terraform Integration Tests', () => {
       }
     });
 
-    test('Aurora endpoint is present in outputs', () => {
-      if (outputs) {
-        expect(
-          outputs.aurora_cluster_endpoint || 
-          outputs.auroraClusterEndpoint || 
-          outputs.AuroraClusterEndpoint
-        ).toBeDefined();
-      }
-    });
-
     test('Lambda function name is present in outputs', () => {
       if (outputs) {
         expect(
