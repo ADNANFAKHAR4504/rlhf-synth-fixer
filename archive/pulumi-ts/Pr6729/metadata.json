@@ -1,6 +1,6 @@
 {
   "platform": "pulumi",
-  "language": "typescript",
+  "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "w19bp2",

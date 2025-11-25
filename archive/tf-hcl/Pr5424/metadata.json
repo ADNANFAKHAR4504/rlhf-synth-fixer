@@ -1,6 +1,6 @@
 {
   "platform": "tf",
-  "language": "unknown",
+  "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "348982",
