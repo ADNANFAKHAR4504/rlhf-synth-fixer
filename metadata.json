@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-25T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "EC2 instances must use Lambda launch type with platform version 1.4.0",
+    "Task definitions must specify both CPU and memory limits with at least 1 vCPU and 2GB RAM",
+    "Application Load Balancer must use path-based routing with health check intervals of 15 seconds",
+    "Auto-scaling policies must trigger at 70% CPU or 80% memory utilization",
+    "All container logs must be streamed to CloudWatch Logs with 30-day retention",
+    "Secrets must be stored in and injected as environment variables",
+    "Network ACLs must explicitly deny all traffic except ports 80, 443, and 8080",
+    "Each service must have dedicated target groups with deregistration delay of 30 seconds"
+  ],
+  "aws_services": [
+    "EC2",
+    "ECS",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "CloudWatch",
+    "Secrets Manager",
+    "SNS",
+    "Cloud Map",
+    "IAM",
+    "VPC"
+  ],
+  "po_id": "o8b8r8m6",
+  "training_quality": 10
+}

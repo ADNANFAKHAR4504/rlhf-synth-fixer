@@ -1,0 +1,1302 @@
+# Blue-Green ECS Deployment Infrastructure
+
+This CloudFormation template creates a complete blue-green deployment infrastructure for ECS with automated rollback capabilities.
+
+## File: lib/blue-green-ecs-stack.json
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Blue-Green ECS deployment infrastructure with automated rollback capabilities",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to enable multiple deployments",
+      "MinLength": 1,
+      "MaxLength": 20,
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC"
+    },
+    "ContainerImage": {
+      "Type": "String",
+      "Default": "nginx:latest",
+      "Description": "Container image to deploy"
+    },
+    "ContainerPort": {
+      "Type": "Number",
+      "Default": 80,
+      "Description": "Port exposed by the container"
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {"Ref": "VpcCIDR"},
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "vpc-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "InternetGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": {"Ref": "InternetGateway"},
+        "VpcId": {"Ref": "VPC"}
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "CidrBlock": "10.0.2.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "CidrBlock": "10.0.3.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "CidrBlock": "10.0.11.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "CidrBlock": "10.0.12.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "CidrBlock": "10.0.13.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NatGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NatGateway2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NatGateway3EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "nat-eip-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NatGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["NatGateway1EIP", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NatGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["NatGateway2EIP", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NatGateway3": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["NatGateway3EIP", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet3"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-route-table-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "DefaultPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "SubnetId": {"Ref": "PublicSubnet1"}
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "SubnetId": {"Ref": "PublicSubnet2"}
+      }
+    },
+    "PublicSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "SubnetId": {"Ref": "PublicSubnet3"}
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-route-table-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NatGateway1"}
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "SubnetId": {"Ref": "PrivateSubnet1"}
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-route-table-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NatGateway2"}
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "SubnetId": {"Ref": "PrivateSubnet2"}
+      }
+    },
+    "PrivateRouteTable3": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-route-table-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "DefaultPrivateRoute3": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable3"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NatGateway3"}
+      }
+    },
+    "PrivateSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable3"},
+        "SubnetId": {"Ref": "PrivateSubnet3"}
+      }
+    },
+    "NetworkAcl": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "network-acl-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "NetworkAclEntryInboundHTTP": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "RuleNumber": 100,
+        "Protocol": 6,
+        "RuleAction": "allow",
+        "CidrBlock": "0.0.0.0/0",
+        "PortRange": {
+          "From": 80,
+          "To": 80
+        }
+      }
+    },
+    "NetworkAclEntryInboundHTTPS": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "RuleNumber": 110,
+        "Protocol": 6,
+        "RuleAction": "allow",
+        "CidrBlock": "0.0.0.0/0",
+        "PortRange": {
+          "From": 443,
+          "To": 443
+        }
+      }
+    },
+    "NetworkAclEntryInbound8080": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "RuleNumber": 120,
+        "Protocol": 6,
+        "RuleAction": "allow",
+        "CidrBlock": "0.0.0.0/0",
+        "PortRange": {
+          "From": 8080,
+          "To": 8080
+        }
+      }
+    },
+    "NetworkAclEntryInboundEphemeral": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "RuleNumber": 130,
+        "Protocol": 6,
+        "RuleAction": "allow",
+        "CidrBlock": "0.0.0.0/0",
+        "PortRange": {
+          "From": 1024,
+          "To": 65535
+        }
+      }
+    },
+    "NetworkAclEntryOutbound": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "RuleNumber": 100,
+        "Protocol": -1,
+        "Egress": true,
+        "RuleAction": "allow",
+        "CidrBlock": "0.0.0.0/0"
+      }
+    },
+    "ALBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for Application Load Balancer",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "ECSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for ECS tasks",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": {"Ref": "ContainerPort"},
+            "ToPort": {"Ref": "ContainerPort"},
+            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"}
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {"Fn::Sub": "alb-${EnvironmentSuffix}"},
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          {"Ref": "PublicSubnet1"},
+          {"Ref": "PublicSubnet2"},
+          {"Ref": "PublicSubnet3"}
+        ],
+        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "alb-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "BlueTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {"Fn::Sub": "blue-tg-${EnvironmentSuffix}"},
+        "Port": {"Ref": "ContainerPort"},
+        "Protocol": "HTTP",
+        "TargetType": "ip",
+        "VpcId": {"Ref": "VPC"},
+        "HealthCheckEnabled": true,
+        "HealthCheckIntervalSeconds": 15,
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 10,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "DeregistrationDelay": 30,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "blue-tg-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "GreenTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {"Fn::Sub": "green-tg-${EnvironmentSuffix}"},
+        "Port": {"Ref": "ContainerPort"},
+        "Protocol": "HTTP",
+        "TargetType": "ip",
+        "VpcId": {"Ref": "VPC"},
+        "HealthCheckEnabled": true,
+        "HealthCheckIntervalSeconds": 15,
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 10,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "DeregistrationDelay": 30,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "green-tg-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "ALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "Port": 80,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "ForwardConfig": {
+              "TargetGroups": [
+                {
+                  "TargetGroupArn": {"Ref": "BlueTargetGroup"},
+                  "Weight": 100
+                },
+                {
+                  "TargetGroupArn": {"Ref": "GreenTargetGroup"},
+                  "Weight": 0
+                }
+              ],
+              "TargetGroupStickinessConfig": {
+                "Enabled": false
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"},
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "enabled"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "TaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SecretsManagerAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ECRAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:CreateLogGroup"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "TaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/ecs/${EnvironmentSuffix}"},
+        "RetentionInDays": 30
+      }
+    },
+    "TaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": {"Fn::Sub": "task-def-${EnvironmentSuffix}"},
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": ["FARGATE"],
+        "Cpu": "1024",
+        "Memory": "2048",
+        "ExecutionRoleArn": {"Fn::GetAtt": ["TaskExecutionRole", "Arn"]},
+        "TaskRoleArn": {"Fn::GetAtt": ["TaskRole", "Arn"]},
+        "ContainerDefinitions": [
+          {
+            "Name": {"Fn::Sub": "container-${EnvironmentSuffix}"},
+            "Image": {"Ref": "ContainerImage"},
+            "Cpu": 1024,
+            "Memory": 2048,
+            "Essential": true,
+            "PortMappings": [
+              {
+                "ContainerPort": {"Ref": "ContainerPort"},
+                "Protocol": "tcp"
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {"Ref": "LogGroup"},
+                "awslogs-region": {"Ref": "AWS::Region"},
+                "awslogs-stream-prefix": "ecs"
+              }
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "task-def-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "ServiceDiscoveryNamespace": {
+      "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
+      "Properties": {
+        "Name": {"Fn::Sub": "local-${EnvironmentSuffix}"},
+        "Vpc": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "sd-namespace-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "BlueServiceDiscoveryService": {
+      "Type": "AWS::ServiceDiscovery::Service",
+      "Properties": {
+        "Name": "blue",
+        "DnsConfig": {
+          "DnsRecords": [
+            {
+              "Type": "A",
+              "TTL": 60
+            }
+          ],
+          "NamespaceId": {"Ref": "ServiceDiscoveryNamespace"}
+        },
+        "HealthCheckCustomConfig": {
+          "FailureThreshold": 1
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "blue-sd-service-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "GreenServiceDiscoveryService": {
+      "Type": "AWS::ServiceDiscovery::Service",
+      "Properties": {
+        "Name": "green",
+        "DnsConfig": {
+          "DnsRecords": [
+            {
+              "Type": "A",
+              "TTL": 60
+            }
+          ],
+          "NamespaceId": {"Ref": "ServiceDiscoveryNamespace"}
+        },
+        "HealthCheckCustomConfig": {
+          "FailureThreshold": 1
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "green-sd-service-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "BlueECSService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": "ALBListener",
+      "Properties": {
+        "ServiceName": {"Fn::Sub": "blue-service-${EnvironmentSuffix}"},
+        "Cluster": {"Ref": "ECSCluster"},
+        "TaskDefinition": {"Ref": "TaskDefinition"},
+        "DesiredCount": 3,
+        "LaunchType": "FARGATE",
+        "PlatformVersion": "1.4.0",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}],
+            "Subnets": [
+              {"Ref": "PrivateSubnet1"},
+              {"Ref": "PrivateSubnet2"},
+              {"Ref": "PrivateSubnet3"}
+            ]
+          }
+        },
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {"Ref": "BlueTargetGroup"},
+            "ContainerName": {"Fn::Sub": "container-${EnvironmentSuffix}"},
+            "ContainerPort": {"Ref": "ContainerPort"}
+          }
+        ],
+        "ServiceRegistries": [
+          {
+            "RegistryArn": {"Fn::GetAtt": ["BlueServiceDiscoveryService", "Arn"]}
+          }
+        ],
+        "DeploymentConfiguration": {
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 50,
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          }
+        },
+        "HealthCheckGracePeriodSeconds": 60,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "blue-service-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "GreenECSService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": "ALBListener",
+      "Properties": {
+        "ServiceName": {"Fn::Sub": "green-service-${EnvironmentSuffix}"},
+        "Cluster": {"Ref": "ECSCluster"},
+        "TaskDefinition": {"Ref": "TaskDefinition"},
+        "DesiredCount": 3,
+        "LaunchType": "FARGATE",
+        "PlatformVersion": "1.4.0",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}],
+            "Subnets": [
+              {"Ref": "PrivateSubnet1"},
+              {"Ref": "PrivateSubnet2"},
+              {"Ref": "PrivateSubnet3"}
+            ]
+          }
+        },
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {"Ref": "GreenTargetGroup"},
+            "ContainerName": {"Fn::Sub": "container-${EnvironmentSuffix}"},
+            "ContainerPort": {"Ref": "ContainerPort"}
+          }
+        ],
+        "ServiceRegistries": [
+          {
+            "RegistryArn": {"Fn::GetAtt": ["GreenServiceDiscoveryService", "Arn"]}
+          }
+        ],
+        "DeploymentConfiguration": {
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 50,
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          }
+        },
+        "HealthCheckGracePeriodSeconds": 60,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "green-service-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "BlueServiceScalingTarget": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 10,
+        "MinCapacity": 3,
+        "ResourceId": {
+          "Fn::Sub": "service/${ECSCluster}/blue-service-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+        },
+        "ScalableDimension": "ecs:service:DesiredCount",
+        "ServiceNamespace": "ecs"
+      }
+    },
+    "BlueServiceScalingPolicyCPU": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {"Fn::Sub": "blue-cpu-scaling-${EnvironmentSuffix}"},
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "BlueServiceScalingTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 70.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+          },
+          "ScaleInCooldown": 300,
+          "ScaleOutCooldown": 60
+        }
+      }
+    },
+    "BlueServiceScalingPolicyMemory": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {"Fn::Sub": "blue-memory-scaling-${EnvironmentSuffix}"},
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "BlueServiceScalingTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 80.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "ECSServiceAverageMemoryUtilization"
+          },
+          "ScaleInCooldown": 300,
+          "ScaleOutCooldown": 60
+        }
+      }
+    },
+    "GreenServiceScalingTarget": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 10,
+        "MinCapacity": 3,
+        "ResourceId": {
+          "Fn::Sub": "service/${ECSCluster}/green-service-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+        },
+        "ScalableDimension": "ecs:service:DesiredCount",
+        "ServiceNamespace": "ecs"
+      }
+    },
+    "GreenServiceScalingPolicyCPU": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {"Fn::Sub": "green-cpu-scaling-${EnvironmentSuffix}"},
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "GreenServiceScalingTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 70.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
+          },
+          "ScaleInCooldown": 300,
+          "ScaleOutCooldown": 60
+        }
+      }
+    },
+    "GreenServiceScalingPolicyMemory": {
+      "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {"Fn::Sub": "green-memory-scaling-${EnvironmentSuffix}"},
+        "PolicyType": "TargetTrackingScaling",
+        "ScalingTargetId": {"Ref": "GreenServiceScalingTarget"},
+        "TargetTrackingScalingPolicyConfiguration": {
+          "TargetValue": 80.0,
+          "PredefinedMetricSpecification": {
+            "PredefinedMetricType": "ECSServiceAverageMemoryUtilization"
+          },
+          "ScaleInCooldown": 300,
+          "ScaleOutCooldown": 60
+        }
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "ecs-alerts-${EnvironmentSuffix}"},
+        "DisplayName": "ECS Health Alerts",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "sns-topic-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "BlueUnhealthyTargetAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "blue-unhealthy-targets-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when 2 or more tasks fail health checks in blue environment",
+        "MetricName": "UnHealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 10,
+        "Threshold": 2,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {"Fn::GetAtt": ["BlueTargetGroup", "TargetGroupFullName"]}
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "LoadBalancerFullName"]}
+          }
+        ],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "GreenUnhealthyTargetAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "green-unhealthy-targets-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when 2 or more tasks fail health checks in green environment",
+        "MetricName": "UnHealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 10,
+        "Threshold": 2,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {"Fn::GetAtt": ["GreenTargetGroup", "TargetGroupFullName"]}
+          },
+          {
+            "Name": "LoadBalancer",
+            "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "LoadBalancerFullName"]}
+          }
+        ],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {"Ref": "VPC"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+      }
+    },
+    "ECSClusterName": {
+      "Description": "ECS Cluster Name",
+      "Value": {"Ref": "ECSCluster"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ECSCluster"}
+      }
+    },
+    "LoadBalancerDNS": {
+      "Description": "Application Load Balancer DNS Name",
+      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"}
+      }
+    },
+    "BlueTargetGroupArn": {
+      "Description": "Blue Target Group ARN",
+      "Value": {"Ref": "BlueTargetGroup"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-BlueTargetGroup"}
+      }
+    },
+    "GreenTargetGroupArn": {
+      "Description": "Green Target Group ARN",
+      "Value": {"Ref": "GreenTargetGroup"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-GreenTargetGroup"}
+      }
+    },
+    "BlueServiceName": {
+      "Description": "Blue ECS Service Name",
+      "Value": {"Fn::GetAtt": ["BlueECSService", "Name"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-BlueService"}
+      }
+    },
+    "GreenServiceName": {
+      "Description": "Green ECS Service Name",
+      "Value": {"Fn::GetAtt": ["GreenECSService", "Name"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-GreenService"}
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS Topic ARN for alerts",
+      "Value": {"Ref": "SNSTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-SNSTopic"}
+      }
+    },
+    "ServiceDiscoveryNamespace": {
+      "Description": "Service Discovery Namespace",
+      "Value": {"Ref": "ServiceDiscoveryNamespace"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-SDNamespace"}
+      }
+    }
+  }
+}
+```
+
+## Deployment Instructions
+
+### Prerequisites
+
+1. AWS CLI configured with appropriate credentials
+2. An ECR repository with a container image (or use the default nginx:latest)
+3. Permissions to create VPC, ECS, ALB, CloudWatch, and IAM resources
+
+### Deployment Steps
+
+1. Deploy the CloudFormation stack:
+
+```bash
+aws cloudformation create-stack \
+  --stack-name blue-green-ecs-demo \
+  --template-body file://lib/blue-green-ecs-stack.json \
+  --parameters ParameterKey=EnvironmentSuffix,ParameterValue=demo123 \
+               ParameterKey=ContainerImage,ParameterValue=nginx:latest \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+2. Wait for stack creation to complete:
+
+```bash
+aws cloudformation wait stack-create-complete \
+  --stack-name blue-green-ecs-demo \
+  --region us-east-1
+```
+
+3. Get the Application Load Balancer DNS name:
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name blue-green-ecs-demo \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+  --output text
+```
+
+4. Access the application via the ALB DNS name in your browser.
+
+### Blue-Green Deployment Process
+
+To switch traffic from blue to green:
+
+1. Update the ALB listener to adjust weights:
+
+```bash
+# Get listener ARN
+LISTENER_ARN=$(aws elbv2 describe-listeners \
+  --load-balancer-arn $(aws cloudformation describe-stack-resources \
+    --stack-name blue-green-ecs-demo \
+    --logical-resource-id ApplicationLoadBalancer \
+    --query 'StackResources[0].PhysicalResourceId' \
+    --output text) \
+  --query 'Listeners[0].ListenerArn' \
+  --output text)
+
+# Get target group ARNs
+BLUE_TG=$(aws cloudformation describe-stacks \
+  --stack-name blue-green-ecs-demo \
+  --query 'Stacks[0].Outputs[?OutputKey==`BlueTargetGroupArn`].OutputValue' \
+  --output text)
+
+GREEN_TG=$(aws cloudformation describe-stacks \
+  --stack-name blue-green-ecs-demo \
+  --query 'Stacks[0].Outputs[?OutputKey==`GreenTargetGroupArn`].OutputValue' \
+  --output text)
+
+# Gradually shift traffic (example: 50/50 split)
+aws elbv2 modify-listener \
+  --listener-arn $LISTENER_ARN \
+  --default-actions Type=forward,ForwardConfig="{TargetGroups=[{TargetGroupArn=$BLUE_TG,Weight=50},{TargetGroupArn=$GREEN_TG,Weight=50}]}"
+
+# Shift all traffic to green
+aws elbv2 modify-listener \
+  --listener-arn $LISTENER_ARN \
+  --default-actions Type=forward,ForwardConfig="{TargetGroups=[{TargetGroupArn=$BLUE_TG,Weight=0},{TargetGroupArn=$GREEN_TG,Weight=100}]}"
+```
+
+### Monitoring
+
+1. View CloudWatch Container Insights:
+   - Navigate to CloudWatch Console
+   - Select Container Insights
+   - View ECS cluster metrics
+
+2. Check CloudWatch Alarms:
+   - Navigate to CloudWatch Alarms
+   - Monitor `blue-unhealthy-targets-*` and `green-unhealthy-targets-*`
+
+3. View ECS Service Events:
+
+```bash
+aws ecs describe-services \
+  --cluster ecs-cluster-demo123 \
+  --services blue-service-demo123 green-service-demo123 \
+  --region us-east-1
+```
+
+### Auto-Scaling Behavior
+
+The infrastructure includes auto-scaling policies that will:
+
+- Scale OUT when CPU utilization exceeds 70% (60-second cooldown)
+- Scale OUT when Memory utilization exceeds 80% (60-second cooldown)
+- Scale IN after 300 seconds when metrics drop below thresholds
+- Maintain minimum of 3 tasks and maximum of 10 tasks per service
+
+### Circuit Breaker and Rollback
+
+The deployment circuit breaker is configured with:
+
+- **Enable**: true
+- **Rollback**: true
+- **Threshold**: 50% (implicit from deployment configuration)
+- **Evaluation Period**: 10 minutes (based on CloudWatch alarm configuration)
+
+When 2 or more tasks fail health checks within the 10-minute window:
+1. CloudWatch alarm triggers
+2. SNS notification sent
+3. Circuit breaker automatically rolls back to previous stable task definition
+
+### Cleanup
+
+To delete all resources:
+
+```bash
+aws cloudformation delete-stack \
+  --stack-name blue-green-ecs-demo \
+  --region us-east-1
+```
+
+Note: All resources are configured without DeletionPolicy: Retain, ensuring complete cleanup.
+
+## Architecture Highlights
+
+1. **High Availability**: Resources distributed across 3 availability zones
+2. **Network Isolation**: Private subnets for ECS tasks, public subnets for ALB
+3. **Security**: Network ACLs restrict traffic to ports 80, 443, and 8080
+4. **Service Discovery**: Cloud Map enables DNS-based service-to-service communication
+5. **Monitoring**: CloudWatch Container Insights and custom alarms
+6. **Auto-scaling**: Independent CPU and memory-based scaling for both blue and green
+7. **Blue-Green Deployment**: Weighted routing with zero-downtime deployments
+8. **Automated Rollback**: Circuit breaker detects failures and rolls back automatically
