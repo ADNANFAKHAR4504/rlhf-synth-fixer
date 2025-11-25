@@ -218,7 +218,7 @@ variable "aurora_engine" {
 variable "aurora_engine_version" {
   description = "Aurora engine version"
   type        = string
-  default     = "15.3"
+  default     = "15.14"
 }
 
 variable "aurora_master_username" {
@@ -790,6 +790,14 @@ resource "aws_elasticache_subnet_group" "redis" {
   })
 }
 
+# Random password for Redis AUTH token (required for transit encryption)
+resource "random_password" "redis_auth_token" {
+  length  = 32
+  special = true
+  # Redis AUTH token requirements: 16-128 printable characters
+  override_special = "!&#$^<>-"
+}
+
 resource "aws_elasticache_replication_group" "redis" {
   replication_group_id       = "${local.resource_prefix}-redis"
   description                = "Redis cluster for fraud detection"
@@ -802,6 +810,7 @@ resource "aws_elasticache_replication_group" "redis" {
   security_group_ids         = [aws_security_group.redis.id]
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
+  auth_token                 = random_password.redis_auth_token.result
   # Automatic failover requires at least 2 nodes
   automatic_failover_enabled = var.redis_num_cache_clusters >= 2 ? var.redis_automatic_failover_enabled : false
   multi_az_enabled           = var.redis_num_cache_clusters >= 2 ? var.redis_automatic_failover_enabled : false
@@ -1904,6 +1913,14 @@ resource "aws_lambda_function" "secret_rotation" {
   tags = merge(local.tags, {
     Name = "${local.resource_prefix}-secret-rotation"
   })
+}
+
+# Lambda Permission for Secrets Manager
+resource "aws_lambda_permission" "secrets_manager_invoke" {
+  statement_id  = "AllowSecretsManagerInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.secret_rotation.function_name
+  principal     = "secretsmanager.amazonaws.com"
 }
 
 # Lambda Event Source Mappings
