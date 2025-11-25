@@ -1,0 +1,17 @@
+env                       = "staging"
+aws_region                = "us-east-1"
+kinesis_stream_mode       = "PROVISIONED"
+kinesis_shard_count       = 2
+dynamodb_billing_mode     = "PROVISIONED"
+dynamodb_rcu              = 10
+dynamodb_wcu              = 10
+redis_node_type           = "cache.t3.small"
+redis_num_cache_clusters  = 2
+aurora_min_capacity       = 0.5
+aurora_max_capacity       = 2
+fraud_scorer_memory       = 512
+fraud_scorer_timeout      = 60
+analyzer_memory           = 1024
+analyzer_timeout          = 90
+log_retention_days        = 7
+lifecycle_expiration_days = 60
