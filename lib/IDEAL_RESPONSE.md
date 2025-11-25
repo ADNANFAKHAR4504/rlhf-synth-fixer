@@ -28,11 +28,7 @@ Complete CloudFormation JSON template implementing all mandatory requirements wi
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": [
-        "subnet-0db236470c68dc5d6",
-        "subnet-001318554ecc56aca",
-        "subnet-0baa670c5a4b71373"
-      ],
+      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
       "Description": "List of private subnet IDs across 3 availability zones"
     },
     "EksVersion": {
