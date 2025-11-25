@@ -1,0 +1,38 @@
+{
+  "task_id": "101912442",
+  "po_id": "101912442",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-14T07:00:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-region-disaster-recovery"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "CloudWatch",
+    "DynamoDB",
+    "EC2",
+    "ELB",
+    "IAM",
+    "RDS",
+    "Route53",
+    "S3",
+    "SNS",
+    "VPC",
+    "SecretsManager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

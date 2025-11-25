@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "complexity": "expert",
+  "po_id": "101912505",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T07:06:08Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "SQS",
+    "EventBridge",
+    "X-Ray"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

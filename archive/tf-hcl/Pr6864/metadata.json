@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912402",
+  "team": "synth",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "ci/cd-pipeline-integration"
+  ],
+  "startedAt": "2025-11-19T09:30:00Z",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeStar",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

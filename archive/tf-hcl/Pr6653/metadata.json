@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6638",
+  "team": "5",
+  "startedAt": "2025-11-17T06:29:47.954Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "PCI-compliant network foundation with strict isolation between public load balancers, application servers, databases, and management tools across three availability zones",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "S3",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

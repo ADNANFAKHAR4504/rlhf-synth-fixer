@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T12:23:41+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "payment-processing",
+    "multi-environment",
+    "fintech"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "SQS",
+    "SNS",
+    "ALB",
+    "CloudWatch",
+    "IAM",
+    "SecretsManager"
+  ],
+  "po_id": "101912543",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

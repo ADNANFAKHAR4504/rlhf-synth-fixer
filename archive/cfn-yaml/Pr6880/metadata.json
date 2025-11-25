@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-19T11:22:30+00:00",
+  "po_id": "101912353",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "environment-migration"
+  ],
+  "aws_services": [
+    "DMS",
+    "DataSync",
+    "RDS Aurora",
+    "EFS",
+    "CloudWatch",
+    "SSM",
+    "SNS",
+    "KMS",
+    "VPC",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,15 @@
+name: TapStack
+runtime:
+  name: python
+description: Serverless payment webhook processor for Stripe and PayPal
+main: lib/__main__.py
+
+config:
+  environment_suffix:
+    description: Unique environment suffix for resource naming
+    type: string
+    default: ${ENVIRONMENT_SUFFIX}
+  aws_region:
+    description: AWS region for deployment
+    type: string
+    default: us-east-1

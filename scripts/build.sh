@@ -33,6 +33,12 @@ case "$LANGUAGE" in
     echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
     ;;
 
+  go)
+    echo "⚡ Building Go project..."
+    go mod tidy
+    echo "✅ Go build completed successfully"
+    ;;
+
   *)
     echo "📦 Running generic build (npm)..."
     npm run build

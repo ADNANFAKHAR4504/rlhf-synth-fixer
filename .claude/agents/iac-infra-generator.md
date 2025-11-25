@@ -21,7 +21,7 @@ All file operations are relative to this directory.
 - Review `.claude/lessons_learnt.md` for common patterns and pitfalls
 - Review `.claude/docs/references/metadata-requirements.md` for strict metadata validation rules
 - Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements
-- Review `.claude/validation_and_testing_guide.md` Phase 1 for quality requirements
+- Review `.claude/validation_and_testing_guide.md` PHASE 1 for quality requirements
 
 ### PHASE 0: Pre-Generation Validation (CRITICAL)
 
@@ -230,7 +230,79 @@ If validation fails (wrong platform, missing bold, no environmentSuffix):
 
 If validation passes:
 - Report: "PROMPT.md validation PASSED - proceeding"
+- Continue to Phase 2.6
+```
+
+---
+
+### PHASE 2.6: Deployment Readiness Validation (NEW)
+
+**Purpose**: Ensure PROMPT.md includes all deployment requirements before code generation
+
+**Validation Checklist**:
+
+1. **environmentSuffix Requirement**:
+   ```bash
+   grep -qiE "(environmentSuffix|environment.?suffix|string suffix|must include.*suffix)" lib/PROMPT.md
+   # Must find explicit requirement
+   ```
+
+2. **Destroyability Requirement**:
+   ```bash
+   grep -qiE "(destroyable|RemovalPolicy.*DESTROY|no.*Retain|DeletionPolicy.*Delete|FORBIDDEN.*RETAIN)" lib/PROMPT.md
+   # Must find explicit requirement
+   ```
+
+3. **Deployment Requirements Section**:
+   ```bash
+   grep -qiE "(Deployment Requirements|deployment.*requirements|CRITICAL)" lib/PROMPT.md
+   # Should find dedicated section
+   ```
+
+4. **Service-Specific Warnings**:
+   ```bash
+   # Check if PROMPT.md mentions GuardDuty → Should warn about account-level limitation
+   if grep -qiE "GuardDuty|guardduty" lib/PROMPT.md; then
+     grep -qiE "(do not create|account level|one detector)" lib/PROMPT.md || echo "⚠️ WARNING: GuardDuty mentioned but no account-level warning"
+   fi
+   
+   # Check if PROMPT.md mentions AWS Config → Should mention correct IAM policy
+   if grep -qiE "AWS Config|aws config|Config" lib/PROMPT.md; then
+     grep -qiE "(service-role/AWS_ConfigRole|AWS_ConfigRole)" lib/PROMPT.md || echo "⚠️ WARNING: AWS Config mentioned but no IAM policy guidance"
+   fi
+   
+   # Check if PROMPT.md mentions Lambda → Should mention Node.js 18+ SDK issue
+   if grep -qiE "Lambda|lambda" lib/PROMPT.md; then
+     grep -qiE "(Node.js 18|aws-sdk|SDK v3)" lib/PROMPT.md || echo "ℹ️ INFO: Lambda mentioned - ensure Node.js 18+ guidance present"
+   fi
+   ```
+
+**CHECKPOINT DECISION**:
+```
+If validation fails (missing deployment requirements):
+- DO NOT proceed to MODEL_RESPONSE
+- Report: "PROMPT.md missing deployment requirements - enhancing"
+- Add missing requirements to PROMPT.md:
+  - Add "Deployment Requirements (CRITICAL)" section if missing
+  - Add environmentSuffix requirement if missing
+  - Add destroyability requirement if missing
+  - Add service-specific warnings if relevant services mentioned
+- Re-validate until pass
+
+If validation passes:
+- Report: "Deployment readiness validation PASSED"
 - Continue to Phase 3
+```
+
+**Report Status**:
+```markdown
+**SYNTH GENERATOR STATUS**: PHASE 2.6 - DEPLOYMENT READINESS VALIDATION
+**PROMPT.md**: <PASSED/FAILED>
+**environmentSuffix**: <FOUND/NOT_FOUND>
+**Destroyability**: <FOUND/NOT_FOUND>
+**Deployment Section**: <FOUND/NOT_FOUND>
+**Service Warnings**: <CHECKED>
+**NEXT ACTION**: <Proceed to Phase 3 / Enhance PROMPT.md>
 ```
 
 ---
@@ -328,12 +400,13 @@ If WRONG platform/language:
 
 Report at each phase:
 - 📍 "Working Directory: $(pwd)"
-- ✅ "Phase 0: Pre-generation validation PASSED"
-- 📋 "Phase 1: Platform: {PLATFORM}, Language: {LANGUAGE}, Region: {REGION}"
-- 📝 "Phase 2: Generating PROMPT.md with human style"
-- ✅ "Phase 2.5: PROMPT.md validation PASSED"
-- 🔨 "Phase 4: Generating MODEL_RESPONSE for {PLATFORM}-{LANGUAGE}"
-- ✅ "Phase 4: MODEL_RESPONSE verified - code matches required platform"
+- ✅ "PHASE 0: Pre-generation validation PASSED"
+- 📋 "PHASE 1: Platform: {PLATFORM}, Language: {LANGUAGE}, Region: {REGION}"
+- 📝 "PHASE 2: Generating PROMPT.md with human style"
+- ✅ "PHASE 2.5: PROMPT.md validation PASSED"
+- ✅ "PHASE 2.6: Deployment readiness validation PASSED"
+- 🔨 "PHASE 4: Generating MODEL_RESPONSE for {PLATFORM}-{LANGUAGE}"
+- ✅ "PHASE 4: MODEL_RESPONSE verified - code matches required platform"
 - 📁 "Extracting {COUNT} files to lib/"
 - ✅ "Code generation complete"
 
@@ -356,6 +429,9 @@ Before completing, verify:
 - [ ] PROMPT.md includes environmentSuffix requirement
 - [ ] PROMPT.md includes destroyability requirement
 - [ ] Phase 2.5: PROMPT.md validation passed
+- [ ] Phase 2.6: Deployment readiness validation passed
+- [ ] PROMPT.md includes "Deployment Requirements (CRITICAL)" section
+- [ ] PROMPT.md includes service-specific warnings (if applicable)
 - [ ] MODEL_RESPONSE.md in correct platform and language
 - [ ] MODEL_RESPONSE platform verified (imports/syntax match)
 - [ ] Region constraints specified (PROMPT.md and lib/AWS_REGION)
@@ -371,9 +447,10 @@ Summary:
 - Language: {LANGUAGE}
 - Region: {REGION}
 - PROMPT.md: Human conversational style
+- PROMPT.md: Deployment requirements included
 - MODEL_RESPONSE.md: Generated and verified
 - Files created: {COUNT} in lib/
-- Validation: All checkpoints passed
+- Validation: All checkpoints passed (including deployment readiness)
 
-Ready for: iac-infra-qa-trainer (Phase 3)
+Ready for: iac-infra-qa-trainer (PHASE 3)
 ```

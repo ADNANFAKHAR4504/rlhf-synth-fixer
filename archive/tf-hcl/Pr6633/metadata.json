@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T04:13:25+00:00",
+  "subtask": "IaC Program Optimization",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "EC2",
+    "RDS",
+    "VPC",
+    "S3",
+    "DynamoDB",
+    "ALB",
+    "Auto Scaling"
+  ],
+  "po_id": "101912432",
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "VPC",
+    "S3",
+    "DynamoDB",
+    "ELB",
+    "Auto Scaling",
+    "Security Groups"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
