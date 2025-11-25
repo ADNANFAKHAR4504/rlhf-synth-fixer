@@ -1,0 +1,120 @@
+2025-11-24 11:45:10,026 - INFO - Starting comprehensive secrets security audit...
+2025-11-24 11:45:10,026 - INFO - Auditing Secrets Manager in us-east-1
+2025-11-24 11:45:17,859 - WARNING - Failed to get CloudTrail events for arn:aws:secretsmanager:us-east-1:123456789012:secret:prod-database-credentials-HGFuhS: An error occurred (500) when calling the LookupEvents operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-11-24 11:45:23,109 - WARNING - Failed to get CloudTrail events for arn:aws:secretsmanager:us-east-1:123456789012:secret:critical-api-key-nAOSvh: An error occurred (500) when calling the LookupEvents operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-11-24 11:45:23,117 - INFO - Auditing Parameter Store in us-east-1
+2025-11-24 11:45:23,149 - INFO - Auditing Lambda environment variables in us-east-1
+2025-11-24 11:45:23,182 - INFO - Auditing ECS task definitions in us-east-1
+2025-11-24 11:45:23,209 - INFO - JSON report saved to secrets_audit.json
+
+========================================================================================================================
+AWS SECRETS SECURITY AUDIT REPORT
+========================================================================================================================
+Audit Timestamp: 2025-11-24T11:45:23.209485+00:00
+Regions Audited: us-east-1
+
+
+EXECUTIVE SUMMARY
+------------------------------------------------------------
++------------------+---------+
+| Metric           |   Count |
++==================+=========+
+| Total Findings   |      22 |
++------------------+---------+
+| Critical Issues  |       9 |
++------------------+---------+
+| High Severity    |       8 |
++------------------+---------+
+| Cleanup Required |       2 |
++------------------+---------+
+| Low Priority     |       3 |
++------------------+---------+
+
+
+ROTATION AND LIFECYCLE AUDIT FINDINGS
+------------------------------------------------------------------------------------------------------------------------
++------------+-------------------+---------------------------+-----------+-----------------+-------------------------------------+
+| Severity   | Issue Type        | Resource                  | Region    | Last Accessed   | Details                             |
++============+===================+===========================+===========+=================+=====================================+
+| CRITICAL   | Never Rotated     | prod-database-credentials | us-east-1 | Never           | Secret has never been rotated       |
++------------+-------------------+---------------------------+-----------+-----------------+-------------------------------------+
+| CLEANUP    | Unused Credential | prod-database-credentials | us-east-1 | Never           | Secret not accessed in over 90 days |
++------------+-------------------+---------------------------+-----------+-----------------+-------------------------------------+
+| CRITICAL   | Never Rotated     | critical-api-key          | us-east-1 | Never           | Secret has never been rotated       |
++------------+-------------------+---------------------------+-----------+-----------------+-------------------------------------+
+| CLEANUP    | Unused Credential | critical-api-key          | us-east-1 | Never           | Secret not accessed in over 90 days |
++------------+-------------------+---------------------------+-----------+-----------------+-------------------------------------+
+
+
+ENCRYPTION AND ACCESS CONTROL AUDIT FINDINGS
+------------------------------------------------------------------------------------------------------------------------
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| Severity   | Issue Type               | Resource                  | Region    | Last Accessed   | Details                                               |
++============+==========================+===========================+===========+=================+=======================================================+
+| HIGH       | Missing Cmk Encryption   | prod-database-credentials | us-east-1 | Never           | Not using customer-managed KMS key                    |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| HIGH       | Missing Cmk Encryption   | critical-api-key          | us-east-1 | Never           | Not using customer-managed KMS key                    |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| HIGH       | Dr Gap                   | critical-api-key          | us-east-1 | Never           | Critical secret not replicated to secondary region    |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| CRITICAL   | Plaintext Sensitive Data | /app/database/password    | us-east-1 | N/A             | Plaintext parameter contains password                 |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| LOW        | Tier Waste               | /app/database/password    | us-east-1 | N/A             | Standard tier parameter under 4KB could use free tier |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| CRITICAL   | Plaintext Sensitive Data | /app/api_key              | us-east-1 | N/A             | Plaintext parameter contains api_key                  |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| LOW        | Tier Waste               | /app/api_key              | us-east-1 | N/A             | Standard tier parameter under 4KB could use free tier |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| HIGH       | Missing Cmk Encryption   | /app/secure/token         | us-east-1 | N/A             | SecureString not using customer-managed KMS key       |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+| LOW        | Tier Waste               | /app/secure/token         | us-east-1 | N/A             | Standard tier parameter under 4KB could use free tier |
++------------+--------------------------+---------------------------+-----------+-----------------+-------------------------------------------------------+
+
+
+CRITICAL: HARDCODED SECRETS FOUND
+------------------------------------------------------------------------------------------------------------------------
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| Severity   | Service   | Resource          | Region    | Variable    | Pattern   | Details                                               |
++============+===========+===================+===========+=============+===========+=======================================================+
+| CRITICAL   | Lambda    | api-handler       | us-east-1 | DB_PASSWORD | password  | Lambda environment variable contains password         |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| CRITICAL   | Lambda    | api-handler       | us-east-1 | API_KEY     | api_key   | Lambda environment variable contains api_key          |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| CRITICAL   | Lambda    | auth-service      | us-east-1 | JWT_SECRET  | token     | Lambda environment variable contains token            |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| CRITICAL   | ECS       | web-app:1         | us-east-1 | DB_PASSWORD | password  | ECS task definition contains password                 |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| CRITICAL   | ECS       | web-app:1         | us-east-1 | API_TOKEN   | token     | ECS task definition contains token                    |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| HIGH       | ECS       | web-app:1         | us-east-1 | DB_PASSWORD | N/A       | Sensitive variable not using Secrets Manager refer... |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| HIGH       | ECS       | web-app:1         | us-east-1 | API_TOKEN   | N/A       | Sensitive variable not using Secrets Manager refer... |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| HIGH       | ECS       | backend-service:1 | us-east-1 | SECRET_KEY  | N/A       | Sensitive variable not using Secrets Manager refer... |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+| HIGH       | ECS       | backend-service:1 | us-east-1 | AUTH_TOKEN  | N/A       | Sensitive variable not using Secrets Manager refer... |
++------------+-----------+-------------------+-----------+-------------+-----------+-------------------------------------------------------+
+
+
+TOP SECURITY RECOMMENDATIONS
+------------------------------------------------------------
+1. IMMEDIATE ACTION: Address 9 CRITICAL findings immediately
+2. Encrypt 2 plaintext parameters containing sensitive data
+3. Migrate all hardcoded secrets to AWS Secrets Manager immediately
+4. Implement CMK encryption for 3 secrets using default AWS keys
+5. Review and potentially delete 2 unused secrets
+6. Enable cross-region replication for all critical secrets
+7. Implement automated rotation for all applicable secrets
+8. Enable AWS CloudTrail logging for all secret access events
+
+========================================================================================================================
