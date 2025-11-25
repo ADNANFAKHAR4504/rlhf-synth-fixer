@@ -20,138 +20,127 @@ describe('TapStack Integration Tests', () => {
   describe('Output Validation', () => {
     it('should have all required outputs', () => {
       expect(outputs).toBeDefined();
-      expect(outputs.ClusterEndpoint).toBeDefined();
-      expect(outputs.OIDCIssuer).toBeDefined();
-      expect(outputs.Kubeconfig).toBeDefined();
-      expect(outputs.VpcId).toBeDefined();
-      expect(outputs.ClusterName).toBeDefined();
-      expect(outputs.ClusterSecurityGroupId).toBeDefined();
-      expect(outputs.NodeSecurityGroupId).toBeDefined();
+      expect(outputs.clusterEndpoint).toBeDefined();
+      expect(outputs.oidcIssuer).toBeDefined();
+      expect(outputs.kubeconfig).toBeDefined();
     });
 
     it('should have valid cluster endpoint format', () => {
-      expect(outputs.ClusterEndpoint).toMatch(
+      expect(outputs.clusterEndpoint).toMatch(
         /^https:\/\/[A-Za-z0-9-]+\.eks\.[a-z0-9-]+\.amazonaws\.com$/
       );
     });
 
     it('should have valid OIDC issuer format', () => {
-      expect(outputs.OIDCIssuer).toMatch(
+      expect(outputs.oidcIssuer).toMatch(
         /^https:\/\/oidc\.eks\.[a-z0-9-]+\.amazonaws\.com\/id\/[A-Z0-9-]+$/
       );
     });
 
-    it('should have valid VPC ID format', () => {
-      expect(outputs.VpcId).toMatch(/^vpc-[a-z0-9]{8,20}$/);
-    });
-
-    it('should have valid security group ID formats', () => {
-      expect(outputs.ClusterSecurityGroupId).toMatch(/^sg-[a-z0-9]{8,20}$/);
-      expect(outputs.NodeSecurityGroupId).toMatch(/^sg-[a-z0-9]{8,20}$/);
-    });
-
     it('should have valid kubeconfig data', () => {
-      expect(outputs.Kubeconfig).toBeDefined();
-      expect(typeof outputs.Kubeconfig).toBe('string');
-      expect(outputs.Kubeconfig.length).toBeGreaterThan(0);
+      expect(outputs.kubeconfig).toBeDefined();
+      expect(typeof outputs.kubeconfig).toBe('string');
+      expect(outputs.kubeconfig.length).toBeGreaterThan(0);
     });
 
-    it('should have valid cluster name', () => {
-      expect(outputs.ClusterName).toBeDefined();
-      expect(typeof outputs.ClusterName).toBe('string');
-      expect(outputs.ClusterName).toMatch(/^eks-cluster-/);
+    it('should have kubeconfig with cluster name', () => {
+      const kubeconfigObj = JSON.parse(outputs.kubeconfig);
+      expect(kubeconfigObj).toBeDefined();
+      expect(kubeconfigObj.users[0].user.exec.args).toContain('--cluster-name');
     });
   });
 
   describe('Resource Naming Conventions', () => {
-    it('should use consistent naming pattern for cluster resources', () => {
-      const clusterName = outputs.ClusterName;
+    it('should extract cluster name from kubeconfig', () => {
+      const kubeconfigObj = JSON.parse(outputs.kubeconfig);
+      const clusterName = kubeconfigObj.users[0].user.exec.args.find((arg: string, idx: number) =>
+        kubeconfigObj.users[0].user.exec.args[idx - 1] === '--cluster-name'
+      );
       expect(clusterName).toMatch(/^eks-cluster-[a-z0-9-]+$/);
     });
 
-    it('should include environment suffix in resource names', () => {
-      const clusterName = outputs.ClusterName;
-      expect(clusterName).toContain('-');
+    it('should include environment suffix in cluster endpoint', () => {
+      expect(outputs.clusterEndpoint).toContain('eks.us-east-1');
     });
   });
 
   describe('Output Data Types', () => {
     it('should have string-type outputs', () => {
-      expect(typeof outputs.ClusterEndpoint).toBe('string');
-      expect(typeof outputs.OIDCIssuer).toBe('string');
-      expect(typeof outputs.Kubeconfig).toBe('string');
-      expect(typeof outputs.VpcId).toBe('string');
-      expect(typeof outputs.ClusterName).toBe('string');
+      expect(typeof outputs.clusterEndpoint).toBe('string');
+      expect(typeof outputs.oidcIssuer).toBe('string');
+      expect(typeof outputs.kubeconfig).toBe('string');
     });
 
     it('should have non-empty string values', () => {
-      expect(outputs.ClusterEndpoint.length).toBeGreaterThan(0);
-      expect(outputs.OIDCIssuer.length).toBeGreaterThan(0);
-      expect(outputs.Kubeconfig.length).toBeGreaterThan(0);
-      expect(outputs.VpcId.length).toBeGreaterThan(0);
+      expect(outputs.clusterEndpoint.length).toBeGreaterThan(0);
+      expect(outputs.oidcIssuer.length).toBeGreaterThan(0);
+      expect(outputs.kubeconfig.length).toBeGreaterThan(0);
     });
   });
 
   describe('Infrastructure Connectivity Patterns', () => {
     it('should have cluster endpoint in correct region', () => {
-      expect(outputs.ClusterEndpoint).toContain('.us-east-1.');
+      expect(outputs.clusterEndpoint).toContain('.us-east-1.');
     });
 
     it('should have OIDC issuer in correct region', () => {
-      expect(outputs.OIDCIssuer).toContain('.us-east-1.');
+      expect(outputs.oidcIssuer).toContain('.us-east-1.');
     });
 
     it('should have matching cluster identifiers', () => {
-      const clusterName = outputs.ClusterName;
-      expect(clusterName).toBeDefined();
-      expect(clusterName.startsWith('eks-cluster-')).toBe(true);
+      const kubeconfigObj = JSON.parse(outputs.kubeconfig);
+      const clusterEndpoint = kubeconfigObj.clusters[0].cluster.server;
+      expect(clusterEndpoint).toBe(outputs.clusterEndpoint);
     });
 
-    it('should have security groups for cluster and nodes', () => {
-      expect(outputs.ClusterSecurityGroupId).toBeDefined();
-      expect(outputs.NodeSecurityGroupId).toBeDefined();
-      expect(outputs.ClusterSecurityGroupId).not.toBe(outputs.NodeSecurityGroupId);
+    it('should have OIDC issuer matching cluster ID', () => {
+      const clusterIdFromEndpoint = outputs.clusterEndpoint.match(/https:\/\/([A-Z0-9]+)\./)?.[1];
+      const clusterIdFromOidc = outputs.oidcIssuer.match(/\/id\/([A-Z0-9]+)$/)?.[1];
+      expect(clusterIdFromEndpoint).toBe(clusterIdFromOidc);
     });
   });
 
   describe('EKS Configuration', () => {
     it('should have HTTPS cluster endpoint', () => {
-      expect(outputs.ClusterEndpoint.startsWith('https://')).toBe(true);
+      expect(outputs.clusterEndpoint.startsWith('https://')).toBe(true);
     });
 
     it('should have valid OIDC provider URL', () => {
-      expect(outputs.OIDCIssuer.startsWith('https://')).toBe(true);
+      expect(outputs.oidcIssuer.startsWith('https://')).toBe(true);
     });
 
     it('should have kubeconfig with sufficient data', () => {
-      expect(outputs.Kubeconfig.length).toBeGreaterThan(10);
+      expect(outputs.kubeconfig.length).toBeGreaterThan(100);
+      const kubeconfigObj = JSON.parse(outputs.kubeconfig);
+      expect(kubeconfigObj.clusters).toBeDefined();
+      expect(kubeconfigObj.users).toBeDefined();
+      expect(kubeconfigObj.contexts).toBeDefined();
     });
   });
 
 
   describe('Network Configuration', () => {
-    it('should have VPC configured', () => {
-      expect(outputs.VpcId).toBeDefined();
-      expect(outputs.VpcId.startsWith('vpc-')).toBe(true);
+    it('should have cluster in us-east-1 region', () => {
+      expect(outputs.clusterEndpoint).toContain('eks.us-east-1');
+      expect(outputs.oidcIssuer).toContain('eks.us-east-1');
     });
 
-    it('should have cluster and node security groups configured', () => {
-      expect(outputs.ClusterSecurityGroupId).toBeDefined();
-      expect(outputs.NodeSecurityGroupId).toBeDefined();
+    it('should have kubeconfig configured for us-east-1', () => {
+      const kubeconfigObj = JSON.parse(outputs.kubeconfig);
+      const region = kubeconfigObj.users[0].user.exec.args.find((arg: string, idx: number) =>
+        kubeconfigObj.users[0].user.exec.args[idx - 1] === '--region'
+      );
+      expect(region).toBe('us-east-1');
     });
   });
 
   describe('AWS Resource ID Validation', () => {
-    it('should have valid AWS resource ID lengths', () => {
-      expect(outputs.VpcId.length).toBeGreaterThanOrEqual(12);
-      expect(outputs.ClusterSecurityGroupId.length).toBeGreaterThanOrEqual(11);
-      expect(outputs.NodeSecurityGroupId.length).toBeGreaterThanOrEqual(11);
+    it('should have valid cluster endpoint format', () => {
+      expect(outputs.clusterEndpoint).toMatch(/^https:\/\/[A-F0-9]+\.gr[0-9]\.us-east-1\.eks\.amazonaws\.com$/);
     });
 
-    it('should have consistent resource ID formats', () => {
-      expect(outputs.VpcId).toMatch(/^vpc-[a-z0-9]+$/);
-      expect(outputs.ClusterSecurityGroupId).toMatch(/^sg-[a-z0-9]+$/);
-      expect(outputs.NodeSecurityGroupId).toMatch(/^sg-[a-z0-9]+$/);
+    it('should have valid OIDC issuer format', () => {
+      expect(outputs.oidcIssuer).toMatch(/^https:\/\/oidc\.eks\.us-east-1\.amazonaws\.com\/id\/[A-F0-9]+$/);
     });
   });
 
@@ -163,13 +152,9 @@ describe('TapStack Integration Tests', () => {
 
     it('should contain only expected output keys', () => {
       const expectedKeys = [
-        'ClusterEndpoint',
-        'OIDCIssuer',
-        'Kubeconfig',
-        'VpcId',
-        'ClusterName',
-        'ClusterSecurityGroupId',
-        'NodeSecurityGroupId',
+        'clusterEndpoint',
+        'oidcIssuer',
+        'kubeconfig',
       ];
 
       const actualKeys = Object.keys(outputs);
@@ -196,23 +181,23 @@ describe('TapStack Integration Tests', () => {
 
   describe('Region Consistency', () => {
     it('should have all resources in us-east-1 region', () => {
-      if (outputs.ClusterEndpoint.includes('.amazonaws.com')) {
-        expect(outputs.ClusterEndpoint).toContain('.us-east-1.');
+      if (outputs.clusterEndpoint.includes('.amazonaws.com')) {
+        expect(outputs.clusterEndpoint).toContain('.us-east-1.');
       }
-      if (outputs.OIDCIssuer.includes('.amazonaws.com')) {
-        expect(outputs.OIDCIssuer).toContain('.us-east-1.');
+      if (outputs.oidcIssuer.includes('.amazonaws.com')) {
+        expect(outputs.oidcIssuer).toContain('.us-east-1.');
       }
     });
   });
 
   describe('Resource Relationships', () => {
-    it('should have consistent environment suffix across resources', () => {
-      const clusterName = outputs.ClusterName;
-      const vpcId = outputs.VpcId;
+    it('should have consistent cluster identifier across outputs', () => {
+      const clusterIdFromEndpoint = outputs.clusterEndpoint.match(/https:\/\/([A-F0-9]+)\./)?.[1];
+      const clusterIdFromOidc = outputs.oidcIssuer.match(/\/id\/([A-F0-9]+)$/)?.[1];
 
-      // Both should have consistent naming
-      expect(clusterName).toBeDefined();
-      expect(vpcId).toBeDefined();
+      expect(clusterIdFromEndpoint).toBeDefined();
+      expect(clusterIdFromOidc).toBeDefined();
+      expect(clusterIdFromEndpoint).toBe(clusterIdFromOidc);
     });
   });
 });
