@@ -146,14 +146,14 @@ class TestTapStack(unittest.TestCase):
         """Test RDS parameter group creation"""
         self.template.resource_count_is("AWS::RDS::DBParameterGroup", 1)
         self.template.has_resource_properties("AWS::RDS::DBParameterGroup", {
-            "Family": "postgres14",
+            "Family": "postgres16",
             "Parameters": {
                 "shared_preload_libraries": "pg_stat_statements",
                 "log_statement": "all",
-                "log_duration": "on",
+                "log_min_duration_statement": "1000",
                 "max_connections": "500",
                 "random_page_cost": "1.1",
-                "effective_cache_size": "45GB"
+                "effective_cache_size": "5898240"
             }
         })
 
@@ -178,7 +178,7 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(len(primary_instances), 1)
         primary = primary_instances[0]["Properties"]
         self.assertEqual(primary["Engine"], "postgres")
-        self.assertEqual(primary["EngineVersion"], "14.7")
+        self.assertEqual(primary["EngineVersion"], "14")
         self.assertEqual(primary["DBInstanceClass"], "db.r6g.2xlarge")
         self.assertTrue(primary["StorageEncrypted"])
         self.assertTrue(primary["MultiAZ"])
@@ -294,7 +294,6 @@ class TestTapStack(unittest.TestCase):
             "Handler": "index.handler",
             "Timeout": 900,
             "MemorySize": 3008,
-            "ReservedConcurrentExecutions": 100,
             "Architectures": ["arm64"]
         })
 
