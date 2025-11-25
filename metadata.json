@@ -6,6 +6,8 @@
   "turn_type": "multi",
   "po_id": "synth-training",
   "team": "synth",
+  "author": "mayanksethi-turing",
+  "reviewer": "adnan-turing",
   "startedAt": "2025-11-25T13:25:00Z",
   "subtask": "Security, Compliance, and Governance",
   "aws_services": [
