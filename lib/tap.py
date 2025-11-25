@@ -125,8 +125,8 @@ class PaymentInfrastructureStack(TerraformStack):
         # Create IAM role for Lambda
         self.lambda_role = self._create_lambda_role()
 
-        # Create Lambda deployment package
-        self._create_lambda_package()
+        # Create Lambda deployment package (store absolute path)
+        self.lambda_zip_path = self._create_lambda_package()
 
         # Create Lambda function
         self.lambda_function = self._create_lambda_function()
@@ -397,10 +397,13 @@ class PaymentInfrastructureStack(TerraformStack):
 
         return role
 
-    def _create_lambda_package(self) -> None:
+    def _create_lambda_package(self) -> str:
         """
         Create Lambda deployment package by zipping the handler code.
         This runs during stack synthesis to prepare the Lambda ZIP file.
+        
+        Returns:
+            str: Absolute path to the created ZIP file
         """
         lib_dir = os.path.dirname(os.path.abspath(__file__))
         lambda_source_dir = os.path.join(lib_dir, 'lambda', 'payment_processor')
@@ -411,12 +414,12 @@ class PaymentInfrastructureStack(TerraformStack):
         # Only create if source exists
         if not os.path.isdir(lambda_source_dir):
             print(f"ℹ️ Lambda source directory not found at {lambda_source_dir}. Skipping package creation.")
-            return
+            return target_zip_path
         
         handler_path = os.path.join(lambda_source_dir, handler_file)
         if not os.path.isfile(handler_path):
             print(f"❌ Error: Lambda handler file not found at {handler_path}")
-            return
+            return target_zip_path
 
         # Create ZIP file
         with zipfile.ZipFile(target_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -424,6 +427,8 @@ class PaymentInfrastructureStack(TerraformStack):
         
         zip_size = os.path.getsize(target_zip_path)
         print(f"✅ Created Lambda package: {target_zip_path} ({zip_size:,} bytes)")
+        
+        return target_zip_path
 
     def _create_lambda_function(self) -> LambdaFunction:
         """
@@ -448,7 +453,7 @@ class PaymentInfrastructureStack(TerraformStack):
             function_name=f'payment-{self.environment_suffix}-processor',
             runtime='python3.11',
             handler='handler.lambda_handler',
-            filename='lib/payment_processor.zip',
+            filename=self.lambda_zip_path,  # Use absolute path
             role=self.lambda_role.arn,
             timeout=60,
             memory_size=512,
