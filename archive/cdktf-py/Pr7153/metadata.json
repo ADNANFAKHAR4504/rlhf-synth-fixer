@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-24T13:54:00+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "b9z1h0",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "EIP",
+    "RouteTable",
+    "SecurityGroup",
+    "CloudWatch",
+    "FlowLog",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
