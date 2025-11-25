@@ -26,5 +26,11 @@
   "medium_failures": 2,
   "low_failures": 0,
   "tests_created": 99,
-  "completedAt": "2025-11-24T03:35:00-00:00"
+  "completedAt": "2025-11-24T03:35:00-00:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
