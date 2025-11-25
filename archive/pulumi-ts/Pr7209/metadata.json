@@ -7,7 +7,9 @@
   "author": "mayanksethi-turing",
   "startedAt": "2025-11-24T05:52:17+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Security Configuration as Code"],
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
   "po_id": "a4w0l1",
   "aws_services": [
     "CodePipeline",
@@ -21,5 +23,10 @@
     "SNS"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
