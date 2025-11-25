@@ -1770,12 +1770,28 @@ EOF
 }
 
 # Lambda Layer for dependencies
+# Note: This creates an empty layer structure. For production, build a proper layer with:
+# mkdir -p python/lib/python3.12/site-packages
+# pip install psycopg2-binary redis -t python/lib/python3.12/site-packages/
+# zip -r dependencies_layer.zip python/
+data "archive_file" "dependencies_layer" {
+  type        = "zip"
+  output_path = "/tmp/dependencies_layer.zip"
+
+  # Create minimal layer structure (empty but valid)
+  source {
+    content  = ""
+    filename = "python/lib/python3.12/site-packages/.gitkeep"
+  }
+}
+
 resource "aws_lambda_layer_version" "dependencies" {
-  filename            = "layer.zip"
+  filename            = data.archive_file.dependencies_layer.output_path
   layer_name          = "${local.resource_prefix}-dependencies"
   compatible_runtimes = [var.lambda_runtime]
+  source_code_hash    = data.archive_file.dependencies_layer.output_base64sha256
 
-  description = "Layer containing psycopg2-binary and redis"
+  description = "Layer containing psycopg2-binary and redis (empty structure - build proper layer separately for production)"
 }
 
 # Lambda Functions
