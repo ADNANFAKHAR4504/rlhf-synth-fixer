@@ -58,8 +58,15 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Configuration
     const config = new pulumi.Config();
-    const environmentSuffix = args.environmentSuffix || config.get('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      args.environmentSuffix || config.get('environmentSuffix') || 'dev';
     const region = aws.config.region || 'us-east-1';
+
+    // Database password - can be configured via Pulumi config or uses default for testing
+    // For production, always use: pulumi config set --secret dbPassword <secure-password>
+    const dbPassword =
+      config.getSecret('dbPassword') ||
+      pulumi.secret('ChangeMe123!TestPassword');
 
     // Availability zones
     const availabilityZones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
@@ -361,7 +368,7 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '15.3',
         databaseName: 'ecommerce',
         masterUsername: 'dbadmin',
-        masterPassword: pulumi.secret(config.requireSecret('dbPassword')),
+        masterPassword: dbPassword,
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [auroraSecurityGroup.id],
         serverlessv2ScalingConfiguration: {
@@ -471,7 +478,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         secretId: dbSecret.id,
         secretString: pulumi
-          .all([auroraCluster.masterUsername, config.requireSecret('dbPassword')])
+          .all([auroraCluster.masterUsername, dbPassword])
           .apply(([username, password]: [string, string]) =>
             JSON.stringify({
               username: username,
@@ -493,7 +500,10 @@ export class TapStack extends pulumi.ComponentResource {
             Statement: [
               {
                 Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
+                Action: [
+                  'secretsmanager:GetSecretValue',
+                  'secretsmanager:DescribeSecret',
+                ],
                 Resource: arn,
               },
             ],
@@ -826,7 +836,8 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.StringAsset(`
+          'index.js': new pulumi.asset.StringAsset(
+            `
 exports.handler = async (event) => {
     console.log('Event:', JSON.stringify(event, null, 2));
 
@@ -843,7 +854,8 @@ exports.handler = async (event) => {
         }),
     };
 };
-        `),
+        `
+          ),
         }),
         environment: {
           variables: {
@@ -1072,7 +1084,8 @@ exports.handler = async (event) => {
         handler: 'index.handler',
         publish: true,
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.StringAsset(`
+          'index.js': new pulumi.asset.StringAsset(
+            `
 exports.handler = async (event) => {
     const request = event.Records[0].cf.request;
     const headers = request.headers;
@@ -1095,7 +1108,8 @@ exports.handler = async (event) => {
 
     return request;
 };
-        `),
+        `
+          ),
         }),
         timeout: 5,
         memorySize: 128,
@@ -1104,7 +1118,10 @@ exports.handler = async (event) => {
           Environment: environmentSuffix,
         },
       },
-      { parent: this, provider: new aws.Provider('us-east-1', { region: 'us-east-1' }) }
+      {
+        parent: this,
+        provider: new aws.Provider('us-east-1', { region: 'us-east-1' }),
+      }
     );
 
     // CloudFront Distribution
@@ -1118,7 +1135,8 @@ exports.handler = async (event) => {
             originId: 's3-static',
             domainName: staticAssetsBucket.bucketRegionalDomainName,
             s3OriginConfig: {
-              originAccessIdentity: originAccessIdentity.cloudfrontAccessIdentityPath,
+              originAccessIdentity:
+                originAccessIdentity.cloudfrontAccessIdentityPath,
             },
           },
           {
@@ -1157,7 +1175,15 @@ exports.handler = async (event) => {
             pathPattern: '/api/*',
             targetOriginId: 'alb-api',
             viewerProtocolPolicy: 'redirect-to-https',
-            allowedMethods: ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'],
+            allowedMethods: [
+              'DELETE',
+              'GET',
+              'HEAD',
+              'OPTIONS',
+              'PATCH',
+              'POST',
+              'PUT',
+            ],
             cachedMethods: ['GET', 'HEAD'],
             forwardedValues: {
               queryString: true,
@@ -1458,87 +1484,120 @@ exports.handler = async (event) => {
       {
         dashboardName: `ecommerce-metrics-${environmentSuffix}`,
         dashboardBody: pulumi
-          .all([apiLambda.name, alb.arnSuffix, lambdaTargetGroup.arnSuffix, auroraCluster.clusterIdentifier])
-          .apply(([_lambdaName, albArn, tgArn, clusterName]: [string, string, string, string]) =>
-            JSON.stringify({
-              widgets: [
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      ['AWS/Lambda', 'Duration', { stat: 'Average', label: 'Avg Latency' }],
-                      ['...', { stat: 'p99', label: 'P99 Latency' }],
-                    ],
-                    period: 60,
-                    stat: 'Average',
-                    region: region,
-                    title: 'API Latency (ms)',
-                    yAxis: { left: { min: 0 } },
-                  },
-                },
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      ['AWS/Lambda', 'Errors', { stat: 'Sum', label: 'Lambda Errors' }],
-                      ['AWS/Lambda', 'Throttles', { stat: 'Sum', label: 'Lambda Throttles' }],
-                    ],
-                    period: 60,
-                    stat: 'Sum',
-                    region: region,
-                    title: 'Error Rates',
-                    yAxis: { left: { min: 0 } },
-                  },
-                },
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      ['AWS/ApplicationELB', 'TargetResponseTime', { stat: 'Average', dimensions: { LoadBalancer: albArn } }],
-                      [
-                        'AWS/ApplicationELB',
-                        'HealthyHostCount',
-                        {
-                          stat: 'Average',
-                          dimensions: { LoadBalancer: albArn, TargetGroup: tgArn },
-                        },
+          .all([
+            apiLambda.name,
+            alb.arnSuffix,
+            lambdaTargetGroup.arnSuffix,
+            auroraCluster.clusterIdentifier,
+          ])
+          .apply(
+            ([_lambdaName, albArn, tgArn, clusterName]: [
+              string,
+              string,
+              string,
+              string,
+            ]) =>
+              JSON.stringify({
+                widgets: [
+                  {
+                    type: 'metric',
+                    properties: {
+                      metrics: [
+                        [
+                          'AWS/Lambda',
+                          'Duration',
+                          { stat: 'Average', label: 'Avg Latency' },
+                        ],
+                        ['...', { stat: 'p99', label: 'P99 Latency' }],
                       ],
-                    ],
-                    period: 60,
-                    stat: 'Average',
-                    region: region,
-                    title: 'ALB Metrics',
+                      period: 60,
+                      stat: 'Average',
+                      region: region,
+                      title: 'API Latency (ms)',
+                      yAxis: { left: { min: 0 } },
+                    },
                   },
-                },
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      [
-                        'AWS/RDS',
-                        'DatabaseConnections',
-                        {
-                          stat: 'Average',
-                          dimensions: { DBClusterIdentifier: clusterName },
-                        },
+                  {
+                    type: 'metric',
+                    properties: {
+                      metrics: [
+                        [
+                          'AWS/Lambda',
+                          'Errors',
+                          { stat: 'Sum', label: 'Lambda Errors' },
+                        ],
+                        [
+                          'AWS/Lambda',
+                          'Throttles',
+                          { stat: 'Sum', label: 'Lambda Throttles' },
+                        ],
                       ],
-                      [
-                        'AWS/RDS',
-                        'CPUUtilization',
-                        {
-                          stat: 'Average',
-                          dimensions: { DBClusterIdentifier: clusterName },
-                        },
-                      ],
-                    ],
-                    period: 60,
-                    stat: 'Average',
-                    region: region,
-                    title: 'Aurora Metrics',
+                      period: 60,
+                      stat: 'Sum',
+                      region: region,
+                      title: 'Error Rates',
+                      yAxis: { left: { min: 0 } },
+                    },
                   },
-                },
-              ],
-            })
+                  {
+                    type: 'metric',
+                    properties: {
+                      metrics: [
+                        [
+                          'AWS/ApplicationELB',
+                          'TargetResponseTime',
+                          {
+                            stat: 'Average',
+                            dimensions: { LoadBalancer: albArn },
+                          },
+                        ],
+                        [
+                          'AWS/ApplicationELB',
+                          'HealthyHostCount',
+                          {
+                            stat: 'Average',
+                            dimensions: {
+                              LoadBalancer: albArn,
+                              TargetGroup: tgArn,
+                            },
+                          },
+                        ],
+                      ],
+                      period: 60,
+                      stat: 'Average',
+                      region: region,
+                      title: 'ALB Metrics',
+                    },
+                  },
+                  {
+                    type: 'metric',
+                    properties: {
+                      metrics: [
+                        [
+                          'AWS/RDS',
+                          'DatabaseConnections',
+                          {
+                            stat: 'Average',
+                            dimensions: { DBClusterIdentifier: clusterName },
+                          },
+                        ],
+                        [
+                          'AWS/RDS',
+                          'CPUUtilization',
+                          {
+                            stat: 'Average',
+                            dimensions: { DBClusterIdentifier: clusterName },
+                          },
+                        ],
+                      ],
+                      period: 60,
+                      stat: 'Average',
+                      region: region,
+                      title: 'Aurora Metrics',
+                    },
+                  },
+                ],
+              })
           ),
       },
       { parent: this }

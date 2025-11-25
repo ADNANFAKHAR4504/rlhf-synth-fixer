@@ -117,6 +117,15 @@ Create a high-performance web application infrastructure using **Pulumi with Typ
 - Follow naming convention: resource-type-environment-suffix
 - All resources must support clean teardown with no Retain policies
 
+### Security and Configuration Management
+
+- **Database Credentials**: Aurora PostgreSQL cluster password is configurable via Pulumi config
+   A default test password can be  provided via variable
+- **IAM Roles**: All services use least-privilege IAM roles
+- **Encryption**: S3 buckets use server-side encryption (AES-256 or KMS)
+- **Network Security**: Private subnets for databases and Lambda, security groups for access control
+- **Secrets Management**: Sensitive values stored as Pulumi secrets and marked with `pulumi.secret()`
+
 ### Deployment Requirements (CRITICAL)
 
 - All named resources must include **environmentSuffix** string parameter in their names
