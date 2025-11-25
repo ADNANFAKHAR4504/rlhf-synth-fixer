@@ -25,7 +25,9 @@ This document contains the corrected, production-ready infrastructure code with 
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "eks-vpc-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "eks-vpc-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -33,14 +35,27 @@ This document contains the corrected, production-ready infrastructure code with 
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -48,14 +63,27 @@ This document contains the corrected, production-ready infrastructure code with 
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -63,14 +91,27 @@ This document contains the corrected, production-ready infrastructure code with 
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -78,11 +119,15 @@ This document contains the corrected, production-ready infrastructure code with 
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-rt-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-rt-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -90,29 +135,43 @@ This document contains the corrected, production-ready infrastructure code with 
     "PrivateSubnetRouteTableAssociation1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet1" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
     "PrivateSubnetRouteTableAssociation2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet2" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
     "PrivateSubnetRouteTableAssociation3": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet3" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
     "ClusterSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for EKS cluster",
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -124,7 +183,9 @@ This document contains the corrected, production-ready infrastructure code with 
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "cluster-sg-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "cluster-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -133,20 +194,28 @@ This document contains the corrected, production-ready infrastructure code with 
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for EKS nodes",
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "-1",
-            "SourceSecurityGroupId": { "Ref": "ClusterSecurityGroup" }
+            "SourceSecurityGroupId": {
+              "Ref": "ClusterSecurityGroup"
+            }
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "node-sg-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "node-sg-${EnvironmentSuffix}"
+            }
           },
           {
-            "Key": { "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}" },
+            "Key": {
+              "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}"
+            },
             "Value": "owned"
           }
         ]
@@ -155,25 +224,35 @@ This document contains the corrected, production-ready infrastructure code with 
     "NodeSecurityGroupSelfIngress": {
       "Type": "AWS::EC2::SecurityGroupIngress",
       "Properties": {
-        "GroupId": { "Ref": "NodeSecurityGroup" },
+        "GroupId": {
+          "Ref": "NodeSecurityGroup"
+        },
         "IpProtocol": "-1",
-        "SourceSecurityGroupId": { "Ref": "NodeSecurityGroup" }
+        "SourceSecurityGroupId": {
+          "Ref": "NodeSecurityGroup"
+        }
       }
     },
     "ClusterToNodeSecurityGroupIngress": {
       "Type": "AWS::EC2::SecurityGroupIngress",
       "Properties": {
-        "GroupId": { "Ref": "ClusterSecurityGroup" },
+        "GroupId": {
+          "Ref": "ClusterSecurityGroup"
+        },
         "IpProtocol": "tcp",
         "FromPort": 443,
         "ToPort": 443,
-        "SourceSecurityGroupId": { "Ref": "NodeSecurityGroup" }
+        "SourceSecurityGroupId": {
+          "Ref": "NodeSecurityGroup"
+        }
       }
     },
     "EncryptionKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
-        "Description": { "Fn::Sub": "KMS key for EKS envelope encryption - ${EnvironmentSuffix}" },
+        "Description": {
+          "Fn::Sub": "KMS key for EKS envelope encryption - ${EnvironmentSuffix}"
+        },
         "EnableKeyRotation": true,
         "KeyPolicy": {
           "Version": "2012-10-17",
@@ -182,7 +261,9 @@ This document contains the corrected, production-ready infrastructure code with 
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
               "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
               },
               "Action": "kms:*",
               "Resource": "*"
@@ -207,14 +288,20 @@ This document contains the corrected, production-ready infrastructure code with 
     "EncryptionKeyAlias": {
       "Type": "AWS::KMS::Alias",
       "Properties": {
-        "AliasName": { "Fn::Sub": "alias/eks-encryption-${EnvironmentSuffix}" },
-        "TargetKeyId": { "Ref": "EncryptionKey" }
+        "AliasName": {
+          "Fn::Sub": "alias/eks-encryption-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EncryptionKey"
+        }
       }
     },
     "ClusterRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}" },
+        "RoleName": {
+          "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -236,33 +323,63 @@ This document contains the corrected, production-ready infrastructure code with 
     "EKSCluster": {
       "Type": "AWS::EKS::Cluster",
       "Properties": {
-        "Name": { "Fn::Sub": "eks-cluster-${EnvironmentSuffix}" },
+        "Name": {
+          "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+        },
         "Version": "1.28",
-        "RoleArn": { "Fn::GetAtt": ["ClusterRole", "Arn"] },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "ClusterRole",
+            "Arn"
+          ]
+        },
         "ResourcesVpcConfig": {
-          "SecurityGroupIds": [{ "Ref": "ClusterSecurityGroup" }],
+          "SecurityGroupIds": [
+            {
+              "Ref": "ClusterSecurityGroup"
+            }
+          ],
           "SubnetIds": [
-            { "Ref": "PrivateSubnet1" },
-            { "Ref": "PrivateSubnet2" },
-            { "Ref": "PrivateSubnet3" }
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
           ],
           "EndpointPrivateAccess": true,
           "EndpointPublicAccess": false
         },
         "EncryptionConfig": [
           {
-            "Resources": ["secrets"],
+            "Resources": [
+              "secrets"
+            ],
             "Provider": {
-              "KeyArn": { "Fn::GetAtt": ["EncryptionKey", "Arn"] }
+              "KeyArn": {
+                "Fn::GetAtt": [
+                  "EncryptionKey",
+                  "Arn"
+                ]
+              }
             }
           }
         ],
         "Logging": {
           "ClusterLogging": {
             "EnabledTypes": [
-              { "Type": "api" },
-              { "Type": "audit" },
-              { "Type": "controllerManager" }
+              {
+                "Type": "api"
+              },
+              {
+                "Type": "audit"
+              },
+              {
+                "Type": "controllerManager"
+              }
             ]
           }
         }
@@ -271,15 +388,26 @@ This document contains the corrected, production-ready infrastructure code with 
     "OIDCProvider": {
       "Type": "AWS::IAM::OIDCProvider",
       "Properties": {
-        "Url": { "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"] },
-        "ClientIdList": ["sts.amazonaws.com"],
-        "ThumbprintList": ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
+        "Url": {
+          "Fn::GetAtt": [
+            "EKSCluster",
+            "OpenIdConnectIssuerUrl"
+          ]
+        },
+        "ClientIdList": [
+          "sts.amazonaws.com"
+        ],
+        "ThumbprintList": [
+          "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+        ]
       }
     },
     "NodeRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "eks-node-role-${EnvironmentSuffix}" },
+        "RoleName": {
+          "Fn::Sub": "eks-node-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -303,46 +431,86 @@ This document contains the corrected, production-ready infrastructure code with 
     "NodeInstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": { "Fn::Sub": "eks-node-profile-${EnvironmentSuffix}" },
-        "Roles": [{ "Ref": "NodeRole" }]
+        "InstanceProfileName": {
+          "Fn::Sub": "eks-node-profile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "NodeRole"
+          }
+        ]
       }
     },
     "ManagedNodeGroup": {
       "Type": "AWS::EKS::Nodegroup",
-      "DependsOn": ["OIDCProvider"],
+      "DependsOn": [
+        "OIDCProvider"
+      ],
       "Properties": {
-        "ClusterName": { "Ref": "EKSCluster" },
-        "NodegroupName": { "Fn::Sub": "managed-nodes-${EnvironmentSuffix}" },
-        "NodeRole": { "Fn::GetAtt": ["NodeRole", "Arn"] },
+        "ClusterName": {
+          "Ref": "EKSCluster"
+        },
+        "NodegroupName": {
+          "Fn::Sub": "managed-nodes-${EnvironmentSuffix}"
+        },
+        "NodeRole": {
+          "Fn::GetAtt": [
+            "NodeRole",
+            "Arn"
+          ]
+        },
         "Subnets": [
-          { "Ref": "PrivateSubnet1" },
-          { "Ref": "PrivateSubnet2" },
-          { "Ref": "PrivateSubnet3" }
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
         ],
         "ScalingConfig": {
           "MinSize": 2,
           "MaxSize": 6,
           "DesiredSize": 2
         },
-        "InstanceTypes": ["t3.medium"],
+        "InstanceTypes": [
+          "t3.medium"
+        ],
         "AmiType": "AL2_x86_64",
         "Tags": {
-          "Name": { "Fn::Sub": "managed-node-${EnvironmentSuffix}" },
-          "Environment": { "Ref": "EnvironmentSuffix" }
+          "Name": {
+            "Fn::Sub": "managed-node-${EnvironmentSuffix}"
+          },
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          }
         }
       }
     },
     "SelfManagedLaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": { "Fn::Sub": "self-managed-lt-${EnvironmentSuffix}" },
+        "LaunchTemplateName": {
+          "Fn::Sub": "self-managed-lt-${EnvironmentSuffix}"
+        },
         "LaunchTemplateData": {
           "InstanceType": "m5.large",
-          "ImageId": "ami-0c55b159cbfafe1f0",
+          "ImageId": "ami-045c6703d28f6bd2a",
           "IamInstanceProfile": {
-            "Arn": { "Fn::GetAtt": ["NodeInstanceProfile", "Arn"] }
+            "Arn": {
+              "Fn::GetAtt": [
+                "NodeInstanceProfile",
+                "Arn"
+              ]
+            }
           },
-          "SecurityGroupIds": [{ "Ref": "NodeSecurityGroup" }],
+          "SecurityGroupIds": [
+            {
+              "Ref": "NodeSecurityGroup"
+            }
+          ],
           "MetadataOptions": {
             "HttpTokens": "required",
             "HttpPutResponseHopLimit": 1
@@ -358,10 +526,14 @@ This document contains the corrected, production-ready infrastructure code with 
               "Tags": [
                 {
                   "Key": "Name",
-                  "Value": { "Fn::Sub": "self-managed-node-${EnvironmentSuffix}" }
+                  "Value": {
+                    "Fn::Sub": "self-managed-node-${EnvironmentSuffix}"
+                  }
                 },
                 {
-                  "Key": { "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}" },
+                  "Key": {
+                    "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}"
+                  },
                   "Value": "owned"
                 }
               ]
@@ -372,29 +544,50 @@ This document contains the corrected, production-ready infrastructure code with 
     },
     "SelfManagedAutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "DependsOn": ["OIDCProvider"],
+      "DependsOn": [
+        "OIDCProvider"
+      ],
       "Properties": {
-        "AutoScalingGroupName": { "Fn::Sub": "self-managed-asg-${EnvironmentSuffix}" },
+        "AutoScalingGroupName": {
+          "Fn::Sub": "self-managed-asg-${EnvironmentSuffix}"
+        },
         "LaunchTemplate": {
-          "LaunchTemplateId": { "Ref": "SelfManagedLaunchTemplate" },
-          "Version": { "Fn::GetAtt": ["SelfManagedLaunchTemplate", "LatestVersionNumber"] }
+          "LaunchTemplateId": {
+            "Ref": "SelfManagedLaunchTemplate"
+          },
+          "Version": {
+            "Fn::GetAtt": [
+              "SelfManagedLaunchTemplate",
+              "LatestVersionNumber"
+            ]
+          }
         },
         "MinSize": "1",
         "MaxSize": "3",
         "DesiredCapacity": "1",
         "VPCZoneIdentifier": [
-          { "Ref": "PrivateSubnet1" },
-          { "Ref": "PrivateSubnet2" },
-          { "Ref": "PrivateSubnet3" }
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "self-managed-node-${EnvironmentSuffix}" },
+            "Value": {
+              "Fn::Sub": "self-managed-node-${EnvironmentSuffix}"
+            },
             "PropagateAtLaunch": true
           },
           {
-            "Key": { "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}" },
+            "Key": {
+              "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}"
+            },
             "Value": "owned",
             "PropagateAtLaunch": true
           }
@@ -405,30 +598,52 @@ This document contains the corrected, production-ready infrastructure code with 
   "Outputs": {
     "ClusterName": {
       "Description": "Name of the EKS cluster",
-      "Value": { "Ref": "EKSCluster" },
+      "Value": {
+        "Ref": "EKSCluster"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterName" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterName"
+        }
       }
     },
     "ClusterEndpoint": {
       "Description": "Endpoint for EKS cluster",
-      "Value": { "Fn::GetAtt": ["EKSCluster", "Endpoint"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "EKSCluster",
+          "Endpoint"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterEndpoint" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterEndpoint"
+        }
       }
     },
     "ClusterArn": {
       "Description": "ARN of the EKS cluster",
-      "Value": { "Fn::GetAtt": ["EKSCluster", "Arn"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "EKSCluster",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterArn" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterArn"
+        }
       }
     },
     "VPCId": {
       "Description": "VPC ID",
-      "Value": { "Ref": "VPC" },
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-VPCId" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "PrivateSubnetIds": {
@@ -437,35 +652,61 @@ This document contains the corrected, production-ready infrastructure code with 
         "Fn::Join": [
           ",",
           [
-            { "Ref": "PrivateSubnet1" },
-            { "Ref": "PrivateSubnet2" },
-            { "Ref": "PrivateSubnet3" }
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
           ]
         ]
       },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-PrivateSubnetIds" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnetIds"
+        }
       }
     },
     "OIDCProviderArn": {
       "Description": "ARN of the OIDC Provider",
-      "Value": { "Ref": "OIDCProvider" },
+      "Value": {
+        "Ref": "OIDCProvider"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-OIDCProviderArn" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OIDCProviderArn"
+        }
       }
     },
     "NodeRoleArn": {
       "Description": "ARN of the Node IAM Role",
-      "Value": { "Fn::GetAtt": ["NodeRole", "Arn"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "NodeRole",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-NodeRoleArn" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NodeRoleArn"
+        }
       }
     },
     "EncryptionKeyArn": {
       "Description": "ARN of the KMS encryption key",
-      "Value": { "Fn::GetAtt": ["EncryptionKey", "Arn"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "EncryptionKey",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-EncryptionKeyArn" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EncryptionKeyArn"
+        }
       }
     }
   }
