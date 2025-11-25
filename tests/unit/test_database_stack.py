@@ -1,6 +1,6 @@
 """
 Unit tests for DatabaseStack
-Tests the primary database infrastructure for disaster recovery.
+Tests the single-region database infrastructure.
 """
 import unittest
 
@@ -51,9 +51,9 @@ class TestDatabaseStack(unittest.TestCase):
             "MultiAZ": True
         })
 
-    @mark.it("enables Multi-AZ for primary database")
+    @mark.it("enables Multi-AZ for database")
     def test_enables_multi_az(self):
-        """Test that primary database has Multi-AZ enabled"""
+        """Test that database has Multi-AZ enabled"""
         self.template.has_resource_properties("AWS::RDS::DBInstance", {
             "MultiAZ": True
         })
@@ -114,86 +114,21 @@ class TestDatabaseStack(unittest.TestCase):
         """Test that DB subnet group is created"""
         self.template.resource_count_is("AWS::RDS::DBSubnetGroup", 1)
 
-    @mark.it("creates Lambda function for failover")
-    def test_creates_failover_lambda(self):
-        """Test that Lambda function is created for failover automation"""
-        self.template.has_resource_properties("AWS::Lambda::Function", {
-            "Handler": "index.handler",
-            "Runtime": "python3.11",
-            "Timeout": 300
-        })
-
-    @mark.it("creates IAM role for Lambda with RDS permissions")
-    def test_creates_lambda_role_with_rds_permissions(self):
-        """Test that Lambda role has permissions to promote replica"""
-        self.template.has_resource_properties("AWS::IAM::Policy", {
-            "PolicyDocument": Match.object_like({
-                "Statement": Match.array_with([
-                    Match.object_like({
-                        "Action": Match.array_with([
-                            "rds:PromoteReadReplica"
-                        ])
-                    })
-                ])
-            })
-        })
-
-    @mark.it("creates IAM role for Lambda with Route53 permissions")
-    def test_creates_lambda_role_with_route53_permissions(self):
-        """Test that Lambda role has permissions to update Route53"""
-        self.template.has_resource_properties("AWS::IAM::Policy", {
-            "PolicyDocument": Match.object_like({
-                "Statement": Match.array_with([
-                    Match.object_like({
-                        "Action": Match.array_with([
-                            "route53:ChangeResourceRecordSets"
-                        ])
-                    })
-                ])
-            })
-        })
-
-    @mark.it("sets Lambda environment variables")
-    def test_sets_lambda_environment_variables(self):
-        """Test that Lambda has required environment variables"""
-        self.template.has_resource_properties("AWS::Lambda::Function", {
-            "Environment": {
-                "Variables": Match.object_like({
-                    "ENVIRONMENT_SUFFIX": self.env_suffix,
-                    "REPLICA_DB_INSTANCE": f"replica-db-{self.env_suffix}",
-                    "REPLICA_REGION": "eu-west-1"
-                })
-            }
-        })
-
-    @mark.it("creates Route53 private hosted zone")
-    def test_creates_route53_hosted_zone(self):
-        """Test that private hosted zone is created"""
-        self.template.resource_count_is("AWS::Route53::HostedZone", 1)
-
-    @mark.it("creates Route53 health check with CloudWatch alarm")
-    def test_creates_route53_health_check(self):
-        """Test that health check monitors database via CloudWatch"""
-        self.template.has_resource_properties("AWS::Route53::HealthCheck", {
-            "HealthCheckConfig": Match.object_like({
-                "Type": "CLOUDWATCH_METRIC"
-            })
-        })
-
-    @mark.it("creates CloudWatch alarm for database connections")
-    def test_creates_connection_alarm(self):
-        """Test that CloudWatch alarm monitors database connections"""
+    @mark.it("creates CloudWatch alarm for CPU utilization")
+    def test_creates_cpu_alarm(self):
+        """Test that CloudWatch alarm monitors database CPU"""
         self.template.has_resource_properties("AWS::CloudWatch::Alarm", {
             "Namespace": "AWS/RDS",
-            "MetricName": "DatabaseConnections"
+            "MetricName": "CPUUtilization",
+            "Threshold": 80
         })
 
-    @mark.it("creates CloudWatch alarm for replication lag")
-    def test_creates_replication_lag_alarm(self):
-        """Test that replication lag alarm is created"""
+    @mark.it("creates CloudWatch alarm for storage space")
+    def test_creates_storage_alarm(self):
+        """Test that storage space alarm is created"""
         self.template.has_resource_properties("AWS::CloudWatch::Alarm", {
-            "MetricName": "ReplicaLag",
-            "Threshold": 60
+            "MetricName": "FreeStorageSpace",
+            "Threshold": 10 * 1024 * 1024 * 1024
         })
 
     @mark.it("creates SNS topic for alarms")
@@ -201,25 +136,12 @@ class TestDatabaseStack(unittest.TestCase):
         """Test that SNS topic is created for alarm notifications"""
         self.template.resource_count_is("AWS::SNS::Topic", 1)
 
-    @mark.it("creates weighted routing record for primary")
-    def test_creates_weighted_routing_record(self):
-        """Test that weighted routing record is created"""
-        self.template.has_resource_properties("AWS::Route53::RecordSet", {
-            "Type": "CNAME",
-            "Weight": 100
-        })
-
     @mark.it("includes environment suffix in all resource names")
     def test_includes_env_suffix_in_names(self):
         """Test that all resources include environment suffix"""
         # Check database instance identifier
         self.template.has_resource_properties("AWS::RDS::DBInstance", {
-            "DBInstanceIdentifier": f"primary-db-{self.env_suffix}"
-        })
-
-        # Check Lambda function name
-        self.template.has_resource_properties("AWS::Lambda::Function", {
-            "FunctionName": f"failover-function-{self.env_suffix}"
+            "DBInstanceIdentifier": f"db-{self.env_suffix}"
         })
 
         # Check secret name
@@ -227,12 +149,19 @@ class TestDatabaseStack(unittest.TestCase):
             "Name": f"db-credentials-{self.env_suffix}"
         })
 
-    @mark.it("outputs primary database endpoint")
-    def test_outputs_primary_endpoint(self):
-        """Test that primary database endpoint is exported"""
+    @mark.it("outputs database endpoint")
+    def test_outputs_endpoint(self):
+        """Test that database endpoint is exported"""
         outputs = self.template.to_json().get('Outputs', {})
-        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackPrimaryDatabaseEndpoint')]
-        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackPrimaryDatabaseEndpoint'")
+        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackDatabaseEndpoint')]
+        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackDatabaseEndpoint'")
+
+    @mark.it("outputs database port")
+    def test_outputs_port(self):
+        """Test that database port is exported"""
+        outputs = self.template.to_json().get('Outputs', {})
+        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackDatabasePort')]
+        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackDatabasePort'")
 
     @mark.it("outputs database secret ARN")
     def test_outputs_secret_arn(self):
@@ -241,26 +170,12 @@ class TestDatabaseStack(unittest.TestCase):
         matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackDatabaseSecretArn')]
         self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackDatabaseSecretArn'")
 
-    @mark.it("outputs Route53 hosted zone ID")
-    def test_outputs_hosted_zone_id(self):
-        """Test that hosted zone ID is exported"""
+    @mark.it("outputs VPC ID")
+    def test_outputs_vpc_id(self):
+        """Test that VPC ID is exported"""
         outputs = self.template.to_json().get('Outputs', {})
-        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackRoute53HostedZoneId')]
-        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackRoute53HostedZoneId'")
-
-    @mark.it("outputs database CNAME")
-    def test_outputs_database_cname(self):
-        """Test that database CNAME is exported"""
-        outputs = self.template.to_json().get('Outputs', {})
-        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackDatabaseCname')]
-        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackDatabaseCname'")
-
-    @mark.it("outputs failover function ARN")
-    def test_outputs_failover_function_arn(self):
-        """Test that failover function ARN is exported"""
-        outputs = self.template.to_json().get('Outputs', {})
-        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackFailoverFunctionArn')]
-        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackFailoverFunctionArn'")
+        matching_outputs = [k for k in outputs.keys() if k.startswith('DatabaseStackVpcId')]
+        self.assertTrue(len(matching_outputs) > 0, "Expected output starting with 'DatabaseStackVpcId'")
 
     @mark.it("creates NAT Gateway for private subnet connectivity")
     def test_creates_nat_gateway(self):

@@ -1,1 +1,0 @@
-"""Failover Lambda function package"""

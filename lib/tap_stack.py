@@ -1,6 +1,6 @@
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for
-the multi-region database disaster recovery project.
+the single-region database infrastructure.
 """
 
 from typing import Optional
@@ -9,7 +9,6 @@ import aws_cdk as cdk
 from constructs import Construct
 
 from lib.database_stack import DatabaseStack, DatabaseStackProps
-from lib.replica_stack import ReplicaStack, ReplicaStackProps
 
 
 class TapStackProps(cdk.StackProps):
@@ -32,9 +31,9 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(cdk.Stack):
     """
-    Represents the main CDK stack for the multi-region database disaster recovery project.
+    Represents the main CDK stack for the single-region database infrastructure.
 
-    This stack orchestrates the instantiation of the database disaster recovery infrastructure.
+    This stack orchestrates the instantiation of the database infrastructure.
     It determines the environment suffix from the provided properties,
     CDK context, or defaults to 'dev'.
 
@@ -66,7 +65,7 @@ class TapStack(cdk.Stack):
         # Store environment suffix for use in nested stacks
         self.environment_suffix = environment_suffix
 
-        # Create the database disaster recovery infrastructure
+        # Create the database infrastructure
         db_props = DatabaseStackProps(environment_suffix=environment_suffix)
 
         self.database_stack = DatabaseStack(
