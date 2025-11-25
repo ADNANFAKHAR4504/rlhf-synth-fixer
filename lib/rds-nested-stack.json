@@ -10,7 +10,7 @@
     "PrivateSubnet2": {"Type": "String", "Description": "Private Subnet 2 ID"},
     "DBSecurityGroup": {"Type": "String", "Description": "Database Security Group ID"},
     "DBMasterUsername": {"Type": "String", "NoEcho": true, "Description": "Master username for database"},
-    "DBMasterPasswordSecretArn": {"Type": "String", "NoEcho": true, "Description": "Secrets Manager ARN for database password"},
+    "DBPasswordSecretArn": {"Type": "String", "Description": "ARN of Secrets Manager secret containing database password"},
     "DBInstanceClass": {"Type": "String", "Description": "RDS instance class"}
   },
   "Resources": {
@@ -35,7 +35,7 @@
         "EngineVersion": "15.7",
         "DatabaseName": {"Fn::Sub": "appdb${Environment}"},
         "MasterUsername": {"Ref": "DBMasterUsername"},
-        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}"},
+        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DBSecurityGroup"}],
         "StorageEncrypted": true,

@@ -5,7 +5,8 @@
     "Environment": {"Type": "String", "Description": "Environment name"},
     "EnvironmentSuffix": {"Type": "String", "Description": "Unique suffix for resource naming"},
     "ProjectName": {"Type": "String", "Description": "Project name for tagging"},
-    "CostCenter": {"Type": "String", "Description": "Cost center for billing"}
+    "CostCenter": {"Type": "String", "Description": "Cost center for billing"},
+    "ReplicaBucketArn": {"Type": "String", "Description": "ARN of the replica bucket in us-west-2 (must be created separately)"}
   },
   "Resources": {
     "ReplicationRole": {
@@ -26,7 +27,7 @@
               "Statement": [
                 {"Effect": "Allow", "Action": ["s3:GetReplicationConfiguration", "s3:ListBucket"], "Resource": {"Fn::Sub": "arn:aws:s3:::data-bucket-${Environment}-${EnvironmentSuffix}"}},
                 {"Effect": "Allow", "Action": ["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl"], "Resource": {"Fn::Sub": "arn:aws:s3:::data-bucket-${Environment}-${EnvironmentSuffix}/*"}},
-                {"Effect": "Allow", "Action": ["s3:ReplicateObject", "s3:ReplicateDelete"], "Resource": {"Fn::Sub": "arn:aws:s3:::data-bucket-replica-${Environment}-${EnvironmentSuffix}/*"}}
+                {"Effect": "Allow", "Action": ["s3:ReplicateObject", "s3:ReplicateDelete"], "Resource": {"Fn::Sub": "${ReplicaBucketArn}/*"}}
               ]
             }
           }
@@ -38,34 +39,8 @@
         ]
       }
     },
-    "ReplicaBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {"Fn::Sub": "data-bucket-replica-${Environment}-${EnvironmentSuffix}"},
-        "VersioningConfiguration": {"Status": "Enabled"},
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "Tags": [
-          {"Key": "Name", "Value": {"Fn::Sub": "data-bucket-replica-${Environment}-${EnvironmentSuffix}"}},
-          {"Key": "Environment", "Value": {"Ref": "Environment"}},
-          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
-          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
-        ]
-      },
-      "DeletionPolicy": "Delete"
-    },
     "DataBucket": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": "ReplicaBucket",
       "Properties": {
         "BucketName": {"Fn::Sub": "data-bucket-${Environment}-${EnvironmentSuffix}"},
         "VersioningConfiguration": {"Status": "Enabled"},
@@ -92,7 +67,7 @@
               "Priority": 1,
               "Filter": {},
               "Destination": {
-                "Bucket": {"Fn::Sub": "arn:aws:s3:::data-bucket-replica-${Environment}-${EnvironmentSuffix}"},
+                "Bucket": {"Ref": "ReplicaBucketArn"},
                 "ReplicationTime": {"Status": "Enabled", "Time": {"Minutes": 15}},
                 "Metrics": {"Status": "Enabled", "EventThreshold": {"Minutes": 15}}
               },
@@ -124,7 +99,6 @@
   "Outputs": {
     "DataBucketName": {"Description": "Data Bucket Name", "Value": {"Ref": "DataBucket"}},
     "DataBucketArn": {"Description": "Data Bucket ARN", "Value": {"Fn::GetAtt": ["DataBucket", "Arn"]}},
-    "ReplicaBucketName": {"Description": "Replica Bucket Name", "Value": {"Ref": "ReplicaBucket"}},
-    "ReplicaBucketArn": {"Description": "Replica Bucket ARN", "Value": {"Fn::GetAtt": ["ReplicaBucket", "Arn"]}}
+    "ReplicaBucketArn": {"Description": "Replica Bucket ARN (in us-west-2)", "Value": {"Ref": "ReplicaBucketArn"}}
   }
 }
