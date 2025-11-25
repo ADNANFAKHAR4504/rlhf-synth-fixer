@@ -511,8 +511,7 @@ exports.handler = async (event) => {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(20, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
-            // Use default AWS managed key for EBS encryption (no kmsKey specified)
+            encrypted: false,
             deleteOnTermination: true,
           }),
         },
