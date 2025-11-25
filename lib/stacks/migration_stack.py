@@ -87,7 +87,7 @@ class MigrationConstruct(Construct):
             replication_instance_id=f"payment-dms-{environment_suffix}",
             replication_instance_class="dms.t3.medium",
             allocated_storage=100,
-            engine_version="3.5.1",  # Changed from 3.5.2 to 3.5.1 (available version)
+            engine_version="3.4.7",  # Using stable version 3.4.7
             multi_az=False,  # Set to True for production
             publicly_accessible=False,
             replication_subnet_group_id=self.subnet_group.replication_subnet_group_id,

@@ -51,7 +51,8 @@ class RoutingConstruct(Construct):
         )
 
         # Create weighted routing record for old system (on-prem)
-        # Start with 100% traffic to old system
+        # For demo purposes, point old system to the same ALB
+        # In production, this would point to the actual on-premises system
         self.old_system_record = Route53Record(
             self,
             f"old-system-record-{environment_suffix}",
@@ -63,8 +64,8 @@ class RoutingConstruct(Construct):
                 "weight": 100
             },
             alias={
-                "name": "old-system.example.com",  # Replace with actual old system endpoint
-                "zone_id": "Z1234567890ABC",  # Replace with actual zone ID
+                "name": alb_dns_name,  # Using same ALB for demo
+                "zone_id": alb_zone_id,  # Using same zone for demo
                 "evaluate_target_health": True
             },
             health_check_id=None
