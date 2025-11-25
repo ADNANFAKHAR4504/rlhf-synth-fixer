@@ -23,23 +23,44 @@ class TestTapStackIntegration:
         with open(outputs_file, 'r') as f:
             outputs = json.load(f)
 
+        # Extract nested stack outputs (handle both flat and nested structure)
+        environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+        stack_name = f"TapStack{environment_suffix}"
+        
+        # If outputs are nested under stack name, extract them
+        if stack_name in outputs and isinstance(outputs[stack_name], dict):
+            return outputs[stack_name]
+        
         return outputs
 
     def test_reports_bucket_exists(self, stack_outputs):
         """Test that reports S3 bucket was created."""
-        assert 'ReportsBucketName' in stack_outputs or 'reports_bucket' in [
-            k.lower() for k in stack_outputs.keys()
-        ], "Reports bucket output not found in stack outputs"
+        # Check for various possible output key names
+        bucket_keys = [k for k in stack_outputs.keys() if 'bucket' in k.lower()]
+        assert len(bucket_keys) > 0, f"Reports bucket output not found. Available keys: {list(stack_outputs.keys())}"
+        
+        # Verify bucket name includes environment suffix
+        environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+        bucket_name = stack_outputs.get('reports_bucket_name', '')
+        assert environment_suffix in bucket_name, f"Bucket name should include environment suffix: {environment_suffix}"
 
     def test_lambda_function_exists(self, stack_outputs):
         """Test that validator Lambda function was created."""
         lambda_keys = [k for k in stack_outputs.keys() if 'lambda' in k.lower()]
-        assert len(lambda_keys) > 0, "Lambda function output not found in stack outputs"
+        assert len(lambda_keys) > 0, f"Lambda function output not found. Available keys: {list(stack_outputs.keys())}"
+        
+        # Verify Lambda function name and ARN exist
+        assert 'lambda_function_name' in stack_outputs, "lambda_function_name output missing"
+        assert 'lambda_function_arn' in stack_outputs, "lambda_function_arn output missing"
 
     def test_iam_role_exists(self, stack_outputs):
         """Test that Lambda IAM role was created."""
         role_keys = [k for k in stack_outputs.keys() if 'role' in k.lower()]
-        assert len(role_keys) > 0, "IAM role output not found in stack outputs"
+        assert len(role_keys) > 0, f"IAM role output not found. Available keys: {list(stack_outputs.keys())}"
+        
+        # Verify IAM role name and ARN exist
+        assert 'iam_role_name' in stack_outputs, "iam_role_name output missing"
+        assert 'iam_role_arn' in stack_outputs, "iam_role_arn output missing"
 
     def test_environment_suffix_in_resources(self, stack_outputs):
         """Test that resources include environment suffix."""
