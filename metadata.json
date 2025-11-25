@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "synth-s6u0s7s4",
+  "team": "synth",
+  "startedAt": "2025-11-25T12:40:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora",
+    "S3",
+    "CloudFront",
+    "ECS",
+    "ALB",
+    "WAF",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch",
+    "Auto Scaling",
+    "NAT Gateway"
+  ],
+  "task_id": "s6u0s7s4",
+  "training_quality": 10
+}
