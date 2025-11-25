@@ -133,8 +133,10 @@ describe('TapStack Module - Exports', () => {
   test('Module exports dbSecretArn', () => {
     const tapStack = require('../lib/tap-stack');
     expect(tapStack.dbSecretArn).toBeDefined();
-    // Secret ARN should be a Pulumi Output
+    // Secret ARN should be a Pulumi Output (from Secrets Manager)
     expect(tapStack.dbSecretArn).toBeDefined();
+    // Verify it's exported (not undefined)
+    expect(tapStack.dbSecretArn).not.toBeUndefined();
   });
 });
 

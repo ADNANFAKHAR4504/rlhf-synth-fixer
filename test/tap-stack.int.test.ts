@@ -37,15 +37,21 @@ function loadOutputs(): Record<string, any> {
 }
 
 const outputs = loadOutputs();
-const region = process.env.AWS_REGION || 'us-east-1';
+const primaryRegion = process.env.AWS_REGION || 'us-east-1';
+const secondaryRegion = 'eu-west-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Initialize AWS SDK clients
-const ec2Client = new EC2Client({ region });
-const rdsClient = new RDSClient({ region });
-const s3Client = new S3Client({ region });
-const lambdaClient = new LambdaClient({ region });
-const cloudwatchClient = new CloudWatchClient({ region });
+// Initialize AWS SDK clients for primary region
+const ec2Client = new EC2Client({ region: primaryRegion });
+const rdsClient = new RDSClient({ region: primaryRegion });
+const s3Client = new S3Client({ region: primaryRegion });
+const lambdaClient = new LambdaClient({ region: primaryRegion });
+const cloudwatchClient = new CloudWatchClient({ region: primaryRegion });
+
+// Initialize AWS SDK clients for secondary region
+const secondaryRdsClient = new RDSClient({ region: secondaryRegion });
+const secondaryS3Client = new S3Client({ region: secondaryRegion });
+const secondaryLambdaClient = new LambdaClient({ region: secondaryRegion });
 
 // Skip all tests if outputs file doesn't exist
 const skipTests = !outputs.primaryVpcId;
@@ -145,6 +151,9 @@ describe('TapStack Integration Tests - Aurora Global Database', () => {
     expect(cluster.Status).toBe('available');
     expect(cluster.Engine).toBe('aurora-mysql');
     expect(cluster.Endpoint).toBe(endpoint);
+    // Verify encryption is enabled with KMS key
+    expect(cluster.StorageEncrypted).toBe(true);
+    expect(cluster.KmsKeyId).toBeTruthy();
   });
 
   test('Secondary Aurora cluster exists and is available', async () => {
@@ -164,7 +173,8 @@ describe('TapStack Integration Tests - Aurora Global Database', () => {
     }
     const clusterId = clusterIdMatch[1].replace('-cluster', '');
 
-    const response = await rdsClient.send(
+    // Use secondary region RDS client for secondary cluster
+    const response = await secondaryRdsClient.send(
       new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
     );
 
@@ -174,6 +184,10 @@ describe('TapStack Integration Tests - Aurora Global Database', () => {
     const cluster = response.DBClusters![0];
     expect(cluster.Status).toBe('available');
     expect(cluster.Engine).toBe('aurora-mysql');
+    expect(cluster.Endpoint).toBe(endpoint);
+    // Verify encryption is enabled with KMS key
+    expect(cluster.StorageEncrypted).toBe(true);
+    expect(cluster.KmsKeyId).toBeTruthy();
   });
 
   test('Aurora clusters are in different regions', async () => {
@@ -186,10 +200,32 @@ describe('TapStack Integration Tests - Aurora Global Database', () => {
     }
 
     // Primary should be in us-east-1, secondary in eu-west-1
-    // This is validated by the fact that we're using different RDS clients
     expect(primaryEndpoint).toBeTruthy();
     expect(secondaryEndpoint).toBeTruthy();
     expect(primaryEndpoint).not.toBe(secondaryEndpoint);
+    
+    // Verify clusters are in different regions by checking their ARNs
+    // Primary cluster should be accessible via primary region client
+    const primaryClusterIdMatch = primaryEndpoint.match(/^([^.]+)/);
+    if (primaryClusterIdMatch) {
+      const primaryClusterId = primaryClusterIdMatch[1].replace('-cluster', '');
+      const primaryResponse = await rdsClient.send(
+        new DescribeDBClustersCommand({ DBClusterIdentifier: primaryClusterId })
+      );
+      expect(primaryResponse.DBClusters).toBeDefined();
+      expect(primaryResponse.DBClusters![0].Status).toBe('available');
+    }
+    
+    // Secondary cluster should be accessible via secondary region client
+    const secondaryClusterIdMatch = secondaryEndpoint.match(/^([^.]+)/);
+    if (secondaryClusterIdMatch) {
+      const secondaryClusterId = secondaryClusterIdMatch[1].replace('-cluster', '');
+      const secondaryResponse = await secondaryRdsClient.send(
+        new DescribeDBClustersCommand({ DBClusterIdentifier: secondaryClusterId })
+      );
+      expect(secondaryResponse.DBClusters).toBeDefined();
+      expect(secondaryResponse.DBClusters![0].Status).toBe('available');
+    }
   });
 });
 
@@ -210,6 +246,9 @@ describe('TapStack Integration Tests - S3 Buckets', () => {
         new GetBucketLocationCommand({ Bucket: bucketName })
       );
       expect(response.LocationConstraint).toBeDefined();
+      // Primary bucket should be in us-east-1 (empty string or 'us-east-1')
+      const location = response.LocationConstraint || 'us-east-1';
+      expect(['us-east-1', '']).toContain(location);
     } catch (error: any) {
       // Bucket might not exist or we might not have permissions
       if (error.name === 'NoSuchBucket') {
@@ -232,10 +271,13 @@ describe('TapStack Integration Tests - S3 Buckets', () => {
     expect(bucketName).toContain('secondary');
 
     try {
-      const response = await s3Client.send(
+      // Use secondary region S3 client for secondary bucket
+      const response = await secondaryS3Client.send(
         new GetBucketLocationCommand({ Bucket: bucketName })
       );
       expect(response.LocationConstraint).toBeDefined();
+      // Secondary bucket should be in eu-west-1
+      expect(response.LocationConstraint).toBe('eu-west-1');
     } catch (error: any) {
       // Bucket might not exist or we might not have permissions
       if (error.name === 'NoSuchBucket') {
@@ -286,6 +328,8 @@ describe('TapStack Integration Tests - Lambda Functions', () => {
     expect(lambdaArn).toMatch(/^arn:aws:lambda:/);
     expect(lambdaArn).toContain(environmentSuffix);
     expect(lambdaArn).toContain('secondary');
+    // Verify ARN contains secondary region
+    expect(lambdaArn).toContain(secondaryRegion);
 
     // Extract function name from ARN
     const functionName = lambdaArn.split(':').pop();
@@ -293,7 +337,8 @@ describe('TapStack Integration Tests - Lambda Functions', () => {
       throw new Error('Could not extract function name from ARN');
     }
 
-    const response = await lambdaClient.send(
+    // Use secondary region Lambda client for secondary function
+    const response = await secondaryLambdaClient.send(
       new GetFunctionCommand({ FunctionName: functionName })
     );
 
@@ -385,6 +430,19 @@ describe('TapStack Integration Tests - Disaster Recovery Configuration', () => {
     expect(primaryVpcId).toBeTruthy();
     expect(secondaryVpcId).toBeTruthy();
     expect(primaryVpcId).not.toBe(secondaryVpcId);
+  });
+
+  test('Database secret ARN is exported', () => {
+    const dbSecretArn = outputs.dbSecretArn;
+    if (!dbSecretArn) {
+      console.warn('Skipping test: dbSecretArn not found in outputs');
+      return;
+    }
+
+    expect(dbSecretArn).toBeTruthy();
+    expect(dbSecretArn).toMatch(/^arn:aws:secretsmanager:/);
+    expect(dbSecretArn).toContain('aurora-db-password');
+    expect(dbSecretArn).toContain(environmentSuffix);
   });
 
   test('VPC peering enables cross-region connectivity', () => {

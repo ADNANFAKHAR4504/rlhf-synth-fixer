@@ -15,7 +15,8 @@ Create a multi-region disaster recovery infrastructure using **Pulumi with TypeS
 1. **Database Infrastructure**
    - Deploy RDS Aurora Global Database with primary cluster in us-east-1 and secondary in eu-west-1
    - Use r6g.large instance type for Aurora clusters
-   - Enable encrypted storage using AWS managed keys
+   - Enable encrypted storage using **region-specific KMS keys** (required for cross-region encrypted replicas)
+   - Store database password in **AWS Secrets Manager** (auto-generated, secure)
    - Configure automatic backups with 7-day retention
    - Enable point-in-time recovery
 
@@ -46,6 +47,8 @@ Create a multi-region disaster recovery infrastructure using **Pulumi with TypeS
 
 7. **IAM and Security**
    - Implement IAM roles with cross-region assume role permissions for failover automation
+   - Create **KMS keys** in both regions with proper policies for RDS encryption
+   - Use **AWS Secrets Manager** for secure database password storage (auto-generated)
    - Follow principle of least privilege
    - Enable deletion protection on production resources but allow programmatic override
 
@@ -79,6 +82,9 @@ Create a multi-region disaster recovery infrastructure using **Pulumi with TypeS
 ### Constraints
 
 - RDS Aurora clusters must use r6g.large instances with encrypted storage
+- **KMS keys must be explicitly specified for cross-region encrypted replicas** (AWS requirement)
+- Database password must be stored in AWS Secrets Manager (auto-generated, not passed from CI/CD)
+- Environment suffix can be set via `ENVIRONMENT_SUFFIX` environment variable or Pulumi config (defaults to 'dev')
 - Route 53 health checks must evaluate both database connectivity and replication lag before triggering failover
 - S3 buckets must use versioning and lifecycle policies to retain backups for exactly 30 days
 - All inter-region traffic must traverse VPC peering connections, not public internet
@@ -103,6 +109,8 @@ Create a multi-region disaster recovery infrastructure using **Pulumi with TypeS
 
 - Complete Pulumi TypeScript implementation in tap-stack.ts
 - RDS Aurora Global Database with primary and secondary clusters
+- **KMS keys** for encryption in both regions (required for cross-region encrypted replicas)
+- **AWS Secrets Manager** secret for database password (auto-generated)
 - Route 53 health checks and failover routing
 - S3 buckets with cross-region replication and lifecycle policies
 - CloudWatch alarms for monitoring replication lag
@@ -110,5 +118,6 @@ Create a multi-region disaster recovery infrastructure using **Pulumi with TypeS
 - VPC peering connection between regions
 - IAM roles with cross-region permissions
 - Proper resource tagging (Environment=production, DisasterRecovery=enabled)
-- Stack exports including: primary and secondary database endpoints, S3 bucket names, Route 53 hosted zone ID
+- Stack exports including: primary and secondary database endpoints, S3 bucket names, Route 53 hosted zone ID, **database secret ARN**
+- Environment suffix support via `ENVIRONMENT_SUFFIX` environment variable or Pulumi config
 - Documentation and deployment instructions

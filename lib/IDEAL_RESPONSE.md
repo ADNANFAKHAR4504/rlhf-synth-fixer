@@ -17,11 +17,15 @@ The infrastructure implements:
 ## File: lib/tap-stack.ts
 
 ```typescript
-import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as pulumi from "@pulumi/pulumi";
+import * as random from "@pulumi/random";
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require("environmentSuffix");
+// Get configuration - prioritize environment variables, then Pulumi config, then default to 'dev'
+// This matches the pattern from Pr6886 and allows the deploy script to set ENVIRONMENT_SUFFIX
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get("environmentSuffix") || "dev";
 
 // Common tags for all resources
 const commonTags = {
@@ -29,6 +33,40 @@ const commonTags = {
     DisasterRecovery: "enabled",
     ManagedBy: "Pulumi",
 };
+
+// Generate random password for database
+const dbPassword = new random.RandomPassword(
+    `db-password-${environmentSuffix}`,
+    {
+        length: 32,
+        special: true,
+        overrideSpecial: "!#$%&*()-_=+[]{}<>:?",
+    }
+);
+
+// Store password in AWS Secrets Manager
+const dbSecret = new aws.secretsmanager.Secret(
+    `db-secret-${environmentSuffix}`,
+    {
+        name: `aurora-db-password-${environmentSuffix}`,
+        description: "Aurora MySQL database password",
+        recoveryWindowInDays: 0, // Allow immediate deletion for testing
+        tags: {
+            ...commonTags,
+            Name: `db-secret-${environmentSuffix}`,
+            Purpose: "DatabasePassword",
+        },
+    }
+);
+
+// Store the password in the secret
+new aws.secretsmanager.SecretVersion(`db-secret-version-${environmentSuffix}`, {
+    secretId: dbSecret.id,
+    secretString: pulumi.interpolate`{"username":"admin","password":"${dbPassword.result}"}`,
+});
+
+// Export the secret ARN for reference
+export const dbSecretArn = dbSecret.arn;
 
 // Primary region provider (us-east-1)
 const primaryProvider = new aws.Provider("primary-provider", {
@@ -270,6 +308,116 @@ const secondaryPeeringRoute = new aws.ec2.Route(`secondary-peering-route-${envir
 
 // ================== RDS AURORA GLOBAL DATABASE ==================
 
+// KMS key for primary region RDS encryption
+const primaryKmsKey = new aws.kms.Key(
+    `primary-rds-kms-${environmentSuffix}`,
+    {
+        description: `KMS key for RDS encryption in primary region - ${environmentSuffix}`,
+        enableKeyRotation: true,
+        deletionWindowInDays: 7,
+        policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+                {
+                    Sid: "Enable IAM User Permissions",
+                    Effect: "Allow",
+                    Principal: {
+                        AWS: "*",
+                    },
+                    Action: "kms:*",
+                    Resource: "*",
+                },
+                {
+                    Sid: "Allow RDS service to use the key",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "rds.amazonaws.com",
+                    },
+                    Action: [
+                        "kms:Decrypt",
+                        "kms:DescribeKey",
+                        "kms:CreateGrant",
+                        "kms:Encrypt",
+                        "kms:GenerateDataKey",
+                    ],
+                    Resource: "*",
+                },
+            ],
+        }),
+        tags: {
+            ...commonTags,
+            Name: `primary-rds-kms-${environmentSuffix}`,
+            Region: "us-east-1",
+        },
+    },
+    { provider: primaryProvider }
+);
+
+// KMS alias for primary region
+new aws.kms.Alias(
+    `primary-rds-kms-alias-${environmentSuffix}`,
+    {
+        name: `alias/rds-primary-${environmentSuffix}`,
+        targetKeyId: primaryKmsKey.keyId,
+    },
+    { provider: primaryProvider }
+);
+
+// KMS key for secondary region RDS encryption
+const secondaryKmsKey = new aws.kms.Key(
+    `secondary-rds-kms-${environmentSuffix}`,
+    {
+        description: `KMS key for RDS encryption in secondary region - ${environmentSuffix}`,
+        enableKeyRotation: true,
+        deletionWindowInDays: 7,
+        policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+                {
+                    Sid: "Enable IAM User Permissions",
+                    Effect: "Allow",
+                    Principal: {
+                        AWS: "*",
+                    },
+                    Action: "kms:*",
+                    Resource: "*",
+                },
+                {
+                    Sid: "Allow RDS service to use the key",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "rds.amazonaws.com",
+                    },
+                    Action: [
+                        "kms:Decrypt",
+                        "kms:DescribeKey",
+                        "kms:CreateGrant",
+                        "kms:Encrypt",
+                        "kms:GenerateDataKey",
+                    ],
+                    Resource: "*",
+                },
+            ],
+        }),
+        tags: {
+            ...commonTags,
+            Name: `secondary-rds-kms-${environmentSuffix}`,
+            Region: "eu-west-1",
+        },
+    },
+    { provider: secondaryProvider }
+);
+
+// KMS alias for secondary region
+new aws.kms.Alias(
+    `secondary-rds-kms-alias-${environmentSuffix}`,
+    {
+        name: `alias/rds-secondary-${environmentSuffix}`,
+        targetKeyId: secondaryKmsKey.keyId,
+    },
+    { provider: secondaryProvider }
+);
+
 // DB subnet group for primary region
 const primaryDbSubnetGroup = new aws.rds.SubnetGroup(`primary-db-subnet-group-${environmentSuffix}`, {
     subnetIds: [primaryPrivateSubnet1.id, primaryPrivateSubnet2.id],
@@ -356,13 +504,14 @@ const primaryCluster = new aws.rds.Cluster(`primary-cluster-${environmentSuffix}
     engineVersion: "8.0.mysql_aurora.3.04.0",
     databaseName: "tradingdb",
     masterUsername: "admin",
-    masterPassword: config.requireSecret("dbPassword"),
+    masterPassword: dbPassword.result,
     dbSubnetGroupName: primaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [primaryRdsSg.id],
     globalClusterIdentifier: globalCluster.id,
     backupRetentionPeriod: 7,
     preferredBackupWindow: "03:00-04:00",
     storageEncrypted: true,
+    kmsKeyId: primaryKmsKey.arn,
     skipFinalSnapshot: true,
     enabledCloudwatchLogsExports: ["error", "general", "slowquery"],
     tags: {
@@ -395,6 +544,8 @@ const secondaryCluster = new aws.rds.Cluster(`secondary-cluster-${environmentSuf
     dbSubnetGroupName: secondaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [secondaryRdsSg.id],
     globalClusterIdentifier: globalCluster.id,
+    storageEncrypted: true,
+    kmsKeyId: secondaryKmsKey.arn, // Required for cross-region encrypted replicas
     skipFinalSnapshot: true,
     enabledCloudwatchLogsExports: ["error", "general", "slowquery"],
     tags: {
@@ -514,7 +665,7 @@ const replicationPolicy = new aws.iam.RolePolicy(`s3-replication-policy-${enviro
 });
 
 // S3 bucket replication configuration
-const replicationConfig = new aws.s3.BucketReplication(`bucket-replication-${environmentSuffix}`, {
+const replicationConfig = new aws.s3.BucketReplicationConfig(`bucket-replication-${environmentSuffix}`, {
     bucket: primaryBucket.id,
     role: replicationRole.arn,
     rules: [{
@@ -522,7 +673,6 @@ const replicationConfig = new aws.s3.BucketReplication(`bucket-replication-${env
         status: "Enabled",
         destination: {
             bucket: secondaryBucket.arn,
-            replicaKmsKeyId: undefined,
             storageClass: "STANDARD",
         },
     }],
@@ -669,7 +819,7 @@ const primaryLambda = new aws.lambda.Function(`primary-connectivity-test-${envir
         variables: {
             DB_HOST: primaryCluster.endpoint,
             DB_USER: "admin",
-            DB_PASSWORD: config.requireSecret("dbPassword"),
+            DB_PASSWORD: dbPassword.result,
             DB_NAME: "tradingdb",
         },
     },
@@ -698,7 +848,7 @@ const secondaryLambda = new aws.lambda.Function(`secondary-connectivity-test-${e
         variables: {
             DB_HOST: secondaryCluster.endpoint,
             DB_USER: "admin",
-            DB_PASSWORD: config.requireSecret("dbPassword"),
+            DB_PASSWORD: dbPassword.result,
             DB_NAME: "tradingdb",
         },
     },
@@ -803,7 +953,7 @@ const primaryConnectionAlarm = new aws.cloudwatch.MetricAlarm(`primary-connectio
 
 // Route 53 hosted zone
 const hostedZone = new aws.route53.Zone(`hosted-zone-${environmentSuffix}`, {
-    name: `tradingdb-${environmentSuffix}.example.com`,
+    name: `tradingdb-${environmentSuffix}.test.local`,
     comment: "Hosted zone for disaster recovery failover",
     tags: {
         ...commonTags,
@@ -838,7 +988,7 @@ const secondaryHealthCheck = new aws.route53.HealthCheck(`secondary-health-check
 // Primary DNS record with failover routing
 const primaryDnsRecord = new aws.route53.Record(`primary-dns-record-${environmentSuffix}`, {
     zoneId: hostedZone.zoneId,
-    name: `db.tradingdb-${environmentSuffix}.example.com`,
+    name: `db.tradingdb-${environmentSuffix}.test.local`,
     type: "CNAME",
     ttl: 60,
     records: [primaryCluster.endpoint],
@@ -852,7 +1002,7 @@ const primaryDnsRecord = new aws.route53.Record(`primary-dns-record-${environmen
 // Secondary DNS record with failover routing
 const secondaryDnsRecord = new aws.route53.Record(`secondary-dns-record-${environmentSuffix}`, {
     zoneId: hostedZone.zoneId,
-    name: `db.tradingdb-${environmentSuffix}.example.com`,
+    name: `db.tradingdb-${environmentSuffix}.test.local`,
     type: "CNAME",
     ttl: 60,
     records: [secondaryCluster.endpoint],
@@ -869,21 +1019,27 @@ export const secondaryDatabaseEndpoint = secondaryCluster.endpoint;
 export const primaryBucketName = primaryBucket.id;
 export const secondaryBucketName = secondaryBucket.id;
 export const route53HostedZoneId = hostedZone.zoneId;
-export const route53DnsName = `db.tradingdb-${environmentSuffix}.example.com`;
+export const route53DnsName = `db.tradingdb-${environmentSuffix}.test.local`;
 export const primaryVpcId = primaryVpc.id;
 export const secondaryVpcId = secondaryVpc.id;
 export const vpcPeeringConnectionId = vpcPeering.id;
 export const primaryLambdaArn = primaryLambda.arn;
 export const secondaryLambdaArn = secondaryLambda.arn;
+export const dbSecretArn = dbSecret.arn;
 ```
 
 ## Deployment Instructions
 
-1. Set the required configuration:
+1. Set the environment suffix (optional - defaults to 'dev' if not set):
 ```bash
-pulumi config set environmentSuffix <your-suffix>
-pulumi config set --secret dbPassword <your-db-password>
+# Option 1: Set via environment variable (recommended for CI/CD)
+export ENVIRONMENT_SUFFIX=<your-suffix>
+
+# Option 2: Set via Pulumi config
+pulumi config set TapStack:environmentSuffix <your-suffix>
 ```
+
+**Note**: The database password is automatically generated and stored in AWS Secrets Manager. No manual password configuration is required.
 
 2. Deploy the stack:
 ```bash
@@ -891,9 +1047,11 @@ pulumi up
 ```
 
 3. The deployment will create all resources in both us-east-1 and eu-west-1 regions, including:
+   - KMS keys for encryption in both regions
+   - AWS Secrets Manager secret for database password
    - VPCs with public and private subnets
    - VPC peering connection
-   - Aurora Global Database clusters
+   - Aurora Global Database clusters with KMS encryption
    - S3 buckets with cross-region replication
    - Lambda functions for connectivity testing
    - CloudWatch alarms for monitoring
@@ -903,6 +1061,8 @@ pulumi up
 
 - Multi-region deployment across us-east-1 (primary) and eu-west-1 (secondary)
 - Aurora Global Database with r6g.large instances
+- **KMS encryption** with region-specific keys for both primary and secondary clusters
+- **AWS Secrets Manager** for secure database password storage (auto-generated)
 - 7-day backup retention with point-in-time recovery
 - VPC peering for secure cross-region communication
 - S3 cross-region replication with 30-day lifecycle policy
@@ -912,4 +1072,5 @@ pulumi up
 - Automatic DNS failover between regions
 - All resources tagged with Environment=production and DisasterRecovery=enabled
 - All resource names include environmentSuffix for multi-environment support
-- Full destroyability with skipFinalSnapshot=true
+- Environment suffix can be set via `ENVIRONMENT_SUFFIX` environment variable or Pulumi config
+- Full destroyability with skipFinalSnapshot=true and recoveryWindowInDays=0 for Secrets Manager

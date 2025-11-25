@@ -231,24 +231,175 @@ setIdentifier: `Primary-${environmentSuffix}`,
 
 ---
 
+---
+
+## Additional Failures Discovered During Deployment
+
+### 8. Missing KMS Keys for Cross-Region Encrypted RDS Replicas
+
+**Impact Level**: Critical - Deployment Blocker
+
+**Issue**:
+When deploying Aurora Global Database with encrypted storage, AWS requires explicit KMS key IDs for cross-region encrypted replicas. The initial implementation did not include KMS keys, causing deployment failures:
+
+```
+error: creating RDS Cluster (secondary-cluster-${suffix}): 
+operation error RDS: CreateDBCluster, 
+api error InvalidParameterCombination: 
+For encrypted cross-region replica, kmsKeyId should be explicitly specified
+```
+
+**Root Cause**: 
+AWS Aurora Global Database requires explicit KMS key specification for secondary clusters when encryption is enabled. The default AWS-managed encryption keys cannot be used for cross-region replication.
+
+**Solution Applied**:
+1. Created region-specific KMS keys for both primary (us-east-1) and secondary (eu-west-1) regions
+2. Added KMS key policies to allow RDS service to use the keys
+3. Explicitly set `kmsKeyId` on both primary and secondary clusters
+4. Set `storageEncrypted: true` and `kmsKeyId` on secondary cluster (required for cross-region)
+
+```typescript
+// KMS key for primary region
+const primaryKmsKey = new aws.kms.Key(`primary-rds-kms-${environmentSuffix}`, {
+    description: `KMS key for RDS encryption in primary region - ${environmentSuffix}`,
+    enableKeyRotation: true,
+    deletionWindowInDays: 7,
+    policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Sid: "Enable IAM User Permissions",
+                Effect: "Allow",
+                Principal: { AWS: "*" },
+                Action: "kms:*",
+                Resource: "*",
+            },
+            {
+                Sid: "Allow RDS service to use the key",
+                Effect: "Allow",
+                Principal: { Service: "rds.amazonaws.com" },
+                Action: [
+                    "kms:Decrypt",
+                    "kms:DescribeKey",
+                    "kms:CreateGrant",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey",
+                ],
+                Resource: "*",
+            },
+        ],
+    }),
+}, { provider: primaryProvider });
+
+// Primary cluster with KMS key
+const primaryCluster = new aws.rds.Cluster(..., {
+    storageEncrypted: true,
+    kmsKeyId: primaryKmsKey.arn,
+    ...
+});
+
+// Secondary cluster with KMS key (REQUIRED for cross-region)
+const secondaryCluster = new aws.rds.Cluster(..., {
+    storageEncrypted: true,
+    kmsKeyId: secondaryKmsKey.arn, // Required for cross-region encrypted replicas
+    ...
+});
+```
+
+**Impact**: Deployment blocker - secondary cluster creation fails without explicit KMS keys.
+
+**AWS Documentation Reference**: AWS RDS Aurora Global Database requires explicit KMS keys for encrypted cross-region replication.
+
+---
+
+### 9. Database Password Management - Secrets Manager Implementation
+
+**Impact Level**: High - Security Best Practice
+
+**Issue**:
+Initial implementation used `config.requireSecret("dbPassword")` which required manual password configuration. This approach:
+- Required manual password management
+- Could not be passed from CI/CD pipelines
+- Did not follow AWS security best practices
+
+**Solution Applied**:
+Implemented AWS Secrets Manager with auto-generated random passwords:
+
+```typescript
+// Generate random password
+const dbPassword = new random.RandomPassword(`db-password-${environmentSuffix}`, {
+    length: 32,
+    special: true,
+    overrideSpecial: "!#$%&*()-_=+[]{}<>:?",
+});
+
+// Store in Secrets Manager
+const dbSecret = new aws.secretsmanager.Secret(`db-secret-${environmentSuffix}`, {
+    name: `aurora-db-password-${environmentSuffix}`,
+    description: "Aurora MySQL database password",
+    recoveryWindowInDays: 0, // Allow immediate deletion for testing
+});
+
+new aws.secretsmanager.SecretVersion(`db-secret-version-${environmentSuffix}`, {
+    secretId: dbSecret.id,
+    secretString: pulumi.interpolate`{"username":"admin","password":"${dbPassword.result}"}`,
+});
+
+// Use in RDS clusters
+masterPassword: dbPassword.result,
+```
+
+**Impact**: Improved security posture, automated password management, no manual configuration required.
+
+---
+
+### 10. Environment Suffix Configuration Pattern
+
+**Impact Level**: Medium - Deployment Flexibility
+
+**Issue**:
+Initial implementation used `config.require("environmentSuffix")` which required explicit Pulumi configuration. This did not align with CI/CD patterns where environment variables are preferred.
+
+**Solution Applied**:
+Updated to prioritize environment variables, then Pulumi config, then default:
+
+```typescript
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get("environmentSuffix") || "dev";
+```
+
+This allows:
+- CI/CD pipelines to set `ENVIRONMENT_SUFFIX` environment variable
+- Fallback to Pulumi config for local development
+- Default to 'dev' if neither is set
+
+**Impact**: Improved deployment flexibility and CI/CD integration.
+
+---
+
 ## Summary
 
-- Total failures: **2 Critical**, **3 High**, **1 Medium**, **1 Low**
+- Total failures: **3 Critical**, **4 High**, **2 Medium**, **1 Low**
 - Primary knowledge gaps:
-  1. **AWS-specific resource constraints** (reserved domain names, actual API types)
+  1. **AWS-specific resource constraints** (reserved domain names, actual API types, KMS requirements for cross-region encryption)
   2. **Pulumi TypeScript API specifics** (correct resource type names, property structures)
   3. **Code quality standards** (ESLint configuration compliance, project conventions)
+  4. **AWS security best practices** (Secrets Manager vs. config secrets, KMS key policies)
 
 - Training value: **HIGH** - These failures represent critical gaps in understanding:
   - Real AWS service limitations vs. documentation examples
   - Correct Pulumi provider API usage (resource types, property names)
   - TypeScript module export/import patterns for Pulumi entry points
   - Project-specific code quality requirements
+  - AWS cross-region encryption requirements (KMS keys)
+  - Security best practices (Secrets Manager)
 
-The model generated architecturally sound infrastructure with correct resource relationships and security practices. However, it failed on API-level accuracy (wrong resource types, invalid properties) and AWS service constraints (reserved domains). This indicates strong conceptual understanding but gaps in specific API knowledge and real-world constraints.
+The model generated architecturally sound infrastructure with correct resource relationships and security practices. However, it failed on API-level accuracy (wrong resource types, invalid properties), AWS service constraints (reserved domains, KMS requirements), and security best practices (password management). This indicates strong conceptual understanding but gaps in specific API knowledge, real-world constraints, and AWS security patterns.
 
 **Recommendation for Training**: Focus on:
 1. Actual Pulumi AWS provider API references over generic examples
 2. AWS service-specific constraints and reserved values
 3. TypeScript type checking and interface validation
 4. Project linting/formatting standards compliance
+5. AWS cross-region encryption requirements (KMS keys for RDS)
+6. AWS security best practices (Secrets Manager, IAM policies)

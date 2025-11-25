@@ -383,6 +383,116 @@ const secondaryPeeringRoute = new aws.ec2.Route(
 
 // ================== RDS AURORA GLOBAL DATABASE ==================
 
+// KMS key for primary region RDS encryption
+const primaryKmsKey = new aws.kms.Key(
+  `primary-rds-kms-${environmentSuffix}`,
+  {
+    description: `KMS key for RDS encryption in primary region - ${environmentSuffix}`,
+    enableKeyRotation: true,
+    deletionWindowInDays: 7,
+    policy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'Enable IAM User Permissions',
+          Effect: 'Allow',
+          Principal: {
+            AWS: '*',
+          },
+          Action: 'kms:*',
+          Resource: '*',
+        },
+        {
+          Sid: 'Allow RDS service to use the key',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'rds.amazonaws.com',
+          },
+          Action: [
+            'kms:Decrypt',
+            'kms:DescribeKey',
+            'kms:CreateGrant',
+            'kms:Encrypt',
+            'kms:GenerateDataKey',
+          ],
+          Resource: '*',
+        },
+      ],
+    }),
+    tags: {
+      ...commonTags,
+      Name: `primary-rds-kms-${environmentSuffix}`,
+      Region: 'us-east-1',
+    },
+  },
+  { provider: primaryProvider }
+);
+
+// KMS alias for primary region
+new aws.kms.Alias(
+  `primary-rds-kms-alias-${environmentSuffix}`,
+  {
+    name: `alias/rds-primary-${environmentSuffix}`,
+    targetKeyId: primaryKmsKey.keyId,
+  },
+  { provider: primaryProvider }
+);
+
+// KMS key for secondary region RDS encryption
+const secondaryKmsKey = new aws.kms.Key(
+  `secondary-rds-kms-${environmentSuffix}`,
+  {
+    description: `KMS key for RDS encryption in secondary region - ${environmentSuffix}`,
+    enableKeyRotation: true,
+    deletionWindowInDays: 7,
+    policy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'Enable IAM User Permissions',
+          Effect: 'Allow',
+          Principal: {
+            AWS: '*',
+          },
+          Action: 'kms:*',
+          Resource: '*',
+        },
+        {
+          Sid: 'Allow RDS service to use the key',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'rds.amazonaws.com',
+          },
+          Action: [
+            'kms:Decrypt',
+            'kms:DescribeKey',
+            'kms:CreateGrant',
+            'kms:Encrypt',
+            'kms:GenerateDataKey',
+          ],
+          Resource: '*',
+        },
+      ],
+    }),
+    tags: {
+      ...commonTags,
+      Name: `secondary-rds-kms-${environmentSuffix}`,
+      Region: 'eu-west-1',
+    },
+  },
+  { provider: secondaryProvider }
+);
+
+// KMS alias for secondary region
+new aws.kms.Alias(
+  `secondary-rds-kms-alias-${environmentSuffix}`,
+  {
+    name: `alias/rds-secondary-${environmentSuffix}`,
+    targetKeyId: secondaryKmsKey.keyId,
+  },
+  { provider: secondaryProvider }
+);
+
 // DB subnet group for primary region
 const primaryDbSubnetGroup = new aws.rds.SubnetGroup(
   `primary-db-subnet-group-${environmentSuffix}`,
@@ -498,6 +608,7 @@ const primaryCluster = new aws.rds.Cluster(
     backupRetentionPeriod: 7,
     preferredBackupWindow: '03:00-04:00',
     storageEncrypted: true,
+    kmsKeyId: primaryKmsKey.arn,
     skipFinalSnapshot: true,
     enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
     tags: {
@@ -539,6 +650,8 @@ const secondaryCluster = new aws.rds.Cluster(
     dbSubnetGroupName: secondaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [secondaryRdsSg.id],
     globalClusterIdentifier: globalCluster.id,
+    storageEncrypted: true,
+    kmsKeyId: secondaryKmsKey.arn, // Required for cross-region encrypted replicas
     skipFinalSnapshot: true,
     enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
     tags: {
