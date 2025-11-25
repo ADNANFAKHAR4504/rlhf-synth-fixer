@@ -187,12 +187,36 @@ export class TapStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryptionKey: dynamoDbKey,
-        pointInTimeRecovery: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
+    // Use escape hatch to set point-in-time recovery (non-deprecated API)
+    const cfnTable = transactionTable.node.defaultChild as dynamodb.CfnTable;
+    cfnTable.pointInTimeRecoverySpecification = {
+      pointInTimeRecoveryEnabled: true,
+    };
+
     // 🔹 Lambda Functions
+    // Grant CloudWatch Logs permission to use the KMS key for log encryption
+    inputBucketKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchLogs',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+      })
+    );
+
     const lambdaLogGroup = new logs.LogGroup(this, 'ProcessorLambdaLogGroup', {
       logGroupName: `/aws/lambda/secure-financial-processor-${environmentSuffix}`,
       retention: logs.RetentionDays.SEVEN_YEARS,
@@ -482,5 +506,90 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Project', 'SecureFinancialProcessing');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
     cdk.Tags.of(this).add('DataClassification', 'Sensitive');
+
+    // 🔹 Stack Outputs
+    new cdk.CfnOutput(this, 'VPCId', {
+      value: vpc.vpcId,
+      description: 'VPC ID for secure processing environment',
+      exportName: `TapStack-${environmentSuffix}-VPCId`,
+    });
+
+    new cdk.CfnOutput(this, 'InputBucketName', {
+      value: inputBucket.bucketName,
+      description: 'Input S3 bucket name',
+      exportName: `TapStack-${environmentSuffix}-InputBucketName`,
+    });
+
+    new cdk.CfnOutput(this, 'InputBucketArn', {
+      value: inputBucket.bucketArn,
+      description: 'Input S3 bucket ARN',
+      exportName: `TapStack-${environmentSuffix}-InputBucketArn`,
+    });
+
+    new cdk.CfnOutput(this, 'OutputBucketName', {
+      value: outputBucket.bucketName,
+      description: 'Output S3 bucket name',
+      exportName: `TapStack-${environmentSuffix}-OutputBucketName`,
+    });
+
+    new cdk.CfnOutput(this, 'OutputBucketArn', {
+      value: outputBucket.bucketArn,
+      description: 'Output S3 bucket ARN',
+      exportName: `TapStack-${environmentSuffix}-OutputBucketArn`,
+    });
+
+    new cdk.CfnOutput(this, 'ProcessorLambdaArn', {
+      value: processorLambda.functionArn,
+      description: 'Data processor Lambda function ARN',
+      exportName: `TapStack-${environmentSuffix}-ProcessorLambdaArn`,
+    });
+
+    new cdk.CfnOutput(this, 'ProcessorLambdaName', {
+      value: processorLambda.functionName,
+      description: 'Data processor Lambda function name',
+      exportName: `TapStack-${environmentSuffix}-ProcessorLambdaName`,
+    });
+
+    new cdk.CfnOutput(this, 'TransactionTableName', {
+      value: transactionTable.tableName,
+      description: 'DynamoDB transaction metadata table name',
+      exportName: `TapStack-${environmentSuffix}-TransactionTableName`,
+    });
+
+    new cdk.CfnOutput(this, 'TransactionTableArn', {
+      value: transactionTable.tableArn,
+      description: 'DynamoDB transaction metadata table ARN',
+      exportName: `TapStack-${environmentSuffix}-TransactionTableArn`,
+    });
+
+    new cdk.CfnOutput(this, 'SecurityAlertTopicArn', {
+      value: securityAlertTopic.topicArn,
+      description: 'SNS topic ARN for security alerts',
+      exportName: `TapStack-${environmentSuffix}-SecurityAlertTopicArn`,
+    });
+
+    new cdk.CfnOutput(this, 'InputBucketKMSKeyArn', {
+      value: inputBucketKey.keyArn,
+      description: 'KMS key ARN for input bucket encryption',
+      exportName: `TapStack-${environmentSuffix}-InputBucketKMSKeyArn`,
+    });
+
+    new cdk.CfnOutput(this, 'OutputBucketKMSKeyArn', {
+      value: outputBucketKey.keyArn,
+      description: 'KMS key ARN for output bucket encryption',
+      exportName: `TapStack-${environmentSuffix}-OutputBucketKMSKeyArn`,
+    });
+
+    new cdk.CfnOutput(this, 'DynamoDBKMSKeyArn', {
+      value: dynamoDbKey.keyArn,
+      description: 'KMS key ARN for DynamoDB encryption',
+      exportName: `TapStack-${environmentSuffix}-DynamoDBKMSKeyArn`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaLogGroupName', {
+      value: lambdaLogGroup.logGroupName,
+      description: 'CloudWatch Log Group name for Lambda function',
+      exportName: `TapStack-${environmentSuffix}-LambdaLogGroupName`,
+    });
   }
 }
