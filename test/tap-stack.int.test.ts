@@ -535,17 +535,76 @@ describe('TapStack EKS Infrastructure Integration Tests', () => {
   });
 
   describe('IAM Role Integration Tests', () => {
-    test('should have node IAM role with correct policies', async () => {
-      const roleName = nodeRoleArn.split('/').pop();
+    test('should have node IAM role created with correct name', async () => {
+      const roleName = `eks-node-role-${environmentSuffix}`;
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
 
       expect(response.Role).toBeDefined();
       expect(response.Role!.RoleName).toBe(roleName);
-      expect(response.Role!.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
+    });
 
-      // Note: In a real test, you might want to check attached policies
-      // But for simplicity, we'll just check the role exists
+    test('should have node IAM role with correct assume role policy for EC2', async () => {
+      const roleName = `eks-node-role-${environmentSuffix}`;
+      const command = new GetRoleCommand({ RoleName: roleName });
+      const response = await iamClient.send(command);
+
+      expect(response.Role).toBeDefined();
+      const policyDoc = JSON.parse(response.Role!.AssumeRolePolicyDocument!);
+      expect(policyDoc.Statement).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Effect: 'Allow',
+            Principal: { Service: 'ec2.amazonaws.com' },
+            Action: 'sts:AssumeRole'
+          })
+        ])
+      );
+    });
+
+    test('should have cluster IAM role created with correct name', async () => {
+      const roleName = `eks-cluster-role-${environmentSuffix}`;
+      const command = new GetRoleCommand({ RoleName: roleName });
+      const response = await iamClient.send(command);
+
+      expect(response.Role).toBeDefined();
+      expect(response.Role!.RoleName).toBe(roleName);
+    });
+
+    test('should have cluster IAM role with correct assume role policy for EKS', async () => {
+      const roleName = `eks-cluster-role-${environmentSuffix}`;
+      const command = new GetRoleCommand({ RoleName: roleName });
+      const response = await iamClient.send(command);
+
+      expect(response.Role).toBeDefined();
+      const policyDoc = JSON.parse(response.Role!.AssumeRolePolicyDocument!);
+      expect(policyDoc.Statement).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Effect: 'Allow',
+            Principal: { Service: 'eks.amazonaws.com' },
+            Action: 'sts:AssumeRole'
+          })
+        ])
+      );
+    });
+
+    test('should have node IAM role with all required managed policies attached', async () => {
+      const roleName = `eks-node-role-${environmentSuffix}`;
+      const command = new ListAttachedRolePoliciesCommand({ RoleName: roleName });
+      const response = await iamClient.send(command);
+
+      expect(response.AttachedPolicies).toBeDefined();
+      const policyArns = response.AttachedPolicies!.map(p => p.PolicyArn);
+      expect(policyArns).toEqual(
+        expect.arrayContaining([
+          'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy',
+          'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy',
+          'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
+          'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        ])
+      );
+      expect(policyArns).toHaveLength(4);
     });
   });
 

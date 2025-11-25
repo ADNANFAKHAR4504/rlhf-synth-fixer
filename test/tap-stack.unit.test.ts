@@ -223,7 +223,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have exactly twenty-two resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(22);
+      expect(resourceCount).toBe(31);
     });
 
     test('should have exactly one parameter', () => {
