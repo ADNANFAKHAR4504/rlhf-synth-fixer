@@ -1,0 +1,1 @@
+Integration tests: 32 out of 33 tests passed successfully
