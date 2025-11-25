@@ -576,12 +576,18 @@ resource "aws_security_group" "aurora" {
 }
 
 # VPC Endpoints
-# VPC Endpoint for DynamoDB (Gateway endpoint - available in all regions)
+# VPC Endpoint for DynamoDB
+# Note: Some regions (like us-west-1) only support Interface endpoints, not Gateway
+# Using Interface endpoint for consistency across all regions
 resource "aws_vpc_endpoint" "dynamodb" {
-  vpc_id            = aws_vpc.main.id
-  service_name       = "com.amazonaws.${var.aws_region}.dynamodb"
-  vpc_endpoint_type  = "Gateway"
-  route_table_ids    = aws_route_table.private[*].id
+  count = var.enable_vpc_endpoints ? 1 : 0
+
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.dynamodb"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.lambda.id]
+  private_dns_enabled = true
 
   tags = merge(local.tags, {
     Name = "${local.resource_prefix}-dynamodb-endpoint"
@@ -2614,7 +2620,7 @@ variable "team" {
 ```hcl
 env                       = "dev"
 aws_region                = "us-west-1"
-pr_number                 = "pr7290"
+pr_number                 = "pr7306"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 1
 dynamodb_billing_mode     = "PROVISIONED"
@@ -2640,7 +2646,7 @@ enable_vpc_endpoints      = false
 ```hcl
 env                       = "prod"
 aws_region                = "us-west-1"
-pr_number                 = "pr7290"
+pr_number                 = "pr7306"
 kinesis_stream_mode       = "ON_DEMAND"
 dynamodb_billing_mode     = "PAY_PER_REQUEST"
 redis_node_type           = "cache.r7g.large"
@@ -2663,7 +2669,7 @@ enable_vpc_endpoints      = false
 ```hcl
 env                       = "staging"
 aws_region                = "us-west-1"
-pr_number                 = "pr7290"
+pr_number                 = "pr7306"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 2
 dynamodb_billing_mode     = "PROVISIONED"
