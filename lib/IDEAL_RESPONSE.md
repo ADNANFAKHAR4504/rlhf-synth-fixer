@@ -263,58 +263,58 @@ pulumi destroy --yes
 
 All PROMPT.md mandatory requirements implemented:
 
-✅ **1. CodePipeline with 4 stages**
+ **1. CodePipeline with 4 stages**
 - Source (GitHub)
 - Build (CodeBuild)
 - Deploy-Blue (Lambda invocation)
 - Switch-Traffic (CodeDeploy)
 
-✅ **2. CodeBuild with TypeScript and Jest**
+ **2. CodeBuild with TypeScript and Jest**
 - Buildspec includes TypeScript compilation
 - Runs Jest unit tests
 - Lint validation
 
-✅ **3. Lambda functions (blue/green)**
+ **3. Lambda functions (blue/green)**
 - Runtime: Node.js 18
 - Memory: 512MB
 - Reserved concurrency: 100 (as required)
 
-✅ **4. DynamoDB table**
+ **4. DynamoDB table**
 - Partition key: 'deploymentId'
 - Billing: PAY_PER_REQUEST
 - Point-in-time recovery: enabled
 
-✅ **5. CodeDeploy with auto rollback**
+ **5. CodeDeploy with auto rollback**
 - LINEAR_10PERCENT_EVERY_10MINUTES deployment
 - Auto rollback on failure and alarm trigger
 
-✅ **6. S3 bucket**
+ **6. S3 bucket**
 - Server-side encryption: AES256
 - Versioning: enabled
 - Lifecycle rules: 30-day deletion
 
-✅ **7. CloudWatch alarm with SNS**
+ **7. CloudWatch alarm with SNS**
 - Monitors Lambda error rate
 - Threshold: 5%
 - Evaluation periods: 2
 - SNS notifications configured
 
-✅ **8. Required outputs**
+ **8. Required outputs**
 - pipelineUrl: Pipeline console URL
 - deploymentTableName: DynamoDB table name
 
 ### Constraints Compliance
 
-✅ 4 pipeline stages
-✅ BUILD_GENERAL1_SMALL compute type
-✅ Lambda reserved concurrent executions: 100
-✅ DynamoDB PAY_PER_REQUEST billing
-✅ DynamoDB point-in-time recovery
-✅ CodeDeploy LINEAR_10PERCENT_EVERY_10MINUTES
-✅ S3 versioning enabled
-✅ S3 lifecycle 30-day deletion
-✅ CloudWatch alarm 5% threshold, 2 periods
-⚠️ **Inline IAM policies** (see MODEL_FAILURES.md for details)
+ 4 pipeline stages
+ BUILD_GENERAL1_SMALL compute type
+ Lambda reserved concurrent executions: 100
+ DynamoDB PAY_PER_REQUEST billing
+ DynamoDB point-in-time recovery
+ CodeDeploy LINEAR_10PERCENT_EVERY_10MINUTES
+ S3 versioning enabled
+ S3 lifecycle 30-day deletion
+ CloudWatch alarm 5% threshold, 2 periods
+ **Inline IAM policies** (see MODEL_FAILURES.md for details)
 
 ---
 

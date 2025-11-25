@@ -108,22 +108,22 @@ Production CI/CD infrastructure deployed in us-east-1 region. Uses CodePipeline 
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  -  CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  -  WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  -  WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  -  Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  -  Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  -  CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  -  WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -152,11 +152,11 @@ Production CI/CD infrastructure deployed in us-east-1 region. Uses CodePipeline 
 ### Correct Resource Naming (Pulumi TypeScript)
 ```typescript
 const bucket = new aws.s3.Bucket("dataBucket", {
-    bucket: `data-bucket-${environmentSuffix}`,  // ✅ CORRECT
+    bucket: `data-bucket-${environmentSuffix}`,  //  CORRECT
     // ...
 });
 
-// ❌ WRONG:
+//  WRONG:
 // bucket: 'data-bucket-prod'  // Hardcoded, will fail
 ```
 

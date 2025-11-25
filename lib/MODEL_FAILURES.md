@@ -103,26 +103,14 @@ The managed policy name `AWSCodeDeployRoleForLambda` does not exist. AWS provide
 ### Fix Applied
 **File**: `lib/tap-stack.ts:259`
 
-**Before**:
-```typescript
-managedPolicyArns: [
-  'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambda',  // ❌ Invalid - doesn't exist
-],
-```
 
-**After**:
-```typescript
-managedPolicyArns: [
-  'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambdaLimited',  // ✅ Correct policy
-],
-```
 
 ### Correct AWS Managed Policies for CodeDeploy Lambda
 
 According to AWS documentation:
-- ✅ `AWSCodeDeployRoleForLambdaLimited` (recommended, least privilege)
-- ✅ `AWSCodeDeployRole` (alternative, broader permissions)
-- ❌ `AWSCodeDeployRoleForLambda` (does not exist)
+-  `AWSCodeDeployRoleForLambdaLimited` (recommended, least privilege)
+-  `AWSCodeDeployRole` (alternative, broader permissions)
+-  `AWSCodeDeployRoleForLambda` (does not exist)
 
 ### Impact
 **Critical** - Deployment blocker. Without the correct policy, CodeDeploy role cannot be created, preventing the entire pipeline from being deployed.
@@ -237,40 +225,40 @@ new aws.iam.RolePolicyAttachment(
 ### Requirements Compliance
 
 All 8 mandatory requirements from PROMPT.md implemented:
-1. ✅ CodePipeline with 4 stages
-2. ✅ CodeBuild with TypeScript compilation and Jest
-3. ✅ Two Lambda functions (blue/green) with 512MB, Node.js 18
-4. ✅ DynamoDB table with 'deploymentId' partition key
-5. ✅ CodeDeploy with blue-green and auto rollback
-6. ✅ S3 bucket with encryption and lifecycle rules
-7. ✅ CloudWatch alarm with SNS notifications
-8. ✅ Outputs: pipelineUrl and deploymentTableName
+1.  CodePipeline with 4 stages
+2.  CodeBuild with TypeScript compilation and Jest
+3.  Two Lambda functions (blue/green) with 512MB, Node.js 18
+4.  DynamoDB table with 'deploymentId' partition key
+5.  CodeDeploy with blue-green and auto rollback
+6.  S3 bucket with encryption and lifecycle rules
+7.  CloudWatch alarm with SNS notifications
+8.  Outputs: pipelineUrl and deploymentTableName
 
 ### Constraints Compliance
 
-✅ 4 pipeline stages (Source, Build, Deploy-Blue, Switch-Traffic)
-✅ BUILD_GENERAL1_SMALL compute type
-✅ Lambda reserved concurrent executions: 100
-✅ DynamoDB PAY_PER_REQUEST billing
-✅ DynamoDB point-in-time recovery enabled
-✅ CodeDeploy LINEAR_10PERCENT_EVERY_10MINUTES configuration
-✅ S3 versioning enabled
-✅ S3 lifecycle rule: 30-day noncurrent version expiration
-✅ CloudWatch alarm: 5% threshold, 2 evaluation periods
-⚠️ **Inline IAM policies** (documented above)
+ 4 pipeline stages (Source, Build, Deploy-Blue, Switch-Traffic)
+ BUILD_GENERAL1_SMALL compute type
+ Lambda reserved concurrent executions: 100
+ DynamoDB PAY_PER_REQUEST billing
+ DynamoDB point-in-time recovery enabled
+ CodeDeploy LINEAR_10PERCENT_EVERY_10MINUTES configuration
+ S3 versioning enabled
+ S3 lifecycle rule: 30-day noncurrent version expiration
+ CloudWatch alarm: 5% threshold, 2 evaluation periods
+ **Inline IAM policies** (documented above)
 
 ### Idempotency Validation
 
 All resources use `environmentSuffix` for unique naming:
-- ✅ S3 bucket: `pipeline-artifacts-${environmentSuffix}`
-- ✅ DynamoDB: `deployment-history-${environmentSuffix}`
-- ✅ Lambda: `payment-processor-{blue|green}-${environmentSuffix}`
-- ✅ IAM roles: `{service}-role-${environmentSuffix}`
-- ✅ CodePipeline: `payment-processor-pipeline-${environmentSuffix}`
-- ✅ CodeBuild: `payment-processor-build-${environmentSuffix}`
-- ✅ CodeDeploy: `payment-processor-{app|dg}-${environmentSuffix}`
-- ✅ SNS: `deployment-alarms-${environmentSuffix}`
-- ✅ CloudWatch: `lambda-errors-${environmentSuffix}`
+-  S3 bucket: `pipeline-artifacts-${environmentSuffix}`
+-  DynamoDB: `deployment-history-${environmentSuffix}`
+-  Lambda: `payment-processor-{blue|green}-${environmentSuffix}`
+-  IAM roles: `{service}-role-${environmentSuffix}`
+-  CodePipeline: `payment-processor-pipeline-${environmentSuffix}`
+-  CodeBuild: `payment-processor-build-${environmentSuffix}`
+-  CodeDeploy: `payment-processor-{app|dg}-${environmentSuffix}`
+-  SNS: `deployment-alarms-${environmentSuffix}`
+-  CloudWatch: `lambda-errors-${environmentSuffix}`
 
 **Result**: Multiple environments can be deployed simultaneously without conflicts.
 
@@ -304,13 +292,13 @@ All resources use `environmentSuffix` for unique naming:
 
 ## Production Readiness Status
 
-- ✅ Build: PASSED (TypeScript compilation successful)
-- ✅ Lint: PASSED
-- ✅ Unit Tests: PASSED (26/26, 100% coverage)
-- ✅ Integration Tests: Ready (30+ tests)
-- ✅ Pulumi.yaml: Created
-- ✅ Metadata: Correct
-- ✅ Idempotency: Verified
-- ⚠️ Constraint Deviation: Inline policies (documented)
+-  Build: PASSED (TypeScript compilation successful)
+-  Lint: PASSED
+-  Unit Tests: PASSED (26/26, 100% coverage)
+-  Integration Tests: Ready (30+ tests)
+-  Pulumi.yaml: Created
+-  Metadata: Correct
+-  Idempotency: Verified
+-  Constraint Deviation: Inline policies (documented)
 
 **Status**: Production-ready with documented inline policy deviation.
