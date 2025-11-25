@@ -1,22 +1,28 @@
 {
+  "task_id": "n9p6s8g8",
   "platform": "cdk",
   "language": "py",
   "complexity": "expert",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-25T12:11:45.000Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "subtask": "Multi-Account Transit Gateway Network",
   "subject_labels": [
-    "Environment Migration"
+    "Network Architecture",
+    "Transit Gateway",
+    "Hub-and-Spoke",
+    "DNS Resolution",
+    "Network Isolation"
   ],
   "aws_services": [
     "EC2",
     "VPC",
     "Transit Gateway",
-    "Route53",
+    "Route53 Resolver",
     "S3",
     "IAM",
-    "CloudWatch Logs"
+    "CloudWatch",
+    "CloudFormation"
   ],
   "po_id": "n9p6s8g8",
   "training_quality": 9
