@@ -4,8 +4,9 @@ Tests deployed resources using actual AWS services
 """
 import json
 import os
-import pytest
+
 import boto3
+import pytest
 from botocore.exceptions import ClientError
 
 
@@ -27,11 +28,11 @@ def stack_outputs():
             keys = list(outputs.keys())
             if len(keys) == 1 and keys[0].startswith('TapStack'):
                 # Return the nested outputs (flattened)
-                print(f"✅ Extracted nested outputs from stack: {keys[0]}")
+                print(f"Extracted nested outputs from stack: {keys[0]}")
                 return outputs[keys[0]]
         
         # If already flat, return as-is
-        print(f"✅ Loaded flat outputs")
+        print(f"Loaded flat outputs")
         return outputs
 
 
