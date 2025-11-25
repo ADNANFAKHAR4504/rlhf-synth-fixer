@@ -31,5 +31,10 @@
   "task_config": {
     "deploy_env": "dev"
   },
-  "author": "Claude"
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
