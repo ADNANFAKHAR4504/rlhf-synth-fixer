@@ -1,0 +1,31 @@
+# Example terraform.tfvars file
+# Copy this file to terraform.tfvars and customize the values
+
+# REQUIRED: Must be provided for resource uniqueness
+environment_suffix = "dev-01"
+
+# AWS Region
+aws_region = "us-east-1"
+
+# VPC Configuration
+vpc_cidr                 = "10.0.0.0/16"
+availability_zones_count = 3
+
+# ECS Configuration
+container_image   = "nginx:latest"  # Replace with your actual container image
+container_port    = 80
+ecs_task_cpu      = "512"
+ecs_task_memory   = "1024"
+ecs_desired_count = 2
+ecs_min_capacity  = 2
+ecs_max_capacity  = 10
+
+# RDS Configuration
+db_name                     = "paymentdb"
+db_username                 = "dbadmin"
+db_instance_class           = "db.r6g.large"
+db_backup_retention_period  = 3
+
+# Monitoring
+enable_container_insights = true
+enable_vpc_flow_logs      = true
