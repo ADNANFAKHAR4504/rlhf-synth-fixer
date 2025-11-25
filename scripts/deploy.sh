@@ -400,6 +400,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/${PULUMI_PROJECT_NAME}/${PULUMI_PROJECT_NAME}${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
+    # Ensure environmentSuffix is configured for the stack before applying other config
+    pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
     echo "Deploying infrastructure ..."
