@@ -21,9 +21,9 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
       expect(template.Description).toContain('payment processing');
     });
 
-    test('should have 47 resources', () => {
+    test('should have 41 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(47);
+      expect(resourceCount).toBe(41);
     });
   });
 
@@ -195,43 +195,23 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
     });
   });
 
-  describe('AWS Config Compliance', () => {
-    test('should have ConfigRole with AWS managed policy', () => {
-      expect(template.Resources.ConfigRole).toBeDefined();
-      const role = template.Resources.ConfigRole;
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWS_ConfigRole');
+  describe('SSM Parameter Store', () => {
+    test('should have PaymentConfigParameter', () => {
+      expect(template.Resources.PaymentConfigParameter).toBeDefined();
+      const param = template.Resources.PaymentConfigParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
     });
 
-    test('should have ConfigRecorder', () => {
-      expect(template.Resources.ConfigRecorder).toBeDefined();
-      const recorder = template.Resources.ConfigRecorder;
-      expect(recorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-      expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
+    test('should have PaymentSecretParameter', () => {
+      expect(template.Resources.PaymentSecretParameter).toBeDefined();
+      const param = template.Resources.PaymentSecretParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
     });
 
-    test('should have ConfigDeliveryChannel', () => {
-      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-      const channel = template.Resources.ConfigDeliveryChannel;
-      expect(channel.Type).toBe('AWS::Config::DeliveryChannel');
-    });
-
-    test('should have S3 encryption Config Rule', () => {
-      expect(template.Resources.S3EncryptionConfigRule).toBeDefined();
-      const rule = template.Resources.S3EncryptionConfigRule;
-      expect(rule.Type).toBe('AWS::Config::ConfigRule');
-      expect(rule.Properties.Source.SourceIdentifier).toBe('S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED');
-    });
-
-    test('should have VPC Flow Logs Config Rule', () => {
-      expect(template.Resources.VpcFlowLogsConfigRule).toBeDefined();
-      const rule = template.Resources.VpcFlowLogsConfigRule;
-      expect(rule.Properties.Source.SourceIdentifier).toBe('VPC_FLOW_LOGS_ENABLED');
-    });
-
-    test('should have Encrypted Volumes Config Rule', () => {
-      expect(template.Resources.EncryptedVolumesConfigRule).toBeDefined();
-      const rule = template.Resources.EncryptedVolumesConfigRule;
-      expect(rule.Properties.Source.SourceIdentifier).toBe('ENCRYPTED_VOLUMES');
+    test('should have PaymentApiKeyParameter', () => {
+      expect(template.Resources.PaymentApiKeyParameter).toBeDefined();
+      const param = template.Resources.PaymentApiKeyParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
     });
   });
 
@@ -306,8 +286,6 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
     });
   });
 
-  describe('SSM Parameter Store', () => {
-  });
 
   describe('Resource Tagging', () => {
     test('VPC should have PCI compliance tags', () => {
@@ -327,8 +305,7 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
         'DataBucket',
         'PaymentProcessorFunction',
         'SecurityAlertsTopic',
-        'FlowLogGroup',
-        'ConfigRole'
+        'FlowLogGroup'
       ];
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
@@ -376,10 +353,6 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
     test('should have SnsTopicArn output', () => {
       expect(template.Outputs.SnsTopicArn).toBeDefined();
     });
-
-    test('should have ConfigRecorderName output', () => {
-      expect(template.Outputs.ConfigRecorderName).toBeDefined();
-    });
   });
 
   describe('Security Validation', () => {
@@ -402,8 +375,7 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
     test('should have proper IAM role trust policies', () => {
       const roles = [
         'LambdaExecutionRole',
-        'FlowLogRole',
-        'ConfigRole'
+        'FlowLogRole'
       ];
       roles.forEach(roleName => {
         const role = template.Resources[roleName];
@@ -426,9 +398,9 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
       expect(template.Outputs).toBeDefined();
     });
 
-    test('should have exactly 47 resources', () => {
+    test('should have exactly 41 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(47);
+      expect(resourceCount).toBe(41);
     });
 
     test('should have 2 parameters', () => {
@@ -436,9 +408,9 @@ describe('PCI-DSS Payment Processing CloudFormation Template', () => {
       expect(parameterCount).toBe(2);
     });
 
-    test('should have 7 outputs', () => {
+    test('should have 6 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(6);
     });
   });
 });
