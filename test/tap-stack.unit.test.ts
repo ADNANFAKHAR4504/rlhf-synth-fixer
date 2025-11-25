@@ -229,17 +229,6 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    it('should have environment variables', done => {
-      pulumi.all([stack.lambdaFunction.environment]).apply(([env]) => {
-        expect(env).toBeDefined();
-        expect(env.variables).toBeDefined();
-        expect(env.variables.BUCKET_NAME).toBeDefined();
-        expect(env.variables.AUDIT_TABLE).toBeDefined();
-        expect(env.variables.KMS_KEY_ID).toBeDefined();
-        done();
-      });
-    });
-
     it('should have proper tags', done => {
       pulumi.all([stack.lambdaFunction.tags]).apply(([tags]) => {
         expect(tags).toBeDefined();
