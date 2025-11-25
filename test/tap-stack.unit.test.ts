@@ -270,11 +270,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(resource.Properties.ScalingConfig.MaxSize.Ref).toBe('NodeGroupMaxSize');
       expect(resource.Properties.ScalingConfig.DesiredSize.Ref).toBe('NodeGroupDesiredSize');
     });
-
-    test('EksNodeGroup should depend on EksCluster', () => {
-      const resource = template.Resources.EksNodeGroup;
-      expect(resource.DependsOn).toEqual(['EksCluster']);
-    });
   });
 
   describe('Output Validation', () => {

@@ -4,9 +4,6 @@ import { DescribeSecurityGroupsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeClusterCommand, DescribeNodegroupCommand, EKSClient } from '@aws-sdk/client-eks';
 import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, GetKeyPolicyCommand, KMSClient } from '@aws-sdk/client-kms';
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
 
 const cfClient = new CloudFormationClient({
   region: 'us-east-1',
@@ -66,72 +63,6 @@ const STACK_NAME = 'tap-stack-localstack';
 const ENVIRONMENT_SUFFIX = 'test';
 
 describe('TapStack CloudFormation Template - Integration Tests', () => {
-  beforeAll(async () => {
-    // Ensure LocalStack is running
-    try {
-      execSync('curl -s http://localhost:4566/_localstack/health', { timeout: 5000 });
-    } catch (error) {
-      throw new Error('LocalStack is not running. Please start LocalStack first.');
-    }
-
-    // Clean up any existing stack
-    try {
-      await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
-      console.log('Cleaning up existing stack...');
-      execSync(`awslocal cloudformation delete-stack --stack-name ${STACK_NAME}`, { timeout: 30000 });
-      // Wait for deletion
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    } catch (error) {
-      // Stack doesn't exist, continue
-    }
-
-    // Deploy the stack
-    console.log('Deploying CloudFormation stack...');
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateBody = fs.readFileSync(templatePath, 'utf-8');
-
-    try {
-      await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
-      // If stack exists, wait for it to be deleted
-      await new Promise(resolve => setTimeout(resolve, 10000));
-    } catch (error) {
-      // Stack doesn't exist, good
-    }
-
-    // Create VPC and subnets for testing
-    const vpcId = await createTestVpc();
-    const subnetIds = await createTestSubnets(vpcId);
-
-    await cfClient.createStack({
-      StackName: STACK_NAME,
-      TemplateBody: templateBody,
-      Parameters: [
-        { ParameterKey: 'EnvironmentSuffix', ParameterValue: ENVIRONMENT_SUFFIX },
-        { ParameterKey: 'VpcId', ParameterValue: vpcId },
-        { ParameterKey: 'PrivateSubnetIds', ParameterValue: subnetIds.join(',') },
-        { ParameterKey: 'EksVersion', ParameterValue: '1.28' },
-        { ParameterKey: 'NodeInstanceType', ParameterValue: 't3.medium' },
-        { ParameterKey: 'NodeGroupMinSize', ParameterValue: '1' },
-        { ParameterKey: 'NodeGroupMaxSize', ParameterValue: '3' },
-        { ParameterKey: 'NodeGroupDesiredSize', ParameterValue: '1' }
-      ],
-      Capabilities: ['CAPABILITY_IAM']
-    });
-
-    // Wait for stack creation to complete
-    await waitForStackCreation(STACK_NAME);
-  }, 120000);
-
-  afterAll(async () => {
-    // Clean up stack
-    try {
-      await cfClient.send(new DescribeStacksCommand({ StackName: STACK_NAME }));
-      console.log('Cleaning up test stack...');
-      execSync(`awslocal cloudformation delete-stack --stack-name ${STACK_NAME}`, { timeout: 30000 });
-    } catch (error) {
-      console.log('Stack cleanup failed or already deleted');
-    }
-  });
 
   describe('Stack Deployment', () => {
     test('stack should be created successfully', async () => {
@@ -268,7 +199,7 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId] }));
 
       expect(sgResponse.SecurityGroups?.[0].GroupName).toBe(`eks-cluster-sg-${ENVIRONMENT_SUFFIX}`);
-      expect(sgResponse.SecurityGroups?.[0].GroupDescription).toBe('Security group for EKS cluster control plane');
+      expect(sgResponse.SecurityGroups?.[0].Description).toBe('Security group for EKS cluster control plane');
     });
 
     test('EKS node security group should be created', async () => {
@@ -283,7 +214,7 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId] }));
 
       expect(sgResponse.SecurityGroups?.[0].GroupName).toBe(`eks-node-sg-${ENVIRONMENT_SUFFIX}`);
-      expect(sgResponse.SecurityGroups?.[0].GroupDescription).toBe('Security group for EKS worker nodes');
+      expect(sgResponse.SecurityGroups?.[0].Description).toBe('Security group for EKS worker nodes');
     });
 
     test('security groups should have proper ingress rules', async () => {
@@ -393,9 +324,9 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       expect(ngResponse.nodegroup?.nodegroupName).toBe(`eks-node-group-${ENVIRONMENT_SUFFIX}`);
       expect(ngResponse.nodegroup?.instanceTypes).toEqual(['t3.medium']);
       expect(ngResponse.nodegroup?.amiType).toBe('AL2_x86_64');
-      expect(ngResponse.nodegroup?.scalingConfig?.minSize).toBe(1);
-      expect(ngResponse.nodegroup?.scalingConfig?.maxSize).toBe(3);
-      expect(ngResponse.nodegroup?.scalingConfig?.desiredSize).toBe(1);
+      expect(ngResponse.nodegroup?.scalingConfig?.minSize).toBe(3);
+      expect(ngResponse.nodegroup?.scalingConfig?.maxSize).toBe(6);
+      expect(ngResponse.nodegroup?.scalingConfig?.desiredSize).toBe(3);
     });
   });
 
@@ -509,31 +440,15 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
 
 // Helper functions
 async function createTestVpc(): Promise<string> {
-  const ec2Client = new EC2Client({
-    region: 'us-east-1',
-    endpoint: 'http://localhost:4566',
-    credentials: { accessKeyId: 'test', secretAccessKey: 'test' }
-  });
-
-  const vpcResponse = await ec2Client.createVpc({ CidrBlock: '10.0.0.0/16' });
-  return vpcResponse.Vpc!.VpcId!;
+  // This function is not used in the current tests
+  // Keeping for potential future use
+  throw new Error('Not implemented');
 }
 
 async function createTestSubnets(vpcId: string): Promise<string[]> {
-  const ec2Client = new EC2Client({
-    region: 'us-east-1',
-    endpoint: 'http://localhost:4566',
-    credentials: { accessKeyId: 'test', secretAccessKey: 'test' }
-  });
-
-  const subnetPromises = [
-    ec2Client.createSubnet({ VpcId: vpcId, CidrBlock: '10.0.1.0/24', AvailabilityZone: 'us-east-1a' }),
-    ec2Client.createSubnet({ VpcId: vpcId, CidrBlock: '10.0.2.0/24', AvailabilityZone: 'us-east-1b' }),
-    ec2Client.createSubnet({ VpcId: vpcId, CidrBlock: '10.0.3.0/24', AvailabilityZone: 'us-east-1c' })
-  ];
-
-  const subnetResponses = await Promise.all(subnetPromises);
-  return subnetResponses.map(r => r.Subnet!.SubnetId!);
+  // This function is not used in the current tests
+  // Keeping for potential future use
+  throw new Error('Not implemented');
 }
 
 async function waitForStackCreation(stackName: string): Promise<void> {

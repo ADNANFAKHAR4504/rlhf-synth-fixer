@@ -518,9 +518,6 @@
     "EksNodeGroup": {
       "Type": "AWS::EKS::Nodegroup",
       "DeletionPolicy": "Delete",
-      "DependsOn": [
-        "EksCluster"
-      ],
       "Properties": {
         "NodegroupName": {
           "Fn::Sub": "eks-node-group-${EnvironmentSuffix}"
