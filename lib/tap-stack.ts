@@ -6,8 +6,8 @@
  * This implements a production-ready web application with blue-green deployment capability
  * for a fintech startup processing real-time payments with PCI-DSS compliance.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 /**
@@ -1016,12 +1016,14 @@ exports.handler = async (event) => {
                       [
                         'AWS/RDS',
                         'DatabaseConnections',
-                        { DBClusterIdentifier: dbClusterId },
+                        'DBClusterIdentifier',
+                        dbClusterId,
                       ],
                       [
                         '.',
                         'CPUUtilization',
-                        { DBClusterIdentifier: dbClusterId },
+                        '.',
+                        '.',
                       ],
                     ],
                     period: 300,
@@ -1037,18 +1039,18 @@ exports.handler = async (event) => {
                       [
                         'AWS/ECS',
                         'CPUUtilization',
-                        {
-                          ServiceName: serviceName,
-                          ClusterName: clusterName,
-                        },
+                        'ServiceName',
+                        serviceName,
+                        'ClusterName',
+                        clusterName,
                       ],
                       [
                         '.',
                         'MemoryUtilization',
-                        {
-                          ServiceName: serviceName,
-                          ClusterName: clusterName,
-                        },
+                        '.',
+                        '.',
+                        '.',
+                        '.',
                       ],
                     ],
                     period: 300,
