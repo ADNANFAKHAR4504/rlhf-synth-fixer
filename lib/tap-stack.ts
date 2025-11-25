@@ -272,6 +272,10 @@ exports.handler = async (event) => {
         serviceRoleArn: codeDeployRole.arn,
         deploymentConfigName:
           'CodeDeployDefault.LambdaLinear10PercentEvery10Minutes',
+        deploymentStyle: {
+          deploymentType: 'BLUE_GREEN',
+          deploymentOption: 'WITH_TRAFFIC_CONTROL',
+        },
         autoRollbackConfiguration: {
           enabled: true,
           events: ['DEPLOYMENT_FAILURE', 'DEPLOYMENT_STOP_ON_ALARM'],
