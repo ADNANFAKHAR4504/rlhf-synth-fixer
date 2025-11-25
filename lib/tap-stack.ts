@@ -774,7 +774,8 @@ export class TapStack extends pulumi.ComponentResource {
       `ecommerce-lambda-basic-${environmentSuffix}`,
       {
         role: lambdaRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       },
       { parent: this }
     );
@@ -784,7 +785,8 @@ export class TapStack extends pulumi.ComponentResource {
       `ecommerce-lambda-vpc-${environmentSuffix}`,
       {
         role: lambdaRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
       },
       { parent: this }
     );
@@ -796,29 +798,30 @@ export class TapStack extends pulumi.ComponentResource {
         role: lambdaRole.id,
         policy: pulumi
           .all([sessionsTable.arn, cacheTable.arn, rdsProxy.arn])
-          .apply(([sessionsArn, cacheArn, proxyArn]: [string, string, string]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'dynamodb:GetItem',
-                    'dynamodb:PutItem',
-                    'dynamodb:UpdateItem',
-                    'dynamodb:DeleteItem',
-                    'dynamodb:Query',
-                    'dynamodb:Scan',
-                  ],
-                  Resource: [sessionsArn, cacheArn],
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['rds-db:connect'],
-                  Resource: proxyArn,
-                },
-              ],
-            })
+          .apply(
+            ([sessionsArn, cacheArn, proxyArn]: [string, string, string]) =>
+              JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Effect: 'Allow',
+                    Action: [
+                      'dynamodb:GetItem',
+                      'dynamodb:PutItem',
+                      'dynamodb:UpdateItem',
+                      'dynamodb:DeleteItem',
+                      'dynamodb:Query',
+                      'dynamodb:Scan',
+                    ],
+                    Resource: [sessionsArn, cacheArn],
+                  },
+                  {
+                    Effect: 'Allow',
+                    Action: ['rds-db:connect'],
+                    Resource: proxyArn,
+                  },
+                ],
+              })
           ),
       },
       { parent: this }
@@ -1069,7 +1072,8 @@ exports.handler = async (event) => {
       `ecommerce-lambda-edge-basic-${environmentSuffix}`,
       {
         role: lambdaEdgeRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       },
       { parent: this }
     );
