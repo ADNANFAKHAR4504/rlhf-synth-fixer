@@ -8,6 +8,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  GetBucketLocationCommand,
 } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
@@ -57,14 +58,45 @@ describe('Trading platform integration flows', () => {
 
   // Use Dev environment outputs (default deployment is dev-only)
   const devBucket = getOutput('DevDataBucketName');
-  const devRegion = getOutput('DevRegion');
+  const devRegionConfig = getOutput('DevRegion');
   const processorAliasArn = getOutput('DevprocessorAliasArn');
   const apiEndpoint = getOutput('DevApiEndpoint');
   const snsTopicArn = getOutput('DevSnsTopicArn');
 
-  const s3Client = new S3Client({ region: devRegion });
-  const lambdaClient = new LambdaClient({ region: devRegion });
-  const snsClient = new SNSClient({ region: devRegion });
+  let s3Client: S3Client;
+  let lambdaClient: LambdaClient;
+  let snsClient: SNSClient;
+
+  const resolveBucketRegion = async (
+    bucket: string,
+    fallbackRegion: string
+  ): Promise<string> => {
+    try {
+      const discoveryClient = new S3Client({ region: 'us-east-1' });
+      const location = await discoveryClient.send(
+        new GetBucketLocationCommand({ Bucket: bucket })
+      );
+      const resolved =
+        location.LocationConstraint && location.LocationConstraint.length > 0
+          ? location.LocationConstraint
+          : 'us-east-1';
+      return resolved;
+    } catch (error) {
+      // If we cannot determine the location, default to fallback region
+      return fallbackRegion;
+    }
+  };
+
+  beforeAll(async () => {
+    const bucketRegion = await resolveBucketRegion(devBucket, devRegionConfig);
+    s3Client = new S3Client({ region: bucketRegion });
+
+    const aliasRegion = processorAliasArn.split(':')[3] || devRegionConfig;
+    lambdaClient = new LambdaClient({ region: aliasRegion });
+
+    const topicRegion = snsTopicArn.split(':')[3] || devRegionConfig;
+    snsClient = new SNSClient({ region: topicRegion });
+  });
 
   test('ingests and retrieves trade events through the dev data lake bucket', async () => {
     const key = `integration-tests/orders/${randomId()}.json`;
