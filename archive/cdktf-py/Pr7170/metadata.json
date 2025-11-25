@@ -19,5 +19,11 @@
     "IAM",
     "CloudWatch"
   ],
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
