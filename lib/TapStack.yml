@@ -237,7 +237,6 @@ Resources:
   StaticWebsiteBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-static-website-${AWS::AccountId}'
       # Remove WebsiteConfiguration as we're using CloudFront OAI
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -285,11 +284,10 @@ Resources:
               - 's3:GetObject'
             Resource: !Sub '${StaticWebsiteBucket.Arn}/*'
             
-  # S3 Bucket for VPC Flow Logs (Now properly used)
+  # S3 Bucket for VPC Flow Logs 
   FlowLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-flow-logs-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
