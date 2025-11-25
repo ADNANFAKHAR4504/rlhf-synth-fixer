@@ -672,32 +672,34 @@ export class TapStack extends pulumi.ComponentResource {
       {
         role: backendTaskRole.id,
         policy: pulumi
-          .all([dbSecret.arn, appConfigParam.arn, dbCluster.clusterResourceId])
-          .apply(([secretArn, paramArn, clusterResourceId]: [string, string, string]) => ({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: secretArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['ssm:GetParameter', 'ssm:GetParameters'],
-                Resource: paramArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['rds-db:connect'],
-                Resource: `arn:aws:rds-db:${region}:*:dbuser:${clusterResourceId}/dbadmin`,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                Resource: backendLogGroup.arn,
-              },
-            ],
-          })),
+          .all([dbSecret.arn, appConfigParam.arn, dbCluster.clusterResourceId, backendLogGroup.arn])
+          .apply(([secretArn, paramArn, clusterResourceId, logGroupArn]: [string, string, string, string]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: secretArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+                  Resource: paramArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['rds-db:connect'],
+                  Resource: `arn:aws:rds-db:${region}:*:dbuser:${clusterResourceId}/dbadmin`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                  Resource: logGroupArn,
+                },
+              ],
+            })
+          ),
       },
       { parent: this }
     );
@@ -726,31 +728,33 @@ export class TapStack extends pulumi.ComponentResource {
         role: taskExecutionRole.id,
         policy: pulumi
           .all([ecsKmsKey.arn, dbSecret.arn])
-          .apply(([kmsKeyArn, secretArn]: [string, string]) => ({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt'],
-                Resource: kmsKeyArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: secretArn,
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'ecr:GetAuthorizationToken',
-                  'ecr:BatchCheckLayerAvailability',
-                  'ecr:GetDownloadUrlForLayer',
-                  'ecr:BatchGetImage',
-                ],
-                Resource: '*',
-              },
-            ],
-          })),
+          .apply(([kmsKeyArn, secretArn]: [string, string]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsKeyArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: secretArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'ecr:GetAuthorizationToken',
+                    'ecr:BatchCheckLayerAvailability',
+                    'ecr:GetDownloadUrlForLayer',
+                    'ecr:BatchGetImage',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
       },
       { parent: this }
     );
