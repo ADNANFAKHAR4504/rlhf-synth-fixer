@@ -40,5 +40,45 @@ class TestStackStructure:
         assert hasattr(stack, 'environment_suffix')
         assert stack.environment_suffix == "test"
 
+    def test_tap_stack_with_custom_tags(self):
+        """TapStack instantiates successfully with custom default_tags."""
+        app = App()
+        custom_tags = {
+            "tags": {
+                "Environment": "staging",
+                "CustomTag": "CustomValue"
+            }
+        }
+        stack = TapStack(
+            app,
+            "TestTapStackWithTags",
+            environment_suffix="staging",
+            default_tags=custom_tags
+        )
+
+        # Verify that TapStack instantiates without errors with custom tags
+        assert stack is not None
+        assert hasattr(stack, 'environment_suffix')
+        assert stack.environment_suffix == "staging"
+
+    def test_tap_stack_with_custom_region_and_state_bucket(self):
+        """TapStack instantiates successfully with custom AWS region and state bucket."""
+        app = App()
+        stack = TapStack(
+            app,
+            "TestTapStackWithRegion",
+            environment_suffix="dev",
+            aws_region="us-west-2",
+            state_bucket="my-terraform-state",
+            state_bucket_region="us-west-2"
+        )
+
+        # Verify that TapStack instantiates without errors with custom parameters
+        assert stack is not None
+        assert hasattr(stack, 'aws_region')
+        assert stack.aws_region == "us-west-2"
+        assert stack.state_bucket == "my-terraform-state"
+        assert stack.state_bucket_region == "us-west-2"
+
 
 # add more test suites and cases as needed

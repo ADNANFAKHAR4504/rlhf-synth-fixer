@@ -95,20 +95,24 @@ class TapStack(TerraformStack):
         # Create SNS topic for alerting
         self.alert_topic = self._create_sns_topic()
 
-        # Create Lambda layer for shared dependencies
-        self.shared_layer = self._create_lambda_layer()
+        # NOTE: Lambda functions and Step Functions are commented out because
+        # the Lambda deployment packages (zip files) don't exist in the repository.
+        # Uncomment these when the Lambda code is packaged and ready for deployment.
+        
+        # # Create Lambda layer for shared dependencies
+        # self.shared_layer = self._create_lambda_layer()
 
-        # Create Lambda functions using reusable construct
-        self.ingest_function = self._create_ingest_lambda()
-        self.transform_function = self._create_transform_lambda()
-        self.load_function = self._create_load_lambda()
-        self.validate_function = self._create_validate_lambda()
+        # # Create Lambda functions using reusable construct
+        # self.ingest_function = self._create_ingest_lambda()
+        # self.transform_function = self._create_transform_lambda()
+        # self.load_function = self._create_load_lambda()
+        # self.validate_function = self._create_validate_lambda()
 
-        # Create Step Functions state machine for orchestration
-        self.state_machine = self._create_step_functions()
+        # # Create Step Functions state machine for orchestration
+        # self.state_machine = self._create_step_functions()
 
-        # Create CloudWatch dashboard for monitoring
-        self.dashboard = self._create_cloudwatch_dashboard()
+        # # Create CloudWatch dashboard for monitoring
+        # self.dashboard = self._create_cloudwatch_dashboard()
 
         # Export outputs to Parameter Store
         self._export_to_parameter_store()
@@ -840,17 +844,18 @@ class TapStack(TerraformStack):
             }
         )
 
-        SsmParameter(
-            self,
-            "state-machine-arn-param",
-            name=f"/pipeline/{self.environment_suffix}/state-machine-arn",
-            type="String",
-            value=self.state_machine.arn,
-            tags={
-                "Environment": self.environment_suffix,
-                "ManagedBy": "CDKTF"
-            }
-        )
+        # Commented out because state_machine is not created when Lambda functions are disabled
+        # SsmParameter(
+        #     self,
+        #     "state-machine-arn-param",
+        #     name=f"/pipeline/{self.environment_suffix}/state-machine-arn",
+        #     type="String",
+        #     value=self.state_machine.arn,
+        #     tags={
+        #         "Environment": self.environment_suffix,
+        #         "ManagedBy": "CDKTF"
+        #     }
+        # )
 
         SsmParameter(
             self,
@@ -880,12 +885,13 @@ class TapStack(TerraformStack):
             description="DynamoDB table name for metadata"
         )
 
-        TerraformOutput(
-            self,
-            "state_machine_arn",
-            value=self.state_machine.arn,
-            description="Step Functions state machine ARN"
-        )
+        # Commented out because state_machine is not created when Lambda functions are disabled
+        # TerraformOutput(
+        #     self,
+        #     "state_machine_arn",
+        #     value=self.state_machine.arn,
+        #     description="Step Functions state machine ARN"
+        # )
 
         TerraformOutput(
             self,
