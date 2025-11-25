@@ -655,7 +655,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       const problematicDuplicates = Object.entries(nameCount).filter(([name, count]) => 
         count > 1 && !allowedDuplicates.includes(name)
       );
-      expect(problematicDuplicates.length).toBeLessThanOrEqual(6); // Allow some common duplicates
+      expect(problematicDuplicates.length).toBeLessThanOrEqual(6); 
     });
 
     test("variable names are consistent across modules", () => {
