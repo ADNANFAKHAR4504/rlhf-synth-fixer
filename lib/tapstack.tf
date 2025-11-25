@@ -37,7 +37,7 @@ variable "env" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 variable "project_name" {
@@ -2015,6 +2015,22 @@ resource "aws_lambda_event_source_mapping" "dynamodb_to_analyzer" {
   ]
 }
 
+resource "aws_lambda_event_source_mapping" "sqs_to_reconciliation" {
+  event_source_arn = aws_sqs_queue.compliance_notifications.arn
+  function_name    = aws_lambda_function.reconciliation.arn
+
+  batch_size                         = 10
+  maximum_batching_window_in_seconds = 5
+
+  depends_on = [
+    aws_iam_role_policy.lambda_execution
+  ]
+
+  tags = merge(local.tags, {
+    Name = "${local.resource_prefix}-sqs-reconciliation-mapping"
+  })
+}
+
 resource "aws_sns_topic_subscription" "fraud_alerts_to_aurora_updater" {
   topic_arn = aws_sns_topic.fraud_alerts.arn
   protocol  = "lambda"
@@ -2237,6 +2253,21 @@ resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
   tags = local.tags
 }
 
+resource "aws_cloudwatch_metric_alarm" "high_fraud_rate" {
+  alarm_name          = "${local.resource_prefix}-high-fraud-rate"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = var.evaluation_period_minutes
+  metric_name         = "FraudDetectionRate"
+  namespace           = "${local.resource_prefix}/Metrics"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = var.fraud_rate_threshold
+  alarm_description   = "This metric monitors fraud detection rate and triggers Step Functions"
+  alarm_actions       = [aws_sns_topic.fraud_alerts.arn]
+
+  tags = local.tags
+}
+
 # ============================================================================
 # CloudWatch Log Metric Filters
 # ============================================================================
@@ -2398,4 +2429,49 @@ output "public_subnet_ids" {
 output "private_subnet_ids" {
   description = "IDs of the private subnets"
   value       = aws_subnet.private[*].id
+}
+
+output "kms_key_id" {
+  description = "ID of the Aurora KMS key"
+  value       = aws_kms_key.aurora.id
+}
+
+output "kms_key_arn" {
+  description = "ARN of the Aurora KMS key"
+  value       = aws_kms_key.aurora.arn
+}
+
+output "secrets_manager_secret_arn" {
+  description = "ARN of the Aurora credentials secret"
+  value       = aws_secretsmanager_secret.aurora_credentials.arn
+}
+
+output "lambda_security_group_id" {
+  description = "ID of the Lambda security group"
+  value       = aws_security_group.lambda.id
+}
+
+output "redis_security_group_id" {
+  description = "ID of the Redis security group"
+  value       = aws_security_group.redis.id
+}
+
+output "aurora_security_group_id" {
+  description = "ID of the Aurora security group"
+  value       = aws_security_group.aurora.id
+}
+
+output "kinesis_stream_name" {
+  description = "Name of the Kinesis stream"
+  value       = aws_kinesis_stream.fraud_transactions.name
+}
+
+output "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB table"
+  value       = aws_dynamodb_table.fraud_scores.arn
+}
+
+output "step_functions_name" {
+  description = "Name of the Step Functions state machine"
+  value       = aws_sfn_state_machine.fraud_investigation.name
 }
