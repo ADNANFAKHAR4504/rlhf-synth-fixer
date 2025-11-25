@@ -1,10 +1,10 @@
-import * as aws from '@aws-sdk/client-s3';
-import * as dynamodb from '@aws-sdk/client-dynamodb';
-import * as lambda from '@aws-sdk/client-lambda';
-import * as kms from '@aws-sdk/client-kms';
-import * as ec2 from '@aws-sdk/client-ec2';
 import * as cloudwatch from '@aws-sdk/client-cloudwatch-logs';
 import * as config from '@aws-sdk/client-config-service';
+import * as dynamodb from '@aws-sdk/client-dynamodb';
+import * as ec2 from '@aws-sdk/client-ec2';
+import * as kms from '@aws-sdk/client-kms';
+import * as lambda from '@aws-sdk/client-lambda';
+import * as aws from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -565,3 +565,4 @@ describe('Integration Tests', () => {
     });
   });
 });
+
