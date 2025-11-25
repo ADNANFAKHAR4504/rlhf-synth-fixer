@@ -22,7 +22,7 @@
     "IAM",
     "CloudWatch Logs",
     "Application Load Balancer",
-    "Auto Scaling",
+    "Auto Scaling Group",
     "RDS",
     "SNS",
     "CloudWatch"
