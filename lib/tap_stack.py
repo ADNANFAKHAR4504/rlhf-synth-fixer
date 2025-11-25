@@ -715,6 +715,7 @@ class PaymentInfrastructureStack(TerraformStack):
             type='HTTPS',
             fqdn=f'{self.api_gateway.id}.execute-api.{self.primary_region}.amazonaws.com',
             resource_path=f'/{self.api_stage.stage_name}/process',
+            port=443,  # HTTPS port
             failure_threshold=3,
             request_interval=30,
             tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-health-check'},
