@@ -19,5 +19,10 @@
   "startedAt": "2025-11-25T00:00:00Z",
   "training_quality": 10,
   "author": "mayanksethi-turing",
-  "reviewer": "balasl342"
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
