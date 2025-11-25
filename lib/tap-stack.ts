@@ -72,7 +72,8 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Configuration
     const config = new pulumi.Config();
-    const environmentSuffix = args.environmentSuffix || config.require('environmentSuffix');
+    const environmentSuffix =
+      args.environmentSuffix || config.require('environmentSuffix');
     const region = aws.config.region || 'us-east-1';
     const certificateArn =
       args.certificateArn ||
@@ -536,14 +537,19 @@ export class TapStack extends pulumi.ComponentResource {
             dbCluster.masterUsername,
             dbCluster.masterPassword,
           ])
-          .apply(([endpoint, username, password]: [string, string, string | undefined]) =>
-            JSON.stringify({
-              host: endpoint,
-              port: 5432,
-              database: 'paymentdb',
-              username: username,
-              password: password,
-            })
+          .apply(
+            ([endpoint, username, password]: [
+              string,
+              string,
+              string | undefined,
+            ]) =>
+              JSON.stringify({
+                host: endpoint,
+                port: 5432,
+                database: 'paymentdb',
+                username: username,
+                password: password,
+              })
           ),
       },
       { parent: this }
@@ -672,33 +678,44 @@ export class TapStack extends pulumi.ComponentResource {
       {
         role: backendTaskRole.id,
         policy: pulumi
-          .all([dbSecret.arn, appConfigParam.arn, dbCluster.clusterResourceId, backendLogGroup.arn])
-          .apply(([secretArn, paramArn, clusterResourceId, logGroupArn]: [string, string, string, string]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: ['secretsmanager:GetSecretValue'],
-                  Resource: secretArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['ssm:GetParameter', 'ssm:GetParameters'],
-                  Resource: paramArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['rds-db:connect'],
-                  Resource: `arn:aws:rds-db:${region}:*:dbuser:${clusterResourceId}/dbadmin`,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                  Resource: logGroupArn,
-                },
-              ],
-            })
+          .all([
+            dbSecret.arn,
+            appConfigParam.arn,
+            dbCluster.clusterResourceId,
+            backendLogGroup.arn,
+          ])
+          .apply(
+            ([secretArn, paramArn, clusterResourceId, logGroupArn]: [
+              string,
+              string,
+              string,
+              string,
+            ]) =>
+              JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Effect: 'Allow',
+                    Action: ['secretsmanager:GetSecretValue'],
+                    Resource: secretArn,
+                  },
+                  {
+                    Effect: 'Allow',
+                    Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+                    Resource: paramArn,
+                  },
+                  {
+                    Effect: 'Allow',
+                    Action: ['rds-db:connect'],
+                    Resource: `arn:aws:rds-db:${region}:*:dbuser:${clusterResourceId}/dbadmin`,
+                  },
+                  {
+                    Effect: 'Allow',
+                    Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                    Resource: logGroupArn,
+                  },
+                ],
+              })
           ),
       },
       { parent: this }
@@ -987,50 +1004,56 @@ export class TapStack extends pulumi.ComponentResource {
             dbSecret.arn,
             appConfigParam.arn,
           ])
-          .apply(([repoUrl, logGroupName, secretArn, paramArn]: [string, string, string, string]) =>
-            JSON.stringify([
-              {
-                name: 'backend',
-                image: `${repoUrl}:latest`,
-                cpu: 512,
-                memory: 1024,
-                essential: true,
-                portMappings: [
-                  {
-                    containerPort: 8080,
-                    protocol: 'tcp',
+          .apply(
+            ([repoUrl, logGroupName, secretArn, paramArn]: [
+              string,
+              string,
+              string,
+              string,
+            ]) =>
+              JSON.stringify([
+                {
+                  name: 'backend',
+                  image: `${repoUrl}:latest`,
+                  cpu: 512,
+                  memory: 1024,
+                  essential: true,
+                  portMappings: [
+                    {
+                      containerPort: 8080,
+                      protocol: 'tcp',
+                    },
+                  ],
+                  logConfiguration: {
+                    logDriver: 'awslogs',
+                    options: {
+                      'awslogs-group': logGroupName,
+                      'awslogs-region': region,
+                      'awslogs-stream-prefix': 'backend',
+                    },
                   },
-                ],
-                logConfiguration: {
-                  logDriver: 'awslogs',
-                  options: {
-                    'awslogs-group': logGroupName,
-                    'awslogs-region': region,
-                    'awslogs-stream-prefix': 'backend',
-                  },
+                  secrets: [
+                    {
+                      name: 'DB_CREDENTIALS',
+                      valueFrom: secretArn,
+                    },
+                  ],
+                  environment: [
+                    {
+                      name: 'ENVIRONMENT',
+                      value: environmentSuffix,
+                    },
+                    {
+                      name: 'PORT',
+                      value: '8080',
+                    },
+                    {
+                      name: 'CONFIG_PARAM',
+                      value: paramArn,
+                    },
+                  ],
                 },
-                secrets: [
-                  {
-                    name: 'DB_CREDENTIALS',
-                    valueFrom: secretArn,
-                  },
-                ],
-                environment: [
-                  {
-                    name: 'ENVIRONMENT',
-                    value: environmentSuffix,
-                  },
-                  {
-                    name: 'PORT',
-                    value: '8080',
-                  },
-                  {
-                    name: 'CONFIG_PARAM',
-                    value: paramArn,
-                  },
-                ],
-              },
-            ])
+              ])
           ),
         tags: {
           Name: `backend-task-${environmentSuffix}`,
