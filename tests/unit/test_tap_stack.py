@@ -1003,8 +1003,8 @@ class TestOutputs:
             state_bucket_region="us-east-1"
         )
 
-        # Verify 6 outputs were created
-        assert mock_aws_resources['tf_output'].call_count == 6
+        # Verify 7 outputs were created
+        assert mock_aws_resources['tf_output'].call_count == 7
 
         # Check output names
         output_calls = [call[0][1] for call in mock_aws_resources['tf_output'].call_args_list]
@@ -1014,6 +1014,7 @@ class TestOutputs:
         assert "dynamodb_table_name" in output_calls
         assert "dns_failover_domain" in output_calls
         assert "sns_topic_arn" in output_calls
+        assert "environment_suffix" in output_calls
 
 
 class TestResourceTagging:
