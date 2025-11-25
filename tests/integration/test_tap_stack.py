@@ -18,7 +18,21 @@ def stack_outputs():
         pytest.skip(f"Outputs file not found: {outputs_file}. Run deployment first.")
 
     with open(outputs_file, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        outputs = json.load(f)
+        
+        # Handle nested structure: {'TapStackpr7110': {...}}
+        # Extract the inner dictionary if nested
+        if isinstance(outputs, dict):
+            # Check if outputs has a single key that looks like a stack name
+            keys = list(outputs.keys())
+            if len(keys) == 1 and keys[0].startswith('TapStack'):
+                # Return the nested outputs (flattened)
+                print(f"✅ Extracted nested outputs from stack: {keys[0]}")
+                return outputs[keys[0]]
+        
+        # If already flat, return as-is
+        print(f"✅ Loaded flat outputs")
+        return outputs
 
 
 @pytest.fixture(scope="module")
