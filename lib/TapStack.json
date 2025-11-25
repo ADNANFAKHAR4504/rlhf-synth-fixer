@@ -12,7 +12,11 @@
       "Type": "String",
       "Description": "Environment type for conditional resource creation",
       "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"],
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
       "ConstraintDescription": "Must be dev, staging, or prod"
     },
     "DBMasterUsername": {
@@ -24,20 +28,14 @@
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for RDS Aurora cluster",
-      "NoEcho": true,
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "^[a-zA-Z0-9]*$",
-      "ConstraintDescription": "Must contain only alphanumeric characters with length 8-41"
-    },
     "EnableMultiAZ": {
       "Type": "String",
       "Description": "Enable Multi-AZ deployment for RDS Aurora",
       "Default": "true",
-      "AllowedValues": ["true", "false"]
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
     },
     "LambdaImageUri": {
       "Type": "String",
@@ -46,36 +44,103 @@
     },
     "TemplatesBucketName": {
       "Type": "String",
-      "Description": "S3 bucket name where nested stack templates are stored",
-      "AllowedPattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$",
-      "ConstraintDescription": "Must be a valid S3 bucket name"
+      "Description": "S3 bucket name where nested stack templates are stored (will be auto-generated if not provided)",
+      "Default": ""
     }
   },
   "Conditions": {
     "IsProd": {
-      "Fn::Equals": [{"Ref": "Environment"}, "prod"]
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "prod"
+      ]
+    },
+    "CreateTemplatesBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "TemplatesBucketName"
+        },
+        ""
+      ]
+    },
+    "UseProvidedBucket": {
+      "Fn::Not": [
+        {
+          "Condition": "CreateTemplatesBucket"
+        }
+      ]
     }
   },
   "Resources": {
+    "TemplatesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateTemplatesBucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "cfn-nested-templates-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "cfn-nested-templates-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
     "NetworkStack": {
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/NetworkStack.json"
+          "Fn::If": [
+            "UseProvidedBucket",
+            {
+              "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/NetworkStack.json"
+            },
+            {
+              "Fn::Sub": "https://${TemplatesBucket}.s3.amazonaws.com/NetworkStack.json"
+            }
+          ]
         },
         "Parameters": {
-          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
-          "Environment": {"Ref": "Environment"}
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Environment": {
+            "Ref": "Environment"
+          }
         },
         "TimeoutInMinutes": 10,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "network-stack-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "network-stack-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           },
           {
             "Key": "ManagedBy",
@@ -88,28 +153,67 @@
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/DatabaseStack.json"
+          "Fn::If": [
+            "UseProvidedBucket",
+            {
+              "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/DatabaseStack.json"
+            },
+            {
+              "Fn::Sub": "https://${TemplatesBucket}.s3.amazonaws.com/DatabaseStack.json"
+            }
+          ]
         },
         "Parameters": {
-          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
-          "Environment": {"Ref": "Environment"},
-          "DBMasterUsername": {"Ref": "DBMasterUsername"},
-          "DBMasterPassword": {"Ref": "DBMasterPassword"},
-          "PrivateSubnet1Id": {"Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet1Id"]},
-          "PrivateSubnet2Id": {"Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet2Id"]},
-          "PrivateSubnet3Id": {"Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet3Id"]},
-          "DatabaseSecurityGroupId": {"Fn::GetAtt": ["NetworkStack", "Outputs.DatabaseSecurityGroupId"]},
-          "EnableMultiAZ": {"Ref": "EnableMultiAZ"}
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Environment": {
+            "Ref": "Environment"
+          },
+          "DBMasterUsername": {
+            "Ref": "DBMasterUsername"
+          },
+          "PrivateSubnet1Id": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet1Id"
+            ]
+          },
+          "PrivateSubnet2Id": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet2Id"
+            ]
+          },
+          "PrivateSubnet3Id": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet3Id"
+            ]
+          },
+          "DatabaseSecurityGroupId": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.DatabaseSecurityGroupId"
+            ]
+          },
+          "EnableMultiAZ": {
+            "Ref": "EnableMultiAZ"
+          }
         },
         "TimeoutInMinutes": 30,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "database-stack-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "database-stack-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           },
           {
             "Key": "ManagedBy",
@@ -122,27 +226,70 @@
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/ComputeStack.json"
+          "Fn::If": [
+            "UseProvidedBucket",
+            {
+              "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/ComputeStack.json"
+            },
+            {
+              "Fn::Sub": "https://${TemplatesBucket}.s3.amazonaws.com/ComputeStack.json"
+            }
+          ]
         },
         "Parameters": {
-          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
-          "Environment": {"Ref": "Environment"},
-          "PrivateSubnet1Id": {"Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet1Id"]},
-          "PrivateSubnet2Id": {"Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet2Id"]},
-          "LambdaSecurityGroupId": {"Fn::GetAtt": ["NetworkStack", "Outputs.LambdaSecurityGroupId"]},
-          "DBClusterEndpoint": {"Fn::GetAtt": ["DatabaseStack", "Outputs.DBClusterEndpoint"]},
-          "DBClusterPort": {"Fn::GetAtt": ["DatabaseStack", "Outputs.DBClusterPort"]},
-          "LambdaImageUri": {"Ref": "LambdaImageUri"}
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Environment": {
+            "Ref": "Environment"
+          },
+          "PrivateSubnet1Id": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet1Id"
+            ]
+          },
+          "PrivateSubnet2Id": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet2Id"
+            ]
+          },
+          "LambdaSecurityGroupId": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.LambdaSecurityGroupId"
+            ]
+          },
+          "DBClusterEndpoint": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.DBClusterEndpoint"
+            ]
+          },
+          "DBClusterPort": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.DBClusterPort"
+            ]
+          },
+          "LambdaImageUri": {
+            "Ref": "LambdaImageUri"
+          }
         },
         "TimeoutInMinutes": 15,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "compute-stack-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "compute-stack-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           },
           {
             "Key": "ManagedBy",
@@ -155,23 +302,52 @@
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
-          "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/MonitoringStack.json"
+          "Fn::If": [
+            "UseProvidedBucket",
+            {
+              "Fn::Sub": "https://${TemplatesBucketName}.s3.amazonaws.com/MonitoringStack.json"
+            },
+            {
+              "Fn::Sub": "https://${TemplatesBucket}.s3.amazonaws.com/MonitoringStack.json"
+            }
+          ]
         },
         "Parameters": {
-          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
-          "DBClusterId": {"Fn::GetAtt": ["DatabaseStack", "Outputs.DBClusterId"]},
-          "ValidatorLambdaName": {"Fn::GetAtt": ["ComputeStack", "Outputs.ValidatorLambdaName"]},
-          "MigrationLambdaName": {"Fn::GetAtt": ["ComputeStack", "Outputs.MigrationLambdaName"]}
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "DBClusterId": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.DBClusterId"
+            ]
+          },
+          "ValidatorLambdaName": {
+            "Fn::GetAtt": [
+              "ComputeStack",
+              "Outputs.ValidatorLambdaName"
+            ]
+          },
+          "MigrationLambdaName": {
+            "Fn::GetAtt": [
+              "ComputeStack",
+              "Outputs.MigrationLambdaName"
+            ]
+          }
         },
         "TimeoutInMinutes": 5,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "monitoring-stack-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "monitoring-stack-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           },
           {
             "Key": "ManagedBy",
@@ -183,7 +359,9 @@
     "SessionTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
-        "TableName": {"Fn::Sub": "session-table-${EnvironmentSuffix}"},
+        "TableName": {
+          "Fn::Sub": "session-table-${EnvironmentSuffix}"
+        },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
           {
@@ -220,16 +398,26 @@
           "AttributeName": "ttl"
         },
         "PointInTimeRecoverySpecification": {
-          "PointInTimeRecoveryEnabled": {"Fn::If": ["IsProd", true, false]}
+          "PointInTimeRecoveryEnabled": {
+            "Fn::If": [
+              "IsProd",
+              true,
+              false
+            ]
+          }
         },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "session-table-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "session-table-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       },
@@ -238,7 +426,9 @@
     "AuditLogsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "audit-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"},
+        "BucketName": {
+          "Fn::Sub": "audit-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -284,7 +474,12 @@
           "Fn::If": [
             "IsProd",
             {
-              "Role": {"Fn::GetAtt": ["S3ReplicationRole", "Arn"]},
+              "Role": {
+                "Fn::GetAtt": [
+                  "S3ReplicationRole",
+                  "Arn"
+                ]
+              },
               "Rules": [
                 {
                   "Id": "ReplicateToSecondaryRegion",
@@ -294,7 +489,9 @@
                     "Prefix": ""
                   },
                   "Destination": {
-                    "Bucket": {"Fn::Sub": "arn:aws:s3:::audit-logs-${EnvironmentSuffix}-replica"},
+                    "Bucket": {
+                      "Fn::Sub": "arn:aws:s3:::audit-logs-${EnvironmentSuffix}-replica"
+                    },
                     "ReplicationTime": {
                       "Status": "Enabled",
                       "Time": {
@@ -314,17 +511,23 @@
                 }
               ]
             },
-            {"Ref": "AWS::NoValue"}
+            {
+              "Ref": "AWS::NoValue"
+            }
           ]
         },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "audit-logs-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "audit-logs-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       },
@@ -352,7 +555,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -361,51 +566,91 @@
   "Outputs": {
     "StackName": {
       "Description": "Name of the CloudFormation stack",
-      "Value": {"Ref": "AWS::StackName"},
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-StackName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
       }
     },
     "VpcId": {
       "Description": "VPC ID from NetworkStack",
-      "Value": {"Fn::GetAtt": ["NetworkStack", "Outputs.VpcId"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "NetworkStack",
+          "Outputs.VpcId"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VpcId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VpcId"
+        }
       }
     },
     "DBClusterEndpoint": {
       "Description": "RDS Aurora cluster endpoint from DatabaseStack",
-      "Value": {"Fn::GetAtt": ["DatabaseStack", "Outputs.DBClusterEndpoint"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseStack",
+          "Outputs.DBClusterEndpoint"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"
+        }
       }
     },
     "ValidatorLambdaArn": {
       "Description": "ARN of the transaction validator Lambda function",
-      "Value": {"Fn::GetAtt": ["ComputeStack", "Outputs.ValidatorLambdaArn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "ComputeStack",
+          "Outputs.ValidatorLambdaArn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ValidatorLambdaArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ValidatorLambdaArn"
+        }
       }
     },
     "SessionTableName": {
       "Description": "DynamoDB session table name",
-      "Value": {"Ref": "SessionTable"},
+      "Value": {
+        "Ref": "SessionTable"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SessionTableName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SessionTableName"
+        }
       }
     },
     "AuditLogsBucketName": {
       "Description": "S3 bucket name for audit logs",
-      "Value": {"Ref": "AuditLogsBucket"},
+      "Value": {
+        "Ref": "AuditLogsBucket"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-AuditLogsBucketName"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuditLogsBucketName"
+        }
       }
     },
     "AuditLogsBucketArn": {
       "Description": "S3 bucket ARN for audit logs",
-      "Value": {"Fn::GetAtt": ["AuditLogsBucket", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "AuditLogsBucket",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-AuditLogsBucketArn"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuditLogsBucketArn"
+        }
       }
     }
   }

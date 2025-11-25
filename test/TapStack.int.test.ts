@@ -80,11 +80,7 @@ describe('TapStack Integration Tests', () => {
       expect(cfnTemplate.Parameters.DBMasterUsername.Default).toBe('admin');
     });
 
-    test('should have DBMasterPassword parameter with NoEcho', () => {
-      expect(cfnTemplate.Parameters.DBMasterPassword).toBeDefined();
-      expect(cfnTemplate.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(cfnTemplate.Parameters.DBMasterPassword.NoEcho).toBe(true);
-    });
+    // DBMasterPassword parameter removed - DatabaseStack now uses AWS Secrets Manager
 
     test('should have EnableMultiAZ parameter', () => {
       expect(cfnTemplate.Parameters.EnableMultiAZ).toBeDefined();
@@ -100,6 +96,7 @@ describe('TapStack Integration Tests', () => {
     test('should have TemplatesBucketName parameter', () => {
       expect(cfnTemplate.Parameters.TemplatesBucketName).toBeDefined();
       expect(cfnTemplate.Parameters.TemplatesBucketName.Type).toBe('String');
+      expect(cfnTemplate.Parameters.TemplatesBucketName.Default).toBe('');
     });
   });
 
@@ -114,6 +111,16 @@ describe('TapStack Integration Tests', () => {
       expect(condition[0]).toEqual({ Ref: 'Environment' });
       expect(condition[1]).toBe('prod');
     });
+
+    test('should have CreateTemplatesBucket condition', () => {
+      expect(cfnTemplate.Conditions.CreateTemplatesBucket).toBeDefined();
+      expect(cfnTemplate.Conditions.CreateTemplatesBucket['Fn::Equals']).toBeDefined();
+    });
+
+    test('should have UseProvidedBucket condition', () => {
+      expect(cfnTemplate.Conditions.UseProvidedBucket).toBeDefined();
+      expect(cfnTemplate.Conditions.UseProvidedBucket['Fn::Not']).toBeDefined();
+    });
   });
 
   describe('Nested Stack Configuration', () => {
@@ -122,10 +129,15 @@ describe('TapStack Integration Tests', () => {
       expect(cfnTemplate.Resources.NetworkStack.Type).toBe('AWS::CloudFormation::Stack');
     });
 
-    test('NetworkStack should reference TemplatesBucketName', () => {
+    test('NetworkStack should reference TemplatesBucketName or TemplatesBucket conditionally', () => {
       const templateURL = cfnTemplate.Resources.NetworkStack.Properties.TemplateURL;
-      expect(templateURL['Fn::Sub']).toContain('${TemplatesBucketName}');
-      expect(templateURL['Fn::Sub']).toContain('NetworkStack.json');
+      expect(templateURL['Fn::If']).toBeDefined();
+      expect(templateURL['Fn::If'][0]).toBe('UseProvidedBucket');
+      // Check both branches of the condition
+      expect(templateURL['Fn::If'][1]['Fn::Sub']).toContain('${TemplatesBucketName}');
+      expect(templateURL['Fn::If'][1]['Fn::Sub']).toContain('NetworkStack.json');
+      expect(templateURL['Fn::If'][2]['Fn::Sub']).toContain('${TemplatesBucket}');
+      expect(templateURL['Fn::If'][2]['Fn::Sub']).toContain('NetworkStack.json');
     });
 
     test('NetworkStack should pass EnvironmentSuffix and Environment', () => {
@@ -154,8 +166,9 @@ describe('TapStack Integration Tests', () => {
     test('DatabaseStack should pass database credentials', () => {
       const params = cfnTemplate.Resources.DatabaseStack.Properties.Parameters;
       expect(params.DBMasterUsername).toEqual({ Ref: 'DBMasterUsername' });
-      expect(params.DBMasterPassword).toEqual({ Ref: 'DBMasterPassword' });
       expect(params.EnableMultiAZ).toEqual({ Ref: 'EnableMultiAZ' });
+      // DBMasterPassword removed - DatabaseStack uses Secrets Manager
+      expect(params.DBMasterPassword).toBeUndefined();
     });
 
     test('DatabaseStack should have timeout configured', () => {
@@ -217,6 +230,26 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Root Level Resources', () => {
+    describe('TemplatesBucket S3', () => {
+      test('should have TemplatesBucket resource (conditional)', () => {
+        expect(cfnTemplate.Resources.TemplatesBucket).toBeDefined();
+        expect(cfnTemplate.Resources.TemplatesBucket.Type).toBe('AWS::S3::Bucket');
+        expect(cfnTemplate.Resources.TemplatesBucket.Condition).toBe('CreateTemplatesBucket');
+      });
+
+      test('TemplatesBucket should have versioning enabled', () => {
+        expect(cfnTemplate.Resources.TemplatesBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      });
+
+      test('TemplatesBucket should have public access blocked', () => {
+        const publicAccess = cfnTemplate.Resources.TemplatesBucket.Properties.PublicAccessBlockConfiguration;
+        expect(publicAccess.BlockPublicAcls).toBe(true);
+        expect(publicAccess.BlockPublicPolicy).toBe(true);
+        expect(publicAccess.IgnorePublicAcls).toBe(true);
+        expect(publicAccess.RestrictPublicBuckets).toBe(true);
+      });
+    });
+
     describe('SessionTable DynamoDB', () => {
       test('should have SessionTable resource', () => {
         expect(cfnTemplate.Resources.SessionTable).toBeDefined();
