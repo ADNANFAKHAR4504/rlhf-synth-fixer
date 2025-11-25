@@ -5,7 +5,7 @@ import os
 import json
 import pytest
 from cdktf import Testing
-from lib.tap import PaymentInfrastructureStack
+from lib.tap_stack import PaymentInfrastructureStack
 
 
 @pytest.fixture(scope="session")
@@ -24,7 +24,15 @@ def environment_suffix():
 def stack(environment_suffix):
     """Create test stack instance - shared across all tests in session"""
     app = Testing.app()
-    return PaymentInfrastructureStack(app, f'TapStacktest123')
+    return PaymentInfrastructureStack(
+        app,
+        f'TapStacktest123',
+        environment_suffix='test123',
+        state_bucket=None,
+        state_bucket_region='us-east-1',
+        primary_region='us-east-1',
+        default_tags=None
+    )
 
 
 @pytest.fixture(scope="session")
