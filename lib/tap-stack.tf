@@ -1,5 +1,11 @@
 # tap-stack.tf
 
+# Local variables for dynamic naming
+locals {
+  # Create unique suffix for parallel deployments
+  name_suffix = var.stack_id != "" ? "${var.environment_suffix}-${var.stack_id}" : var.environment_suffix
+}
+
 # KMS keys for encryption
 resource "aws_kms_key" "lambda_key" {
   description             = "KMS key for Lambda environment variable encryption"
@@ -32,7 +38,7 @@ resource "aws_kms_key" "lambda_key" {
   })
 
   tags = {
-    Name = "fraud-detection-lambda-key-${var.environment_suffix}"
+    Name = "fraud-detection-lambda-key-${local.name_suffix}"
   }
 }
 
@@ -56,7 +62,7 @@ resource "aws_kms_key" "dynamodb_key" {
   })
 
   tags = {
-    Name = "fraud-detection-dynamodb-key-${var.environment_suffix}"
+    Name = "fraud-detection-dynamodb-key-${local.name_suffix}"
   }
 }
 
@@ -80,7 +86,7 @@ resource "aws_kms_key" "s3_key" {
   })
 
   tags = {
-    Name = "fraud-detection-s3-key-${var.environment_suffix}"
+    Name = "fraud-detection-s3-key-${local.name_suffix}"
   }
 }
 
@@ -104,7 +110,7 @@ resource "aws_kms_key" "sqs_key" {
   })
 
   tags = {
-    Name = "fraud-detection-sqs-key-${var.environment_suffix}"
+    Name = "fraud-detection-sqs-key-${local.name_suffix}"
   }
 }
 
@@ -118,7 +124,7 @@ resource "aws_vpc" "fraud_detection_vpc" {
   enable_dns_hostnames = true
 
   tags = {
-    Name = "fraud-detection-vpc-${var.environment_suffix}"
+    Name = "fraud-detection-vpc-${local.name_suffix}"
   }
 }
 
@@ -129,7 +135,7 @@ resource "aws_subnet" "private_subnet_a" {
   availability_zone = "${var.aws_region}a"
 
   tags = {
-    Name = "fraud-detection-private-a-${var.environment_suffix}"
+    Name = "fraud-detection-private-a-${local.name_suffix}"
   }
 }
 
@@ -139,7 +145,7 @@ resource "aws_subnet" "private_subnet_b" {
   availability_zone = "${var.aws_region}b"
 
   tags = {
-    Name = "fraud-detection-private-b-${var.environment_suffix}"
+    Name = "fraud-detection-private-b-${local.name_suffix}"
   }
 }
 
@@ -148,7 +154,7 @@ resource "aws_route_table" "private" {
   vpc_id = aws_vpc.fraud_detection_vpc.id
 
   tags = {
-    Name = "fraud-detection-private-rt-${var.environment_suffix}"
+    Name = "fraud-detection-private-rt-${local.name_suffix}"
   }
 }
 
@@ -164,7 +170,7 @@ resource "aws_route_table_association" "private_b" {
 
 # Security group for VPC endpoints
 resource "aws_security_group" "vpc_endpoints" {
-  name        = "fraud-detection-vpc-endpoints-sg-${var.environment_suffix}"
+  name        = "fraud-detection-vpc-endpoints-sg-${local.name_suffix}"
   description = "Security group for VPC endpoints"
   vpc_id      = aws_vpc.fraud_detection_vpc.id
 
@@ -183,7 +189,7 @@ resource "aws_security_group" "vpc_endpoints" {
   }
 
   tags = {
-    Name = "fraud-detection-vpc-endpoints-sg-${var.environment_suffix}"
+    Name = "fraud-detection-vpc-endpoints-sg-${local.name_suffix}"
   }
 }
 
@@ -195,7 +201,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = [aws_route_table.private.id]
 
   tags = {
-    Name = "fraud-detection-s3-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-s3-endpoint-${local.name_suffix}"
   }
 }
 
@@ -206,7 +212,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
   route_table_ids   = [aws_route_table.private.id]
 
   tags = {
-    Name = "fraud-detection-dynamodb-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-dynamodb-endpoint-${local.name_suffix}"
   }
 }
 
@@ -219,7 +225,7 @@ resource "aws_vpc_endpoint" "sqs" {
   private_dns_enabled = true
 
   tags = {
-    Name = "fraud-detection-sqs-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-sqs-endpoint-${local.name_suffix}"
   }
 }
 
@@ -232,7 +238,7 @@ resource "aws_vpc_endpoint" "cloudwatch" {
   private_dns_enabled = true
 
   tags = {
-    Name = "fraud-detection-cloudwatch-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-cloudwatch-endpoint-${local.name_suffix}"
   }
 }
 
@@ -245,7 +251,7 @@ resource "aws_vpc_endpoint" "sns" {
   private_dns_enabled = true
 
   tags = {
-    Name = "fraud-detection-sns-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-sns-endpoint-${local.name_suffix}"
   }
 }
 
@@ -258,7 +264,7 @@ resource "aws_vpc_endpoint" "events" {
   private_dns_enabled = true
 
   tags = {
-    Name = "fraud-detection-events-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-events-endpoint-${local.name_suffix}"
   }
 }
 
@@ -271,13 +277,13 @@ resource "aws_vpc_endpoint" "kms" {
   private_dns_enabled = true
 
   tags = {
-    Name = "fraud-detection-kms-endpoint-${var.environment_suffix}"
+    Name = "fraud-detection-kms-endpoint-${local.name_suffix}"
   }
 }
 
 # DynamoDB table
 resource "aws_dynamodb_table" "transactions" {
-  name         = "fraud-detection-transactions-${var.environment_suffix}"
+  name         = "fraud-detection-transactions-${local.name_suffix}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "transaction_id"
   range_key    = "timestamp"
@@ -302,16 +308,16 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
   tags = {
-    Name = "fraud-detection-transactions-${var.environment_suffix}"
+    Name = "fraud-detection-transactions-${local.name_suffix}"
   }
 }
 
 # S3 bucket for archiving
 resource "aws_s3_bucket" "transaction_archive" {
-  bucket = "fraud-detection-archive-${data.aws_caller_identity.current.account_id}-${var.aws_region}-${var.environment_suffix}"
+  bucket = "fraud-detection-archive-${data.aws_caller_identity.current.account_id}-${var.aws_region}-${local.name_suffix}"
 
   tags = {
-    Name = "fraud-detection-archive-${var.environment_suffix}"
+    Name = "fraud-detection-archive-${local.name_suffix}"
   }
 }
 
@@ -379,18 +385,18 @@ resource "aws_s3_bucket_policy" "transaction_archive_secure_transport" {
 
 # SQS queues
 resource "aws_sqs_queue" "notification_dlq" {
-  name                       = "fraud-detection-notification-dlq-${var.environment_suffix}"
+  name                       = "fraud-detection-notification-dlq-${local.name_suffix}"
   kms_master_key_id          = aws_kms_key.sqs_key.key_id
   message_retention_seconds  = 1209600 # 14 days
   visibility_timeout_seconds = 60
 
   tags = {
-    Name = "fraud-detection-notification-dlq-${var.environment_suffix}"
+    Name = "fraud-detection-notification-dlq-${local.name_suffix}"
   }
 }
 
 resource "aws_sqs_queue" "notification_queue" {
-  name                       = "fraud-detection-notification-queue-${var.environment_suffix}"
+  name                       = "fraud-detection-notification-queue-${local.name_suffix}"
   kms_master_key_id          = aws_kms_key.sqs_key.key_id
   visibility_timeout_seconds = 60
   message_retention_seconds  = 345600 # 4 days
@@ -401,50 +407,50 @@ resource "aws_sqs_queue" "notification_queue" {
   })
 
   tags = {
-    Name = "fraud-detection-notification-queue-${var.environment_suffix}"
+    Name = "fraud-detection-notification-queue-${local.name_suffix}"
   }
 }
 
 # CloudWatch log groups
 resource "aws_cloudwatch_log_group" "validation_lambda_logs" {
-  name              = "/aws/lambda/fraud-detection-transaction-validation-${var.environment_suffix}"
+  name              = "/aws/lambda/fraud-detection-transaction-validation-${local.name_suffix}"
   retention_in_days = 30
 
   tags = {
-    Name = "fraud-detection-validation-lambda-logs-${var.environment_suffix}"
+    Name = "fraud-detection-validation-lambda-logs-${local.name_suffix}"
   }
 }
 
 resource "aws_cloudwatch_log_group" "fraud_scoring_lambda_logs" {
-  name              = "/aws/lambda/fraud-detection-scoring-${var.environment_suffix}"
+  name              = "/aws/lambda/fraud-detection-scoring-${local.name_suffix}"
   retention_in_days = 30
 
   tags = {
-    Name = "fraud-detection-scoring-lambda-logs-${var.environment_suffix}"
+    Name = "fraud-detection-scoring-lambda-logs-${local.name_suffix}"
   }
 }
 
 resource "aws_cloudwatch_log_group" "notification_lambda_logs" {
-  name              = "/aws/lambda/fraud-detection-notification-${var.environment_suffix}"
+  name              = "/aws/lambda/fraud-detection-notification-${local.name_suffix}"
   retention_in_days = 30
 
   tags = {
-    Name = "fraud-detection-notification-lambda-logs-${var.environment_suffix}"
+    Name = "fraud-detection-notification-lambda-logs-${local.name_suffix}"
   }
 }
 
 resource "aws_cloudwatch_log_group" "authorizer_lambda_logs" {
-  name              = "/aws/lambda/fraud-detection-token-authorizer-${var.environment_suffix}"
+  name              = "/aws/lambda/fraud-detection-token-authorizer-${local.name_suffix}"
   retention_in_days = 30
 
   tags = {
-    Name = "fraud-detection-authorizer-lambda-logs-${var.environment_suffix}"
+    Name = "fraud-detection-authorizer-lambda-logs-${local.name_suffix}"
   }
 }
 
 # IAM role for Lambda functions
 resource "aws_iam_role" "lambda_role" {
-  name = "fraud-detection-lambda-role-${var.environment_suffix}"
+  name = "fraud-detection-lambda-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -460,7 +466,7 @@ resource "aws_iam_role" "lambda_role" {
   })
 
   tags = {
-    Name = "fraud-detection-lambda-role-${var.environment_suffix}"
+    Name = "fraud-detection-lambda-role-${local.name_suffix}"
   }
 }
 
@@ -553,7 +559,7 @@ resource "aws_iam_role_policy" "lambda_inline_policy" {
 
 # Security group for Lambda functions
 resource "aws_security_group" "lambda_sg" {
-  name        = "fraud-detection-lambda-sg-${var.environment_suffix}"
+  name        = "fraud-detection-lambda-sg-${local.name_suffix}"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.fraud_detection_vpc.id
 
@@ -565,14 +571,14 @@ resource "aws_security_group" "lambda_sg" {
   }
 
   tags = {
-    Name = "fraud-detection-lambda-sg-${var.environment_suffix}"
+    Name = "fraud-detection-lambda-sg-${local.name_suffix}"
   }
 }
 
 # Lambda functions
 resource "aws_lambda_function" "token_authorizer" {
   filename                       = "lambda/authorizer.zip"
-  function_name                  = "fraud-detection-token-authorizer-${var.environment_suffix}"
+  function_name                  = "fraud-detection-token-authorizer-${local.name_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "authorizer.lambda_handler"
   runtime                        = "python3.11"
@@ -595,7 +601,7 @@ resource "aws_lambda_function" "token_authorizer" {
   kms_key_arn = aws_kms_key.lambda_key.arn
 
   tags = {
-    Name = "fraud-detection-token-authorizer-${var.environment_suffix}"
+    Name = "fraud-detection-token-authorizer-${local.name_suffix}"
   }
 
   depends_on = [
@@ -606,7 +612,7 @@ resource "aws_lambda_function" "token_authorizer" {
 
 resource "aws_lambda_function" "transaction_validation" {
   filename                       = "lambda/validation.zip"
-  function_name                  = "fraud-detection-transaction-validation-${var.environment_suffix}"
+  function_name                  = "fraud-detection-transaction-validation-${local.name_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "validation.lambda_handler"
   runtime                        = "python3.11"
@@ -631,7 +637,7 @@ resource "aws_lambda_function" "transaction_validation" {
   kms_key_arn = aws_kms_key.lambda_key.arn
 
   tags = {
-    Name = "fraud-detection-transaction-validation-${var.environment_suffix}"
+    Name = "fraud-detection-transaction-validation-${local.name_suffix}"
   }
 
   depends_on = [
@@ -642,7 +648,7 @@ resource "aws_lambda_function" "transaction_validation" {
 
 resource "aws_lambda_function" "fraud_scoring" {
   filename                       = "lambda/fraud_scoring.zip"
-  function_name                  = "fraud-detection-scoring-${var.environment_suffix}"
+  function_name                  = "fraud-detection-scoring-${local.name_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "fraud_scoring.lambda_handler"
   runtime                        = "python3.11"
@@ -667,7 +673,7 @@ resource "aws_lambda_function" "fraud_scoring" {
   kms_key_arn = aws_kms_key.lambda_key.arn
 
   tags = {
-    Name = "fraud-detection-scoring-${var.environment_suffix}"
+    Name = "fraud-detection-scoring-${local.name_suffix}"
   }
 
   depends_on = [
@@ -678,7 +684,7 @@ resource "aws_lambda_function" "fraud_scoring" {
 
 resource "aws_lambda_function" "notification_processing" {
   filename                       = "lambda/notification.zip"
-  function_name                  = "fraud-detection-notification-${var.environment_suffix}"
+  function_name                  = "fraud-detection-notification-${local.name_suffix}"
   role                           = aws_iam_role.lambda_role.arn
   handler                        = "notification.lambda_handler"
   runtime                        = "python3.11"
@@ -702,7 +708,7 @@ resource "aws_lambda_function" "notification_processing" {
   kms_key_arn = aws_kms_key.lambda_key.arn
 
   tags = {
-    Name = "fraud-detection-notification-${var.environment_suffix}"
+    Name = "fraud-detection-notification-${local.name_suffix}"
   }
 
   depends_on = [
@@ -713,7 +719,7 @@ resource "aws_lambda_function" "notification_processing" {
 
 # API Gateway
 resource "aws_api_gateway_rest_api" "fraud_detection_api" {
-  name        = "fraud-detection-api-${var.environment_suffix}"
+  name        = "fraud-detection-api-${local.name_suffix}"
   description = "Fraud Detection API"
 
   endpoint_configuration {
@@ -722,7 +728,7 @@ resource "aws_api_gateway_rest_api" "fraud_detection_api" {
 }
 
 resource "aws_api_gateway_authorizer" "token_authorizer" {
-  name                             = "token-authorizer-${var.environment_suffix}"
+  name                             = "token-authorizer-${local.name_suffix}"
   rest_api_id                      = aws_api_gateway_rest_api.fraud_detection_api.id
   authorizer_uri                   = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.token_authorizer.arn}/invocations"
   authorizer_credentials           = aws_iam_role.api_gateway_authorizer_role.arn
@@ -733,7 +739,7 @@ resource "aws_api_gateway_authorizer" "token_authorizer" {
 
 # IAM role for API Gateway to invoke authorizer
 resource "aws_iam_role" "api_gateway_authorizer_role" {
-  name = "api-gateway-authorizer-role-${var.environment_suffix}"
+  name = "api-gateway-authorizer-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -751,7 +757,7 @@ resource "aws_iam_role" "api_gateway_authorizer_role" {
 
 # Policy for API Gateway to invoke Lambda
 resource "aws_iam_policy" "lambda_invoke_policy" {
-  name        = "lambda-invoke-policy-${var.environment_suffix}"
+  name        = "lambda-invoke-policy-${local.name_suffix}"
   description = "Policy to allow API Gateway to invoke Lambda functions"
 
   policy = jsonencode({
@@ -876,7 +882,7 @@ resource "aws_lambda_permission" "api_gateway_authorizer" {
 
 # EventBridge rule for high-risk transactions
 resource "aws_cloudwatch_event_rule" "high_risk_transaction" {
-  name        = "high-risk-transaction-${var.environment_suffix}"
+  name        = "high-risk-transaction-${local.name_suffix}"
   description = "Trigger when a high-risk transaction is detected"
 
   event_pattern = jsonencode({
@@ -909,17 +915,17 @@ resource "aws_lambda_event_source_mapping" "sqs_trigger" {
 
 # SNS topic for alarms
 resource "aws_sns_topic" "alarm_notification" {
-  name              = "fraud-detection-alarms-${var.environment_suffix}"
+  name              = "fraud-detection-alarms-${local.name_suffix}"
   kms_master_key_id = aws_kms_key.lambda_key.key_id
 
   tags = {
-    Name = "fraud-detection-alarms-${var.environment_suffix}"
+    Name = "fraud-detection-alarms-${local.name_suffix}"
   }
 }
 
 # CloudWatch alarms
 resource "aws_cloudwatch_metric_alarm" "validation_lambda_errors" {
-  alarm_name          = "validation-lambda-errors-${var.environment_suffix}"
+  alarm_name          = "validation-lambda-errors-${local.name_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "Errors"
@@ -936,7 +942,7 @@ resource "aws_cloudwatch_metric_alarm" "validation_lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "fraud_scoring_lambda_errors" {
-  alarm_name          = "fraud-scoring-lambda-errors-${var.environment_suffix}"
+  alarm_name          = "fraud-scoring-lambda-errors-${local.name_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "Errors"
@@ -953,7 +959,7 @@ resource "aws_cloudwatch_metric_alarm" "fraud_scoring_lambda_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "notification_lambda_errors" {
-  alarm_name          = "notification-lambda-errors-${var.environment_suffix}"
+  alarm_name          = "notification-lambda-errors-${local.name_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "Errors"
@@ -971,7 +977,7 @@ resource "aws_cloudwatch_metric_alarm" "notification_lambda_errors" {
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "fraud_detection" {
-  dashboard_name = "FraudDetectionDashboard-${var.environment_suffix}"
+  dashboard_name = "FraudDetectionDashboard-${local.name_suffix}"
 
   dashboard_body = jsonencode({
     widgets = [

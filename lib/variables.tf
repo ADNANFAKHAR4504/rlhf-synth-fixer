@@ -12,6 +12,12 @@ variable "environment_suffix" {
   default     = "dev"
 }
 
+variable "stack_id" {
+  description = "Unique identifier for this stack deployment (for parallel deployments)"
+  type        = string
+  default     = ""
+}
+
 variable "repository" {
   description = "Repository name for tagging"
   type        = string
