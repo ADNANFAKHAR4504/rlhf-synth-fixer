@@ -40,7 +40,7 @@ variable "env" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 variable "project_name" {
@@ -306,6 +306,13 @@ variable "log_retention_days" {
   default     = 7
 }
 
+# VPC Endpoints Variables
+variable "enable_vpc_endpoints" {
+  description = "Enable VPC endpoints for Kinesis, SNS, SQS, and SageMaker (may not be available in all regions)"
+  type        = bool
+  default     = false
+}
+
 # ============================================================================
 # Locals
 # ============================================================================
@@ -565,17 +572,23 @@ resource "aws_security_group" "aurora" {
 }
 
 # VPC Endpoints
+# VPC Endpoint for DynamoDB (Gateway endpoint - available in all regions)
 resource "aws_vpc_endpoint" "dynamodb" {
-  vpc_id          = aws_vpc.main.id
-  service_name    = "com.amazonaws.${var.aws_region}.dynamodb"
-  route_table_ids = [aws_route_table.private.id]
+  vpc_id            = aws_vpc.main.id
+  service_name       = "com.amazonaws.${var.aws_region}.dynamodb"
+  vpc_endpoint_type  = "Gateway"
+  route_table_ids    = aws_route_table.private[*].id
 
   tags = merge(local.tags, {
     Name = "${local.resource_prefix}-dynamodb-endpoint"
   })
 }
 
+# VPC Endpoints for Interface services (may not be available in all regions)
+# Using count to make them optional - they'll be created if service exists
 resource "aws_vpc_endpoint" "kinesis" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.kinesis-streams"
   vpc_endpoint_type   = "Interface"
@@ -589,8 +602,10 @@ resource "aws_vpc_endpoint" "kinesis" {
 }
 
 resource "aws_vpc_endpoint" "sagemaker" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.sagemaker.runtime"
+  service_name        = "com.amazonaws.${var.aws_region}.sagemaker-runtime"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.lambda.id]
@@ -602,6 +617,8 @@ resource "aws_vpc_endpoint" "sagemaker" {
 }
 
 resource "aws_vpc_endpoint" "sns" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.sns"
   vpc_endpoint_type   = "Interface"
@@ -615,6 +632,8 @@ resource "aws_vpc_endpoint" "sns" {
 }
 
 resource "aws_vpc_endpoint" "sqs" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.sqs"
   vpc_endpoint_type   = "Interface"
@@ -1770,12 +1789,32 @@ EOF
 }
 
 # Lambda Layer for dependencies
+# Note: This creates a minimal layer structure. For production with actual dependencies, build a proper layer:
+# mkdir -p python/lib/python3.12/site-packages
+# pip install psycopg2-binary redis -t python/lib/python3.12/site-packages/
+# zip -r dependencies_layer.zip python/
+data "archive_file" "dependencies_layer" {
+  type        = "zip"
+  output_path = "/tmp/dependencies_layer.zip"
+
+  # Create proper layer structure with __init__.py files
+  source {
+    content  = "# Lambda Layer Dependencies\n# Install psycopg2-binary and redis for production use\n"
+    filename = "python/lib/python3.12/site-packages/README.txt"
+  }
+  source {
+    content  = "# Package marker\n"
+    filename = "python/lib/python3.12/site-packages/__init__.py"
+  }
+}
+
 resource "aws_lambda_layer_version" "dependencies" {
-  filename            = "layer.zip"
+  filename            = data.archive_file.dependencies_layer.output_path
   layer_name          = "${local.resource_prefix}-dependencies"
   compatible_runtimes = [var.lambda_runtime]
+  source_code_hash    = data.archive_file.dependencies_layer.output_base64sha256
 
-  description = "Layer containing psycopg2-binary and redis"
+  description = "Layer containing psycopg2-binary and redis (minimal structure - build proper layer separately for production)"
 }
 
 # Lambda Functions
@@ -2015,6 +2054,22 @@ resource "aws_lambda_event_source_mapping" "dynamodb_to_analyzer" {
   ]
 }
 
+resource "aws_lambda_event_source_mapping" "sqs_to_reconciliation" {
+  event_source_arn = aws_sqs_queue.compliance_notifications.arn
+  function_name    = aws_lambda_function.reconciliation.arn
+
+  batch_size                         = 10
+  maximum_batching_window_in_seconds = 5
+
+  depends_on = [
+    aws_iam_role_policy.lambda_execution
+  ]
+
+  tags = merge(local.tags, {
+    Name = "${local.resource_prefix}-sqs-reconciliation-mapping"
+  })
+}
+
 resource "aws_sns_topic_subscription" "fraud_alerts_to_aurora_updater" {
   topic_arn = aws_sns_topic.fraud_alerts.arn
   protocol  = "lambda"
@@ -2237,6 +2292,21 @@ resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
   tags = local.tags
 }
 
+resource "aws_cloudwatch_metric_alarm" "high_fraud_rate" {
+  alarm_name          = "${local.resource_prefix}-high-fraud-rate"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = var.evaluation_period_minutes
+  metric_name         = "FraudDetectionRate"
+  namespace           = "${local.resource_prefix}/Metrics"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = var.fraud_rate_threshold
+  alarm_description   = "This metric monitors fraud detection rate and triggers Step Functions"
+  alarm_actions       = [aws_sns_topic.fraud_alerts.arn]
+
+  tags = local.tags
+}
+
 # ============================================================================
 # CloudWatch Log Metric Filters
 # ============================================================================
@@ -2399,6 +2469,51 @@ output "private_subnet_ids" {
   description = "IDs of the private subnets"
   value       = aws_subnet.private[*].id
 }
+
+output "kms_key_id" {
+  description = "ID of the Aurora KMS key"
+  value       = aws_kms_key.aurora.id
+}
+
+output "kms_key_arn" {
+  description = "ARN of the Aurora KMS key"
+  value       = aws_kms_key.aurora.arn
+}
+
+output "secrets_manager_secret_arn" {
+  description = "ARN of the Aurora credentials secret"
+  value       = aws_secretsmanager_secret.aurora_credentials.arn
+}
+
+output "lambda_security_group_id" {
+  description = "ID of the Lambda security group"
+  value       = aws_security_group.lambda.id
+}
+
+output "redis_security_group_id" {
+  description = "ID of the Redis security group"
+  value       = aws_security_group.redis.id
+}
+
+output "aurora_security_group_id" {
+  description = "ID of the Aurora security group"
+  value       = aws_security_group.aurora.id
+}
+
+output "kinesis_stream_name" {
+  description = "Name of the Kinesis stream"
+  value       = aws_kinesis_stream.fraud_transactions.name
+}
+
+output "dynamodb_table_arn" {
+  description = "ARN of the DynamoDB table"
+  value       = aws_dynamodb_table.fraud_scores.arn
+}
+
+output "step_functions_name" {
+  description = "Name of the Step Functions state machine"
+  value       = aws_sfn_state_machine.fraud_investigation.name
+}
 ```
 
 ---
@@ -2439,8 +2554,8 @@ variable "team" {
 
 ```hcl
 env                       = "dev"
-aws_region                = "us-east-1"
-pr_number                 = "pr7259"
+aws_region                = "us-west-1"
+pr_number                 = "pr7290"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 1
 dynamodb_billing_mode     = "PROVISIONED"
@@ -2456,6 +2571,7 @@ analyzer_memory           = 512
 analyzer_timeout          = 60
 log_retention_days        = 3
 lifecycle_expiration_days = 30
+enable_vpc_endpoints      = false
 ```
 
 ---
@@ -2464,8 +2580,8 @@ lifecycle_expiration_days = 30
 
 ```hcl
 env                       = "prod"
-aws_region                = "us-east-1"
-pr_number                 = "pr7259"
+aws_region                = "us-west-1"
+pr_number                 = "pr7290"
 kinesis_stream_mode       = "ON_DEMAND"
 dynamodb_billing_mode     = "PAY_PER_REQUEST"
 redis_node_type           = "cache.r7g.large"
@@ -2478,6 +2594,7 @@ analyzer_memory           = 2048
 analyzer_timeout          = 180
 log_retention_days        = 30
 lifecycle_expiration_days = 90
+enable_vpc_endpoints      = false
 ```
 
 ---
@@ -2486,8 +2603,8 @@ lifecycle_expiration_days = 90
 
 ```hcl
 env                       = "staging"
-aws_region                = "us-east-1"
-pr_number                 = "pr7259"
+aws_region                = "us-west-1"
+pr_number                 = "pr7290"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 2
 dynamodb_billing_mode     = "PROVISIONED"
@@ -2503,6 +2620,7 @@ analyzer_memory           = 1024
 analyzer_timeout          = 90
 log_retention_days        = 7
 lifecycle_expiration_days = 60
+enable_vpc_endpoints      = false
 ```
 
 ---

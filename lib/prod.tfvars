@@ -13,3 +13,4 @@ analyzer_memory           = 2048
 analyzer_timeout          = 180
 log_retention_days        = 30
 lifecycle_expiration_days = 90
+enable_vpc_endpoints      = false

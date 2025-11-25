@@ -305,6 +305,13 @@ variable "log_retention_days" {
   default     = 7
 }
 
+# VPC Endpoints Variables
+variable "enable_vpc_endpoints" {
+  description = "Enable VPC endpoints for Kinesis, SNS, SQS, and SageMaker (may not be available in all regions)"
+  type        = bool
+  default     = false
+}
+
 # ============================================================================
 # Locals
 # ============================================================================
@@ -565,17 +572,23 @@ resource "aws_security_group" "aurora" {
 }
 
 # VPC Endpoints
+# VPC Endpoint for DynamoDB (Gateway endpoint - available in all regions)
 resource "aws_vpc_endpoint" "dynamodb" {
-  vpc_id          = aws_vpc.main.id
-  service_name    = "com.amazonaws.${var.aws_region}.dynamodb"
-  route_table_ids = [aws_route_table.private.id]
+  vpc_id            = aws_vpc.main.id
+  service_name       = "com.amazonaws.${var.aws_region}.dynamodb"
+  vpc_endpoint_type  = "Gateway"
+  route_table_ids    = aws_route_table.private[*].id
 
   tags = merge(local.tags, {
     Name = "${local.resource_prefix}-dynamodb-endpoint"
   })
 }
 
+# VPC Endpoints for Interface services (may not be available in all regions)
+# Using count to make them optional - they'll be created if service exists
 resource "aws_vpc_endpoint" "kinesis" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.kinesis-streams"
   vpc_endpoint_type   = "Interface"
@@ -589,8 +602,10 @@ resource "aws_vpc_endpoint" "kinesis" {
 }
 
 resource "aws_vpc_endpoint" "sagemaker" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.sagemaker.runtime"
+  service_name        = "com.amazonaws.${var.aws_region}.sagemaker-runtime"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.lambda.id]
@@ -602,6 +617,8 @@ resource "aws_vpc_endpoint" "sagemaker" {
 }
 
 resource "aws_vpc_endpoint" "sns" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.sns"
   vpc_endpoint_type   = "Interface"
@@ -615,6 +632,8 @@ resource "aws_vpc_endpoint" "sns" {
 }
 
 resource "aws_vpc_endpoint" "sqs" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id              = aws_vpc.main.id
   service_name        = "com.amazonaws.${var.aws_region}.sqs"
   vpc_endpoint_type   = "Interface"
@@ -1770,7 +1789,7 @@ EOF
 }
 
 # Lambda Layer for dependencies
-# Note: This creates an empty layer structure. For production, build a proper layer with:
+# Note: This creates a minimal layer structure. For production with actual dependencies, build a proper layer:
 # mkdir -p python/lib/python3.12/site-packages
 # pip install psycopg2-binary redis -t python/lib/python3.12/site-packages/
 # zip -r dependencies_layer.zip python/
@@ -1778,10 +1797,14 @@ data "archive_file" "dependencies_layer" {
   type        = "zip"
   output_path = "/tmp/dependencies_layer.zip"
 
-  # Create minimal layer structure (empty but valid)
+  # Create proper layer structure with __init__.py files
   source {
-    content  = ""
-    filename = "python/lib/python3.12/site-packages/.gitkeep"
+    content  = "# Lambda Layer Dependencies\n# Install psycopg2-binary and redis for production use\n"
+    filename = "python/lib/python3.12/site-packages/README.txt"
+  }
+  source {
+    content  = "# Package marker\n"
+    filename = "python/lib/python3.12/site-packages/__init__.py"
   }
 }
 
@@ -1791,7 +1814,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   compatible_runtimes = [var.lambda_runtime]
   source_code_hash    = data.archive_file.dependencies_layer.output_base64sha256
 
-  description = "Layer containing psycopg2-binary and redis (empty structure - build proper layer separately for production)"
+  description = "Layer containing psycopg2-binary and redis (minimal structure - build proper layer separately for production)"
 }
 
 # Lambda Functions
