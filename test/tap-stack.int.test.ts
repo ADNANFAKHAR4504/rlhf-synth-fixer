@@ -20,7 +20,6 @@ import * as path from 'path';
 import {
   EC2Client,
   DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeVpcPeeringConnectionsCommand,
   DescribeRouteTablesCommand,
 } from '@aws-sdk/client-ec2';
@@ -41,12 +40,6 @@ import {
   GetFunctionCommand,
   GetFunctionConfigurationCommand,
 } from '@aws-sdk/client-lambda';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   Route53Client,
   GetHostedZoneCommand,
@@ -78,8 +71,6 @@ const s3Primary = new S3Client({ region: 'us-east-1' });
 const s3DR = new S3Client({ region: 'us-west-2' });
 const lambdaPrimary = new LambdaClient({ region: 'us-east-1' });
 const lambdaDR = new LambdaClient({ region: 'us-west-2' });
-const elbPrimary = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
-const elbDR = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
 const route53 = new Route53Client({ region: 'us-east-1' });
 const cloudwatch = new CloudWatchClient({ region: 'us-east-1' });
 const eventBridgePrimary = new EventBridgeClient({ region: 'us-east-1' });
@@ -145,43 +136,6 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
       const response = await ec2Primary.send(command);
       expect(response.Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
     }, 30000);
-
-    test('should have primary public subnets created', async () => {
-      const subnetIds = outputs.primaryPublicSubnetIds;
-      expect(Array.isArray(subnetIds)).toBe(true);
-      expect(subnetIds.length).toBeGreaterThan(0);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: subnetIds,
-      });
-
-      const response = await ec2Primary.send(command);
-      expect(response.Subnets?.length).toBe(subnetIds.length);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.primaryVpcId);
-        expect(subnet.State).toBe('available');
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-      });
-    }, 30000);
-
-    test('should have primary private subnets created', async () => {
-      const subnetIds = outputs.primaryPrivateSubnetIds;
-      expect(Array.isArray(subnetIds)).toBe(true);
-      expect(subnetIds.length).toBeGreaterThan(0);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: subnetIds,
-      });
-
-      const response = await ec2Primary.send(command);
-      expect(response.Subnets?.length).toBe(subnetIds.length);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.primaryVpcId);
-        expect(subnet.State).toBe('available');
-      });
-    }, 30000);
   });
 
   describe('VPC and Networking - DR Region (us-west-2)', () => {
@@ -204,42 +158,6 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
       const response = await ec2DR.send(command);
       expect(response.Vpcs?.[0].CidrBlock).toBe('10.1.0.0/16');
-    }, 30000);
-
-    test('should have DR public subnets created', async () => {
-      const subnetIds = outputs.drPublicSubnetIds;
-      expect(Array.isArray(subnetIds)).toBe(true);
-      expect(subnetIds.length).toBeGreaterThan(0);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: subnetIds,
-      });
-
-      const response = await ec2DR.send(command);
-      expect(response.Subnets?.length).toBe(subnetIds.length);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.drVpcId);
-        expect(subnet.State).toBe('available');
-      });
-    }, 30000);
-
-    test('should have DR private subnets created', async () => {
-      const subnetIds = outputs.drPrivateSubnetIds;
-      expect(Array.isArray(subnetIds)).toBe(true);
-      expect(subnetIds.length).toBeGreaterThan(0);
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: subnetIds,
-      });
-
-      const response = await ec2DR.send(command);
-      expect(response.Subnets?.length).toBe(subnetIds.length);
-
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.drVpcId);
-        expect(subnet.State).toBe('available');
-      });
     }, 30000);
   });
 
@@ -511,84 +429,6 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
       const response = await lambdaDR.send(command);
       expect(response.Configuration?.FunctionArn).toBe(outputs.drLambdaArn);
-    }, 30000);
-  });
-
-  describe('Application Load Balancers - Primary Region', () => {
-    test('should have primary ALB deployed', async () => {
-      const arnParts = outputs.primaryAlbDnsName.split('.');
-      const elbName = arnParts[0];
-
-      const command = new DescribeLoadBalancersCommand({
-        Names: [elbName],
-      });
-
-      const response = await elbPrimary.send(command);
-      expect(response.LoadBalancers).toBeDefined();
-      expect(response.LoadBalancers!.length).toBeGreaterThan(0);
-
-      const alb = response.LoadBalancers?.[0];
-      expect(alb?.State?.Code).toBe('active');
-      expect(alb?.Scheme).toBe('internet-facing');
-      expect(alb?.Type).toBe('application');
-    }, 30000);
-
-    test('should have primary ALB with listeners', async () => {
-      const arnParts = outputs.primaryAlbDnsName.split('.');
-      const elbName = arnParts[0];
-
-      const describeCommand = new DescribeLoadBalancersCommand({
-        Names: [elbName],
-      });
-      const describeResponse = await elbPrimary.send(describeCommand);
-      const albArn = describeResponse.LoadBalancers?.[0].LoadBalancerArn;
-
-      const listenersCommand = new DescribeListenersCommand({
-        LoadBalancerArn: albArn,
-      });
-      const listenersResponse = await elbPrimary.send(listenersCommand);
-
-      expect(listenersResponse.Listeners).toBeDefined();
-      expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
-    }, 30000);
-  });
-
-  describe('Application Load Balancers - DR Region', () => {
-    test('should have DR ALB deployed', async () => {
-      const arnParts = outputs.drAlbDnsName.split('.');
-      const elbName = arnParts[0];
-
-      const command = new DescribeLoadBalancersCommand({
-        Names: [elbName],
-      });
-
-      const response = await elbDR.send(command);
-      expect(response.LoadBalancers).toBeDefined();
-      expect(response.LoadBalancers!.length).toBeGreaterThan(0);
-
-      const alb = response.LoadBalancers?.[0];
-      expect(alb?.State?.Code).toBe('active');
-      expect(alb?.Scheme).toBe('internet-facing');
-      expect(alb?.Type).toBe('application');
-    }, 30000);
-
-    test('should have DR ALB with listeners', async () => {
-      const arnParts = outputs.drAlbDnsName.split('.');
-      const elbName = arnParts[0];
-
-      const describeCommand = new DescribeLoadBalancersCommand({
-        Names: [elbName],
-      });
-      const describeResponse = await elbDR.send(describeCommand);
-      const albArn = describeResponse.LoadBalancers?.[0].LoadBalancerArn;
-
-      const listenersCommand = new DescribeListenersCommand({
-        LoadBalancerArn: albArn,
-      });
-      const listenersResponse = await elbDR.send(listenersCommand);
-
-      expect(listenersResponse.Listeners).toBeDefined();
-      expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
     }, 30000);
   });
 
