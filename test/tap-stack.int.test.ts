@@ -27,7 +27,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should have valid cluster endpoint format', () => {
       expect(outputs.clusterEndpoint).toMatch(
-        /^https:\/\/[A-Za-z0-9-]+\.eks\.[a-z0-9-]+\.amazonaws\.com$/
+        /^https:\/\/[A-F0-9]+\.gr[0-9]+\.us-east-1\.eks\.amazonaws\.com$/
       );
     });
 
@@ -60,7 +60,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should include environment suffix in cluster endpoint', () => {
-      expect(outputs.clusterEndpoint).toContain('eks.us-east-1');
+      expect(outputs.clusterEndpoint).toContain('.us-east-1.eks.amazonaws.com');
     });
   });
 
@@ -121,8 +121,8 @@ describe('TapStack Integration Tests', () => {
 
   describe('Network Configuration', () => {
     it('should have cluster in us-east-1 region', () => {
-      expect(outputs.clusterEndpoint).toContain('eks.us-east-1');
-      expect(outputs.oidcIssuer).toContain('eks.us-east-1');
+      expect(outputs.clusterEndpoint).toContain('.us-east-1.eks.amazonaws.com');
+      expect(outputs.oidcIssuer).toContain('eks.us-east-1.amazonaws.com');
     });
 
     it('should have kubeconfig configured for us-east-1', () => {
