@@ -68,17 +68,18 @@ export class VpcComponent extends pulumi.ComponentResource {
     const subnetSize = 24;
 
     // Public Subnets
-    // Start from offset 10 to avoid conflicts with existing subnets (common practice)
-    const publicSubnetOffset = 10;
+    // Start from offset 50 to avoid conflicts with existing subnets
+    // This provides a large buffer zone for commonly used lower CIDR ranges
+    const publicSubnetOffset = 50;
 
     this.publicSubnets = args.availabilityZones.map((az, index) => {
       // Calculate subnet CIDR based on VPC CIDR
-      // For /16 VPC: 10.0.0.0/16 -> subnets: 10.0.10.0/24, 10.0.11.0/24, etc.
-      // Start from offset 10 to avoid conflicts with existing subnets
+      // For /16 VPC: 10.0.0.0/16 -> subnets: 10.0.50.0/24, 10.0.51.0/24, etc.
+      // Start from offset 50 to avoid conflicts with existing subnets
       let cidrBlock: string;
       if (vpcPrefix <= 16) {
         // VPC is /16 or larger, use third octet for subnet numbering
-        // Start from offset 10 to avoid conflicts with existing subnets
+        // Start from offset 50 to avoid conflicts with existing subnets
         const thirdOctet = publicSubnetOffset + index;
         cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${thirdOctet}.0/${subnetSize}`;
       } else {
@@ -146,16 +147,16 @@ export class VpcComponent extends pulumi.ComponentResource {
     // Private Subnets
     // Calculate subnet CIDRs based on the actual VPC CIDR block
     // Offset private subnets to avoid overlap with public subnets
-    // Private subnets start at offset 20 (public subnets use 10-19)
-    const privateSubnetOffset = 20;
+    // Private subnets start at offset 100 (public subnets use 50-99)
+    const privateSubnetOffset = 100;
 
     this.privateSubnets = args.availabilityZones.map((az, index) => {
       // Calculate subnet CIDR based on VPC CIDR
-      // Private subnets start at offset 20 to avoid overlap with public subnets (10-19)
+      // Private subnets start at offset 100 to avoid overlap with public subnets (50-99)
       let cidrBlock: string;
       if (vpcPrefix <= 16) {
         // VPC is /16 or larger, use third octet for subnet numbering
-        // Private subnets start at offset 20 (e.g., 10.0.20.0/24, 10.0.21.0/24)
+        // Private subnets start at offset 100 (e.g., 10.0.100.0/24, 10.0.101.0/24)
         const thirdOctet = privateSubnetOffset + index;
         cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${thirdOctet}.0/${subnetSize}`;
       } else {
