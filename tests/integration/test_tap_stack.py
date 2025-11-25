@@ -44,18 +44,21 @@ class TestTapStackIntegration(unittest.TestCase):
         if missing:
             raise ValueError(f"Missing required outputs: {missing}")
 
-        # Initialize AWS clients
-        cls.ec2 = boto3.client('ec2')
-        cls.rds = boto3.client('rds')
-        cls.elasticache = boto3.client('elasticache')
-        cls.autoscaling = boto3.client('autoscaling')
-        cls.elbv2 = boto3.client('elbv2')
-        cls.lambda_client = boto3.client('lambda')
-        cls.ssm = boto3.client('ssm')
-        cls.cloudwatch = boto3.client('cloudwatch')
-        cls.logs = boto3.client('logs')
-        cls.kms = boto3.client('kms')
-        cls.secretsmanager = boto3.client('secretsmanager')
+        # Get region from outputs
+        region = cls.outputs.get('Region', 'us-east-1')
+
+        # Initialize AWS clients with correct region
+        cls.ec2 = boto3.client('ec2', region_name=region)
+        cls.rds = boto3.client('rds', region_name=region)
+        cls.elasticache = boto3.client('elasticache', region_name=region)
+        cls.autoscaling = boto3.client('autoscaling', region_name=region)
+        cls.elbv2 = boto3.client('elbv2', region_name=region)
+        cls.lambda_client = boto3.client('lambda', region_name=region)
+        cls.ssm = boto3.client('ssm', region_name=region)
+        cls.cloudwatch = boto3.client('cloudwatch', region_name=region)
+        cls.logs = boto3.client('logs', region_name=region)
+        cls.kms = boto3.client('kms', region_name=region)
+        cls.secretsmanager = boto3.client('secretsmanager', region_name=region)
 
         # Extract identifiers from outputs
         cls.vpc_id = cls.outputs['VpcId']
