@@ -3,7 +3,10 @@ import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX ||
+  config.get('environmentSuffix') ||
+  'dev';
 const domainName =
   config.get('domainName') || `dr-${environmentSuffix}.example.com`;
 
