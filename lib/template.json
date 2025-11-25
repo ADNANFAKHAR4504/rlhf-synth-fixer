@@ -1,0 +1,662 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template for PostgreSQL to Aurora migration using DMS with Route 53 traffic shifting",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "PrivateSubnet1",
+            "PrivateSubnet2",
+            "PrivateSubnet3"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "SourceDbHost",
+            "SourceDbPort",
+            "SourceDbName",
+            "TargetDbPassword",
+            "DBInstanceClass",
+            "EngineVersion"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Migration Configuration"
+          },
+          "Parameters": [
+            "ReplicationInstanceClass",
+            "DmsTaskTableMappings",
+            "ReplicationLagThreshold"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID where resources will be deployed"
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "First private subnet in availability zone 1"
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "Second private subnet in availability zone 2"
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "Third private subnet in availability zone 3"
+    },
+    "SourceDbHost": {
+      "Type": "String",
+      "Description": "Source PostgreSQL database host (on-premises)"
+    },
+    "SourceDbPort": {
+      "Type": "Number",
+      "Default": 5432,
+      "Description": "Source PostgreSQL database port"
+    },
+    "SourceDbName": {
+      "Type": "String",
+      "Description": "Source PostgreSQL database name"
+    },
+    "TargetDbPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Aurora PostgreSQL master user password"
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.r5.xlarge",
+      "AllowedValues": [
+        "db.r5.large",
+        "db.r5.xlarge",
+        "db.r5.2xlarge",
+        "db.r6i.xlarge",
+        "db.r6i.2xlarge"
+      ],
+      "Description": "Aurora PostgreSQL instance class"
+    },
+    "EngineVersion": {
+      "Type": "String",
+      "Default": "14.6",
+      "Description": "PostgreSQL engine version for Aurora"
+    },
+    "ReplicationInstanceClass": {
+      "Type": "String",
+      "Default": "dms.t3.medium",
+      "Description": "DMS replication instance class"
+    },
+    "DmsTaskTableMappings": {
+      "Type": "String",
+      "Default": "{\"rules\": [{\"rule-type\": \"selection\", \"rule-id\": \"1\", \"rule-name\": \"include-all-tables\", \"object-locator\": {\"schema-name\": \"%\", \"table-name\": \"%\"}, \"rule-action\": \"include\"}]}",
+      "Description": "DMS task table mappings in JSON format"
+    },
+    "ReplicationLagThreshold": {
+      "Type": "Number",
+      "Default": 300,
+      "Description": "DMS replication lag threshold in seconds for CloudWatch alarm"
+    }
+  },
+  "Resources": {
+    "DMSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for DMS replication instance",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "PostgreSQL from source database"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dms-replication-sg"
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for Aurora PostgreSQL cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "aurora-db-subnet-group"
+          }
+        ]
+      }
+    },
+    "AuroraDBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora PostgreSQL database",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "DMSSecurityGroup"
+            },
+            "Description": "PostgreSQL from DMS replication instance"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "aurora-db-sg"
+          }
+        ]
+      }
+    },
+    "SourceDbPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "dms/source-db-password",
+        "Description": "Source database password for DMS endpoint",
+        "SecretString": {
+          "Fn::Sub": "{\"username\": \"postgres\", \"password\": \"${SourceDbPassword}\"}"
+        }
+      }
+    },
+    "TargetDbPasswordParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/aurora/master-password",
+        "Type": "SecureString",
+        "Value": {
+          "Ref": "TargetDbPassword"
+        },
+        "Description": "Aurora PostgreSQL master user password"
+      }
+    },
+    "DMSReplicationSubnetGroup": {
+      "Type": "AWS::DMS::ReplicationSubnetGroup",
+      "Properties": {
+        "ReplicationSubnetGroupDescription": "Subnet group for DMS replication instance",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "dms-replication-subnet-group"
+          }
+        ]
+      }
+    },
+    "DMSReplicationInstance": {
+      "Type": "AWS::DMS::ReplicationInstance",
+      "DeletionPolicy": "Snapshot",
+      "Properties": {
+        "ReplicationInstanceIdentifier": "aurora-migration-replica-instance",
+        "ReplicationInstanceClass": {
+          "Ref": "ReplicationInstanceClass"
+        },
+        "ReplicationSubnetGroupIdentifier": {
+          "Ref": "DMSReplicationSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DMSSecurityGroup"
+          }
+        ],
+        "AllocatedStorage": 200,
+        "EngineVersion": "3.4.6",
+        "MultiAZ": true,
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "aurora-migration-instance"
+          }
+        ]
+      }
+    },
+    "DMSSourceEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointType": "source",
+        "EngineName": "postgres",
+        "ServerName": {
+          "Ref": "SourceDbHost"
+        },
+        "Port": {
+          "Ref": "SourceDbPort"
+        },
+        "DatabaseName": {
+          "Ref": "SourceDbName"
+        },
+        "Username": "postgres",
+        "Password": "{{resolve:secretsmanager:dms/source-db-password:SecretString:password}}",
+        "SslMode": "require",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "source-postgres-endpoint"
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Snapshot",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "EngineVersion": {
+          "Ref": "EngineVersion"
+        },
+        "DatabaseName": {
+          "Ref": "SourceDbName"
+        },
+        "MasterUsername": "postgres",
+        "MasterUserPassword": {
+          "Ref": "TargetDbPassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "AuroraDBSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 35,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
+        "StorageEncrypted": true,
+        "EnableIAMDatabaseAuthentication": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "aurora-postgres-cluster"
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": "aurora-postgres-instance-1",
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "aurora-instance-1"
+          }
+        ]
+      }
+    },
+    "AuroraInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": "aurora-postgres-instance-2",
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "aurora-instance-2"
+          }
+        ]
+      }
+    },
+    "DMSTargetEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "DependsOn": "AuroraCluster",
+      "Properties": {
+        "EndpointType": "target",
+        "EngineName": "aurora-postgresql",
+        "ServerName": {
+          "Fn::GetAtt": [
+            "AuroraCluster",
+            "Endpoint.Address"
+          ]
+        },
+        "Port": 5432,
+        "DatabaseName": {
+          "Ref": "SourceDbName"
+        },
+        "Username": "postgres",
+        "Password": {
+          "Ref": "TargetDbPassword"
+        },
+        "SslMode": "require",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "target-aurora-endpoint"
+          }
+        ]
+      }
+    },
+    "DMSTaskSettings": {
+      "Type": "AWS::DMS::ReplicationTask",
+      "DeletionPolicy": "Snapshot",
+      "DependsOn": [
+        "DMSSourceEndpoint",
+        "DMSTargetEndpoint",
+        "DMSReplicationInstance"
+      ],
+      "Properties": {
+        "ReplicationInstanceIdentifier": {
+          "Ref": "DMSReplicationInstance"
+        },
+        "SourceEndpointArn": {
+          "Fn::Sub": "arn:aws:dms:${AWS::Region}:${AWS::AccountId}:endpoint/source-postgres-endpoint"
+        },
+        "TargetEndpointArn": {
+          "Fn::Sub": "arn:aws:dms:${AWS::Region}:${AWS::AccountId}:endpoint/target-aurora-endpoint"
+        },
+        "MigrationType": "cdc",
+        "TableMappings": {
+          "Ref": "DmsTaskTableMappings"
+        },
+        "ReplicationTaskSettings": {
+          "TargetMetadata": {
+            "EngineType": "aurora-postgresql"
+          },
+          "FullLoadSettings": {
+            "TargetSchema": "",
+            "CreatePkAfterFullLoad": false,
+            "StopTaskCachedSourceNotApplied": false,
+            "StopTaskCachedSourceApplied": false,
+            "MaxFullLoadSubTasks": 8,
+            "TransactionConsistencyTimeout": 600,
+            "CommitRate": 50000
+          },
+          "Logging": {
+            "EnableLogging": true
+          },
+          "ControlTablesSettings": {
+            "HistoryTimeslotInMinutes": 5,
+            "HistoryTableEnabled": true,
+            "SuspendedTablesTableEnabled": true,
+            "StatusTableEnabled": true,
+            "ControlSchema": "dms_sample",
+            "HistoryTableName": "awsdms_history",
+            "SuspendedTablesTableName": "awsdms_suspended_tables",
+            "StatusTableName": "awsdms_status"
+          },
+          "StreamBufferSettings": {
+            "StreamBufferCount": 3,
+            "StreamBufferSizeInMB": 8,
+            "CtrlStreamBufferSizeInMB": 5
+          },
+          "ChangeProcessingTuning": {
+            "BatchApplyEnabled": true,
+            "MinTransactionSize": 1000,
+            "CommitTimeout": 1,
+            "MemoryLimitTotal": 1024,
+            "MemoryKeepTime": 60,
+            "StatementCacheSize": 50
+          },
+          "ValidationSettings": {
+            "EnableValidation": true,
+            "ValidationMode": "row",
+            "ThreadCount": 5,
+            "PartitionSize": 10000
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "postgres-to-aurora-migration"
+          }
+        ]
+      }
+    },
+    "ReplicationLagAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "dms-replication-lag-alerts",
+        "DisplayName": "DMS Replication Lag Alerts",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "replication-lag-topic"
+          }
+        ]
+      }
+    },
+    "ReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "DMS-ReplicationLagExceeded",
+        "AlarmDescription": "Alert when DMS replication lag exceeds threshold",
+        "MetricName": "CDCLatencySource",
+        "Namespace": "AWS/DMS",
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": {
+          "Ref": "ReplicationLagThreshold"
+        },
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationTaskIdentifier",
+            "Value": {
+              "Fn::Sub": "postgres-to-aurora-migration"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ReplicationLagAlarmTopic"
+          }
+        ]
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": "DMS-Aurora-Migration-Dashboard",
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\": [{\"type\": \"metric\", \"properties\": {\"metrics\": [[\"AWS/DMS\", \"CDCLatencySource\", {\"stat\": \"Maximum\"}], [\"AWS/DMS\", \"CDCLatencyTarget\", {\"stat\": \"Maximum\"}], [\"AWS/DMS\", \"FullLoadThroughputRowsTarget\", {\"stat\": \"Average\"}], [\"AWS/DMS\", \"NetworkTransmitThroughput\", {\"stat\": \"Average\"}], [\"AWS/RDS\", \"DatabaseConnections\", {\"dimensions\": {\"DBClusterIdentifier\": \"${AuroraCluster}\"}}], [\"AWS/RDS\", \"ReplicaLag\", {\"dimensions\": {\"DBClusterIdentifier\": \"${AuroraCluster}\"}}]], \"period\": 300, \"stat\": \"Average\", \"region\": \"${AWS::Region}\", \"title\": \"DMS and Aurora Metrics\"}}]}"
+        }
+      }
+    },
+    "Route53HostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": "migration.local",
+        "VPCs": [
+          {
+            "VPCId": {
+              "Ref": "VpcId"
+            },
+            "VPCRegion": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ],
+        "HostedZoneConfig": {
+          "Comment": "Private hosted zone for database migration traffic shifting"
+        }
+      }
+    },
+    "Route53WeightedRecord1": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": "database.migration.local",
+        "Type": "CNAME",
+        "SetIdentifier": "source-primary",
+        "Weight": 100,
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Ref": "SourceDbHost"
+          }
+        ]
+      }
+    },
+    "Route53WeightedRecord2": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": "database.migration.local",
+        "Type": "CNAME",
+        "SetIdentifier": "target-secondary",
+        "Weight": 0,
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "AuroraCluster",
+              "Endpoint.Address"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DMSTaskArn": {
+      "Description": "ARN of the DMS replication task",
+      "Value": {
+        "Fn::Sub": "arn:aws:dms:${AWS::Region}:${AWS::AccountId}:task/postgres-to-aurora-migration"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMSTaskArn"
+        }
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora PostgreSQL cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraEndpoint"
+        }
+      }
+    },
+    "AuroraClusterPort": {
+      "Description": "Aurora PostgreSQL cluster port",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraPort"
+        }
+      }
+    },
+    "Route53HostedZoneId": {
+      "Description": "Route 53 hosted zone ID for traffic shifting",
+      "Value": {
+        "Ref": "Route53HostedZone"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-HostedZoneId"
+        }
+      }
+    },
+    "DMSReplicationInstanceIdentifier": {
+      "Description": "DMS replication instance identifier",
+      "Value": "aurora-migration-replica-instance",
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReplicationInstance"
+        }
+      }
+    },
+    "CloudWatchDashboardUrl": {
+      "Description": "URL to CloudWatch dashboard for monitoring",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=DMS-Aurora-Migration-Dashboard"
+      }
+    },
+    "SNSAlertTopicArn": {
+      "Description": "SNS topic ARN for replication lag alerts",
+      "Value": {
+        "Ref": "ReplicationLagAlarmTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopic"
+        }
+      }
+    }
+  }
+}
