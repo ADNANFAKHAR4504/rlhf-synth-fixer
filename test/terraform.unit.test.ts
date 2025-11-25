@@ -210,10 +210,11 @@ describe('Fraud Detection Terraform Configuration - Unit Tests', () => {
   // 7. VPC ENDPOINTS
   // ---------------------------------------------------------------------------
   describe('VPC Endpoints Configuration', () => {
-    test('DynamoDB VPC endpoint exists (Gateway endpoint)', () => {
+    test('DynamoDB VPC endpoint is conditional and uses Interface type', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_vpc_endpoint"\s+"dynamodb"\s*{/);
+      expect(tapstackTf).toMatch(/count\s*=\s*var\.enable_vpc_endpoints\s*\?\s*1\s*:\s*0/);
       expect(tapstackTf).toMatch(/service_name\s*=\s*"com\.amazonaws\.\$\{var\.aws_region\}\.dynamodb"/);
-      expect(tapstackTf).toMatch(/vpc_endpoint_type\s*=\s*"Gateway"/);
+      expect(tapstackTf).toMatch(/vpc_endpoint_type\s*=\s*"Interface"/);
     });
 
     test('Kinesis VPC endpoint is conditional', () => {
