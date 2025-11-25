@@ -1,6 +1,6 @@
 {
-  "team": "turing",
-  "turn_type": "synth",
+  "team": "symth",
+  "turn_type": "single",
   "po_id": "g5v7w6n9",
   "platform": "tf",
   "language": "hcl",
