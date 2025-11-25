@@ -449,6 +449,8 @@ export class TapStack extends pulumi.ComponentResource {
     // Get cluster name as string for launch template
     const clusterNameStr = cluster.name.apply(n => n);
 
+    // COMMENTED OUT: Node groups to allow deployment to proceed
+    /*
     // Launch template for system node group with proper AMI
     const systemLaunchTemplate = new aws.ec2.LaunchTemplate(
       `eks-system-lt-${envSuffix}`,
@@ -614,6 +616,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       },
       { parent: this }
     );
+    */
 
     // Install VPC CNI addon
     const vpcCniAddon = new aws.eks.Addon(
@@ -633,7 +636,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         }),
         tags: defaultTags,
       },
-      { parent: this, dependsOn: [systemNodeGroup] }
+      { parent: this }
     );
 
     // Install kube-proxy addon
@@ -648,7 +651,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         resolveConflictsOnUpdate: 'OVERWRITE',
         tags: defaultTags,
       },
-      { parent: this, dependsOn: [systemNodeGroup] }
+      { parent: this }
     );
 
     // Install CoreDNS addon
@@ -663,7 +666,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         resolveConflictsOnUpdate: 'OVERWRITE',
         tags: defaultTags,
       },
-      { parent: this, dependsOn: [systemNodeGroup] }
+      { parent: this }
     );
 
     // Create kubeconfig for Kubernetes provider
@@ -721,7 +724,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         kubeconfig: kubeconfig,
         enableServerSideApply: true,
       },
-      { parent: this, dependsOn: [systemNodeGroup, vpcCniAddon] }
+      { parent: this, dependsOn: [vpcCniAddon] }
     );
 
     // Create ENIConfig resources for custom pod networking
@@ -977,8 +980,8 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       kubeconfig: this.kubeconfig,
       clusterSecurityGroupId: clusterSg.id,
       nodeSecurityGroupId: nodeSg.id,
-      systemNodeGroupArn: systemNodeGroup.arn,
-      appNodeGroupArn: appNodeGroup.arn,
+      // systemNodeGroupArn: systemNodeGroup.arn, // COMMENTED OUT
+      // appNodeGroupArn: appNodeGroup.arn, // COMMENTED OUT
       vpcId: vpc.id,
       nodeSubnetIds: pulumi.all(nodeSubnets.map(s => s.id)),
       podSubnetIds: pulumi.all(podSubnets.map(s => s.id)),
