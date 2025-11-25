@@ -6,9 +6,9 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
-    S3BucketLifecycleConfigurationA,
-    S3BucketLifecycleConfigurationRuleA,
-    S3BucketLifecycleConfigurationRuleTransitionA,
+    S3BucketLifecycleConfiguration,
+    S3BucketLifecycleConfigurationRule,
+    S3BucketLifecycleConfigurationRuleTransition,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
     S3BucketReplicationConfigurationA,
@@ -654,16 +654,16 @@ class TapStack(TerraformStack):
         )
 
         # Lifecycle policy for Glacier transition
-        S3BucketLifecycleConfigurationA(
+        S3BucketLifecycleConfiguration(
             self,
             "audit_bucket_lifecycle",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketLifecycleConfigurationRuleA(
+                S3BucketLifecycleConfigurationRule(
                     id="archive-old-logs",
                     status="Enabled",
                     transition=[
-                        S3BucketLifecycleConfigurationRuleTransitionA(
+                        S3BucketLifecycleConfigurationRuleTransition(
                             days=90,
                             storage_class="GLACIER"
                         )
