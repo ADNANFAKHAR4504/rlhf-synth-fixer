@@ -758,7 +758,6 @@ resource "aws_launch_template" "general" {
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "vpc-cni"
-  addon_version               = var.vpc_cni_version
   resolve_conflicts_on_create = "OVERWRITE"
 
   configuration_values = jsonencode({
@@ -785,7 +784,6 @@ resource "aws_eks_addon" "vpc_cni" {
 resource "aws_eks_addon" "coredns" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "coredns"
-  addon_version               = var.coredns_version
   resolve_conflicts_on_create = "OVERWRITE"
 
   depends_on = [
@@ -805,7 +803,6 @@ resource "aws_eks_addon" "coredns" {
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "kube-proxy"
-  addon_version               = var.kube_proxy_version
   resolve_conflicts_on_create = "OVERWRITE"
 
   depends_on = [
@@ -824,6 +821,10 @@ resource "aws_eks_addon" "kube_proxy" {
 # IAM Role for Cluster Autoscaler
 resource "aws_iam_role" "cluster_autoscaler" {
   name = "${var.cluster_name}-cluster-autoscaler-${var.pr_number}"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
