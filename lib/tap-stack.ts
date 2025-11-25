@@ -75,10 +75,6 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix =
       args.environmentSuffix || config.require('environmentSuffix');
     const region = aws.config.region || 'us-east-1';
-    const certificateArn =
-      args.certificateArn ||
-      config.get('certificateArn') ||
-      'arn:aws:acm:us-east-1:123456789012:certificate/example';
 
     // KMS Key for RDS Encryption
     const rdsKmsKey = new aws.kms.Key(
@@ -95,7 +91,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const rdsKmsKeyAlias = new aws.kms.Alias(
+    new aws.kms.Alias(
       `rds-key-alias-${environmentSuffix}`,
       {
         name: `alias/rds-${environmentSuffix}`,
@@ -119,7 +115,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const ecsKmsKeyAlias = new aws.kms.Alias(
+    new aws.kms.Alias(
       `ecs-key-alias-${environmentSuffix}`,
       {
         name: `alias/ecs-${environmentSuffix}`,
@@ -172,7 +168,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const flowLogPolicy = new aws.iam.RolePolicy(
+    new aws.iam.RolePolicy(
       `vpc-flow-log-policy-${environmentSuffix}`,
       {
         role: flowLogRole.id,
@@ -208,7 +204,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const vpcFlowLog = new aws.ec2.FlowLog(
+    new aws.ec2.FlowLog(
       `vpc-flow-log-${environmentSuffix}`,
       {
         iamRoleArn: flowLogRole.arn,
@@ -408,7 +404,7 @@ export class TapStack extends pulumi.ComponentResource {
       ],
     };
 
-    const frontendLifecyclePolicy = new aws.ecr.LifecyclePolicy(
+    new aws.ecr.LifecyclePolicy(
       `frontend-lifecycle-${environmentSuffix}`,
       {
         repository: frontendRepo.name,
@@ -417,7 +413,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const backendLifecyclePolicy = new aws.ecr.LifecyclePolicy(
+    new aws.ecr.LifecyclePolicy(
       `backend-lifecycle-${environmentSuffix}`,
       {
         repository: backendRepo.name,
@@ -493,7 +489,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const dbInstance = new aws.rds.ClusterInstance(
+    new aws.rds.ClusterInstance(
       `aurora-instance-${environmentSuffix}`,
       {
         identifier: `payment-db-instance-${environmentSuffix}`,
@@ -527,7 +523,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const dbSecretVersion = new aws.secretsmanager.SecretVersion(
+    new aws.secretsmanager.SecretVersion(
       `db-secret-version-${environmentSuffix}`,
       {
         secretId: dbSecret.id,
@@ -636,7 +632,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const frontendTaskPolicy = new aws.iam.RolePolicy(
+    new aws.iam.RolePolicy(
       `frontend-task-policy-${environmentSuffix}`,
       {
         role: frontendTaskRole.id,
@@ -673,7 +669,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const backendTaskPolicy = new aws.iam.RolePolicy(
+    new aws.iam.RolePolicy(
       `backend-task-policy-${environmentSuffix}`,
       {
         role: backendTaskRole.id,
@@ -739,7 +735,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const taskExecutionPolicy = new aws.iam.RolePolicy(
+    new aws.iam.RolePolicy(
       `task-execution-policy-${environmentSuffix}`,
       {
         role: taskExecutionRole.id,
@@ -899,7 +895,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Listener Rules for path-based routing
-    const backendRule = new aws.lb.ListenerRule(
+    new aws.lb.ListenerRule(
       `backend-rule-${environmentSuffix}`,
       {
         listenerArn: httpListener.arn,
@@ -1064,7 +1060,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // ECS Services
-    const frontendService = new aws.ecs.Service(
+    new aws.ecs.Service(
       `frontend-service-${environmentSuffix}`,
       {
         name: `frontend-service-${environmentSuffix}`,
@@ -1092,7 +1088,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [httpListener] }
     );
 
-    const backendService = new aws.ecs.Service(
+    new aws.ecs.Service(
       `backend-service-${environmentSuffix}`,
       {
         name: `backend-service-${environmentSuffix}`,
@@ -1121,7 +1117,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // WAF Web ACL
-    const wafIpSet = new aws.wafv2.IpSet(
+    new aws.wafv2.IpSet(
       `waf-ipset-${environmentSuffix}`,
       {
         name: `waf-ipset-${environmentSuffix}`,
