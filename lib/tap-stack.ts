@@ -838,27 +838,28 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // ALB Listeners
-    const httpsListener = new aws.lb.Listener(
-      `https-listener-${environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-        certificateArn: certificateArn,
-        defaultActions: [
-          {
-            type: 'forward',
-            targetGroupArn: frontendTargetGroup.arn,
-          },
-        ],
-        tags: {
-          Name: `https-listener-${environmentSuffix}`,
-          Environment: environmentSuffix,
-        },
-      },
-      { parent: this }
-    );
+    // Note: For production, uncomment HTTPS listener and provide valid certificate ARN
+    // const httpsListener = new aws.lb.Listener(
+    //   `https-listener-${environmentSuffix}`,
+    //   {
+    //     loadBalancerArn: alb.arn,
+    //     port: 443,
+    //     protocol: 'HTTPS',
+    //     sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+    //     certificateArn: certificateArn,
+    //     defaultActions: [
+    //       {
+    //         type: 'forward',
+    //         targetGroupArn: frontendTargetGroup.arn,
+    //       },
+    //     ],
+    //     tags: {
+    //       Name: `https-listener-${environmentSuffix}`,
+    //       Environment: environmentSuffix,
+    //     },
+    //   },
+    //   { parent: this }
+    // );
 
     const httpListener = new aws.lb.Listener(
       `http-listener-${environmentSuffix}`,
@@ -868,12 +869,8 @@ export class TapStack extends pulumi.ComponentResource {
         protocol: 'HTTP',
         defaultActions: [
           {
-            type: 'redirect',
-            redirect: {
-              port: '443',
-              protocol: 'HTTPS',
-              statusCode: 'HTTP_301',
-            },
+            type: 'forward',
+            targetGroupArn: frontendTargetGroup.arn,
           },
         ],
         tags: {
@@ -888,7 +885,7 @@ export class TapStack extends pulumi.ComponentResource {
     const backendRule = new aws.lb.ListenerRule(
       `backend-rule-${environmentSuffix}`,
       {
-        listenerArn: httpsListener.arn,
+        listenerArn: httpListener.arn,
         priority: 100,
         actions: [
           {
@@ -1069,7 +1066,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: environmentSuffix,
         },
       },
-      { parent: this, dependsOn: [httpsListener] }
+      { parent: this, dependsOn: [httpListener] }
     );
 
     const backendService = new aws.ecs.Service(
@@ -1097,7 +1094,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: environmentSuffix,
         },
       },
-      { parent: this, dependsOn: [httpsListener] }
+      { parent: this, dependsOn: [httpListener] }
     );
 
     // WAF Web ACL
@@ -1201,7 +1198,7 @@ export class TapStack extends pulumi.ComponentResource {
             customOriginConfig: {
               httpPort: 80,
               httpsPort: 443,
-              originProtocolPolicy: 'https-only',
+              originProtocolPolicy: 'http-only',
               originSslProtocols: ['TLSv1.2'],
             },
             customHeaders: [
