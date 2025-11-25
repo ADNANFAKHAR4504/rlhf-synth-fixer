@@ -31,17 +31,19 @@ from lib.constructs.tagging_aspect import TaggingAspect
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, id: str, environment_suffix: str):
+    def __init__(self, scope: Construct, id: str, environment_suffix: str, 
+                 state_bucket: str = None, state_bucket_region: str = None, 
+                 aws_region: str = "us-east-2", default_tags: dict = None):
         super().__init__(scope, id)
 
         self.environment_suffix = environment_suffix
+        self.state_bucket = state_bucket
+        self.state_bucket_region = state_bucket_region
+        self.aws_region = aws_region
 
-        # Configure AWS Provider
-        AwsProvider(
-            self,
-            "aws",
-            region="us-east-2",
-            default_tags=[{
+        # Merge default tags with stack-specific tags
+        if default_tags is None:
+            default_tags = {
                 "tags": {
                     "Environment": environment_suffix,
                     "ManagedBy": "CDKTF",
@@ -49,7 +51,26 @@ class TapStack(TerraformStack):
                     "CostCenter": "DataPipeline",
                     "Team": "DataEngineering"
                 }
-            }]
+            }
+        else:
+            # Merge with stack defaults
+            stack_tags = {
+                "ManagedBy": "CDKTF",
+                "Project": "FinancialDataProcessing",
+                "CostCenter": "DataPipeline",
+                "Team": "DataEngineering"
+            }
+            if "tags" in default_tags:
+                default_tags["tags"].update(stack_tags)
+            else:
+                default_tags = {"tags": stack_tags}
+
+        # Configure AWS Provider
+        AwsProvider(
+            self,
+            "aws",
+            region=self.aws_region,
+            default_tags=[default_tags]
         )
 
         # Apply tagging aspect for FinOps compliance
