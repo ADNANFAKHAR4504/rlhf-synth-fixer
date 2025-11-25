@@ -189,7 +189,7 @@ class PaymentInfrastructureStack(TerraformStack):
         table = DynamodbTable(
             self,
             'payments_table',
-            name=f'payment-{self.environment_suffix}-payments',
+            name=f'payment-{self.environment_suffix}-payments-v2',
             billing_mode='PAY_PER_REQUEST',
             hash_key='payment_id',
             range_key='timestamp',
@@ -227,7 +227,7 @@ class PaymentInfrastructureStack(TerraformStack):
                 enabled=True,
                 kms_key_arn=self.kms_key_dynamodb.arn
             ),
-            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-payments'},
+            tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-payments-v2'},
             provider=self.primary_provider
         )
 

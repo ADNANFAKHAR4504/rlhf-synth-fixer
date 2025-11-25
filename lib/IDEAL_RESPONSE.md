@@ -18,6 +18,7 @@ This is the complete, production-ready implementation of a multi-region payment 
 ## Architecture Components
 
 ### 1. Multi-Region Providers (CDKTF)
+
 ```python
 # Primary region provider
 self.primary_provider = AwsProvider(
@@ -35,12 +36,14 @@ self.secondary_provider = AwsProvider(
 ```
 
 ### 2. KMS Keys (3 keys for different services)
+
 - **DynamoDB Key**: Encrypts DynamoDB table data at rest
 - **S3 Key**: Encrypts S3 bucket objects
 - **Lambda Key**: Encrypts Lambda environment variables
 - Features: Automatic rotation enabled, 10-day deletion window, aliases
 
 ### 3. DynamoDB Global Table
+
 ```python
 DynamodbTable(
     name=f'payment-{environmentSuffix}-payments',
@@ -65,6 +68,7 @@ DynamodbTable(
 ```
 
 Key Features:
+
 - Multi-region replication (us-east-1 ↔ us-west-2)
 - On-demand billing for cost efficiency
 - 2 Global Secondary Indexes (status, customer)
@@ -73,6 +77,7 @@ Key Features:
 - DynamoDB Streams for replication
 
 ### 4. S3 Bucket (Audit Logs)
+
 ```python
 S3Bucket(
     bucket=f'payment-{environmentSuffix}-logs-us-east-1',
@@ -86,6 +91,7 @@ S3Bucket(
 ```
 
 Features:
+
 - Versioning for audit trail
 - KMS encryption for security
 - Lifecycle policy (GLACIER after 30 days)
@@ -93,6 +99,7 @@ Features:
 - Stores payment logs and error logs
 
 ### 5. IAM Role (Lambda Execution)
+
 ```python
 IamRole(
     name=f'payment-{environmentSuffix}-lambda-role',
@@ -109,6 +116,7 @@ IamRole(
 Follows least privilege principle - only necessary permissions.
 
 ### 6. Lambda Function (Payment Processor)
+
 ```python
 LambdaFunction(
     function_name=f'payment-{environmentSuffix}-processor',
@@ -124,6 +132,7 @@ LambdaFunction(
 ```
 
 Handler Features (247 lines):
+
 - Payment validation (amount, currency, customer_id, payment_method)
 - DynamoDB writes with error handling
 - S3 audit logging (payments/ and errors/ prefixes)
@@ -132,6 +141,7 @@ Handler Features (247 lines):
 - Returns JSON responses with proper status codes
 
 ### 7. API Gateway (Regional REST API)
+
 ```python
 ApiGatewayRestApi(
     name=f'payment-{environmentSuffix}-api',
@@ -146,6 +156,7 @@ ApiGatewayRestApi(
 ```
 
 Features:
+
 - Regional REST API in us-east-1
 - POST /process endpoint for payment submission
 - API key authentication (required)
@@ -154,6 +165,7 @@ Features:
 - Proper Lambda permissions for API Gateway
 
 ### 8. CloudWatch (Monitoring & Alarms)
+
 ```python
 # SNS Topic for alarm notifications
 SnsTopic(name=f'payment-{environmentSuffix}-alarms')
@@ -178,6 +190,7 @@ CloudwatchLogGroup(name='/aws/lambda/payment-processor', retention=7)
 ```
 
 ### 9. Route 53 (Health Check)
+
 ```python
 Route53HealthCheck(
     type='HTTPS',
@@ -190,6 +203,7 @@ Route53HealthCheck(
 Monitors API Gateway endpoint health for failover scenarios.
 
 ### 10. SSM Parameter Store (Configuration)
+
 ```python
 # Plain text parameters
 SsmParameter(name='/payment/{suffix}/table-name', type=String)
@@ -204,7 +218,9 @@ Stores configuration values securely for runtime access.
 ## Testing Strategy
 
 ### Unit Tests (854 lines, 100% coverage target)
+
 Comprehensive unit tests covering:
+
 - Stack creation and configuration
 - Multi-region provider setup
 - All 3 KMS keys with rotation
@@ -222,6 +238,7 @@ Comprehensive unit tests covering:
 - Service count validation (all 9 services present)
 
 Test Classes:
+
 - TestStackCreation
 - TestProviders
 - TestKMSKeys
@@ -240,7 +257,9 @@ Test Classes:
 - TestResourceCount
 
 ### Integration Tests (324 lines)
+
 Tests deployed resources using real AWS services:
+
 - API Gateway endpoint reachability
 - DynamoDB table operations (write, read, delete)
 - DynamoDB global replication verification
@@ -253,6 +272,7 @@ Tests deployed resources using real AWS services:
 - Multi-region replica verification
 
 Test Classes:
+
 - TestAPIGateway
 - TestDynamoDB
 - TestS3
@@ -283,12 +303,14 @@ outputs = {
 ## Code Quality
 
 ### Lint Results
+
 ```
 pylint lib/tap.py --rcfile=.pylintrc
 Your code has been rated at 10.00/10
 ```
 
 ### File Structure
+
 ```
 lib/
 ├── __init__.py
@@ -315,6 +337,7 @@ Note: Lambda packaging is automated via _create_lambda_package() method in tap.p
 ## Best Practices Implemented
 
 ### 1. Security
+
 - All data encrypted at rest (DynamoDB, S3, Lambda env vars)
 - KMS customer-managed keys with automatic rotation
 - IAM least privilege principle
@@ -323,6 +346,7 @@ Note: Lambda packaging is automated via _create_lambda_package() method in tap.p
 - Secure parameter storage in SSM
 
 ### 2. Cost Optimization
+
 - DynamoDB on-demand billing (pay per request)
 - S3 lifecycle policy (GLACIER after 30 days)
 - CloudWatch log retention: 7 days
@@ -330,6 +354,7 @@ Note: Lambda packaging is automated via _create_lambda_package() method in tap.p
 - No expensive NAT Gateways or RDS instances
 
 ### 3. Reliability
+
 - Multi-region DynamoDB Global Table for disaster recovery
 - Point-in-time recovery enabled
 - DynamoDB streams for replication
@@ -339,7 +364,9 @@ Note: Lambda packaging is automated via _create_lambda_package() method in tap.p
 - Lambda automatic retries
 
 ### 4. Naming Conventions
+
 All resources include `environmentSuffix` variable:
+
 - Format: `payment-{environmentSuffix}-{resource-type}`
 - Examples:
   - `payment-synthl0s3m1-payments` (DynamoDB)
@@ -348,7 +375,9 @@ All resources include `environmentSuffix` variable:
   - `payment-synthl0s3m1-api` (API Gateway)
 
 ### 5. Tagging
+
 Consistent tags on all resources:
+
 ```python
 {
     'Environment': 'dev',
@@ -359,6 +388,7 @@ Consistent tags on all resources:
 ```
 
 ### 6. Testing
+
 - Unit tests verify infrastructure configuration before deployment
 - Integration tests verify deployed resources work correctly
 - Tests use cdktf.Testing framework
@@ -367,6 +397,7 @@ Consistent tags on all resources:
 ## Deployment Process
 
 ### Prerequisites
+
 ```bash
 # Set environment suffix
 export ENVIRONMENT_SUFFIX=synthl0s3m1
@@ -379,6 +410,7 @@ pipenv run pylint lib/tap.py
 ```
 
 ### Deployment Steps
+
 ```bash
 # 1. Synthesize CDKTF
 pipenv run python lib/tap.py
@@ -400,6 +432,7 @@ pipenv run pytest tests/integration/
 ```
 
 ### Cleanup
+
 ```bash
 cdktf destroy --auto-approve
 ```
@@ -411,6 +444,7 @@ Note: All resources are destroyable (no Retain policies).
 #### Issue: "ResourceAlreadyExistsException" or "AlreadyExists" Errors
 
 **Symptom:**
+
 ```
 Error: creating CloudWatch Logs Log Group: ResourceAlreadyExistsException
 Error: creating AWS DynamoDB Table: Table already exists
@@ -422,6 +456,7 @@ Error: creating KMS Alias: An alias with the name already exists
 Orphaned resources from a previous failed deployment exist in AWS but are not tracked in Terraform state.
 
 **Solution 1: Clean Destroy (Recommended for CI/CD)**
+
 ```bash
 # Method A: If you have the Terraform state
 cd cdktf.out/stacks/TapStack${ENVIRONMENT_SUFFIX}
@@ -435,6 +470,7 @@ cdktf deploy --auto-approve
 ```
 
 **Solution 2: Import Existing Resources**
+
 ```bash
 # Import existing resources into Terraform state
 cd cdktf.out/stacks/TapStack${ENVIRONMENT_SUFFIX}
@@ -447,6 +483,7 @@ terraform apply -auto-approve
 ```
 
 **Solution 3: Manual Cleanup (Last Resort)**
+
 ```bash
 # Delete specific resources via AWS CLI
 aws dynamodb delete-table --table-name payment-${ENVIRONMENT_SUFFIX}-payments
@@ -459,6 +496,7 @@ cdktf deploy --auto-approve
 ```
 
 **Prevention:**
+
 - Always use `cdktf destroy` before redeploying to the same environment
 - In CI/CD, add a cleanup step before deployment
 - Use unique environment suffixes for each PR/deployment
@@ -466,6 +504,7 @@ cdktf deploy --auto-approve
 #### Issue: Lambda Deployment Package Not Found
 
 **Symptom:**
+
 ```
 Error: reading ZIP file (lib/payment_processor.zip): no such file or directory
 ```
@@ -481,6 +520,7 @@ def _create_lambda_package(self):
 ```
 
 If the error persists:
+
 ```bash
 # Verify handler exists
 ls -la lib/lambda/payment_processor/handler.py
@@ -494,6 +534,7 @@ cd ../../..
 ## Multi-Region Considerations
 
 ### DynamoDB Global Table
+
 - Primary region: us-east-1
 - Replica region: us-west-2
 - Automatic bidirectional replication
@@ -502,12 +543,14 @@ cd ../../..
 - KMS encryption per region
 
 ### Deployment Order
+
 1. KMS keys (primary region)
 2. DynamoDB table (primary region)
 3. DynamoDB replica (automatic, us-west-2)
 4. Other resources (primary region only)
 
 ### Failover Strategy
+
 - Route 53 health check monitors primary API Gateway
 - If primary fails, can redirect to Lambda in secondary region (not implemented in this version, but architecture supports it)
 - DynamoDB Global Table provides data redundancy
@@ -530,6 +573,7 @@ cd ../../..
 ## Known Limitations & Deployment Notes
 
 ### Time to Deploy
+
 - Initial deployment: 20-30 minutes
 - DynamoDB Global Table creation is the longest step (~15-20 minutes)
 - KMS key creation: ~1 minute
@@ -537,11 +581,13 @@ cd ../../..
 - API Gateway: ~2-3 minutes
 
 ### AWS Quotas
+
 - DynamoDB: May hit table limits in new accounts
 - Lambda: Concurrent execution limits (default: 1000)
 - API Gateway: Throttle limits (default: 10,000 rps)
 
 ### Cost Estimates (Monthly)
+
 - DynamoDB On-Demand: ~$1.25 per million requests
 - Lambda: ~$0.20 per million requests (512 MB, 60s timeout)
 - S3: ~$0.023/GB storage + request costs
@@ -551,6 +597,7 @@ cd ../../..
 - **Total**: ~$10-50/month depending on usage
 
 ### Best Use Cases
+
 - Payment processing with global availability
 - Multi-region disaster recovery requirements
 - Serverless architecture with API Gateway + Lambda
