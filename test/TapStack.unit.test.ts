@@ -144,7 +144,20 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
       expect(subnetGroup.Properties.SubnetIds).toBeDefined();
-      expect(subnetGroup.Properties.SubnetIds.length).toBe(3);
+      // SubnetIds is now a conditional (Fn::If), check that it has the expected structure
+      if (subnetGroup.Properties.SubnetIds['Fn::If']) {
+        const ifCondition = subnetGroup.Properties.SubnetIds['Fn::If'];
+        expect(ifCondition).toBeDefined();
+        expect(Array.isArray(ifCondition)).toBe(true);
+        expect(ifCondition.length).toBe(3); // Condition, true array, false array
+        // Check that both branches have 3 subnets
+        expect(ifCondition[1].length).toBe(3); // True branch (created subnets)
+        expect(ifCondition[2].length).toBe(3); // False branch (parameter subnets)
+      } else {
+        // Fallback: if it's still an array (backward compatibility)
+        expect(Array.isArray(subnetGroup.Properties.SubnetIds)).toBe(true);
+        expect(subnetGroup.Properties.SubnetIds.length).toBe(3);
+      }
     });
 
     test('should have Aurora cluster', () => {
@@ -194,7 +207,21 @@ describe('CloudFormation Template Unit Tests', () => {
       const subnetGroup = template.Resources.DMSReplicationSubnetGroup;
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.Type).toBe('AWS::DMS::ReplicationSubnetGroup');
-      expect(subnetGroup.Properties.SubnetIds.length).toBe(3);
+      expect(subnetGroup.Properties.SubnetIds).toBeDefined();
+      // SubnetIds is now a conditional (Fn::If), check that it has the expected structure
+      if (subnetGroup.Properties.SubnetIds['Fn::If']) {
+        const ifCondition = subnetGroup.Properties.SubnetIds['Fn::If'];
+        expect(ifCondition).toBeDefined();
+        expect(Array.isArray(ifCondition)).toBe(true);
+        expect(ifCondition.length).toBe(3); // Condition, true array, false array
+        // Check that both branches have 3 subnets
+        expect(ifCondition[1].length).toBe(3); // True branch (created subnets)
+        expect(ifCondition[2].length).toBe(3); // False branch (parameter subnets)
+      } else {
+        // Fallback: if it's still an array (backward compatibility)
+        expect(Array.isArray(subnetGroup.Properties.SubnetIds)).toBe(true);
+        expect(subnetGroup.Properties.SubnetIds.length).toBe(3);
+      }
       expect(
         subnetGroup.Properties.ReplicationSubnetGroupIdentifier['Fn::Sub']
       ).toContain('${EnvironmentSuffix}');

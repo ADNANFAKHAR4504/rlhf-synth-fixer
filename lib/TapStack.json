@@ -58,23 +58,28 @@
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID where resources will be deployed"
+      "Description": "VPC ID where resources will be deployed",
+      "Default": "vpc-00000000000000000"
     },
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "First private subnet in availability zone 1"
+      "Description": "First private subnet in availability zone 1",
+      "Default": "subnet-00000000000000000"
     },
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Second private subnet in availability zone 2"
+      "Description": "Second private subnet in availability zone 2",
+      "Default": "subnet-00000000000000001"
     },
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Third private subnet in availability zone 3"
+      "Description": "Third private subnet in availability zone 3",
+      "Default": "subnet-00000000000000002"
     },
     "SourceDbHost": {
       "Type": "String",
-      "Description": "Source PostgreSQL database host (on-premises)"
+      "Description": "Source PostgreSQL database host (on-premises)",
+      "Default": "source-db.example.com"
     },
     "SourceDbPort": {
       "Type": "Number",
@@ -83,17 +88,20 @@
     },
     "SourceDbName": {
       "Type": "String",
-      "Description": "Source PostgreSQL database name"
+      "Description": "Source PostgreSQL database name",
+      "Default": "postgres"
     },
     "SourceDbPassword": {
       "Type": "String",
       "NoEcho": true,
-      "Description": "Source PostgreSQL database password"
+      "Description": "Source PostgreSQL database password",
+      "Default": "TempPassword123!"
     },
     "TargetDbPassword": {
       "Type": "String",
       "NoEcho": true,
-      "Description": "Aurora PostgreSQL master user password"
+      "Description": "Aurora PostgreSQL master user password",
+      "Default": "TempPassword123!"
     },
     "DBInstanceClass": {
       "Type": "String",
@@ -126,9 +134,120 @@
       "Type": "Number",
       "Default": 300,
       "Description": "DMS replication lag threshold in seconds for CloudWatch alarm"
+    },
+    "CreateVpc": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Whether to create a new VPC and subnets (true) or use existing ones (false)"
+    }
+  },
+  "Conditions": {
+    "ShouldCreateVpc": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateVpc"
+        },
+        "true"
+      ]
     }
   },
   "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1Resource": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2Resource": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3Resource": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "2",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
     "DMSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -139,7 +258,15 @@
           "Fn::Sub": "dms-replication-sg-${EnvironmentSuffix}"
         },
         "VpcId": {
-          "Ref": "VpcId"
+          "Fn::If": [
+            "ShouldCreateVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
         },
         "SecurityGroupIngress": [
           {
@@ -176,17 +303,33 @@
         "DBSubnetGroupDescription": {
           "Fn::Sub": "Subnet group for Aurora PostgreSQL cluster ${EnvironmentSuffix}"
         },
-        "SubnetIds": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          },
-          {
-            "Ref": "PrivateSubnet3"
-          }
-        ],
+        "SubnetIds": {
+          "Fn::If": [
+            "ShouldCreateVpc",
+            [
+              {
+                "Ref": "PrivateSubnet1Resource"
+              },
+              {
+                "Ref": "PrivateSubnet2Resource"
+              },
+              {
+                "Ref": "PrivateSubnet3Resource"
+              }
+            ],
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ]
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -207,7 +350,15 @@
           "Fn::Sub": "aurora-db-sg-${EnvironmentSuffix}"
         },
         "VpcId": {
-          "Ref": "VpcId"
+          "Fn::If": [
+            "ShouldCreateVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
         },
         "SecurityGroupIngress": [
           {
@@ -269,17 +420,33 @@
         "ReplicationSubnetGroupDescription": {
           "Fn::Sub": "Subnet group for DMS replication instance ${EnvironmentSuffix}"
         },
-        "SubnetIds": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          },
-          {
-            "Ref": "PrivateSubnet3"
-          }
-        ],
+        "SubnetIds": {
+          "Fn::If": [
+            "ShouldCreateVpc",
+            [
+              {
+                "Ref": "PrivateSubnet1Resource"
+              },
+              {
+                "Ref": "PrivateSubnet2Resource"
+              },
+              {
+                "Ref": "PrivateSubnet3Resource"
+              }
+            ],
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ]
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
