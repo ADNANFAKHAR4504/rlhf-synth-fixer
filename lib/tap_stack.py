@@ -512,6 +512,9 @@ class TapStack(TerraformStack):
                 "Name": f"dr-payment-primary-cluster-{environment_suffix}",
                 "Backup": "daily",
             },
+            lifecycle={
+                "ignore_changes": ["global_cluster_identifier"]
+            }
         )
 
         # Primary Aurora Instance
@@ -562,6 +565,9 @@ class TapStack(TerraformStack):
             tags={
                 "Name": f"dr-payment-secondary-cluster-{environment_suffix}",
             },
+            lifecycle={
+                "ignore_changes": ["global_cluster_identifier"]
+            }
         )
 
         # Secondary Aurora Instance
