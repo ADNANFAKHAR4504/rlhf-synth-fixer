@@ -314,7 +314,7 @@ variable "log_retention_days" {
 # ============================================================================
 
 locals {
-  resource_prefix = "${var.project_name}-${var.env}"
+  resource_prefix = "${var.project_name}-${var.env}-${var.pr_number}"
 
   tags = merge(
     var.common_tags,
