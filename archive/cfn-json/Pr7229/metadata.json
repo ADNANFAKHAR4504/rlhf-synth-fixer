@@ -1,5 +1,4 @@
 {
-  "task_id": "z8f3t7z0",
   "platform": "cfn",
   "language": "json",
   "complexity": "expert",
@@ -10,7 +9,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "po_id": "synth-z8f3t7z0",
+  "po_id": "z8f3t7z0",
   "aws_services": [
     "VPC",
     "EC2",
