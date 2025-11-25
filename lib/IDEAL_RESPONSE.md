@@ -38,8 +38,12 @@ resource "aws_kms_alias" "main" {
 }
 
 # KMS key policy
+# CRITICAL: Must include Auto Scaling service principal for EKS node groups
 resource "aws_kms_key_policy" "main" {
   key_id = aws_kms_key.main.id
+
+  # Policy depends on node role being created first to avoid circular dependency
+  depends_on = [aws_iam_role.eks_nodes]
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -64,6 +68,7 @@ resource "aws_kms_key_policy" "main" {
           "kms:Encrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
+          "kms:GenerateDataKeyWithoutPlaintext",
           "kms:CreateGrant",
           "kms:DescribeKey"
         ]
@@ -87,21 +92,85 @@ resource "aws_kms_key_policy" "main" {
           "kms:Encrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
+          "kms:GenerateDataKeyWithoutPlaintext",
           "kms:CreateGrant",
           "kms:DescribeKey"
         ]
         Resource = "*"
       },
       {
-        Sid    = "Allow EC2 service to create grants"
+        Sid    = "Allow Auto Scaling service to use the key"
         Effect = "Allow"
         Principal = {
-          Service = "ec2.amazonaws.com"
+          Service = "autoscaling.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
+          "kms:RetireGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = [
+              "ec2.${var.aws_region}.amazonaws.com"
+            ]
+          }
+        }
+      },
+      {
+        Sid    = "Allow Auto Scaling service to create grants for AWS resources"
+        Effect = "Allow"
+        Principal = {
+          Service = "autoscaling.amazonaws.com"
         }
         Action = [
           "kms:CreateGrant",
           "kms:ListGrants",
-          "kms:RevokeGrant"
+          "kms:RevokeGrant",
+          "kms:RetireGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "kms:GrantIsForAWSResource" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "Allow Auto Scaling service-linked role to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow Auto Scaling service-linked role to manage grants"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+        }
+        Action = [
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant",
+          "kms:RetireGrant"
         ]
         Resource = "*"
         Condition = {
@@ -121,6 +190,7 @@ resource "aws_kms_key_policy" "main" {
           "kms:Encrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
+          "kms:GenerateDataKeyWithoutPlaintext",
           "kms:CreateGrant",
           "kms:DescribeKey"
         ]
@@ -412,8 +482,16 @@ resource "aws_eks_cluster" "main" {
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_policy,
-    aws_iam_role_policy_attachment.eks_vpc_resource_controller
+    aws_iam_role_policy_attachment.eks_vpc_resource_controller,
+    aws_security_group_rule.nodes_to_cluster
   ]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      version
+    ]
+  }
 
   tags = merge(
     var.common_tags,
@@ -523,8 +601,16 @@ resource "aws_eks_node_group" "critical" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
-    aws_kms_key.main
+    aws_launch_template.critical,
+    aws_kms_key_policy.main
   ]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
 
   tags = merge(
     var.common_tags,
@@ -546,7 +632,7 @@ resource "aws_launch_template" "critical" {
       volume_size           = 20
       volume_type           = "gp3"
       encrypted             = true
-      kms_key_id            = aws_kms_key.main.arn
+      kms_key_id            = aws_kms_key.main.id
       delete_on_termination = true
     }
   }
@@ -555,6 +641,15 @@ resource "aws_launch_template" "critical" {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
+  }
+
+  depends_on = [
+    aws_kms_key.main,
+    aws_kms_key_policy.main
+  ]
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(
@@ -602,8 +697,16 @@ resource "aws_eks_node_group" "general" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
-    aws_kms_key.main
+    aws_launch_template.general,
+    aws_kms_key_policy.main
   ]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
 
   tags = merge(
     var.common_tags,
@@ -625,7 +728,7 @@ resource "aws_launch_template" "general" {
       volume_size           = 20
       volume_type           = "gp3"
       encrypted             = true
-      kms_key_id            = aws_kms_key.main.arn
+      kms_key_id            = aws_kms_key.main.id
       delete_on_termination = true
     }
   }
@@ -634,6 +737,15 @@ resource "aws_launch_template" "general" {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
+  }
+
+  depends_on = [
+    aws_kms_key.main,
+    aws_kms_key_policy.main
+  ]
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = merge(
@@ -649,7 +761,6 @@ resource "aws_launch_template" "general" {
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "vpc-cni"
-  addon_version               = var.vpc_cni_version
   resolve_conflicts_on_create = "OVERWRITE"
 
   configuration_values = jsonencode({
@@ -676,7 +787,6 @@ resource "aws_eks_addon" "vpc_cni" {
 resource "aws_eks_addon" "coredns" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "coredns"
-  addon_version               = var.coredns_version
   resolve_conflicts_on_create = "OVERWRITE"
 
   depends_on = [
@@ -696,7 +806,6 @@ resource "aws_eks_addon" "coredns" {
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "kube-proxy"
-  addon_version               = var.kube_proxy_version
   resolve_conflicts_on_create = "OVERWRITE"
 
   depends_on = [
@@ -716,6 +825,10 @@ resource "aws_eks_addon" "kube_proxy" {
 resource "aws_iam_role" "cluster_autoscaler" {
   name = "${var.cluster_name}-cluster-autoscaler-${var.pr_number}"
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -732,6 +845,10 @@ resource "aws_iam_role" "cluster_autoscaler" {
       }
     }]
   })
+
+  depends_on = [
+    aws_iam_openid_connect_provider.eks
+  ]
 
   tags = merge(
     var.common_tags,
@@ -790,6 +907,7 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   role       = aws_iam_role.cluster_autoscaler.name
 }
 ```
+
 
 ## `outputs.tf`
 
@@ -918,6 +1036,7 @@ output "eks_node_role_arn" {
 }
 ```
 
+
 ## `provider.tf`
 
 ```hcl
@@ -942,7 +1061,7 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # backend "s3" {}
 }
 
 # Primary AWS provider for general resources
@@ -960,6 +1079,7 @@ provider "aws" {
   }
 }
 ```
+
 
 ## `variables.tf`
 
@@ -1029,7 +1149,7 @@ variable "kube_proxy_version" {
 variable "pr_number" {
   description = "PR number for resource identification"
   type        = string
-  default     = "pr7198"
+  default     = "pr7219"
 }
 
 variable "common_tags" {
@@ -1066,4 +1186,5 @@ variable "team" {
   default     = "unknown"
 }
 ```
+
 

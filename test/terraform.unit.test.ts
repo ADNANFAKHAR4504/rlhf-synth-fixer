@@ -1,7 +1,3 @@
-// tests/terraform.unit.test.ts
-// Unit tests for Terraform EKS configuration
-// These tests validate the Terraform code structure without deployment
-
 import fs from 'fs';
 import path from 'path';
 
@@ -156,6 +152,9 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
       expect(mainTf).toMatch(/Service\s*=\s*"ec2\.amazonaws\.com"/);
       expect(mainTf).toMatch(/Service\s*=\s*"ebs\.amazonaws\.com"/);
       expect(mainTf).toMatch(/Principal\s*=\s*{\s*Service\s*=\s*"ec2\.amazonaws\.com"\s*}/);
+      expect(mainTf).toMatch(/Sid\s*=\s*"Allow Auto Scaling service-linked role to use the key"/);
+      expect(mainTf).toMatch(/Sid\s*=\s*"Allow Auto Scaling service-linked role to manage grants"/);
+      expect(mainTf).toMatch(/"kms:GrantIsForAWSResource"\s*=\s*"true"/);
     });
 
     test('Security groups are created for cluster and nodes', () => {
@@ -229,12 +228,12 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
       expect(mainTf).toMatch(/instance_types\s*=\s*\["m5\.large",\s*"m5\.xlarge"\]/);
     });
 
-    // test('Node groups use launch templates with encrypted EBS', () => {
-    //   expect(mainTf).toMatch(/resource\s+"aws_launch_template"\s+"critical"\s*{/);
-    //   expect(mainTf).toMatch(/resource\s+"aws_launch_template"\s+"general"\s*{/);
-    //   expect(mainTf).toMatch(/encrypted\s*=\s*true/);
-    //   expect(mainTf).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main\.arn/);
-    // });
+    test('Node groups use launch templates with encrypted EBS', () => {
+      expect(mainTf).toMatch(/resource\s+"aws_launch_template"\s+"critical"\s*{/);
+      expect(mainTf).toMatch(/resource\s+"aws_launch_template"\s+"general"\s*{/);
+      expect(mainTf).toMatch(/encrypted\s*=\s*true/);
+      expect(mainTf).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main\.id/);
+    });
 
     test('Node groups have proper scaling configuration', () => {
       expect(mainTf).toMatch(/scaling_config\s*{/);
@@ -280,6 +279,8 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
   describe('Cluster Autoscaler Configuration', () => {
     test('IAM role for cluster autoscaler is created', () => {
       expect(mainTf).toMatch(/resource\s+"aws_iam_role"\s+"cluster_autoscaler"\s*{/);
+      expect(mainTf).toMatch(/name\s*=\s*"\$\{var\.cluster_name\}-cluster-autoscaler-\$\{var\.pr_number\}"/);
+      expect(mainTf).toMatch(/lifecycle\s*{\s*create_before_destroy\s*=\s*true\s*}/);
       expect(mainTf).toMatch(/sts:AssumeRoleWithWebIdentity/);
     });
 

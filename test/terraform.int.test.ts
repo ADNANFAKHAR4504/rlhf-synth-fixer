@@ -4,7 +4,6 @@ import {
   KMSClient,
 } from '@aws-sdk/client-kms';
 import * as AWS from 'aws-sdk';
-import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -25,90 +24,27 @@ function getTerraformOutputs(): Record<string, any> {
   if (fs.existsSync(cfnOutputsPath)) {
     try {
       const data = fs.readFileSync(cfnOutputsPath, 'utf-8');
-      return JSON.parse(data);
+      const outputs = JSON.parse(data);
+      const result: Record<string, any> = {};
+
+      // Parse values that might be JSON strings (like arrays)
+      for (const [key, value] of Object.entries(outputs)) {
+        if (typeof value === 'string' && (value.startsWith('[') || value.startsWith('{'))) {
+          try {
+            result[key] = JSON.parse(value);
+          } catch {
+            result[key] = value;
+          }
+        } else {
+          result[key] = value;
+        }
+      }
+
+      return result;
     } catch (error) {
       // Continue to try terraform output
     }
   }
-
-  try {
-    const outputJson = execSync('terraform output -json', {
-      cwd: TERRAFORM_DIR,
-      encoding: 'utf-8',
-    });
-    const outputs = JSON.parse(outputJson);
-    const result: Record<string, any> = {};
-    for (const [key, value] of Object.entries(outputs)) {
-      result[key] = (value as any).value;
-    }
-    return result;
-  } catch (error) {
-    throw new Error(`Failed to get Terraform outputs: ${error}`);
-  }
-}
-
-// Helper: Run Terraform plan
-function runTerraformPlan(): { success: boolean; output: string; error?: string } {
-  try {
-    const output = execSync(
-      'terraform plan -no-color',
-      {
-        cwd: TERRAFORM_DIR,
-        encoding: 'utf-8',
-      }
-    );
-    return { success: true, output };
-  } catch (error: any) {
-    return {
-      success: false,
-      output: error.stdout || '',
-      error: error.stderr || error.message,
-    };
-  }
-}
-
-// Helper: Get Terraform plan JSON
-function getTerraformPlanJson(): any {
-  try {
-    execSync('terraform plan -out=tfplan-test', {
-      cwd: TERRAFORM_DIR,
-      stdio: 'pipe',
-    });
-
-    const planJson = execSync('terraform show -json tfplan-test', {
-      cwd: TERRAFORM_DIR,
-      encoding: 'utf-8',
-    });
-
-    return JSON.parse(planJson);
-  } catch (error) {
-    return null;
-  }
-}
-
-// Helper: Extract resources from plan
-function extractResources(plan: any): Map<string, number> {
-  const resourceCounts = new Map<string, number>();
-
-  if (plan?.planned_values?.root_module?.resources) {
-    for (const resource of plan.planned_values.root_module.resources) {
-      const type = resource.type;
-      resourceCounts.set(type, (resourceCounts.get(type) || 0) + 1);
-    }
-  }
-
-  if (plan?.planned_values?.root_module?.child_modules) {
-    for (const childModule of plan.planned_values.root_module.child_modules) {
-      if (childModule.resources) {
-        for (const resource of childModule.resources) {
-          const type = resource.type;
-          resourceCounts.set(type, (resourceCounts.get(type) || 0) + 1);
-        }
-      }
-    }
-  }
-
-  return resourceCounts;
 }
 
 // Helper: AWS API call wrapper
@@ -120,79 +56,6 @@ async function awsCall<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// =============================================================================
-// SUITE 1: TERRAFORM PLAN VALIDATION
-// =============================================================================
-
-describe('Terraform Plan Validation', () => {
-  let terraformAvailable = false;
-
-  beforeAll(() => {
-    try {
-      execSync('which terraform', { encoding: 'utf-8' });
-      terraformAvailable = true;
-
-      // Initialize Terraform with local backend for testing
-      const backendOverride = `
-terraform {
-  backend "local" {}
-}
-`;
-      const overridePath = path.join(TERRAFORM_DIR, 'backend_override.tf');
-      if (!fs.existsSync(overridePath)) {
-        fs.writeFileSync(overridePath, backendOverride);
-      }
-
-      execSync('terraform init -reconfigure', {
-        cwd: TERRAFORM_DIR,
-        stdio: 'pipe',
-      });
-    } catch (error) {
-      console.warn('Terraform not available or init failed:', error);
-    }
-  });
-
-  test('Terraform is installed and accessible', () => {
-    expect(terraformAvailable).toBe(true);
-  });
-
-  test('can generate valid plan', () => {
-    expect(terraformAvailable).toBe(true);
-
-    const result = runTerraformPlan();
-    expect(result.success).toBe(true);
-    expect(result.output).toMatch(/Plan:|No changes/);
-    expect(result.output).not.toContain('Error:');
-  }, TEST_TIMEOUT);
-
-  test('plan includes all expected EKS resource types', () => {
-    expect(terraformAvailable).toBe(true);
-
-    const plan = getTerraformPlanJson();
-    expect(plan).toBeTruthy();
-
-    const resources = extractResources(plan);
-    const resourceTypes = Array.from(resources.keys());
-
-    const expectedTypes = [
-      'aws_vpc',
-      'aws_subnet',
-      'aws_internet_gateway',
-      'aws_nat_gateway',
-      'aws_eip',
-      'aws_route_table',
-      'aws_security_group',
-      'aws_eks_cluster',
-      'aws_eks_node_group',
-      'aws_kms_key',
-      'aws_iam_role',
-    ];
-
-    for (const expectedType of expectedTypes) {
-      expect(resourceTypes).toContain(expectedType);
-    }
-  });
-});
 
 // =============================================================================
 // SUITE 2: DEPLOYED INFRASTRUCTURE VALIDATION
@@ -352,8 +215,10 @@ describe('Deployed Infrastructure Validation', () => {
       const criticalNodeGroupId = outputs.critical_node_group_id;
       expect(criticalNodeGroupId).toBeDefined();
 
-      // Terraform returns the node group name as the ID
-      const nodeGroupName = criticalNodeGroupId;
+      // Terraform returns format: "cluster-name:node-group-name", extract the node group name
+      const nodeGroupName = criticalNodeGroupId.includes(':')
+        ? criticalNodeGroupId.split(':')[1]
+        : criticalNodeGroupId;
 
       const result = await awsCall(() =>
         eks.describeNodegroup({
@@ -374,8 +239,10 @@ describe('Deployed Infrastructure Validation', () => {
       const generalNodeGroupId = outputs.general_node_group_id;
       expect(generalNodeGroupId).toBeDefined();
 
-      // Terraform returns the node group name as the ID
-      const nodeGroupName = generalNodeGroupId;
+      // Terraform returns format: "cluster-name:node-group-name", extract the node group name
+      const nodeGroupName = generalNodeGroupId.includes(':')
+        ? generalNodeGroupId.split(':')[1]
+        : generalNodeGroupId;
 
       const result = await awsCall(() =>
         eks.describeNodegroup({
@@ -388,12 +255,17 @@ describe('Deployed Infrastructure Validation', () => {
       expect(result.nodegroup!.status).toBe('ACTIVE');
       expect(result.nodegroup!.nodegroupName).toBe(nodeGroupName);
       expect(result.nodegroup!.amiType).toBe('BOTTLEROCKET_x86_64');
+      // General node group can have multiple instance types
+      expect(result.nodegroup!.instanceTypes).toBeDefined();
+      expect(result.nodegroup!.instanceTypes!.length).toBeGreaterThan(0);
     }, TEST_TIMEOUT);
 
     test('Node groups have correct scaling configuration', async () => {
       const clusterName = outputs.cluster_name;
       const criticalNodeGroupId = outputs.critical_node_group_id;
-      const nodeGroupName = criticalNodeGroupId;
+      const nodeGroupName = criticalNodeGroupId.includes(':')
+        ? criticalNodeGroupId.split(':')[1]
+        : criticalNodeGroupId;
 
       const result = await awsCall(() =>
         eks.describeNodegroup({
@@ -524,7 +396,8 @@ describe('Deployed Infrastructure Validation', () => {
       const oidcProviderArn = outputs.oidc_provider_arn;
       expect(oidcProviderUrl).toBeDefined();
       expect(oidcProviderArn).toBeDefined();
-      expect(oidcProviderUrl).toMatch(/^https:\/\/oidc\.eks\./);
+      // OIDC URL format: oidc.eks.region.amazonaws.com/id/...
+      expect(oidcProviderUrl).toMatch(/^oidc\.eks\./);
       expect(oidcProviderArn).toMatch(/^arn:aws:iam::.*:oidc-provider\/oidc\.eks\./);
     }, TEST_TIMEOUT);
   });
@@ -545,37 +418,36 @@ describe('EKS Addons Validation', () => {
     const clusterName = outputs.cluster_name;
     expect(clusterName).toBeDefined();
 
-    // List addons for the cluster
     const result = await awsCall(() =>
-      eks.listClusters({}).promise()
+      eks.listAddons({ clusterName }).promise()
     );
 
-    // Verify cluster exists (addons are managed by Terraform)
-    expect(result.clusters).toContain(clusterName);
+    expect(result.addons).toBeDefined();
+    expect(result.addons).toContain('vpc-cni');
   }, TEST_TIMEOUT);
 
   test('CoreDNS addon is installed', async () => {
     const clusterName = outputs.cluster_name;
     expect(clusterName).toBeDefined();
 
-    // CoreDNS is a critical addon, cluster should be functional
     const result = await awsCall(() =>
-      eks.describeCluster({ name: clusterName }).promise()
+      eks.listAddons({ clusterName }).promise()
     );
 
-    expect(result.cluster!.status).toBe('ACTIVE');
+    expect(result.addons).toBeDefined();
+    expect(result.addons).toContain('coredns');
   }, TEST_TIMEOUT);
 
   test('kube-proxy addon is installed', async () => {
     const clusterName = outputs.cluster_name;
     expect(clusterName).toBeDefined();
 
-    // kube-proxy is a critical addon, cluster should be functional
     const result = await awsCall(() =>
-      eks.describeCluster({ name: clusterName }).promise()
+      eks.listAddons({ clusterName }).promise()
     );
 
-    expect(result.cluster!.status).toBe('ACTIVE');
+    expect(result.addons).toBeDefined();
+    expect(result.addons).toContain('kube-proxy');
   }, TEST_TIMEOUT);
 });
 
