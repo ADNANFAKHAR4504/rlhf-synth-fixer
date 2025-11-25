@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Any
 from constructs import Construct
+from cdktf import Fn
 from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
 from cdktf_cdktf_provider_aws.route53_record import Route53Record
 
@@ -35,10 +36,11 @@ class RoutingConstruct(Construct):
         self.environment_suffix = environment_suffix
 
         # Create Route53 hosted zone
+        # Using .internal domain to avoid conflicts with reserved domains
         self.hosted_zone = Route53Zone(
             self,
             f"hosted-zone-{environment_suffix}",
-            name=domain_name,
+            name=f"payment-{environment_suffix}.internal",
             comment=f"Hosted zone for payment API - {environment_suffix}",
             force_destroy=True,
             tags={

@@ -79,7 +79,7 @@ class DatabaseConstruct(Construct):
             self,
             f"cluster-param-group-{environment_suffix}",
             name=f"payment-cluster-pg-{environment_suffix}",
-            family="aurora-postgresql14",
+            family="aurora-postgresql14",  # This is correct for Aurora PostgreSQL 14.x
             description="Cluster parameter group with SSL enforcement",
             parameter=[
                 {
@@ -103,7 +103,7 @@ class DatabaseConstruct(Construct):
             f"aurora-cluster-{environment_suffix}",
             cluster_identifier=f"payment-aurora-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="14.9",
+            engine_version="14.6",  # Changed from 14.9 to 14.6 (available version)
             engine_mode="provisioned",
             database_name="payments",
             master_username="dbadmin",
