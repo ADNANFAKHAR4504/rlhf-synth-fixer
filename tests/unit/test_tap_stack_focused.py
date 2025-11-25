@@ -8,6 +8,10 @@ without full stack instantiation to avoid complex dependency issues.
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import sys
+from tests.unit.test_constants import (
+    DEFAULT_ENVIRONMENT, DEFAULT_TEST_TAGS,
+    ENVIRONMENT_SUFFIXES, TEST_ENVIRONMENTS
+)
 
 
 class TestTapStackArgsUnit(unittest.TestCase):
@@ -26,18 +30,18 @@ class TestTapStackArgsUnit(unittest.TestCase):
                 
                 # Test default values
                 args = TapStackArgs()
-                self.assertEqual(args.environment_suffix, 'dev')
+                self.assertEqual(args.environment_suffix, DEFAULT_ENVIRONMENT)
                 self.assertEqual(args.tags, {})
                 
                 # Test custom values
-                custom_tags = {'Environment': 'test', 'Team': 'platform'}
+                custom_tags = DEFAULT_TEST_TAGS
                 args_custom = TapStackArgs(environment_suffix='prod', tags=custom_tags)
                 self.assertEqual(args_custom.environment_suffix, 'prod')
                 self.assertEqual(args_custom.tags, custom_tags)
                 
                 # Test None handling
                 args_none = TapStackArgs(environment_suffix=None, tags=None)
-                self.assertEqual(args_none.environment_suffix, 'dev')
+                self.assertEqual(args_none.environment_suffix, DEFAULT_ENVIRONMENT)
                 self.assertEqual(args_none.tags, {})
                 
             except Exception as e:
@@ -49,12 +53,12 @@ class TestTapStackArgsUnit(unittest.TestCase):
             from lib.tap_stack import TapStackArgs
             
             test_cases = [
-                ('dev', 'dev'),
+                (DEFAULT_ENVIRONMENT, DEFAULT_ENVIRONMENT),
                 ('staging', 'staging'),
                 ('production', 'production'),
                 ('test-123', 'test-123'),
-                ('', 'dev'),  # Empty string should default
-                (None, 'dev'),  # None should default
+                ('', DEFAULT_ENVIRONMENT),  # Empty string should default
+                (None, DEFAULT_ENVIRONMENT),  # None should default
             ]
             
             for input_val, expected in test_cases:
@@ -72,7 +76,7 @@ class TestTapStackArgsUnit(unittest.TestCase):
             self.assertEqual(args.tags, {})
             
             # Test populated dict
-            tags = {'Env': 'test', 'Team': 'devops', 'Cost': 'engineering'}
+            tags = DEFAULT_TEST_TAGS
             args = TapStackArgs(tags=tags)
             self.assertEqual(args.tags, tags)
             

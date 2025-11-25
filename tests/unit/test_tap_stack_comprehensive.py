@@ -10,6 +10,9 @@ from unittest.mock import Mock, patch, MagicMock
 import inspect
 import re
 import json
+from tests.unit.test_constants import (
+    AWS_SERVICES, FINANCIAL_KEYWORDS, TAP_STACK_FILE_PATH
+)
 
 
 class TestStackArchitecture(unittest.TestCase):
@@ -18,21 +21,11 @@ class TestStackArchitecture(unittest.TestCase):
     def test_infrastructure_components_coverage(self):
         """Test that all expected infrastructure components are covered."""
         # Read the source file to analyze infrastructure coverage
-        with open('lib/tap_stack.py', 'r') as f:
+        with open(TAP_STACK_FILE_PATH, 'r') as f:
             source_code = f.read()
         
         # Expected AWS services that should be present
-        expected_aws_services = [
-            'kms',        # Encryption
-            'dynamodb',   # Data storage
-            's3',         # File storage
-            'sqs',        # Messaging
-            'sns',        # Notifications
-            'iam',        # Security
-            'lambda',     # Compute
-            'cloudwatch', # Monitoring
-            'sfn',        # Step Functions
-        ]
+        expected_aws_services = AWS_SERVICES
         
         for service in expected_aws_services:
             with self.subTest(service=service):
@@ -42,19 +35,11 @@ class TestStackArchitecture(unittest.TestCase):
 
     def test_financial_transaction_specific_components(self):
         """Test that financial transaction processing specific components exist."""
-        with open('lib/tap_stack.py', 'r') as f:
+        with open(TAP_STACK_FILE_PATH, 'r') as f:
             source_code = f.read()
         
         # Financial transaction processing keywords
-        financial_keywords = [
-            'fraud',
-            'transaction',
-            'processing',
-            'priority',
-            'alert',
-            'risk',
-            'fifo'  # For ordered processing
-        ]
+        financial_keywords = FINANCIAL_KEYWORDS
         
         for keyword in financial_keywords:
             with self.subTest(keyword=keyword):
