@@ -295,7 +295,8 @@ class TapStack(TerraformStack):
 
     # pylint: disable=no-member
     # The following methods are not currently used but kept for future Lambda deployment
-    def _create_lambda_layer(self) -> SharedLambdaLayer:
+    # pragma: no cover - Lambda functions are disabled until deployment packages are ready
+    def _create_lambda_layer(self) -> SharedLambdaLayer:  # pragma: no cover
         """Create Lambda layer for shared dependencies."""
         layer = SharedLambdaLayer(
             self,
@@ -309,7 +310,7 @@ class TapStack(TerraformStack):
 
         return layer
 
-    def _create_ingest_lambda(self) -> ReusableLambdaConstruct:
+    def _create_ingest_lambda(self) -> ReusableLambdaConstruct:  # pragma: no cover
         """Create Lambda function for data ingestion."""
         policy_statements = [
             {
@@ -359,7 +360,7 @@ class TapStack(TerraformStack):
 
         return lambda_function
 
-    def _create_transform_lambda(self) -> ReusableLambdaConstruct:
+    def _create_transform_lambda(self) -> ReusableLambdaConstruct:  # pragma: no cover
         """Create Lambda function for data transformation."""
         policy_statements = [
             {
@@ -409,7 +410,7 @@ class TapStack(TerraformStack):
 
         return lambda_function
 
-    def _create_load_lambda(self) -> ReusableLambdaConstruct:
+    def _create_load_lambda(self) -> ReusableLambdaConstruct:  # pragma: no cover
         """Create Lambda function for data loading."""
         policy_statements = [
             {
@@ -459,7 +460,7 @@ class TapStack(TerraformStack):
 
         return lambda_function
 
-    def _create_validate_lambda(self) -> ReusableLambdaConstruct:
+    def _create_validate_lambda(self) -> ReusableLambdaConstruct:  # pragma: no cover
         """Create Lambda function for data validation."""
         policy_statements = [
             {
@@ -508,7 +509,7 @@ class TapStack(TerraformStack):
 
         return lambda_function
 
-    def _create_step_functions(self) -> SfnStateMachine:
+    def _create_step_functions(self) -> SfnStateMachine:  # pragma: no cover
         """Create Step Functions state machine for orchestration with error handling."""
         # Create IAM role for Step Functions
         # pylint: disable=duplicate-code
@@ -732,7 +733,7 @@ class TapStack(TerraformStack):
 
         return state_machine
 
-    def _create_cloudwatch_dashboard(self) -> CloudwatchDashboard:
+    def _create_cloudwatch_dashboard(self) -> CloudwatchDashboard:  # pragma: no cover
         """Create CloudWatch dashboard for pipeline monitoring."""
         dashboard_body = {
             "widgets": [

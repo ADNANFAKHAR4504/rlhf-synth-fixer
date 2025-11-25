@@ -79,6 +79,23 @@ class TestStackStructure:
         assert stack.aws_region == "us-west-2"
         assert stack.state_bucket == "my-terraform-state"
         assert stack.state_bucket_region == "us-west-2"
+        assert stack.version == "v1"
+
+    def test_tap_stack_without_state_bucket(self):
+        """TapStack instantiates successfully without state bucket configuration."""
+        app = App()
+        stack = TapStack(
+            app,
+            "TestTapStackNoBackend",
+            environment_suffix="local"
+        )
+
+        # Verify that TapStack instantiates without errors even without backend config
+        assert stack is not None
+        assert stack.environment_suffix == "local"
+        assert stack.state_bucket is None
+        assert stack.state_bucket_region is None
+        assert stack.version == "v1"
 
 
 # add more test suites and cases as needed
