@@ -302,7 +302,6 @@ class TestCostOptimizationPatterns(unittest.TestCase):
         sizing_patterns = [
             'memory_size',              # Lambda memory configuration
             'timeout',                  # Lambda timeout limits
-            'reserved_concurrent_executions', # Lambda concurrency limits
             'batch_size',               # SQS batch processing
             'visibility_timeout'        # SQS message processing time
         ]

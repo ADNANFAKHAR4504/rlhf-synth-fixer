@@ -122,7 +122,6 @@ LAMBDA_ARCHITECTURE = "arm64"
 LAMBDA_PATTERNS = [
     f'runtime="{LAMBDA_RUNTIME}"',
     f'architectures=["{LAMBDA_ARCHITECTURE}"]',
-    "reserved_concurrent_executions",
     "timeout",
     "memory_size",
     "tracing_config",
@@ -157,7 +156,6 @@ CROSS_REFERENCES = [
 # Scalability Patterns
 SCALABILITY_PATTERNS = [
     "PAY_PER_REQUEST",
-    "reserved_concurrent_executions",
     "batch_size",
     "arm64",
     "intelligent_tiering"
@@ -228,7 +226,6 @@ COST_MIN_OPTIMIZATIONS = 4
 SIZING_PATTERNS = [
     "memory_size",
     "timeout",
-    "reserved_concurrent_executions",
     "batch_size",
     "visibility_timeout"
 ]

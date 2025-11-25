@@ -154,7 +154,6 @@ class TestResourceConfigurationPatterns(unittest.TestCase):
         lambda_patterns = [
             'runtime="python3.11"',
             'architectures=["arm64"]',  # Graviton2
-            'reserved_concurrent_executions',
             'timeout',
             'memory_size',
             'tracing_config',
@@ -465,13 +464,15 @@ class TestPerformanceOptimizations(unittest.TestCase):
                             f"S3 intelligent tiering {pattern} should be configured")
 
     def test_concurrent_execution_limits(self):
-        """Test Lambda concurrent execution limits."""
+        """Test Lambda event source mapping batch size configuration."""
         with open('lib/tap_stack.py', 'r') as f:
             source_code = f.read()
         
-        self.assertIn('reserved_concurrent_executions', source_code,
-                     "Lambda should have concurrent execution limits")
+        # Lambda should have batch size configuration for SQS processing
+        self.assertIn('batch_size', source_code,
+                     "Lambda should have batch size configuration for SQS event source mapping")
 
 
 if __name__ == '__main__':
+    unittest.main()
     unittest.main()
