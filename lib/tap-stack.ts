@@ -442,7 +442,7 @@ export class TapStack extends pulumi.ComponentResource {
     const dbClusterParameterGroup = new aws.rds.ClusterParameterGroup(
       `db-cluster-pg-${environmentSuffix}`,
       {
-        family: 'aurora-postgresql14',
+        family: 'aurora-postgresql17',
         description: `Cluster parameter group for ${environmentSuffix}`,
         parameters: [
           {
@@ -464,7 +464,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: `payment-db-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '14.7',
+        engineVersion: '17.3',
         databaseName: 'paymentdb',
         masterUsername: 'dbadmin',
         masterPassword: pulumi.secret('ChangeMe123!'),
@@ -499,7 +499,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: dbCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '14.7',
+        engineVersion: '17.3',
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: rdsKmsKey.arn,
         performanceInsightsRetentionPeriod: 7,
