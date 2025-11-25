@@ -458,7 +458,6 @@ artifacts:
           {
             location: artifactBucket.bucket,
             type: 'S3',
-            region: process.env.AWS_REGION || 'us-east-1',
           },
         ],
         stages: [
