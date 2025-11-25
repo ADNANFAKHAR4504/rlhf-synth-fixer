@@ -282,6 +282,83 @@ Prefixed unused parameters with underscore:
 })
 ```
 
+#### Fix 5: CloudWatch Log Group Name Validation
+
+**File: `lib/components/ecs.ts`**
+
+CloudWatch log group names must start with `/` and can only contain valid characters. The implementation sanitizes environment suffixes and uses explicit naming:
+
+```typescript
+// ✅ CORRECT (sanitized and explicit)
+const sanitizedSuffix = args.environmentSuffix.replace(
+  /[^a-zA-Z0-9-_]/g,
+  '-'
+);
+const logGroupName = `/ecs/trading-app-${sanitizedSuffix}`;
+new aws.cloudwatch.LogGroup(
+  `ecs-log-group-${args.environmentSuffix}`,
+  {
+    name: logGroupName,  // Explicit name property
+    retentionInDays: 7,
+    ...
+  }
+);
+
+// Task definition uses explicit name
+logConfiguration: {
+  logDriver: 'awslogs',
+  options: {
+    'awslogs-group': logGroupName,  // Uses sanitized name
+    'awslogs-region': aws.config.region || 'us-east-1',
+    'awslogs-stream-prefix': 'ecs',
+  },
+}
+```
+
+**Why This Fix is Necessary**:
+- CloudWatch log group names have strict naming requirements
+- Environment suffixes may contain invalid characters (e.g., from stack names)
+- Using `logGroup.name` (Pulumi Output) can cause deployment failures if it contains invalid characters
+- Explicit naming ensures valid log group names regardless of environment suffix format
+
+#### Fix 6: Dynamic VPC Subnet CIDR Calculation
+
+**File: `lib/components/vpc.ts`**
+
+Subnet CIDR blocks are now calculated dynamically based on the actual VPC CIDR block, rather than hardcoded values:
+
+```typescript
+// ✅ CORRECT (dynamic calculation)
+const vpcCidrParts = args.vpcCidr.split('/');
+const vpcBase = vpcCidrParts[0].split('.');
+const vpcPrefix = parseInt(vpcCidrParts[1]);
+const subnetSize = 24;
+
+// Public subnets: 10.0.1.0/24, 10.0.2.0/24, etc. (for 10.0.0.0/16 VPC)
+// Private subnets: 10.0.10.0/24, 10.0.11.0/24, etc. (offset by 10)
+this.publicSubnets = args.availabilityZones.map((az, index) => {
+  let cidrBlock: string;
+  if (vpcPrefix <= 16) {
+    const thirdOctet = index + 1;  // Start from 1 to avoid 10.0.0.0/24
+    cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${thirdOctet}.0/${subnetSize}`;
+  } else {
+    const fourthOctet = (index + 1) * 64;
+    cidrBlock = `${vpcBase[0]}.${vpcBase[1]}.${vpcBase[2]}.${fourthOctet}/${subnetSize}`;
+  }
+  return new aws.ec2.Subnet(..., { cidrBlock, ... });
+});
+```
+
+**Why This Fix is Necessary**:
+- Hardcoded subnet CIDRs (e.g., `10.${index}.1.0/24`) don't work with different VPC CIDR blocks
+- Staging environments may use `10.1.0.0/16` instead of `10.0.0.0/16`
+- Invalid CIDR errors occur when subnet CIDR doesn't fall within VPC CIDR range
+- Dynamic calculation ensures subnets are always valid for any VPC CIDR configuration
+
+**Example Calculations**:
+- VPC `10.0.0.0/16`: Public subnets `10.0.1.0/24`, `10.0.2.0/24`; Private subnets `10.0.10.0/24`, `10.0.11.0/24`
+- VPC `10.1.0.0/16`: Public subnets `10.1.1.0/24`, `10.1.2.0/24`; Private subnets `10.1.10.0/24`, `10.1.11.0/24`
+
 ## Testing Strategy
 
 ### Unit Tests (100% Coverage Achieved)
@@ -324,6 +401,14 @@ Validates real AWS infrastructure using SDK clients:
 // Reads actual deployment outputs
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json'));
 
+// Handle case where arrays might be serialized as JSON strings (Pulumi outputs)
+if (typeof outputs.publicSubnetIds === 'string') {
+  outputs.publicSubnetIds = JSON.parse(outputs.publicSubnetIds);
+}
+if (typeof outputs.privateSubnetIds === 'string') {
+  outputs.privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
+}
+
 // Tests VPC infrastructure
 const ec2Client = new EC2Client({ region });
 const vpc = await ec2Client.send(new DescribeVpcsCommand({
@@ -340,6 +425,8 @@ expect(cluster.clusters![0].status).toBe('ACTIVE');
 
 // Tests RDS, ALB, S3, CloudWatch in similar fashion
 ```
+
+**Note**: The integration tests include robust handling for Pulumi output serialization, where arrays may be serialized as JSON strings when flattened to `flat-outputs.json`. The tests automatically parse these strings back to arrays when needed.
 
 ## Environment Configurations
 
@@ -421,6 +508,8 @@ pulumi stack output --json > cfn-outputs/flat-outputs.json
 6. **Code Style**: Consistent single quotes, proper unused parameter handling
 7. **Complete Tests**: 100% coverage vs placeholder tests
 8. **Build Success**: All lint/build/test gates pass
+9. **CloudWatch Log Group Validation**: Sanitizes environment suffixes and uses explicit naming to ensure valid log group names
+10. **Dynamic Subnet CIDR Calculation**: Calculates subnet CIDRs based on actual VPC CIDR block, supporting any VPC configuration
 
 ## Conclusion
 

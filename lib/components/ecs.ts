@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface EcsComponentArgs {
   vpcId: pulumi.Input<string>;
@@ -101,9 +101,17 @@ export class EcsComponent extends pulumi.ComponentResource {
     );
 
     // CloudWatch Logs Group
-    const logGroup = new aws.cloudwatch.LogGroup(
+    // CloudWatch log group names must start with '/' and can only contain letters, numbers, hyphens, underscores, forward slashes, and periods
+    // Sanitize environment suffix to remove any invalid characters
+    const sanitizedSuffix = args.environmentSuffix.replace(
+      /[^a-zA-Z0-9-_]/g,
+      '-'
+    );
+    const logGroupName = `/ecs/trading-app-${sanitizedSuffix}`;
+    new aws.cloudwatch.LogGroup(
       `ecs-log-group-${args.environmentSuffix}`,
       {
+        name: logGroupName,
         retentionInDays: 7,
         tags: {
           ...args.tags,
@@ -137,8 +145,8 @@ export class EcsComponent extends pulumi.ComponentResource {
             logConfiguration: {
               logDriver: 'awslogs',
               options: {
-                'awslogs-group': logGroup.name,
-                'awslogs-region': aws.config.region,
+                'awslogs-group': logGroupName,
+                'awslogs-region': aws.config.region || 'us-east-1',
                 'awslogs-stream-prefix': 'ecs',
               },
             },

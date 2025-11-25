@@ -30,10 +30,18 @@ describe('Trading Platform Infrastructure Integration Tests', () => {
     const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
     if (!fs.existsSync(outputsPath)) {
       throw new Error(
-        'cfn-outputs/flat-outputs.json not found. Please deploy the stack first.'
+        'cfn-outputs/flat-outputs.json not found. Please deploy the stack first and run: ./scripts/get-outputs.sh'
       );
     }
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Handle case where arrays might be serialized as JSON strings (Pulumi outputs)
+    if (typeof outputs.publicSubnetIds === 'string') {
+      outputs.publicSubnetIds = JSON.parse(outputs.publicSubnetIds);
+    }
+    if (typeof outputs.privateSubnetIds === 'string') {
+      outputs.privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
+    }
   });
 
   describe('VPC Infrastructure', () => {
