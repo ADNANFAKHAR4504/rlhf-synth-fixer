@@ -2,8 +2,11 @@
 
 # Local variables for dynamic naming
 locals {
-  # Create unique suffix for parallel deployments
-  name_suffix = var.stack_id != "" ? "${var.environment_suffix}-${var.stack_id}" : var.environment_suffix
+  # Extract unique stack identifier from environment_suffix for parallel deployments
+  # If environment_suffix contains "pr" prefix (e.g., "pr123"), use it directly
+  # Otherwise use the environment_suffix as-is (e.g., "dev")
+  # This enables parallel PR deployments: pr123, pr456, etc.
+  name_suffix = var.environment_suffix
 }
 
 # KMS keys for encryption

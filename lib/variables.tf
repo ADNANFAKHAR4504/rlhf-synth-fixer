@@ -7,15 +7,9 @@ variable "aws_region" {
 }
 
 variable "environment_suffix" {
-  description = "Environment suffix for resource naming"
+  description = "Environment suffix for resource naming (e.g., dev, pr123, pr456 for parallel deployments)"
   type        = string
   default     = "dev"
-}
-
-variable "stack_id" {
-  description = "Unique identifier for this stack deployment (for parallel deployments)"
-  type        = string
-  default     = ""
 }
 
 variable "repository" {
