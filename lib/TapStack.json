@@ -46,17 +46,23 @@
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
+      "Default": "vpc-09c4bdbdfef55e103",
       "Description": "VPC ID where EKS cluster will be deployed"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
       "Description": "List of private subnet IDs across 3 availability zones (minimum 3 required)"
     },
     "EksVersion": {
       "Type": "String",
       "Default": "1.28",
       "Description": "EKS cluster version (must be 1.28 or higher)",
-      "AllowedValues": ["1.28", "1.29", "1.30"]
+      "AllowedValues": [
+        "1.28",
+        "1.29",
+        "1.30"
+      ]
     },
     "NodeInstanceType": {
       "Type": "String",
@@ -396,7 +402,10 @@
           "Ref": "EksVersion"
         },
         "RoleArn": {
-          "Fn::GetAtt": ["EksClusterRole", "Arn"]
+          "Fn::GetAtt": [
+            "EksClusterRole",
+            "Arn"
+          ]
         },
         "ResourcesVpcConfig": {
           "SecurityGroupIds": [
@@ -414,10 +423,15 @@
           {
             "Provider": {
               "KeyArn": {
-                "Fn::GetAtt": ["EksKmsKey", "Arn"]
+                "Fn::GetAtt": [
+                  "EksKmsKey",
+                  "Arn"
+                ]
               }
             },
-            "Resources": ["secrets"]
+            "Resources": [
+              "secrets"
+            ]
           }
         ],
         "Logging": {
@@ -515,7 +529,10 @@
           "Ref": "EksCluster"
         },
         "NodeRole": {
-          "Fn::GetAtt": ["EksNodeRole", "Arn"]
+          "Fn::GetAtt": [
+            "EksNodeRole",
+            "Arn"
+          ]
         },
         "Subnets": {
           "Ref": "PrivateSubnetIds"
@@ -566,7 +583,10 @@
     "EksClusterArn": {
       "Description": "ARN of the EKS cluster",
       "Value": {
-        "Fn::GetAtt": ["EksCluster", "Arn"]
+        "Fn::GetAtt": [
+          "EksCluster",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -577,7 +597,10 @@
     "EksClusterEndpoint": {
       "Description": "API endpoint of the EKS cluster",
       "Value": {
-        "Fn::GetAtt": ["EksCluster", "Endpoint"]
+        "Fn::GetAtt": [
+          "EksCluster",
+          "Endpoint"
+        ]
       },
       "Export": {
         "Name": {
@@ -621,7 +644,10 @@
     "EksKmsKeyArn": {
       "Description": "KMS key ARN for EKS secrets encryption",
       "Value": {
-        "Fn::GetAtt": ["EksKmsKey", "Arn"]
+        "Fn::GetAtt": [
+          "EksKmsKey",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -632,7 +658,10 @@
     "EksOidcIssuer": {
       "Description": "OIDC issuer URL for the EKS cluster (for IRSA)",
       "Value": {
-        "Fn::GetAtt": ["EksCluster", "OpenIdConnectIssuerUrl"]
+        "Fn::GetAtt": [
+          "EksCluster",
+          "OpenIdConnectIssuerUrl"
+        ]
       },
       "Export": {
         "Name": {
@@ -654,7 +683,10 @@
     "EksClusterRoleArn": {
       "Description": "ARN of the EKS cluster IAM role",
       "Value": {
-        "Fn::GetAtt": ["EksClusterRole", "Arn"]
+        "Fn::GetAtt": [
+          "EksClusterRole",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -665,7 +697,10 @@
     "EksNodeRoleArn": {
       "Description": "ARN of the EKS node IAM role",
       "Value": {
-        "Fn::GetAtt": ["EksNodeRole", "Arn"]
+        "Fn::GetAtt": [
+          "EksNodeRole",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {

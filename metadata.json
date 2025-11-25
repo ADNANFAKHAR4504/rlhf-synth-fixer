@@ -6,7 +6,7 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
-  "platform": "cloudformation",
+  "platform": "cfn",
   "language": "json",
   "complexity": "expert",
   "aws_services": [
