@@ -35,3 +35,9 @@ variable "team" {
   type        = string
   default     = "unknown"
 }
+
+variable "acm_certificate_arn" {
+  description = "ARN of existing ACM certificate for HTTPS. If not provided, only HTTP will be enabled."
+  type        = string
+  default     = ""
+}
