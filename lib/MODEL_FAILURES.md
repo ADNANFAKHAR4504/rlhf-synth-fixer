@@ -4,8 +4,8 @@ This document details the critical issues found during implementation and the fi
 
 ## Summary
 
-**Total Issues Fixed**: 3 critical issues
-**Final Status**: Infrastructure ready for deployment, all tests passing (26 unit tests, 100% coverage)
+**Total Issues Fixed**: 4 critical issues
+**Final Status**: Infrastructure ready for deployment, all tests passing (26 unit tests, 100% coverage), IAM policy ARN corrected
 
 ---
 
@@ -83,7 +83,58 @@ The metadata file wasn't updated to match the actual Pulumi TypeScript implement
 
 ---
 
-## Issue 3: Inline IAM Policies Constraint Violation
+## Issue 3: Incorrect IAM Managed Policy ARN for CodeDeploy
+
+### Problem
+Deployment failed when creating CodeDeploy service role with wrong managed policy ARN.
+
+### Error Message
+```
+error: creating IAM Role (codedeploy-service-role-pr7209): attaching IAM Policy 
+(arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambda) to IAM Role: 
+operation error IAM: AttachRolePolicy, https response error StatusCode: 404, 
+NoSuchEntity: Policy arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambda does 
+not exist or is not attachable
+```
+
+### Root Cause
+The managed policy name `AWSCodeDeployRoleForLambda` does not exist. AWS provides different policy names for CodeDeploy Lambda deployments.
+
+### Fix Applied
+**File**: `lib/tap-stack.ts:259`
+
+**Before**:
+```typescript
+managedPolicyArns: [
+  'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambda',  // ❌ Invalid - doesn't exist
+],
+```
+
+**After**:
+```typescript
+managedPolicyArns: [
+  'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambdaLimited',  // ✅ Correct policy
+],
+```
+
+### Correct AWS Managed Policies for CodeDeploy Lambda
+
+According to AWS documentation:
+- ✅ `AWSCodeDeployRoleForLambdaLimited` (recommended, least privilege)
+- ✅ `AWSCodeDeployRole` (alternative, broader permissions)
+- ❌ `AWSCodeDeployRoleForLambda` (does not exist)
+
+### Impact
+**Critical** - Deployment blocker. Without the correct policy, CodeDeploy role cannot be created, preventing the entire pipeline from being deployed.
+
+### Key Learning
+Always verify AWS managed policy ARNs in AWS documentation. Policy names are case-sensitive and specific to the service integration type.
+
+**Reference**: https://docs.aws.amazon.com/codedeploy/latest/userguide/getting-started-create-service-role.html
+
+---
+
+## Issue 4: Inline IAM Policies Constraint Violation
 
 ### Problem
 PROMPT.md states: "IAM roles must follow principle of least privilege with no inline policies allowed"

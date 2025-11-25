@@ -256,7 +256,7 @@ exports.handler = async (event) => {
           ],
         }),
         managedPolicyArns: [
-          'arn:aws:iam::aws:policy/AWSCodeDeployRoleForLambdaLimited',
+          'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda',
         ],
         tags: props.tags,
       },
