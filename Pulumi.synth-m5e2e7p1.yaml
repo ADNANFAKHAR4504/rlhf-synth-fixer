@@ -1,0 +1,6 @@
+encryptionsalt: v1:1uLnss8HftU=:v1:QPhey6QcdV1M177a:DOT/OhCQ41YYYEyTNWJUu1gpA9r6vA==
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: synth-m5e2e7p1
+  TapStack:dbPassword:
+    secure: v1:pR27WSf/cml32XWD:O50/CGubcXqn6sa3CmgivPqo2eg4ILIekaYJyG389TM=
