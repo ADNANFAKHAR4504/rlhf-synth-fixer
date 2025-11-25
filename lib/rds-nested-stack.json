@@ -6,12 +6,11 @@
     "EnvironmentSuffix": {"Type": "String", "Description": "Unique suffix for resource naming"},
     "ProjectName": {"Type": "String", "Description": "Project name for tagging"},
     "CostCenter": {"Type": "String", "Description": "Cost center for billing"},
-    "VPCId": {"Type": "String", "Description": "VPC ID"},
     "PrivateSubnet1": {"Type": "String", "Description": "Private Subnet 1 ID"},
     "PrivateSubnet2": {"Type": "String", "Description": "Private Subnet 2 ID"},
     "DBSecurityGroup": {"Type": "String", "Description": "Database Security Group ID"},
     "DBMasterUsername": {"Type": "String", "NoEcho": true, "Description": "Master username for database"},
-    "DBMasterPassword": {"Type": "String", "NoEcho": true, "Description": "Master password for database"},
+    "DBMasterPasswordSecretArn": {"Type": "String", "NoEcho": true, "Description": "Secrets Manager ARN for database password"},
     "DBInstanceClass": {"Type": "String", "Description": "RDS instance class"}
   },
   "Resources": {
@@ -36,7 +35,7 @@
         "EngineVersion": "15.7",
         "DatabaseName": {"Fn::Sub": "appdb${Environment}"},
         "MasterUsername": {"Ref": "DBMasterUsername"},
-        "MasterUserPassword": {"Ref": "DBMasterPassword"},
+        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecretArn}:SecretString:password}}"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DBSecurityGroup"}],
         "StorageEncrypted": true,

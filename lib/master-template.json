@@ -116,7 +116,6 @@
     },
     "RDSStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": "VPCStack",
       "Properties": {
         "TemplateURL": {"Ref": "RDSTemplateURL"},
         "Parameters": {
@@ -124,12 +123,11 @@
           "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
           "ProjectName": {"Ref": "ProjectName"},
           "CostCenter": {"Ref": "CostCenter"},
-          "VPCId": {"Fn::GetAtt": ["VPCStack", "Outputs.VPCId"]},
           "PrivateSubnet1": {"Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnet1"]},
           "PrivateSubnet2": {"Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnet2"]},
           "DBSecurityGroup": {"Fn::GetAtt": ["VPCStack", "Outputs.DBSecurityGroup"]},
           "DBMasterUsername": {"Ref": "DBMasterUsername"},
-          "DBMasterPassword": {"Ref": "DBMasterPassword"},
+          "DBMasterPasswordSecretArn": {"Ref": "DBMasterPassword"},
           "DBInstanceClass": {
             "Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "RDSInstanceClass"]
           }
@@ -143,7 +141,6 @@
     },
     "LambdaStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["VPCStack", "RDSStack"],
       "Properties": {
         "TemplateURL": {"Ref": "LambdaTemplateURL"},
         "Parameters": {
@@ -185,7 +182,6 @@
     },
     "MonitoringStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["RDSStack", "LambdaStack"],
       "Properties": {
         "TemplateURL": {"Ref": "MonitoringTemplateURL"},
         "Parameters": {
