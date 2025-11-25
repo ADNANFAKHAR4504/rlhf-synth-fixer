@@ -11,7 +11,7 @@ class SharedLambdaLayer(Construct):
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        id: str,  # pylint: disable=redefined-builtin
         layer_name: str,
         environment_suffix: str,
         code_path: str,

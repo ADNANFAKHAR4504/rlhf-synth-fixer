@@ -18,7 +18,7 @@ class ReusableLambdaConstruct(Construct):
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        id: str,  # pylint: disable=redefined-builtin
         function_name: str,
         handler: str,
         runtime: str,
@@ -52,6 +52,7 @@ class ReusableLambdaConstruct(Construct):
         )
 
         # Create IAM role for Lambda
+        # pylint: disable=duplicate-code
         assume_role_policy = {
             "Version": "2012-10-17",
             "Statement": [

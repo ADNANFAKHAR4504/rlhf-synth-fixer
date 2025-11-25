@@ -282,6 +282,8 @@ class TapStack(TerraformStack):
 
         return topic
 
+    # pylint: disable=no-member
+    # The following methods are not currently used but kept for future Lambda deployment
     def _create_lambda_layer(self) -> SharedLambdaLayer:
         """Create Lambda layer for shared dependencies."""
         layer = SharedLambdaLayer(
@@ -498,6 +500,7 @@ class TapStack(TerraformStack):
     def _create_step_functions(self) -> SfnStateMachine:
         """Create Step Functions state machine for orchestration with error handling."""
         # Create IAM role for Step Functions
+        # pylint: disable=duplicate-code
         assume_role_policy = {
             "Version": "2012-10-17",
             "Statement": [
