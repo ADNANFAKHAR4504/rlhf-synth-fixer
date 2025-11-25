@@ -1603,39 +1603,9 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
-    // Application Auto Scaling Target for Lambda
-    const lambdaScalingTarget = new aws.appautoscaling.Target(
-      `ecommerce-lambda-scaling-target-${environmentSuffix}`,
-      {
-        serviceNamespace: 'lambda',
-        resourceId: pulumi.interpolate`function:${apiLambda.name}:provisioned-concurrency`,
-        scalableDimension: 'lambda:function:ProvisionedConcurrency',
-        minCapacity: 2,
-        maxCapacity: 10,
-      },
-      { parent: this }
-    );
-
-    // Lambda Auto Scaling Policy
-    void new aws.appautoscaling.Policy(
-      `ecommerce-lambda-scaling-policy-${environmentSuffix}`,
-      {
-        name: `ecommerce-lambda-scaling-${environmentSuffix}`,
-        serviceNamespace: lambdaScalingTarget.serviceNamespace,
-        resourceId: lambdaScalingTarget.resourceId,
-        scalableDimension: lambdaScalingTarget.scalableDimension,
-        policyType: 'TargetTrackingScaling',
-        targetTrackingScalingPolicyConfiguration: {
-          targetValue: 70.0,
-          predefinedMetricSpecification: {
-            predefinedMetricType: 'LambdaProvisionedConcurrencyUtilization',
-          },
-          scaleInCooldown: 60,
-          scaleOutCooldown: 30,
-        },
-      },
-      { parent: this }
-    );
+    // Note: Lambda functions auto-scale automatically based on incoming requests.
+    // Provisioned concurrency auto-scaling would require a Lambda alias and provisioned concurrency configuration.
+    // For this use case, Lambda's built-in auto-scaling is sufficient.
 
     // Set public outputs
     this.vpcId = vpc.id;
