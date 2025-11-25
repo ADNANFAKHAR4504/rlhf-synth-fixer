@@ -1546,21 +1546,18 @@ exports.handler = async (event) => {
                         [
                           'AWS/ApplicationELB',
                           'TargetResponseTime',
-                          {
-                            stat: 'Average',
-                            dimensions: { LoadBalancer: albArn },
-                          },
+                          'LoadBalancer',
+                          albArn,
+                          { stat: 'Average' },
                         ],
                         [
                           'AWS/ApplicationELB',
                           'HealthyHostCount',
-                          {
-                            stat: 'Average',
-                            dimensions: {
-                              LoadBalancer: albArn,
-                              TargetGroup: tgArn,
-                            },
-                          },
+                          'LoadBalancer',
+                          albArn,
+                          'TargetGroup',
+                          tgArn,
+                          { stat: 'Average' },
                         ],
                       ],
                       period: 60,
@@ -1576,18 +1573,16 @@ exports.handler = async (event) => {
                         [
                           'AWS/RDS',
                           'DatabaseConnections',
-                          {
-                            stat: 'Average',
-                            dimensions: { DBClusterIdentifier: clusterName },
-                          },
+                          'DBClusterIdentifier',
+                          clusterName,
+                          { stat: 'Average' },
                         ],
                         [
                           'AWS/RDS',
                           'CPUUtilization',
-                          {
-                            stat: 'Average',
-                            dimensions: { DBClusterIdentifier: clusterName },
-                          },
+                          'DBClusterIdentifier',
+                          clusterName,
+                          { stat: 'Average' },
                         ],
                       ],
                       period: 60,
