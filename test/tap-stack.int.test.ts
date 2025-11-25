@@ -189,7 +189,9 @@ describe('TapStack Integration Tests', () => {
           expect(rule.Destination).toBeDefined();
         } catch (error: any) {
           // Replication might not be configured yet if target bucket doesn't exist
-          // This is acceptable during initial deployment
+          // The custom resource returns SUCCESS even if destination bucket doesn't exist
+          // to allow stack completion. Replication will be configured on next update.
+          // This is acceptable during initial deployment or when target region stack hasn't been deployed yet
           if (error.name !== 'ReplicationConfigurationNotFoundError') {
             throw error;
           }
