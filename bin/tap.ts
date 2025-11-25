@@ -9,8 +9,8 @@
  */
 import * as aws from '@pulumi/aws';
 
-// Import the stack module which will create all resources
-import '../lib/tap-stack';
+// Import and re-export all outputs from the stack module
+import * as stack from '../lib/tap-stack';
 
 // Get the environment suffix from environment variables, defaulting to 'dev'.
 const _environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -42,3 +42,13 @@ const _provider = new aws.Provider('aws', {
 
 // Mark intentionally unused to satisfy linter
 void _provider;
+
+// Re-export all outputs from the stack
+export const apiId = stack.apiId;
+export const apiEndpoint = stack.apiEndpoint;
+export const apiUrl = stack.apiUrl;
+export const stateMachineArn = stack.stateMachineArn;
+export const paymentsTableName = stack.paymentsTableName;
+export const kmsKeyId = stack.kmsKeyId;
+export const webhookValidatorFunctionName = stack.webhookValidatorFunctionName;
+export const paymentProcessorFunctionName = stack.paymentProcessorFunctionName;

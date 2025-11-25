@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as path from 'path';
 
 // Get configuration and environment suffix
@@ -543,6 +543,7 @@ const _pipe = new aws.pipes.Pipe(`payment-events-pipe-${environmentSuffix}`, {
 });
 
 // Export outputs
+export const apiId = api.id;
 export const apiEndpoint = pulumi.interpolate`${api.executionArn.apply(arn => arn.replace('execute-api', 'execute-api').replace(/:([^:]+)$/, ''))}/prod/webhooks`;
 export const apiUrl = pulumi.interpolate`https://${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/prod/webhooks`;
 export const stateMachineArn = stateMachine.arn;
