@@ -1,0 +1,17 @@
+import * as pulumi from "@pulumi/pulumi";
+export declare const scannerLambdaArn: pulumi.Output<string>;
+export declare const analysisLambdaArn: pulumi.Output<string>;
+export declare const remediationLambdaArn: pulumi.Output<string>;
+export declare const securityHubPublisherArn: pulumi.Output<string>;
+export declare const scanHistoryTableName: pulumi.Output<string>;
+export declare const complianceReportsBucketName: pulumi.Output<string>;
+export declare const accessLogsBucketName: pulumi.Output<string>;
+export declare const criticalAlertTopicArn: pulumi.Output<string>;
+export declare const highAlertTopicArn: pulumi.Output<string>;
+export declare const dashboardUrl: pulumi.Output<string>;
+export declare const stepFunctionArn: pulumi.Output<string>;
+export declare const stepFunctionName: pulumi.Output<string>;
+export declare const parameterStorePrefix = "/compliance/scanner";
+export declare const automationDocuments: pulumi.Output<string>[];
+export declare const kmsKeyId: pulumi.Output<string>;
+export declare const kmsKeyArn: pulumi.Output<string>;
