@@ -58,13 +58,13 @@ class TestMultiRegionDRIntegration:
             return {
                 "primary_vpc_id": "vpc-0123456789abcdef0",
                 "secondary_vpc_id": "vpc-0fedcba987654321",
-                "global_database_id": "payment-global-db-dev",
-                "dynamodb_table_name": "payment-transactions-dev",
+                "global_database_id": "payment-v1-global-dev",
+                "dynamodb_table_name": "payment-v1-sessions-dev",
                 "environment_suffix": "dev",
-                "dns_failover_domain": "payment.example.com",
-                "sns_topic_arn": "arn:aws:sns:us-east-1:123456789012:payment-alerts-dev",
-                "primary_cluster_id": "payment-primary-cluster-dev",
-                "secondary_cluster_id": "payment-secondary-cluster-dev"
+                "dns_failover_domain": "api.payment-dr-dev.internal.test",
+                "sns_topic_arn": "arn:aws:sns:us-east-1:123456789012:payment-v1-alerts-dev",
+                "primary_cluster_id": "payment-v1-primary-dev",
+                "secondary_cluster_id": "payment-v1-secondary-dev"
             }
         
         # Load real deployment outputs
@@ -75,6 +75,13 @@ class TestMultiRegionDRIntegration:
         with open(outputs_file, 'r') as f:
             outputs = json.load(f)
 
+        # Handle nested structure (e.g., {'payment-dr-pr7115': {...}})
+        # If outputs is a dict with a single key that contains another dict, flatten it
+        if outputs and len(outputs) == 1:
+            first_key = list(outputs.keys())[0]
+            if isinstance(outputs[first_key], dict):
+                return outputs[first_key]
+        
         return outputs
 
     @pytest.fixture(scope="class", autouse=True)
@@ -130,12 +137,12 @@ class TestMultiRegionDRIntegration:
             
             # Create mock DynamoDB table
             dynamodb_primary.create_table(
-                TableName='payment-transactions-dev',
+                TableName='payment-v1-sessions-dev',
                 KeySchema=[
-                    {'AttributeName': 'id', 'KeyType': 'HASH'}
+                    {'AttributeName': 'sessionId', 'KeyType': 'HASH'}
                 ],
                 AttributeDefinitions=[
-                    {'AttributeName': 'id', 'AttributeType': 'S'}
+                    {'AttributeName': 'sessionId', 'AttributeType': 'S'}
                 ],
                 BillingMode='PAY_PER_REQUEST',
                 StreamSpecification={
@@ -152,7 +159,7 @@ class TestMultiRegionDRIntegration:
             
             # Create mock Lambda functions
             lambda_primary.create_function(
-                FunctionName='payment-processor-primary-dev',
+                FunctionName='payment-v1-processor-primary-dev',
                 Runtime='python3.11',
                 Role='arn:aws:iam::123456789012:role/lambda-role',
                 Handler='index.handler',
@@ -162,7 +169,7 @@ class TestMultiRegionDRIntegration:
             )
             
             lambda_secondary.create_function(
-                FunctionName='payment-processor-secondary-dev',
+                FunctionName='payment-v1-processor-secondary-dev',
                 Runtime='python3.11',
                 Role='arn:aws:iam::123456789012:role/lambda-role',
                 Handler='index.handler',
@@ -172,7 +179,7 @@ class TestMultiRegionDRIntegration:
             )
             
             lambda_primary.create_function(
-                FunctionName='backup-verification-dev',
+                FunctionName='payment-v1-backup-verification-dev',
                 Runtime='python3.11',
                 Role='arn:aws:iam::123456789012:role/lambda-role',
                 Handler='index.handler',
@@ -181,23 +188,23 @@ class TestMultiRegionDRIntegration:
             )
             
             # Create mock SNS topic
-            sns_response = sns.create_topic(Name='payment-alerts-dev')
+            sns_response = sns.create_topic(Name='payment-v1-alerts-dev')
             deployment_outputs['sns_topic_arn'] = sns_response['TopicArn']
             
             # Create mock Secrets Manager secrets
             secretsmanager_primary.create_secret(
-                Name='payment-primary-db-creds-dev',
+                Name='payment-v2-primary-db-creds-dev',
                 SecretString=json.dumps({'username': 'admin', 'password': 'secret'})
             )
             
             secretsmanager_secondary.create_secret(
-                Name='payment-secondary-db-creds-dev',
+                Name='payment-v2-secondary-db-creds-dev',
                 SecretString=json.dumps({'username': 'admin', 'password': 'secret'})
             )
             
             # Create mock CloudWatch Events rule
             events.put_rule(
-                Name='payment-backup-schedule-dev',
+                Name='payment-v1-backup-schedule-dev',
                 ScheduleExpression='rate(1 day)',
                 State='ENABLED',
                 Description='Backup verification schedule'
@@ -212,9 +219,9 @@ class TestMultiRegionDRIntegration:
             # Create mock RDS Global Database
             try:
                 rds_primary.create_global_cluster(
-                    GlobalClusterIdentifier='payment-global-db-dev',
+                    GlobalClusterIdentifier='payment-v1-global-dev',
                     Engine='aurora-postgresql',
-                    EngineVersion='15.3',
+                    EngineVersion='14.6',
                     StorageEncrypted=True
                 )
             except Exception:
@@ -338,8 +345,8 @@ class TestMultiRegionDRIntegration:
         env_suffix = deployment_outputs.get('environment_suffix', 'dev')
 
         try:
-            # Check primary
-            primary_function_name = f"payment-processor-primary-{env_suffix}"
+            # Check primary - using actual naming convention from tap_stack.py
+            primary_function_name = f"payment-v1-processor-primary-{env_suffix}"
             primary_response = aws_clients['lambda_primary'].get_function(
                 FunctionName=primary_function_name
             )
@@ -347,7 +354,7 @@ class TestMultiRegionDRIntegration:
             assert 'arm64' in primary_response['Configuration']['Architectures']
 
             # Check secondary
-            secondary_function_name = f"payment-processor-secondary-{env_suffix}"
+            secondary_function_name = f"payment-v1-processor-secondary-{env_suffix}"
             secondary_response = aws_clients['lambda_secondary'].get_function(
                 FunctionName=secondary_function_name
             )
@@ -389,15 +396,15 @@ class TestMultiRegionDRIntegration:
         env_suffix = deployment_outputs.get('environment_suffix', 'dev')
 
         try:
-            # Check primary secret
-            primary_secret_name = f"payment-primary-db-creds-{env_suffix}"
+            # Check primary secret - using v2 naming as updated
+            primary_secret_name = f"payment-v2-primary-db-creds-{env_suffix}"
             primary_response = aws_clients['secretsmanager_primary'].describe_secret(
                 SecretId=primary_secret_name
             )
             assert primary_response['Name'] == primary_secret_name
 
-            # Check secondary secret
-            secondary_secret_name = f"payment-secondary-db-creds-{env_suffix}"
+            # Check secondary secret - using v2 naming as updated
+            secondary_secret_name = f"payment-v2-secondary-db-creds-{env_suffix}"
             secondary_response = aws_clients['secretsmanager_secondary'].describe_secret(
                 SecretId=secondary_secret_name
             )
@@ -425,7 +432,7 @@ class TestMultiRegionDRIntegration:
 
         try:
             events_client = aws_clients.get('events', boto3.client('events', region_name='us-east-1'))
-            rule_name = f"payment-backup-schedule-{env_suffix}"
+            rule_name = f"payment-v1-backup-schedule-{env_suffix}"
             response = events_client.describe_rule(Name=rule_name)
             assert response['State'] == 'ENABLED'
             assert 'rate(1 day)' in response['ScheduleExpression']
