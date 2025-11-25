@@ -30,13 +30,17 @@
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": {"Ref": "VpcCIDR"},
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "vpc-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -47,7 +51,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -55,21 +61,36 @@
     "InternetGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "InternetGatewayId": {"Ref": "InternetGateway"},
-        "VpcId": {"Ref": "VPC"}
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        }
       }
     },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.1.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -77,14 +98,25 @@
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.2.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -92,14 +124,25 @@
     "PublicSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.3.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -107,14 +150,25 @@
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.11.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -122,14 +176,25 @@
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.12.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -137,14 +202,25 @@
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.13.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -157,7 +233,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -170,7 +248,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -183,7 +263,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -191,12 +273,21 @@
     "NatGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -204,12 +295,21 @@
     "NatGateway2": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway2EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet2"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -217,12 +317,21 @@
     "NatGateway3": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway3EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet3"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway3EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -230,11 +339,15 @@
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-route-table-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-route-table-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -243,40 +356,60 @@
       "Type": "AWS::EC2::Route",
       "DependsOn": "InternetGatewayAttachment",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
     "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet1"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
       }
     },
     "PublicSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet2"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
       }
     },
     "PublicSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet3"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        }
       }
     },
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-route-table-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-route-table-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -284,26 +417,38 @@
     "DefaultPrivateRoute1": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway1"}
+        "NatGatewayId": {
+          "Ref": "NatGateway1"
+        }
       }
     },
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
-        "SubnetId": {"Ref": "PrivateSubnet1"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        }
       }
     },
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-route-table-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-route-table-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -311,26 +456,38 @@
     "DefaultPrivateRoute2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway2"}
+        "NatGatewayId": {
+          "Ref": "NatGateway2"
+        }
       }
     },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
-        "SubnetId": {"Ref": "PrivateSubnet2"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        }
       }
     },
     "PrivateRouteTable3": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-route-table-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-route-table-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -338,26 +495,38 @@
     "DefaultPrivateRoute3": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable3"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway3"}
+        "NatGatewayId": {
+          "Ref": "NatGateway3"
+        }
       }
     },
     "PrivateSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable3"},
-        "SubnetId": {"Ref": "PrivateSubnet3"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        }
       }
     },
     "NetworkAcl": {
       "Type": "AWS::EC2::NetworkAcl",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "network-acl-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "network-acl-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -365,7 +534,9 @@
     "NetworkAclEntryInboundHTTP": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 100,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -379,7 +550,9 @@
     "NetworkAclEntryInboundHTTPS": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 110,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -393,7 +566,9 @@
     "NetworkAclEntryInbound8080": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 120,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -407,7 +582,9 @@
     "NetworkAclEntryInboundEphemeral": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 130,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -421,7 +598,9 @@
     "NetworkAclEntryOutbound": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 100,
         "Protocol": -1,
         "Egress": true,
@@ -432,9 +611,13 @@
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for Application Load Balancer",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -458,7 +641,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -466,15 +651,25 @@
     "ECSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "ecs-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for ECS tasks",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
-            "FromPort": {"Ref": "ContainerPort"},
-            "ToPort": {"Ref": "ContainerPort"},
-            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"}
+            "FromPort": {
+              "Ref": "ContainerPort"
+            },
+            "ToPort": {
+              "Ref": "ContainerPort"
+            },
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -486,7 +681,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -494,20 +691,34 @@
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {"Fn::Sub": "alb-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "alb-${EnvironmentSuffix}"
+        },
         "Type": "application",
         "Scheme": "internet-facing",
         "IpAddressType": "ipv4",
         "Subnets": [
-          {"Ref": "PublicSubnet1"},
-          {"Ref": "PublicSubnet2"},
-          {"Ref": "PublicSubnet3"}
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          },
+          {
+            "Ref": "PublicSubnet3"
+          }
         ],
-        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -515,11 +726,17 @@
     "BlueTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "blue-tg-${EnvironmentSuffix}"},
-        "Port": {"Ref": "ContainerPort"},
+        "Name": {
+          "Fn::Sub": "blue-tg-${EnvironmentSuffix}"
+        },
+        "Port": {
+          "Ref": "ContainerPort"
+        },
         "Protocol": "HTTP",
         "TargetType": "ip",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "HealthCheckEnabled": true,
         "HealthCheckIntervalSeconds": 15,
         "HealthCheckPath": "/",
@@ -536,7 +753,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "blue-tg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "blue-tg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -544,11 +763,17 @@
     "GreenTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "green-tg-${EnvironmentSuffix}"},
-        "Port": {"Ref": "ContainerPort"},
+        "Name": {
+          "Fn::Sub": "green-tg-${EnvironmentSuffix}"
+        },
+        "Port": {
+          "Ref": "ContainerPort"
+        },
         "Protocol": "HTTP",
         "TargetType": "ip",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "HealthCheckEnabled": true,
         "HealthCheckIntervalSeconds": 15,
         "HealthCheckPath": "/",
@@ -565,7 +790,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "green-tg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "green-tg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -573,7 +800,9 @@
     "ALBListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
-        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
         "Port": 80,
         "Protocol": "HTTP",
         "DefaultActions": [
@@ -582,11 +811,15 @@
             "ForwardConfig": {
               "TargetGroups": [
                 {
-                  "TargetGroupArn": {"Ref": "BlueTargetGroup"},
+                  "TargetGroupArn": {
+                    "Ref": "BlueTargetGroup"
+                  },
                   "Weight": 100
                 },
                 {
-                  "TargetGroupArn": {"Ref": "GreenTargetGroup"},
+                  "TargetGroupArn": {
+                    "Ref": "GreenTargetGroup"
+                  },
                   "Weight": 0
                 }
               ],
@@ -601,7 +834,9 @@
     "ECSCluster": {
       "Type": "AWS::ECS::Cluster",
       "Properties": {
-        "ClusterName": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"},
+        "ClusterName": {
+          "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
+        },
         "ClusterSettings": [
           {
             "Name": "containerInsights",
@@ -611,7 +846,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -619,7 +856,9 @@
     "TaskExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -691,7 +930,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -699,7 +940,9 @@
     "TaskRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -715,7 +958,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -723,38 +968,64 @@
     "LogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/ecs/${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/${EnvironmentSuffix}"
+        },
         "RetentionInDays": 30
       }
     },
     "TaskDefinition": {
       "Type": "AWS::ECS::TaskDefinition",
       "Properties": {
-        "Family": {"Fn::Sub": "task-def-${EnvironmentSuffix}"},
+        "Family": {
+          "Fn::Sub": "task-def-${EnvironmentSuffix}"
+        },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": ["FARGATE"],
+        "RequiresCompatibilities": [
+          "EC2"
+        ],
         "Cpu": "1024",
         "Memory": "2048",
-        "ExecutionRoleArn": {"Fn::GetAtt": ["TaskExecutionRole", "Arn"]},
-        "TaskRoleArn": {"Fn::GetAtt": ["TaskRole", "Arn"]},
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "TaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "TaskRole",
+            "Arn"
+          ]
+        },
         "ContainerDefinitions": [
           {
-            "Name": {"Fn::Sub": "container-${EnvironmentSuffix}"},
-            "Image": {"Ref": "ContainerImage"},
+            "Name": {
+              "Fn::Sub": "container-${EnvironmentSuffix}"
+            },
+            "Image": {
+              "Ref": "ContainerImage"
+            },
             "Cpu": 1024,
             "Memory": 2048,
             "Essential": true,
             "PortMappings": [
               {
-                "ContainerPort": {"Ref": "ContainerPort"},
+                "ContainerPort": {
+                  "Ref": "ContainerPort"
+                },
                 "Protocol": "tcp"
               }
             ],
             "LogConfiguration": {
               "LogDriver": "awslogs",
               "Options": {
-                "awslogs-group": {"Ref": "LogGroup"},
-                "awslogs-region": {"Ref": "AWS::Region"},
+                "awslogs-group": {
+                  "Ref": "LogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
                 "awslogs-stream-prefix": "ecs"
               }
             }
@@ -763,7 +1034,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "task-def-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "task-def-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -771,12 +1044,18 @@
     "ServiceDiscoveryNamespace": {
       "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
       "Properties": {
-        "Name": {"Fn::Sub": "local-${EnvironmentSuffix}"},
-        "Vpc": {"Ref": "VPC"},
+        "Name": {
+          "Fn::Sub": "local-${EnvironmentSuffix}"
+        },
+        "Vpc": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "sd-namespace-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "sd-namespace-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -792,7 +1071,9 @@
               "TTL": 60
             }
           ],
-          "NamespaceId": {"Ref": "ServiceDiscoveryNamespace"}
+          "NamespaceId": {
+            "Ref": "ServiceDiscoveryNamespace"
+          }
         },
         "HealthCheckCustomConfig": {
           "FailureThreshold": 1
@@ -800,7 +1081,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "blue-sd-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "blue-sd-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -816,7 +1099,9 @@
               "TTL": 60
             }
           ],
-          "NamespaceId": {"Ref": "ServiceDiscoveryNamespace"}
+          "NamespaceId": {
+            "Ref": "ServiceDiscoveryNamespace"
+          }
         },
         "HealthCheckCustomConfig": {
           "FailureThreshold": 1
@@ -824,7 +1109,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "green-sd-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "green-sd-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -833,33 +1120,60 @@
       "Type": "AWS::ECS::Service",
       "DependsOn": "ALBListener",
       "Properties": {
-        "ServiceName": {"Fn::Sub": "blue-service-${EnvironmentSuffix}"},
-        "Cluster": {"Ref": "ECSCluster"},
-        "TaskDefinition": {"Ref": "TaskDefinition"},
+        "ServiceName": {
+          "Fn::Sub": "blue-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "TaskDefinition"
+        },
         "DesiredCount": 3,
-        "LaunchType": "FARGATE",
+        "LaunchType": "EC2",
         "PlatformVersion": "1.4.0",
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
-            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
             "Subnets": [
-              {"Ref": "PrivateSubnet1"},
-              {"Ref": "PrivateSubnet2"},
-              {"Ref": "PrivateSubnet3"}
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ]
           }
         },
         "LoadBalancers": [
           {
-            "TargetGroupArn": {"Ref": "BlueTargetGroup"},
-            "ContainerName": {"Fn::Sub": "container-${EnvironmentSuffix}"},
-            "ContainerPort": {"Ref": "ContainerPort"}
+            "TargetGroupArn": {
+              "Ref": "BlueTargetGroup"
+            },
+            "ContainerName": {
+              "Fn::Sub": "container-${EnvironmentSuffix}"
+            },
+            "ContainerPort": {
+              "Ref": "ContainerPort"
+            }
           }
         ],
         "ServiceRegistries": [
           {
-            "RegistryArn": {"Fn::GetAtt": ["BlueServiceDiscoveryService", "Arn"]}
+            "RegistryArn": {
+              "Fn::GetAtt": [
+                "BlueServiceDiscoveryService",
+                "Arn"
+              ]
+            }
           }
         ],
         "DeploymentConfiguration": {
@@ -874,7 +1188,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "blue-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "blue-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -883,33 +1199,60 @@
       "Type": "AWS::ECS::Service",
       "DependsOn": "ALBListener",
       "Properties": {
-        "ServiceName": {"Fn::Sub": "green-service-${EnvironmentSuffix}"},
-        "Cluster": {"Ref": "ECSCluster"},
-        "TaskDefinition": {"Ref": "TaskDefinition"},
+        "ServiceName": {
+          "Fn::Sub": "green-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "TaskDefinition"
+        },
         "DesiredCount": 3,
-        "LaunchType": "FARGATE",
+        "LaunchType": "EC2",
         "PlatformVersion": "1.4.0",
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
-            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
             "Subnets": [
-              {"Ref": "PrivateSubnet1"},
-              {"Ref": "PrivateSubnet2"},
-              {"Ref": "PrivateSubnet3"}
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ]
           }
         },
         "LoadBalancers": [
           {
-            "TargetGroupArn": {"Ref": "GreenTargetGroup"},
-            "ContainerName": {"Fn::Sub": "container-${EnvironmentSuffix}"},
-            "ContainerPort": {"Ref": "ContainerPort"}
+            "TargetGroupArn": {
+              "Ref": "GreenTargetGroup"
+            },
+            "ContainerName": {
+              "Fn::Sub": "container-${EnvironmentSuffix}"
+            },
+            "ContainerPort": {
+              "Ref": "ContainerPort"
+            }
           }
         ],
         "ServiceRegistries": [
           {
-            "RegistryArn": {"Fn::GetAtt": ["GreenServiceDiscoveryService", "Arn"]}
+            "RegistryArn": {
+              "Fn::GetAtt": [
+                "GreenServiceDiscoveryService",
+                "Arn"
+              ]
+            }
           }
         ],
         "DeploymentConfiguration": {
@@ -924,7 +1267,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "green-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "green-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -947,9 +1292,13 @@
     "BlueServiceScalingPolicyCPU": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "blue-cpu-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "blue-cpu-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "BlueServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "BlueServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 70.0,
           "PredefinedMetricSpecification": {
@@ -963,9 +1312,13 @@
     "BlueServiceScalingPolicyMemory": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "blue-memory-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "blue-memory-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "BlueServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "BlueServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 80.0,
           "PredefinedMetricSpecification": {
@@ -994,9 +1347,13 @@
     "GreenServiceScalingPolicyCPU": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "green-cpu-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "green-cpu-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "GreenServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "GreenServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 70.0,
           "PredefinedMetricSpecification": {
@@ -1010,9 +1367,13 @@
     "GreenServiceScalingPolicyMemory": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "green-memory-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "green-memory-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "GreenServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "GreenServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 80.0,
           "PredefinedMetricSpecification": {
@@ -1026,12 +1387,16 @@
     "SNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "ecs-alerts-${EnvironmentSuffix}"},
+        "TopicName": {
+          "Fn::Sub": "ecs-alerts-${EnvironmentSuffix}"
+        },
         "DisplayName": "ECS Health Alerts",
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "sns-topic-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "sns-topic-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -1039,7 +1404,9 @@
     "BlueUnhealthyTargetAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "blue-unhealthy-targets-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "blue-unhealthy-targets-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when 2 or more tasks fail health checks in blue environment",
         "MetricName": "UnHealthyHostCount",
         "Namespace": "AWS/ApplicationELB",
@@ -1051,21 +1418,37 @@
         "Dimensions": [
           {
             "Name": "TargetGroup",
-            "Value": {"Fn::GetAtt": ["BlueTargetGroup", "TargetGroupFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "BlueTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
           },
           {
             "Name": "LoadBalancer",
-            "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "LoadBalancerFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ApplicationLoadBalancer",
+                "LoadBalancerFullName"
+              ]
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     },
     "GreenUnhealthyTargetAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "green-unhealthy-targets-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "green-unhealthy-targets-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when 2 or more tasks fail health checks in green environment",
         "MetricName": "UnHealthyHostCount",
         "Namespace": "AWS/ApplicationELB",
@@ -1077,14 +1460,28 @@
         "Dimensions": [
           {
             "Name": "TargetGroup",
-            "Value": {"Fn::GetAtt": ["GreenTargetGroup", "TargetGroupFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "GreenTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
           },
           {
             "Name": "LoadBalancer",
-            "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "LoadBalancerFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ApplicationLoadBalancer",
+                "LoadBalancerFullName"
+              ]
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     }
@@ -1092,65 +1489,110 @@
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "ECSClusterName": {
       "Description": "ECS Cluster Name",
-      "Value": {"Ref": "ECSCluster"},
+      "Value": {
+        "Ref": "ECSCluster"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ECSCluster"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ECSCluster"
+        }
       }
     },
     "LoadBalancerDNS": {
       "Description": "Application Load Balancer DNS Name",
-      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"
+        }
       }
     },
     "BlueTargetGroupArn": {
       "Description": "Blue Target Group ARN",
-      "Value": {"Ref": "BlueTargetGroup"},
+      "Value": {
+        "Ref": "BlueTargetGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-BlueTargetGroup"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueTargetGroup"
+        }
       }
     },
     "GreenTargetGroupArn": {
       "Description": "Green Target Group ARN",
-      "Value": {"Ref": "GreenTargetGroup"},
+      "Value": {
+        "Ref": "GreenTargetGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-GreenTargetGroup"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenTargetGroup"
+        }
       }
     },
     "BlueServiceName": {
       "Description": "Blue ECS Service Name",
-      "Value": {"Fn::GetAtt": ["BlueECSService", "Name"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "BlueECSService",
+          "Name"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-BlueService"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueService"
+        }
       }
     },
     "GreenServiceName": {
       "Description": "Green ECS Service Name",
-      "Value": {"Fn::GetAtt": ["GreenECSService", "Name"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "GreenECSService",
+          "Name"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-GreenService"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenService"
+        }
       }
     },
     "SNSTopicArn": {
       "Description": "SNS Topic ARN for alerts",
-      "Value": {"Ref": "SNSTopic"},
+      "Value": {
+        "Ref": "SNSTopic"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SNSTopic"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopic"
+        }
       }
     },
     "ServiceDiscoveryNamespace": {
       "Description": "Service Discovery Namespace",
-      "Value": {"Ref": "ServiceDiscoveryNamespace"},
+      "Value": {
+        "Ref": "ServiceDiscoveryNamespace"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SDNamespace"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SDNamespace"
+        }
       }
     }
   }
