@@ -11,9 +11,9 @@ from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfigurationRuleTransition,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfigurationA,
-    S3BucketReplicationConfigurationRuleA,
-    S3BucketReplicationConfigurationRuleDestinationA,
+    S3BucketReplicationConfiguration,
+    S3BucketReplicationConfigurationRule,
+    S3BucketReplicationConfigurationRuleDestination,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
@@ -739,17 +739,17 @@ class TapStack(TerraformStack):
         )
 
         # Configure replication
-        S3BucketReplicationConfigurationA(
+        S3BucketReplicationConfiguration(
             self,
             "audit_bucket_replication",
             bucket=self.audit_bucket.id,
             role=self.s3_replication_role.arn,
             rule=[
-                S3BucketReplicationConfigurationRuleA(
+                S3BucketReplicationConfigurationRule(
                     id="replicate-all",
                     status="Enabled",
                     priority=1,
-                    destination=S3BucketReplicationConfigurationRuleDestinationA(
+                    destination=S3BucketReplicationConfigurationRuleDestination(
                         bucket=self.audit_bucket_replica.arn,
                         storage_class="STANDARD",
                     ),
