@@ -1,0 +1,3 @@
+name: fraud-detection-pipeline
+runtime: nodejs
+description: Serverless fraud detection pipeline with EventBridge, Lambda, DynamoDB, and SNS

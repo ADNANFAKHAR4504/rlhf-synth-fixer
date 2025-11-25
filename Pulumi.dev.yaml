@@ -1,0 +1,5 @@
+config:
+  fraud-detection-pipeline:environmentSuffix: synthp0k8w0t1
+  fraud-detection-pipeline:emailAddress: alerts@example.com
+  aws:region: us-east-1
+encryptionsalt: v1:op8m0it2Fk8=:v1:9uOmPILAlTTHaXkO:5oCHF/LAoDCMHd+lnlx0+sZhoEpDzw==
