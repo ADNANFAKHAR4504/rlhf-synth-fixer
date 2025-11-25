@@ -34,15 +34,22 @@ export class CloudWatchComponent extends pulumi.ComponentResource {
             args.rdsClusterId,
             args.albArn,
           ])
-          .apply(([_clusterName, _serviceName, clusterId, _albArn]) =>
-            JSON.stringify({
+          .apply(([_clusterName, _serviceName, clusterId, albArn]) => {
+            // Extract ALB ARN suffix for LoadBalancer dimension
+            // ARN format: arn:aws:elasticloadbalancing:region:account:loadbalancer/app/name/id
+            // Dimension value should be: app/name/id (everything after 'loadbalancer/')
+            const albArnSuffix = albArn.includes('loadbalancer/')
+              ? albArn.split('loadbalancer/')[1]
+              : albArn.split('/').slice(-3).join('/');
+
+            return JSON.stringify({
               widgets: [
                 {
                   type: 'metric',
                   properties: {
                     metrics: [
-                      ['AWS/ECS', 'CPUUtilization', { stat: 'Average' }],
-                      ['.', 'MemoryUtilization', { stat: 'Average' }],
+                      ['AWS/ECS', 'CPUUtilization'],
+                      ['.', 'MemoryUtilization'],
                     ],
                     period: 300,
                     stat: 'Average',
@@ -63,18 +70,31 @@ export class CloudWatchComponent extends pulumi.ComponentResource {
                       [
                         'AWS/RDS',
                         'CPUUtilization',
-                        { stat: 'Average', DBClusterIdentifier: clusterId },
-                      ],
-                      [
-                        '.',
-                        'DatabaseConnections',
-                        { stat: 'Average', DBClusterIdentifier: clusterId },
+                        'DBClusterIdentifier',
+                        clusterId,
                       ],
                     ],
                     period: 300,
                     stat: 'Average',
                     region: aws.config.region,
-                    title: 'RDS Cluster Metrics',
+                    title: 'RDS CPU Utilization',
+                  },
+                },
+                {
+                  type: 'metric',
+                  properties: {
+                    metrics: [
+                      [
+                        'AWS/RDS',
+                        'DatabaseConnections',
+                        'DBClusterIdentifier',
+                        clusterId,
+                      ],
+                    ],
+                    period: 300,
+                    stat: 'Average',
+                    region: aws.config.region,
+                    title: 'RDS Database Connections',
                   },
                 },
                 {
@@ -84,10 +104,10 @@ export class CloudWatchComponent extends pulumi.ComponentResource {
                       [
                         'AWS/ApplicationELB',
                         'TargetResponseTime',
-                        { stat: 'Average' },
+                        'LoadBalancer',
+                        albArnSuffix,
                       ],
-                      ['.', 'RequestCount', { stat: 'Sum' }],
-                      ['.', 'HTTPCode_Target_5XX_Count', { stat: 'Sum' }],
+                      ['.', 'RequestCount', '.', '.'],
                     ],
                     period: 300,
                     stat: 'Average',
@@ -95,9 +115,26 @@ export class CloudWatchComponent extends pulumi.ComponentResource {
                     title: 'ALB Metrics',
                   },
                 },
+                {
+                  type: 'metric',
+                  properties: {
+                    metrics: [
+                      [
+                        'AWS/ApplicationELB',
+                        'HTTPCode_Target_5XX_Count',
+                        'LoadBalancer',
+                        albArnSuffix,
+                      ],
+                    ],
+                    period: 300,
+                    stat: 'Sum',
+                    region: aws.config.region,
+                    title: 'ALB Error Metrics',
+                  },
+                },
               ],
-            })
-          ),
+            });
+          }),
       },
       defaultResourceOptions
     );
