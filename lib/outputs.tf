@@ -184,32 +184,32 @@ output "availability_zones" {
 output "deployment_summary" {
   description = "Comprehensive deployment summary for the region"
   value = {
-    region     = var.aws_region
-    vpc_id     = aws_vpc.main.id
-    vpc_cidr   = aws_vpc.main.cidr_block
-    
+    region   = var.aws_region
+    vpc_id   = aws_vpc.main.id
+    vpc_cidr = aws_vpc.main.cidr_block
+
     load_balancer = {
       dns_name = aws_lb.main.dns_name
       endpoint = "http://${aws_lb.main.dns_name}"
     }
-    
+
     database = {
       cluster_endpoint = aws_rds_cluster.main.endpoint
       reader_endpoint  = aws_rds_cluster.main.reader_endpoint
       database_name    = aws_rds_cluster.main.database_name
-      port            = aws_rds_cluster.main.port
-      secret_name     = aws_secretsmanager_secret.db_credentials.name
+      port             = aws_rds_cluster.main.port
+      secret_name      = aws_secretsmanager_secret.db_credentials.name
     }
-    
+
     storage = {
       bucket_name = aws_s3_bucket.main.id
     }
-    
+
     compute = {
       autoscaling_group = aws_autoscaling_group.main.name
-      min_size         = aws_autoscaling_group.main.min_size
-      max_size         = aws_autoscaling_group.main.max_size
-      desired_capacity = aws_autoscaling_group.main.desired_capacity
+      min_size          = aws_autoscaling_group.main.min_size
+      max_size          = aws_autoscaling_group.main.max_size
+      desired_capacity  = aws_autoscaling_group.main.desired_capacity
     }
   }
 }

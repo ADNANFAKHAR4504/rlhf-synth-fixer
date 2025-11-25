@@ -52,8 +52,8 @@ locals {
 
   # Current region configuration
   current_region_config = local.region_config[var.aws_region]
-  vpc_cidr             = local.current_region_config.vpc_cidr
-  cidr_offset          = local.current_region_config.cidr_offset
+  vpc_cidr              = local.current_region_config.vpc_cidr
+  cidr_offset           = local.current_region_config.cidr_offset
 
   # Calculate subnet CIDRs using Terraform functions
   # Public subnets: 10.X.1.0/24, 10.X.2.0/24, 10.X.3.0/24
@@ -556,10 +556,10 @@ HTML
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -658,8 +658,8 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 
 # Generate random password for RDS
 resource "random_password" "db_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
@@ -737,12 +737,12 @@ resource "aws_db_parameter_group" "main" {
 
 # Aurora PostgreSQL Cluster
 resource "aws_rds_cluster" "main" {
-  cluster_identifier     = "${local.name_prefix}-aurora-cluster"
-  engine                 = "aurora-postgresql"
-  engine_version         = "15.4"
-  database_name          = "trading"
-  master_username        = "tradingadmin"
-  master_password        = random_password.db_password.result
+  cluster_identifier = "${local.name_prefix}-aurora-cluster"
+  engine             = "aurora-postgresql"
+  engine_version     = "15.4"
+  database_name      = "trading"
+  master_username    = "tradingadmin"
+  master_password    = random_password.db_password.result
 
   db_subnet_group_name            = aws_db_subnet_group.main.name
   vpc_security_group_ids          = [aws_security_group.rds.id]
@@ -787,8 +787,8 @@ resource "aws_rds_cluster_instance" "main" {
   db_parameter_group_name = aws_db_parameter_group.main.name
 
   # Performance Insights
-  performance_insights_enabled    = true
-  performance_insights_kms_key_id = aws_kms_key.rds.arn
+  performance_insights_enabled          = true
+  performance_insights_kms_key_id       = aws_kms_key.rds.arn
   performance_insights_retention_period = 7
 
   # Enhanced Monitoring
