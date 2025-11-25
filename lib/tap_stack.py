@@ -258,15 +258,15 @@ class TapStack(Stack):
         parameter_group = rds.ParameterGroup(
             self, "PostgresParameterGroup",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14_7
+                version=rds.PostgresEngineVersion.VER_14
             ),
             parameters={
                 "shared_preload_libraries": "pg_stat_statements",
                 "log_statement": "all",
-                "log_duration": "on",
+                "log_min_duration_statement": "1000",  # Log queries taking > 1 second
                 "max_connections": "500",
                 "random_page_cost": "1.1",
-                "effective_cache_size": "45GB"
+                "effective_cache_size": "5898240"  # 45GB in 8kB pages
             }
         )
 
@@ -285,7 +285,7 @@ class TapStack(Stack):
         primary = rds.DatabaseInstance(
             self, "PostgresPrimary",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14_7
+                version=rds.PostgresEngineVersion.VER_14
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.R6G,
