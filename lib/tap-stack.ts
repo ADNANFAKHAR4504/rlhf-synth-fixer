@@ -1,8 +1,10 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackArgs {
   environmentSuffix: string;
+  tags?: { [key: string]: string };
+  region?: string;
 }
 
 export class TapStack extends pulumi.ComponentResource {

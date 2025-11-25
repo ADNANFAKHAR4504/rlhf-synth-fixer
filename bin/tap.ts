@@ -53,39 +53,42 @@ const stack = new TapStack(
   { provider }
 );
 
-// Export stack outputs
+// Export stack outputs (only outputs that exist in the current TapStack)
 export const secretArn = stack.secretArn;
 export const vpcId = stack.vpcId;
-export const vpcCidr = stack.vpcCidr;
-export const internetGatewayId = stack.internetGatewayId;
-export const publicSubnetIds = stack.publicSubnetIds;
-export const privateSubnetIds = stack.privateSubnetIds;
-export const databaseSubnetIds = stack.databaseSubnetIds;
-export const natInstanceIds = stack.natInstanceIds;
-export const natInstancePrivateIps = stack.natInstancePrivateIps;
-export const webSecurityGroupId = stack.webSecurityGroupId;
-export const appSecurityGroupId = stack.appSecurityGroupId;
-export const databaseSecurityGroupId = stack.databaseSecurityGroupId;
-export const flowLogsBucketName = stack.flowLogsBucketName;
-export const flowLogsLogGroupName = stack.flowLogsLogGroupName;
-export const s3EndpointId = stack.s3EndpointId;
-
-// EKS Cluster outputs
-export const clusterName = stack.clusterName;
-export const clusterVersion = stack.clusterVersion;
 export const clusterEndpoint = stack.clusterEndpoint;
-export const oidcIssuerUrl = stack.oidcIssuerUrl;
-export const kubeconfig = stack.kubeconfig;
 
-// KMS outputs
-export const kmsKeyId = stack.kmsKeyId;
-export const kmsKeyAliasName = stack.kmsKeyAliasName;
-export const kmsKeyArn = stack.kmsKeyArn;
+// The following exports are from a more comprehensive infrastructure template
+// and should be added as the corresponding resources are implemented in tap-stack.ts:
+// export const vpcCidr = stack.vpcCidr;
+// export const internetGatewayId = stack.internetGatewayId;
+// export const publicSubnetIds = stack.publicSubnetIds;
+// export const privateSubnetIds = stack.privateSubnetIds;
+// export const databaseSubnetIds = stack.databaseSubnetIds;
+// export const natInstanceIds = stack.natInstanceIds;
+// export const natInstancePrivateIps = stack.natInstancePrivateIps;
+// export const webSecurityGroupId = stack.webSecurityGroupId;
+// export const appSecurityGroupId = stack.appSecurityGroupId;
+// export const databaseSecurityGroupId = stack.databaseSecurityGroupId;
+// export const flowLogsBucketName = stack.flowLogsBucketName;
+// export const flowLogsLogGroupName = stack.flowLogsLogGroupName;
+// export const s3EndpointId = stack.s3EndpointId;
 
-// Route outputs
-export const publicRouteId = stack.publicRouteId;
+// EKS Cluster outputs (to be implemented):
+// export const clusterName = stack.clusterName;
+// export const clusterVersion = stack.clusterVersion;
+// export const oidcIssuerUrl = stack.oidcIssuerUrl;
+// export const kubeconfig = stack.kubeconfig;
 
-// Addon outputs
-export const coreDnsAddonVersion = stack.coreDnsAddonVersion;
-export const kubeProxyAddonVersion = stack.kubeProxyAddonVersion;
-export const vpcCniAddonVersion = stack.vpcCniAddonVersion;
+// KMS outputs (to be implemented):
+// export const kmsKeyId = stack.kmsKeyId;
+// export const kmsKeyAliasName = stack.kmsKeyAliasName;
+// export const kmsKeyArn = stack.kmsKeyArn;
+
+// Route outputs (to be implemented):
+// export const publicRouteId = stack.publicRouteId;
+
+// Addon outputs (to be implemented):
+// export const coreDnsAddonVersion = stack.coreDnsAddonVersion;
+// export const kubeProxyAddonVersion = stack.kubeProxyAddonVersion;
+// export const vpcCniAddonVersion = stack.vpcCniAddonVersion;
