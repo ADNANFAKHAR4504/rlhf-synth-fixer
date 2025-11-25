@@ -4,21 +4,21 @@ from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
-    S3BucketLifecycleConfigurationRuleA,
-    S3BucketLifecycleConfigurationRuleTransitionA,
+    S3BucketLifecycleConfigurationRule,
+    S3BucketLifecycleConfigurationRuleTransition,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
     S3BucketReplicationConfiguration,
-    S3BucketReplicationConfigurationRuleA,
-    S3BucketReplicationConfigurationRuleDestinationA,
+    S3BucketReplicationConfigurationRule,
+    S3BucketReplicationConfigurationRuleDestination,
 )
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfiguration,
-    S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA,
+    S3BucketServerSideEncryptionConfigurationRule,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault,
 )
 from cdktf_cdktf_provider_aws.vpc import Vpc, DataAwsVpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -629,7 +629,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning
-        S3BucketVersioningA(
+        S3BucketVersioning(
             self,
             "audit_bucket_versioning",
             bucket=self.audit_bucket.id,
@@ -644,8 +644,8 @@ class TapStack(TerraformStack):
             "audit_bucket_encryption",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                S3BucketServerSideEncryptionConfigurationRule(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
                         sse_algorithm="AES256"
                     ),
                     bucket_key_enabled=True,
@@ -659,11 +659,11 @@ class TapStack(TerraformStack):
             "audit_bucket_lifecycle",
             bucket=self.audit_bucket.id,
             rule=[
-                S3BucketLifecycleConfigurationRuleA(
+                S3BucketLifecycleConfigurationRule(
                     id="archive-old-logs",
                     status="Enabled",
                     transition=[
-                        S3BucketLifecycleConfigurationRuleTransitionA(
+                        S3BucketLifecycleConfigurationRuleTransition(
                             days=90,
                             storage_class="GLACIER"
                         )
@@ -687,7 +687,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning on replica
-        S3BucketVersioningA(
+        S3BucketVersioning(
             self,
             "audit_bucket_replica_versioning",
             provider=self.provider_secondary,
@@ -745,11 +745,11 @@ class TapStack(TerraformStack):
             bucket=self.audit_bucket.id,
             role=self.s3_replication_role.arn,
             rule=[
-                S3BucketReplicationConfigurationRuleA(
+                S3BucketReplicationConfigurationRule(
                     id="replicate-all",
                     status="Enabled",
                     priority=1,
-                    destination=S3BucketReplicationConfigurationRuleDestinationA(
+                    destination=S3BucketReplicationConfigurationRuleDestination(
                         bucket=self.audit_bucket_replica.arn,
                         storage_class="STANDARD",
                     ),
