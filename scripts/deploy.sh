@@ -272,16 +272,6 @@ elif [ "$PLATFORM" = "tf" ]; then
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
   
-  # Pass ENVIRONMENT_SUFFIX as stack_id to Terraform for unique resource naming
-  # This enables parallel deployments without resource name conflicts
-  if [ "$ENVIRONMENT_SUFFIX" != "dev" ]; then
-    export TF_VAR_stack_id="${ENVIRONMENT_SUFFIX}"
-    echo "Setting stack_id for parallel deployment: $TF_VAR_stack_id"
-  else
-    export TF_VAR_stack_id=""
-    echo "Using default stack naming (no stack_id)"
-  fi
-  
   cd lib
   
   # Determine var-file to use based on metadata.json
