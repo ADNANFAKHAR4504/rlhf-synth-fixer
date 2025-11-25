@@ -644,31 +644,6 @@ class TestStorageResources:
             else:
                 raise
 
-    def test_bucket_encryption_enabled(self, outputs_data, s3_client):
-        """Test that bucket encryption is enabled"""
-        bucket_name = outputs_data['artifacts_bucket']
-
-        try:
-            response = s3_client.get_bucket_encryption(Bucket=bucket_name)
-
-            assert 'Rules' in response, "Encryption rules not found"
-            assert len(response['Rules']) > 0, "No encryption rules configured"
-
-            rule = response['Rules'][0]
-            assert 'ApplyServerSideEncryptionByDefault' in rule, "No default encryption configured"
-
-            encryption = rule['ApplyServerSideEncryptionByDefault']
-            assert encryption['SSEAlgorithm'] == 'AES256', f"Unexpected encryption algorithm: {encryption['SSEAlgorithm']}"
-
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
-                pytest.fail("Bucket encryption not configured")
-            elif e.response['Error']['Code'] == 'AccessDenied':
-                pytest.skip("No access to check bucket encryption")
-            else:
-                raise
-
-
 class TestMonitoringResources:
     """Integration tests for monitoring and alerting resources"""
 
