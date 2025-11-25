@@ -55,6 +55,7 @@ def handle_post(event):
     transaction_id = body['transaction_id']
     amount = float(body['amount'])
     country = body.get('country', 'US')
+    timestamp = body.get('timestamp', '2024-01-01T00:00:00Z')
     
     # Calculate fraud risk score
     risk_score = calculate_fraud_score(amount, country)
@@ -63,7 +64,7 @@ def handle_post(event):
     # Store transaction in DynamoDB
     transaction = {
         'transaction_id': transaction_id,
-        'timestamp': body.get('timestamp', '2024-01-01T00:00:00Z'),
+        'timestamp': timestamp,
         'amount': Decimal(str(amount)),
         'currency': body.get('currency', 'USD'),
         'merchant': body.get('merchant', 'unknown'),
@@ -85,7 +86,10 @@ def handle_post(event):
     if s3_location:
         # Update transaction with archive info
         table.update_item(
-            Key={'transaction_id': transaction_id},
+            Key={
+                'transaction_id': transaction_id,
+                'timestamp': timestamp
+            },
             UpdateExpression='SET archived = :archived, s3_location = :location',
             ExpressionAttributeValues={
                 ':archived': True,
@@ -118,7 +122,7 @@ def calculate_fraud_score(amount, country):
     # High amount = higher risk
     if amount > 1000:
         risk_score += 0.5
-    if amount > 5000:
+    if amount >= 5000:  # Changed to >= to include 5000
         risk_score += 0.3
     
     # International transaction = higher risk
@@ -169,15 +173,22 @@ def handle_get(event):
     """Handle GET /transactions/{id} - retrieve transaction"""
     transaction_id = event['pathParameters']['id']
     
-    response = table.get_item(Key={'transaction_id': transaction_id})
+    # Query by partition key since we don't have the sort key (timestamp)
+    response = table.query(
+        KeyConditionExpression='transaction_id = :tid',
+        ExpressionAttributeValues={
+            ':tid': transaction_id
+        },
+        Limit=1  # Get the most recent transaction
+    )
     
-    if 'Item' not in response:
+    if 'Items' not in response or len(response['Items']) == 0:
         return {
             'statusCode': 404,
             'body': json.dumps({'error': 'Transaction not found'})
         }
     
-    transaction = response['Item']
+    transaction = response['Items'][0]
     
     response_data = {
         'transaction_id': transaction['transaction_id'],
