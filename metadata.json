@@ -1,0 +1,30 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-01-26T00:00:00-08:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "z4a8u2v3",
+  "aws_services": [
+    "Application Load Balancer",
+    "Aurora",
+    "CloudFront",
+    "CloudWatch",
+    "EC2",
+    "EC2 Auto Scaling",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "RDS",
+    "S3",
+    "VPC",
+    "WAF"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8
+}
