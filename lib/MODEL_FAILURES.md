@@ -4,7 +4,7 @@
 
 **Issue:** The MODEL_RESPONSE specified `rds.AuroraMysqlEngineVersion.VER_3_05_2` which does not exist in AWS.
 
-**Fix:** Changed to `rds.AuroraMysqlEngineVersion.VER_3_05_0` which is a valid and available Aurora MySQL engine version across all AWS regions.
+**Fix:** Changed to `rds.AuroraMysqlEngineVersion.VER_3_04_1` which is a stable, widely available Aurora MySQL engine version across all AWS regions.
 
 **Impact:** Prevents CREATE_FAILED errors for AWS::RDS::DBCluster resources during CloudFormation deployment.
 
