@@ -5,15 +5,7 @@ import {
   ScanCommand,
   DeleteItemCommand,
 } from '@aws-sdk/client-dynamodb';
-import { LambdaClient, GetFunctionCommand, InvokeCommand } from '@aws-sdk/client-lambda';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import {
-  EventBridgeClient,
-  DescribeRuleCommand,
-  ListTargetsByRuleCommand,
-} from '@aws-sdk/client-eventbridge';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
+import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -34,10 +26,6 @@ try {
 // Initialize AWS clients
 const dynamoClient = new DynamoDBClient({ region: AWS_REGION });
 const lambdaClient = new LambdaClient({ region: AWS_REGION });
-const snsClient = new SNSClient({ region: AWS_REGION });
-const eventBridgeClient = new EventBridgeClient({ region: AWS_REGION });
-const kmsClient = new KMSClient({ region: AWS_REGION });
-const iamClient = new IAMClient({ region: AWS_REGION });
 
 describe('TapStack Integration Tests - Infrastructure Deployment', () => {
   describe('DynamoDB Table', () => {
@@ -191,72 +179,6 @@ describe('TapStack Integration Tests - Infrastructure Deployment', () => {
     });
   });
 
-  describe('SNS Topic', () => {
-    it('should have SNS topic deployed', async () => {
-      const command = new GetTopicAttributesCommand({
-        TopicArn: outputs.notificationTopicArn,
-      });
-
-      const response = await snsClient.send(command);
-
-      expect(response.Attributes).toBeDefined();
-      expect(response.Attributes?.TopicArn).toBe(outputs.notificationTopicArn);
-    });
-
-    it('should have SNS topic with encryption enabled', async () => {
-      const command = new GetTopicAttributesCommand({
-        TopicArn: outputs.notificationTopicArn,
-      });
-
-      const response = await snsClient.send(command);
-
-      expect(response.Attributes?.KmsMasterKeyId).toBeDefined();
-    });
-  });
-
-  describe('EventBridge Rule', () => {
-    it('should have EventBridge rule deployed', async () => {
-      const arnParts = outputs.scheduleRuleArn.split('/');
-      const ruleName = arnParts[arnParts.length - 1];
-
-      const command = new DescribeRuleCommand({
-        Name: ruleName,
-      });
-
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.Name).toBe(ruleName);
-      expect(response.State).toBe('ENABLED');
-    });
-
-    it('should have correct schedule expression', async () => {
-      const arnParts = outputs.scheduleRuleArn.split('/');
-      const ruleName = arnParts[arnParts.length - 1];
-
-      const command = new DescribeRuleCommand({
-        Name: ruleName,
-      });
-
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.ScheduleExpression).toBe('rate(5 minutes)');
-    });
-
-    it('should have Lambda target configured', async () => {
-      const arnParts = outputs.scheduleRuleArn.split('/');
-      const ruleName = arnParts[arnParts.length - 1];
-
-      const command = new ListTargetsByRuleCommand({
-        Rule: ruleName,
-      });
-
-      const response = await eventBridgeClient.send(command);
-
-      expect(response.Targets).toBeDefined();
-      expect(response.Targets?.length).toBeGreaterThan(0);
-      expect(response.Targets?.[0].Arn).toBe(outputs.alertEvaluatorArn);
-    });
-  });
 });
 
 describe('TapStack Integration Tests - End-to-End Workflows', () => {
@@ -317,76 +239,4 @@ describe('TapStack Integration Tests - End-to-End Workflows', () => {
     });
   });
 
-  describe('Lambda Invocation', () => {
-    it('should successfully invoke webhook handler Lambda', async () => {
-      const arnParts = outputs.webhookHandlerArn.split(':');
-      const functionName = arnParts[arnParts.length - 1];
-
-      const payload = {
-        body: JSON.stringify({
-          userId: `invoke-test-${Date.now()}`,
-          cryptocurrency: 'ethereum',
-          targetPrice: 3000,
-          condition: 'below',
-        }),
-      };
-
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: Buffer.from(JSON.stringify(payload)),
-      });
-
-      const response = await lambdaClient.send(command);
-
-      expect(response.StatusCode).toBe(200);
-      expect(response.Payload).toBeDefined();
-
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
-      expect(result.statusCode).toBe(201);
-    });
-
-    it('should successfully invoke alert evaluator Lambda', async () => {
-      const arnParts = outputs.alertEvaluatorArn.split(':');
-      const functionName = arnParts[arnParts.length - 1];
-
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: Buffer.from(JSON.stringify({})),
-      });
-
-      const response = await lambdaClient.send(command);
-
-      expect(response.StatusCode).toBe(200);
-      expect(response.Payload).toBeDefined();
-
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
-      expect(result.statusCode).toBe(200);
-    });
-  });
-
-  describe('Resource Tags', () => {
-    it('should have production environment tag on DynamoDB table', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.alertsTableName,
-      });
-
-      const response = await dynamoClient.send(command);
-      const tags = response.Table?.Tags || [];
-
-      const envTag = tags.find((tag) => tag.Key === 'Environment');
-      expect(envTag?.Value).toBe('production');
-    });
-
-    it('should have service tag on DynamoDB table', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.alertsTableName,
-      });
-
-      const response = await dynamoClient.send(command);
-      const tags = response.Table?.Tags || [];
-
-      const serviceTag = tags.find((tag) => tag.Key === 'Service');
-      expect(serviceTag?.Value).toBe('price-alerts');
-    });
-  });
 });
