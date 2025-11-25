@@ -14,7 +14,10 @@ export function validateTemplateStructure(template: any): boolean {
   return true;
 }
 
-export function getResourcesByType(template: any, resourceType: string): string[] {
+export function getResourcesByType(
+  template: any,
+  resourceType: string
+): string[] {
   const resources: string[] = [];
   for (const [name, resource] of Object.entries(template.Resources)) {
     if ((resource as any).Type === resourceType) {
@@ -24,7 +27,10 @@ export function getResourcesByType(template: any, resourceType: string): string[
   return resources;
 }
 
-export function validateResourceTags(resource: any, requiredTags: string[]): boolean {
+export function validateResourceTags(
+  resource: any,
+  requiredTags: string[]
+): boolean {
   if (!resource.Properties || !resource.Properties.Tags) {
     return false;
   }
@@ -66,7 +72,10 @@ export function countResourcesByType(template: any): Record<string, number> {
   return counts;
 }
 
-export function validateDeletionPolicies(template: any): { hasRetain: boolean; resources: string[] } {
+export function validateDeletionPolicies(template: any): {
+  hasRetain: boolean;
+  resources: string[];
+} {
   const retainResources: string[] = [];
 
   for (const [name, resource] of Object.entries(template.Resources)) {
@@ -77,11 +86,14 @@ export function validateDeletionPolicies(template: any): { hasRetain: boolean; r
 
   return {
     hasRetain: retainResources.length > 0,
-    resources: retainResources
+    resources: retainResources,
   };
 }
 
-export function validateEncryption(template: any): { encrypted: string[]; unencrypted: string[] } {
+export function validateEncryption(template: any): {
+  encrypted: string[];
+  unencrypted: string[];
+} {
   const encrypted: string[] = [];
   const unencrypted: string[] = [];
 
@@ -106,18 +118,24 @@ export function validateEncryption(template: any): { encrypted: string[]; unencr
   return { encrypted, unencrypted };
 }
 
-export function validateVPCConfiguration(template: any): { valid: boolean; issues: string[] } {
+export function validateVPCConfiguration(template: any): {
+  valid: boolean;
+  issues: string[];
+} {
   const issues: string[] = [];
 
   // Check VPC exists
-  const vpc = Object.values(template.Resources).find((r: any) => r.Type === 'AWS::EC2::VPC');
+  const vpc = Object.values(template.Resources).find(
+    (r: any) => r.Type === 'AWS::EC2::VPC'
+  );
   if (!vpc) {
     issues.push('No VPC resource found');
   }
 
   // Check public subnets
   const publicSubnets = Object.values(template.Resources).filter(
-    (r: any) => r.Type === 'AWS::EC2::Subnet' && r.Properties.MapPublicIpOnLaunch === true
+    (r: any) =>
+      r.Type === 'AWS::EC2::Subnet' && r.Properties.MapPublicIpOnLaunch === true
   );
   if (publicSubnets.length < 2) {
     issues.push('Less than 2 public subnets found');
@@ -125,7 +143,8 @@ export function validateVPCConfiguration(template: any): { valid: boolean; issue
 
   // Check private subnets
   const privateSubnets = Object.values(template.Resources).filter(
-    (r: any) => r.Type === 'AWS::EC2::Subnet' && r.Properties.MapPublicIpOnLaunch !== true
+    (r: any) =>
+      r.Type === 'AWS::EC2::Subnet' && r.Properties.MapPublicIpOnLaunch !== true
   );
   if (privateSubnets.length < 2) {
     issues.push('Less than 2 private subnets found');
@@ -142,13 +161,18 @@ export function validateVPCConfiguration(template: any): { valid: boolean; issue
   return { valid: issues.length === 0, issues };
 }
 
-export function validateSecurityGroups(template: any): { count: number; hasRules: boolean } {
+export function validateSecurityGroups(template: any): {
+  count: number;
+  hasRules: boolean;
+} {
   const securityGroups = Object.values(template.Resources).filter(
     (r: any) => r.Type === 'AWS::EC2::SecurityGroup'
   );
 
   const hasRules = securityGroups.some((sg: any) => {
-    return sg.Properties.SecurityGroupIngress || sg.Properties.SecurityGroupEgress;
+    return (
+      sg.Properties.SecurityGroupIngress || sg.Properties.SecurityGroupEgress
+    );
   });
 
   return { count: securityGroups.length, hasRules };

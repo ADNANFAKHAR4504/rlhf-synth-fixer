@@ -5,31 +5,28 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand
+  DescribeNatGatewaysCommand,
 } from '@aws-sdk/client-ec2';
 import {
   RDSClient,
   DescribeDBClustersCommand,
-  DescribeDBInstancesCommand
+  DescribeDBInstancesCommand,
 } from '@aws-sdk/client-rds';
 import {
   LambdaClient,
   GetFunctionCommand,
-  GetFunctionConfigurationCommand
+  GetFunctionConfigurationCommand,
 } from '@aws-sdk/client-lambda';
 import {
   ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  DescribeListenersCommand
+  DescribeListenersCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  KMSClient,
-  DescribeKeyCommand
-} from '@aws-sdk/client-kms';
+import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import {
   CloudWatchLogsClient,
-  DescribeLogGroupsCommand
+  DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 
 describe('CloudFormation Stack Integration Tests', () => {
@@ -37,7 +34,12 @@ describe('CloudFormation Stack Integration Tests', () => {
   const region = process.env.AWS_REGION || 'us-east-1';
 
   beforeAll(() => {
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '..',
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
     const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
     outputs = JSON.parse(outputsContent);
   });
@@ -55,7 +57,7 @@ describe('CloudFormation Stack Integration Tests', () => {
 
     test('VPC should exist and be properly configured', async () => {
       const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
+        VpcIds: [outputs.VPCId],
       });
       const response = await ec2Client.send(command);
 
@@ -73,17 +75,21 @@ describe('CloudFormation Stack Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
-          }
-        ]
+            Values: [outputs.VPCId],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
 
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(6);
 
-      const publicSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch === true);
-      const privateSubnets = response.Subnets!.filter(s => s.MapPublicIpOnLaunch === false);
+      const publicSubnets = response.Subnets!.filter(
+        s => s.MapPublicIpOnLaunch === true
+      );
+      const privateSubnets = response.Subnets!.filter(
+        s => s.MapPublicIpOnLaunch === false
+      );
 
       expect(publicSubnets.length).toBeGreaterThanOrEqual(3);
       expect(privateSubnets.length).toBeGreaterThanOrEqual(3);
@@ -94,13 +100,13 @@ describe('CloudFormation Stack Integration Tests', () => {
         Filter: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
+            Values: [outputs.VPCId],
           },
           {
             Name: 'state',
-            Values: ['available']
-          }
-        ]
+            Values: ['available'],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
 
@@ -113,9 +119,9 @@ describe('CloudFormation Stack Integration Tests', () => {
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [outputs.VPCId]
-          }
-        ]
+            Values: [outputs.VPCId],
+          },
+        ],
       });
       const response = await ec2Client.send(command);
 
@@ -140,7 +146,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const functionName = functionArn.split(':').pop();
 
       const command = new GetFunctionCommand({
-        FunctionName: functionName
+        FunctionName: functionName,
       });
       const response = await lambdaClient.send(command);
 
@@ -155,7 +161,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const functionName = functionArn.split(':').pop();
 
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: functionName
+        FunctionName: functionName,
       });
       const response = await lambdaClient.send(command);
 
@@ -172,7 +178,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const functionName = functionArn.split(':').pop();
 
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: functionName
+        FunctionName: functionName,
       });
       const response = await lambdaClient.send(command);
 
@@ -185,7 +191,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const functionName = functionArn.split(':').pop();
 
       const command = new GetFunctionConfigurationCommand({
-        FunctionName: functionName
+        FunctionName: functionName,
       });
       const response = await lambdaClient.send(command);
 
@@ -211,7 +217,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const clusterIdentifier = outputs.DBClusterEndpoint.split('.')[0];
 
       const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: clusterIdentifier
+        DBClusterIdentifier: clusterIdentifier,
       });
       const response = await rdsClient.send(command);
 
@@ -228,7 +234,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const clusterIdentifier = outputs.DBClusterEndpoint.split('.')[0];
 
       const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: clusterIdentifier
+        DBClusterIdentifier: clusterIdentifier,
       });
       const response = await rdsClient.send(command);
 
@@ -241,7 +247,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const clusterIdentifier = outputs.DBClusterEndpoint.split('.')[0];
 
       const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: clusterIdentifier
+        DBClusterIdentifier: clusterIdentifier,
       });
       const response = await rdsClient.send(command);
 
@@ -254,7 +260,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const clusterIdentifier = outputs.DBClusterEndpoint.split('.')[0];
 
       const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: clusterIdentifier
+        DBClusterIdentifier: clusterIdentifier,
       });
       const response = await rdsClient.send(command);
 
@@ -267,7 +273,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const clusterIdentifier = outputs.DBClusterEndpoint.split('.')[0];
 
       const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: clusterIdentifier
+        DBClusterIdentifier: clusterIdentifier,
       });
       const response = await rdsClient.send(command);
 
@@ -284,9 +290,9 @@ describe('CloudFormation Stack Integration Tests', () => {
         Filters: [
           {
             Name: 'db-cluster-id',
-            Values: [clusterIdentifier]
-          }
-        ]
+            Values: [clusterIdentifier],
+          },
+        ],
       });
       const response = await rdsClient.send(command);
 
@@ -342,10 +348,12 @@ describe('CloudFormation Stack Integration Tests', () => {
 
       const lbCommand = new DescribeLoadBalancersCommand({});
       const lbResponse = await elbClient.send(lbCommand);
-      const alb = lbResponse.LoadBalancers!.find(lb => lb.DNSName === albDnsName);
+      const alb = lbResponse.LoadBalancers!.find(
+        lb => lb.DNSName === albDnsName
+      );
 
       const tgCommand = new DescribeTargetGroupsCommand({
-        LoadBalancerArn: alb!.LoadBalancerArn
+        LoadBalancerArn: alb!.LoadBalancerArn,
       });
       const tgResponse = await elbClient.send(tgCommand);
 
@@ -361,10 +369,12 @@ describe('CloudFormation Stack Integration Tests', () => {
 
       const lbCommand = new DescribeLoadBalancersCommand({});
       const lbResponse = await elbClient.send(lbCommand);
-      const alb = lbResponse.LoadBalancers!.find(lb => lb.DNSName === albDnsName);
+      const alb = lbResponse.LoadBalancers!.find(
+        lb => lb.DNSName === albDnsName
+      );
 
       const listenerCommand = new DescribeListenersCommand({
-        LoadBalancerArn: alb!.LoadBalancerArn
+        LoadBalancerArn: alb!.LoadBalancerArn,
       });
       const listenerResponse = await elbClient.send(listenerCommand);
 
@@ -392,7 +402,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const keyId = outputs.KMSKeyId;
 
       const command = new DescribeKeyCommand({
-        KeyId: keyId
+        KeyId: keyId,
       });
       const response = await kmsClient.send(command);
 
@@ -406,7 +416,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const keyId = outputs.KMSKeyId;
 
       const command = new DescribeKeyCommand({
-        KeyId: keyId
+        KeyId: keyId,
       });
       const response = await kmsClient.send(command);
 
@@ -432,13 +442,15 @@ describe('CloudFormation Stack Integration Tests', () => {
       const logGroupName = `/aws/lambda/${functionName}`;
 
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: logGroupName
+        logGroupNamePrefix: logGroupName,
       });
       const response = await logsClient.send(command);
 
       expect(response.logGroups).toBeDefined();
 
-      const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
+      const logGroup = response.logGroups!.find(
+        lg => lg.logGroupName === logGroupName
+      );
       expect(logGroup).toBeDefined();
       expect(logGroup!.retentionInDays).toBe(365);
     });
@@ -454,19 +466,27 @@ describe('CloudFormation Stack Integration Tests', () => {
     });
 
     test('ALB DNS name should be reachable (HTTP endpoint exists)', () => {
-      expect(outputs.ALBDNSName).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
+      expect(outputs.ALBDNSName).toMatch(
+        /^[a-z0-9-]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/
+      );
     });
 
     test('Lambda function ARN should have correct format', () => {
-      expect(outputs.LambdaFunctionArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:\d+:function:[a-z0-9-]+$/);
+      expect(outputs.LambdaFunctionArn).toMatch(
+        /^arn:aws:lambda:[a-z0-9-]+:\d+:function:[a-z0-9-]+$/
+      );
     });
 
     test('DB cluster endpoint should have correct format', () => {
-      expect(outputs.DBClusterEndpoint).toMatch(/^[a-z0-9-]+\.cluster-[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
+      expect(outputs.DBClusterEndpoint).toMatch(
+        /^[a-z0-9-]+\.cluster-[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/
+      );
     });
 
     test('KMS Key ID should be a valid UUID', () => {
-      expect(outputs.KMSKeyId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(outputs.KMSKeyId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      );
     });
   });
 
@@ -484,7 +504,9 @@ describe('CloudFormation Stack Integration Tests', () => {
 
       expect(lambdaConfig.VpcConfig).toBeDefined();
       expect(lambdaConfig.VpcConfig!.SecurityGroupIds).toBeDefined();
-      expect(lambdaConfig.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
+      expect(lambdaConfig.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(
+        0
+      );
 
       ec2Client.destroy();
       lambdaClient.destroy();
@@ -496,10 +518,12 @@ describe('CloudFormation Stack Integration Tests', () => {
 
       const lbCommand = new DescribeLoadBalancersCommand({});
       const lbResponse = await elbClient.send(lbCommand);
-      const alb = lbResponse.LoadBalancers!.find(lb => lb.DNSName === albDnsName);
+      const alb = lbResponse.LoadBalancers!.find(
+        lb => lb.DNSName === albDnsName
+      );
 
       const tgCommand = new DescribeTargetGroupsCommand({
-        LoadBalancerArn: alb!.LoadBalancerArn
+        LoadBalancerArn: alb!.LoadBalancerArn,
       });
       const tgResponse = await elbClient.send(tgCommand);
 

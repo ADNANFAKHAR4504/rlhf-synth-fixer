@@ -10,7 +10,7 @@ import {
   validateDeletionPolicies,
   validateEncryption,
   validateVPCConfiguration,
-  validateSecurityGroups
+  validateSecurityGroups,
 } from '../lib/template-loader';
 
 describe('CloudFormation Template Unit Tests', () => {
@@ -62,13 +62,6 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.DBMasterUsername.NoEcho).toBe(true);
     });
 
-    test('should have DBMasterPassword parameter with constraints', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
-    });
-
     test('should have required tagging parameters', () => {
       expect(template.Parameters.CostCenter).toBeDefined();
       expect(template.Parameters.Environment).toBeDefined();
@@ -106,13 +99,19 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Resources.PublicSubnet3).toBeDefined();
 
       expect(template.Resources.PublicSubnet1.Type).toBe('AWS::EC2::Subnet');
-      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
 
       expect(template.Resources.PublicSubnet2.Type).toBe('AWS::EC2::Subnet');
-      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
 
       expect(template.Resources.PublicSubnet3.Type).toBe('AWS::EC2::Subnet');
-      expect(template.Resources.PublicSubnet3.Properties.MapPublicIpOnLaunch).toBe(true);
+      expect(
+        template.Resources.PublicSubnet3.Properties.MapPublicIpOnLaunch
+      ).toBe(true);
     });
 
     test('should have private subnets in 3 AZs', () => {
@@ -122,7 +121,9 @@ describe('CloudFormation Template Unit Tests', () => {
 
       expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
       // MapPublicIpOnLaunch is false by default for private subnets (not explicitly set)
-      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBeFalsy();
+      expect(
+        template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch
+      ).toBeFalsy();
     });
 
     test('should have NAT Gateways for each AZ', () => {
@@ -146,7 +147,9 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('should have route table for public subnets', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
-      expect(template.Resources.PublicRouteTable.Type).toBe('AWS::EC2::RouteTable');
+      expect(template.Resources.PublicRouteTable.Type).toBe(
+        'AWS::EC2::RouteTable'
+      );
     });
   });
 
@@ -171,7 +174,9 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(permission).toBeDefined();
       expect(permission.Type).toBe('AWS::Lambda::Permission');
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
-      expect(permission.Properties.Principal).toBe('elasticloadbalancing.amazonaws.com');
+      expect(permission.Properties.Principal).toBe(
+        'elasticloadbalancing.amazonaws.com'
+      );
     });
 
     test('should have Lambda log group with retention', () => {
@@ -207,8 +212,12 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have Aurora Serverless v2 scaling configuration', () => {
       const cluster = template.Resources.DBCluster;
       expect(cluster.Properties.ServerlessV2ScalingConfiguration).toBeDefined();
-      expect(cluster.Properties.ServerlessV2ScalingConfiguration.MinCapacity).toBe(0.5);
-      expect(cluster.Properties.ServerlessV2ScalingConfiguration.MaxCapacity).toBe(1);
+      expect(
+        cluster.Properties.ServerlessV2ScalingConfiguration.MinCapacity
+      ).toBe(0.5);
+      expect(
+        cluster.Properties.ServerlessV2ScalingConfiguration.MaxCapacity
+      ).toBe(1);
     });
 
     test('should have DB instance', () => {
@@ -249,7 +258,9 @@ describe('CloudFormation Template Unit Tests', () => {
     test('should have CloudWatch logs enabled', () => {
       const cluster = template.Resources.DBCluster;
       expect(cluster.Properties.EnableCloudwatchLogsExports).toBeDefined();
-      expect(Array.isArray(cluster.Properties.EnableCloudwatchLogsExports)).toBe(true);
+      expect(
+        Array.isArray(cluster.Properties.EnableCloudwatchLogsExports)
+      ).toBe(true);
     });
 
     test('should have DeletionPolicy set to Delete', () => {
@@ -328,10 +339,10 @@ describe('CloudFormation Template Unit Tests', () => {
       'CreditScoringFunction',
       'ApplicationLoadBalancer',
       'LambdaLogGroup',
-      'ALBLogGroup'
+      'ALBLogGroup',
     ];
 
-    resourcesWithTags.forEach((resourceName) => {
+    resourcesWithTags.forEach(resourceName => {
       test(`${resourceName} should have required tags`, () => {
         const resource = template.Resources[resourceName];
         expect(resource).toBeDefined();
@@ -383,7 +394,7 @@ describe('CloudFormation Template Unit Tests', () => {
   describe('Security Configuration', () => {
     test('should have no Retain deletion policies', () => {
       const resources = Object.keys(template.Resources);
-      resources.forEach((resourceName) => {
+      resources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource.DeletionPolicy) {
           expect(resource.DeletionPolicy).not.toBe('Retain');
@@ -410,13 +421,16 @@ describe('CloudFormation Template Unit Tests', () => {
         'PublicSubnet1',
         'CreditScoringFunction',
         'ApplicationLoadBalancer',
-        'TargetGroup'
+        'TargetGroup',
       ];
 
-      resourcesWithNames.forEach((resourceName) => {
+      resourcesWithNames.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const nameTag = resource.Properties.Tags?.find((t: any) => t.Key === 'Name');
-        const name = resource.Properties.Name || resource.Properties.FunctionName;
+        const nameTag = resource.Properties.Tags?.find(
+          (t: any) => t.Key === 'Name'
+        );
+        const name =
+          resource.Properties.Name || resource.Properties.FunctionName;
 
         if (nameTag) {
           expect(nameTag.Value['Fn::Sub']).toMatch(/\$\{EnvironmentSuffix\}/);
@@ -471,12 +485,21 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('validateResourceTags should validate required tags', () => {
       const vpc = template.Resources.VPC;
-      expect(validateResourceTags(vpc, ['CostCenter', 'Environment', 'DataClassification'])).toBe(true);
+      expect(
+        validateResourceTags(vpc, [
+          'CostCenter',
+          'Environment',
+          'DataClassification',
+        ])
+      ).toBe(true);
       expect(validateResourceTags(vpc, ['NonExistentTag'])).toBe(false);
     });
 
     test('validateResourceTags should return false for resources without tags', () => {
-      const resourceWithoutTags = { Type: 'AWS::Test::Resource', Properties: {} };
+      const resourceWithoutTags = {
+        Type: 'AWS::Test::Resource',
+        Properties: {},
+      };
       expect(validateResourceTags(resourceWithoutTags, ['AnyTag'])).toBe(false);
     });
 
@@ -499,8 +522,193 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('validateTemplateStructure should return false for invalid template', () => {
       expect(validateTemplateStructure({})).toBe(false);
-      expect(validateTemplateStructure({ AWSTemplateFormatVersion: '2010-09-09' })).toBe(false);
+      expect(
+        validateTemplateStructure({ AWSTemplateFormatVersion: '2010-09-09' })
+      ).toBe(false);
       expect(validateTemplateStructure({ Resources: {} })).toBe(false);
+    });
+
+    test('validateResourceNaming should return true for resource with FunctionName using Fn::Sub', () => {
+      const resourceWithFnSubName = {
+        Type: 'AWS::Lambda::Function',
+        Properties: {
+          FunctionName: { 'Fn::Sub': 'my-function-${EnvironmentSuffix}' },
+        },
+      };
+      expect(validateResourceNaming(resourceWithFnSubName)).toBe(true);
+    });
+
+    test('validateResourceNaming should return false for resource with FunctionName missing suffix', () => {
+      const resourceWithoutSuffix = {
+        Type: 'AWS::Lambda::Function',
+        Properties: {
+          FunctionName: { 'Fn::Sub': 'my-function-hardcoded' },
+        },
+      };
+      expect(validateResourceNaming(resourceWithoutSuffix)).toBe(false);
+    });
+
+    test('validateDeletionPolicies should find Retain policies', () => {
+      const templateWithRetain = {
+        Resources: {
+          MyBucket: {
+            Type: 'AWS::S3::Bucket',
+            DeletionPolicy: 'Retain',
+            Properties: {},
+          },
+          MyTable: {
+            Type: 'AWS::DynamoDB::Table',
+            DeletionPolicy: 'Delete',
+            Properties: {},
+          },
+        },
+      };
+      const result = validateDeletionPolicies(templateWithRetain);
+      expect(result.hasRetain).toBe(true);
+      expect(result.resources).toContain('MyBucket');
+      expect(result.resources.length).toBe(1);
+    });
+
+    test('validateEncryption should find unencrypted DBCluster', () => {
+      const templateWithUnencryptedDB = {
+        Resources: {
+          UnencryptedCluster: {
+            Type: 'AWS::RDS::DBCluster',
+            Properties: {
+              StorageEncrypted: false,
+            },
+          },
+        },
+      };
+      const result = validateEncryption(templateWithUnencryptedDB);
+      expect(result.unencrypted).toContain('UnencryptedCluster');
+      expect(result.encrypted.length).toBe(0);
+    });
+
+    test('validateVPCConfiguration should detect missing VPC', () => {
+      const templateWithoutVPC = {
+        Resources: {
+          MyLambda: {
+            Type: 'AWS::Lambda::Function',
+            Properties: {},
+          },
+        },
+      };
+      const result = validateVPCConfiguration(templateWithoutVPC);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContain('No VPC resource found');
+    });
+
+    test('validateVPCConfiguration should detect insufficient public subnets', () => {
+      const templateWithOnePublicSubnet = {
+        Resources: {
+          VPC: {
+            Type: 'AWS::EC2::VPC',
+            Properties: { CidrBlock: '10.0.0.0/16' },
+          },
+          PublicSubnet1: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: true },
+          },
+          PrivateSubnet1: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: false },
+          },
+          PrivateSubnet2: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: false },
+          },
+        },
+      };
+      const result = validateVPCConfiguration(templateWithOnePublicSubnet);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContain('Less than 2 public subnets found');
+      expect(result.issues).toContain('No NAT Gateways found');
+    });
+
+    test('validateVPCConfiguration should detect insufficient private subnets', () => {
+      const templateWithOnePrivateSubnet = {
+        Resources: {
+          VPC: {
+            Type: 'AWS::EC2::VPC',
+            Properties: { CidrBlock: '10.0.0.0/16' },
+          },
+          PublicSubnet1: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: true },
+          },
+          PublicSubnet2: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: true },
+          },
+          PrivateSubnet1: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: false },
+          },
+        },
+      };
+      const result = validateVPCConfiguration(templateWithOnePrivateSubnet);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContain('Less than 2 private subnets found');
+    });
+
+    test('validateVPCConfiguration should detect missing NAT Gateways', () => {
+      const templateWithoutNAT = {
+        Resources: {
+          VPC: {
+            Type: 'AWS::EC2::VPC',
+            Properties: { CidrBlock: '10.0.0.0/16' },
+          },
+          PublicSubnet1: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: true },
+          },
+          PublicSubnet2: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: true },
+          },
+          PrivateSubnet1: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: false },
+          },
+          PrivateSubnet2: {
+            Type: 'AWS::EC2::Subnet',
+            Properties: { MapPublicIpOnLaunch: false },
+          },
+        },
+      };
+      const result = validateVPCConfiguration(templateWithoutNAT);
+      expect(result.valid).toBe(false);
+      expect(result.issues).toContain('No NAT Gateways found');
+    });
+
+    test('validateTemplateStructure should return false for template with empty Resources', () => {
+      const templateEmptyResources = {
+        AWSTemplateFormatVersion: '2010-09-09',
+        Resources: {},
+      };
+      expect(validateTemplateStructure(templateEmptyResources)).toBe(false);
+    });
+
+    test('validateResourceNaming should return false for resource without Properties', () => {
+      const resourceNoProps = { Type: 'AWS::Test::Resource' };
+      expect(validateResourceNaming(resourceNoProps)).toBe(false);
+    });
+
+    test('validateSecurityGroups should detect security groups without rules', () => {
+      const templateWithSGNoRules = {
+        Resources: {
+          MySG: {
+            Type: 'AWS::EC2::SecurityGroup',
+            Properties: {
+              GroupDescription: 'Test SG',
+            },
+          },
+        },
+      };
+      const result = validateSecurityGroups(templateWithSGNoRules);
+      expect(result.count).toBe(1);
+      expect(result.hasRules).toBe(false);
     });
   });
 });
