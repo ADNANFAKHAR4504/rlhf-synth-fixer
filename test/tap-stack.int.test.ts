@@ -1,18 +1,18 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  RDSClient,
   DescribeDBClustersCommand,
+  RDSClient,
 } from '@aws-sdk/client-rds';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const OUTPUTS_PATH = path.join(
   process.cwd(),
@@ -65,7 +65,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const vpcIdKey = Object.keys(outputs).find(
-        key => key.includes('Vpc') || key.includes('VPC')
+        key => key.toLowerCase().includes('vpc')
       );
       expect(vpcIdKey).toBeDefined();
     });
@@ -77,7 +77,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const albKey = Object.keys(outputs).find(
-        key => key.includes('Alb') || key.includes('LoadBalancer')
+        key => key.toLowerCase().includes('alb') || key.toLowerCase().includes('loadbalancer')
       );
       expect(albKey).toBeDefined();
     });
@@ -90,9 +90,9 @@ describe('TapStack Integration Tests', () => {
 
       const dbKey = Object.keys(outputs).find(
         key =>
-          key.includes('Database') ||
-          key.includes('Db') ||
-          key.includes('Cluster')
+          key.toLowerCase().includes('database') ||
+          key.toLowerCase().includes('db') ||
+          key.toLowerCase().includes('cluster')
       );
       expect(dbKey).toBeDefined();
     });
@@ -106,7 +106,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const vpcIdKey = Object.keys(outputs).find(
-        key => key.includes('Vpc') || key.includes('VPC')
+        key => key.toLowerCase().includes('vpc')
       );
       if (!vpcIdKey || !outputs[vpcIdKey]) {
         console.log('Skipping: VPC ID not found in outputs');
@@ -133,7 +133,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const vpcIdKey = Object.keys(outputs).find(
-        key => key.includes('Vpc') || key.includes('VPC')
+        key => key.toLowerCase().includes('vpc')
       );
       if (!vpcIdKey || !outputs[vpcIdKey]) {
         console.log('Skipping: VPC ID not found in outputs');
@@ -166,7 +166,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const albDnsKey = Object.keys(outputs).find(
-        key => key.includes('Alb') || key.includes('LoadBalancer')
+        key => key.toLowerCase().includes('alb') || key.toLowerCase().includes('loadbalancer')
       );
       if (!albDnsKey || !outputs[albDnsKey]) {
         console.log('Skipping: ALB DNS not found in outputs');
@@ -196,9 +196,9 @@ describe('TapStack Integration Tests', () => {
 
       const dbEndpointKey = Object.keys(outputs).find(
         key =>
-          key.includes('Database') ||
-          key.includes('Db') ||
-          key.includes('Cluster')
+          key.toLowerCase().includes('database') ||
+          key.toLowerCase().includes('db') ||
+          key.toLowerCase().includes('cluster')
       );
       if (!dbEndpointKey || !outputs[dbEndpointKey]) {
         console.log('Skipping: Database endpoint not found in outputs');
@@ -226,7 +226,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       const albDnsKey = Object.keys(outputs).find(
-        key => key.includes('Alb') || key.includes('LoadBalancer')
+        key => key.toLowerCase().includes('alb') || key.toLowerCase().includes('loadbalancer')
       );
       if (!albDnsKey || !outputs[albDnsKey]) {
         console.log('Skipping: ALB DNS not found in outputs');
@@ -245,9 +245,9 @@ describe('TapStack Integration Tests', () => {
 
       const dbEndpointKey = Object.keys(outputs).find(
         key =>
-          key.includes('Database') ||
-          key.includes('Db') ||
-          key.includes('Cluster')
+          key.toLowerCase().includes('database') ||
+          key.toLowerCase().includes('db') ||
+          key.toLowerCase().includes('cluster')
       );
       if (!dbEndpointKey || !outputs[dbEndpointKey]) {
         console.log('Skipping: Database endpoint not found in outputs');
