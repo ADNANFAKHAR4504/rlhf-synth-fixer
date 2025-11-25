@@ -365,7 +365,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: `ecommerce-aurora-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '15.3',
+        engineVersion: '17.4',
         databaseName: 'ecommerce',
         masterUsername: 'dbadmin',
         masterPassword: dbPassword,
@@ -392,7 +392,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '15.3',
+        engineVersion: '17.4',
         tags: {
           Name: `ecommerce-aurora-writer-${environmentSuffix}`,
           Environment: environmentSuffix,
@@ -410,7 +410,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '15.3',
+        engineVersion: '17.4',
         tags: {
           Name: `ecommerce-aurora-reader-1-${environmentSuffix}`,
           Environment: environmentSuffix,
@@ -427,7 +427,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '15.3',
+        engineVersion: '17.4',
         tags: {
           Name: `ecommerce-aurora-reader-2-${environmentSuffix}`,
           Environment: environmentSuffix,
