@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 interface MultiRegionDRConfig {
   environmentSuffix: string;
@@ -531,7 +531,7 @@ export class TapStack extends pulumi.ComponentResource {
       { ...opts, provider: secondaryProvider }
     );
 
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `dr-bucket-versioning-secondary-${environmentSuffix}`,
       {
         bucket: secondaryBucket.id,
@@ -555,7 +555,7 @@ export class TapStack extends pulumi.ComponentResource {
       { ...opts, provider: primaryProvider }
     );
 
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `dr-bucket-versioning-primary-${environmentSuffix}`,
       {
         bucket: primaryBucket.id,
@@ -739,7 +739,7 @@ export class TapStack extends pulumi.ComponentResource {
         handler: 'index.handler',
         memorySize: 512,
         timeout: 30,
-        reservedConcurrentExecutions: 100,
+        reservedConcurrentExecutions: 10,
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
 const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
