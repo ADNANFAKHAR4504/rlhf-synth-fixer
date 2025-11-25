@@ -1,4 +1,0 @@
-encryptionsalt: v1:NAQJNBQtTas=:v1:+bQfdH75bcIZWfKl:0sCiFmAecHZXUW7jkDtoLQop6HpyBQ==
-config:
-  payment-processing-infrastructure:environmentSuffix: dev
-  aws:region: us-east-1

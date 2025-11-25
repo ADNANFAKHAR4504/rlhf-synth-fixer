@@ -1,6 +1,0 @@
-name: payment-processing-infrastructure
-runtime:
-  name: nodejs
-  options:
-    typescript: true
-description: PCI DSS compliant payment processing infrastructure with ECS, Aurora, and comprehensive security controls
