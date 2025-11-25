@@ -279,7 +279,7 @@ export class FailureRecoveryInfrastructure extends Construct {
     // LAMBDA FUNCTION FOR LOG PROCESSING
     // ==========================================
     const logProcessorRole = new iam.Role(this, 'LogProcessorRole', {
-      roleName: `prod-role-lambda-log-processor-${config.environmentSuffix}`,
+      roleName: `prod-role-lambda-log-processor-${config.environmentSuffix}-${config.timestamp}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -292,7 +292,7 @@ export class FailureRecoveryInfrastructure extends Construct {
     s3KmsKey.grantEncryptDecrypt(logProcessorRole);
 
     const logProcessor = new lambda.Function(this, 'LogProcessor', {
-      functionName: `prod-lambda-log-processor-${config.environmentSuffix}`,
+      functionName: `prod-lambda-log-processor-${config.environmentSuffix}-${config.timestamp}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       role: logProcessorRole,
