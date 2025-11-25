@@ -380,7 +380,7 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
       });
       const response = await wafClient.send(command);
       expect(response.WebACL).toBeDefined();
-      expect(response.WebACL!.Scope).toBe('REGIONAL');
+      expect(outputs.WAFWebACLArn).toContain('regional');
 
       const resourcesCommand = new ListResourcesForWebACLCommand({
         WebACLArn: outputs.WAFWebACLArn,

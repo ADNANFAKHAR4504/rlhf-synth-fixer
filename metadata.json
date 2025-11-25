@@ -14,8 +14,17 @@
     "S3 Bucket",
     "CloudFormation",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "Secrets Manager",
+    "CloudFront",
+    "WAF",
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch Logs",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "RDS",
+    "SNS",
+    "CloudWatch"
   ]
 }
