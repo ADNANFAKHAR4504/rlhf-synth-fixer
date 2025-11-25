@@ -58,6 +58,12 @@ variable "cost_center" {
   default     = "engineering"
 }
 
+variable "pr_number" {
+  description = "PR number for tracking resources"
+  type        = string
+  default     = "unknown"
+}
+
 variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
@@ -317,6 +323,7 @@ locals {
       Project     = var.project_name
       Owner       = var.owner
       CostCenter  = var.cost_center
+      PRNumber    = var.pr_number
       ManagedBy   = "terraform"
     }
   )

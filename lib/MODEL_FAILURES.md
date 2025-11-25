@@ -129,18 +129,79 @@ enable_key_rotation = true
 
 ---
 
+## **Issue 6 — Invalid Aurora PostgreSQL Version**
+
+**Error:**
+```
+Error: creating RDS Cluster (fraud-detection-dev-aurora): operation error RDS: CreateDBCluster, https response error StatusCode: 400, RequestID: bd97ce2b-8f25-4c59-b3b8-5fe4301d5afb, api error InvalidParameterCombination: Cannot find version 15.3 for aurora-postgresql
+```
+
+**Root Cause:** PostgreSQL version 15.3 is not available in the us-east-1 region. AWS periodically deprecates older minor versions and only maintains recent versions.
+
+**Fix:** Updated `aurora_engine_version` from `15.3` to `15.14`, which is the latest available version in us-east-1:
+```hcl
+variable "aurora_engine_version" {
+  description = "Aurora engine version"
+  type        = string
+  default     = "15.14"
+}
+```
+
+Available versions were verified using:
+```bash
+aws rds describe-db-engine-versions --engine aurora-postgresql --query "DBEngineVersions[?contains(EngineVersion, '15.')].EngineVersion"
+```
+
+---
+
+## **Issue 7 — Missing Secrets Manager Lambda Permission**
+
+**Error:**
+```
+Error: creating Secrets Manager Secret Rotation (arn:aws:secretsmanager:us-east-1:679047180946:secret:fraud-detection-dev-aurora-credentials-aALkBc): operation error Secrets Manager: RotateSecret, https response error StatusCode: 400, RequestID: 765498c9-4f07-4d3f-8859-1843bb251b88, api error AccessDeniedException: Secrets Manager cannot invoke the specified Lambda function. Ensure that the function policy grants access to the principal secretsmanager.amazonaws.com.
+```
+
+**Root Cause:** The Lambda function for secret rotation didn't have a resource-based policy allowing Secrets Manager service to invoke it. Even though the Lambda has an execution role, Secrets Manager needs explicit permission to invoke the function.
+
+**Fix:** Added `aws_lambda_permission` resource to grant Secrets Manager invoke access:
+```hcl
+resource "aws_lambda_permission" "secrets_manager_invoke" {
+  statement_id  = "AllowSecretsManagerInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.secret_rotation.function_name
+  principal     = "secretsmanager.amazonaws.com"
+}
+```
+
+---
+
+## **Issue 8 — Missing Redis AUTH Token**
+
+**Error:**
+```
+Error: modifying ElastiCache Replication Group (fraud-detection-dev-redis): operation error ElastiCache: ModifyReplicationGroup, https response error StatusCode: 400, RequestID: 103b8e7d-b4c6-4ee5-831d-f0c3b193d7c3, InvalidParameterValue: Invalid AUTH token provided. Please check valid AUTH token format.
+```
+
+**Root Cause:** When `transit_encryption_enabled = true` is set for Redis, an AUTH token is required. The configuration had transit encryption enabled but no auth_token was provided.
+
+**Fix:** Added a random password resource for the Redis AUTH token:
+```hcl
+resource "random_password" "redis_auth_token" {
+  length  = 32
+  special = true
+  # Redis AUTH token requirements: 16-128 printable characters
+  override_special = "!&#$^<>-"
+}
+
+resource "aws_elasticache_replication_group" "redis" {
+  # ... other configuration ...
+  transit_encryption_enabled = true
+  auth_token                 = random_password.redis_auth_token.result
+}
+```
+
+---
+
 ## Summary
 
 All identified issues have been resolved:
-- ✅ Removed duplicate variable declarations
-- ✅ Fixed invalid SageMaker data source reference
-- ✅ Added required filter blocks to S3 lifecycle configurations
-- ✅ Fixed Redis automatic failover configuration for single-node environments
-- ✅ Added comprehensive KMS key policy with proper service permissions
-
-The Terraform configuration now successfully validates with all three environment files:
-- `terraform plan -var-file=dev.tfvars` ✓
-- `terraform plan -var-file=staging.tfvars` ✓
-- `terraform plan -var-file=prod.tfvars` ✓
-
-No errors or warnings are present in any environment configuration.
