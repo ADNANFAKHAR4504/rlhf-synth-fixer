@@ -1,5 +1,10 @@
 # Main Terraform configuration
 
+# Generate a random suffix for unique resource names
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 module "vpc" {
   source = "./modules/vpc"
 
@@ -192,7 +197,7 @@ resource "aws_sns_topic_subscription" "alerts_email" {
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "application" {
-  name              = "/payment-processing/${var.environment}/application"
+  name              = "/payment-processing/${var.environment}/application-${substr(random_id.suffix.hex, 0, 8)}"
   retention_in_days = var.log_retention_days
 
   tags = merge(
