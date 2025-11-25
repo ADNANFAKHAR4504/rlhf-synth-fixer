@@ -1609,7 +1609,7 @@ exports.handler = async (event) => {
       {
         serviceNamespace: 'lambda',
         resourceId: pulumi.interpolate`function:${apiLambda.name}:provisioned-concurrency`,
-        scalableDimension: 'lambda:function:ProvisionedConcurrentExecutions',
+        scalableDimension: 'lambda:function:ProvisionedConcurrency',
         minCapacity: 2,
         maxCapacity: 10,
       },
