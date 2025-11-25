@@ -41,7 +41,8 @@ Multi-AZ deployment in us-east-1 across 3 availability zones for payment process
 
 ### Security and Compliance
 - Implement encryption at rest for all data stores using AWS KMS
-- Enable encryption in transit using TLS/SSL
+- Enable encryption in transit for Aurora connections (TLS required)
+- ALB can use HTTP (port 80) for testing environments; HTTPS recommended for production
 - Follow the principle of least privilege for IAM roles and policies
 - Enable logging and monitoring using CloudWatch
 - Tag all resources appropriately
