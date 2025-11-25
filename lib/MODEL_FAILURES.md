@@ -276,6 +276,26 @@ Lambda functions import external libraries (`psycopg2`, `redis`) that are not pa
 
 ---
 
+## **Issue 14 — Invalid Aurora Password Characters**
+
+**Error:**
+```
+Error: creating RDS Cluster ... api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+```
+
+**Root Cause:** The `random_password` resource was generating passwords containing characters that are not allowed by RDS (specifically `/`, `@`, `"`, or space) because `override_special` was not defined.
+
+**Fix:** Updated `random_password.aurora_password` to explicitly define allowed special characters using `override_special`:
+```hcl
+resource "random_password" "aurora_password" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+```
+
+---
+
 ## Summary
 
 All identified issues have been resolved:

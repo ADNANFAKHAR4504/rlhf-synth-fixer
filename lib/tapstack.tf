@@ -874,8 +874,9 @@ resource "aws_cloudwatch_log_group" "redis_slow" {
 # ============================================================================
 
 resource "random_password" "aurora_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "aurora_credentials" {
