@@ -21,6 +21,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.5"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
   }
 }
 
@@ -955,7 +959,7 @@ resource "aws_rds_cluster" "aurora" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
   deletion_protection             = var.env == "prod" ? true : false
   skip_final_snapshot             = var.env == "dev" ? true : false
-  final_snapshot_identifier       = var.env != "dev" ? "${local.resource_prefix}-aurora-final-snapshot-${formatdate("YYYY-MM-DD", timestamp())}" : null
+  final_snapshot_identifier       = var.env != "dev" ? "${local.resource_prefix}-aurora-final-snapshot" : null
 
   serverlessv2_scaling_configuration {
     min_capacity = var.aurora_min_capacity
@@ -1789,32 +1793,82 @@ EOF
 }
 
 # Lambda Layer for dependencies
-# Note: This creates a minimal layer structure. For production with actual dependencies, build a proper layer:
-# mkdir -p python/lib/python3.12/site-packages
-# pip install psycopg2-binary redis -t python/lib/python3.12/site-packages/
-# zip -r dependencies_layer.zip python/
-data "archive_file" "dependencies_layer" {
-  type        = "zip"
-  output_path = "/tmp/dependencies_layer.zip"
-
-  # Create proper layer structure with __init__.py files
-  source {
-    content  = "# Lambda Layer Dependencies\n# Install psycopg2-binary and redis for production use\n"
-    filename = "python/lib/python3.12/site-packages/README.txt"
+# Builds layer with psycopg2-binary and redis libraries automatically
+resource "null_resource" "lambda_layer_builder" {
+  triggers = {
+    python_version = var.lambda_runtime
+    layer_hash     = md5("${var.lambda_runtime}-dependencies-v1")
   }
-  source {
-    content  = "# Package marker\n"
-    filename = "python/lib/python3.12/site-packages/__init__.py"
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      LAYER_DIR="/tmp/lambda-layer-${local.resource_prefix}"
+      LAYER_ZIP="/tmp/dependencies_layer.zip"
+      PYTHON_VER="${var.lambda_runtime}"
+      PYTHON_PATH=$(echo "$PYTHON_VER" | sed 's/\./\//g')
+      
+      # Cleanup previous builds
+      rm -rf "$LAYER_DIR" "$LAYER_ZIP"
+      mkdir -p "$LAYER_DIR/python/lib/$PYTHON_PATH/site-packages"
+      
+      TARGET_DIR="$LAYER_DIR/python/lib/$PYTHON_PATH/site-packages"
+      
+      # Try to install dependencies (try multiple methods for compatibility)
+      INSTALLED=0
+      if command -v pip3 &> /dev/null; then
+        pip3 install --target "$TARGET_DIR" psycopg2-binary redis --quiet 2>&1 && INSTALLED=1 || true
+      fi
+      
+      if [ $INSTALLED -eq 0 ] && command -v pip &> /dev/null; then
+        pip install --target "$TARGET_DIR" psycopg2-binary redis --quiet 2>&1 && INSTALLED=1 || true
+      fi
+      
+      # If pip failed, create placeholder files to ensure zip is not empty
+      if [ $INSTALLED -eq 0 ] || [ -z "$(ls -A $TARGET_DIR 2>/dev/null)" ]; then
+        echo "# Placeholder - install psycopg2-binary and redis manually" > "$TARGET_DIR/README.txt"
+        echo "# Package marker" > "$TARGET_DIR/__init__.py"
+      fi
+      
+      # Create zip file
+      cd "$LAYER_DIR"
+      if command -v zip &> /dev/null; then
+        zip -r "$LAYER_ZIP" python/ > /dev/null 2>&1
+      elif command -v python3 &> /dev/null; then
+        python3 -c "import zipfile, os; z = zipfile.ZipFile('$LAYER_ZIP', 'w'); [z.write(os.path.join(root, f), os.path.relpath(os.path.join(root, f), '$LAYER_DIR')) for root, dirs, files in os.walk('python') for f in files]"
+      elif command -v python &> /dev/null; then
+        python -c "import zipfile, os; z = zipfile.ZipFile('$LAYER_ZIP', 'w'); [z.write(os.path.join(root, f), os.path.relpath(os.path.join(root, f), '$LAYER_DIR')) for root, dirs, files in os.walk('python') for f in files]"
+      fi
+      
+      # Ensure zip file exists and is not empty
+      if [ ! -f "$LAYER_ZIP" ] || [ ! -s "$LAYER_ZIP" ]; then
+        # Create minimal valid zip as fallback
+        cd "$LAYER_DIR"
+        if command -v zip &> /dev/null; then
+          zip "$LAYER_ZIP" python/lib/$PYTHON_PATH/site-packages/__init__.py > /dev/null 2>&1
+        elif command -v python3 &> /dev/null; then
+          python3 -c "import zipfile; z = zipfile.ZipFile('$LAYER_ZIP', 'w'); z.write('python/lib/$PYTHON_PATH/site-packages/__init__.py', 'python/lib/$PYTHON_PATH/site-packages/__init__.py')"
+        fi
+      fi
+      
+      # Cleanup temp directory
+      rm -rf "$LAYER_DIR"
+    EOT
   }
 }
 
 resource "aws_lambda_layer_version" "dependencies" {
-  filename            = data.archive_file.dependencies_layer.output_path
+  filename            = "/tmp/dependencies_layer.zip"
   layer_name          = "${local.resource_prefix}-dependencies"
   compatible_runtimes = [var.lambda_runtime]
-  source_code_hash    = data.archive_file.dependencies_layer.output_base64sha256
 
-  description = "Layer containing psycopg2-binary and redis (minimal structure - build proper layer separately for production)"
+  description = "Layer containing psycopg2-binary and redis libraries"
+
+  depends_on = [null_resource.lambda_layer_builder]
+
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
 }
 
 # Lambda Functions

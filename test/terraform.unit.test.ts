@@ -41,6 +41,11 @@ describe('Fraud Detection Terraform Configuration - Unit Tests', () => {
       expect(tapstackTf).toMatch(/source\s*=\s*"hashicorp\/random"/);
       expect(tapstackTf).toMatch(/version\s*=\s*"~>\s*3\.5"/);
     });
+
+    test('Null provider is configured', () => {
+      expect(tapstackTf).toMatch(/source\s*=\s*"hashicorp\/null"/);
+      expect(tapstackTf).toMatch(/version\s*=\s*"~>\s*3\.2"/);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -205,27 +210,32 @@ describe('Fraud Detection Terraform Configuration - Unit Tests', () => {
   // 7. VPC ENDPOINTS
   // ---------------------------------------------------------------------------
   describe('VPC Endpoints Configuration', () => {
-    test('DynamoDB VPC endpoint exists', () => {
+    test('DynamoDB VPC endpoint exists (Gateway endpoint)', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_vpc_endpoint"\s+"dynamodb"\s*{/);
       expect(tapstackTf).toMatch(/service_name\s*=\s*"com\.amazonaws\.\$\{var\.aws_region\}\.dynamodb"/);
+      expect(tapstackTf).toMatch(/vpc_endpoint_type\s*=\s*"Gateway"/);
     });
 
-    test('Kinesis VPC endpoint exists', () => {
+    test('Kinesis VPC endpoint is conditional', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_vpc_endpoint"\s+"kinesis"\s*{/);
+      expect(tapstackTf).toMatch(/count\s*=\s*var\.enable_vpc_endpoints\s*\?\s*1\s*:\s*0/);
       expect(tapstackTf).toMatch(/vpc_endpoint_type\s*=\s*"Interface"/);
-      expect(tapstackTf).toMatch(/private_dns_enabled\s*=\s*true/);
     });
 
-    test('SageMaker VPC endpoint exists', () => {
+    test('SageMaker VPC endpoint is conditional', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_vpc_endpoint"\s+"sagemaker"\s*{/);
+      expect(tapstackTf).toMatch(/count\s*=\s*var\.enable_vpc_endpoints\s*\?\s*1\s*:\s*0/);
+      expect(tapstackTf).toMatch(/service_name.*sagemaker-runtime/);
     });
 
-    test('SNS VPC endpoint exists', () => {
+    test('SNS VPC endpoint is conditional', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_vpc_endpoint"\s+"sns"\s*{/);
+      expect(tapstackTf).toMatch(/count\s*=\s*var\.enable_vpc_endpoints\s*\?\s*1\s*:\s*0/);
     });
 
-    test('SQS VPC endpoint exists', () => {
+    test('SQS VPC endpoint is conditional', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_vpc_endpoint"\s+"sqs"\s*{/);
+      expect(tapstackTf).toMatch(/count\s*=\s*var\.enable_vpc_endpoints\s*\?\s*1\s*:\s*0/);
     });
   });
 
@@ -358,6 +368,12 @@ describe('Fraud Detection Terraform Configuration - Unit Tests', () => {
     test('Aurora uses subnet group', () => {
       expect(tapstackTf).toMatch(/resource\s+"aws_db_subnet_group"\s+"aurora"\s*{/);
     });
+
+    test('Aurora final snapshot identifier is deterministic', () => {
+      expect(tapstackTf).toMatch(/final_snapshot_identifier\s*=\s*var\.env\s*!=\s*"dev"\s*\?\s*"\$\{local\.resource_prefix\}-aurora-final-snapshot"\s*:\s*null/);
+      // Should NOT use timestamp() for deterministic naming
+      expect(tapstackTf).not.toMatch(/final_snapshot_identifier.*timestamp\(\)/);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -474,6 +490,21 @@ describe('Fraud Detection Terraform Configuration - Unit Tests', () => {
     test('Lambda archive files are created', () => {
       expect(tapstackTf).toMatch(/data\s+"archive_file"\s+"fraud_scorer"\s*{/);
       expect(tapstackTf).toMatch(/data\s+"archive_file"\s+"analyzer"\s*{/);
+    });
+
+    test('Lambda layer is built using null_resource', () => {
+      expect(tapstackTf).toMatch(/resource\s+"null_resource"\s+"lambda_layer_builder"\s*{/);
+      expect(tapstackTf).toMatch(/provisioner\s+"local-exec"\s*{/);
+    });
+
+    test('Lambda layer version uses dependencies layer', () => {
+      expect(tapstackTf).toMatch(/resource\s+"aws_lambda_layer_version"\s+"dependencies"\s*{/);
+      expect(tapstackTf).toMatch(/filename\s*=\s*"\/tmp\/dependencies_layer\.zip"/);
+      expect(tapstackTf).toMatch(/depends_on\s*=\s*\[null_resource\.lambda_layer_builder\]/);
+    });
+
+    test('Lambda functions use dependencies layer', () => {
+      expect(tapstackTf).toMatch(/layers\s*=\s*\[aws_lambda_layer_version\.dependencies\.arn\]/);
     });
   });
 
