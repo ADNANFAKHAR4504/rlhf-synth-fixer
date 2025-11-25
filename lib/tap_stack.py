@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, Fn
+from cdktf import TerraformStack, TerraformOutput, Fn, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.lambda_function import (
     LambdaFunction, LambdaFunctionEnvironment
@@ -27,15 +27,35 @@ import os
 
 class TapStack(TerraformStack):
     # pylint: disable=redefined-builtin
-    def __init__(self, scope: Construct, id: str, environment_suffix: str = "dev"):
+    def __init__(
+        self,
+        scope: Construct,
+        id: str,
+        environment_suffix: str = "dev",
+        state_bucket: str = "iac-rlhf-tf-states",
+        state_bucket_region: str = "us-east-1",
+        aws_region: str = "us-east-1",
+        default_tags: dict = None
+    ):
         super().__init__(scope, id)
 
         self.environment_suffix = environment_suffix
 
-        # AWS Provider
-        AwsProvider(self, "aws",
-            region="us-east-1"
+        # Configure S3 backend for Terraform state
+        S3Backend(self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/terraform.tfstate",
+            region=state_bucket_region
         )
+
+        # AWS Provider with default tags
+        provider_config = {
+            "region": aws_region
+        }
+        if default_tags:
+            provider_config["default_tags"] = [default_tags]
+
+        AwsProvider(self, "aws", **provider_config)
 
         # KMS Key for Lambda environment variables
         self.kms_key = KmsKey(self, "lambda_kms_key",
