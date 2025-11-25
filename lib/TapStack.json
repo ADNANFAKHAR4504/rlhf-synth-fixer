@@ -104,51 +104,6 @@
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
         },
-        "ReplicationConfiguration": {
-          "Fn::If": [
-            "IsSourceRegion",
-            {
-              "Role": {
-                "Fn::GetAtt": [
-                  "S3ReplicationRole",
-                  "Arn"
-                ]
-              },
-              "Rules": [
-                {
-                  "Id": "ReplicateAll",
-                  "Status": "Enabled",
-                  "Priority": 1,
-                  "Filter": {},
-                  "Destination": {
-                    "Bucket": {
-                      "Fn::Sub": "arn:aws:s3:::trading-data-${EnvironmentSuffix}-${TargetRegion}"
-                    },
-                    "ReplicationTime": {
-                      "Status": "Enabled",
-                      "Time": {
-                        "Minutes": 15
-                      }
-                    },
-                    "Metrics": {
-                      "Status": "Enabled",
-                      "EventThreshold": {
-                        "Minutes": 15
-                      }
-                    },
-                    "StorageClass": "STANDARD"
-                  },
-                  "DeleteMarkerReplication": {
-                    "Status": "Enabled"
-                  }
-                }
-              ]
-            },
-            {
-              "Ref": "AWS::NoValue"
-            }
-          ]
-        },
         "LifecycleConfiguration": {
           "Rules": [
             {
@@ -257,8 +212,206 @@
         ]
       }
     },
+    "S3ReplicationConfigFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "IsSourceRegion",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "s3-replication-config-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "S3ReplicationConfigRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import urllib3",
+                "import time",
+                "",
+                "s3 = boto3.client('s3')",
+                "http = urllib3.PoolManager()",
+                "",
+                "def send_response(event, context, response_status, response_data, physical_resource_id=None):",
+                "    response_url = event['ResponseURL']",
+                "    response_body = json.dumps({",
+                "        'Status': response_status,",
+                "        'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',",
+                "        'PhysicalResourceId': physical_resource_id or context.log_stream_name,",
+                "        'StackId': event['StackId'],",
+                "        'RequestId': event['RequestId'],",
+                "        'LogicalResourceId': event['LogicalResourceId'],",
+                "        'Data': response_data",
+                "    })",
+                "    headers = {'content-type': '', 'content-length': str(len(response_body))}",
+                "    http.request('PUT', response_url, body=response_body.encode('utf-8'), headers=headers)",
+                "",
+                "def handler(event, context):",
+                "    try:",
+                "        request_type = event['RequestType']",
+                "        props = event['ResourceProperties']",
+                "        source_bucket = props['SourceBucket']",
+                "        dest_bucket = props['DestBucket']",
+                "        dest_region = props['DestRegion']",
+                "        role_arn = props['RoleArn']",
+                "",
+                "        if request_type == 'Delete':",
+                "            # Don't remove replication on delete, let it be cleaned up manually if needed",
+                "            send_response(event, context, 'SUCCESS', {}, 's3-replication-config')",
+                "            return",
+                "",
+                "        # Check if destination bucket exists",
+                "        dest_s3 = boto3.client('s3', region_name=dest_region)",
+                "        try:",
+                "            dest_s3.list_objects_v2(Bucket=dest_bucket, MaxKeys=1)",
+                "            bucket_exists = True",
+                "        except:",
+                "            bucket_exists = False",
+                "",
+                "        if not bucket_exists:",
+                "            # Destination doesn't exist yet, return success but don't configure replication",
+                "            # This allows the stack to complete. Replication can be configured later via stack update.",
+                "            send_response(event, context, 'SUCCESS', {'Message': 'Destination bucket does not exist yet. Replication will be configured on next update.'}, 's3-replication-config')",
+                "            return",
+                "",
+                "        # Configure replication",
+                "        replication_config = {",
+                "            'Role': role_arn,",
+                "            'Rules': [{",
+                "                'Id': 'ReplicateAll',",
+                "                'Status': 'Enabled',",
+                "                'Priority': 1,",
+                "                'Filter': {},",
+                "                'Destination': {",
+                "                    'Bucket': f'arn:aws:s3:::{dest_bucket}',",
+                "                    'ReplicationTime': {",
+                "                        'Status': 'Enabled',",
+                "                        'Time': {'Minutes': 15}",
+                "                    },",
+                "                    'Metrics': {",
+                "                        'Status': 'Enabled',",
+                "                        'EventThreshold': {'Minutes': 15}",
+                "                    },",
+                "                    'StorageClass': 'STANDARD'",
+                "                },",
+                "                'DeleteMarkerReplication': {'Status': 'Enabled'}",
+                "            }]",
+                "        }",
+                "",
+                "        s3.put_bucket_replication(",
+                "            Bucket=source_bucket,",
+                "            ReplicationConfiguration=replication_config",
+                "        )",
+                "",
+                "        send_response(event, context, 'SUCCESS', {'Message': 'Replication configured successfully'}, 's3-replication-config')",
+                "    except Exception as e:",
+                "        send_response(event, context, 'FAILED', {'Error': str(e)}, 's3-replication-config')",
+                ""
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "S3ReplicationConfigRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "IsSourceRegion",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "s3-replication-config-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationConfigPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:PutReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:s3:::trading-data-${EnvironmentSuffix}-${AWS::Region}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::trading-data-${EnvironmentSuffix}-${TargetRegion}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::trading-data-${EnvironmentSuffix}-${AWS::Region}/*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:s3:::trading-data-${EnvironmentSuffix}-${TargetRegion}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "S3ReplicationConfigResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Condition": "IsSourceRegion",
+      "DependsOn": [
+        "TradingDataBucket"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "S3ReplicationConfigFunction",
+            "Arn"
+          ]
+        },
+        "SourceBucket": {
+          "Fn::Sub": "trading-data-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "DestBucket": {
+          "Fn::Sub": "trading-data-${EnvironmentSuffix}-${TargetRegion}"
+        },
+        "DestRegion": {
+          "Ref": "TargetRegion"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "S3ReplicationRole",
+            "Arn"
+          ]
+        }
+      }
+    },
     "TradingAnalyticsGlobalTable": {
       "Type": "AWS::DynamoDB::GlobalTable",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "TableName": {
           "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"

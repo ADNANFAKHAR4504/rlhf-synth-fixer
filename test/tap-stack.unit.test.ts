@@ -148,44 +148,48 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(role.Condition).toBe('IsSourceRegion');
     });
 
-    test('TradingDataBucket should have ReplicationConfiguration', () => {
-      const bucket = template.Resources.TradingDataBucket;
-      expect(bucket.Properties.ReplicationConfiguration).toBeDefined();
+    test('should have S3ReplicationConfigFunction for replication configuration', () => {
+      const functionResource = template.Resources.S3ReplicationConfigFunction;
+      expect(functionResource).toBeDefined();
+      expect(functionResource.Type).toBe('AWS::Lambda::Function');
+      expect(functionResource.Condition).toBe('IsSourceRegion');
+      expect(functionResource.Properties.Runtime).toBe('python3.11');
     });
 
-    test('TradingDataBucket ReplicationConfiguration should be conditional', () => {
-      const bucket = template.Resources.TradingDataBucket;
-      const replicationConfig = bucket.Properties.ReplicationConfiguration;
-      expect(replicationConfig['Fn::If']).toBeDefined();
-      expect(replicationConfig['Fn::If'][0]).toBe('IsSourceRegion');
+    test('should have S3ReplicationConfigRole with proper permissions', () => {
+      const role = template.Resources.S3ReplicationConfigRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Condition).toBe('IsSourceRegion');
+      expect(role.Properties.Policies).toBeDefined();
+      const policy = role.Properties.Policies[0];
+      expect(policy.PolicyDocument.Statement).toBeDefined();
+      const s3Actions = policy.PolicyDocument.Statement[0].Action;
+      // Using correct IAM action names (not PutBucketReplication/GetBucketReplication)
+      expect(s3Actions).toContain('s3:PutReplicationConfiguration');
+      expect(s3Actions).toContain('s3:GetReplicationConfiguration');
+      expect(s3Actions).toContain('s3:ListBucket');
     });
 
-    test('TradingDataBucket ReplicationConfiguration should have replication rules', () => {
-      const bucket = template.Resources.TradingDataBucket;
-      const replicationConfig = bucket.Properties.ReplicationConfiguration;
-      const config = replicationConfig['Fn::If'][1];
-      expect(config.Role).toBeDefined();
-      expect(config.Rules).toBeDefined();
-      expect(Array.isArray(config.Rules)).toBe(true);
-      expect(config.Rules.length).toBeGreaterThan(0);
+    test('should have S3ReplicationConfigResource Custom Resource', () => {
+      const customResource = template.Resources.S3ReplicationConfigResource;
+      expect(customResource).toBeDefined();
+      expect(customResource.Type).toBe('AWS::CloudFormation::CustomResource');
+      expect(customResource.Condition).toBe('IsSourceRegion');
+      expect(customResource.Properties.ServiceToken).toBeDefined();
+      expect(customResource.Properties.SourceBucket).toBeDefined();
+      expect(customResource.Properties.DestBucket).toBeDefined();
+      expect(customResource.Properties.DestRegion).toBeDefined();
+      expect(customResource.Properties.RoleArn).toBeDefined();
     });
 
-    test('TradingDataBucket ReplicationConfiguration should have ReplicationTime', () => {
-      const bucket = template.Resources.TradingDataBucket;
-      const replicationConfig = bucket.Properties.ReplicationConfiguration;
-      const config = replicationConfig['Fn::If'][1];
-      const rule = config.Rules[0];
-      expect(rule.Destination.ReplicationTime).toBeDefined();
-      expect(rule.Destination.ReplicationTime.Status).toBe('Enabled');
-    });
-
-    test('TradingDataBucket ReplicationConfiguration should have Metrics', () => {
-      const bucket = template.Resources.TradingDataBucket;
-      const replicationConfig = bucket.Properties.ReplicationConfiguration;
-      const config = replicationConfig['Fn::If'][1];
-      const rule = config.Rules[0];
-      expect(rule.Destination.Metrics).toBeDefined();
-      expect(rule.Destination.Metrics.Status).toBe('Enabled');
+    test('S3ReplicationConfigResource should depend on TradingDataBucket', () => {
+      const customResource = template.Resources.S3ReplicationConfigResource;
+      expect(customResource.DependsOn).toBeDefined();
+      expect(Array.isArray(customResource.DependsOn)).toBe(true);
+      expect(customResource.DependsOn).toContain('TradingDataBucket');
+      // S3ReplicationConfigFunction dependency is enforced via GetAtt in ServiceToken
+      // so it doesn't need to be in DependsOn (removed to fix linting warning W3005)
     });
   });
 
@@ -791,11 +795,20 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       });
     });
 
-    test('no resources should have Retain deletion policy', () => {
+    test('no resources should have Retain deletion policy (except Global Tables)', () => {
+      // Global Tables require Retain policy to prevent 24-hour cooldown issues
+      // when replicas are added/removed. This is a necessary exception.
+      const allowedRetainResources = ['TradingAnalyticsGlobalTable'];
+
       Object.keys(template.Resources).forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource.DeletionPolicy) {
-          expect(resource.DeletionPolicy).not.toBe('Retain');
+          if (allowedRetainResources.includes(resourceName)) {
+            // Global Tables are allowed to have Retain policy
+            expect(resource.DeletionPolicy).toBe('Retain');
+          } else {
+            expect(resource.DeletionPolicy).not.toBe('Retain');
+          }
         }
       });
     });
