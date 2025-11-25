@@ -567,13 +567,13 @@ class PaymentInfrastructureStack(TerraformStack):
 
         # Create deployment
         deployment = ApiGatewayDeployment(
-            self,
+                self,
             'api_deployment',
             rest_api_id=api.id,
             depends_on=[integration],
             lifecycle={'create_before_destroy': True},
             provider=self.primary_provider
-        )
+            )
 
         # Create stage
         stage = ApiGatewayStage(
@@ -597,7 +597,7 @@ class PaymentInfrastructureStack(TerraformStack):
 
         # Create usage plan
         usage_plan = ApiGatewayUsagePlan(
-            self,
+                self,
             'usage_plan',
             name=f'payment-{self.environment_suffix}-usage-plan',
             api_stages=[
@@ -608,11 +608,11 @@ class PaymentInfrastructureStack(TerraformStack):
             ],
             tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-usage-plan'},
             provider=self.primary_provider
-        )
+            )
 
         # Associate API key with usage plan
         ApiGatewayUsagePlanKey(
-            self,
+                self,
             'usage_plan_key',
             key_id=api_key.id,
             key_type='API_KEY',
@@ -634,7 +634,7 @@ class PaymentInfrastructureStack(TerraformStack):
             SnsTopic instance
         """
         topic = SnsTopic(
-            self,
+                self,
             'alarm_topic',
             name=f'payment-{self.environment_suffix}-alarms',
             tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-alarms'},
@@ -647,7 +647,7 @@ class PaymentInfrastructureStack(TerraformStack):
         """Create CloudWatch alarms for monitoring"""
         # Lambda error alarm
         CloudwatchMetricAlarm(
-            self,
+                self,
             'lambda_error_alarm',
             alarm_name=f'payment-{self.environment_suffix}-lambda-errors',
             comparison_operator='GreaterThanThreshold',
@@ -666,7 +666,7 @@ class PaymentInfrastructureStack(TerraformStack):
 
         # Lambda duration alarm
         CloudwatchMetricAlarm(
-            self,
+                self,
             'lambda_duration_alarm',
             alarm_name=f'payment-{self.environment_suffix}-lambda-duration',
             comparison_operator='GreaterThanThreshold',
@@ -734,7 +734,7 @@ class PaymentInfrastructureStack(TerraformStack):
             value=self.dynamodb_table.name,
             tags={**self.common_tags, 'Name': f'payment-{self.environment_suffix}-table-name'},
             provider=self.primary_provider
-        )
+            )
 
         # Store bucket name
         SsmParameter(
