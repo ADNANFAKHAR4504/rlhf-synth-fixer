@@ -1,0 +1,11 @@
+# Development environment variables
+aws_region         = "us-east-1"
+environment_suffix = "dev"
+repository         = "iac-test-automations"
+commit_author      = "developer"
+pr_number          = "dev"
+team               = "4"
+project_name       = "CorpApp"
+vpc_cidr           = "10.0.0.0/16"
+instance_type      = "t3.micro"
+db_instance_class  = "db.t3.micro"
