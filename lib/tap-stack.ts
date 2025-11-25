@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackProps {
   environmentSuffix: string;
@@ -23,12 +23,55 @@ export class TapStack extends pulumi.ComponentResource {
 
     const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
-    // KMS Key with rotation
+    // Get current AWS account
+    const current = aws.getCallerIdentity({});
+    const accountId = current.then(c => c.accountId);
+
+    // KMS Key with rotation and proper policy
     this.kmsKey = new aws.kms.Key(
       'financialDataKey',
       {
         description: 'KMS key for financial data encryption',
         enableKeyRotation: true,
+        policy: pulumi
+          .all([accountId])
+          .apply(([acctId]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${acctId}:root`,
+                  },
+                  Action: 'kms:*',
+                  Resource: '*',
+                },
+                {
+                  Sid: 'Allow services to use the key',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: [
+                      's3.amazonaws.com',
+                      'dynamodb.amazonaws.com',
+                      'logs.amazonaws.com',
+                      'lambda.amazonaws.com',
+                      'config.amazonaws.com',
+                    ],
+                  },
+                  Action: [
+                    'kms:Decrypt',
+                    'kms:Encrypt',
+                    'kms:GenerateDataKey',
+                    'kms:DescribeKey',
+                    'kms:CreateGrant',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
         tags: {
           Environment: props.environmentSuffix,
           DataClassification: 'PCI-DSS',
@@ -485,7 +528,11 @@ export class TapStack extends pulumi.ComponentResource {
       defaultResourceOptions
     );
 
-    // AWS Config Recorder
+    // AWS Config Recorder - COMMENTED OUT
+    // AWS Config allows only ONE recorder per AWS account/region.
+    // If a recorder already exists in the account, creating another will fail.
+    // For production use, ensure AWS Config is enabled manually at the account level.
+    /*
     const configRecorder = new aws.cfg.Recorder(
       'configRecorder',
       {
@@ -532,6 +579,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { ...defaultResourceOptions, dependsOn: [configDeliveryChannel] }
     );
+    */
 
     this.registerOutputs({
       vpcId: this.vpc.id,
