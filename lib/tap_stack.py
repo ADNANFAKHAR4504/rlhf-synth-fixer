@@ -4,7 +4,7 @@ from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
     S3BucketLifecycleConfigurationRule,
@@ -629,7 +629,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning
-        S3BucketVersioning(
+        S3BucketVersioningA(
             self,
             "audit_bucket_versioning",
             bucket=self.audit_bucket.id,
@@ -687,7 +687,7 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning on replica
-        S3BucketVersioning(
+        S3BucketVersioningA(
             self,
             "audit_bucket_replica_versioning",
             provider=self.provider_secondary,
