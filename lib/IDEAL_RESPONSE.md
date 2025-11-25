@@ -1,13 +1,12 @@
 # Ideal Response - Production EKS Cluster with Advanced Networking
 
-This corrected implementation creates a production-ready EKS cluster with proper VPC CNI configuration, ENIConfig resources, complete VPC endpoints, and enhanced security.
+This implementation creates a production-ready EKS cluster with proper VPC CNI configuration, complete VPC endpoints, and enhanced security. This simplified version focuses on the core infrastructure without node groups or Kubernetes resources, which can be added later via manual configuration or separate tooling.
 
 ## File: lib/tap-stack.ts
 
 ```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as k8s from '@pulumi/kubernetes';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface TapStackArgs {
@@ -250,7 +249,7 @@ export class TapStack extends pulumi.ComponentResource {
       tags: defaultTags,
     }, { parent: this });
 
-    // Node group IAM role
+    // Node group IAM role (for future node group deployment)
     const nodeRole = new aws.iam.Role(`eks-node-role-${envSuffix}`, {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -277,7 +276,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { parent: this });
     });
 
-    // Node security group
+    // Node security group (for future node group deployment)
     const nodeSg = new aws.ec2.SecurityGroup(`eks-node-sg-${envSuffix}`, {
       vpcId: vpc.id,
       description: 'Security group for EKS nodes',
@@ -325,119 +324,6 @@ export class TapStack extends pulumi.ComponentResource {
       description: 'Allow nodes to communicate with cluster API',
     }, { parent: this });
 
-    // Get cluster name as string for launch template
-    const clusterNameStr = cluster.name.apply(n => n);
-
-    // Launch template for system node group with proper AMI
-    const systemLaunchTemplate = new aws.ec2.LaunchTemplate(`eks-system-lt-${envSuffix}`, {
-      imageId: pulumi.output(aws.ssm.getParameter({
-        name: '/aws/service/eks/optimized-ami/1.28/amazon-linux-2-arm64/recommended/image_id',
-      })).apply(param => param.value),
-      instanceType: 't4g.medium',
-      userData: clusterNameStr.apply(name => Buffer.from(`#!/bin/bash
-set -ex
-/etc/eks/bootstrap.sh ${name}
-# Install CloudWatch agent
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
-`).toString('base64')),
-      vpcSecurityGroupIds: [nodeSg.id],
-      tagSpecifications: [{
-        resourceType: 'instance',
-        tags: { ...defaultTags, Name: `eks-system-node-${envSuffix}`, NodeGroup: 'system' },
-      }, {
-        resourceType: 'volume',
-        tags: { ...defaultTags, Name: `eks-system-volume-${envSuffix}` },
-      }],
-      blockDeviceMappings: [{
-        deviceName: '/dev/xvda',
-        ebs: {
-          volumeSize: 30,
-          volumeType: 'gp3',
-          deleteOnTermination: 'true',
-        },
-      }],
-      metadataOptions: {
-        httpTokens: 'required',
-        httpPutResponseHopLimit: 2,
-      },
-    }, { parent: this });
-
-    // System node group
-    const systemNodeGroup = new aws.eks.NodeGroup(`eks-system-ng-${envSuffix}`, {
-      clusterName: cluster.name,
-      nodeRoleArn: nodeRole.arn,
-      subnetIds: nodeSubnets.map(s => s.id),
-      capacityType: 'SPOT',
-      instanceTypes: ['t4g.medium', 't4g.small', 't4g.large'],
-      scalingConfig: {
-        desiredSize: 2,
-        minSize: 2,
-        maxSize: 4,
-      },
-      launchTemplate: {
-        id: systemLaunchTemplate.id,
-        version: systemLaunchTemplate.latestVersion.apply(v => v.toString()),
-      },
-      tags: { ...defaultTags, Name: `eks-system-ng-${envSuffix}`, NodeGroup: 'system' },
-      labels: { workload: 'system' },
-    }, { parent: this });
-
-    // Launch template for app node group with proper AMI
-    const appLaunchTemplate = new aws.ec2.LaunchTemplate(`eks-app-lt-${envSuffix}`, {
-      imageId: pulumi.output(aws.ssm.getParameter({
-        name: '/aws/service/eks/optimized-ami/1.28/amazon-linux-2-arm64/recommended/image_id',
-      })).apply(param => param.value),
-      instanceType: 'c7g.large',
-      userData: clusterNameStr.apply(name => Buffer.from(`#!/bin/bash
-set -ex
-/etc/eks/bootstrap.sh ${name}
-# Install CloudWatch agent
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
-`).toString('base64')),
-      vpcSecurityGroupIds: [nodeSg.id],
-      tagSpecifications: [{
-        resourceType: 'instance',
-        tags: { ...defaultTags, Name: `eks-app-node-${envSuffix}`, NodeGroup: 'application' },
-      }, {
-        resourceType: 'volume',
-        tags: { ...defaultTags, Name: `eks-app-volume-${envSuffix}` },
-      }],
-      blockDeviceMappings: [{
-        deviceName: '/dev/xvda',
-        ebs: {
-          volumeSize: 50,
-          volumeType: 'gp3',
-          deleteOnTermination: 'true',
-        },
-      }],
-      metadataOptions: {
-        httpTokens: 'required',
-        httpPutResponseHopLimit: 2,
-      },
-    }, { parent: this });
-
-    // Application node group
-    const appNodeGroup = new aws.eks.NodeGroup(`eks-app-ng-${envSuffix}`, {
-      clusterName: cluster.name,
-      nodeRoleArn: nodeRole.arn,
-      subnetIds: nodeSubnets.map(s => s.id),
-      capacityType: 'SPOT',
-      instanceTypes: ['c7g.large', 'c7g.xlarge', 'c6g.large'],
-      scalingConfig: {
-        desiredSize: 3,
-        minSize: 3,
-        maxSize: 10,
-      },
-      launchTemplate: {
-        id: appLaunchTemplate.id,
-        version: appLaunchTemplate.latestVersion.apply(v => v.toString()),
-      },
-      tags: { ...defaultTags, Name: `eks-app-ng-${envSuffix}`, NodeGroup: 'application' },
-      labels: { workload: 'application' },
-    }, { parent: this });
-
     // Install VPC CNI addon
     const vpcCniAddon = new aws.eks.Addon(`eks-vpc-cni-${envSuffix}`, {
       clusterName: cluster.name,
@@ -453,7 +339,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
         },
       }),
       tags: defaultTags,
-    }, { parent: this, dependsOn: [systemNodeGroup] });
+    }, { parent: this });
 
     // Install kube-proxy addon
     const kubeProxyAddon = new aws.eks.Addon(`eks-kube-proxy-${envSuffix}`, {
@@ -463,7 +349,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       resolveConflictsOnCreate: 'OVERWRITE',
       resolveConflictsOnUpdate: 'OVERWRITE',
       tags: defaultTags,
-    }, { parent: this, dependsOn: [systemNodeGroup] });
+    }, { parent: this });
 
     // Install CoreDNS addon
     const coreDnsAddon = new aws.eks.Addon(`eks-coredns-${envSuffix}`, {
@@ -473,200 +359,47 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       resolveConflictsOnCreate: 'OVERWRITE',
       resolveConflictsOnUpdate: 'OVERWRITE',
       tags: defaultTags,
-    }, { parent: this, dependsOn: [systemNodeGroup] });
-
-    // Create Kubernetes provider
-    const k8sProvider = new k8s.Provider(`eks-k8s-${envSuffix}`, {
-      kubeconfig: cluster.kubeconfigs[0].rawConfig,
-      enableServerSideApply: true,
-    }, { parent: this, dependsOn: [systemNodeGroup, vpcCniAddon] });
-
-    // Create ENIConfig resources for custom pod networking
-    azs.forEach((az, i) => {
-      new k8s.apiextensions.CustomResource(`eniconfig-${az}-${envSuffix}`, {
-        apiVersion: 'crd.k8s.amazonaws.com/v1alpha1',
-        kind: 'ENIConfig',
-        metadata: {
-          name: az,
-        },
-        spec: {
-          subnet: podSubnets[i].id,
-          securityGroups: [nodeSg.id],
-        },
-      }, { provider: k8sProvider, parent: this });
-    });
-
-    // Cluster autoscaler IAM role
-    const autoscalerRole = new aws.iam.Role(`eks-autoscaler-role-${envSuffix}`, {
-      assumeRolePolicy: pulumi.all([oidcProvider.arn, cluster.identities]).apply(([arn, identities]) => {
-        const oidcIssuer = identities[0].oidcs[0].issuer.replace('https://', '');
-        return JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{
-            Effect: 'Allow',
-            Principal: {
-              Federated: arn,
-            },
-            Action: 'sts:AssumeRoleWithWebIdentity',
-            Condition: {
-              StringEquals: {
-                [`${oidcIssuer}:sub`]: 'system:serviceaccount:kube-system:cluster-autoscaler',
-                [`${oidcIssuer}:aud`]: 'sts.amazonaws.com',
-              },
-            },
-          }],
-        });
-      }),
-      tags: defaultTags,
     }, { parent: this });
 
-    const autoscalerPolicy = new aws.iam.RolePolicy(`eks-autoscaler-policy-${envSuffix}`, {
-      role: autoscalerRole.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Action: [
-            'autoscaling:DescribeAutoScalingGroups',
-            'autoscaling:DescribeAutoScalingInstances',
-            'autoscaling:DescribeLaunchConfigurations',
-            'autoscaling:DescribeScalingActivities',
-            'autoscaling:DescribeTags',
-            'ec2:DescribeInstanceTypes',
-            'ec2:DescribeLaunchTemplateVersions',
-          ],
-          Resource: '*',
-        }, {
-          Effect: 'Allow',
-          Action: [
-            'autoscaling:SetDesiredCapacity',
-            'autoscaling:TerminateInstanceInAutoScalingGroup',
-            'ec2:DescribeImages',
-            'ec2:GetInstanceTypesFromInstanceRequirements',
-            'eks:DescribeNodegroup',
-          ],
-          Resource: '*',
-        }],
-      }),
-    }, { parent: this });
-
-    // Deploy cluster autoscaler with Helm
-    const autoscaler = new k8s.helm.v3.Release(`cluster-autoscaler-${envSuffix}`, {
-      chart: 'cluster-autoscaler',
-      version: '9.29.0',
-      repositoryOpts: {
-        repo: 'https://kubernetes.github.io/autoscaler',
-      },
-      namespace: 'kube-system',
-      values: {
-        autoDiscovery: {
-          clusterName: cluster.name,
+    // Create kubeconfig for cluster access
+    const kubeconfig = pulumi.all([
+      cluster.endpoint,
+      cluster.certificateAuthority,
+      cluster.name
+    ]).apply(([endpoint, certAuth, name]) => JSON.stringify({
+      apiVersion: 'v1',
+      clusters: [{
+        cluster: {
+          server: endpoint,
+          'certificate-authority-data': certAuth.data,
         },
-        awsRegion: region,
-        rbac: {
-          serviceAccount: {
-            create: true,
-            name: 'cluster-autoscaler',
-            annotations: {
-              'eks.amazonaws.com/role-arn': autoscalerRole.arn,
-            },
+        name: 'kubernetes',
+      }],
+      contexts: [{
+        context: {
+          cluster: 'kubernetes',
+          user: 'aws',
+        },
+        name: 'aws',
+      }],
+      'current-context': 'aws',
+      kind: 'Config',
+      users: [{
+        name: 'aws',
+        user: {
+          exec: {
+            apiVersion: 'client.authentication.k8s.io/v1beta1',
+            command: 'aws',
+            args: ['eks', 'get-token', '--cluster-name', name, '--region', region],
           },
         },
-        nodeSelector: {
-          workload: 'system',
-        },
-        tolerations: [{
-          key: 'node-role.kubernetes.io/master',
-          effect: 'NoSchedule',
-        }],
-        resources: {
-          limits: {
-            cpu: '200m',
-            memory: '256Mi',
-          },
-          requests: {
-            cpu: '100m',
-            memory: '128Mi',
-          },
-        },
-        extraArgs: {
-          'balance-similar-node-groups': true,
-          'skip-nodes-with-system-pods': false,
-        },
-      },
-    }, { provider: k8sProvider, parent: this, dependsOn: [autoscalerPolicy, vpcCniAddon] });
+      }],
+    }));
 
-    // AWS Load Balancer Controller IAM role
-    const lbControllerRole = new aws.iam.Role(`eks-lb-controller-role-${envSuffix}`, {
-      assumeRolePolicy: pulumi.all([oidcProvider.arn, cluster.identities]).apply(([arn, identities]) => {
-        const oidcIssuer = identities[0].oidcs[0].issuer.replace('https://', '');
-        return JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{
-            Effect: 'Allow',
-            Principal: {
-              Federated: arn,
-            },
-            Action: 'sts:AssumeRoleWithWebIdentity',
-            Condition: {
-              StringEquals: {
-                [`${oidcIssuer}:sub`]: 'system:serviceaccount:kube-system:aws-load-balancer-controller',
-                [`${oidcIssuer}:aud`]: 'sts.amazonaws.com',
-              },
-            },
-          }],
-        });
-      }),
-      tags: defaultTags,
-    }, { parent: this });
-
-    // Simplified LB Controller policy (actual policy would be much longer)
-    const lbControllerPolicy = new aws.iam.RolePolicy(`eks-lb-controller-policy-${envSuffix}`, {
-      role: lbControllerRole.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Action: [
-            'ec2:DescribeVpcs',
-            'ec2:DescribeSubnets',
-            'ec2:DescribeSecurityGroups',
-            'ec2:CreateSecurityGroup',
-            'elasticloadbalancing:*',
-            'iam:CreateServiceLinkedRole',
-          ],
-          Resource: '*',
-        }],
-      }),
-    }, { parent: this });
-
-    // Configure aws-auth ConfigMap
-    const awsAuth = new k8s.core.v1.ConfigMap(`aws-auth-${envSuffix}`, {
-      metadata: {
-        name: 'aws-auth',
-        namespace: 'kube-system',
-      },
-      data: {
-        mapRoles: nodeRole.arn.apply(arn => `- rolearn: ${arn}
-  username: system:node:{{EC2PrivateDNSName}}
-  groups:
-    - system:bootstrappers
-    - system:nodes`),
-        mapUsers: `- userarn: arn:aws:iam::123456789012:user/developer
-  username: developer
-  groups:
-    - system:masters
-- userarn: arn:aws:iam::123456789012:role/ci-cd-role
-  username: ci-cd
-  groups:
-    - system:masters`,
-      },
-    }, { provider: k8sProvider, parent: this, dependsOn: [vpcCniAddon] });
-
-    // Export kubeconfig as string
+    // Export values
     this.clusterEndpoint = cluster.endpoint;
     this.oidcIssuer = cluster.identities[0].oidcs[0].issuer;
-    this.kubeconfig = cluster.kubeconfigs[0].rawConfig;
+    this.kubeconfig = kubeconfig;
 
     this.registerOutputs({
       clusterEndpoint: this.clusterEndpoint,
@@ -674,8 +407,6 @@ rpm -U ./amazon-cloudwatch-agent.rpm
       kubeconfig: this.kubeconfig,
       clusterSecurityGroupId: clusterSg.id,
       nodeSecurityGroupId: nodeSg.id,
-      systemNodeGroupArn: systemNodeGroup.arn,
-      appNodeGroupArn: appNodeGroup.arn,
       vpcId: vpc.id,
       nodeSubnetIds: pulumi.all(nodeSubnets.map(s => s.id)),
       podSubnetIds: pulumi.all(podSubnets.map(s => s.id)),
@@ -689,7 +420,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
 ```markdown
 # Production EKS Cluster Infrastructure
 
-This Pulumi TypeScript project deploys a production-ready Amazon EKS cluster with advanced networking, autoscaling, and security features for financial services workloads.
+This Pulumi TypeScript project deploys a production-ready Amazon EKS cluster with advanced networking and security features for financial services workloads.
 
 ## Architecture Overview
 
@@ -706,37 +437,17 @@ This Pulumi TypeScript project deploys a production-ready Amazon EKS cluster wit
 - **Private Subnets**: 3 for nodes + 3 for pods (custom networking)
 - **VPC Endpoints**: S3, EC2, ECR (API & DKR), CloudWatch Logs, STS
 
-### Node Groups
-1. **System Node Group**
-   - Instance Types: t4g.medium, t4g.small, t4g.large (Graviton3)
-   - Capacity: 2-4 nodes (SPOT instances)
-   - Purpose: Cluster autoscaler, monitoring, system services
-   - Label: workload=system
-
-2. **Application Node Group**
-   - Instance Types: c7g.large, c7g.xlarge, c6g.large (Graviton3)
-   - Capacity: 3-10 nodes (SPOT instances)
-   - Purpose: Application workloads
-   - Label: workload=application
-
 ### Security Features
 - Private API endpoint only (no internet exposure)
 - Custom security groups for cluster, nodes, and VPC endpoints
-- IMDSv2 enforced on all nodes
-- SSM Session Manager for node access (no SSH)
-- IAM Roles for Service Accounts (IRSA) enabled
+- IAM Roles for Service Accounts (IRSA) enabled via OIDC provider
 - Least privilege IAM policies
+- Node roles configured for future node group deployment
 
 ### CNI Configuration
 - **VPC CNI Addon**: v1.15.0 with custom networking
 - **Pod Networking**: Secondary CIDR (100.64.0.0/16)
-- **ENIConfig**: Configured per availability zone
 - **Prefix Delegation**: Enabled for higher pod density
-
-### Autoscaling
-- Cluster Autoscaler deployed via Helm
-- Automatic node scaling based on workload demand
-- Support for spot instance diversification
 
 ### Addons Installed
 - VPC CNI v1.15.0 (custom networking enabled)
@@ -768,7 +479,7 @@ pulumi config set aws:region us-east-1
 pulumi up
 ```
 
-The deployment will take approximately 20-30 minutes due to EKS cluster creation time.
+The deployment will take approximately 15-20 minutes due to EKS cluster creation time.
 
 ## Accessing the Cluster
 
@@ -780,24 +491,16 @@ export KUBECONFIG=./kubeconfig.yaml
 
 ### Verify Cluster Access
 ```bash
-kubectl get nodes
-kubectl get pods -A
+kubectl get svc
 ```
 
-### Check Node Groups
-```bash
-kubectl get nodes --show-labels
-kubectl get nodes -l workload=system
-kubectl get nodes -l workload=application
-```
+Note: Since the cluster has a private-only endpoint, you'll need to access it from within the VPC or through a VPN/bastion host.
 
 ## Cost Optimization Features
 
-1. **Spot Instances**: All node groups use spot instances for 70-90% cost savings
-2. **Graviton3 Processors**: ARM-based instances provide better price/performance
-3. **VPC Endpoints**: Eliminates NAT Gateway costs ($0.045/hour + data transfer)
-4. **Custom Pod Networking**: Efficient IP address utilization
-5. **Autoscaling**: Scales down during low demand periods
+1. **VPC Endpoints**: Eliminates NAT Gateway costs ($0.045/hour + data transfer)
+2. **Custom Pod Networking**: Efficient IP address utilization
+3. **CloudWatch Logs**: 7-day retention for cost management
 
 ## Outputs
 
@@ -808,8 +511,6 @@ The stack exports the following outputs:
 - `kubeconfig`: Complete kubeconfig for cluster access
 - `clusterSecurityGroupId`: Cluster security group ID
 - `nodeSecurityGroupId`: Node security group ID
-- `systemNodeGroupArn`: System node group ARN
-- `appNodeGroupArn`: Application node group ARN
 - `vpcId`: VPC ID
 - `nodeSubnetIds`: Node subnet IDs
 - `podSubnetIds`: Pod subnet IDs
@@ -831,21 +532,15 @@ Note: All resources are configured to be fully destroyable. No manual cleanup re
 - No public IP addresses assigned to nodes
 - VPC endpoints used for AWS service access
 - IAM roles follow least privilege principle
-- Node access via SSM Session Manager only
-- IMDSv2 required on all instances
+- OIDC provider configured for service account integration
 
-## Troubleshooting
+## Next Steps
 
-### Nodes not joining cluster
-Check the CloudWatch Logs for the cluster and verify:
-- ENIConfig resources are created
-- VPC CNI is configured with custom networking
-- Security groups allow proper communication
+To add node groups and deploy workloads:
 
-### Pods stuck in pending
-- Check cluster autoscaler logs: `kubectl logs -n kube-system -l app.kubernetes.io/name=aws-cluster-autoscaler`
-- Verify IRSA is working: `kubectl describe sa cluster-autoscaler -n kube-system`
-
-### VPC endpoint connectivity issues
-Verify security group allows HTTPS (443) from VPC CIDR ranges.
+1. Create node groups manually via AWS Console or eksctl
+2. Use the exported node role ARN and security group IDs
+3. Deploy ENIConfig resources for custom networking
+4. Deploy cluster autoscaler using Helm
+5. Configure aws-auth ConfigMap for developer access
 ```

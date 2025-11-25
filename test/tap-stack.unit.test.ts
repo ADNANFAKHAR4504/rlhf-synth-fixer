@@ -81,29 +81,6 @@ pulumi.runtime.setMocks({
       };
     }
 
-    // Mock EKS Node Group
-    if (args.type === 'aws:eks/nodeGroup:NodeGroup') {
-      return {
-        id: mockId,
-        state: {
-          ...args.inputs,
-          arn: `arn:aws:eks:us-east-1:123456789012:nodegroup/${args.name}`,
-          status: 'ACTIVE',
-        },
-      };
-    }
-
-    // Mock Launch Template
-    if (args.type === 'aws:ec2/launchTemplate:LaunchTemplate') {
-      return {
-        id: mockId,
-        state: {
-          ...args.inputs,
-          latestVersion: pulumi.output(1),
-          arn: `arn:aws:ec2:us-east-1:123456789012:launch-template/${mockId}`,
-        },
-      };
-    }
 
     // Mock CloudWatch Log Group
     if (args.type === 'aws:cloudwatch/logGroup:LogGroup') {
@@ -385,31 +362,6 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('Node Groups', () => {
-    it('should create system node group with SPOT capacity', async () => {
-      const stack = new TapStack('test-system-ng', {
-        environmentSuffix: 'system-ng-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    it('should create application node group with SPOT capacity', async () => {
-      const stack = new TapStack('test-app-ng', {
-        environmentSuffix: 'app-ng-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    it('should create launch templates for node groups', async () => {
-      const stack = new TapStack('test-launch-templates', {
-        environmentSuffix: 'lt-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-  });
 
   describe('EKS Addons', () => {
     it('should install VPC CNI addon', async () => {
@@ -479,39 +431,6 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('Kubernetes Resources', () => {
-    it('should create Kubernetes provider', async () => {
-      const stack = new TapStack('test-k8s-provider', {
-        environmentSuffix: 'k8s-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    it('should create ENIConfig resources for custom networking', async () => {
-      const stack = new TapStack('test-eniconfig', {
-        environmentSuffix: 'eni-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    it('should deploy cluster autoscaler via Helm', async () => {
-      const stack = new TapStack('test-autoscaler-helm', {
-        environmentSuffix: 'helm-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    it('should configure aws-auth ConfigMap', async () => {
-      const stack = new TapStack('test-aws-auth', {
-        environmentSuffix: 'auth-test',
-      });
-
-      expect(stack).toBeDefined();
-    });
-  });
 
   describe('CloudWatch Logging', () => {
     it('should create CloudWatch log group for cluster', async () => {
