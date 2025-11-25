@@ -86,5 +86,5 @@ variable "kubernetes_version" {
 variable "admin_access_cidr" {
   type        = string
   description = "CIDR block for administrative access to the EKS API endpoint"
-  default     = "0.0.0.0/0" # Allow all IPs for testing. RESTRICT THIS ONE DEPLOYMENT DONE
+  default     = "0.0.0.0/0" # Allow all IPs for testing AND TO GET THE APPLY SUCCESFULL. RESTRICT THIS ONCE DEPLOYMENT DONE
 }

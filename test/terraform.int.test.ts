@@ -151,7 +151,6 @@ interface ParsedOutputs {
   // IAM Roles
   eks_cluster_iam_role_arn: string;
   ebs_csi_driver_iam_role_arn: string;
-  vpc_flow_logs_iam_role_arn: string;
 }
 
 // =============================================================================

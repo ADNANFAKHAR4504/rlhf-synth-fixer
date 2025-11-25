@@ -73,17 +73,14 @@ describe('Terraform Infrastructure Unit Tests - BULLETPROOF v3.0 (MEGA SUITE)', 
 
   beforeAll(() => {
     try {
-      // File reading - Adapting for 'mian.tf' typo in user project
-      let mainPath = path.join(libPath, 'main.tf');
-      if (!fs.existsSync(mainPath)) {
-        mainPath = path.join(libPath, 'mian.tf');
-      }
+      // Read Terraform configuration files
+      const mainPath = path.join(libPath, 'main.tf');
       const providerPath = path.join(libPath, 'provider.tf');
 
       if (fs.existsSync(mainPath)) {
         mainContent = fs.readFileSync(mainPath, 'utf8');
       } else {
-        throw new Error(`main.tf (or mian.tf) file not found at ${mainPath}`);
+        throw new Error(`main.tf file not found at ${mainPath}`);
       }
 
       if (fs.existsSync(providerPath)) {
@@ -140,8 +137,7 @@ describe('Terraform Infrastructure Unit Tests - BULLETPROOF v3.0 (MEGA SUITE)', 
 
   describe('Phase 1: File Structure & Setup', () => {
     test('1.1 should have main configuration file', () => {
-      const hasMain = fs.existsSync(path.join(libPath, 'main.tf')) || fs.existsSync(path.join(libPath, 'mian.tf'));
-      expect(hasMain).toBe(true);
+      expect(fs.existsSync(path.join(libPath, 'main.tf'))).toBe(true);
     });
 
     test('1.2 should have provider.tf file', () => {
@@ -453,12 +449,10 @@ describe('Terraform Infrastructure Unit Tests - BULLETPROOF v3.0 (MEGA SUITE)', 
       expect(roleBlock).toContain('ec2.amazonaws.com');
     });
 
-    test('5.3 VPC Flow Logs Role should assume role from vpc-flow-logs.amazonaws.com', () => {
-      const roleBlock = extractResource(mainContent, 'aws_iam_role', 'vpc_flow_logs');
-      expect(roleBlock).toContain('vpc-flow-logs.amazonaws.com');
-    });
+    // NOTE: VPC Flow Logs IAM role test removed - not needed for S3 destination
+    // When VPC Flow Logs use S3 as a destination, AWS uses a service-linked role automatically.
 
-    test('5.4 Cluster Autoscaler Role should use OIDC federation', () => {
+    test('5.3 Cluster Autoscaler Role should use OIDC federation', () => {
       const roleBlock = extractResource(mainContent, 'aws_iam_role', 'cluster_autoscaler');
       expect(roleBlock).toContain('Federated');
       expect(roleBlock).toContain('sts:AssumeRoleWithWebIdentity');

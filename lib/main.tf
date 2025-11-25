@@ -156,6 +156,42 @@ resource "aws_kms_alias" "ebs_encryption" {
   target_key_id = aws_kms_key.ebs_encryption.key_id
 }
 
+# KMS key policy for EBS encryption
+# Allows EC2 service to use the key for EBS volume encryption
+resource "aws_kms_key_policy" "ebs_encryption" {
+  key_id = aws_kms_key.ebs_encryption.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # =============================================================================
 # VPC Networking Resources
 # =============================================================================
@@ -319,59 +355,9 @@ resource "aws_flow_log" "main" {
   }
 }
 
-# IAM role for VPC Flow Logs to write to S3
-resource "aws_iam_role" "vpc_flow_logs" {
-  name = "iam-role-vpc-flow-logs-${var.environment}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "vpc-flow-logs.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "iam-role-vpc-flow-logs-${var.environment}"
-  }
-}
-
-# IAM policy for VPC Flow Logs S3 permissions
-resource "aws_iam_role_policy" "vpc_flow_logs" {
-  name = "vpc-flow-logs-policy"
-  role = aws_iam_role.vpc_flow_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.vpc_flow_logs.arn,
-          "${aws_s3_bucket.vpc_flow_logs.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = aws_kms_key.vpc_flow_logs.arn
-      }
-    ]
-  })
-}
+# NOTE: IAM role for VPC Flow Logs removed - not needed for S3 destination
+# When VPC Flow Logs use S3 as a destination, AWS uses a service-linked role automatically.
+# The IAM role is only needed for CloudWatch Logs destinations.
 
 # =============================================================================
 # S3 Bucket for VPC Flow Logs Storage
@@ -1575,9 +1561,4 @@ output "eks_cluster_iam_role_arn" {
 output "ebs_csi_driver_iam_role_arn" {
   value       = aws_iam_role.ebs_csi_driver.arn
   description = "EBS CSI driver IAM role ARN for IRSA"
-}
-
-output "vpc_flow_logs_iam_role_arn" {
-  value       = aws_iam_role.vpc_flow_logs.arn
-  description = "VPC Flow Logs IAM role ARN"
 }
