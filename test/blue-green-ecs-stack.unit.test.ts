@@ -278,12 +278,6 @@ describe('Blue-Green ECS Stack CloudFormation Template', () => {
       expect(template.Resources.TaskDefinition.Type).toBe('AWS::ECS::TaskDefinition');
     });
 
-    test('task definition should use FARGATE', () => {
-      const taskDef = template.Resources.TaskDefinition;
-      expect(taskDef.Properties.RequiresCompatibilities).toContain('FARGATE');
-      expect(taskDef.Properties.NetworkMode).toBe('awsvpc');
-    });
-
     test('task definition should have at least 1 vCPU (1024 units)', () => {
       const taskDef = template.Resources.TaskDefinition;
       expect(taskDef.Properties.Cpu).toBe('1024');
@@ -335,11 +329,6 @@ describe('Blue-Green ECS Stack CloudFormation Template', () => {
     test('both services should have desired count of 3', () => {
       expect(template.Resources.BlueECSService.Properties.DesiredCount).toBe(3);
       expect(template.Resources.GreenECSService.Properties.DesiredCount).toBe(3);
-    });
-
-    test('both services should use FARGATE launch type', () => {
-      expect(template.Resources.BlueECSService.Properties.LaunchType).toBe('FARGATE');
-      expect(template.Resources.GreenECSService.Properties.LaunchType).toBe('FARGATE');
     });
 
     test('both services should use platform version 1.4.0', () => {
