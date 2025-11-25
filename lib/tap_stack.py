@@ -27,8 +27,7 @@ class TapStack(TerraformStack):
             bucket=state_bucket,
             key=f"tap-stack-v1/{environment_suffix}/terraform.tfstate",
             region=state_bucket_region,
-            encrypt=True,
-            dynamodb_table=f"terraform-state-lock-v1-{environment_suffix}"
+            encrypt=True
         )
 
         # AWS Provider
