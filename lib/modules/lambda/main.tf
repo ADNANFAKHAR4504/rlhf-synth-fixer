@@ -1,5 +1,5 @@
 resource "aws_iam_role" "lambda" {
-  name_prefix = "${var.name_prefix}-lambda-"
+  name_prefix = "${substr(var.name_prefix, 0, 20)}-lambda-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -28,7 +28,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_iam_role_policy" "lambda_s3" {
-  name_prefix = "${var.name_prefix}-lambda-s3-"
+  name_prefix = "${substr(var.name_prefix, 0, 20)}-lambda-s3-"
   role        = aws_iam_role.lambda.id
 
   policy = jsonencode({

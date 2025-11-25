@@ -67,7 +67,7 @@ variable "availability_zones" {
 variable "aurora_instance_class" {
   description = "Aurora instance class"
   type        = string
-  default     = "db.t3.small"
+  default     = "db.t3.medium"
 }
 
 variable "aurora_instance_count" {

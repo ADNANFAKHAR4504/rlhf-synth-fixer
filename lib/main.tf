@@ -124,7 +124,7 @@ module "lambda" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "${local.short_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -139,7 +139,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "${local.name_prefix}-tg"
+  name     = "${local.short_prefix}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = module.vpc.vpc_id
@@ -212,7 +212,7 @@ resource "aws_cloudwatch_log_group" "application" {
 resource "aws_iam_role" "app_role" {
   for_each = toset(["api", "worker", "scheduler"])
 
-  name_prefix = "${local.name_prefix}-${each.key}-"
+  name_prefix = "${local.short_prefix}-${each.key}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -244,7 +244,7 @@ resource "aws_iam_role" "app_role" {
 resource "aws_iam_role_policy" "app_role_policy" {
   for_each = aws_iam_role.app_role
 
-  name_prefix = "${local.name_prefix}-${each.key}-policy-"
+  name_prefix = "${local.short_prefix}-${each.key}-pol-"
   role        = each.value.id
 
   policy = jsonencode({
