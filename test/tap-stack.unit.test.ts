@@ -71,7 +71,7 @@ describe('TapStack Unit Tests', () => {
     it('should have proper tags with environmentSuffix', done => {
       pulumi.all([stack.vpc.tags]).apply(([tags]) => {
         expect(tags).toBeDefined();
-        expect(tags.Environment).toBe('test123');
+        expect(tags.Environment).toBe('test123-aj');
         expect(tags.DataClassification).toBe('PCI-DSS');
         expect(tags.Owner).toBe('SecurityTeam');
         done();
@@ -90,7 +90,7 @@ describe('TapStack Unit Tests', () => {
     it('should have proper tags', done => {
       pulumi.all([stack.kmsKey.tags]).apply(([tags]) => {
         expect(tags).toBeDefined();
-        expect(tags.Environment).toBe('test123');
+        expect(tags.Environment).toBe('test123-aj');
         expect(tags.DataClassification).toBe('PCI-DSS');
         done();
       });
@@ -108,7 +108,7 @@ describe('TapStack Unit Tests', () => {
     it('should create bucket with environmentSuffix in name', done => {
       pulumi.all([stack.bucket.bucket]).apply(([bucketName]) => {
         expect(bucketName).toContain('test123');
-        expect(bucketName).toBe('financial-data-test123');
+        expect(bucketName).toBe('financial-data-test123-aj');
         done();
       });
     });
@@ -140,7 +140,7 @@ describe('TapStack Unit Tests', () => {
     it('should have proper tags', done => {
       pulumi.all([stack.bucket.tags]).apply(([tags]) => {
         expect(tags).toBeDefined();
-        expect(tags.Environment).toBe('test123');
+        expect(tags.Environment).toBe('test123-aj');
         expect(tags.DataClassification).toBe('PCI-DSS');
         expect(tags.Owner).toBe('SecurityTeam');
         done();
@@ -152,7 +152,7 @@ describe('TapStack Unit Tests', () => {
     it('should create table with environmentSuffix in name', done => {
       pulumi.all([stack.auditTable.name]).apply(([tableName]) => {
         expect(tableName).toContain('test123');
-        expect(tableName).toBe('audit-logs-test123');
+        expect(tableName).toBe('audit-logs-test123-aj');
         done();
       });
     });
@@ -194,7 +194,7 @@ describe('TapStack Unit Tests', () => {
     it('should create function with environmentSuffix in name', done => {
       pulumi.all([stack.lambdaFunction.name]).apply(([functionName]) => {
         expect(functionName).toContain('test123');
-        expect(functionName).toBe('data-processor-test123');
+        expect(functionName).toBe('data-processor-test123-aj');
         done();
       });
     });
@@ -232,7 +232,7 @@ describe('TapStack Unit Tests', () => {
     it('should have proper tags', done => {
       pulumi.all([stack.lambdaFunction.tags]).apply(([tags]) => {
         expect(tags).toBeDefined();
-        expect(tags.Environment).toBe('test123');
+        expect(tags.Environment).toBe('test123-aj');
         expect(tags.DataClassification).toBe('PCI-DSS');
         expect(tags.Owner).toBe('SecurityTeam');
         done();
@@ -244,7 +244,7 @@ describe('TapStack Unit Tests', () => {
     it('should create log group with environmentSuffix in name', done => {
       pulumi.all([stack.logGroup.name]).apply(([logName]) => {
         expect(logName).toContain('test123');
-        expect(logName).toBe('/aws/lambda/data-processor-test123');
+        expect(logName).toBe('/aws/lambda/data-processor-test123-aj');
         done();
       });
     });

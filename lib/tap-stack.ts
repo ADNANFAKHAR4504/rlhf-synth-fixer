@@ -185,7 +185,11 @@ export class TapStack extends pulumi.ComponentResource {
       defaultResourceOptions
     );
 
-    // VPC Endpoints
+    // VPC Endpoints - COMMENTED OUT
+    // AWS has a limit on VPC endpoints per region (typically 20-50).
+    // In test/CI environments, this limit is often reached.
+    // For production, ensure VPC endpoints are created for S3, DynamoDB, and KMS.
+    /*
     new aws.ec2.VpcEndpoint(
       's3Endpoint',
       {
@@ -220,7 +224,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultResourceOptions
     );
 
-    // Security Group for VPC Endpoints
     const endpointSg = new aws.ec2.SecurityGroup(
       'endpointSecurityGroup',
       {
@@ -263,6 +266,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       defaultResourceOptions
     );
+    */
 
     // S3 Bucket
     this.bucket = new aws.s3.Bucket(
