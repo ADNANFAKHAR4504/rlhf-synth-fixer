@@ -73,6 +73,7 @@ describe('Integration Tests - Deployed Infrastructure', () => {
   describe('VPC and Networking', () => {
     let vpc: EC2.Vpc;
     let subnets: EC2.Subnet[];
+    let vpcAttributes: any = {};
 
     beforeAll(async () => {
       if (!outputs.vpc_id) return;
@@ -81,6 +82,19 @@ describe('Integration Tests - Deployed Infrastructure', () => {
         VpcIds: [outputs.vpc_id]
       }).promise();
       vpc = vpcResponse.Vpcs![0];
+
+      // Get VPC attributes separately
+      const dnsSupport = await ec2.describeVpcAttribute({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport'
+      }).promise();
+      vpcAttributes.EnableDnsSupport = dnsSupport.EnableDnsSupport?.Value;
+
+      const dnsHostnames = await ec2.describeVpcAttribute({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames'
+      }).promise();
+      vpcAttributes.EnableDnsHostnames = dnsHostnames.EnableDnsHostnames?.Value;
 
       const subnetResponse = await ec2.describeSubnets({
         Filters: [{ Name: 'vpc-id', Values: [outputs.vpc_id] }]
@@ -96,8 +110,8 @@ describe('Integration Tests - Deployed Infrastructure', () => {
 
     test('should have DNS support and hostnames enabled', () => {
       if (!outputs.vpc_id) return;
-      expect(vpc.EnableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpcAttributes.EnableDnsSupport).toBe(true);
+      expect(vpcAttributes.EnableDnsHostnames).toBe(true);
     });
 
     test('should have correct CIDR block', () => {
@@ -136,14 +150,13 @@ describe('Integration Tests - Deployed Infrastructure', () => {
     test('should have NAT Gateway for private subnet connectivity', async () => {
       if (!outputs.vpc_id) return;
       
-      const response = await ec2.describeNatGateways({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id] },
-          { Name: 'state', Values: ['available'] }
-        ]
-      }).promise();
+      const response = await ec2.describeNatGateways({}).promise();
       
-      expect(response.NatGateways?.length).toBeGreaterThanOrEqual(1);
+      const vpcNatGateways = response.NatGateways?.filter(
+        ng => ng.VpcId === outputs.vpc_id && ng.State === 'available'
+      );
+      
+      expect(vpcNatGateways?.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -242,7 +255,7 @@ describe('Integration Tests - Deployed Infrastructure', () => {
     });
 
     test('should have target groups configured', () => {
-      if (!outputs.app_target_group_arn) return;
+      if (!outputs.app_target_group_arn || !targetGroups) return;
       expect(targetGroups.length).toBeGreaterThanOrEqual(2);
       
       targetGroups.forEach(tg => {
@@ -260,7 +273,7 @@ describe('Integration Tests - Deployed Infrastructure', () => {
     });
 
     test('should have path-based routing rules', async () => {
-      if (!listeners.length) return;
+      if (!listeners || !listeners.length) return;
       
       const httpListener = listeners.find(l => l.Port === 80);
       if (!httpListener) return;

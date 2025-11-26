@@ -80,6 +80,125 @@ locals {
 
 **Root Cause**: Lack of fallback mechanism for environment suffix and inconsistent variable usage throughout the codebase.
 
+### 10. Backend Configuration Mismatch
+
+**Impact Level**: Critical
+
+**Issue**: The backend was initially configured as "local" but CI/CD pipeline expected S3 backend with dynamic configuration.
+
+**Error Message**:
+```
+Error: Invalid backend configuration argument
+The backend configuration argument "bucket" given on the command line is not expected for the selected backend type.
+```
+
+**Fix Applied**:
+Changed from local backend to S3 with partial configuration:
+```hcl
+# Before
+backend "local" {
+  path = "terraform.tfstate"
+}
+
+# After
+backend "s3" {}
+```
+
+**Root Cause**: Misunderstanding of CI/CD requirements - the pipeline uses S3 backend with dynamic configuration via `-backend-config` flags.
+
+### 11. Volume Size Mismatch with AMI
+
+**Impact Level**: Critical
+
+**Issue**: Launch template specified 20GB volume but AMI snapshot required minimum 30GB.
+
+**Error Message**:
+```
+Error: creating Auto Scaling Group: Volume of size 20GB is smaller than snapshot 'snap-00ab232ebe3af4034', expect size>= 30GB
+```
+
+**Fix Applied**:
+Updated volume size in asg.tf:
+```hcl
+ebs {
+  volume_size = 30  # Match AMI snapshot size requirement
+}
+```
+
+**Root Cause**: Not checking AMI requirements before setting volume size.
+
+### 12. Aurora PostgreSQL Version Not Available
+
+**Impact Level**: High
+
+**Issue**: Specified Aurora PostgreSQL version 15.4 was not available for the region.
+
+**Error Message**:
+```
+Error: creating RDS Cluster: InvalidParameterCombination: Cannot find version 15.4 for aurora-postgresql
+```
+
+**Fix Applied**:
+Changed to supported version:
+```hcl
+engine_version = "15.3"  # Use supported version for Serverless v2
+```
+
+**Root Cause**: Using a version that wasn't yet available in the deployment region.
+
+### 13. KMS Key Policy Missing CloudWatch Logs Access
+
+**Impact Level**: High
+
+**Issue**: CloudWatch Log Groups couldn't use the KMS key due to missing permissions.
+
+**Error Message**:
+```
+Error: creating CloudWatch Logs Log Group: AccessDeniedException: The specified KMS key does not exist or is not allowed to be used
+```
+
+**Fix Applied**:
+Added comprehensive KMS key policy allowing CloudWatch Logs access:
+```hcl
+policy = jsonencode({
+  Version = "2012-10-17"
+  Statement = [
+    {
+      Sid    = "Enable IAM User Permissions"
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+      }
+      Action   = "kms:*"
+      Resource = "*"
+    },
+    {
+      Sid    = "Allow CloudWatch Logs"
+      Effect = "Allow"
+      Principal = {
+        Service = "logs.${var.aws_region}.amazonaws.com"
+      }
+      Action = [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:CreateGrant",
+        "kms:DescribeKey"
+      ]
+      Resource = "*"
+      Condition = {
+        ArnLike = {
+          "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+        }
+      }
+    }
+  ]
+})
+```
+
+**Root Cause**: Default KMS key policy doesn't grant CloudWatch Logs service permission to use the key.
+
 ## Critical Failures
 
 ### 1. IAM Role Name Length Constraint Violation

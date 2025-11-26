@@ -70,7 +70,7 @@ resource "aws_launch_template" "main" {
     device_name = "/dev/xvda"
 
     ebs {
-      volume_size           = 20
+      volume_size           = 30 # Match AMI snapshot size requirement
       volume_type           = "gp3"
       encrypted             = true
       kms_key_id            = aws_kms_key.main.arn

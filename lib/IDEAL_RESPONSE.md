@@ -6,12 +6,16 @@ This document contains the complete, corrected Terraform configuration for deplo
 - IAM role name_prefix values shortened to fit within 38-character AWS limit
 - S3 lifecycle configurations include required `filter {}` attribute
 - All files formatted with `terraform fmt`
-- Backend configuration added for state management
+- Backend configuration uses S3 with partial config for dynamic state management
 - Random provider added for environment suffix fallback
 - All resources use `local.env_suffix` for consistent naming
 - Actual terraform.tfvars file created with task-specific values
 - Complete test suite in TypeScript/Jest for Terraform projects
 - All outputs include necessary aliases for backward compatibility
+- Volume size increased to 30GB to match AMI snapshot requirements
+- Aurora PostgreSQL version updated to 15.3 (supported version)
+- KMS key policy added to allow CloudWatch Logs service access
+- Integration tests fixed for proper API usage
 
 ## Complete Source Code from lib/ folder
 
@@ -119,9 +123,8 @@ terraform {
   }
 
   # Backend configuration for state management
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # Partial backend config: values are injected at terraform init time via -backend-config
+  backend "s3" {}
 }
 
 provider "aws" {
@@ -542,6 +545,43 @@ resource "aws_kms_key" "main" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
+  # Policy to allow CloudWatch Logs and other services to use this key
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = {
     Name = "loan-processing-key-${local.env_suffix}"
   }
@@ -581,7 +621,7 @@ resource "aws_rds_cluster" "aurora" {
   cluster_identifier = "loan-processing-aurora-${local.env_suffix}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
-  engine_version     = "15.4"
+  engine_version     = "15.3" # Use supported version for Serverless v2
   database_name      = "loandb"
   master_username    = var.db_master_username
   master_password    = random_password.db_master.result
@@ -1046,7 +1086,7 @@ resource "aws_launch_template" "main" {
     device_name = "/dev/xvda"
 
     ebs {
-      volume_size           = 20
+      volume_size           = 30  # Match AMI snapshot size requirement
       volume_type           = "gp3"
       encrypted             = true
       kms_key_id            = aws_kms_key.main.arn

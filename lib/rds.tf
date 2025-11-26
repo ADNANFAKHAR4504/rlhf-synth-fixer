@@ -23,7 +23,7 @@ resource "aws_rds_cluster" "aurora" {
   cluster_identifier = "loan-processing-aurora-${local.env_suffix}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
-  engine_version     = "15.4"
+  engine_version     = "15.3" # Use supported version for Serverless v2
   database_name      = "loandb"
   master_username    = var.db_master_username
   master_password    = random_password.db_master.result
