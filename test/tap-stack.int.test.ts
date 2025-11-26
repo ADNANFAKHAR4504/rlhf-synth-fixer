@@ -174,7 +174,7 @@ describe('Integration Tests', () => {
       const response = await kmsClient.send(new kms.ListAliasesCommand({}));
 
       const alias = response.Aliases?.find(
-        a => a.AliasName === 'alias/financial-data-key'
+        a => a.AliasName?.startsWith('alias/financial-data-key-')
       );
 
       expect(alias).toBeDefined();

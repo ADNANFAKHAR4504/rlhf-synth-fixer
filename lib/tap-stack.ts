@@ -23,6 +23,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
+    // Add unique suffix to all resource names to avoid conflicts
+    const suffix = `${suffix}-aj`;
+
     // Get current AWS account
     const current = aws.getCallerIdentity({});
     const accountId = current.then(c => c.accountId);
@@ -71,7 +74,7 @@ export class TapStack extends pulumi.ComponentResource {
           })
         ),
         tags: {
-          Environment: props.environmentSuffix,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -82,7 +85,7 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.kms.Alias(
       'financialDataKeyAlias',
       {
-        name: 'alias/financial-data-key',
+        name: `alias/financial-data-key-${suffix}`,
         targetKeyId: this.kmsKey.keyId,
       },
       defaultResourceOptions
@@ -96,8 +99,8 @@ export class TapStack extends pulumi.ComponentResource {
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: `secure-vpc-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `secure-vpc-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -122,8 +125,8 @@ export class TapStack extends pulumi.ComponentResource {
           cidrBlock: `10.0.${i + 1}.0/24`,
           availabilityZone: azs.then(az => az.names[i]),
           tags: {
-            Name: `private-subnet-${i + 1}-${props.environmentSuffix}`,
-            Environment: props.environmentSuffix,
+            Name: `private-subnet-${i + 1}-${suffix}`,
+            Environment: suffix,
             DataClassification: 'PCI-DSS',
             Owner: 'SecurityTeam',
           },
@@ -137,8 +140,8 @@ export class TapStack extends pulumi.ComponentResource {
         {
           vpcId: this.vpc.id,
           tags: {
-            Name: `private-rt-${i + 1}-${props.environmentSuffix}`,
-            Environment: props.environmentSuffix,
+            Name: `private-rt-${i + 1}-${suffix}`,
+            Environment: suffix,
             DataClassification: 'PCI-DSS',
             Owner: 'SecurityTeam',
           },
@@ -161,7 +164,7 @@ export class TapStack extends pulumi.ComponentResource {
     const lambdaSg = new aws.ec2.SecurityGroup(
       'lambdaSecurityGroup',
       {
-        name: `lambda-sg-${props.environmentSuffix}`,
+        name: `lambda-sg-${suffix}`,
         vpcId: this.vpc.id,
         description: 'Security group for Lambda function',
         egress: [
@@ -173,8 +176,8 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `lambda-sg-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `lambda-sg-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -191,8 +194,8 @@ export class TapStack extends pulumi.ComponentResource {
         vpcEndpointType: 'Gateway',
         routeTableIds: privateRouteTables.map(rt => rt.id),
         tags: {
-          Name: `s3-endpoint-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `s3-endpoint-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -208,8 +211,8 @@ export class TapStack extends pulumi.ComponentResource {
         vpcEndpointType: 'Gateway',
         routeTableIds: privateRouteTables.map(rt => rt.id),
         tags: {
-          Name: `dynamodb-endpoint-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `dynamodb-endpoint-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -221,7 +224,7 @@ export class TapStack extends pulumi.ComponentResource {
     const endpointSg = new aws.ec2.SecurityGroup(
       'endpointSecurityGroup',
       {
-        name: `endpoint-sg-${props.environmentSuffix}`,
+        name: `endpoint-sg-${suffix}`,
         vpcId: this.vpc.id,
         description: 'Security group for VPC endpoints',
         ingress: [
@@ -233,8 +236,8 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `endpoint-sg-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `endpoint-sg-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -252,8 +255,8 @@ export class TapStack extends pulumi.ComponentResource {
         securityGroupIds: [endpointSg.id],
         privateDnsEnabled: true,
         tags: {
-          Name: `kms-endpoint-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `kms-endpoint-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -265,7 +268,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.bucket = new aws.s3.Bucket(
       'dataBucket',
       {
-        bucket: `financial-data-${props.environmentSuffix}`,
+        bucket: `financial-data-${suffix}`,
         versioning: {
           enabled: true,
         },
@@ -278,8 +281,8 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         tags: {
-          Name: `financial-data-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `financial-data-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -304,7 +307,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.auditTable = new aws.dynamodb.Table(
       'auditLogsTable',
       {
-        name: `audit-logs-${props.environmentSuffix}`,
+        name: `audit-logs-${suffix}`,
         billingMode: 'PAY_PER_REQUEST',
         hashKey: 'id',
         attributes: [
@@ -321,8 +324,8 @@ export class TapStack extends pulumi.ComponentResource {
           enabled: true,
         },
         tags: {
-          Name: `audit-logs-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `audit-logs-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -334,11 +337,11 @@ export class TapStack extends pulumi.ComponentResource {
     this.logGroup = new aws.cloudwatch.LogGroup(
       'lambdaLogGroup',
       {
-        name: `/aws/lambda/data-processor-${props.environmentSuffix}`,
+        name: `/aws/lambda/data-processor-${suffix}`,
         retentionInDays: 90,
         kmsKeyId: this.kmsKey.arn,
         tags: {
-          Environment: props.environmentSuffix,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -350,7 +353,7 @@ export class TapStack extends pulumi.ComponentResource {
     const lambdaRole = new aws.iam.Role(
       'lambdaRole',
       {
-        name: `lambda-role-${props.environmentSuffix}`,
+        name: `lambda-role-${suffix}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -364,7 +367,7 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         }),
         tags: {
-          Environment: props.environmentSuffix,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -432,7 +435,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.lambdaFunction = new aws.lambda.Function(
       'dataProcessor',
       {
-        name: `data-processor-${props.environmentSuffix}`,
+        name: `data-processor-${suffix}`,
         runtime: aws.lambda.Runtime.NodeJS18dX,
         handler: 'index.handler',
         role: lambdaRole.arn,
@@ -453,8 +456,8 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         tags: {
-          Name: `data-processor-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `data-processor-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -470,7 +473,7 @@ export class TapStack extends pulumi.ComponentResource {
     const configRole = new aws.iam.Role(
       'configRole',
       {
-        name: `config-role-${props.environmentSuffix}`,
+        name: `config-role-${suffix}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -487,7 +490,7 @@ export class TapStack extends pulumi.ComponentResource {
           'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
         ],
         tags: {
-          Environment: props.environmentSuffix,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -498,7 +501,7 @@ export class TapStack extends pulumi.ComponentResource {
     const configBucket = new aws.s3.Bucket(
       'configBucket',
       {
-        bucket: `config-bucket-${props.environmentSuffix}`,
+        bucket: `config-bucket-${suffix}`,
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
@@ -508,8 +511,8 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         tags: {
-          Name: `config-bucket-${props.environmentSuffix}`,
-          Environment: props.environmentSuffix,
+          Name: `config-bucket-${suffix}`,
+          Environment: suffix,
           DataClassification: 'PCI-DSS',
           Owner: 'SecurityTeam',
         },
@@ -532,7 +535,7 @@ export class TapStack extends pulumi.ComponentResource {
     const configRecorder = new aws.cfg.Recorder(
       'configRecorder',
       {
-        name: `config-recorder-${props.environmentSuffix}`,
+        name: `config-recorder-${suffix}`,
         roleArn: configRole.arn,
         recordingGroup: {
           allSupported: true,
@@ -545,7 +548,7 @@ export class TapStack extends pulumi.ComponentResource {
     const configDeliveryChannel = new aws.cfg.DeliveryChannel(
       'configDeliveryChannel',
       {
-        name: `config-delivery-${props.environmentSuffix}`,
+        name: `config-delivery-${suffix}`,
         s3BucketName: configBucket.bucket,
       },
       { ...defaultResourceOptions, dependsOn: [configRecorder] }
@@ -554,7 +557,7 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.cfg.Rule(
       's3EncryptionRule',
       {
-        name: `s3-encryption-rule-${props.environmentSuffix}`,
+        name: `s3-encryption-rule-${suffix}`,
         source: {
           owner: 'AWS',
           sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
@@ -566,7 +569,7 @@ export class TapStack extends pulumi.ComponentResource {
     new aws.cfg.Rule(
       'dynamoEncryptionRule',
       {
-        name: `dynamo-encryption-rule-${props.environmentSuffix}`,
+        name: `dynamo-encryption-rule-${suffix}`,
         source: {
           owner: 'AWS',
           sourceIdentifier: 'DYNAMODB_TABLE_ENCRYPTED_KMS',
