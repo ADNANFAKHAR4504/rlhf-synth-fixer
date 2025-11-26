@@ -77,11 +77,12 @@ All of the following MUST pass:
    bash .claude/scripts/iac-synth-trainer/add-assignee.sh ${PR_NUMBER}
    ```
 
-4. **Create isolated worktree** (extracted to script with cleanup):
+4. **Create isolated worktree and sync with main** (CRITICAL):
    ```bash
    # Use helper script that handles:
    # - Existing worktree detection
    # - Worktree validation with cleanup on failure
+   # - Branch synchronization with main (rebase if behind)
    # - Parallel execution safety
    WORKTREE_PATH=$(bash .claude/scripts/iac-synth-trainer/setup-worktree.sh ${BRANCH_NAME} ${TASK_ID})
 
@@ -94,6 +95,26 @@ All of the following MUST pass:
    cd "${WORKTREE_PATH}"
    echo "✅ Working in isolated worktree: ${WORKTREE_PATH}"
    ```
+
+   **What setup-worktree.sh does**:
+   1. ✅ Creates or reuses worktree at `worktree/synth-{task_id}`
+   2. ✅ Validates worktree structure
+   3. ✅ **Fetches latest main branch**
+   4. ✅ **Checks if branch is behind main**
+   5. ✅ **Rebases branch on main if behind** (gets latest changes)
+   6. ✅ **Force-pushes rebased branch** (with lease for safety)
+   7. ✅ Cleans up on any failure
+
+   **Why this is critical**:
+   - Ensures fixes are applied on top of latest code
+   - Prevents merge conflicts later
+   - Gets latest CI/CD changes, scripts, validations
+   - Ensures consistency across all PRs
+
+   **Failure scenarios**:
+   - Uncommitted changes: Aborts with error (commit first)
+   - Rebase conflicts: Aborts rebase, removes worktree, exits with error
+   - Manual resolution needed if conflicts occur
 
 5. **Fetch CI/CD job status and create checklist**:
    ```bash
@@ -1037,9 +1058,40 @@ git worktree remove worktree/synth-{task_id} --force
 git worktree prune
 ```
 
-### 2. PR Was Force-Pushed During Fix
+### 2. Branch Behind Main (Not Synced)
 
-**Symptom**: Git conflicts or "diverged branches"
+**Symptom**: Fixes work locally but fail in CI/CD due to outdated code
+
+**Solution**: **Already handled automatically** by setup-worktree.sh
+
+**What happens**:
+1. Agent fetches latest main
+2. Checks if branch is behind
+3. Rebases branch on main (if behind)
+4. Force-pushes with `--force-with-lease`
+
+**Manual sync** (if needed):
+```bash
+cd worktree/synth-{task_id}
+git fetch origin main
+git rebase origin/main
+git push origin {branch_name} --force-with-lease
+```
+
+**Rebase conflict resolution**:
+```bash
+# If rebase fails with conflicts
+git status  # See conflicted files
+# Fix conflicts manually
+git add <resolved-files>
+git rebase --continue
+```
+
+**Prevention**: setup-worktree.sh does this automatically before any fixes
+
+### 3. PR Was Force-Pushed During Fix
+
+**Symptom**: Git conflicts or "diverged branches" during agent execution
 
 **Solution**:
 ```bash
@@ -1060,7 +1112,7 @@ if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
 fi
 ```
 
-### 3. Deployment Takes Longer Than 10 Minutes
+### 4. Deployment Takes Longer Than 10 Minutes
 
 **Symptom**: "CI/CD timeout" message
 
@@ -1081,7 +1133,7 @@ fi
 bash .claude/scripts/iac-synth-trainer/wait-for-cicd.sh ${PR_NUMBER} 900  # 15 minutes
 ```
 
-### 4. GitHub API Rate Limiting
+### 5. GitHub API Rate Limiting
 
 **Symptom**: "API rate limit exceeded" errors
 
@@ -1096,7 +1148,7 @@ gh api rate_limit
 # Or use GitHub App authentication (higher limits)
 ```
 
-### 5. Multiple Failed Jobs with Same Root Cause
+### 6. Multiple Failed Jobs with Same Root Cause
 
 **Symptom**: Many jobs fail due to one issue (e.g., metadata.json)
 
@@ -1111,7 +1163,7 @@ gh api rate_limit
 git commit -m "fix: intermediate changes [skip-jobs]"
 ```
 
-### 6. Stuck in Iteration Loop
+### 7. Stuck in Iteration Loop
 
 **Symptom**: Agent reaches max iterations without progress
 
@@ -1128,7 +1180,7 @@ git commit -m "fix: intermediate changes [skip-jobs]"
   - IAM permission adjustments
   - Test stability improvements
 
-### 7. Comment Flood on PR
+### 8. Comment Flood on PR
 
 **Symptom**: Too many bot comments
 

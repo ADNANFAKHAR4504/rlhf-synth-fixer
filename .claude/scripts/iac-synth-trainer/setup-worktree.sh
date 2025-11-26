@@ -63,4 +63,52 @@ if ! bash .claude/scripts/verify-worktree.sh; then
 fi
 
 echo "✅ Worktree validated - safe for parallel execution"
+
+# Sync with main branch to get latest changes
+echo ""
+echo "🔄 Synchronizing branch with latest main..."
+
+# Fetch latest main
+git fetch origin main
+
+# Check if branch has diverged from main
+MERGE_BASE=$(git merge-base HEAD origin/main)
+MAIN_HEAD=$(git rev-parse origin/main)
+
+if [ "$MERGE_BASE" != "$MAIN_HEAD" ]; then
+  echo "⚠️ Branch is behind main. Syncing with latest changes..."
+
+  # Check for local uncommitted changes
+  if ! git diff-index --quiet HEAD --; then
+    echo "❌ ERROR: Branch has uncommitted changes. Cannot sync with main."
+    echo "Please commit or stash changes first."
+    cd "${REPO_ROOT}"
+    git worktree remove "${WORKTREE_PATH}" --force
+    exit 1
+  fi
+
+  # Rebase on main to get latest changes
+  echo "Rebasing branch on latest main..."
+  if git rebase origin/main; then
+    echo "✅ Successfully rebased on main"
+
+    # Force push to update remote branch
+    echo "Pushing rebased branch to remote..."
+    if git push origin "${BRANCH_NAME}" --force-with-lease; then
+      echo "✅ Remote branch updated"
+    else
+      echo "⚠️ Failed to push rebased branch (may need manual push)"
+    fi
+  else
+    echo "❌ Rebase failed. Manual intervention required."
+    echo "Aborting rebase..."
+    git rebase --abort
+    cd "${REPO_ROOT}"
+    git worktree remove "${WORKTREE_PATH}" --force
+    exit 1
+  fi
+else
+  echo "✅ Branch is even with main - no sync needed"
+fi
+
 echo "${WORKTREE_PATH}"  # Output path for caller

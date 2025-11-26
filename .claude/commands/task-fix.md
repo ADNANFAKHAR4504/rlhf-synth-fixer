@@ -202,16 +202,18 @@ ${FAILING_CHECKS}
 **Your Mission**:
 1. Add assignee to PR #${PR_NUMBER}
 2. Create isolated worktree at \`worktree/synth-${TASK_ID}\`
-3. Fetch CI/CD pipeline status and create job checklist
-4. Analyze failed jobs and identify failure reasons
-5. Apply fixes systematically based on CI/CD failures
-6. Iterate until all CI/CD jobs pass
-7. Update the PR with fixes and summary
-8. Report completion status
+3. **CRITICAL: Sync branch with latest main** (rebase if behind)
+4. Fetch CI/CD pipeline status and create job checklist
+5. Analyze failed jobs and identify failure reasons
+6. Apply fixes systematically based on CI/CD failures
+7. Iterate until all CI/CD jobs pass
+8. Update the PR with fixes and summary
+9. Report completion status
 
 **Expected Outcome**:
 - ✅ Assignee added to PR
 - ✅ Working in isolated worktree (enables parallel execution)
+- ✅ **Branch synced with latest main** (no merge conflicts)
 - ✅ Complete CI/CD job checklist created
 - ✅ All CI/CD jobs passing
 - ✅ All 12 quality gates passing
