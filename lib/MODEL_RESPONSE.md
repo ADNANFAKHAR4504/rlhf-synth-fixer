@@ -75,7 +75,7 @@ variable "environment_suffix" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "eu-west-2"
+  default     = "eu-west-1"
 }
 
 variable "vpc_cidr" {
@@ -2433,7 +2433,7 @@ output "cluster_info" {
 
    ```hcl
    environment_suffix = "prod"
-   aws_region = "eu-west-2"
+   aws_region = "eu-west-1"
    cluster_version = "1.28"
    node_group_min_size = 2
    node_group_max_size = 10
@@ -2454,7 +2454,7 @@ output "cluster_info" {
 6. Configure kubectl:
 
    ```bash
-   aws eks update-kubeconfig --region eu-west-2 --name eks-cluster-<suffix>
+   aws eks update-kubeconfig --region eu-west-1 --name eks-cluster-<suffix>
    ```
 
 7. Verify deployment:

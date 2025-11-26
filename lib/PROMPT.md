@@ -76,7 +76,7 @@ Create a Terraform configuration to deploy a production-ready EKS cluster for co
 
 ## Environment Details
 
-**Region**: eu-west-2
+**Region**: eu-west-1
 
 **Infrastructure Requirements**:
 
@@ -126,7 +126,7 @@ resource "aws_eks_cluster" "main" {
 
 ### AWS Region
 
-Deploy all resources in **eu-west-2** region.
+Deploy all resources in **eu-west-1** region.
 
 ### GuardDuty Warning
 

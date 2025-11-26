@@ -66,7 +66,7 @@ This document describes the complete architecture and implementation of a produc
 ### Network Architecture
 
 ```
-Region: eu-west-2 (3 Availability Zones)
+Region: eu-west-1 (3 Availability Zones)
 
 VPC: 10.0.0.0/16
 ├── Public Subnets (3)
