@@ -115,7 +115,7 @@ describe("Terraform EKS Infrastructure - Data Sources", () => {
 
   test("fetches VPC information", () => {
     expect(dataContent).toMatch(/data\s+"aws_vpc"\s+"selected"\s*{/);
-    expect(dataContent).toMatch(/id\s*=\s*var\.vpc_id/);
+    expect(dataContent).toMatch(/id\s*=\s*aws_vpc\.main\.id/);
   });
 
   test("fetches Bottlerocket AMI for EKS", () => {
@@ -343,7 +343,7 @@ describe("Terraform EKS Infrastructure - Helm Releases", () => {
 
   test("configures Load Balancer Controller with VPC ID", () => {
     expect(helmContent).toMatch(/name\s*=\s*"vpcId"/);
-    expect(helmContent).toMatch(/value\s*=\s*var\.vpc_id/);
+    expect(helmContent).toMatch(/value\s*=\s*aws_vpc\.main\.id/);
   });
 });
 
