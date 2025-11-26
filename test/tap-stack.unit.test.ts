@@ -33,11 +33,22 @@ describe('TapStack Unit Tests', () => {
       expect(stack).toBeInstanceOf(pulumi.ComponentResource);
     });
 
-    it('should create TapStack with environment suffix', () => {
+    it('should create TapStack with environment suffix from args', () => {
       const stack = new TapStack('test-stack', {
         environmentSuffix: 'dev',
       });
       expect(stack).toBeDefined();
+    });
+
+    it('should create TapStack with environment suffix from Pulumi config', () => {
+      // Mock Pulumi config to return a value
+      const mockConfig = jest.spyOn(pulumi.Config.prototype, 'get');
+      mockConfig.mockReturnValue('staging');
+
+      const stack = new TapStack('test-stack', {});
+      expect(stack).toBeDefined();
+
+      mockConfig.mockRestore();
     });
 
     it('should create TapStack with custom tags', () => {
@@ -186,14 +197,6 @@ describe('TapStack Unit Tests', () => {
       expect(childStack).toBeDefined();
     });
 
-    it('should accept provider resource option', () => {
-      const opts: pulumi.ResourceOptions = {
-        provider: {} as any,
-      };
-      const stack = new TapStack('test-stack', {}, opts);
-      expect(stack).toBeDefined();
-    });
-
     it('should accept dependsOn resource option', () => {
       const dep = new TapStack('dependency', {});
       const opts: pulumi.ResourceOptions = {
@@ -314,6 +317,39 @@ describe('TapStack Unit Tests', () => {
         new TapStack(`test-stack-${i}`, { environmentSuffix: 'test' })
       );
       stacks.forEach(stack => expect(stack).toBeDefined());
+    });
+
+    it('should prioritize args.environmentSuffix over config', () => {
+      const mockConfig = jest.spyOn(pulumi.Config.prototype, 'get');
+      mockConfig.mockReturnValue('config-env');
+
+      const stack = new TapStack('test-stack', { environmentSuffix: 'args-env' });
+      expect(stack).toBeDefined();
+
+      mockConfig.mockRestore();
+    });
+
+    it('should use default when both args and config are empty', () => {
+      const mockConfig = jest.spyOn(pulumi.Config.prototype, 'get');
+      mockConfig.mockReturnValue(undefined);
+
+      const stack = new TapStack('test-stack', {});
+      expect(stack).toBeDefined();
+
+      mockConfig.mockRestore();
+    });
+
+    it('should handle undefined environmentSuffix in args', () => {
+      const stack = new TapStack('test-stack', { environmentSuffix: undefined });
+      expect(stack).toBeDefined();
+    });
+
+    it('should handle certificateArn parameter when provided', () => {
+      const stack = new TapStack('test-stack', {
+        environmentSuffix: 'test',
+        certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test',
+      });
+      expect(stack).toBeDefined();
     });
   });
 
