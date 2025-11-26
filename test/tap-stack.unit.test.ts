@@ -89,9 +89,19 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Conditions.CreateVPCPeering['Fn::And']).toBeDefined();
     });
 
-    test('CreateVPCPeering should check VpcPeeringEnabled and IsSourceRegion', () => {
+    test('CreateVPCPeering should check VpcPeeringEnabled, IsSourceRegion, and TargetVpcId not empty', () => {
       const condition = template.Conditions.CreateVPCPeering['Fn::And'];
-      expect(condition).toHaveLength(2);
+      expect(condition).toHaveLength(3);
+      // Check first condition: VpcPeeringEnabled == true
+      expect(condition[0]['Fn::Equals'][0]['Ref']).toBe('VpcPeeringEnabled');
+      expect(condition[0]['Fn::Equals'][1]).toBe('true');
+      // Check second condition: AWS::Region == SourceRegion
+      expect(condition[1]['Fn::Equals'][0]['Ref']).toBe('AWS::Region');
+      expect(condition[1]['Fn::Equals'][1]['Ref']).toBe('SourceRegion');
+      // Check third condition: TargetVpcId != ""
+      expect(condition[2]['Fn::Not']).toBeDefined();
+      expect(condition[2]['Fn::Not'][0]['Fn::Equals'][0]['Ref']).toBe('TargetVpcId');
+      expect(condition[2]['Fn::Not'][0]['Fn::Equals'][1]).toBe('');
     });
 
     test('should have IsTargetRegion condition', () => {
@@ -797,16 +807,18 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       });
     });
 
-    test('no resources should have Retain deletion policy (except Global Tables)', () => {
+    test('no resources should have Retain deletion policy (except Global Tables and VPC Peering)', () => {
       // Global Tables require Retain policy to prevent 24-hour cooldown issues
       // when replicas are added/removed. This is a necessary exception.
-      const allowedRetainResources = ['TradingAnalyticsGlobalTable'];
+      // VPC Peering connections should also have Retain policy to prevent accidental
+      // deletion which would break cross-region connectivity.
+      const allowedRetainResources = ['TradingAnalyticsGlobalTable', 'VPCPeeringConnection'];
 
       Object.keys(template.Resources).forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource.DeletionPolicy) {
           if (allowedRetainResources.includes(resourceName)) {
-            // Global Tables are allowed to have Retain policy
+            // Global Tables and VPC Peering are allowed to have Retain policy
             expect(resource.DeletionPolicy).toBe('Retain');
           } else {
             expect(resource.DeletionPolicy).not.toBe('Retain');

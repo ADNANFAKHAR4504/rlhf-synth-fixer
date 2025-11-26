@@ -32,7 +32,9 @@
     "TargetVpcId": {
       "Description": "Target VPC ID for VPC peering (required only if VpcPeeringEnabled is true)",
       "Type": "String",
-      "Default": ""
+      "Default": "",
+      "AllowedPattern": "^$|^vpc-[0-9a-f]{8,17}$",
+      "ConstraintDescription": "Must be a valid VPC ID (vpc-xxxxxxxx) or empty string"
     }
   },
   "Conditions": {
@@ -73,6 +75,18 @@
             },
             {
               "Ref": "SourceRegion"
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "TargetVpcId"
+                },
+                ""
+              ]
             }
           ]
         }
@@ -1195,6 +1209,8 @@
     "VPCPeeringConnection": {
       "Type": "AWS::EC2::VPCPeeringConnection",
       "Condition": "CreateVPCPeering",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "VpcId": {
           "Ref": "TradingVPC"
@@ -1211,8 +1227,20 @@
             "Value": {
               "Fn::Sub": "vpc-peering-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Designer": {
+          "id": "VPCPeeringConnection"
+        },
+        "Note": "VPC peering connection is only created when VpcPeeringEnabled=true, in source region, and TargetVpcId is provided. Early validation may fail if target VPC doesn't exist yet - deploy target region stack first."
       }
     },
     "MonitoringDashboard": {
