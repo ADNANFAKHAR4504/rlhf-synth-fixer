@@ -400,3 +400,4 @@ describe("VPC Network Isolation Infrastructure - Integration Tests", () => {
       expect(outputs.vpc_flow_log_group_name).toBeDefined();
     });
   });
+});
