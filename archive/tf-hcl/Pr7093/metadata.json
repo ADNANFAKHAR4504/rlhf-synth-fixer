@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7090",
+  "team": "5",
+  "startedAt": "2025-11-22T15:21:59.385Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "serverless transaction file ingestion and validation pipeline for an EU financial platform with GDPR-compliant audit trails and end-to-end observability",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "CloudWatch",
+    "KMS",
+    "SNS",
+    "VPC",
+    "X-Ray",
+    "IAM"
+  ],
+  "training_quality": 9.8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
