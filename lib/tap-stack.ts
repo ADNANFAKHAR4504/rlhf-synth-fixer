@@ -503,6 +503,9 @@ export class TapStack extends pulumi.ComponentResource {
         instanceType: 't3.micro',
         ami: primaryAmi.then(ami => ami.id), // FIXED: Dynamic AMI lookup
         subnetId: primarySubnets[0].id,
+        rootBlockDevice: {
+          encrypted: false, // Disable EBS encryption to avoid KMS key issues
+        },
         tags: {
           Name: `primary-instance-${environmentSuffix}`,
         },
@@ -620,6 +623,9 @@ export class TapStack extends pulumi.ComponentResource {
         instanceType: 't3.micro',
         ami: secondaryAmi.then(ami => ami.id), // FIXED: Dynamic AMI lookup
         subnetId: secondarySubnets[0].id,
+        rootBlockDevice: {
+          encrypted: false, // Disable EBS encryption to avoid KMS key issues
+        },
         tags: {
           Name: `secondary-instance-${environmentSuffix}`,
         },
