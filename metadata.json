@@ -3,14 +3,14 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "u8o0j5r3",
   "team": "synth",
   "startedAt": "2025-11-25T23:23:00Z",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Containerized Application Deployment",
-    "Database Migration"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
+  "po_id": "u8o0j5r3",
   "aws_services": [
     "Aurora PostgreSQL",
     "ECS",
