@@ -6,13 +6,13 @@ import os
 from cdktf import Testing
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def environment_suffix():
     """Return the environment suffix for testing."""
     return os.getenv("ENVIRONMENT_SUFFIX", "test")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def aws_region():
     """Return the AWS region for testing."""
     return os.getenv("AWS_REGION", "us-east-1")
