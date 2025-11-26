@@ -182,10 +182,13 @@ ${FAILING_CHECKS}
 1. **Add yourself as assignee**: Add your GitHub user as assignee to PR #${PR_NUMBER}
    - Command: \`gh pr edit ${PR_NUMBER} --add-assignee \$(gh api user --jq '.login')\`
 
-2. **Create isolated worktree**: MUST work in isolated worktree at \`worktree/synth-${TASK_ID}\`
+2. **Create isolated worktree and sync with main**: MUST work in isolated worktree at \`worktree/synth-${TASK_ID}\`
    - This enables parallel execution of multiple PR fixes
    - Do NOT work directly on the branch
    - Worktree path: \`$(git rev-parse --show-toplevel)/worktree/synth-${TASK_ID}\`
+   - **Automatically sync branch with main** (fetch, rebase if behind)
+   - **Automatically resolve merge conflicts** (accept main's version for scripts/configs)
+   - If unresolvable conflicts: Exit with instructions for manual resolution
 
 3. **Fetch and analyze CI/CD job status**:
    - Create complete checklist of all CI/CD pipeline jobs
