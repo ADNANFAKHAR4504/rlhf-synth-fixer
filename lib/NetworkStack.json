@@ -312,9 +312,23 @@
         "VpcId": {"Ref": "VPC"},
         "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.s3"},
         "RouteTableIds": [
-          {"Ref": "PrivateRouteTable"},
-          {"Ref": "PublicRouteTable"}
-        ]
+          {"Ref": "PrivateRouteTable"}
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:ListBucket"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
       }
     },
     "DynamoDBVPCEndpoint": {
@@ -324,9 +338,26 @@
         "VpcId": {"Ref": "VPC"},
         "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"},
         "RouteTableIds": [
-          {"Ref": "PrivateRouteTable"},
-          {"Ref": "PublicRouteTable"}
-        ]
+          {"Ref": "PrivateRouteTable"}
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:Query",
+                "dynamodb:Scan",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
       }
     },
     "ECRVPCEndpoint": {
