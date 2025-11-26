@@ -16,7 +16,7 @@ data "aws_iam_policy_document" "cross_account_security_assume" {
   statement {
     sid    = "AllowAssumeWithMFA"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "AWS"
       identifiers = [for id in var.trusted_account_ids : "arn:aws:iam::${id}:root"]
     }
@@ -31,7 +31,7 @@ data "aws_iam_policy_document" "cross_account_security_assume" {
   statement {
     sid    = "DenyAssumeWithoutMFA"
     effect = "Deny"
-    principals = {
+    principals {
       type        = "AWS"
       identifiers = [for id in var.trusted_account_ids : "arn:aws:iam::${id}:root"]
     }
@@ -117,7 +117,7 @@ data "aws_iam_policy_document" "cross_account_operations_assume" {
   statement {
     sid    = "AllowAssumeWithMFA"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "AWS"
       identifiers = [for id in var.trusted_account_ids : "arn:aws:iam::${id}:root"]
     }
@@ -188,7 +188,7 @@ data "aws_iam_policy_document" "cross_account_developer_assume" {
   statement {
     sid    = "AllowAssumeWithMFA"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "AWS"
       identifiers = [for id in var.trusted_account_ids : "arn:aws:iam::${id}:root"]
     }
@@ -263,7 +263,7 @@ data "aws_iam_policy_document" "config_assume" {
   statement {
     sid    = "AllowConfigService"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "Service"
       identifiers = ["config.amazonaws.com"]
     }

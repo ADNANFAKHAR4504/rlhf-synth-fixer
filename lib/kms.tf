@@ -35,7 +35,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
   statement {
     sid    = "Enable IAM Root Account Permissions"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "AWS"
       identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
     }
@@ -46,7 +46,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
   statement {
     sid    = "Allow Cross Account Use"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "AWS"
       identifiers = [for id in var.trusted_account_ids : "arn:aws:iam::${id}:root"]
     }
@@ -62,7 +62,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
   statement {
     sid    = "Allow CloudTrail to Encrypt Logs"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
@@ -76,7 +76,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
   statement {
     sid    = "Allow AWS Config to Use Key"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "Service"
       identifiers = ["config.amazonaws.com"]
     }
@@ -90,7 +90,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
   statement {
     sid    = "Allow CloudWatch Logs to Encrypt"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "Service"
       identifiers = ["logs.${var.primary_region}.amazonaws.com"]
     }
@@ -110,7 +110,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
   statement {
     sid    = "Prevent Key Deletion"
     effect = "Deny"
-    principals = {
+    principals {
       type        = "*"
       identifiers = ["*"]
     }
@@ -126,7 +126,7 @@ data "aws_iam_policy_document" "kms_primary_policy" {
 resource "aws_kms_replica_key" "secondary" {
   provider                = aws.secondary
   description             = "Replica KMS key for disaster recovery - ${var.environment_suffix}"
-  primary_key_id          = aws_kms_key.primary.id
+  primary_key_arn         = aws_kms_key.primary.arn
   deletion_window_in_days = 30
 
   depends_on = [aws_kms_key.primary]

@@ -8,23 +8,17 @@ resource "aws_config_configuration_recorder" "main" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.config_managed_policy]
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "config-recorder-${var.environment_suffix}"
-    }
-  )
 }
 
 # Start the configuration recorder
 resource "aws_config_configuration_recorder_status" "main" {
-  count               = var.enable_config ? 1 : 0
-  name                = aws_config_configuration_recorder.main[0].name
-  is_enabled          = true
-  depends_on          = [aws_s3_bucket_policy.config_bucket_policy]
-  start_recording     = true
-  depends_on_explicit = [aws_config_delivery_channel.main[0].name]
+  count      = var.enable_config ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
+  is_enabled = true
+  depends_on = [
+    aws_s3_bucket_policy.config_bucket_policy,
+    aws_config_delivery_channel.main[0]
+  ]
 }
 
 # AWS Config Delivery Channel
@@ -34,13 +28,6 @@ resource "aws_config_delivery_channel" "main" {
   s3_bucket_name = aws_s3_bucket.config_bucket.id
   sns_topic_arn  = aws_sns_topic.config_notifications.arn
   depends_on     = [aws_config_configuration_recorder.main[0]]
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "config-delivery-channel-${var.environment_suffix}"
-    }
-  )
 }
 
 # S3 bucket policy for Config
@@ -263,11 +250,4 @@ resource "aws_config_conformance_pack" "security" {
     aws_config_config_rule.cloudtrail_enabled[0],
     aws_config_config_rule.config_enabled[0]
   ]
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "security-conformance-pack-${var.environment_suffix}"
-    }
-  )
 }

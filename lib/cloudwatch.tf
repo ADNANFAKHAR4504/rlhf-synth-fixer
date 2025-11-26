@@ -15,8 +15,7 @@ resource "aws_cloudwatch_log_group" "central" {
 # CloudWatch Logs resource policy for cross-account access
 resource "aws_cloudwatch_log_resource_policy" "cross_account" {
   policy_name = "cross-account-logs-policy-${var.environment_suffix}"
-
-  policy_text = jsonencode({
+  policy_document = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -108,7 +107,7 @@ data "aws_iam_policy_document" "cloudtrail_logs_assume" {
   statement {
     sid    = "AllowCloudTrailService"
     effect = "Allow"
-    principals = {
+    principals {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
@@ -142,7 +141,7 @@ data "aws_iam_policy_document" "cloudtrail_logs_policy" {
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
   name           = "UnauthorizedAPICallsMetricFilter-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-  filter_pattern = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
+  pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
 
   metric_transformation {
     name      = "UnauthorizedAPICallsCount"
@@ -157,7 +156,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
 resource "aws_cloudwatch_log_metric_filter" "root_account_usage" {
   name           = "RootAccountUsageMetricFilter-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-  filter_pattern = "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }"
+  pattern        = "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }"
 
   metric_transformation {
     name      = "RootAccountUsageCount"
@@ -172,7 +171,7 @@ resource "aws_cloudwatch_log_metric_filter" "root_account_usage" {
 resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
   name           = "IAMPolicyChangesMetricFilter-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.iam_activity.name
-  filter_pattern = "{ ($.eventName = DeleteGroupPolicy) || ($.eventName = DeleteRolePolicy) || ($.eventName = DeleteUserPolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutUserPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = CreatePolicyVersion) || ($.eventName = DeletePolicyVersion) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy) || ($.eventName = AttachUserPolicy) || ($.eventName = DetachUserPolicy) || ($.eventName = AttachGroupPolicy) || ($.eventName = DetachGroupPolicy) }"
+  pattern        = "{ ($.eventName = DeleteGroupPolicy) || ($.eventName = DeleteRolePolicy) || ($.eventName = DeleteUserPolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutUserPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = CreatePolicyVersion) || ($.eventName = DeletePolicyVersion) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy) || ($.eventName = AttachUserPolicy) || ($.eventName = DetachUserPolicy) || ($.eventName = AttachGroupPolicy) || ($.eventName = DetachGroupPolicy) }"
 
   metric_transformation {
     name      = "IAMPolicyChangesCount"
@@ -187,7 +186,7 @@ resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
 resource "aws_cloudwatch_log_metric_filter" "kms_key_disabling" {
   name           = "KMSKeyDisablingMetricFilter-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-  filter_pattern = "{ ($.eventName = DisableKey) || ($.eventName = ScheduleKeyDeletion) }"
+  pattern        = "{ ($.eventName = DisableKey) || ($.eventName = ScheduleKeyDeletion) }"
 
   metric_transformation {
     name      = "KMSKeyDisablingCount"
@@ -202,7 +201,7 @@ resource "aws_cloudwatch_log_metric_filter" "kms_key_disabling" {
 resource "aws_cloudwatch_log_metric_filter" "config_changes" {
   name           = "ConfigChangesMetricFilter-${var.environment_suffix}"
   log_group_name = aws_cloudwatch_log_group.config.name
-  filter_pattern = "{ ($.eventName = PutConfigRule) || ($.eventName = DeleteConfigRule) || ($.eventName = PutConformancePack) || ($.eventName = DeleteConformancePack) }"
+  pattern        = "{ ($.eventName = PutConfigRule) || ($.eventName = DeleteConfigRule) || ($.eventName = PutConformancePack) || ($.eventName = DeleteConformancePack) }"
 
   metric_transformation {
     name      = "ConfigChangesCount"
