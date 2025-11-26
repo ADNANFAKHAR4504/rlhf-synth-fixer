@@ -134,9 +134,39 @@ resource "aws_nat_gateway" "primary" {
     Environment = "production"
     DR-Tier     = "critical"
   }
+
+  depends_on = [aws_internet_gateway.primary]
 }
 
-# Route tables for primary region
+# NAT Gateways for secondary region
+resource "aws_eip" "secondary_nat" {
+  provider = aws.secondary
+  count    = 3
+  domain   = "vpc"
+
+  tags = {
+    Name        = "eip-nat-secondary-${count.index + 1}-${var.environment_suffix}"
+    Environment = "production"
+    DR-Tier     = "critical"
+  }
+}
+
+resource "aws_nat_gateway" "secondary" {
+  provider      = aws.secondary
+  count         = 3
+  allocation_id = aws_eip.secondary_nat[count.index].id
+  subnet_id     = aws_subnet.secondary_public[count.index].id
+
+  tags = {
+    Name        = "nat-secondary-${count.index + 1}-${var.environment_suffix}"
+    Environment = "production"
+    DR-Tier     = "critical"
+  }
+
+  depends_on = [aws_internet_gateway.secondary]
+}
+
+# Route tables for primary region - Private
 resource "aws_route_table" "primary_private" {
   provider = aws.primary
   count    = 3
@@ -161,7 +191,56 @@ resource "aws_route_table_association" "primary_private" {
   route_table_id = aws_route_table.primary_private[count.index].id
 }
 
-# Route tables for secondary region
+# Route tables for primary region - Public
+resource "aws_route_table" "primary_public" {
+  provider = aws.primary
+  vpc_id   = aws_vpc.primary.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.primary.id
+  }
+
+  tags = {
+    Name        = "rt-primary-public-${var.environment_suffix}"
+    Environment = "production"
+    DR-Tier     = "critical"
+  }
+}
+
+resource "aws_route_table_association" "primary_public" {
+  provider       = aws.primary
+  count          = 3
+  subnet_id      = aws_subnet.primary_public[count.index].id
+  route_table_id = aws_route_table.primary_public.id
+}
+
+# Route tables for secondary region - Private
+resource "aws_route_table" "secondary_private" {
+  provider = aws.secondary
+  count    = 3
+  vpc_id   = aws_vpc.secondary.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.secondary[count.index].id
+  }
+
+  tags = {
+    Name        = "rt-secondary-private-${count.index + 1}-${var.environment_suffix}"
+    Environment = "production"
+    DR-Tier     = "critical"
+  }
+}
+
+resource "aws_route_table_association" "secondary_private" {
+  provider       = aws.secondary
+  count          = 3
+  subnet_id      = aws_subnet.secondary_private[count.index].id
+  route_table_id = aws_route_table.secondary_private[count.index].id
+}
+
+# Route tables for secondary region - Public
 resource "aws_route_table" "secondary_public" {
   provider = aws.secondary
   vpc_id   = aws_vpc.secondary.id
