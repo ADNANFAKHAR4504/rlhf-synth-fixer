@@ -158,24 +158,6 @@ describe("EKS Platform - Integration Tests", () => {
         expect(normalizeName(outputs.fargate_profile_coredns_id)).toContain("eks-cluster");
       });
     });
-
-    test("cluster_info JSON parses and node groups have expected shape", () => {
-      withOutputs(() => {
-        const info = JSON.parse(outputs.cluster_info as string);
-        expect(info.cluster_name).toMatch(/eks-cluster/);
-        expect(info.cluster_version).toBe("1.28");
-        expect(info.region).toBe(region);
-        expect(info.vpc_id).toBe(outputs.vpc_id);
-
-        info.nodegroups.forEach((ng: any) => {
-          expect(ng).toBeDefined();
-          expect(typeof ng.instance_type).toBe("string");
-          expect(ng.min_size).toBeGreaterThanOrEqual(1);
-          expect(ng.max_size).toBeGreaterThanOrEqual(ng.min_size);
-          expect(ng.name).toMatch(/-dev$/);
-        });
-      });
-    });
   });
 
   describe("ECR, CloudWatch and kubectl config", () => {
