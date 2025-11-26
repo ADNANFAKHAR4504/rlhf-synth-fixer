@@ -8,15 +8,7 @@
   "startedAt": "2025-11-26T04:43:00+00:00",
   "subtask": "Multi-Region Disaster Recovery Infrastructure",
   "subject_labels": [
-    "Disaster Recovery",
-    "Multi-Region Architecture",
-    "Database Replication",
-    "High Availability",
-    "Network Configuration",
-    "Security Configuration",
-    "Monitoring Setup",
-    "Backup and Restore",
-    "Global Infrastructure"
+    "Disaster Recovery"
   ],
   "training_quality": 8,
   "aws_services": [
