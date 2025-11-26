@@ -1032,10 +1032,14 @@ def lambda_handler(event, context):
 
         # Write Lambda function code to lib/lambda directory
         import os as os_module
-        lambda_dir = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e2u0x0/lib/lambda"
+        import pathlib
+        # Use relative path from the current file location
+        current_file = pathlib.Path(__file__).parent
+        lambda_dir = current_file / "lambda"
         os_module.makedirs(lambda_dir, exist_ok=True)
 
-        with open(f"{lambda_dir}/health_check.py", "w") as f:
+        lambda_file_path = lambda_dir / "health_check.py"
+        with open(lambda_file_path, "w") as f:
             f.write(lambda_code)
 
         # Lambda function
@@ -1046,7 +1050,7 @@ def lambda_handler(event, context):
             runtime="python3.9",
             handler="health_check.lambda_handler",
             role=lambda_role.arn,
-            filename=f"{lambda_dir}/health_check.py",
+            filename=str(lambda_file_path),
             timeout=300,
             memory_size=256,
             environment=LambdaFunctionEnvironment(
