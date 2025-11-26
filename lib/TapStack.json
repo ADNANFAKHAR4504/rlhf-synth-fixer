@@ -53,27 +53,33 @@
     },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Public subnet in us-east-1a for ALB"
+      "Description": "Public subnet in us-east-1a for ALB",
+      "Default": "subnet-00000000000000001"
     },
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Public subnet in us-east-1b for ALB"
+      "Description": "Public subnet in us-east-1b for ALB",
+      "Default": "subnet-00000000000000002"
     },
     "PublicSubnet3": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Public subnet in us-east-1c for ALB"
+      "Description": "Public subnet in us-east-1c for ALB",
+      "Default": "subnet-00000000000000003"
     },
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Private subnet in us-east-1a for ECS tasks"
+      "Description": "Private subnet in us-east-1a for ECS tasks",
+      "Default": "subnet-00000000000000011"
     },
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Private subnet in us-east-1b for ECS tasks"
+      "Description": "Private subnet in us-east-1b for ECS tasks",
+      "Default": "subnet-00000000000000012"
     },
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Private subnet in us-east-1c for ECS tasks"
+      "Description": "Private subnet in us-east-1c for ECS tasks",
+      "Default": "subnet-00000000000000013"
     },
     "ContainerImage": {
       "Type": "String",
