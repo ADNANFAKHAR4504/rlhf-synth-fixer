@@ -2,6 +2,108 @@
 
 This document tracks issues encountered during implementation and their resolutions for training improvement.
 
+## Issue 0: Cannot Add Existing RDS Cluster to Global Cluster
+
+### What Went Wrong
+
+After initial deployment of a standalone Aurora cluster, attempting to add it to a newly created Global Database resulted in the error:
+
+```
+Error: existing RDS Clusters cannot be added to an existing RDS Global Cluster
+
+  with aws_rds_cluster.primary,
+  on rds_aurora.tf line 17, in resource "aws_rds_cluster" "primary":
+  17: resource "aws_rds_cluster" "primary" {
+```
+
+**Evidence**:
+- Primary cluster already deployed as standalone cluster
+- Attempted to add `global_cluster_identifier` parameter to existing cluster
+- AWS does not support adding existing clusters to global clusters post-creation
+
+### Root Cause
+
+The initial configuration created the global cluster first, then tried to make the existing standalone primary cluster join it by adding the `global_cluster_identifier` parameter. AWS RDS does not allow this operation - clusters must be created as part of a global database from the beginning, or the global database must be created by promoting an existing cluster.
+
+### Correct Implementation
+
+Use AWS's supported migration path: create the global cluster FROM the existing primary cluster using `source_db_cluster_identifier`:
+
+```hcl
+# Primary cluster - created standalone first
+resource "aws_rds_cluster" "primary" {
+  cluster_identifier = "aurora-primary-${var.environment_suffix}"
+  engine             = "aurora-postgresql"
+  engine_version     = "14.13"
+  master_username    = var.master_username
+  master_password    = random_password.master_password.result
+  database_name      = var.database_name
+  # ... other config (NO global_cluster_identifier) ...
+  
+  lifecycle {
+    ignore_changes = [
+      global_cluster_identifier,  # Ignore after promotion
+      engine_version
+    ]
+  }
+}
+
+# Global cluster - promotes the existing primary cluster
+resource "aws_rds_global_cluster" "global" {
+  global_cluster_identifier    = "aurora-global-${var.environment_suffix}"
+  source_db_cluster_identifier = aws_rds_cluster.primary.arn
+  force_destroy                = true
+  
+  lifecycle {
+    ignore_changes = [
+      engine_version,
+      source_db_cluster_identifier,
+      engine,
+      engine_lifecycle_support,
+      force_destroy
+    ]
+  }
+  
+  depends_on = [aws_rds_cluster_instance.primary]
+}
+
+# Secondary cluster - joins the global cluster normally
+resource "aws_rds_cluster" "secondary" {
+  provider                  = aws.secondary
+  cluster_identifier        = "aurora-secondary-${var.environment_suffix}"
+  engine                    = "aurora-postgresql"
+  engine_version            = "14.13"
+  global_cluster_identifier = aws_rds_global_cluster.global.id
+  # ... other config ...
+  
+  depends_on = [aws_rds_global_cluster.global]
+}
+```
+
+### Key Learnings
+
+- Existing standalone clusters CANNOT be added to a global cluster by modifying configuration
+- Use `source_db_cluster_identifier` to promote an existing cluster to a global database
+- `force_destroy` is required when using `source_db_cluster_identifier`
+- Lifecycle rules prevent Terraform from trying to modify immutable attributes
+- The primary cluster must exist and be fully operational before creating the global cluster
+- This approach allows migration with no data loss and minimal downtime
+
+### Migration Flow
+
+1. Primary cluster exists standalone (already deployed)
+2. Create global cluster using `source_db_cluster_identifier` pointing to primary
+3. AWS promotes primary cluster to be the primary of the global database
+4. Create secondary cluster with `global_cluster_identifier` to join the global database
+5. Replication automatically established between regions
+
+### References
+
+- [AWS: Converting a standalone cluster to a global database](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-getting-started.html#aurora-global-database-attach)
+- [Terraform: aws_rds_global_cluster with source_db_cluster_identifier](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/rds_global_cluster#source_db_cluster_identifier)
+
+---
+
 ## Issue 1: Single-Region HA Instead of Multi-Region DR
 
 ### What Went Wrong

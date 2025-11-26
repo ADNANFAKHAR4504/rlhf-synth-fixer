@@ -1,26 +1,11 @@
-# Aurora Global Database cluster
-resource "aws_rds_global_cluster" "global" {
-  global_cluster_identifier = "aurora-global-${var.environment_suffix}"
-  engine                    = "aurora-postgresql"
-  engine_version            = "14.13"
-  database_name             = var.database_name
-  storage_encrypted         = true
-
-  lifecycle {
-    ignore_changes = [
-      engine_version
-    ]
-  }
-}
-
-# Primary Aurora cluster in us-east-1
+# Primary Aurora cluster in us-east-1 (will be promoted to global)
 resource "aws_rds_cluster" "primary" {
   cluster_identifier              = "aurora-primary-${var.environment_suffix}"
-  engine                          = aws_rds_global_cluster.global.engine
-  engine_version                  = aws_rds_global_cluster.global.engine_version
-  global_cluster_identifier       = aws_rds_global_cluster.global.id
+  engine                          = "aurora-postgresql"
+  engine_version                  = "14.13"
   master_username                 = var.master_username
   master_password                 = random_password.master_password.result
+  database_name                   = var.database_name
   backup_retention_period         = var.backup_retention_period
   preferred_backup_window         = var.preferred_backup_window
   preferred_maintenance_window    = var.preferred_maintenance_window
@@ -33,9 +18,12 @@ resource "aws_rds_cluster" "primary" {
   deletion_protection             = false
   skip_final_snapshot             = true
 
-  depends_on = [
-    aws_rds_global_cluster.global
-  ]
+  lifecycle {
+    ignore_changes = [
+      global_cluster_identifier,
+      engine_version
+    ]
+  }
 
   tags = merge(
     var.common_tags,
@@ -47,6 +35,27 @@ resource "aws_rds_cluster" "primary" {
       ManagedBy = "terraform"
     }
   )
+}
+
+# Aurora Global Database cluster - created from existing primary cluster
+resource "aws_rds_global_cluster" "global" {
+  global_cluster_identifier    = "aurora-global-${var.environment_suffix}"
+  source_db_cluster_identifier = aws_rds_cluster.primary.arn
+  force_destroy                = true
+
+  lifecycle {
+    ignore_changes = [
+      engine_version,
+      source_db_cluster_identifier,
+      engine,
+      engine_lifecycle_support,
+      force_destroy
+    ]
+  }
+
+  depends_on = [
+    aws_rds_cluster_instance.primary
+  ]
 }
 
 # Primary cluster instances (2 for HA)
@@ -81,8 +90,8 @@ resource "aws_rds_cluster_instance" "primary" {
 resource "aws_rds_cluster" "secondary" {
   provider                        = aws.secondary
   cluster_identifier              = "aurora-secondary-${var.environment_suffix}"
-  engine                          = aws_rds_global_cluster.global.engine
-  engine_version                  = aws_rds_global_cluster.global.engine_version
+  engine                          = "aurora-postgresql"
+  engine_version                  = "14.13"
   global_cluster_identifier       = aws_rds_global_cluster.global.id
   db_subnet_group_name            = aws_db_subnet_group.secondary.name
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.secondary.name
@@ -94,12 +103,13 @@ resource "aws_rds_cluster" "secondary" {
   skip_final_snapshot             = true
 
   depends_on = [
-    aws_rds_cluster_instance.primary
+    aws_rds_global_cluster.global
   ]
 
   lifecycle {
     ignore_changes = [
-      replication_source_identifier
+      replication_source_identifier,
+      engine_version
     ]
   }
 

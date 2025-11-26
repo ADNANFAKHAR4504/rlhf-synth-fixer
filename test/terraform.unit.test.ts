@@ -147,7 +147,9 @@ describe('Terraform Configuration Unit Tests', () => {
         r.type === 'aws_rds_global_cluster'
       );
       expect(globalCluster).toBeDefined();
-      expect(globalCluster.values.engine).toBe('aurora-postgresql');
+      expect(globalCluster.values.global_cluster_identifier).toContain('aurora-global');
+      expect(globalCluster.values.source_db_cluster_identifier).toContain('aurora-primary');
+      expect(globalCluster.values.force_destroy).toBe(true);
     });
 
     test('should create primary Aurora cluster', () => {
