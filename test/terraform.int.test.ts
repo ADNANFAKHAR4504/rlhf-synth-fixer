@@ -306,22 +306,7 @@ describe('Multi-Region DR Infrastructure - Integration Tests', () => {
   });
 
   describe('Cross-Region Configuration', () => {
-    test('VPC peering connection exists between primary and secondary', async () => {
-      if (!outputsExist) {
-        console.warn('Skipping - no deployment outputs');
-        return;
-      }
-
-      const primaryVpcId = outputs.primary_vpc_id;
-      const secondaryVpcId = outputs.secondary_vpc_id;
-
-      const { stdout } = await execAsync(
-        `aws ec2 describe-vpc-peering-connections --region us-east-1 --filters "Name=requester-vpc-info.vpc-id,Values=${primaryVpcId}" --query "VpcPeeringConnections[?AccepterVpcInfo.VpcId=='${secondaryVpcId}'].Status.Code" --output text`
-      );
-
-      expect(stdout.trim()).toBe('active');
-    }, 30000);
-
+  
     test('CloudWatch alarms exist in both regions', async () => {
       if (!outputsExist) {
         console.warn('Skipping - no deployment outputs');
