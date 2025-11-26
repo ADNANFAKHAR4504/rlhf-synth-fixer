@@ -533,6 +533,7 @@ export class TapStack extends pulumi.ComponentResource {
         parent: this,
         provider: primaryProvider,
         replaceOnChanges: ['globalClusterIdentifier'],
+        deleteBeforeReplace: true,
         dependsOn: [
           globalCluster,
           primaryDbSubnetGroup,
@@ -607,6 +608,7 @@ export class TapStack extends pulumi.ComponentResource {
         parent: this,
         provider: secondaryProvider,
         replaceOnChanges: ['globalClusterIdentifier'],
+        deleteBeforeReplace: true,
         dependsOn: [
           globalCluster,
           primaryCluster,
