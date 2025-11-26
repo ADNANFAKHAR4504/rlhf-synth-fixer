@@ -42,6 +42,15 @@ locals {
   env_suffix = var.environment_suffix != "" ? var.environment_suffix : (length(random_string.environment_suffix) > 0 ? random_string.environment_suffix[0].result : "dev")
 }
 
+# Random string for unique resource naming to avoid conflicts
+resource "random_string" "unique_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+  lower   = true
+  numeric = true
+}
+
 # Data sources
 data "aws_caller_identity" "current" {}
 

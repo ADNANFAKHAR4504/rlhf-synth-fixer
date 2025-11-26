@@ -47,6 +47,6 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/loan-processing-${local.env_suffix}"
+  name          = "alias/loan-processing-${local.env_suffix}-${random_string.unique_suffix.result}"
   target_key_id = aws_kms_key.main.key_id
 }

@@ -1,6 +1,6 @@
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "loan-proc-alb-${local.env_suffix}"
+  name               = "loan-proc-alb-${local.env_suffix}-${random_string.unique_suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]

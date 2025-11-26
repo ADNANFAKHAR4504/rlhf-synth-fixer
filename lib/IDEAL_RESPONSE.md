@@ -13,9 +13,11 @@ This document contains the complete, corrected Terraform configuration for deplo
 - Complete test suite in TypeScript/Jest for Terraform projects
 - All outputs include necessary aliases for backward compatibility
 - Volume size increased to 30GB to match AMI snapshot requirements
-- Aurora PostgreSQL version updated to 15.3 (supported version)
+- Aurora PostgreSQL version updated to 14.6 (widely supported version)
 - KMS key policy added to allow CloudWatch Logs service access
-- Integration tests fixed for proper API usage
+- Integration tests fixed for proper API usage and skip logic
+- Random string suffix added to prevent resource naming conflicts
+- Resources with naming conflicts now use `random_string.unique_suffix` for uniqueness
 
 ## Complete Source Code from lib/ folder
 
@@ -150,6 +152,15 @@ resource "random_string" "environment_suffix" {
 
 locals {
   env_suffix = var.environment_suffix != "" ? var.environment_suffix : (length(random_string.environment_suffix) > 0 ? random_string.environment_suffix[0].result : "dev")
+}
+
+# Random string for unique resource naming to avoid conflicts
+resource "random_string" "unique_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+  lower   = true
+  numeric = true
 }
 
 # Data sources
@@ -588,7 +599,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/loan-processing-${local.env_suffix}"
+  name          = "alias/loan-processing-${local.env_suffix}-${random_string.unique_suffix.result}"
   target_key_id = aws_kms_key.main.key_id
 }
 ```
@@ -618,10 +629,10 @@ resource "random_password" "db_master" {
 
 # Aurora PostgreSQL Serverless v2 Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "loan-processing-aurora-${local.env_suffix}"
+  cluster_identifier = "loan-processing-aurora-${local.env_suffix}-${random_string.unique_suffix.result}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
-  engine_version     = "15.3" # Use supported version for Serverless v2
+  engine_version     = "14.6" # Use supported version for Serverless v2
   database_name      = "loandb"
   master_username    = var.db_master_username
   master_password    = random_password.db_master.result
@@ -661,7 +672,7 @@ resource "aws_rds_cluster" "aurora" {
 
 # Aurora Cluster Instance
 resource "aws_rds_cluster_instance" "aurora" {
-  identifier         = "loan-processing-aurora-instance-${local.env_suffix}"
+  identifier         = "loan-processing-aurora-instance-${local.env_suffix}-${random_string.unique_suffix.result}"
   cluster_identifier = aws_rds_cluster.aurora.id
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.aurora.engine
@@ -680,7 +691,7 @@ resource "aws_rds_cluster_instance" "aurora" {
 ```hcl
 # S3 Bucket for Application Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "loan-processing-logs-${local.env_suffix}"
+  bucket = "loan-processing-logs-${local.env_suffix}-${random_string.unique_suffix.result}"
 
   tags = {
     Name = "loan-processing-logs-${local.env_suffix}"
@@ -741,7 +752,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 
 # S3 Bucket for Loan Documents
 resource "aws_s3_bucket" "documents" {
-  bucket = "loan-processing-documents-${local.env_suffix}"
+  bucket = "loan-processing-documents-${local.env_suffix}-${random_string.unique_suffix.result}"
 
   tags = {
     Name = "loan-processing-documents-${local.env_suffix}"
@@ -812,7 +823,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "documents" {
 
 # S3 Bucket for Static Assets
 resource "aws_s3_bucket" "static_assets" {
-  bucket = "loan-processing-static-${local.env_suffix}"
+  bucket = "loan-processing-static-${local.env_suffix}-${random_string.unique_suffix.result}"
 
   tags = {
     Name = "loan-processing-static-${local.env_suffix}"
@@ -844,7 +855,7 @@ resource "aws_s3_bucket_public_access_block" "static_assets" {
 
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "static_assets" {
-  name                              = "loan-processing-oac-${local.env_suffix}"
+  name                              = "loan-processing-oac-${local.env_suffix}-${random_string.unique_suffix.result}"
   description                       = "OAC for static assets bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -882,7 +893,7 @@ resource "aws_s3_bucket_policy" "static_assets" {
 ```hcl
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "loan-proc-alb-${local.env_suffix}"
+  name               = "loan-proc-alb-${local.env_suffix}-${random_string.unique_suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -1304,7 +1315,7 @@ resource "aws_cloudfront_distribution" "static_assets" {
 ```hcl
 # WAF Web ACL for ALB
 resource "aws_wafv2_web_acl" "alb" {
-  name  = "loan-proc-waf-${local.env_suffix}"
+  name  = "loan-proc-waf-${local.env_suffix}-${random_string.unique_suffix.result}"
   scope = "REGIONAL"
 
   default_action {
@@ -1894,7 +1905,7 @@ tags = {
 This complete Terraform configuration implements a PCI DSS compliant loan processing application infrastructure with:
 
 - **VPC**: 3 public and 3 private subnets across 3 availability zones
-- **Aurora PostgreSQL Serverless v2**: With 0.5-1 ACU scaling and point-in-time recovery
+- **Aurora PostgreSQL Serverless v2**: With 0.5-1 ACU scaling and point-in-time recovery (v14.6)
 - **Application Load Balancer**: With path-based routing to different EC2 instances
 - **Auto Scaling**: Based on CPU and memory metrics with 20% spot instances
 - **S3 Buckets**: For logs and documents with lifecycle policies and KMS encryption
@@ -1905,4 +1916,24 @@ This complete Terraform configuration implements a PCI DSS compliant loan proces
 - **KMS**: Customer-managed key with automatic rotation for all encryption
 - **IAM**: Least privilege roles following best practices
 
-All resources are properly tagged, use environment suffix for unique naming, and are configured to be destroyable for CI/CD workflows. The infrastructure validates successfully and can be deployed with `terraform apply`.
+### Resource Naming Strategy
+
+To prevent naming conflicts during deployments, the configuration uses a two-part naming strategy:
+1. **Environment Suffix** (`local.env_suffix`): Identifies the deployment environment
+2. **Random Suffix** (`random_string.unique_suffix`): 6-character random string ensuring uniqueness
+
+Resources prone to naming conflicts include the random suffix:
+- ALB: `loan-proc-alb-${env_suffix}-${unique_suffix}`
+- S3 Buckets: `loan-processing-{type}-${env_suffix}-${unique_suffix}`
+- Aurora Cluster: `loan-processing-aurora-${env_suffix}-${unique_suffix}`
+- KMS Alias: `alias/loan-processing-${env_suffix}-${unique_suffix}`
+- WAF Web ACL: `loan-proc-waf-${env_suffix}-${unique_suffix}`
+- CloudFront OAC: `loan-processing-oac-${env_suffix}-${unique_suffix}`
+
+This ensures resources are:
+- **Idempotent**: Within the same Terraform state
+- **Unique**: Across different deployments
+- **Destroyable**: For CI/CD workflows
+- **Identifiable**: Through consistent naming patterns
+
+The infrastructure validates successfully and can be deployed with `terraform apply`.
