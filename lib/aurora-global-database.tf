@@ -1,3 +1,43 @@
+# KMS Key for Primary Aurora Encryption
+resource "aws_kms_key" "aurora_primary" {
+  provider                = aws.primary
+  description             = "KMS key for Aurora encryption in primary region"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name    = "kms-aurora-primary-${var.environment_suffix}"
+    Region  = "primary"
+    DR-Role = "primary"
+  })
+}
+
+resource "aws_kms_alias" "aurora_primary" {
+  provider      = aws.primary
+  name          = "alias/aurora-primary-${var.environment_suffix}"
+  target_key_id = aws_kms_key.aurora_primary.key_id
+}
+
+# KMS Key for Secondary Aurora Encryption
+resource "aws_kms_key" "aurora_secondary" {
+  provider                = aws.secondary
+  description             = "KMS key for Aurora encryption in secondary region"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name    = "kms-aurora-secondary-${var.environment_suffix}"
+    Region  = "secondary"
+    DR-Role = "secondary"
+  })
+}
+
+resource "aws_kms_alias" "aurora_secondary" {
+  provider      = aws.secondary
+  name          = "alias/aurora-secondary-${var.environment_suffix}"
+  target_key_id = aws_kms_key.aurora_secondary.key_id
+}
+
 # Aurora Global Database Cluster
 resource "aws_rds_global_cluster" "main" {
   provider                  = aws.primary
@@ -42,6 +82,8 @@ resource "aws_rds_cluster" "primary" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
   skip_final_snapshot             = true
   global_cluster_identifier       = aws_rds_global_cluster.main.id
+  kms_key_id                      = aws_kms_key.aurora_primary.arn
+  storage_encrypted               = true
 
   # Point-in-time recovery is enabled by default with backup_retention_period > 0
 
@@ -102,6 +144,8 @@ resource "aws_rds_cluster" "secondary" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
   skip_final_snapshot             = true
   global_cluster_identifier       = aws_rds_global_cluster.main.id
+  kms_key_id                      = aws_kms_key.aurora_secondary.arn
+  storage_encrypted               = true
 
   depends_on = [
     aws_rds_cluster_instance.primary

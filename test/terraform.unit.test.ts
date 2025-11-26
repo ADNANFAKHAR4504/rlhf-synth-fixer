@@ -292,6 +292,15 @@ describe('Terraform Configuration Structure', () => {
       auroraContent = readTerraformFile('aurora-global-database.tf');
     });
 
+    test('creates KMS keys for Aurora encryption', () => {
+      expect(auroraContent).toMatch(/resource\s+"aws_kms_key"\s+"aurora_primary"/);
+      expect(auroraContent).toMatch(/resource\s+"aws_kms_key"\s+"aurora_secondary"/);
+    });
+
+    test('KMS keys have rotation enabled', () => {
+      expect(auroraContent).toMatch(/enable_key_rotation\s*=\s*true/);
+    });
+
     test('creates Aurora global cluster', () => {
       expect(auroraContent).toMatch(/resource\s+"aws_rds_global_cluster"/);
     });
@@ -326,6 +335,20 @@ describe('Terraform Configuration Structure', () => {
 
     test('enables backup retention', () => {
       expect(auroraContent).toMatch(/backup_retention_period/);
+    });
+
+    test('primary cluster uses KMS encryption', () => {
+      expect(auroraContent).toMatch(/resource\s+"aws_rds_cluster"\s+"primary"[\s\S]*?kms_key_id\s*=\s*aws_kms_key\.aurora_primary\.arn/);
+    });
+
+    test('secondary cluster uses KMS encryption', () => {
+      expect(auroraContent).toMatch(/resource\s+"aws_rds_cluster"\s+"secondary"[\s\S]*?kms_key_id\s*=\s*aws_kms_key\.aurora_secondary\.arn/);
+    });
+
+    test('both clusters have storage_encrypted = true', () => {
+      const storageEncryptedMatches = auroraContent.match(/storage_encrypted\s*=\s*true/g);
+      expect(storageEncryptedMatches).toBeTruthy();
+      expect(storageEncryptedMatches!.length).toBeGreaterThanOrEqual(3); // Global cluster + 2 regional clusters
     });
   });
 

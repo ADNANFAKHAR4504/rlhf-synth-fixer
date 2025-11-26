@@ -213,12 +213,23 @@ describe('Multi-Region DR Infrastructure - Integration Tests', () => {
         return;
       }
 
+      // Get all health checks and filter in code (safer than JMESPath with null values)
       const { stdout } = await execAsync(
-        `aws route53 list-health-checks --query "HealthChecks[?contains(HealthCheckConfig.FullyQualifiedDomainName, '${outputs.primary_alb_dns.split('.')[0]}')].Id" --output json`
+        `aws route53 list-health-checks --output json`
       );
 
-      const healthChecks = JSON.parse(stdout);
-      expect(healthChecks.length).toBeGreaterThanOrEqual(1);
+      const allHealthChecks = JSON.parse(stdout);
+      
+      // Filter health checks that match our ALB DNS names
+      const primaryAlbName = outputs.primary_alb_dns.split('.')[0];
+      const secondaryAlbName = outputs.secondary_alb_dns.split('.')[0];
+      
+      const relevantHealthChecks = allHealthChecks.HealthChecks.filter((hc: any) => {
+        const fqdn = hc.HealthCheckConfig?.FullyQualifiedDomainName || '';
+        return fqdn.includes(primaryAlbName) || fqdn.includes(secondaryAlbName);
+      });
+
+      expect(relevantHealthChecks.length).toBeGreaterThanOrEqual(2);
     }, 30000);
 
     test('primary ALB exists and is active', async () => {

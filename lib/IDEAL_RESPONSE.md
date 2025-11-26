@@ -10,6 +10,7 @@ This Terraform configuration implements a comprehensive disaster recovery archit
 
 - **Multi-Region VPCs**: Isolated networks in both primary and secondary regions with VPC peering for cross-region communication
 - **Aurora PostgreSQL Global Database**: Multi-region database with automatic replication and failover capabilities
+- **KMS Encryption**: Customer-managed encryption keys in both regions with automatic key rotation
 - **Application Load Balancers**: Highly available load balancing in both regions
 - **Auto Scaling Groups**: Self-healing EC2 infrastructure that scales based on demand  
 - **Route 53 Failover**: DNS-based automatic failover with health checks
@@ -922,6 +923,46 @@ resource "aws_iam_role_policy_attachment" "backup_restores" {
 ### File: aurora-global-database.tf
 
 ```hcl
+# KMS Key for Primary Aurora Encryption
+resource "aws_kms_key" "aurora_primary" {
+  provider                = aws.primary
+  description             = "KMS key for Aurora encryption in primary region"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name    = "kms-aurora-primary-${var.environment_suffix}"
+    Region  = "primary"
+    DR-Role = "primary"
+  })
+}
+
+resource "aws_kms_alias" "aurora_primary" {
+  provider      = aws.primary
+  name          = "alias/aurora-primary-${var.environment_suffix}"
+  target_key_id = aws_kms_key.aurora_primary.key_id
+}
+
+# KMS Key for Secondary Aurora Encryption
+resource "aws_kms_key" "aurora_secondary" {
+  provider                = aws.secondary
+  description             = "KMS key for Aurora encryption in secondary region"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name    = "kms-aurora-secondary-${var.environment_suffix}"
+    Region  = "secondary"
+    DR-Role = "secondary"
+  })
+}
+
+resource "aws_kms_alias" "aurora_secondary" {
+  provider      = aws.secondary
+  name          = "alias/aurora-secondary-${var.environment_suffix}"
+  target_key_id = aws_kms_key.aurora_secondary.key_id
+}
+
 # Aurora Global Database Cluster
 resource "aws_rds_global_cluster" "main" {
   provider                  = aws.primary
@@ -966,6 +1007,8 @@ resource "aws_rds_cluster" "primary" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
   skip_final_snapshot             = true
   global_cluster_identifier       = aws_rds_global_cluster.main.id
+  kms_key_id                      = aws_kms_key.aurora_primary.arn
+  storage_encrypted               = true
 
   # Point-in-time recovery is enabled by default with backup_retention_period > 0
 
@@ -1026,6 +1069,8 @@ resource "aws_rds_cluster" "secondary" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
   skip_final_snapshot             = true
   global_cluster_identifier       = aws_rds_global_cluster.main.id
+  kms_key_id                      = aws_kms_key.aurora_secondary.arn
+  storage_encrypted               = true
 
   depends_on = [
     aws_rds_cluster_instance.primary
@@ -2173,7 +2218,8 @@ All resources use the `environment_suffix` variable for unique identification, e
 ### Security Implementation
 
 - **Network Isolation**: VPCs with private subnets and security groups implementing least privilege
-- **Encryption at Rest**: Aurora encryption enabled, S3 bucket encryption with AWS-managed keys
+- **Encryption at Rest**: Aurora encryption with customer-managed KMS keys, S3 bucket encryption
+- **KMS Key Rotation**: Automatic key rotation enabled for compliance requirements
 - **Encryption in Transit**: HTTPS/TLS for all external communications, SSL for database connections
 - **IAM Roles**: Least privilege IAM roles and policies for EC2, S3 replication, and AWS Backup
 - **No Hardcoded Credentials**: All sensitive values passed via variables marked as sensitive
@@ -2189,10 +2235,12 @@ All resources use the `environment_suffix` variable for unique identification, e
 
 1. **Multi-Region Active-Passive**: Primary region (us-east-1) serves traffic actively while secondary (us-west-2) remains warm standby with data replication
 2. **Aurora Global Database**: Provides sub-second replication lag and automated failover capabilities  
-3. **VPC Peering**: Enables secure cross-region communication for database replication without internet exposure
-4. **S3 Replication Time Control (RTC)**: Ensures 99.99% of objects replicated within 15 minutes with replication metrics
-5. **Route 53 Failover Routing**: Automatic DNS-based failover when primary health checks fail
-6. **IAM Policy Attachments**: Uses modern aws_iam_role_policy_attachment resources instead of deprecated managed_policy_arns
+3. **Customer-Managed KMS Keys**: Explicit KMS keys in both regions for Aurora encryption (required for cross-region replicas)
+4. **VPC Peering**: Enables secure cross-region communication for database replication without internet exposure
+5. **S3 Replication Time Control (RTC)**: Ensures 99.99% of objects replicated within 15 minutes with replication metrics
+6. **Route 53 Failover Routing**: Automatic DNS-based failover when primary health checks fail
+7. **IAM Policy Attachments**: Uses modern aws_iam_role_policy_attachment resources instead of deprecated managed_policy_arns
+8. **Aurora PostgreSQL 14.11**: Latest stable version supporting Global Database functionality
 
 ### Deployment Instructions
 
@@ -2209,7 +2257,7 @@ All resources use the `environment_suffix` variable for unique identification, e
 ### Validation
 
 - Run unit tests: `npm run test:unit`
-- Run integration tests after deployment: `npm run test:int`
+- Run integration tests after deployment: `npm run test:integration`
 - Verify terraform formatting: `terraform fmt -check -recursive`
 - Validate configuration: `terraform validate`
 
@@ -2217,8 +2265,8 @@ All resources use the `environment_suffix` variable for unique identification, e
 
 The implementation includes comprehensive testing:
 
-- **176 Unit Tests**: Validate Terraform configuration structure, resource definitions, security settings, and compliance
-- **50+ Integration Tests**: Verify deployed resources, failover mechanisms, replication, monitoring, and end-to-end DR workflows
+- **180 Unit Tests**: Validate Terraform configuration structure, resource definitions, security settings, KMS encryption, and compliance
+- **27 Integration Tests**: Verify deployed resources, failover mechanisms, replication, monitoring, and end-to-end DR workflows
 
 ### CloudFormation Outputs
 
@@ -2241,4 +2289,5 @@ All resources are idempotent and can be applied multiple times safely:
 - Conditional logic handles both new deployments and updates
 - Tags include environment_suffix to prevent naming conflicts
 - No deletion protection enabled (suitable for development/testing environments)
+- KMS keys have 7-day deletion window for recovery
 
