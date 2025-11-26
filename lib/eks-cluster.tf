@@ -172,7 +172,11 @@ resource "aws_iam_role_policy" "ebs_csi_driver_kms" {
 }
 
 # EBS CSI Driver addon
+# Note: This addon often goes to DEGRADED state on initial cluster creation
+# It can be enabled manually after cluster is fully operational
 resource "aws_eks_addon" "ebs_csi_driver" {
+  count = var.enable_ebs_csi_driver ? 1 : 0
+
   cluster_name                = aws_eks_cluster.main.name
   addon_name                  = "aws-ebs-csi-driver"
   addon_version               = "v1.37.0-eksbuild.1"

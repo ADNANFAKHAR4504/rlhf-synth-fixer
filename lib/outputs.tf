@@ -93,6 +93,11 @@ output "ebs_csi_driver_role_arn" {
   value       = aws_iam_role.ebs_csi_driver.arn
 }
 
+output "ebs_csi_driver_enabled" {
+  description = "Whether EBS CSI driver addon is enabled"
+  value       = var.enable_ebs_csi_driver
+}
+
 output "aws_load_balancer_controller_role_arn" {
   description = "ARN of IAM role for AWS Load Balancer Controller"
   value       = aws_iam_role.aws_load_balancer_controller.arn

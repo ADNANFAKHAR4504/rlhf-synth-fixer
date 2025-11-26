@@ -168,6 +168,14 @@ describe('Terraform HCL Infrastructure - Variables Configuration', () => {
     expect(variablesContent).toMatch(/variable\s+['"]enable_cluster_autoscaler['"]/);
   });
 
+  test('declares enable_ebs_csi_driver variable', () => {
+    expect(variablesContent).toMatch(/variable\s+['"]enable_ebs_csi_driver['"]/);
+  });
+
+  test('enable_ebs_csi_driver defaults to false', () => {
+    expect(variablesContent).toMatch(/variable\s+['"]enable_ebs_csi_driver['"][\s\S]*default\s*=\s*false/);
+  });
+
   test('declares kms_key_deletion_window variable with validation', () => {
     expect(variablesContent).toMatch(/variable\s+['"]kms_key_deletion_window['"]/);
     expect(variablesContent).toMatch(/validation\s*{/);
@@ -587,13 +595,27 @@ describe('Terraform HCL Infrastructure - EBS CSI Driver', () => {
     expect(eksContent).toMatch(/service_account_role_arn\s*=\s*aws_iam_role\.ebs_csi_driver\.arn/);
   });
 
-  test('EBS CSI addon has resolve_conflicts settings', () => {
-    expect(eksContent).toMatch(/resolve_conflicts_on_create\s*=\s*['"]OVERWRITE['"]/);
-    expect(eksContent).toMatch(/resolve_conflicts_on_update\s*=\s*['"]PRESERVE['"]/);
+  test('EBS CSI addon has count for conditional creation', () => {
+    expect(eksContent).toMatch(/count\s*=\s*var\.enable_ebs_csi_driver\s*\?\s*1\s*:\s*0/);
   });
 
-  test('EBS CSI addon depends_on system node group', () => {
+  test('EBS CSI addon has resolve_conflicts_on_create = OVERWRITE', () => {
+    expect(eksContent).toMatch(/resolve_conflicts_on_create\s*=\s*['"]OVERWRITE['"]/);
+  });
+
+  test('EBS CSI addon has resolve_conflicts_on_update = OVERWRITE', () => {
+    expect(eksContent).toMatch(/resolve_conflicts_on_update\s*=\s*['"]OVERWRITE['"]/);
+  });
+
+  test('EBS CSI addon has timeouts configuration', () => {
+    expect(eksContent).toMatch(/timeouts\s*{/);
+    expect(eksContent).toMatch(/create\s*=\s*['"]30m['"]/);
+    expect(eksContent).toMatch(/update\s*=\s*['"]30m['"]/);
+  });
+
+  test('EBS CSI addon depends_on system and application node groups', () => {
     expect(eksContent).toMatch(/depends_on\s*=\s*\[[\s\S]*aws_eks_node_group\.system/);
+    expect(eksContent).toMatch(/depends_on\s*=\s*\[[\s\S]*aws_eks_node_group\.application/);
   });
 });
 

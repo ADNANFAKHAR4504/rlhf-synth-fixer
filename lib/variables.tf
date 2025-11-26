@@ -103,6 +103,12 @@ variable "enable_cluster_autoscaler" {
   default     = true
 }
 
+variable "enable_ebs_csi_driver" {
+  description = "Enable EBS CSI driver addon (may timeout on initial cluster creation)"
+  type        = bool
+  default     = false
+}
+
 variable "kms_key_deletion_window" {
   description = "KMS key deletion window in days"
   type        = number

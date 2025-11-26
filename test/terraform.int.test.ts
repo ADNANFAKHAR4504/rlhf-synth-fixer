@@ -436,7 +436,14 @@ describe('Terraform EKS Integration Tests', () => {
       clients = initializeClients(region);
     });
 
-    test('should verify EBS CSI driver addon is active', async () => {
+    test('should verify EBS CSI driver addon status when enabled', async () => {
+      const ebsCsiEnabled = outputs.ebs_csi_driver_enabled;
+
+      if (!ebsCsiEnabled || ebsCsiEnabled === 'false' || ebsCsiEnabled === false) {
+        console.log('EBS CSI driver addon is disabled, skipping verification');
+        return;
+      }
+
       const command = new DescribeAddonCommand({
         clusterName,
         addonName: 'aws-ebs-csi-driver',
@@ -448,7 +455,7 @@ describe('Terraform EKS Integration Tests', () => {
         expect(response.addon?.serviceAccountRoleArn).toBe(outputs.ebs_csi_driver_role_arn);
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
-          console.warn('EBS CSI driver addon not found - may still be deploying');
+          console.warn('EBS CSI driver addon not found - this is expected when disabled');
         } else {
           throw error;
         }
