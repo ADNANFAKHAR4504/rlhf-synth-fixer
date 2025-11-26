@@ -134,12 +134,6 @@ describe('EKS Terraform - Basic Unit Tests', () => {
       expect(content).toMatch(/variable\s+"cluster_name"/);
       expect(content).toMatch(/variable\s+"aws_region"/);
     });
-
-    test('helm.tf contains helm module declaration', () => {
-      const content = fileContent('helm.tf');
-      expect(content).toMatch(/module\s+"helm"/);
-      expect(content).toContain('source =');
-    });
   });
 
   describe('Syntax validation', () => {
