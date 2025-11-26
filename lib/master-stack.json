@@ -116,10 +116,6 @@
     },
     "DatabaseStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "NetworkStack",
-        "SecurityStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/database-stack.json",
         "Parameters": {
@@ -196,9 +192,6 @@
     },
     "DMSStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "DatabaseStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/dms-stack.json",
         "Parameters": {
@@ -229,13 +222,13 @@
               "Outputs.DMSSecurityGroup"
             ]
           },
-          "BlueDBEndpoint": {
+          "BlueDBEndpointAddress": {
             "Fn::GetAtt": [
               "DatabaseStack",
               "Outputs.BlueDBEndpoint"
             ]
           },
-          "GreenDBEndpoint": {
+          "GreenDBEndpointAddress": {
             "Fn::GetAtt": [
               "DatabaseStack",
               "Outputs.GreenDBEndpoint"
@@ -284,10 +277,6 @@
     },
     "ECSStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "NetworkStack",
-        "DatabaseStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/ecs-stack.json",
         "Parameters": {
@@ -351,6 +340,18 @@
               "Outputs.GreenDBSecretArn"
             ]
           },
+          "BlueTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.BlueTargetGroup"
+            ]
+          },
+          "GreenTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.GreenTargetGroup"
+            ]
+          },
           "Project": {
             "Ref": "Project"
           },
@@ -382,10 +383,6 @@
     },
     "ALBStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "NetworkStack",
-        "ECSStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/alb-stack.json",
         "Parameters": {
@@ -422,18 +419,6 @@
               "Outputs.ALBSecurityGroup"
             ]
           },
-          "BlueECSService": {
-            "Fn::GetAtt": [
-              "ECSStack",
-              "Outputs.BlueECSService"
-            ]
-          },
-          "GreenECSService": {
-            "Fn::GetAtt": [
-              "ECSStack",
-              "Outputs.GreenECSService"
-            ]
-          },
           "Project": {
             "Ref": "Project"
           },
@@ -465,9 +450,6 @@
     },
     "Route53Stack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "ALBStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/route53-stack.json",
         "Parameters": {
@@ -523,12 +505,6 @@
     },
     "MonitoringStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "DatabaseStack",
-        "ECSStack",
-        "ALBStack",
-        "DMSStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/monitoring-stack.json",
         "Parameters": {
@@ -602,10 +578,6 @@
     },
     "AutomationStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "ALBStack",
-        "MonitoringStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/automation-stack.json",
         "Parameters": {
@@ -673,9 +645,6 @@
     },
     "BackupStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "DatabaseStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/backup-stack.json",
         "Parameters": {
@@ -731,10 +700,6 @@
     },
     "SSMParameterStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": [
-        "DatabaseStack",
-        "ALBStack"
-      ],
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/ssm-parameter-stack.json",
         "Parameters": {

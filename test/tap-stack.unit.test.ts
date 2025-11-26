@@ -107,7 +107,7 @@ describe('Nested Stacks Validation', () => {
     const ecsTemplate = JSON.parse(fs.readFileSync(ecsTemplatePath, 'utf8'));
     expect(ecsTemplate.Resources.BlueService).toBeDefined();
     expect(ecsTemplate.Resources.GreenService).toBeDefined();
-    expect(ecsTemplate.Resources.BlueTargetGroup).toBeDefined();
-    expect(ecsTemplate.Resources.GreenTargetGroup).toBeDefined();
+    expect(ecsTemplate.Parameters.BlueTargetGroup).toBeDefined();
+    expect(ecsTemplate.Parameters.GreenTargetGroup).toBeDefined();
   });
 });

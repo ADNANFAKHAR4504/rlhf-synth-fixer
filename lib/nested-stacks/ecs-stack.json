@@ -46,6 +46,14 @@
       "Type": "String",
       "Description": "Green database secret ARN"
     },
+    "BlueTargetGroup": {
+      "Type": "String",
+      "Description": "Blue target group ARN"
+    },
+    "GreenTargetGroup": {
+      "Type": "String",
+      "Description": "Green target group ARN"
+    },
     "Project": {
       "Type": "String",
       "Description": "Project name for tagging"
@@ -69,10 +77,30 @@
           }
         ],
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-cluster-${EnvironmentSuffix}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -109,8 +137,12 @@
                     "secretsmanager:GetSecretValue"
                   ],
                   "Resource": [
-                    { "Ref": "BlueDBSecretArn" },
-                    { "Ref": "GreenDBSecretArn" }
+                    {
+                      "Ref": "BlueDBSecretArn"
+                    },
+                    {
+                      "Ref": "GreenDBSecretArn"
+                    }
                   ]
                 }
               ]
@@ -118,9 +150,24 @@
           }
         ],
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -162,9 +209,24 @@
           }
         ],
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -193,15 +255,29 @@
           "Fn::Sub": "blue-payment-app-${EnvironmentSuffix}"
         },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": ["FARGATE"],
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
         "Cpu": "512",
         "Memory": "1024",
-        "ExecutionRoleArn": { "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"] },
-        "TaskRoleArn": { "Fn::GetAtt": ["ECSTaskRole", "Arn"] },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskRole",
+            "Arn"
+          ]
+        },
         "ContainerDefinitions": [
           {
             "Name": "payment-app",
-            "Image": { "Ref": "ECSTaskImage" },
+            "Image": {
+              "Ref": "ECSTaskImage"
+            },
             "PortMappings": [
               {
                 "ContainerPort": 8080,
@@ -215,7 +291,9 @@
               },
               {
                 "Name": "DB_ENDPOINT",
-                "Value": { "Ref": "BlueDBEndpoint" }
+                "Value": {
+                  "Ref": "BlueDBEndpoint"
+                }
               }
             ],
             "Secrets": [
@@ -235,8 +313,12 @@
             "LogConfiguration": {
               "LogDriver": "awslogs",
               "Options": {
-                "awslogs-group": { "Ref": "BlueTaskLogGroup" },
-                "awslogs-region": { "Ref": "AWS::Region" },
+                "awslogs-group": {
+                  "Ref": "BlueTaskLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
                 "awslogs-stream-prefix": "ecs"
               }
             },
@@ -244,10 +326,28 @@
           }
         ],
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "blue-task-def-${EnvironmentSuffix}" } },
-          { "Key": "Environment", "Value": "blue" },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-task-def-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -258,15 +358,29 @@
           "Fn::Sub": "green-payment-app-${EnvironmentSuffix}"
         },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": ["FARGATE"],
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
         "Cpu": "512",
         "Memory": "1024",
-        "ExecutionRoleArn": { "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"] },
-        "TaskRoleArn": { "Fn::GetAtt": ["ECSTaskRole", "Arn"] },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskRole",
+            "Arn"
+          ]
+        },
         "ContainerDefinitions": [
           {
             "Name": "payment-app",
-            "Image": { "Ref": "ECSTaskImage" },
+            "Image": {
+              "Ref": "ECSTaskImage"
+            },
             "PortMappings": [
               {
                 "ContainerPort": 8080,
@@ -280,7 +394,9 @@
               },
               {
                 "Name": "DB_ENDPOINT",
-                "Value": { "Ref": "GreenDBEndpoint" }
+                "Value": {
+                  "Ref": "GreenDBEndpoint"
+                }
               }
             ],
             "Secrets": [
@@ -300,8 +416,12 @@
             "LogConfiguration": {
               "LogDriver": "awslogs",
               "Options": {
-                "awslogs-group": { "Ref": "GreenTaskLogGroup" },
-                "awslogs-region": { "Ref": "AWS::Region" },
+                "awslogs-group": {
+                  "Ref": "GreenTaskLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
                 "awslogs-stream-prefix": "ecs"
               }
             },
@@ -309,10 +429,28 @@
           }
         ],
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "green-task-def-${EnvironmentSuffix}" } },
-          { "Key": "Environment", "Value": "green" },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-task-def-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -322,27 +460,68 @@
         "ServiceName": {
           "Fn::Sub": "blue-payment-service-${EnvironmentSuffix}"
         },
-        "Cluster": { "Ref": "ECSCluster" },
-        "TaskDefinition": { "Ref": "BlueTaskDefinition" },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "BlueTaskDefinition"
+        },
         "DesiredCount": 2,
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {
+              "Ref": "BlueTargetGroup"
+            },
+            "ContainerName": "payment-app",
+            "ContainerPort": 8080
+          }
+        ],
         "LaunchType": "FARGATE",
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
-            "SecurityGroups": [{ "Ref": "ECSSecurityGroup" }],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
             "Subnets": [
-              { "Ref": "PrivateSubnet1" },
-              { "Ref": "PrivateSubnet2" },
-              { "Ref": "PrivateSubnet3" }
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ]
           }
         },
         "HealthCheckGracePeriodSeconds": 60,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "blue-payment-service-${EnvironmentSuffix}" } },
-          { "Key": "Environment", "Value": "blue" },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-payment-service-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     },
@@ -352,27 +531,68 @@
         "ServiceName": {
           "Fn::Sub": "green-payment-service-${EnvironmentSuffix}"
         },
-        "Cluster": { "Ref": "ECSCluster" },
-        "TaskDefinition": { "Ref": "GreenTaskDefinition" },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "GreenTaskDefinition"
+        },
         "DesiredCount": 2,
+        "LoadBalancers": [
+          {
+            "TargetGroupArn": {
+              "Ref": "GreenTargetGroup"
+            },
+            "ContainerName": "payment-app",
+            "ContainerPort": 8080
+          }
+        ],
         "LaunchType": "FARGATE",
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
-            "SecurityGroups": [{ "Ref": "ECSSecurityGroup" }],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
             "Subnets": [
-              { "Ref": "PrivateSubnet1" },
-              { "Ref": "PrivateSubnet2" },
-              { "Ref": "PrivateSubnet3" }
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ]
           }
         },
         "HealthCheckGracePeriodSeconds": 60,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "green-payment-service-${EnvironmentSuffix}" } },
-          { "Key": "Environment", "Value": "green" },
-          { "Key": "Project", "Value": { "Ref": "Project" } },
-          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-payment-service-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
         ]
       }
     }
@@ -380,23 +600,44 @@
   "Outputs": {
     "ECSClusterArn": {
       "Description": "ECS Cluster ARN",
-      "Value": { "Fn::GetAtt": ["ECSCluster", "Arn"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "ECSCluster",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-ECSClusterArn" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ECSClusterArn"
+        }
       }
     },
     "BlueECSService": {
       "Description": "Blue ECS Service Name",
-      "Value": { "Fn::GetAtt": ["BlueService", "Name"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "BlueService",
+          "Name"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-BlueECSService" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueECSService"
+        }
       }
     },
     "GreenECSService": {
       "Description": "Green ECS Service Name",
-      "Value": { "Fn::GetAtt": ["GreenService", "Name"] },
+      "Value": {
+        "Fn::GetAtt": [
+          "GreenService",
+          "Name"
+        ]
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-GreenECSService" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenECSService"
+        }
       }
     }
   }

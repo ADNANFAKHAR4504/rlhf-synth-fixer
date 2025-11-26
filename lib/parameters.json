@@ -40,5 +40,6 @@
       "Description": "Domain name for the application",
       "Default": "payments.example.com"
     }
-  }
+  },
+  "Resources": {}
 }

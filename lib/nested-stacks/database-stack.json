@@ -205,7 +205,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.05.2",
+        "EngineVersion": "8.0.mysql_aurora.3.10.0",
         "DatabaseName": "paymentdb",
         "MasterUsername": {
           "Fn::Sub": "{{resolve:secretsmanager:${BlueDBSecret}:SecretString:username}}"
@@ -335,7 +335,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.05.2",
+        "EngineVersion": "8.0.mysql_aurora.3.10.0",
         "DatabaseName": "paymentdb",
         "MasterUsername": {
           "Fn::Sub": "{{resolve:secretsmanager:${GreenDBSecret}:SecretString:username}}"
