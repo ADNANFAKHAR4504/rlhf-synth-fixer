@@ -75,8 +75,11 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.db_instance_id = cls.db_endpoint.split('.')[0]
         cls.read_replica_id = cls.read_replica_endpoint.split('.')[0]
 
-        # Extract Redis cluster identifier (configuration endpoint format)
-        cls.redis_cluster_id = cls.redis_endpoint.split('.')[0]
+        # Get Redis cluster identifier from outputs (fallback to parsing endpoint)
+        cls.redis_cluster_id = cls.outputs.get('RedisClusterId')
+        if not cls.redis_cluster_id:
+            # Fallback: extract from configuration endpoint (less reliable)
+            cls.redis_cluster_id = cls.redis_endpoint.split('.')[0]
 
     @classmethod
     def _wait_for_ssm_ready(cls, max_wait=60):

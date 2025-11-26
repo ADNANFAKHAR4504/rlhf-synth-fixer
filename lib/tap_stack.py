@@ -790,6 +790,13 @@ def handler(event, context):
             export_name=f"{self.stack_name}-redis-port-{self.environment_suffix}"
         )
 
+        CfnOutput(
+            self, "RedisClusterId",
+            value=self.redis.ref,
+            description="Redis replication group ID",
+            export_name=f"{self.stack_name}-redis-cluster-id-{self.environment_suffix}"
+        )
+
         # Load balancer outputs
         CfnOutput(
             self, "NlbDnsName",
