@@ -138,11 +138,9 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": {
-          "Fn::Sub": "{{resolve:secretsmanager:rds-master-secret-${EnvironmentSuffix}:SecretString:username}}"
+          "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:rds-master-secret-${EnvironmentSuffix}:SecretString:password}}"
-        },
+        "ManageMasterUserPassword": true,
         "DatabaseName": "transactions",
         "Port": 3306,
         "DBSubnetGroupName": {
