@@ -598,8 +598,24 @@ describe('TapStack Integration Tests', () => {
       const nestedStacks = ['NetworkStack', 'DatabaseStack', 'ComputeStack', 'MonitoringStack'];
       nestedStacks.forEach(stackName => {
         const templateURL = cfnTemplate.Resources[stackName].Properties.TemplateURL;
-        expect(templateURL['Fn::Sub']).toContain(`${stackName}.json`);
-        expect(templateURL['Fn::Sub']).toContain('${TemplatesBucketName}');
+
+        // Template uses Fn::If for conditional bucket selection
+        if (templateURL['Fn::If']) {
+          const [conditionName, trueValue, falseValue] = templateURL['Fn::If'];
+          expect(conditionName).toBe('UseProvidedBucket');
+
+          // Check true value (UseProvidedBucket = true)
+          expect(trueValue['Fn::Sub']).toContain(`${stackName}.json`);
+          expect(trueValue['Fn::Sub']).toContain('${TemplatesBucketName}');
+
+          // Check false value (CreateTemplatesBucket = true)
+          expect(falseValue['Fn::Sub']).toContain(`${stackName}.json`);
+          expect(falseValue['Fn::Sub']).toContain('${TemplatesBucket}');
+        } else {
+          // Fallback for simple Fn::Sub
+          expect(templateURL['Fn::Sub']).toContain(`${stackName}.json`);
+          expect(templateURL['Fn::Sub']).toContain('${TemplatesBucketName}');
+        }
       });
     });
   });
