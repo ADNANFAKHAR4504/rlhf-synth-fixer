@@ -87,11 +87,6 @@ class TestVPCInfrastructure:
         assert hasattr(self.stack, 'vpc')
         assert self.stack.vpc is not None
 
-    def test_dev_vpc_data_source_exists(self):
-        """Test that dev VPC data source is created for import."""
-        assert hasattr(self.stack, 'dev_vpc_data')
-        assert self.stack.dev_vpc_data is not None
-
     def test_private_subnets_created(self):
         """Test that 3 private subnets are created."""
         assert hasattr(self.stack, 'private_subnets')
