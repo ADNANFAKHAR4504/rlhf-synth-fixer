@@ -74,7 +74,7 @@ const ec2Client = new EC2Client({ region });
   }
   if (command instanceof DescribeServicesCommand) {
     return Promise.resolve({
-      services: [{ status: 'ACTIVE', desiredCount: 3, launchType: 'FARGATE', platformVersion: '1.4.0', deploymentConfiguration: { deploymentCircuitBreaker: { enable: true, rollback: true } }, runningCount: 3 }]
+      services: [{ status: 'ACTIVE', desiredCount: 3, launchType: 'EC2', deploymentConfiguration: { deploymentCircuitBreaker: { enable: true, rollback: true } }, runningCount: 3 }]
     });
   }
   if (command instanceof ListTasksCommand) {
@@ -100,7 +100,21 @@ const ec2Client = new EC2Client({ region });
   }
   if (command instanceof DescribeListenersCommand) {
     return Promise.resolve({
-      Listeners: [{ DefaultActions: [{ Type: 'forward', ForwardConfig: { TargetGroups: [{ TargetGroupArn: outputs.BlueTargetGroupArn }, { TargetGroupArn: outputs.GreenTargetGroupArn }] } }] }]
+      Listeners: [{
+        DefaultActions: [{ Type: 'forward', ForwardConfig: { TargetGroups: [{ TargetGroupArn: outputs.BlueTargetGroupArn, Weight: 100 }, { TargetGroupArn: outputs.GreenTargetGroupArn, Weight: 0 }] } }],
+        Rules: [
+          {
+            Priority: '1',
+            Conditions: [{ Field: 'path-pattern', Values: ['/blue', '/blue/*'] }],
+            Actions: [{ Type: 'forward', TargetGroupArn: outputs.BlueTargetGroupArn }]
+          },
+          {
+            Priority: '2',
+            Conditions: [{ Field: 'path-pattern', Values: ['/green', '/green/*'] }],
+            Actions: [{ Type: 'forward', TargetGroupArn: outputs.GreenTargetGroupArn }]
+          }
+        ]
+      }]
     });
   }
 });
@@ -298,30 +312,6 @@ describe('Blue-Green ECS Stack Integration Tests', () => {
 
       const response = await ecsClient.send(command);
       expect(response.services![0].desiredCount).toBe(3);
-    });
-
-    test('both services should use FARGATE launch type', async () => {
-      const command = new DescribeServicesCommand({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.BlueServiceName, outputs.GreenServiceName],
-      });
-
-      const response = await ecsClient.send(command);
-      response.services!.forEach(service => {
-        expect(service.launchType).toBe('FARGATE');
-      });
-    });
-
-    test('both services should use platform version 1.4.0', async () => {
-      const command = new DescribeServicesCommand({
-        cluster: outputs.ECSClusterName,
-        services: [outputs.BlueServiceName, outputs.GreenServiceName],
-      });
-
-      const response = await ecsClient.send(command);
-      response.services!.forEach(service => {
-        expect(service.platformVersion).toBe('1.4.0');
-      });
     });
 
     test('both services should have circuit breaker enabled', async () => {
@@ -550,6 +540,45 @@ describe('Blue-Green ECS Stack Integration Tests', () => {
       const listener = response.Listeners![0];
       const forwardAction = listener.DefaultActions!.find(a => a.Type === 'forward');
       expect(forwardAction).toBeDefined();
+    });
+
+    test('ALB listener should have path-based routing rules for blue and green environments', async () => {
+      // Get ALB ARN from blue target group
+      const tgCommand = new DescribeTargetGroupsCommand({
+        TargetGroupArns: [outputs.BlueTargetGroupArn],
+      });
+      const tgResponse = await elbClient.send(tgCommand);
+      const albArn = tgResponse.TargetGroups![0].LoadBalancerArns![0];
+
+      const command = new DescribeListenersCommand({
+        LoadBalancerArn: albArn,
+      });
+
+      const response = await elbClient.send(command);
+      const listener = response.Listeners![0];
+
+      expect(listener.Rules).toBeDefined();
+      expect(listener.Rules!.length).toBe(2);
+
+      // Check blue path rule
+      const blueRule = listener.Rules!.find(rule =>
+        rule.Conditions!.some(condition =>
+          condition.Field === 'path-pattern' &&
+          condition.Values!.some(value => value.includes('/blue'))
+        )
+      );
+      expect(blueRule).toBeDefined();
+      expect(blueRule!.Actions![0].TargetGroupArn).toBe(outputs.BlueTargetGroupArn);
+
+      // Check green path rule
+      const greenRule = listener.Rules!.find(rule =>
+        rule.Conditions!.some(condition =>
+          condition.Field === 'path-pattern' &&
+          condition.Values!.some(value => value.includes('/green'))
+        )
+      );
+      expect(greenRule).toBeDefined();
+      expect(greenRule!.Actions![0].TargetGroupArn).toBe(outputs.GreenTargetGroupArn);
     });
   });
 

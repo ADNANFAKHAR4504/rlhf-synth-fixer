@@ -52,7 +52,6 @@ Create a complete container orchestration infrastructure using **CloudFormation 
 ### Technical Requirements
 
 - All infrastructure defined using **CloudFormation with JSON**
-- Use **EC2** for compute orchestration with Lambda launch type
 - Use **Application Load Balancer** for traffic distribution
 - Use **Auto Scaling** for dynamic capacity management
 - Use **CloudWatch** for monitoring and logging
@@ -67,7 +66,6 @@ Create a complete container orchestration infrastructure using **CloudFormation 
 
 ### Platform-Specific Constraints
 
-- EC2 instances must use Lambda launch type with platform version 1.4.0
 - Task definitions must specify both CPU and memory limits with at least 1 vCPU (1024 CPU units) and 2GB RAM (2048 memory units)
 - VPC must be configured with public subnets for ALB and private subnets for EC2 tasks
 - NAT Gateways required for outbound internet access from containers

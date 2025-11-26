@@ -31,19 +31,42 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
       "Type": "Number",
       "Default": 80,
       "Description": "Port exposed by the container"
+    },
+    "ECSAMI": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+      "Description": "ECS optimized AMI ID"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "Description": "EC2 instance type for ECS cluster"
+    },
+    "KeyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "EC2 key pair name (optional)"
+    },
+    "DesiredCapacity": {
+      "Type": "Number",
+      "Default": 3,
+      "Description": "Desired number of EC2 instances per ASG"
     }
   },
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": {"Ref": "VpcCIDR"},
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "vpc-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -54,7 +77,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -62,21 +87,36 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "InternetGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "InternetGatewayId": {"Ref": "InternetGateway"},
-        "VpcId": {"Ref": "VPC"}
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        }
       }
     },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.1.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -84,14 +124,25 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.2.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -99,14 +150,25 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "PublicSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.3.0/24",
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -114,14 +176,25 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.11.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -129,14 +202,25 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.12.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -144,14 +228,25 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": "10.0.13.0/24",
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -164,7 +259,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -177,7 +274,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -190,7 +289,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-eip-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-eip-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -198,12 +299,21 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NatGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -211,12 +321,21 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NatGateway2": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway2EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet2"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -224,12 +343,21 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NatGateway3": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway3EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet3"},
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway3EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -237,11 +365,15 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "public-route-table-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "public-route-table-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -250,40 +382,60 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
       "Type": "AWS::EC2::Route",
       "DependsOn": "InternetGatewayAttachment",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
       }
     },
     "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet1"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        }
       }
     },
     "PublicSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet2"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        }
       }
     },
     "PublicSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "SubnetId": {"Ref": "PublicSubnet3"}
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        }
       }
     },
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-route-table-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-route-table-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -291,26 +443,38 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "DefaultPrivateRoute1": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway1"}
+        "NatGatewayId": {
+          "Ref": "NatGateway1"
+        }
       }
     },
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
-        "SubnetId": {"Ref": "PrivateSubnet1"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        }
       }
     },
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-route-table-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-route-table-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -318,26 +482,38 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "DefaultPrivateRoute2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway2"}
+        "NatGatewayId": {
+          "Ref": "NatGateway2"
+        }
       }
     },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
-        "SubnetId": {"Ref": "PrivateSubnet2"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        }
       }
     },
     "PrivateRouteTable3": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "private-route-table-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "private-route-table-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -345,26 +521,38 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "DefaultPrivateRoute3": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable3"},
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway3"}
+        "NatGatewayId": {
+          "Ref": "NatGateway3"
+        }
       }
     },
     "PrivateSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable3"},
-        "SubnetId": {"Ref": "PrivateSubnet3"}
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        }
       }
     },
     "NetworkAcl": {
       "Type": "AWS::EC2::NetworkAcl",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "network-acl-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "network-acl-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -372,7 +560,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NetworkAclEntryInboundHTTP": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 100,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -386,7 +576,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NetworkAclEntryInboundHTTPS": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 110,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -400,7 +592,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NetworkAclEntryInbound8080": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 120,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -414,7 +608,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NetworkAclEntryInboundEphemeral": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 130,
         "Protocol": 6,
         "RuleAction": "allow",
@@ -428,7 +624,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "NetworkAclEntryOutbound": {
       "Type": "AWS::EC2::NetworkAclEntry",
       "Properties": {
-        "NetworkAclId": {"Ref": "NetworkAcl"},
+        "NetworkAclId": {
+          "Ref": "NetworkAcl"
+        },
         "RuleNumber": 100,
         "Protocol": -1,
         "Egress": true,
@@ -439,9 +637,13 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for Application Load Balancer",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -465,7 +667,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -473,15 +677,25 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "ECSSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"},
+        "GroupName": {
+          "Fn::Sub": "ecs-sg-${EnvironmentSuffix}"
+        },
         "GroupDescription": "Security group for ECS tasks",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
-            "FromPort": {"Ref": "ContainerPort"},
-            "ToPort": {"Ref": "ContainerPort"},
-            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"}
+            "FromPort": {
+              "Ref": "ContainerPort"
+            },
+            "ToPort": {
+              "Ref": "ContainerPort"
+            },
+            "SourceSecurityGroupId": {
+              "Ref": "ALBSecurityGroup"
+            }
           }
         ],
         "SecurityGroupEgress": [
@@ -493,7 +707,43 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "ecs-instance-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for ECS EC2 instances",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ecs-instance-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -501,20 +751,34 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {"Fn::Sub": "alb-${EnvironmentSuffix}"},
+        "Name": {
+          "Fn::Sub": "alb-${EnvironmentSuffix}"
+        },
         "Type": "application",
         "Scheme": "internet-facing",
         "IpAddressType": "ipv4",
         "Subnets": [
-          {"Ref": "PublicSubnet1"},
-          {"Ref": "PublicSubnet2"},
-          {"Ref": "PublicSubnet3"}
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          },
+          {
+            "Ref": "PublicSubnet3"
+          }
         ],
-        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "alb-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "alb-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -522,11 +786,17 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "BlueTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "blue-tg-${EnvironmentSuffix}"},
-        "Port": {"Ref": "ContainerPort"},
+        "Name": {
+          "Fn::Sub": "blue-tg-${EnvironmentSuffix}"
+        },
+        "Port": {
+          "Ref": "ContainerPort"
+        },
         "Protocol": "HTTP",
         "TargetType": "ip",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "HealthCheckEnabled": true,
         "HealthCheckIntervalSeconds": 15,
         "HealthCheckPath": "/",
@@ -534,11 +804,18 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "HealthCheckTimeoutSeconds": 10,
         "HealthyThresholdCount": 2,
         "UnhealthyThresholdCount": 3,
-        "DeregistrationDelay": 30,
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "30"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "blue-tg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "blue-tg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -546,11 +823,17 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "GreenTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "green-tg-${EnvironmentSuffix}"},
-        "Port": {"Ref": "ContainerPort"},
+        "Name": {
+          "Fn::Sub": "green-tg-${EnvironmentSuffix}"
+        },
+        "Port": {
+          "Ref": "ContainerPort"
+        },
         "Protocol": "HTTP",
         "TargetType": "ip",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "HealthCheckEnabled": true,
         "HealthCheckIntervalSeconds": 15,
         "HealthCheckPath": "/",
@@ -558,11 +841,18 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "HealthCheckTimeoutSeconds": 10,
         "HealthyThresholdCount": 2,
         "UnhealthyThresholdCount": 3,
-        "DeregistrationDelay": 30,
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "30"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "green-tg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "green-tg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -570,7 +860,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "ALBListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
-        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
         "Port": 80,
         "Protocol": "HTTP",
         "DefaultActions": [
@@ -579,11 +871,15 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
             "ForwardConfig": {
               "TargetGroups": [
                 {
-                  "TargetGroupArn": {"Ref": "BlueTargetGroup"},
+                  "TargetGroupArn": {
+                    "Ref": "BlueTargetGroup"
+                  },
                   "Weight": 100
                 },
                 {
-                  "TargetGroupArn": {"Ref": "GreenTargetGroup"},
+                  "TargetGroupArn": {
+                    "Ref": "GreenTargetGroup"
+                  },
                   "Weight": 0
                 }
               ],
@@ -598,7 +894,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "ECSCluster": {
       "Type": "AWS::ECS::Cluster",
       "Properties": {
-        "ClusterName": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"},
+        "ClusterName": {
+          "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
+        },
         "ClusterSettings": [
           {
             "Name": "containerInsights",
@@ -608,7 +906,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -616,7 +916,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "TaskExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -688,7 +990,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -696,7 +1000,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "TaskRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -712,7 +1018,237 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-instance-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ecs-instance-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "ecs-instance-profile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ]
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "ecs-launch-template-${EnvironmentSuffix}"
+        },
+        "LaunchTemplateData": {
+          "ImageId": {
+            "Ref": "ECSAMI"
+          },
+          "InstanceType": {
+            "Ref": "InstanceType"
+          },
+          "KeyName": {
+            "Ref": "KeyName"
+          },
+          "IamInstanceProfile": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceProfile",
+                "Arn"
+              ]
+            }
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "EC2InstanceSecurityGroup"
+            }
+          ],
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\necho ECS_CLUSTER=ecs-cluster-${EnvironmentSuffix} >> /etc/ecs/ecs.config\nyum update -y\necho 'ECS_AVAILABLE_LOGGING_DRIVERS=[\"json-file\",\"awslogs\"]' >> /etc/ecs/ecs.config"
+            }
+          },
+          "Monitoring": {
+            "Enabled": true
+          }
+        }
+      }
+    },
+    "BlueASG": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Fn::Sub": "blue-asg-${EnvironmentSuffix}"
+        },
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": "$Latest"
+        },
+        "MinSize": "1",
+        "MaxSize": "10",
+        "DesiredCapacity": {
+          "Ref": "DesiredCapacity"
+        },
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-ecs-instance-${EnvironmentSuffix}"
+            },
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue",
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "GreenASG": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Fn::Sub": "green-asg-${EnvironmentSuffix}"
+        },
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": "$Latest"
+        },
+        "MinSize": "1",
+        "MaxSize": "10",
+        "DesiredCapacity": {
+          "Ref": "DesiredCapacity"
+        },
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-ecs-instance-${EnvironmentSuffix}"
+            },
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Environment",
+            "Value": "green",
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "BlueCapacityProvider": {
+      "Type": "AWS::ECS::CapacityProvider",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "blue-capacity-provider-${EnvironmentSuffix}"
+        },
+        "AutoScalingGroupProvider": {
+          "AutoScalingGroupArn": {
+            "Ref": "BlueASG"
+          },
+          "ManagedScaling": {
+            "Status": "ENABLED",
+            "TargetCapacity": 80,
+            "MinimumScalingStepSize": 1,
+            "MaximumScalingStepSize": 10
+          },
+          "ManagedTerminationProtection": "ENABLED"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-capacity-provider-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "GreenCapacityProvider": {
+      "Type": "AWS::ECS::CapacityProvider",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "green-capacity-provider-${EnvironmentSuffix}"
+        },
+        "AutoScalingGroupProvider": {
+          "AutoScalingGroupArn": {
+            "Ref": "GreenASG"
+          },
+          "ManagedScaling": {
+            "Status": "ENABLED",
+            "TargetCapacity": 80,
+            "MinimumScalingStepSize": 1,
+            "MaximumScalingStepSize": 10
+          },
+          "ManagedTerminationProtection": "ENABLED"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-capacity-provider-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -720,38 +1256,64 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "LogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/ecs/${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/${EnvironmentSuffix}"
+        },
         "RetentionInDays": 30
       }
     },
     "TaskDefinition": {
       "Type": "AWS::ECS::TaskDefinition",
       "Properties": {
-        "Family": {"Fn::Sub": "task-def-${EnvironmentSuffix}"},
+        "Family": {
+          "Fn::Sub": "task-def-${EnvironmentSuffix}"
+        },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": ["FARGATE"],
+        "RequiresCompatibilities": [
+          "EC2"
+        ],
         "Cpu": "1024",
         "Memory": "2048",
-        "ExecutionRoleArn": {"Fn::GetAtt": ["TaskExecutionRole", "Arn"]},
-        "TaskRoleArn": {"Fn::GetAtt": ["TaskRole", "Arn"]},
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "TaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "TaskRole",
+            "Arn"
+          ]
+        },
         "ContainerDefinitions": [
           {
-            "Name": {"Fn::Sub": "container-${EnvironmentSuffix}"},
-            "Image": {"Ref": "ContainerImage"},
+            "Name": {
+              "Fn::Sub": "container-${EnvironmentSuffix}"
+            },
+            "Image": {
+              "Ref": "ContainerImage"
+            },
             "Cpu": 1024,
             "Memory": 2048,
             "Essential": true,
             "PortMappings": [
               {
-                "ContainerPort": {"Ref": "ContainerPort"},
+                "ContainerPort": {
+                  "Ref": "ContainerPort"
+                },
                 "Protocol": "tcp"
               }
             ],
             "LogConfiguration": {
               "LogDriver": "awslogs",
               "Options": {
-                "awslogs-group": {"Ref": "LogGroup"},
-                "awslogs-region": {"Ref": "AWS::Region"},
+                "awslogs-group": {
+                  "Ref": "LogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
                 "awslogs-stream-prefix": "ecs"
               }
             }
@@ -760,7 +1322,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "task-def-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "task-def-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -768,12 +1332,18 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "ServiceDiscoveryNamespace": {
       "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
       "Properties": {
-        "Name": {"Fn::Sub": "local-${EnvironmentSuffix}"},
-        "Vpc": {"Ref": "VPC"},
+        "Name": {
+          "Fn::Sub": "local-${EnvironmentSuffix}"
+        },
+        "Vpc": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "sd-namespace-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "sd-namespace-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -789,7 +1359,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
               "TTL": 60
             }
           ],
-          "NamespaceId": {"Ref": "ServiceDiscoveryNamespace"}
+          "NamespaceId": {
+            "Ref": "ServiceDiscoveryNamespace"
+          }
         },
         "HealthCheckCustomConfig": {
           "FailureThreshold": 1
@@ -797,7 +1369,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "blue-sd-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "blue-sd-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -813,7 +1387,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
               "TTL": 60
             }
           ],
-          "NamespaceId": {"Ref": "ServiceDiscoveryNamespace"}
+          "NamespaceId": {
+            "Ref": "ServiceDiscoveryNamespace"
+          }
         },
         "HealthCheckCustomConfig": {
           "FailureThreshold": 1
@@ -821,7 +1397,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "green-sd-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "green-sd-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -830,33 +1408,66 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
       "Type": "AWS::ECS::Service",
       "DependsOn": "ALBListener",
       "Properties": {
-        "ServiceName": {"Fn::Sub": "blue-service-${EnvironmentSuffix}"},
-        "Cluster": {"Ref": "ECSCluster"},
-        "TaskDefinition": {"Ref": "TaskDefinition"},
+        "ServiceName": {
+          "Fn::Sub": "blue-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "TaskDefinition"
+        },
         "DesiredCount": 3,
-        "LaunchType": "FARGATE",
-        "PlatformVersion": "1.4.0",
+        "CapacityProviderStrategy": [
+          {
+            "CapacityProvider": {
+              "Ref": "BlueCapacityProvider"
+            },
+            "Weight": 1
+          }
+        ],
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
-            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
             "Subnets": [
-              {"Ref": "PrivateSubnet1"},
-              {"Ref": "PrivateSubnet2"},
-              {"Ref": "PrivateSubnet3"}
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ]
           }
         },
         "LoadBalancers": [
           {
-            "TargetGroupArn": {"Ref": "BlueTargetGroup"},
-            "ContainerName": {"Fn::Sub": "container-${EnvironmentSuffix}"},
-            "ContainerPort": {"Ref": "ContainerPort"}
+            "TargetGroupArn": {
+              "Ref": "BlueTargetGroup"
+            },
+            "ContainerName": {
+              "Fn::Sub": "container-${EnvironmentSuffix}"
+            },
+            "ContainerPort": {
+              "Ref": "ContainerPort"
+            }
           }
         ],
         "ServiceRegistries": [
           {
-            "RegistryArn": {"Fn::GetAtt": ["BlueServiceDiscoveryService", "Arn"]}
+            "RegistryArn": {
+              "Fn::GetAtt": [
+                "BlueServiceDiscoveryService",
+                "Arn"
+              ]
+            }
           }
         ],
         "DeploymentConfiguration": {
@@ -871,7 +1482,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "blue-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "blue-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -880,33 +1493,66 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
       "Type": "AWS::ECS::Service",
       "DependsOn": "ALBListener",
       "Properties": {
-        "ServiceName": {"Fn::Sub": "green-service-${EnvironmentSuffix}"},
-        "Cluster": {"Ref": "ECSCluster"},
-        "TaskDefinition": {"Ref": "TaskDefinition"},
+        "ServiceName": {
+          "Fn::Sub": "green-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Ref": "ECSCluster"
+        },
+        "TaskDefinition": {
+          "Ref": "TaskDefinition"
+        },
         "DesiredCount": 3,
-        "LaunchType": "FARGATE",
-        "PlatformVersion": "1.4.0",
+        "CapacityProviderStrategy": [
+          {
+            "CapacityProvider": {
+              "Ref": "GreenCapacityProvider"
+            },
+            "Weight": 1
+          }
+        ],
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
-            "SecurityGroups": [{"Ref": "ECSSecurityGroup"}],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ],
             "Subnets": [
-              {"Ref": "PrivateSubnet1"},
-              {"Ref": "PrivateSubnet2"},
-              {"Ref": "PrivateSubnet3"}
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
             ]
           }
         },
         "LoadBalancers": [
           {
-            "TargetGroupArn": {"Ref": "GreenTargetGroup"},
-            "ContainerName": {"Fn::Sub": "container-${EnvironmentSuffix}"},
-            "ContainerPort": {"Ref": "ContainerPort"}
+            "TargetGroupArn": {
+              "Ref": "GreenTargetGroup"
+            },
+            "ContainerName": {
+              "Fn::Sub": "container-${EnvironmentSuffix}"
+            },
+            "ContainerPort": {
+              "Ref": "ContainerPort"
+            }
           }
         ],
         "ServiceRegistries": [
           {
-            "RegistryArn": {"Fn::GetAtt": ["GreenServiceDiscoveryService", "Arn"]}
+            "RegistryArn": {
+              "Fn::GetAtt": [
+                "GreenServiceDiscoveryService",
+                "Arn"
+              ]
+            }
           }
         ],
         "DeploymentConfiguration": {
@@ -921,7 +1567,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "green-service-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "green-service-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -944,9 +1592,13 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "BlueServiceScalingPolicyCPU": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "blue-cpu-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "blue-cpu-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "BlueServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "BlueServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 70.0,
           "PredefinedMetricSpecification": {
@@ -960,9 +1612,13 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "BlueServiceScalingPolicyMemory": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "blue-memory-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "blue-memory-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "BlueServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "BlueServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 80.0,
           "PredefinedMetricSpecification": {
@@ -991,9 +1647,13 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "GreenServiceScalingPolicyCPU": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "green-cpu-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "green-cpu-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "GreenServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "GreenServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 70.0,
           "PredefinedMetricSpecification": {
@@ -1007,9 +1667,13 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "GreenServiceScalingPolicyMemory": {
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
-        "PolicyName": {"Fn::Sub": "green-memory-scaling-${EnvironmentSuffix}"},
+        "PolicyName": {
+          "Fn::Sub": "green-memory-scaling-${EnvironmentSuffix}"
+        },
         "PolicyType": "TargetTrackingScaling",
-        "ScalingTargetId": {"Ref": "GreenServiceScalingTarget"},
+        "ScalingTargetId": {
+          "Ref": "GreenServiceScalingTarget"
+        },
         "TargetTrackingScalingPolicyConfiguration": {
           "TargetValue": 80.0,
           "PredefinedMetricSpecification": {
@@ -1023,12 +1687,16 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "SNSTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "ecs-alerts-${EnvironmentSuffix}"},
+        "TopicName": {
+          "Fn::Sub": "ecs-alerts-${EnvironmentSuffix}"
+        },
         "DisplayName": "ECS Health Alerts",
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "sns-topic-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "sns-topic-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -1036,7 +1704,9 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
     "BlueUnhealthyTargetAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "blue-unhealthy-targets-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "blue-unhealthy-targets-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when 2 or more tasks fail health checks in blue environment",
         "MetricName": "UnHealthyHostCount",
         "Namespace": "AWS/ApplicationELB",
@@ -1048,21 +1718,37 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Dimensions": [
           {
             "Name": "TargetGroup",
-            "Value": {"Fn::GetAtt": ["BlueTargetGroup", "TargetGroupFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "BlueTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
           },
           {
             "Name": "LoadBalancer",
-            "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "LoadBalancerFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ApplicationLoadBalancer",
+                "LoadBalancerFullName"
+              ]
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     },
     "GreenUnhealthyTargetAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "green-unhealthy-targets-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "green-unhealthy-targets-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when 2 or more tasks fail health checks in green environment",
         "MetricName": "UnHealthyHostCount",
         "Namespace": "AWS/ApplicationELB",
@@ -1074,14 +1760,28 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
         "Dimensions": [
           {
             "Name": "TargetGroup",
-            "Value": {"Fn::GetAtt": ["GreenTargetGroup", "TargetGroupFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "GreenTargetGroup",
+                "TargetGroupFullName"
+              ]
+            }
           },
           {
             "Name": "LoadBalancer",
-            "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "LoadBalancerFullName"]}
+            "Value": {
+              "Fn::GetAtt": [
+                "ApplicationLoadBalancer",
+                "LoadBalancerFullName"
+              ]
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     }
@@ -1089,65 +1789,110 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "ECSClusterName": {
       "Description": "ECS Cluster Name",
-      "Value": {"Ref": "ECSCluster"},
+      "Value": {
+        "Ref": "ECSCluster"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ECSCluster"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ECSCluster"
+        }
       }
     },
     "LoadBalancerDNS": {
       "Description": "Application Load Balancer DNS Name",
-      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"
+        }
       }
     },
     "BlueTargetGroupArn": {
       "Description": "Blue Target Group ARN",
-      "Value": {"Ref": "BlueTargetGroup"},
+      "Value": {
+        "Ref": "BlueTargetGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-BlueTargetGroup"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueTargetGroup"
+        }
       }
     },
     "GreenTargetGroupArn": {
       "Description": "Green Target Group ARN",
-      "Value": {"Ref": "GreenTargetGroup"},
+      "Value": {
+        "Ref": "GreenTargetGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-GreenTargetGroup"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenTargetGroup"
+        }
       }
     },
     "BlueServiceName": {
       "Description": "Blue ECS Service Name",
-      "Value": {"Fn::GetAtt": ["BlueECSService", "Name"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "BlueECSService",
+          "Name"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-BlueService"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueService"
+        }
       }
     },
     "GreenServiceName": {
       "Description": "Green ECS Service Name",
-      "Value": {"Fn::GetAtt": ["GreenECSService", "Name"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "GreenECSService",
+          "Name"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-GreenService"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenService"
+        }
       }
     },
     "SNSTopicArn": {
       "Description": "SNS Topic ARN for alerts",
-      "Value": {"Ref": "SNSTopic"},
+      "Value": {
+        "Ref": "SNSTopic"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SNSTopic"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopic"
+        }
       }
     },
     "ServiceDiscoveryNamespace": {
       "Description": "Service Discovery Namespace",
-      "Value": {"Ref": "ServiceDiscoveryNamespace"},
+      "Value": {
+        "Ref": "ServiceDiscoveryNamespace"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-SDNamespace"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SDNamespace"
+        }
       }
     }
   }

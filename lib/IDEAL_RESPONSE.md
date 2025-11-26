@@ -4,7 +4,7 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
 
 ## Key Differences from MODEL_RESPONSE
 
-1. **EC2 Launch Type**: Uses EC2 instances instead of FARGATE
+1. **EC2 Launch Type**: Uses EC2 instances
 2. **Auto Scaling Groups**: Separate ASGs for blue and green environments
 3. **Path-Based Routing**: ALB listener rules for granular traffic control
 4. **Secrets Manager Integration**: Complete secret creation and injection
