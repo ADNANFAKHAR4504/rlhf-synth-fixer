@@ -1,8 +1,8 @@
 # AWS Config Recorder
 resource "aws_config_configuration_recorder" "main" {
-  count           = var.enable_config ? 1 : 0
-  name            = "config-recorder-${var.environment_suffix}"
-  role_arn        = aws_iam_role.config_role.arn
+  count    = var.enable_config ? 1 : 0
+  name     = "config-recorder-${var.environment_suffix}"
+  role_arn = aws_iam_role.config_role.arn
   recording_group {
     all_supported = true
   }
@@ -19,21 +19,21 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Start the configuration recorder
 resource "aws_config_configuration_recorder_status" "main" {
-  count              = var.enable_config ? 1 : 0
-  name               = aws_config_configuration_recorder.main[0].name
-  is_enabled         = true
-  depends_on         = [aws_s3_bucket_policy.config_bucket_policy]
-  start_recording    = true
+  count               = var.enable_config ? 1 : 0
+  name                = aws_config_configuration_recorder.main[0].name
+  is_enabled          = true
+  depends_on          = [aws_s3_bucket_policy.config_bucket_policy]
+  start_recording     = true
   depends_on_explicit = [aws_config_delivery_channel.main[0].name]
 }
 
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  count           = var.enable_config ? 1 : 0
-  name            = "config-delivery-channel-${var.environment_suffix}"
-  s3_bucket_name  = aws_s3_bucket.config_bucket.id
-  sns_topic_arn   = aws_sns_topic.config_notifications.arn
-  depends_on      = [aws_config_configuration_recorder.main[0]]
+  count          = var.enable_config ? 1 : 0
+  name           = "config-delivery-channel-${var.environment_suffix}"
+  s3_bucket_name = aws_s3_bucket.config_bucket.id
+  sns_topic_arn  = aws_sns_topic.config_notifications.arn
+  depends_on     = [aws_config_configuration_recorder.main[0]]
 
   tags = merge(
     var.tags,
