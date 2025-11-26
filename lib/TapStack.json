@@ -1615,18 +1615,7 @@
                 "Environment": {
                   "Ref": "EnvironmentSuffix"
                 }
-              },
-              "CopyActions": [
-                {
-                  "DestinationBackupVaultArn": {
-                    "Fn::Sub": "arn:aws:backup:${TargetRegion}:${AWS::AccountId}:backup-vault:trading-platform-backup-${EnvironmentSuffix}"
-                  },
-                  "Lifecycle": {
-                    "DeleteAfterDays": 120,
-                    "MoveToColdStorageAfterDays": 7
-                  }
-                }
-              ]
+              }
             }
           ]
         }
