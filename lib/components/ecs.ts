@@ -156,22 +156,25 @@ export class EcsComponent extends pulumi.ComponentResource {
       resourceOpts
     );
 
-    // Create CloudWatch log group
+    // Create CloudWatch log group (name must follow AWS naming conventions)
+    const logGroupName =
+      `/ecs/${args.environment}-payment-processor`.toLowerCase();
     this.logGroup = new aws.cloudwatch.LogGroup(
       `${args.environment}-payment-logs`,
       {
-        name: `/ecs/${args.environment}-payment-processor`,
+        name: logGroupName,
         retentionInDays: 7,
         tags: args.tags,
       },
       resourceOpts
     );
 
-    // Create ECS task definition
+    // Create ECS task definition (family name must be lowercase)
+    const taskFamily = `${args.environment}-payment-processor`.toLowerCase();
     this.taskDefinition = new aws.ecs.TaskDefinition(
       `${args.environment}-payment-task`,
       {
-        family: `${args.environment}-payment-processor`,
+        family: taskFamily,
         networkMode: 'awsvpc',
         requiresCompatibilities: ['FARGATE'],
         cpu: '256',
@@ -205,7 +208,7 @@ export class EcsComponent extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': this.logGroup.name,
+                    'awslogs-group': logGroupName,
                     'awslogs-region': aws.getRegionOutput().name,
                     'awslogs-stream-prefix': 'ecs',
                   },
