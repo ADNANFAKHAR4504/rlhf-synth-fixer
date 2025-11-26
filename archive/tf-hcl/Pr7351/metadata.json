@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T07:57:59+00:00",
+  "subtask": "VPC Network Isolation",
+  "subject_labels": [
+    "Networking",
+    "Security",
+    "VPC"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "IAM"
+  ],
+  "po_id": "101912685",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -100,12 +100,87 @@ if [ "$MERGE_BASE" != "$MAIN_HEAD" ]; then
       echo "⚠️ Failed to push rebased branch (may need manual push)"
     fi
   else
-    echo "❌ Rebase failed. Manual intervention required."
-    echo "Aborting rebase..."
-    git rebase --abort
-    cd "${REPO_ROOT}"
-    git worktree remove "${WORKTREE_PATH}" --force
-    exit 1
+    echo "❌ Rebase failed - conflicts detected"
+    echo ""
+
+    # Check if there are conflicts
+    CONFLICTED_FILES=$(git diff --name-only --diff-filter=U)
+
+    if [ -n "$CONFLICTED_FILES" ]; then
+      echo "📋 Conflicted files:"
+      echo "$CONFLICTED_FILES"
+      echo ""
+
+      # Attempt automatic conflict resolution
+      echo "🔧 Attempting automatic conflict resolution..."
+
+      RESOLVED_COUNT=0
+      UNRESOLVED_COUNT=0
+
+      while IFS= read -r file; do
+        echo "Resolving: $file"
+
+        # Strategy: For most conflicts, prefer main's version (ours during rebase)
+        # This is safe because we're pulling in updates from main
+        if git checkout --ours "$file" 2>/dev/null; then
+          git add "$file"
+          RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
+          echo "  ✅ Auto-resolved (accepted main's version)"
+        else
+          UNRESOLVED_COUNT=$((UNRESOLVED_COUNT + 1))
+          echo "  ⚠️ Could not auto-resolve"
+        fi
+      done <<< "$CONFLICTED_FILES"
+
+      echo ""
+      echo "Resolution summary:"
+      echo "  ✅ Auto-resolved: ${RESOLVED_COUNT}"
+      echo "  ⚠️ Unresolved: ${UNRESOLVED_COUNT}"
+
+      if [ $UNRESOLVED_COUNT -eq 0 ]; then
+        echo ""
+        echo "✅ All conflicts auto-resolved, continuing rebase..."
+
+        if git rebase --continue; then
+          echo "✅ Rebase completed successfully"
+
+          # Push rebased branch
+          echo "Pushing rebased branch to remote..."
+          if git push origin "${BRANCH_NAME}" --force-with-lease; then
+            echo "✅ Remote branch updated"
+          else
+            echo "⚠️ Failed to push rebased branch (may need manual push)"
+          fi
+        else
+          echo "❌ Rebase --continue failed"
+          git rebase --abort
+          cd "${REPO_ROOT}"
+          git worktree remove "${WORKTREE_PATH}" --force
+          exit 1
+        fi
+      else
+        echo ""
+        echo "❌ Cannot auto-resolve all conflicts. Manual intervention required."
+        echo ""
+        echo "Manual resolution steps:"
+        echo "1. cd ${WORKTREE_PATH}"
+        echo "2. Resolve conflicts in files listed above"
+        echo "3. git add <resolved-files>"
+        echo "4. git rebase --continue"
+        echo "5. git push origin ${BRANCH_NAME} --force-with-lease"
+        echo ""
+        git rebase --abort
+        cd "${REPO_ROOT}"
+        git worktree remove "${WORKTREE_PATH}" --force
+        exit 1
+      fi
+    else
+      echo "❌ Rebase failed for unknown reason"
+      git rebase --abort
+      cd "${REPO_ROOT}"
+      git worktree remove "${WORKTREE_PATH}" --force
+      exit 1
+    fi
   fi
 else
   echo "✅ Branch is even with main - no sync needed"
