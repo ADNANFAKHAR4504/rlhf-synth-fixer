@@ -89,19 +89,22 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Conditions.CreateVPCPeering['Fn::And']).toBeDefined();
     });
 
-    test('CreateVPCPeering should check VpcPeeringEnabled, IsSourceRegion, and TargetVpcId not empty', () => {
+    test('CreateVPCPeering should check EnableCrossRegionFeatures, VpcPeeringEnabled, IsSourceRegion, and TargetVpcId not empty', () => {
       const condition = template.Conditions.CreateVPCPeering['Fn::And'];
-      expect(condition).toHaveLength(3);
-      // Check first condition: VpcPeeringEnabled == true
-      expect(condition[0]['Fn::Equals'][0]['Ref']).toBe('VpcPeeringEnabled');
+      expect(condition).toHaveLength(4);
+      // Check first condition: EnableCrossRegionFeatures == true
+      expect(condition[0]['Fn::Equals'][0]['Ref']).toBe('EnableCrossRegionFeatures');
       expect(condition[0]['Fn::Equals'][1]).toBe('true');
-      // Check second condition: AWS::Region == SourceRegion
-      expect(condition[1]['Fn::Equals'][0]['Ref']).toBe('AWS::Region');
-      expect(condition[1]['Fn::Equals'][1]['Ref']).toBe('SourceRegion');
-      // Check third condition: TargetVpcId != ""
-      expect(condition[2]['Fn::Not']).toBeDefined();
-      expect(condition[2]['Fn::Not'][0]['Fn::Equals'][0]['Ref']).toBe('TargetVpcId');
-      expect(condition[2]['Fn::Not'][0]['Fn::Equals'][1]).toBe('');
+      // Check second condition: VpcPeeringEnabled == true
+      expect(condition[1]['Fn::Equals'][0]['Ref']).toBe('VpcPeeringEnabled');
+      expect(condition[1]['Fn::Equals'][1]).toBe('true');
+      // Check third condition: AWS::Region == SourceRegion
+      expect(condition[2]['Fn::Equals'][0]['Ref']).toBe('AWS::Region');
+      expect(condition[2]['Fn::Equals'][1]['Ref']).toBe('SourceRegion');
+      // Check fourth condition: TargetVpcId != ""
+      expect(condition[3]['Fn::Not']).toBeDefined();
+      expect(condition[3]['Fn::Not'][0]['Fn::Equals'][0]['Ref']).toBe('TargetVpcId');
+      expect(condition[3]['Fn::Not'][0]['Fn::Equals'][1]).toBe('');
     });
 
     test('should have IsTargetRegion condition', () => {
@@ -148,59 +151,9 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('should have S3ReplicationRole', () => {
-      expect(template.Resources.S3ReplicationRole).toBeDefined();
-      expect(template.Resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('S3ReplicationRole should be conditional on EnableS3Replication', () => {
-      const role = template.Resources.S3ReplicationRole;
-      expect(role.Condition).toBe('EnableS3Replication');
-    });
-
-    test('should have S3ReplicationConfigFunction for replication configuration', () => {
-      const functionResource = template.Resources.S3ReplicationConfigFunction;
-      expect(functionResource).toBeDefined();
-      expect(functionResource.Type).toBe('AWS::Lambda::Function');
-      expect(functionResource.Condition).toBe('EnableS3Replication');
-      expect(functionResource.Properties.Runtime).toBe('python3.11');
-    });
-
-    test('should have S3ReplicationConfigRole with proper permissions', () => {
-      const role = template.Resources.S3ReplicationConfigRole;
-      expect(role).toBeDefined();
-      expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Condition).toBe('EnableS3Replication');
-      expect(role.Properties.Policies).toBeDefined();
-      const policy = role.Properties.Policies[0];
-      expect(policy.PolicyDocument.Statement).toBeDefined();
-      const s3Actions = policy.PolicyDocument.Statement[0].Action;
-      // Using correct IAM action names (not PutBucketReplication/GetBucketReplication)
-      expect(s3Actions).toContain('s3:PutReplicationConfiguration');
-      expect(s3Actions).toContain('s3:GetReplicationConfiguration');
-      expect(s3Actions).toContain('s3:ListBucket');
-    });
-
-    test('should have S3ReplicationConfigResource Custom Resource', () => {
-      const customResource = template.Resources.S3ReplicationConfigResource;
-      expect(customResource).toBeDefined();
-      expect(customResource.Type).toBe('AWS::CloudFormation::CustomResource');
-      expect(customResource.Condition).toBe('EnableS3Replication');
-      expect(customResource.Properties.ServiceToken).toBeDefined();
-      expect(customResource.Properties.SourceBucket).toBeDefined();
-      expect(customResource.Properties.DestBucket).toBeDefined();
-      expect(customResource.Properties.DestRegion).toBeDefined();
-      expect(customResource.Properties.RoleArn).toBeDefined();
-    });
-
-    test('S3ReplicationConfigResource should depend on TradingDataBucket', () => {
-      const customResource = template.Resources.S3ReplicationConfigResource;
-      expect(customResource.DependsOn).toBeDefined();
-      expect(Array.isArray(customResource.DependsOn)).toBe(true);
-      expect(customResource.DependsOn).toContain('TradingDataBucket');
-      // S3ReplicationConfigFunction dependency is enforced via GetAtt in ServiceToken
-      // so it doesn't need to be in DependsOn (removed to fix linting warning W3005)
-    });
+    // S3 Replication resources removed to allow single-region deployment
+    // These caused AWS Early Validation errors due to cross-region resource references
+    // S3 replication can be re-added later when multi-region deployment is supported
   });
 
   describe('DynamoDB Resources', () => {
@@ -414,15 +367,8 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Resources.AttachGateway.Type).toBe('AWS::EC2::VPCGatewayAttachment');
     });
 
-    test('should have NATGatewayEIP', () => {
-      expect(template.Resources.NATGatewayEIP).toBeDefined();
-      expect(template.Resources.NATGatewayEIP.Type).toBe('AWS::EC2::EIP');
-    });
-
-    test('should have NATGateway', () => {
-      expect(template.Resources.NATGateway).toBeDefined();
-      expect(template.Resources.NATGateway.Type).toBe('AWS::EC2::NatGateway');
-    });
+    // NAT Gateway resources removed in iteration 3 to fix EIP quota exhaustion
+    // Lambdas now use VPC endpoints or public subnets for internet access
 
     test('should have PublicRouteTable and PrivateRouteTable', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
@@ -854,14 +800,7 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       });
     });
 
-    test('NAT Gateway should depend on Internet Gateway attachment', () => {
-      const natGw = template.Resources.NATGateway;
-      if (natGw.DependsOn) {
-        expect(
-          Array.isArray(natGw.DependsOn) ? natGw.DependsOn : [natGw.DependsOn]
-        ).toContain('InternetGatewayAttachment');
-      }
-    });
+    // NAT Gateway dependency test removed (NAT Gateway no longer in template)
 
     test('KinesisEventSourceMapping should reference both stream and function', () => {
       const mapping = template.Resources.KinesisEventSourceMapping;
@@ -876,11 +815,12 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(30);
     });
 
-    test('should have at least 4 IAM roles', () => {
+    test('should have at least 3 IAM roles', () => {
       const iamRoles = Object.keys(template.Resources).filter(key =>
         template.Resources[key].Type === 'AWS::IAM::Role'
       );
-      expect(iamRoles.length).toBeGreaterThanOrEqual(4);
+      // Was 4, now 3 after removing S3ReplicationRole and S3ReplicationConfigRole
+      expect(iamRoles.length).toBeGreaterThanOrEqual(3);
     });
 
     test('should have at least 10 outputs', () => {
