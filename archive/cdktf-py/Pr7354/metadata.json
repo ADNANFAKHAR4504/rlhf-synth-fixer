@@ -27,5 +27,10 @@
     "IAM",
     "KMS",
     "SSM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
