@@ -1068,8 +1068,7 @@
               "Ebs": {
                 "VolumeSize": 20,
                 "VolumeType": "gp3",
-                "DeleteOnTermination": true,
-                "Encrypted": true
+                "DeleteOnTermination": true
               }
             }
           ],
