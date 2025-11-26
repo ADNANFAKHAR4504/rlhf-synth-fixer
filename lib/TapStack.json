@@ -16,15 +16,23 @@
       "MaxLength": 16,
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
     },
-    "DBPasswordSSMPath": {
+    "DBPassword": {
       "Type": "String",
-      "Description": "SSM Parameter Store path for Aurora database master password",
-      "Default": "/trading/db/password"
+      "Description": "Master password for Aurora database",
+      "Default": "TradingDB2024!Secure",
+      "NoEcho": true,
+      "MinLength": 8,
+      "MaxLength": 41
     },
     "VpcCidr": {
       "Type": "String",
       "Description": "CIDR block for VPC",
       "Default": "10.0.0.0/16"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for Route 53 health checks",
+      "Default": "trading-platform.internal"
     }
   },
   "Resources": {
@@ -389,7 +397,7 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": { "Ref": "DBUsername" },
-        "MasterUserPassword": { "Fn::Sub": "{{resolve:ssm-secure:${DBPasswordSSMPath}}}" },
+        "MasterUserPassword": { "Ref": "DBPassword" },
         "DatabaseName": "tradingdb",
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
         "DBClusterParameterGroupName": { "Ref": "DBClusterParameterGroup" },
