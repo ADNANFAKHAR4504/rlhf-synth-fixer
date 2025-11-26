@@ -393,6 +393,9 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Aurora Serverless v2 cluster
+    // Note: ignoreChanges on masterPassword prevents password updates from triggering
+    // cluster modifications when secret versions change. The password is managed via
+    // Secrets Manager and should only be changed through AWS console/CLI when needed.
     const auroraCluster = new aws.rds.Cluster(
       `${appName}-aurora-cluster-${environmentSuffix}`,
       {
@@ -423,7 +426,10 @@ export class TapStack extends pulumi.ComponentResource {
           Name: `${appName}-aurora-cluster-${environmentSuffix}`,
         },
       },
-      { parent: this }
+      {
+        parent: this,
+        ignoreChanges: ['masterPassword'], // Prevent password updates from triggering cluster modifications
+      }
     );
 
     new aws.rds.ClusterInstance(
