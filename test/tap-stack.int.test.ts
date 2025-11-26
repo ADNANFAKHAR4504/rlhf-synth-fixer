@@ -11,39 +11,17 @@ import {
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
 } from "@aws-sdk/client-s3";
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from "@aws-sdk/client-sns";
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-  ListMetricsCommand,
-} from "@aws-sdk/client-cloudwatch";
+import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
+import { CloudWatchClient, DescribeAlarmsCommand, ListMetricsCommand } from "@aws-sdk/client-cloudwatch";
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
   FilterLogEventsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetAliasCommand,
-  InvokeCommand,
-} from "@aws-sdk/client-lambda";
-import {
-  IAMClient,
-  GetRoleCommand,
-} from "@aws-sdk/client-iam";
-import {
-  SQSClient,
-  GetQueueAttributesCommand,
-} from "@aws-sdk/client-sqs";
-import {
-  CodeDeployClient,
-  GetApplicationCommand,
-  GetDeploymentGroupCommand,
-} from "@aws-sdk/client-codedeploy";
+import { LambdaClient, GetFunctionCommand, GetAliasCommand, InvokeCommand } from "@aws-sdk/client-lambda";
+import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
+import { SQSClient, GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
+import { CodeDeployClient, GetApplicationCommand, GetDeploymentGroupCommand } from "@aws-sdk/client-codedeploy";
 
 /* ---------------------------- Setup / Helpers --------------------------- */
 
@@ -113,7 +91,7 @@ function parseNameFromAlarmArn(arn: string | undefined): string | undefined {
 }
 
 function parseQueueUrlFromArn(arn?: string): string | undefined {
-  // arn:aws:sqs:region:account:queueName -> need URL: https://sqs.region.amazonaws.com/account/queueName
+  // arn:aws:sqs:region:account:queueName -> URL: https://sqs.region.amazonaws.com/account/queueName
   if (!arn) return undefined;
   const parts = arn.split(":");
   if (parts.length < 6) return undefined;
@@ -124,6 +102,16 @@ function parseQueueUrlFromArn(arn?: string): string | undefined {
 
 function base64ToUtf8(b: Uint8Array): string {
   return new TextDecoder().decode(b);
+}
+
+// Accept either alias name ("live") or alias ARN ("arn:...:function:<fn>:live")
+function normalizeAliasName(aliasNameOrArn: string): string {
+  if (!aliasNameOrArn) return "live";
+  if (aliasNameOrArn.startsWith("arn:")) {
+    const last = aliasNameOrArn.split(":").pop();
+    return last || "live";
+  }
+  return aliasNameOrArn;
 }
 
 /* ------------------------------ Tests ---------------------------------- */
@@ -152,22 +140,24 @@ describe("TapStack — Live Integration Tests", () => {
 
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: bucket })));
 
-    // Encryption
+    // Encryption (support both shapes)
     const enc = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: bucket })));
-    const alg = enc.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-           || enc.ServerSideEncryptionConfiguration?.ServerSideEncryptionConfiguration?.[0]?.ServerSideEncryptionByDefault?.SSEAlgorithm; // tolerate shapes
-    expect(alg === "AES256" || alg === "aws:kms").toBe(true);
+    const cfg: any = enc as any;
+    const sse =
+      cfg.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm ??
+      cfg.ServerSideEncryptionConfiguration?.ServerSideEncryptionConfiguration?.[0]?.ServerSideEncryptionByDefault
+        ?.SSEAlgorithm;
+    expect(sse === "AES256" || sse === "aws:kms").toBe(true);
 
-    // Public access block (best-effort; some accounts may restrict this API if no explicit PAB set)
+    // Public access block (best-effort)
     try {
       const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
-      const cfg = pab.PublicAccessBlockConfiguration!;
-      expect(cfg.BlockPublicAcls).toBe(true);
-      expect(cfg.BlockPublicPolicy).toBe(true);
-      expect(cfg.IgnorePublicAcls).toBe(true);
-      expect(cfg.RestrictPublicBuckets).toBe(true);
+      const c = pab.PublicAccessBlockConfiguration!;
+      expect(c.BlockPublicAcls).toBe(true);
+      expect(c.BlockPublicPolicy).toBe(true);
+      expect(c.IgnorePublicAcls).toBe(true);
+      expect(c.RestrictPublicBuckets).toBe(true);
     } catch {
-      // If not set (or permission denied), bucket policy/ACLs still protect; the test remains green.
       expect(true).toBe(true);
     }
   });
@@ -190,11 +180,11 @@ describe("TapStack — Live Integration Tests", () => {
   });
 
   /* 5 */
-  it("05 Lambda alias 'live' exists and points to a version", async () => {
+  it("05 Lambda alias 'live' exists and points to a version (handle ARN-or-name in outputs)", async () => {
     const fnName = outputs.PrimaryLambdaName;
-    const aliasName = outputs.PrimaryLambdaAliasName;
-    const alias = await retry(() => lambda.send(new GetAliasCommand({ FunctionName: fnName, Name: aliasName })));
-    expect(alias.Name).toBe("live");
+    const aliasInput = normalizeAliasName(outputs.PrimaryLambdaAliasName);
+    const alias = await retry(() => lambda.send(new GetAliasCommand({ FunctionName: fnName, Name: aliasInput })));
+    expect(alias.Name?.toLowerCase()).toBe("live");
     expect(typeof alias.FunctionVersion).toBe("string");
     expect(alias.FunctionVersion).not.toBe("$LATEST");
   });
@@ -202,11 +192,12 @@ describe("TapStack — Live Integration Tests", () => {
   /* 6 */
   it("06 Invoke Lambda: returns 200 and JSON body", async () => {
     const fnName = outputs.PrimaryLambdaName;
-    const res = await retry(() => lambda.send(new InvokeCommand({ FunctionName: fnName, Payload: new Uint8Array(Buffer.from(JSON.stringify({ ping: true }))) })));
+    const res = await retry(() =>
+      lambda.send(new InvokeCommand({ FunctionName: fnName, Payload: new Uint8Array(Buffer.from(JSON.stringify({ ping: true }))) }))
+    );
     expect(res.StatusCode && res.StatusCode >= 200 && res.StatusCode < 300).toBe(true);
     if (res.Payload) {
       const text = base64ToUtf8(res.Payload as Uint8Array);
-      // Lambda proxy response style
       const parsed = JSON.parse(text);
       expect(typeof parsed.statusCode).toBe("number");
     }
@@ -226,15 +217,13 @@ describe("TapStack — Live Integration Tests", () => {
     const logGroupName = `/aws/lambda/${outputs.PrimaryLambdaName}`;
     const since = Date.now() - 15 * 60 * 1000;
     const resp = await retry(() => logs.send(new FilterLogEventsCommand({ logGroupName, startTime: since, limit: 5 })));
-    // If empty, the stack is fresh; still pass as the call succeeded.
     expect(Array.isArray(resp.events)).toBe(true);
   });
 
   /* 9 */
   it("09 CloudWatch Alarms (Errors): alarm name resolves and is describable", async () => {
-    const alarmName = parseNameFromAlarmArn(outputs.AlarmErrorArn);
-    expect(alarmName).toBeTruthy();
-    const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [alarmName!] })));
+    const alarmName = parseNameFromAlarmArn(outputs.AlarmErrorArn)!;
+    const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [alarmName] })));
     const a = (resp.MetricAlarms || [])[0];
     expect(a).toBeDefined();
     expect(a?.Namespace).toBe("AWS/Lambda");
@@ -243,9 +232,8 @@ describe("TapStack — Live Integration Tests", () => {
 
   /* 10 */
   it("10 CloudWatch Alarms (Throttles): alarm name resolves and is describable", async () => {
-    const alarmName = parseNameFromAlarmArn(outputs.AlarmThrottleArn);
-    expect(alarmName).toBeTruthy();
-    const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [alarmName!] })));
+    const alarmName = parseNameFromAlarmArn(outputs.AlarmThrottleArn)!;
+    const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [alarmName] })));
     const a = (resp.MetricAlarms || [])[0];
     expect(a).toBeDefined();
     expect(a?.Namespace).toBe("AWS/Lambda");
@@ -256,27 +244,16 @@ describe("TapStack — Live Integration Tests", () => {
   it("11 CloudWatch: Lambda metric exists for live alias (Errors with Resource dimension)", async () => {
     const fnName = outputs.PrimaryLambdaName;
     const list = await retry(() =>
-      cw.send(
-        new ListMetricsCommand({
-          Namespace: "AWS/Lambda",
-          MetricName: "Errors",
-          Dimensions: [{ Name: "FunctionName", Value: fnName }],
-        })
-      )
+      cw.send(new ListMetricsCommand({ Namespace: "AWS/Lambda", MetricName: "Errors", Dimensions: [{ Name: "FunctionName", Value: fnName }] }))
     );
-    // We can't filter server-side for Resource dimension; inspect locally
     const items = list.Metrics || [];
-    const hasLive = items.some((m) =>
-      (m.Dimensions || []).some((d) => d.Name === "Resource" && typeof d.Value === "string" && d.Value.endsWith(":live"))
-    );
-    // If metrics not yet published (brand new stack), still accept the call succeeded
+    const hasLive = items.some((m) => (m.Dimensions || []).some((d) => d.Name === "Resource" && String(d.Value || "").endsWith(":live")));
     expect(Array.isArray(items)).toBe(true);
     if (items.length > 0) expect(typeof hasLive).toBe("boolean");
   });
 
   /* 12 */
   it("12 IAM Role for Lambda exists and trust policy includes lambda.amazonaws.com", async () => {
-    // Role name isn't in outputs; fetch from GetFunction
     const fn = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: outputs.PrimaryLambdaName })));
     const roleArn = fn.Configuration?.Role!;
     expect(roleArn).toBeTruthy();
@@ -302,35 +279,27 @@ describe("TapStack — Live Integration Tests", () => {
 
   /* 14 */
   it("14 If DLQ is configured, queue is accessible and has KMS-managed encryption", async () => {
-    // DLQ is optional; infer from Lambda DeadLetterConfig.TargetArn
     const fn = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: outputs.PrimaryLambdaName })));
     const targetArn = (fn.Configuration as any)?.DeadLetterConfig?.TargetArn as string | undefined;
     if (!targetArn) {
       expect(targetArn).toBeUndefined(); // DLQ not enabled — pass
       return;
     }
-    // If present, query queue attributes
     const queueUrl = parseQueueUrlFromArn(targetArn);
     expect(queueUrl).toBeTruthy();
     const attrs = await retry(() =>
-      sqs.send(
-        new GetQueueAttributesCommand({
-          QueueUrl: queueUrl!,
-          AttributeNames: ["KmsMasterKeyId", "QueueArn", "RedrivePolicy"],
-        })
-      )
+      sqs.send(new GetQueueAttributesCommand({ QueueUrl: queueUrl!, AttributeNames: ["KmsMasterKeyId", "QueueArn", "RedrivePolicy"] }))
     );
-    // Managed key may be alias/aws/sqs or a CMK; assert attribute presence
     expect(attrs.Attributes?.QueueArn).toBeDefined();
     expect(attrs.Attributes?.KmsMasterKeyId).toBeDefined();
   });
 
   /* 15 */
-  it("15 Lambda alias ARN matches function ARN partition/account/region", async () => {
+  it("15 Lambda alias ARN matches function ARN partition/account/region", () => {
     const aliasArn = outputs.PrimaryLambdaAliasArn;
     const fnArn = outputs.PrimaryLambdaArn;
-    const [aPart, aSvc, aRes, aRegion, aAcct] = aliasArn.split(":");
-    const [fPart, fSvc, fRes, fRegion, fAcct] = fnArn.split(":");
+    const [aPart, aSvc, , aRegion, aAcct] = aliasArn.split(":");
+    const [fPart, fSvc, , fRegion, fAcct] = fnArn.split(":");
     expect(aPart).toBe(fPart);
     expect(aSvc).toBe(fSvc);
     expect(aRegion).toBe(fRegion);
@@ -341,7 +310,7 @@ describe("TapStack — Live Integration Tests", () => {
   it("16 S3 bucket ARN matches bucket name", () => {
     const arn = outputs.ArtifactsBucketArn;
     const name = outputs.ArtifactsBucketName;
-    expect(arn.endsWith(`:${name}`) || arn.endsWith(`:${name}/`)).toBe(true);
+    expect(arn.endsWith(`:${name}`) || arn.endsWith(`:${name}/`) || arn.endsWith(`:::${name}`)).toBe(true);
   });
 
   /* 17 */
@@ -369,23 +338,15 @@ describe("TapStack — Live Integration Tests", () => {
     const fn = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: outputs.PrimaryLambdaName })));
     const roleArn = fn.Configuration?.Role!;
     expect(roleArn).toBeTruthy();
-    // Basic validation: roleArn exists and is used; detailed policy inspection done in unit tests
     expect(roleArn.startsWith("arn:")).toBe(true);
   });
 
   /* 20 */
   it("20 Lambda invocation logs appear shortly after invoke (best-effort)", async () => {
     const logGroupName = `/aws/lambda/${outputs.PrimaryLambdaName}`;
-    // Invoke to generate a log line
     await retry(() =>
-      lambda.send(
-        new InvokeCommand({
-          FunctionName: outputs.PrimaryLambdaName,
-          Payload: new Uint8Array(Buffer.from(JSON.stringify({ trace: Date.now() }))),
-        })
-      )
+      lambda.send(new InvokeCommand({ FunctionName: outputs.PrimaryLambdaName, Payload: new Uint8Array(Buffer.from(JSON.stringify({ trace: Date.now() }))) }))
     );
-    // Wait a bit for logs to ship
     await wait(3000);
     const since = Date.now() - 5 * 60 * 1000;
     const resp = await retry(() => logs.send(new FilterLogEventsCommand({ logGroupName, startTime: since, limit: 1 })));
@@ -396,13 +357,7 @@ describe("TapStack — Live Integration Tests", () => {
   it("21 CloudWatch Lambda metric list succeeds for Throttles on the function", async () => {
     const fnName = outputs.PrimaryLambdaName;
     const list = await retry(() =>
-      cw.send(
-        new ListMetricsCommand({
-          Namespace: "AWS/Lambda",
-          MetricName: "Throttles",
-          Dimensions: [{ Name: "FunctionName", Value: fnName }],
-        })
-      )
+      cw.send(new ListMetricsCommand({ Namespace: "AWS/Lambda", MetricName: "Throttles", Dimensions: [{ Name: "FunctionName", Value: fnName }] }))
     );
     expect(Array.isArray(list.Metrics)).toBe(true);
   });
@@ -426,15 +381,12 @@ describe("TapStack — Live Integration Tests", () => {
       expect(appName || dgName).toBeUndefined();
       return;
     }
-    const dg = await retry(() =>
-      cd.send(new GetDeploymentGroupCommand({ applicationName: appName, deploymentGroupName: dgName }))
-    );
+    const dg = await retry(() => cd.send(new GetDeploymentGroupCommand({ applicationName: appName, deploymentGroupName: dgName })));
     expect(dg.deploymentGroupInfo?.applicationName).toBe(appName);
   });
 
   /* 24 */
-  it("24 Network reachability (TCP): Lambda is not directly reachable (sanity) but DNS for AWS endpoints resolves", async () => {
-    // This is a light sanity check that the runner has network; resolve an AWS API endpoint DNS
+  it("24 Network reachability (TCP): DNS for AWS endpoints resolves/connects", async () => {
     const host = `lambda.${region}.amazonaws.com`;
     const reachable = await new Promise<boolean>((resolve) => {
       const socket = new net.Socket();
@@ -454,17 +406,26 @@ describe("TapStack — Live Integration Tests", () => {
   });
 
   /* 25 */
-  it("25 Output ARNs are well-formed and belong to the same account", () => {
+  it("25 Output ARNs with account segments belong to the same account", () => {
     const arns = [
       outputs.PrimaryLambdaArn,
       outputs.PrimaryLambdaAliasArn,
-      outputs.ArtifactsBucketArn,
+      outputs.ArtifactsBucketArn, // may not have account (S3 bucket ARNs don't)
       outputs.StackEventsSnsTopicArn,
       outputs.AlarmErrorArn,
       outputs.AlarmThrottleArn,
     ].filter(Boolean) as string[];
     expect(arns.length).toBeGreaterThanOrEqual(4);
-    const accounts = new Set(arns.map((a) => a.split(":")[4]));
-    expect(accounts.size).toBe(1);
+
+    // Consider only ARNs that include a non-empty account segment (index 4)
+    const withAccounts = arns.filter((a) => a.split(":").length > 4 && a.split(":")[4]);
+    const accounts = new Set(withAccounts.map((a) => a.split(":")[4]));
+    // If at least one ARN has an account segment, all such ARNs must match
+    if (withAccounts.length > 0) {
+      expect(accounts.size).toBe(1);
+    } else {
+      // No ARNs with account segments (unlikely) — still pass
+      expect(true).toBe(true);
+    }
   });
 });
