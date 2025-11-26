@@ -547,8 +547,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=self.lambda_role.arn,
-            filename="lib/lambda_placeholder.zip",  # Placeholder - should be actual deployment package
-            source_code_hash="${filebase64sha256(\"lib/lambda_placeholder.zip\")}",
+            filename="../../../lib/lambda_placeholder.zip",  # Placeholder - should be actual deployment package
+            source_code_hash="${filebase64sha256(\"../../../lib/lambda_placeholder.zip\")}",
             timeout=30,
             memory_size=512,
             reserved_concurrent_executions=10,
@@ -578,8 +578,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=self.lambda_role.arn,
-            filename="lib/lambda_placeholder.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda_placeholder.zip\")}",
+            filename="../../../lib/lambda_placeholder.zip",
+            source_code_hash="${filebase64sha256(\"../../../lib/lambda_placeholder.zip\")}",
             timeout=30,
             memory_size=256,
             reserved_concurrent_executions=5,
@@ -894,8 +894,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             handler="index.handler",
             role=self.param_migration_role.arn,
-            filename="lib/lambda_placeholder.zip",
-            source_code_hash="${filebase64sha256(\"lib/lambda_placeholder.zip\")}",
+            filename="../../../lib/lambda_placeholder.zip",
+            source_code_hash="${filebase64sha256(\"../../../lib/lambda_placeholder.zip\")}",
             timeout=300,
             memory_size=256,
             environment={
