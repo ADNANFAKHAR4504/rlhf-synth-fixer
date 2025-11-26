@@ -19,7 +19,7 @@ resource "aws_cloudwatch_event_target" "trade_lambda" {
   arn            = aws_lambda_function.market_processor.arn
 
   retry_policy {
-    maximum_event_age      = 3600  # ❌ UNSUPPORTED PARAMETER
+    maximum_event_age      = 3600  #  UNSUPPORTED PARAMETER
     maximum_retry_attempts = 2
   }
   ...
@@ -37,7 +37,7 @@ resource "aws_cloudwatch_event_target" "trade_lambda" {
   arn            = aws_lambda_function.market_processor.arn
 
   retry_policy {
-    maximum_retry_attempts = 2  # ✅ CORRECT
+    maximum_retry_attempts = 2  #  CORRECT
   }
   ...
 }
@@ -72,7 +72,7 @@ variable "tags" {
   default = {
     Project     = "FinancialMarketData"
     ManagedBy   = "Terraform"
-    Environment = "production"  # ❌ HARDCODED ENVIRONMENT
+    Environment = "production"  #  HARDCODED ENVIRONMENT
   }
 }
 ```
@@ -87,7 +87,7 @@ variable "tags" {
   default = {
     Project   = "FinancialMarketData"
     ManagedBy = "Terraform"
-    # ✅ Environment tag removed - should be set per deployment
+    #  Environment tag removed - should be set per deployment
   }
 }
 ```
