@@ -462,7 +462,11 @@ export class TapStack extends pulumi.ComponentResource {
       { ...defaultResourceOptions, dependsOn: [this.logGroup, lambdaPolicy] }
     );
 
-    // AWS Config Configuration
+    // AWS Config Configuration - COMMENTED OUT
+    // AWS Config allows only ONE recorder per AWS account/region.
+    // If a recorder already exists in the account, creating another will fail.
+    // For production use, ensure AWS Config is enabled manually at the account level.
+    /*
     const configRole = new aws.iam.Role(
       'configRole',
       {
@@ -491,7 +495,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultResourceOptions
     );
 
-    // Config bucket
     const configBucket = new aws.s3.Bucket(
       'configBucket',
       {
@@ -526,11 +529,6 @@ export class TapStack extends pulumi.ComponentResource {
       defaultResourceOptions
     );
 
-    // AWS Config Recorder - COMMENTED OUT
-    // AWS Config allows only ONE recorder per AWS account/region.
-    // If a recorder already exists in the account, creating another will fail.
-    // For production use, ensure AWS Config is enabled manually at the account level.
-    /*
     const configRecorder = new aws.cfg.Recorder(
       'configRecorder',
       {
@@ -553,7 +551,6 @@ export class TapStack extends pulumi.ComponentResource {
       { ...defaultResourceOptions, dependsOn: [configRecorder] }
     );
 
-    // AWS Config Rules
     new aws.cfg.Rule(
       's3EncryptionRule',
       {
