@@ -1,33 +1,231 @@
-import fs from 'fs';
-import {
-  EKSClient,
-  DescribeClusterCommand,
-  DescribeNodegroupCommand,
-  ListNodegroupsCommand,
-} from '@aws-sdk/client-eks';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeRouteTablesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  IAMClient,
-  GetRoleCommand,
-  GetOpenIDConnectProviderCommand,
-  ListAttachedRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
+jest.mock('@aws-sdk/client-eks');
+jest.mock('@aws-sdk/client-ec2');
+jest.mock('@aws-sdk/client-iam');
+jest.mock('@aws-sdk/client-cloudwatch-logs');
+
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClusterCommand,
+  DescribeNodegroupCommand,
+  EKSClient,
+  ListNodegroupsCommand,
+} from '@aws-sdk/client-eks';
+import {
+  GetOpenIDConnectProviderCommand,
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
+
+// Mock implementations
+const mockEKSSend = jest.fn();
+(EKSClient as any).mockImplementation(() => ({
+  send: mockEKSSend
+}));
+mockEKSSend.mockImplementation((command) => {
+  if (command instanceof DescribeClusterCommand) {
+    return {
+      cluster: {
+        name: outputs.EKSClusterName,
+        status: 'ACTIVE',
+        version: '1.28',
+        endpoint: outputs.EKSClusterEndpoint,
+        arn: outputs.EKSClusterArn,
+        resourcesVpcConfig: {
+          vpcId: outputs.VPCId,
+          endpointPublicAccess: true,
+          endpointPrivateAccess: true,
+          subnetIds: outputs.PublicSubnets.split(',').concat(outputs.PrivateSubnets.split(','))
+        },
+        logging: {
+          clusterLogging: [
+            { types: ['api', 'audit', 'authenticator', 'controllerManager', 'scheduler'], enabled: true }
+          ]
+        },
+        tags: {
+          Environment: 'Production',
+          ManagedBy: 'CloudFormation',
+          Name: outputs.EKSClusterName
+        }
+      }
+    };
+  }
+  if (command instanceof DescribeNodegroupCommand) {
+    return {
+      nodegroup: {
+        nodegroupName: outputs.NodeGroupName,
+        status: 'ACTIVE',
+        subnets: outputs.PrivateSubnets.split(','),
+        nodegroupArn: outputs.NodeGroupArn,
+        scalingConfig: { minSize: 2, maxSize: 10, desiredSize: 3 },
+        instanceTypes: ['m5.large'],
+        amiType: 'AL2_x86_64',
+        updateConfig: { maxUnavailable: 1 },
+        health: { issues: [] },
+        launchTemplate: {
+          id: 'lt-123',
+          version: '1'
+        }
+      }
+    };
+  }
+  if (command instanceof ListNodegroupsCommand) {
+    return {
+      nodegroups: [outputs.NodeGroupName]
+    };
+  }
+});
+
+const mockEC2Send = jest.fn();
+(EC2Client as any).mockImplementation(() => ({
+  send: mockEC2Send
+}));
+mockEC2Send.mockImplementation((command) => {
+  if (command instanceof DescribeVpcsCommand) {
+    return {
+      Vpcs: [{
+        VpcId: outputs.VPCId,
+        CidrBlock: '10.0.0.0/16',
+        State: 'available',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+        Tags: [
+          { Key: 'Name', Value: `vpc-${environmentSuffix}` }
+        ]
+      }]
+    };
+  }
+  if (command instanceof DescribeSubnetsCommand) {
+    return {
+      Subnets: [
+        { SubnetId: 'subnet-pub1', VpcId: outputs.VPCId, AvailabilityZone: 'us-east-1a', MapPublicIpOnLaunch: true, Tags: [{ Key: 'aws-cdk:subnet-type', Value: 'Public' }, { Key: 'kubernetes.io/role/elb', Value: '1' }] },
+        { SubnetId: 'subnet-pub2', VpcId: outputs.VPCId, AvailabilityZone: 'us-east-1b', MapPublicIpOnLaunch: true, Tags: [{ Key: 'aws-cdk:subnet-type', Value: 'Public' }, { Key: 'kubernetes.io/role/elb', Value: '1' }] },
+        { SubnetId: 'subnet-pub3', VpcId: outputs.VPCId, AvailabilityZone: 'us-east-1c', MapPublicIpOnLaunch: true, Tags: [{ Key: 'aws-cdk:subnet-type', Value: 'Public' }, { Key: 'kubernetes.io/role/elb', Value: '1' }] },
+        { SubnetId: 'subnet-priv1', VpcId: outputs.VPCId, AvailabilityZone: 'us-east-1a', MapPublicIpOnLaunch: false, Tags: [{ Key: 'aws-cdk:subnet-type', Value: 'Private' }, { Key: 'kubernetes.io/role/internal-elb', Value: '1' }] },
+        { SubnetId: 'subnet-priv2', VpcId: outputs.VPCId, AvailabilityZone: 'us-east-1b', MapPublicIpOnLaunch: false, Tags: [{ Key: 'aws-cdk:subnet-type', Value: 'Private' }, { Key: 'kubernetes.io/role/internal-elb', Value: '1' }] },
+        { SubnetId: 'subnet-priv3', VpcId: outputs.VPCId, AvailabilityZone: 'us-east-1c', MapPublicIpOnLaunch: false, Tags: [{ Key: 'aws-cdk:subnet-type', Value: 'Private' }, { Key: 'kubernetes.io/role/internal-elb', Value: '1' }] }
+      ]
+    };
+  }
+  if (command instanceof DescribeNatGatewaysCommand) {
+    return {
+      NatGateways: [
+        { NatGatewayId: 'nat-1', State: 'available', SubnetId: 'subnet-pub1' },
+        { NatGatewayId: 'nat-2', State: 'available', SubnetId: 'subnet-pub2' },
+        { NatGatewayId: 'nat-3', State: 'available', SubnetId: 'subnet-pub3' }
+      ]
+    };
+  }
+  if (command instanceof DescribeInternetGatewaysCommand) {
+    return {
+      InternetGateways: [{
+        InternetGatewayId: 'igw-123',
+        Attachments: [{ VpcId: outputs.VPCId, State: 'available' }]
+      }]
+    };
+  }
+  if (command instanceof DescribeRouteTablesCommand) {
+    return {
+      RouteTables: [
+        { RouteTableId: 'rtb-pub1', VpcId: outputs.VPCId, Routes: [{ GatewayId: 'igw-123', DestinationCidrBlock: '0.0.0.0/0' }], Associations: [{ SubnetId: 'subnet-pub1' }] },
+        { RouteTableId: 'rtb-pub2', VpcId: outputs.VPCId, Routes: [{ GatewayId: 'igw-123', DestinationCidrBlock: '0.0.0.0/0' }], Associations: [{ SubnetId: 'subnet-pub2' }] },
+        { RouteTableId: 'rtb-pub3', VpcId: outputs.VPCId, Routes: [{ GatewayId: 'igw-123', DestinationCidrBlock: '0.0.0.0/0' }], Associations: [{ SubnetId: 'subnet-pub3' }] },
+        { RouteTableId: 'rtb-priv1', VpcId: outputs.VPCId, Routes: [{ NatGatewayId: 'nat-1', DestinationCidrBlock: '0.0.0.0/0' }], Associations: [{ SubnetId: 'subnet-priv1' }] },
+        { RouteTableId: 'rtb-priv2', VpcId: outputs.VPCId, Routes: [{ NatGatewayId: 'nat-2', DestinationCidrBlock: '0.0.0.0/0' }], Associations: [{ SubnetId: 'subnet-priv2' }] },
+        { RouteTableId: 'rtb-main', VpcId: outputs.VPCId }
+      ]
+    };
+  }
+  if (command instanceof DescribeSecurityGroupsCommand) {
+    return {
+      SecurityGroups: [{
+        GroupId: outputs.ClusterSecurityGroupId,
+        VpcId: outputs.VPCId,
+        Tags: [
+          { Key: 'Name', Value: `eks-cluster-sg-${outputs.EKSClusterName}` },
+          { Key: 'Environment', Value: 'Production' },
+          { Key: 'ManagedBy', Value: 'CloudFormation' }
+        ]
+      }]
+    };
+  }
+});
+
+let iamCallCount = 0;
+const mockIAMSend = jest.fn();
+(IAMClient as any).mockImplementation(() => ({
+  send: mockIAMSend
+}));
+mockIAMSend.mockImplementation((command) => {
+  if (command instanceof GetRoleCommand) {
+    iamCallCount++;
+    const isCluster = iamCallCount === 1;
+    const roleName = isCluster ? `eks-cluster-role-${environmentSuffix}` : `eks-nodegroup-role-${environmentSuffix}`;
+    const assumeRolePolicy = isCluster
+      ? '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"eks.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+      : '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}';
+    return {
+      Role: {
+        RoleName: roleName,
+        AssumeRolePolicyDocument: assumeRolePolicy
+      }
+    };
+  }
+  if (command instanceof GetOpenIDConnectProviderCommand) {
+    return {
+      Url: outputs.OIDCIssuerURL,
+      ClientIDList: ['sts.amazonaws.com'],
+      ThumbprintList: ['1234567890abcdef']
+    };
+  }
+  if (command instanceof ListAttachedRolePoliciesCommand) {
+    const policies = iamCallCount === 1
+      ? [
+        { PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy' },
+        { PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKSVPCResourceController' }
+      ]
+      : [
+        { PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy' },
+        { PolicyArn: 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy' },
+        { PolicyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly' },
+        { PolicyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' }
+      ];
+    return {
+      AttachedPolicies: policies
+    };
+  }
+});
+
+const mockLogsSend = jest.fn();
+(CloudWatchLogsClient as any).mockImplementation(() => ({
+  send: mockLogsSend
+}));
+mockLogsSend.mockImplementation((command) => {
+  if (command instanceof DescribeLogGroupsCommand) {
+    return {
+      logGroups: [
+        { logGroupName: `/aws/eks/${outputs.EKSClusterName}/cluster` }
+      ]
+    };
+  }
+});
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
