@@ -1,5 +1,5 @@
 {
-  "platform": "terraform",
+  "platform": "tf",
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
