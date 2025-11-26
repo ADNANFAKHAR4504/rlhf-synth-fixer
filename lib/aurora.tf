@@ -15,6 +15,7 @@ resource "aws_rds_cluster" "aurora" {
   master_username                 = var.aurora_master_username
   master_password                 = var.aurora_master_password != null ? var.aurora_master_password : random_password.aurora_master_password.result
   db_subnet_group_name            = aws_db_subnet_group.aurora.name
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora.name
   vpc_security_group_ids          = [aws_security_group.aurora.id]
   backup_retention_period         = var.aurora_backup_retention_days
   preferred_backup_window         = "03:00-04:00"
