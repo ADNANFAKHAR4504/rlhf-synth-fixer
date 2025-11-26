@@ -12,6 +12,7 @@ export interface VpcStackArgs {
   cidr: string;
   availabilityZones: number;
   tags?: pulumi.Input<{ [key: string]: string }>;
+  enableNatGateway?: boolean;
 }
 
 export class VpcStack extends pulumi.ComponentResource {
@@ -27,7 +28,13 @@ export class VpcStack extends pulumi.ComponentResource {
   ) {
     super('tap:vpc:VpcStack', name, args, opts);
 
-    const { environmentSuffix, cidr, availabilityZones, tags } = args;
+    const {
+      environmentSuffix,
+      cidr,
+      availabilityZones,
+      tags,
+      enableNatGateway = false,
+    } = args;
 
     // Create VPC
     const vpc = new aws.ec2.Vpc(
@@ -105,32 +112,35 @@ export class VpcStack extends pulumi.ComponentResource {
       privateSubnets.push(subnet);
     }
 
-    // Create Elastic IP for NAT Gateway (only 1 for cost optimization)
-    const eip = new aws.ec2.Eip(
-      `financial-nat-eip-${environmentSuffix}`,
-      {
-        domain: 'vpc',
-        tags: {
-          ...tags,
-          Name: `financial-nat-eip-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+    // Create Elastic IP and NAT Gateway only if enabled (disabled by default for cost optimization and EIP limits)
+    let natGateway: aws.ec2.NatGateway | undefined;
 
-    // Create NAT Gateway (only 1 for cost optimization)
-    const natGateway = new aws.ec2.NatGateway(
-      `financial-nat-gateway-${environmentSuffix}`,
-      {
-        allocationId: eip.id,
-        subnetId: publicSubnets[0].id,
-        tags: {
-          ...tags,
-          Name: `financial-nat-gateway-${environmentSuffix}`,
+    if (enableNatGateway) {
+      const eip = new aws.ec2.Eip(
+        `financial-nat-eip-${environmentSuffix}`,
+        {
+          domain: 'vpc',
+          tags: {
+            ...tags,
+            Name: `financial-nat-eip-${environmentSuffix}`,
+          },
         },
-      },
-      { parent: this, dependsOn: [igw] }
-    );
+        { parent: this }
+      );
+
+      natGateway = new aws.ec2.NatGateway(
+        `financial-nat-gateway-${environmentSuffix}`,
+        {
+          allocationId: eip.id,
+          subnetId: publicSubnets[0].id,
+          tags: {
+            ...tags,
+            Name: `financial-nat-gateway-${environmentSuffix}`,
+          },
+        },
+        { parent: this, dependsOn: [igw] }
+      );
+    }
 
     // Create public route table
     const publicRouteTable = new aws.ec2.RouteTable(
@@ -181,16 +191,18 @@ export class VpcStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create route to NAT Gateway
-    new aws.ec2.Route(
-      `financial-private-route-${environmentSuffix}`,
-      {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGateway.id,
-      },
-      { parent: this }
-    );
+    // Create route to NAT Gateway only if NAT Gateway is enabled
+    if (enableNatGateway && natGateway) {
+      new aws.ec2.Route(
+        `financial-private-route-${environmentSuffix}`,
+        {
+          routeTableId: privateRouteTable.id,
+          destinationCidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateway.id,
+        },
+        { parent: this }
+      );
+    }
 
     // Associate private subnets with private route table
     privateSubnets.forEach((subnet, i) => {

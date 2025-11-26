@@ -13,7 +13,9 @@ import { MonitoringStack } from '../lib/monitoring-stack';
 
 // Set up mocks for Pulumi testing
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+  newResource: (
+    args: pulumi.runtime.MockResourceArgs
+  ): { id: string; state: any } => {
     // Mock resource creation
     return {
       id: `${args.name}-id`,
@@ -40,7 +42,6 @@ pulumi.runtime.setMocks({
 });
 
 describe('TapStack Unit Tests', () => {
-
   describe('TapStack Component', () => {
     it('should create a TapStack with required properties', async () => {
       const testStack = new TapStack('test-stack', {
@@ -128,8 +129,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Database Stack Component', () => {
-
-
     it('should create a database cluster with correct configuration', async () => {
       const db = new DatabaseStack('test-db', {
         environmentSuffix: 'test123',
@@ -165,8 +164,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Container Stack Component', () => {
-
-
     it('should create ECR repository with correct configuration', async () => {
       const container = new ContainerStack('test-container', {
         environmentSuffix: 'test123',
@@ -185,8 +182,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Monitoring Stack Component', () => {
-
-
     it('should create CloudWatch log groups', async () => {
       const monitoring = new MonitoringStack('test-monitoring', {
         environmentSuffix: 'test123',
@@ -236,7 +231,6 @@ describe('TapStack Unit Tests', () => {
 
   describe('Deletion Protection', () => {
     it('should have deletionProtection set to false for RDS', async () => {
-
       const db = new DatabaseStack('deletion-test', {
         environmentSuffix: 'test-del',
         vpcId: pulumi.output('vpc-test'),
@@ -252,7 +246,6 @@ describe('TapStack Unit Tests', () => {
 
   describe('Cost Optimization', () => {
     it('should use Aurora Serverless v2 for cost optimization', async () => {
-
       const db = new DatabaseStack('serverless-test', {
         environmentSuffix: 'test-serverless',
         vpcId: pulumi.output('vpc-test'),
@@ -279,7 +272,6 @@ describe('TapStack Unit Tests', () => {
 
   describe('Security Configuration', () => {
     it('should enable KMS encryption with key rotation', async () => {
-
       const db = new DatabaseStack('security-test', {
         environmentSuffix: 'test-security',
         vpcId: pulumi.output('vpc-test'),
@@ -294,7 +286,6 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should enable vulnerability scanning for ECR', async () => {
-
       const container = new ContainerStack('scan-test', {
         environmentSuffix: 'test-scan',
         logGroupName: pulumi.output('/aws/ecs/test'),
@@ -307,7 +298,6 @@ describe('TapStack Unit Tests', () => {
 
   describe('Backup Configuration', () => {
     it('should set 30-day backup retention for RDS', async () => {
-
       const db = new DatabaseStack('backup-test', {
         environmentSuffix: 'test-backup',
         vpcId: pulumi.output('vpc-test'),
@@ -323,7 +313,6 @@ describe('TapStack Unit Tests', () => {
 
   describe('Logging Configuration', () => {
     it('should set 30-day retention for CloudWatch logs', async () => {
-
       const monitoring = new MonitoringStack('logging-test', {
         environmentSuffix: 'test-logs',
       });

@@ -12,7 +12,11 @@ describe('TapStack Integration Tests', () => {
 
   beforeAll(() => {
     // Load outputs from flat-outputs.json generated during deployment
-    const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+    const outputsPath = path.join(
+      process.cwd(),
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
 
     if (!fs.existsSync(outputsPath)) {
       throw new Error(
@@ -58,13 +62,17 @@ describe('TapStack Integration Tests', () => {
     it('should have databaseEndpoint output', () => {
       expect(outputs.databaseEndpoint).toBeDefined();
       expect(typeof outputs.databaseEndpoint).toBe('string');
-      expect(outputs.databaseEndpoint).toMatch(/\.eu-central-1\.rds\.amazonaws\.com$/);
+      expect(outputs.databaseEndpoint).toMatch(
+        /\.eu-central-1\.rds\.amazonaws\.com$/
+      );
     });
 
     it('should have ecrRepositoryUrl output', () => {
       expect(outputs.ecrRepositoryUrl).toBeDefined();
       expect(typeof outputs.ecrRepositoryUrl).toBe('string');
-      expect(outputs.ecrRepositoryUrl).toMatch(/\.dkr\.ecr\.eu-central-1\.amazonaws\.com\//);
+      expect(outputs.ecrRepositoryUrl).toMatch(
+        /\.dkr\.ecr\.eu-central-1\.amazonaws\.com\//
+      );
     });
   });
 
@@ -96,12 +104,15 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have endpoint in eu-central-1 region', () => {
-      expect(outputs.databaseEndpoint).toContain('eu-central-1.rds.amazonaws.com');
+      expect(outputs.databaseEndpoint).toContain(
+        'eu-central-1.rds.amazonaws.com'
+      );
     });
 
     it('should have endpoint with correct format', () => {
       // Aurora endpoints typically follow pattern: cluster-name.cluster-id.region.rds.amazonaws.com
-      const endpointPattern = /^[a-z0-9-]+\.cluster-[a-z0-9]+\.eu-central-1\.rds\.amazonaws\.com$/;
+      const endpointPattern =
+        /^[a-z0-9-]+\.cluster-[a-z0-9]+\.eu-central-1\.rds\.amazonaws\.com$/;
       expect(outputs.databaseEndpoint).toMatch(endpointPattern);
     });
 
@@ -115,7 +126,8 @@ describe('TapStack Integration Tests', () => {
 
   describe('Container Infrastructure', () => {
     it('should have valid ECR repository URL format', () => {
-      const ecrPattern = /^[0-9]{12}\.dkr\.ecr\.eu-central-1\.amazonaws\.com\/[a-z0-9-]+$/;
+      const ecrPattern =
+        /^[0-9]{12}\.dkr\.ecr\.eu-central-1\.amazonaws\.com\/[a-z0-9-]+$/;
       expect(outputs.ecrRepositoryUrl).toMatch(ecrPattern);
     });
 
@@ -136,7 +148,9 @@ describe('TapStack Integration Tests', () => {
       const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 
       if (!environmentSuffix) {
-        console.warn('ENVIRONMENT_SUFFIX not set, skipping environment suffix validation');
+        console.warn(
+          'ENVIRONMENT_SUFFIX not set, skipping environment suffix validation'
+        );
         return;
       }
 
@@ -159,7 +173,7 @@ describe('TapStack Integration Tests', () => {
         'ecrRepositoryUrl',
       ];
 
-      requiredOutputs.forEach((outputKey) => {
+      requiredOutputs.forEach(outputKey => {
         expect(outputs[outputKey]).toBeDefined();
       });
     });
@@ -224,7 +238,7 @@ describe('TapStack Integration Tests', () => {
         'ecrRepositoryUrl',
       ];
 
-      deploymentOutputs.forEach((output) => {
+      deploymentOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
         if (Array.isArray(outputs[output])) {
           expect(outputs[output].length).toBeGreaterThan(0);
@@ -265,7 +279,7 @@ describe('TapStack Integration Tests', () => {
         'ecrRepositoryUrl',
       ];
 
-      mandatoryOutputs.forEach((output) => {
+      mandatoryOutputs.forEach(output => {
         expect(outputs).toHaveProperty(output);
       });
     });

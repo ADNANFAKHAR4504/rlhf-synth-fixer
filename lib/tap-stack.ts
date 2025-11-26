@@ -50,6 +50,7 @@ export class TapStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
 
     // Create VPC infrastructure
+    // NAT Gateway is disabled by default to avoid EIP allocation limits in CI/CD environments
     const vpcStack = new VpcStack(
       'vpc',
       {
@@ -57,6 +58,7 @@ export class TapStack extends pulumi.ComponentResource {
         cidr: '10.0.0.0/16',
         availabilityZones: 3,
         tags: tags,
+        enableNatGateway: false,
       },
       { parent: this }
     );
