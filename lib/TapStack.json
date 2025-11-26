@@ -16,23 +16,15 @@
       "MaxLength": 16,
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
     },
-    "DBPassword": {
+    "DBPasswordSSMPath": {
       "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41,
-      "Default": "ChangeMe123!"
+      "Description": "SSM Parameter Store path for Aurora database master password",
+      "Default": "/trading/db/password"
     },
     "VpcCidr": {
       "Type": "String",
       "Description": "CIDR block for VPC",
       "Default": "10.0.0.0/16"
-    },
-    "DomainName": {
-      "Type": "String",
-      "Description": "Domain name for database failover endpoint",
-      "Default": "tradingdb.example.com"
     }
   },
   "Resources": {
@@ -350,6 +342,7 @@
           "character_set_server": "utf8mb4",
           "collation_server": "utf8mb4_unicode_ci",
           "time_zone": "UTC",
+          "binlog_format": "ROW",
           "aurora_enhanced_binlog": "1"
         },
         "Tags": [
@@ -396,7 +389,7 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": { "Ref": "DBUsername" },
-        "MasterUserPassword": { "Ref": "DBPassword" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:ssm-secure:${DBPasswordSSMPath}}}" },
         "DatabaseName": "tradingdb",
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
         "DBClusterParameterGroupName": { "Ref": "DBClusterParameterGroup" },
@@ -429,7 +422,6 @@
           }
         ]
       },
-      "DependsOn": ["GlobalCluster"],
       "DeletionPolicy": "Delete"
     },
     "EnhancedMonitoringRole": {
@@ -486,7 +478,6 @@
           }
         ]
       },
-      "DependsOn": ["PrimaryDBCluster"],
       "DeletionPolicy": "Delete"
     },
     "PrimaryDBInstanceReader": {
