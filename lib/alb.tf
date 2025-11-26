@@ -155,10 +155,6 @@ resource "aws_acm_certificate" "main" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes = [
-      validation_emails,
-      domain_validation_options
-    ]
   }
 
   tags = {

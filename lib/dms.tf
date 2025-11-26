@@ -2,9 +2,9 @@
 
 # DMS Replication Instance
 resource "aws_dms_replication_instance" "main" {
-  replication_instance_id     = "dms-replication-${var.environment_suffix}"
-  replication_instance_class  = var.dms_replication_instance_class
-  allocated_storage           = 200
+  replication_instance_id    = "dms-replication-${var.environment_suffix}"
+  replication_instance_class = var.dms_replication_instance_class
+  allocated_storage          = 200
   # engine_version removed - will use latest available version
   multi_az                    = true
   publicly_accessible         = false
