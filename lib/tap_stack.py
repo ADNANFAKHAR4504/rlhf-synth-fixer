@@ -724,7 +724,8 @@ artifacts:
                         "matcher": "200"
                     },
                     deregistration_delay="30",
-                    tags={"Environment": env, "Service": service, "Color": "blue"}
+                    tags={"Environment": env, "Service": service, "Color": "blue"},
+                    lifecycle={"create_before_destroy": True}
                 )
 
                 # Target Group for Green environment
@@ -753,7 +754,8 @@ artifacts:
                         "matcher": "200"
                     },
                     deregistration_delay="30",
-                    tags={"Environment": env, "Service": service, "Color": "green"}
+                    tags={"Environment": env, "Service": service, "Color": "green"},
+                    lifecycle={"create_before_destroy": True}
                 )
 
                 target_groups[f"{env}-{service}-blue"] = tg_blue
