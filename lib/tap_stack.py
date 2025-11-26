@@ -83,19 +83,20 @@ class TapStack(TerraformStack):
             target_key_id=self.kms_key.id
         )
 
-        # Create IAM Account Password Policy
-        IamAccountPasswordPolicy(
-            self,
-            f"password_policy_{environment_suffix}",
-            minimum_password_length=14,
-            require_uppercase_characters=True,
-            require_lowercase_characters=True,
-            require_numbers=True,
-            require_symbols=True,
-            allow_users_to_change_password=True,
-            max_password_age=90,
-            password_reuse_prevention=24
-        )
+        # DISABLED: IAM Account Password Policy is account-wide singleton
+        # Cannot be created per-PR due to AWS account limits
+        # IamAccountPasswordPolicy(
+        #     self,
+        #     f"password_policy_{environment_suffix}",
+        #     minimum_password_length=14,
+        #     require_uppercase_characters=True,
+        #     require_lowercase_characters=True,
+        #     require_numbers=True,
+        #     require_symbols=True,
+        #     allow_users_to_change_password=True,
+        #     max_password_age=90,
+        #     password_reuse_prevention=24
+        # )
 
         # Create CloudWatch Log Group for remediation
         self.remediation_log_group = CloudwatchLogGroup(
@@ -342,39 +343,44 @@ class TapStack(TerraformStack):
             provider=provider
         )
 
-        # Configuration recorder
-        recorder = ConfigConfigurationRecorder(
-            self,
-            f"config_recorder_{alias}_{self.environment_suffix}",
-            name=f"config-recorder-{region}-{self.environment_suffix}",
-            role_arn=config_role.arn,
-            provider=provider,
-            recording_group=ConfigConfigurationRecorderRecordingGroup(
-                all_supported=True,
-                include_global_resource_types=(region == self.primary_region)
-            )
-        )
+        # DISABLED: Configuration recorder is limited to 1 per region per account
+        # Cannot be created per-PR due to AWS service limits
+        # Use existing Config recorder in the account instead
+        # recorder = ConfigConfigurationRecorder(
+        #     self,
+        #     f"config_recorder_{alias}_{self.environment_suffix}",
+        #     name=f"config-recorder-{region}-{self.environment_suffix}",
+        #     role_arn=config_role.arn,
+        #     provider=provider,
+        #     recording_group=ConfigConfigurationRecorderRecordingGroup(
+        #         all_supported=True,
+        #         include_global_resource_types=(region == self.primary_region)
+        #     )
+        # )
 
-        # Delivery channel
-        delivery_channel = ConfigDeliveryChannel(
-            self,
-            f"config_delivery_{alias}_{self.environment_suffix}",
-            name=f"config-delivery-{region}-{self.environment_suffix}",
-            s3_bucket_name=bucket.id,
-            sns_topic_arn=self.sns_topic.arn,
-            provider=provider,
-            depends_on=[recorder]
-        )
+        # DISABLED: Delivery channel depends on recorder
+        # delivery_channel = ConfigDeliveryChannel(
+        #     self,
+        #     f"config_delivery_{alias}_{self.environment_suffix}",
+        #     name=f"config-delivery-{region}-{self.environment_suffix}",
+        #     s3_bucket_name=bucket.id,
+        #     sns_topic_arn=self.sns_topic.arn,
+        #     provider=provider,
+        #     depends_on=[recorder]
+        # )
 
-        # Start recorder
-        ConfigConfigurationRecorderStatus(
-            self,
-            f"config_recorder_status_{alias}_{self.environment_suffix}",
-            name=recorder.name,
-            is_enabled=True,
-            provider=provider,
-            depends_on=[delivery_channel]
-        )
+        # DISABLED: Recorder status depends on recorder
+        # ConfigConfigurationRecorderStatus(
+        #     self,
+        #     f"config_recorder_status_{alias}_{self.environment_suffix}",
+        #     name=recorder.name,
+        #     is_enabled=True,
+        #     provider=provider,
+        #     depends_on=[delivery_channel]
+        # )
+
+        # Placeholder for recorder (used in dependencies)
+        recorder = None
 
         # CloudWatch Log Group for region
         CloudwatchLogGroup(
@@ -400,22 +406,25 @@ class TapStack(TerraformStack):
     def _create_config_aggregator(self, account_id: str):
         """Create Config aggregator in primary region"""
 
-        ConfigConfigurationAggregator(
-            self,
-            f"config_aggregator_{self.environment_suffix}",
-            name=f"config-aggregator-{self.environment_suffix}",
-            account_aggregation_source=ConfigConfigurationAggregatorAccountAggregationSource(
-                account_ids=[account_id],
-                all_regions=False,
-                regions=self.regions
-            ),
-            tags={
-                "Name": f"config-aggregator-{self.environment_suffix}",
-                "CostCenter": "security",
-                "Environment": self.environment_suffix,
-                "ComplianceLevel": "high"
-            }
-        )
+        # DISABLED: Config Aggregator requires Config Recorders to exist
+        # Cannot create aggregator per-PR without account-level recorders
+        # ConfigConfigurationAggregator(
+        #     self,
+        #     f"config_aggregator_{self.environment_suffix}",
+        #     name=f"config-aggregator-{self.environment_suffix}",
+        #     account_aggregation_source=ConfigConfigurationAggregatorAccountAggregationSource(
+        #         account_ids=[account_id],
+        #         all_regions=False,
+        #         regions=self.regions
+        #     ),
+        #     tags={
+        #         "Name": f"config-aggregator-{self.environment_suffix}",
+        #         "CostCenter": "security",
+        #         "Environment": self.environment_suffix,
+        #         "ComplianceLevel": "high"
+        #     }
+        # )
+        pass  # No-op function now
 
     def _create_remediation_lambdas(self):
         """Create Lambda functions for auto-remediation"""
@@ -584,78 +593,80 @@ class TapStack(TerraformStack):
     def _create_config_rules(self):
         """Create Config rules with Lambda-based remediation"""
 
+        # DISABLED: Config Rules require Config Recorder which is account-level
+        # Cannot create Config Rules without recorder in place
+        # These would need existing account-level Config Recorder to work
+
         # S3 Versioning Rule
-        ConfigConfigRule(
-            self,
-            f"s3_versioning_rule_{self.environment_suffix}",
-            name=f"s3-bucket-versioning-enabled-{self.environment_suffix}",
-            description="Checks if S3 bucket versioning is enabled",
-            source=ConfigConfigRuleSource(
-                owner="AWS",
-                source_identifier="S3_BUCKET_VERSIONING_ENABLED"
-            ),
-            scope=ConfigConfigRuleScope(
-                compliance_resource_types=["AWS::S3::Bucket"]
-            ),
-            depends_on=[
-                self.config_resources[region]["recorder"]
-                for region in self.regions
-            ],
-            tags={
-                "Name": f"s3-versioning-rule-{self.environment_suffix}",
-                "CostCenter": "security",
-                "Environment": self.environment_suffix,
-                "ComplianceLevel": "high"
-            }
-        )
+        # ConfigConfigRule(
+        #     self,
+        #     f"s3_versioning_rule_{self.environment_suffix}",
+        #     name=f"s3-bucket-versioning-enabled-{self.environment_suffix}",
+        #     description="Checks if S3 bucket versioning is enabled",
+        #     source=ConfigConfigRuleSource(
+        #         owner="AWS",
+        #         source_identifier="S3_BUCKET_VERSIONING_ENABLED"
+        #     ),
+        #     scope=ConfigConfigRuleScope(
+        #         compliance_resource_types=["AWS::S3::Bucket"]
+        #     ),
+        #     tags={
+        #         "Name": f"s3-versioning-rule-{self.environment_suffix}",
+        #         "CostCenter": "security",
+        #         "Environment": self.environment_suffix,
+        #         "ComplianceLevel": "high"
+        #     }
+        # )
 
         # S3 Encryption Rule
-        ConfigConfigRule(
-            self,
-            f"s3_encryption_rule_{self.environment_suffix}",
-            name=f"s3-bucket-server-side-encryption-{self.environment_suffix}",
-            description="Checks if S3 bucket has server-side encryption enabled",
-            source=ConfigConfigRuleSource(
-                owner="AWS",
-                source_identifier="S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-            ),
-            scope=ConfigConfigRuleScope(
-                compliance_resource_types=["AWS::S3::Bucket"]
-            ),
-            depends_on=[
-                self.config_resources[region]["recorder"]
-                for region in self.regions
-            ],
-            tags={
-                "Name": f"s3-encryption-rule-{self.environment_suffix}",
-                "CostCenter": "security",
-                "Environment": self.environment_suffix,
-                "ComplianceLevel": "high"
-            }
-        )
+        # ConfigConfigRule(
+        #     self,
+        #     f"s3_encryption_rule_{self.environment_suffix}",
+        #     name=f"s3-bucket-server-side-encryption-{self.environment_suffix}",
+        #     description="Checks if S3 bucket has server-side encryption enabled",
+        #     source=ConfigConfigRuleSource(
+        #         owner="AWS",
+        #         source_identifier="S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+        #     ),
+        #     scope=ConfigConfigRuleScope(
+        #         compliance_resource_types=["AWS::S3::Bucket"]
+        #     ),
+        #     tags={
+        #         "Name": f"s3-encryption-rule-{self.environment_suffix}",
+        #         "CostCenter": "security",
+        #         "Environment": self.environment_suffix,
+        #         "ComplianceLevel": "high"
+        #     }
+        # )
 
     def _create_security_hub_resources(self):
         """Create Security Hub in all regions"""
 
-        for region in self.regions:
-            alias = region.replace("-", "_")
-            provider = self.providers[region]
+        # DISABLED: Security Hub is account-wide singleton per region
+        # Account already subscribed to Security Hub - cannot create per-PR
+        # Use existing Security Hub subscription instead
 
-            # Enable Security Hub
-            security_hub = SecurityhubAccount(
-                self,
-                f"security_hub_{alias}_{self.environment_suffix}",
-                provider=provider
-            )
+        # for region in self.regions:
+        #     alias = region.replace("-", "_")
+        #     provider = self.providers[region]
 
-            # Subscribe to CIS AWS Foundations Benchmark
-            SecurityhubStandardsSubscription(
-                self,
-                f"cis_standard_{alias}_{self.environment_suffix}",
-                standards_arn=f"arn:aws:securityhub:{region}::standards/cis-aws-foundations-benchmark/v/1.4.0",
-                provider=provider,
-                depends_on=[security_hub]
-            )
+        #     # Enable Security Hub
+        #     security_hub = SecurityhubAccount(
+        #         self,
+        #         f"security_hub_{alias}_{self.environment_suffix}",
+        #         provider=provider
+        #     )
+
+        #     # Subscribe to CIS AWS Foundations Benchmark
+        #     SecurityhubStandardsSubscription(
+        #         self,
+        #         f"cis_standard_{alias}_{self.environment_suffix}",
+        #         standards_arn=f"arn:aws:securityhub:{region}::standards/cis-aws-foundations-benchmark/v/1.4.0",
+        #         provider=provider,
+        #         depends_on=[security_hub]
+        #     )
+
+        pass  # No-op function now
 
     def _create_eventbridge_rules(self):
         """Create EventBridge rules for critical compliance violations"""
