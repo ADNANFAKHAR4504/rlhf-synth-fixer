@@ -68,7 +68,7 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
   ) {
     super('custom:infrastructure:FraudDetectionStack', name, {}, opts);
 
-    const { environmentSuffix, region, tags: commonTags } = args;
+    const { environmentSuffix, region, emailAddress, tags: commonTags } = args;
 
     // KMS key for Lambda environment variable encryption
     const kmsKey = new aws.kms.Key(
@@ -116,6 +116,15 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Email subscription for SNS topic
+    new aws.sns.TopicSubscription(
+      `fraud-alerts-email-${environmentSuffix}`,
+      {
+        topic: fraudAlertsTopic.arn,
+        protocol: 'email',
+        endpoint: emailAddress,
+      },
+      { parent: this }
+    );
 
     // EventBridge custom event bus
     const fraudDetectionBus = new aws.cloudwatch.EventBus(
@@ -465,13 +474,104 @@ Action Required: Review this transaction immediately.
     );
 
     // IAM role for EventBridge to invoke Lambda
+    const eventBridgeRole = new aws.iam.Role(
+      `eventbridge-role-${environmentSuffix}`,
+      {
+        name: `eventbridge-fraud-detection-role-${environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'events.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: commonTags,
+      },
+      { parent: this }
+    );
 
+    new aws.iam.RolePolicy(
+      `eventbridge-policy-${environmentSuffix}`,
+      {
+        role: eventBridgeRole.id,
+        policy: pulumi
+          .all([fraudDetectorFunction.arn, fraudDetectorDLQ.arn])
+          .apply(([lambdaArn, dlqArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: 'lambda:InvokeFunction',
+                  Resource: lambdaArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: 'sqs:SendMessage',
+                  Resource: dlqArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // EventBridge rule to trigger fraud-detector for high-value transactions
+    const fraudDetectionRule = new aws.cloudwatch.EventRule(
+      `fraud-detection-rule-${environmentSuffix}`,
+      {
+        name: `fraud-detection-rule-${environmentSuffix}`,
+        eventBusName: fraudDetectionBus.name,
+        description:
+          'Trigger fraud detector for transactions with amount > 10000',
+        eventPattern: JSON.stringify({
+          source: ['fraud-detection.transaction-processor'],
+          'detail-type': ['HighValueTransaction'],
+          detail: {
+            amount: [{ numeric: ['>', 10000] }],
+          },
+        }),
+        tags: commonTags,
+      },
+      { parent: this }
+    );
 
     // EventBridge target for fraud-detector Lambda with DLQ
+    new aws.cloudwatch.EventTarget(
+      `fraud-detection-target-${environmentSuffix}`,
+      {
+        rule: fraudDetectionRule.name,
+        eventBusName: fraudDetectionBus.name,
+        arn: fraudDetectorFunction.arn,
+        roleArn: eventBridgeRole.arn,
+        deadLetterConfig: {
+          arn: fraudDetectorDLQ.arn,
+        },
+        retryPolicy: {
+          maximumRetryAttempts: 2,
+          maximumEventAgeInSeconds: 3600,
+        },
+      },
+      { parent: this }
+    );
 
     // Permission for EventBridge to invoke fraud-detector Lambda
+    new aws.lambda.Permission(
+      `fraud-detector-event-permission-${environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: fraudDetectorFunction.name,
+        principal: 'events.amazonaws.com',
+        sourceArn: fraudDetectionRule.arn,
+      },
+      { parent: this }
+    );
 
     // Register outputs
     this.eventBridgeBusArn = fraudDetectionBus.arn;
