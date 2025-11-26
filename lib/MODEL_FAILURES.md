@@ -46,7 +46,7 @@ aws cloudformation deploy: error
     "Type": "AWS::IAM::Role",
     "Properties": {
       "ManagedPolicyArns": [
-        "arn:aws:iam::aws:policy/AWSCodeDeployRole"  // ❌ INCORRECT
+        "arn:aws:iam::aws:policy/AWSCodeDeployRole"  //  INCORRECT
       ]
     }
   }
@@ -61,7 +61,7 @@ aws cloudformation deploy: error
     "Type": "AWS::IAM::Role",
     "Properties": {
       "ManagedPolicyArns": [
-        "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"  // ✅ CORRECT
+        "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"  //  CORRECT
       ]
     }
   }

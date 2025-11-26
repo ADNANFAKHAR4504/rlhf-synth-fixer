@@ -8,9 +8,7 @@
   "startedAt": "2025-11-26T04:13:17+05:30",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "cicd",
-    "containers",
-    "pipeline"
+    "CI/CD Pipeline"
   ],
   "aws_services": [
     "CodePipeline",
