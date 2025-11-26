@@ -13,8 +13,8 @@
  * All resources are tagged with Environment=production and DR-Role=primary/secondary
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 /**
@@ -734,32 +734,40 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // IAM Role for DR operations
+    // Get the AWS account ID properly
+    const callerIdentity = pulumi.output(aws.getCallerIdentity());
+    const accountId = callerIdentity.accountId;
+
     const drOperationsRole = new aws.iam.Role(
       `dr-operations-role-${environmentSuffix}`,
       {
         name: `dr-operations-role-${environmentSuffix}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 'lambda.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            },
-            {
-              Effect: 'Allow',
-              Principal: {
-                AWS: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(i => i.accountId)}:root`,
-              },
-              Action: 'sts:AssumeRole',
-              Condition: {
-                StringEquals: {
-                  'sts:ExternalId': `dr-ops-${environmentSuffix}`,
+        assumeRolePolicy: pulumi
+          .all([accountId])
+          .apply(([accId]: [string]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: { Service: 'lambda.amazonaws.com' },
+                  Action: 'sts:AssumeRole',
                 },
-              },
-            },
-          ],
-        }),
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${accId}:root`,
+                  },
+                  Action: 'sts:AssumeRole',
+                  Condition: {
+                    StringEquals: {
+                      'sts:ExternalId': `dr-ops-${environmentSuffix}`,
+                    },
+                  },
+                },
+              ],
+            })
+          ),
         tags: {
           ...defaultTags,
           Name: `dr-operations-role-${environmentSuffix}`,

@@ -11,8 +11,8 @@
 import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
 
-// Get the environment suffix from environment variables, defaulting to 'dev'.
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+// Get the environment suffix from environment variables, defaulting to 'dev-an'.
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev-an';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
@@ -48,6 +48,7 @@ const provider = new aws.Provider('aws', {
 new TapStack(
   'pulumi-infra',
   {
+    environmentSuffix: environmentSuffix,
     tags: defaultTags,
   },
   { provider }
