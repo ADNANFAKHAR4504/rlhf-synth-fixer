@@ -6,10 +6,6 @@
       "Type": "String",
       "Description": "Unique suffix for resource naming"
     },
-    "VpcId": {
-      "Type": "String",
-      "Description": "VPC ID"
-    },
     "PrivateSubnet1": {
       "Type": "String",
       "Description": "Private Subnet 1"

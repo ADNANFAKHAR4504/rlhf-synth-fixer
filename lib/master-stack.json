@@ -122,12 +122,6 @@
           "EnvironmentSuffix": {
             "Ref": "EnvironmentSuffix"
           },
-          "VpcId": {
-            "Fn::GetAtt": [
-              "NetworkStack",
-              "Outputs.VpcId"
-            ]
-          },
           "PrivateSubnet1": {
             "Fn::GetAtt": [
               "NetworkStack",
@@ -197,12 +191,6 @@
         "Parameters": {
           "EnvironmentSuffix": {
             "Ref": "EnvironmentSuffix"
-          },
-          "VpcId": {
-            "Fn::GetAtt": [
-              "NetworkStack",
-              "Outputs.VpcId"
-            ]
           },
           "PrivateSubnet1": {
             "Fn::GetAtt": [
@@ -282,12 +270,6 @@
         "Parameters": {
           "EnvironmentSuffix": {
             "Ref": "EnvironmentSuffix"
-          },
-          "VpcId": {
-            "Fn::GetAtt": [
-              "NetworkStack",
-              "Outputs.VpcId"
-            ]
           },
           "PrivateSubnet1": {
             "Fn::GetAtt": [
@@ -453,9 +435,6 @@
       "Properties": {
         "TemplateURL": "https://s3.amazonaws.com/your-bucket/route53-stack.json",
         "Parameters": {
-          "EnvironmentSuffix": {
-            "Ref": "EnvironmentSuffix"
-          },
           "HostedZoneId": {
             "Ref": "HostedZoneId"
           },
@@ -473,12 +452,6 @@
               "ALBStack",
               "Outputs.ALBHostedZoneId"
             ]
-          },
-          "Project": {
-            "Ref": "Project"
-          },
-          "CostCenter": {
-            "Ref": "CostCenter"
           }
         },
         "Tags": [
@@ -510,30 +483,6 @@
         "Parameters": {
           "EnvironmentSuffix": {
             "Ref": "EnvironmentSuffix"
-          },
-          "BlueDBCluster": {
-            "Fn::GetAtt": [
-              "DatabaseStack",
-              "Outputs.BlueDBClusterId"
-            ]
-          },
-          "GreenDBCluster": {
-            "Fn::GetAtt": [
-              "DatabaseStack",
-              "Outputs.GreenDBClusterId"
-            ]
-          },
-          "BlueECSService": {
-            "Fn::GetAtt": [
-              "ECSStack",
-              "Outputs.BlueECSService"
-            ]
-          },
-          "GreenECSService": {
-            "Fn::GetAtt": [
-              "ECSStack",
-              "Outputs.GreenECSService"
-            ]
           },
           "ALBTargetGroup": {
             "Fn::GetAtt": [
@@ -723,12 +672,6 @@
               "ALBStack",
               "Outputs.ALBDNSName"
             ]
-          },
-          "Project": {
-            "Ref": "Project"
-          },
-          "CostCenter": {
-            "Ref": "CostCenter"
           }
         },
         "Tags": [

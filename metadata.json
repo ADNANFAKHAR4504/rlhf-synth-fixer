@@ -15,20 +15,6 @@
     "Blue-Green Deployment"
   ],
   "startedAt": "2025-11-26T07:49:37+00:00",
-  "background": "A financial services company needs to migrate their legacy payment processing system from on-premises to AWS. The system currently handles 50,000 transactions per hour and requires strict compliance with PCI DSS standards. The migration must be performed with zero downtime using a blue-green deployment strategy.",
-  "problem_statement": "Create a CloudFormation template to implement a blue-green deployment infrastructure for migrating a payment processing system. The configuration must: 1. Define a parent stack that orchestrates nested stacks for networking, database, and compute resources. 2. Create separate Aurora MySQL clusters for blue and green environments with encryption enabled. 3. Configure AWS DMS replication instance and tasks to sync data between blue and green databases. 4. Deploy ECS Fargate services in both environments running the payment processing application. 5. Implement an Application Load Balancer with weighted target groups for traffic distribution. 6. Create Route 53 weighted routing policies for gradual traffic migration. 7. Configure CloudWatch alarms monitoring database replication lag and application health. 8. Implement Lambda functions to automate traffic shifting based on health metrics. 9. Set up AWS Backup plans for both database clusters with 7-day retention. 10. Create Systems Manager parameters to store environment-specific configuration. 11. Define stack outputs exposing ALB DNS names and database endpoints. Expected output: A modular CloudFormation template structure with a master stack and nested stacks that creates complete blue-green infrastructure, enabling zero-downtime migration through controlled traffic shifting and automated rollback capabilities.",
-  "constraints": {
-    "count": 6,
-    "items": [
-      "All data must be encrypted at rest using AWS KMS customer-managed keys",
-      "Database credentials must be stored in AWS Secrets Manager and rotated every 30 days",
-      "The solution must support automatic rollback if health checks fail during deployment",
-      "All resources must be tagged with Environment, Project, and CostCenter tags",
-      "Network traffic between components must use AWS PrivateLink where available",
-      "CloudFormation stack must use nested stacks for modular resource organization"
-    ]
-  },
-  "environment": "Blue-green deployment infrastructure in us-east-1 for migrating payment processing system. Uses Application Load Balancer for traffic switching between environments, RDS Aurora MySQL clusters in Multi-AZ configuration, and ECS Fargate for containerized services. VPC spans 3 availability zones with private subnets for compute and database tiers, public subnets for ALB. Requires AWS CLI 2.x configured with appropriate permissions, CloudFormation JSON templates. Each environment (blue/green) maintains separate Aurora clusters with AWS DMS for data synchronization. NAT Gateways provide outbound internet access for private resources.",
   "aws_services": [
     "CloudFormation",
     "Aurora MySQL",
@@ -46,8 +32,7 @@
     "NAT Gateway"
   ],
   "region": "us-east-1",
-  "status": "in_progress",
-  "branch": "synth-101912682",
-  "worktree_path": "/var/www/turing/iac-test-automations/worktree/synth-101912682",
-  "training_quality": 4
+  "training_quality": 4,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
