@@ -13,9 +13,8 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize AWS clients
-s3_client = boto3.client('s3')
-config_client = boto3.client('config')
+# AWS clients will be initialized lazily inside functions
+# to avoid import-time connection errors in test environments
 
 
 def lambda_handler(event, context):
@@ -85,6 +84,9 @@ def remediate_s3_versioning(bucket_name):
     try:
         logger.info("Enabling versioning for bucket: %s", bucket_name)
 
+        # Initialize S3 client
+        s3_client = boto3.client('s3')
+
         s3_client.put_bucket_versioning(
             Bucket=bucket_name,
             VersioningConfiguration={
@@ -126,6 +128,9 @@ def remediate_s3_encryption(bucket_name):
     """
     try:
         logger.info("Enabling encryption for bucket: %s", bucket_name)
+
+        # Initialize S3 client
+        s3_client = boto3.client('s3')
 
         # Get KMS key ID from environment variable
         kms_key_id = os.environ.get('KMS_KEY_ID')
@@ -185,6 +190,9 @@ def report_to_config(event, result):
         if not result_token:
             logger.warning("No result token found, skipping Config reporting")
             return
+
+        # Initialize Config client
+        config_client = boto3.client('config')
 
         config_item = event.get('configRuleInvokingEvent', {}).get(
             'configurationItem', {}
