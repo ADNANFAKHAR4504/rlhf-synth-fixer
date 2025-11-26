@@ -9,7 +9,7 @@ import {
   DescribeDBInstancesCommand,
 } from '@aws-sdk/client-rds';
 import {
-  DMSClient,
+  DatabaseMigrationServiceClient,
   DescribeReplicationInstancesCommand,
   DescribeEndpointsCommand,
   DescribeReplicationTasksCommand,
@@ -269,7 +269,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const replicationInstanceArn = discovered.stackOutputs.DMSReplicationInstanceArn;
       expect(replicationInstanceArn).toBeDefined();
       
-      const dmsClient = new DMSClient({ region });
+      const dmsClient = new DatabaseMigrationServiceClient({ region });
       const command = new DescribeReplicationInstancesCommand({
         Filters: [
           {
@@ -291,7 +291,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const replicationInstanceArn = discovered.stackOutputs.DMSReplicationInstanceArn;
       expect(replicationInstanceArn).toBeDefined();
       
-      const dmsClient = new DMSClient({ region });
+      const dmsClient = new DatabaseMigrationServiceClient({ region });
       const command = new DescribeReplicationInstancesCommand({
         Filters: [
           {
@@ -309,7 +309,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const sourceEndpointArn = discovered.stackOutputs.DMSSourceEndpointArn;
       expect(sourceEndpointArn).toBeDefined();
       
-      const dmsClient = new DMSClient({ region });
+      const dmsClient = new DatabaseMigrationServiceClient({ region });
       const command = new DescribeEndpointsCommand({
         Filters: [
           {
@@ -330,7 +330,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const targetEndpointArn = discovered.stackOutputs.DMSTargetEndpointArn;
       expect(targetEndpointArn).toBeDefined();
       
-      const dmsClient = new DMSClient({ region });
+      const dmsClient = new DatabaseMigrationServiceClient({ region });
       const command = new DescribeEndpointsCommand({
         Filters: [
           {
@@ -351,7 +351,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       const taskArn = discovered.stackOutputs.DMSReplicationTaskArn;
       expect(taskArn).toBeDefined();
       
-      const dmsClient = new DMSClient({ region });
+      const dmsClient = new DatabaseMigrationServiceClient({ region });
       const command = new DescribeReplicationTasksCommand({
         Filters: [
           {
