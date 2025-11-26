@@ -5,12 +5,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeListenersCommand,
   DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elbv2';
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   RDSClient,
   DescribeDBClustersCommand,
@@ -215,7 +215,7 @@ const outputs = readStructuredOutputs();
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // AWS clients
-const elbv2Client = new ELBv2Client({ region });
+const elbv2Client = new ElasticLoadBalancingV2Client({ region });
 const rdsClient = new RDSClient({ region });
 const lambdaClient = new LambdaClient({ region });
 const s3Client = new S3Client({ region });
