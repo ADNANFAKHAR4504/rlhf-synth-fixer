@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912731",
+  "team": "synth",
+  "startedAt": "2025-11-26T17:56:27.882936",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "infrastructure-drift",
+    "terraform-state",
+    "compliance",
+    "monitoring"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Config",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "background": "Your DevOps team manages multiple Terraform workspaces across different AWS accounts and has discovered significant configuration drift between deployed resources and stored state files. Management requires an automated solution to detect, analyze, and report infrastructure drift across all environments to maintain compliance and prevent security vulnerabilities.",
+  "problem_statement": "Create a Terraform configuration to implement an infrastructure drift detection and analysis system. The configuration must: 1. Create an S3 bucket with versioning and lifecycle policies to store drift analysis reports from multiple workspaces. 2. Configure DynamoDB tables for Terraform state locking with point-in-time recovery enabled. 3. Implement AWS Config rules to track configuration changes for EC2, RDS, and S3 resources. 4. Create Lambda functions that execute terraform plan -detailed-exitcode and parse the output for drift analysis. 5. Set up EventBridge rules to trigger drift detection Lambda functions every 6 hours. 6. Configure SNS topics with email subscriptions for critical drift notifications. 7. Implement IAM roles and policies allowing cross-account state file access for centralized analysis. 8. Create CloudWatch dashboards displaying drift metrics and trends across environments. 9. Use Terraform data sources to validate current resource states against expected configurations. 10. Generate structured JSON reports containing resource drift details, timestamps, and remediation suggestions. Expected output: A Terraform configuration that deploys a complete drift detection system capable of analyzing infrastructure state across multiple AWS accounts and workspaces, generating detailed reports, and alerting on configuration drift.",
+  "constraints_list": [
+    "Use Terraform's native drift detection capabilities without external tools",
+    "Implement custom null_resource triggers for scheduled drift checks",
+    "Store drift analysis results in S3 with versioning enabled",
+    "Generate JSON-formatted drift reports with timestamp and severity levels",
+    "Use data sources to compare actual vs expected resource configurations",
+    "Implement lifecycle rules to prevent automatic remediation of critical resources",
+    "Configure remote state locking with DynamoDB to prevent concurrent modifications",
+    "Use terraform_remote_state data sources to analyze cross-workspace dependencies",
+    "Implement AWS Config rules through Terraform to track configuration changes"
+  ],
+  "environment": "\"Multi-account AWS infrastructure spanning us-east-1, us-west-2, and eu-central-1 regions. Terraform 1.5+ with remote S3 backend configured for each environment (dev, staging, prod). DynamoDB tables for state locking in each region. AWS Config enabled across all accounts for compliance tracking. Lambda functions deployed for custom drift detection logic. EventBridge rules for scheduled drift checks. SNS topics for alerting on critical drift. IAM roles with cross-account assume permissions for centralized monitoring. VPCs in each region with private subnets for sensitive workloads.\"",
+  "constraints_count": 0,
+  "training_quality": 9
+}
