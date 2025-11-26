@@ -43,7 +43,6 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly primaryAlbDns: pulumi.Output<string>;
   public readonly secondaryAlbDns: pulumi.Output<string>;
   public readonly acceleratorDns: pulumi.Output<string>;
-  public readonly hostedZoneId: pulumi.Output<string>;
   public readonly primarySecretArn: pulumi.Output<string>;
   public readonly secondarySecretArn: pulumi.Output<string>;
   public readonly configBucketName: pulumi.Output<string>;
@@ -778,100 +777,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Route 53 Hosted Zone
-    const hostedZone = new aws.route53.Zone(
-      'hosted-zone',
-      {
-        name: `trading-${environmentSuffix}.example.com`,
-        tags: {
-          Name: `hosted-zone-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Route 53 Health Checks (FIXED: requestInterval changed from 10 to 30)
-    const primaryHealthCheck = new aws.route53.HealthCheck(
-      'primary-health',
-      {
-        type: 'HTTP',
-        resourcePath: '/health',
-        fqdn: primaryAlb.dnsName,
-        port: 80,
-        requestInterval: 30, // FIXED: Changed from 10 to 30 (minimum allowed)
-        failureThreshold: 3,
-        tags: {
-          Name: `primary-health-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    const secondaryHealthCheck = new aws.route53.HealthCheck(
-      'secondary-health',
-      {
-        type: 'HTTP',
-        resourcePath: '/health',
-        fqdn: secondaryAlb.dnsName,
-        port: 80,
-        requestInterval: 30, // FIXED: Changed from 10 to 30 (minimum allowed)
-        failureThreshold: 3,
-        tags: {
-          Name: `secondary-health-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Route 53 Records with failover
-    const _primaryRecord = new aws.route53.Record(
-      'primary-record',
-      {
-        zoneId: hostedZone.zoneId,
-        name: `trading-${environmentSuffix}.example.com`,
-        type: 'A',
-        setIdentifier: 'primary',
-        failoverRoutingPolicies: [
-          {
-            type: 'PRIMARY',
-          },
-        ],
-        aliases: [
-          {
-            name: primaryAlb.dnsName,
-            zoneId: primaryAlb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
-        healthCheckId: primaryHealthCheck.id,
-      },
-      { parent: this }
-    );
-
-    const _secondaryRecord = new aws.route53.Record(
-      'secondary-record',
-      {
-        zoneId: hostedZone.zoneId,
-        name: `trading-${environmentSuffix}.example.com`,
-        type: 'A',
-        setIdentifier: 'secondary',
-        failoverRoutingPolicies: [
-          {
-            type: 'SECONDARY',
-          },
-        ],
-        aliases: [
-          {
-            name: secondaryAlb.dnsName,
-            zoneId: secondaryAlb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
-        healthCheckId: secondaryHealthCheck.id,
-      },
-      { parent: this }
-    );
-
     // Secrets Manager in primary region
     const primarySecret = new aws.secretsmanager.Secret(
       'primary-secret',
@@ -1153,7 +1058,6 @@ def handler(event, context):
     this.primaryAlbDns = primaryAlb.dnsName;
     this.secondaryAlbDns = secondaryAlb.dnsName;
     this.acceleratorDns = accelerator.dnsName;
-    this.hostedZoneId = hostedZone.zoneId;
     this.primarySecretArn = primarySecret.arn;
     this.secondarySecretArn = secondarySecret.arn;
     this.configBucketName = configBucket.bucket;
@@ -1167,7 +1071,6 @@ def handler(event, context):
       primaryAlbDns: this.primaryAlbDns,
       secondaryAlbDns: this.secondaryAlbDns,
       acceleratorDns: this.acceleratorDns,
-      hostedZoneId: this.hostedZoneId,
       primarySecretArn: this.primarySecretArn,
       secondarySecretArn: this.secondarySecretArn,
       configBucketName: this.configBucketName,

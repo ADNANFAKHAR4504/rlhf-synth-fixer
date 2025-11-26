@@ -59,7 +59,6 @@ export const secondaryClusterId = stack.secondaryClusterId;
 export const primaryAlbDns = stack.primaryAlbDns;
 export const secondaryAlbDns = stack.secondaryAlbDns;
 export const acceleratorDns = stack.acceleratorDns;
-export const hostedZoneId = stack.hostedZoneId;
 export const primarySecretArn = stack.primarySecretArn;
 export const secondarySecretArn = stack.secondarySecretArn;
 export const configBucketName = stack.configBucketName;
