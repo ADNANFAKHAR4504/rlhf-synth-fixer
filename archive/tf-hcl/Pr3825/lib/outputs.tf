@@ -63,10 +63,10 @@ output "monitoring_alarms" {
 output "cost_optimization_notes" {
   description = "Cost optimization recommendations"
   value = {
-    aurora_note      = "Using db.t3.medium instances for cost-effective Multi-AZ deployment"
-    asg_standby_note = "Secondary ASG starts with 0 capacity (warm standby pattern)"
-    dynamodb_billing = "PAY_PER_REQUEST billing mode - scales automatically"
-    nat_gateway_note = "Consider single NAT Gateway per region for cost savings in non-prod"
+    aurora_note          = "Using db.t3.medium instances for cost-effective Multi-AZ deployment"
+    asg_standby_note     = "Secondary ASG starts with 0 capacity (warm standby pattern)"
+    dynamodb_billing     = "PAY_PER_REQUEST billing mode - scales automatically"
+    nat_gateway_note     = "Consider single NAT Gateway per region for cost savings in non-prod"
   }
 }
 

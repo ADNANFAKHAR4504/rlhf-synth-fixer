@@ -57,18 +57,18 @@ output "autoscaling_group_name" {
 output "resource_summary" {
   description = "Summary of created resources"
   value = {
-    vpc_id            = aws_vpc.main.id
-    public_subnets    = aws_subnet.public[*].id
-    private_subnets   = aws_subnet.private[*].id
-    db_subnets        = aws_subnet.database[*].id
-    alb_name          = aws_lb.main.name
-    alb_dns           = aws_lb.main.dns_name
-    target_group      = aws_lb_target_group.main.name
-    autoscaling_group = aws_autoscaling_group.main.name
-    iam_role          = aws_iam_role.ec2_role.name
-    db_subnet_group   = aws_db_subnet_group.main.name
-    rds_identifier    = aws_db_instance.main.identifier
-    s3_app_bucket     = aws_s3_bucket.app_data.id
-    s3_logs_bucket    = aws_s3_bucket.access_logs.id
+    vpc_id           = aws_vpc.main.id
+    public_subnets   = aws_subnet.public[*].id
+    private_subnets  = aws_subnet.private[*].id
+    db_subnets       = aws_subnet.database[*].id
+    alb_name         = aws_lb.main.name
+    alb_dns          = aws_lb.main.dns_name
+    target_group     = aws_lb_target_group.main.name
+    autoscaling_group= aws_autoscaling_group.main.name
+    iam_role         = aws_iam_role.ec2_role.name
+    db_subnet_group  = aws_db_subnet_group.main.name
+    rds_identifier   = aws_db_instance.main.identifier
+    s3_app_bucket    = aws_s3_bucket.app_data.id
+    s3_logs_bucket   = aws_s3_bucket.access_logs.id
   }
 }

@@ -30,13 +30,13 @@ locals {
 
   # Naming convention
   name_prefix = "tap-webapp"
-
+  
   # VPC Configuration
   vpc_cidr = "10.0.0.0/16"
-
+  
   # Availability Zones
   availability_zones = ["${var.aws_region}a", "${var.aws_region}b"]
-
+  
   # Subnet CIDRs
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
@@ -119,7 +119,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = length(aws_subnet.public)
 
-  domain     = "vpc"
+  domain = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -461,10 +461,10 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.name_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "${local.name_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2

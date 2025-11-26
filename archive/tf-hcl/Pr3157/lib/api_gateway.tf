@@ -1,5 +1,5 @@
 resource "aws_api_gateway_rest_api" "api" {
-  name        = var.app_name
+  name        = "${var.app_name}"
   description = "API for search functionality"
 
   endpoint_configuration {

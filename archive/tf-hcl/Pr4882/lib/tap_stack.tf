@@ -65,7 +65,7 @@ variable "lambda_timeout" {
 variable "kinesis_shard_count" {
   description = "Number of shards for Kinesis stream"
   type        = number
-  default     = 10 # ~10,000 events/min = 167 events/sec, each shard handles 1000 records/sec
+  default     = 10  # ~10,000 events/min = 167 events/sec, each shard handles 1000 records/sec
 }
 
 variable "kinesis_retention_period" {
@@ -111,36 +111,36 @@ variable "project_name" {
 locals {
   # Resource naming convention
   resource_prefix = "${var.unique_prefix}-${var.environment}"
-
+  
   # Common tags
   common_tags = {
-    Environment     = var.environment
-    Project         = var.project_name
-    ManagedBy       = "Terraform"
-    iac-rlhf-amazon = "true"
-    team            = 2
-  }
-
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+      iac-rlhf-amazon = "true"
+      team = 2
+    }
+  
   # Network configuration
   private_subnet_cidrs = [
-    cidrsubnet(var.vpc_cidr, 4, 0), # 10.0.0.0/20
-    cidrsubnet(var.vpc_cidr, 4, 1), # 10.0.16.0/20
+    cidrsubnet(var.vpc_cidr, 4, 0),  # 10.0.0.0/20
+    cidrsubnet(var.vpc_cidr, 4, 1),  # 10.0.16.0/20
   ]
-
+  
   nat_gateway_subnet_cidrs = [
     cidrsubnet(var.vpc_cidr, 8, 32), # 10.0.32.0/24
     cidrsubnet(var.vpc_cidr, 8, 33), # 10.0.33.0/24
   ]
-
+  
   # Feature toggles
-  enable_vpc_flow_logs       = true
+  enable_vpc_flow_logs = true
   enable_enhanced_monitoring = true
-
+  
   # Lambda configuration
-  lambda_batch_size             = 100
-  lambda_max_batching_window    = 5
+  lambda_batch_size = 100
+  lambda_max_batching_window = 5
   lambda_parallelization_factor = 10
-  lambda_retry_attempts         = 3
+  lambda_retry_attempts = 3
 }
 
 # ============================================================================
@@ -162,7 +162,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -174,11 +174,11 @@ resource "aws_vpc" "main" {
 # Private Subnets
 resource "aws_subnet" "private" {
   count = length(var.azs)
-
+  
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = var.azs[count.index]
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -191,12 +191,12 @@ resource "aws_subnet" "private" {
 # NAT Gateway Subnets (small public subnets for NAT Gateways only)
 resource "aws_subnet" "nat" {
   count = length(var.azs)
-
+  
   vpc_id                  = aws_vpc.main.id
   cidr_block              = local.nat_gateway_subnet_cidrs[count.index]
   availability_zone       = var.azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -209,7 +209,7 @@ resource "aws_subnet" "nat" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -222,43 +222,43 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   count  = length(var.azs)
   domain = "vpc"
-
+  
   tags = merge(
     local.common_tags,
     {
       Name = "${local.resource_prefix}-nat-eip-${count.index + 1}"
     }
   )
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
   count = length(var.azs)
-
+  
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.nat[count.index].id
-
+  
   tags = merge(
     local.common_tags,
     {
       Name = "${local.resource_prefix}-nat-gateway-${count.index + 1}"
     }
   )
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # Route table for NAT subnets
 resource "aws_route_table" "nat" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -270,7 +270,7 @@ resource "aws_route_table" "nat" {
 # Associate NAT subnets with route table
 resource "aws_route_table_association" "nat" {
   count = length(var.azs)
-
+  
   subnet_id      = aws_subnet.nat[count.index].id
   route_table_id = aws_route_table.nat.id
 }
@@ -278,14 +278,14 @@ resource "aws_route_table_association" "nat" {
 # Route tables for private subnets
 resource "aws_route_table" "private" {
   count = length(var.azs)
-
+  
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -297,7 +297,7 @@ resource "aws_route_table" "private" {
 # Associate private subnets with route tables
 resource "aws_route_table_association" "private" {
   count = length(var.azs)
-
+  
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
@@ -308,7 +308,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
   service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = aws_route_table.private[*].id
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -324,7 +324,7 @@ resource "aws_vpc_endpoint" "kinesis" {
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -340,7 +340,7 @@ resource "aws_vpc_endpoint" "lambda" {
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -352,12 +352,12 @@ resource "aws_vpc_endpoint" "lambda" {
 # VPC Flow Logs
 resource "aws_flow_log" "main" {
   count = local.enable_vpc_flow_logs ? 1 : 0
-
+  
   iam_role_arn    = aws_iam_role.flow_logs[0].arn
   log_destination = aws_cloudwatch_log_group.flow_logs[0].arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main.id
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -368,18 +368,18 @@ resource "aws_flow_log" "main" {
 
 resource "aws_cloudwatch_log_group" "flow_logs" {
   count = local.enable_vpc_flow_logs ? 1 : 0
-
+  
   name              = "/aws/vpc/${local.resource_prefix}-2"
   retention_in_days = 7
-
+  
   tags = local.common_tags
 }
 
 resource "aws_iam_role" "flow_logs" {
   count = local.enable_vpc_flow_logs ? 1 : 0
-
+  
   name = "${local.resource_prefix}-flow-logs-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -392,16 +392,16 @@ resource "aws_iam_role" "flow_logs" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
 resource "aws_iam_role_policy" "flow_logs" {
   count = local.enable_vpc_flow_logs ? 1 : 0
-
+  
   name = "${local.resource_prefix}-flow-logs-policy"
   role = aws_iam_role.flow_logs[0].id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -428,21 +428,21 @@ resource "aws_iam_role_policy" "flow_logs" {
 resource "aws_security_group" "vpc_endpoints" {
   name_prefix = "${local.resource_prefix}-vpce-sg"
   vpc_id      = aws_vpc.main.id
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -455,14 +455,14 @@ resource "aws_security_group" "vpc_endpoints" {
 resource "aws_security_group" "lambda" {
   name_prefix = "${local.resource_prefix}-lambda-sg"
   vpc_id      = aws_vpc.main.id
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -475,30 +475,30 @@ resource "aws_security_group" "lambda" {
 resource "aws_security_group" "alb" {
   name_prefix = "${local.resource_prefix}-alb-sg"
   vpc_id      = aws_vpc.main.id
-
+  
   # Open to outside for E2E testing purposes
   ingress {
-    from_port        = 80
-    to_port          = 80
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
   }
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -515,21 +515,21 @@ resource "aws_kinesis_stream" "clickstream" {
   name             = "${local.resource_prefix}-clickstream"
   shard_count      = var.kinesis_shard_count
   retention_period = var.kinesis_retention_period
-
+  
   shard_level_metrics = [
     "IncomingBytes",
     "IncomingRecords",
     "OutgoingBytes",
     "OutgoingRecords",
   ]
-
+  
   stream_mode_details {
     stream_mode = "PROVISIONED"
   }
-
+  
   encryption_type = var.enable_kinesis_encryption ? "KMS" : "NONE"
   kms_key_id      = var.enable_kinesis_encryption ? aws_kms_key.kinesis[0].id : null
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -541,54 +541,54 @@ resource "aws_kinesis_stream" "clickstream" {
 # KMS Key for Kinesis Encryption
 resource "aws_kms_key" "kinesis" {
   count = var.enable_kinesis_encryption ? 1 : 0
-
+  
   description             = "KMS key for Kinesis stream encryption"
   deletion_window_in_days = 7
 
-  policy = jsonencode({
-    "Version" : "2012-10-17",
-    "Statement" : [
-      {
-        "Sid" : "EnableIAMUserPermissions",
-        "Effect" : "Allow",
-        "Principal" : { "AWS" : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
-        "Action" : "kms:*",
-        "Resource" : "*"
-      },
-      // Kinesis service pode criptografar/descr. via serviço (producer e consumer)
-      {
-        "Sid" : "AllowKinesisServiceViaService",
-        "Effect" : "Allow",
-        "Principal" : { "Service" : "kinesis.amazonaws.com" },
-        "Action" : ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
-        "Resource" : "*",
-        "Condition" : {
-          "StringEquals" : { "kms:ViaService" : "kinesis.${var.aws_region}.amazonaws.com" }
-        }
-      },
-      // (opcional) Lambda service via Kinesis — pode manter ou remover; não é estritamente necessário
-      {
-        "Sid" : "AllowLambdaServiceViaKinesis",
-        "Effect" : "Allow",
-        "Principal" : { "Service" : "lambda.amazonaws.com" },
-        "Action" : ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
-        "Resource" : "*",
-        "Condition" : {
-          "StringEquals" : { "kms:ViaService" : "kinesis.${var.aws_region}.amazonaws.com" }
-        }
-      },
-      // Permite o produtor (sua Lambda ingest) gerar data keys (erro que você já viu)
-      {
-        "Sid" : "AllowProducerLambdaGenerateDataKey",
-        "Effect" : "Allow",
-        "Principal" : { "AWS" : "${aws_iam_role.lambda_execution_ingest.arn}" },
-        "Action" : ["kms:GenerateDataKey", "kms:DescribeKey"],
-        "Resource" : "*"
+   policy = jsonencode({
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnableIAMUserPermissions",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    // Kinesis service pode criptografar/descr. via serviço (producer e consumer)
+    {
+      "Sid": "AllowKinesisServiceViaService",
+      "Effect": "Allow",
+      "Principal": { "Service": "kinesis.amazonaws.com" },
+      "Action": [ "kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey" ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "kms:ViaService": "kinesis.${var.aws_region}.amazonaws.com" }
       }
-    ]
-  })
+    },
+    // (opcional) Lambda service via Kinesis — pode manter ou remover; não é estritamente necessário
+    {
+      "Sid": "AllowLambdaServiceViaKinesis",
+      "Effect": "Allow",
+      "Principal": { "Service": "lambda.amazonaws.com" },
+      "Action": [ "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey" ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": { "kms:ViaService": "kinesis.${var.aws_region}.amazonaws.com" }
+      }
+    },
+    // Permite o produtor (sua Lambda ingest) gerar data keys (erro que você já viu)
+    {
+      "Sid": "AllowProducerLambdaGenerateDataKey",
+      "Effect": "Allow",
+      "Principal": { "AWS": "${aws_iam_role.lambda_execution_ingest.arn}" },
+      "Action": [ "kms:GenerateDataKey", "kms:DescribeKey" ],
+      "Resource": "*"
+    }
+  ]
+})
 
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -599,7 +599,7 @@ resource "aws_kms_key" "kinesis" {
 
 resource "aws_kms_alias" "kinesis" {
   count = var.enable_kinesis_encryption ? 1 : 0
-
+  
   name          = "alias/${local.resource_prefix}-kinesis"
   target_key_id = aws_kms_key.kinesis[0].key_id
 }
@@ -611,7 +611,7 @@ resource "aws_kms_alias" "kinesis" {
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_execution" {
   name = "${local.resource_prefix}-lambda-execution-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -624,7 +624,7 @@ resource "aws_iam_role" "lambda_execution" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -632,7 +632,7 @@ resource "aws_iam_role" "lambda_execution" {
 resource "aws_iam_role_policy" "lambda_execution" {
   name = "${local.resource_prefix}-lambda-execution-policy"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -685,8 +685,8 @@ resource "aws_iam_role_policy" "lambda_execution" {
         Resource = "*"
       },
       {
-        Effect   = "Allow",
-        Action   = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
+        Effect = "Allow",
+        Action = [  "kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"  ],
         Resource = aws_kms_key.kinesis[0].arn
       }
     ]
@@ -705,36 +705,36 @@ data "archive_file" "stream_process_simple" {
 }
 
 resource "aws_lambda_function" "processor" {
-  filename      = data.archive_file.stream_process_simple.output_path
-  function_name = "${local.resource_prefix}-processor"
-  role          = aws_iam_role.lambda_execution.arn
-  handler       = "stream_process.lambda_handler"
-  runtime       = var.lambda_runtime
-  timeout       = var.lambda_timeout
+  filename         = data.archive_file.stream_process_simple.output_path
+  function_name    = "${local.resource_prefix}-processor"
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "stream_process.lambda_handler"
+  runtime          = var.lambda_runtime
+  timeout          = var.lambda_timeout
 
   source_code_hash = data.archive_file.stream_process_simple.output_base64sha256
 
-  memory_size = 512
+  memory_size      = 512
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
-
+  
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.processed_data.name
       ENVIRONMENT    = var.environment
     }
   }
-
+  
   tags = merge(
     local.common_tags,
     {
       Name = "${local.resource_prefix}-processor"
     }
   )
-
+  
   depends_on = [
     aws_iam_role_policy_attachment.lambda_vpc_execution,
     aws_cloudwatch_log_group.lambda
@@ -745,7 +745,7 @@ resource "aws_lambda_function" "processor" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${local.resource_prefix}-processor"
   retention_in_days = 7
-
+  
   tags = local.common_tags
 }
 
@@ -754,12 +754,12 @@ resource "aws_lambda_event_source_mapping" "kinesis_lambda" {
   event_source_arn  = aws_kinesis_stream.clickstream.arn
   function_name     = aws_lambda_function.processor.arn
   starting_position = "LATEST"
-
+  
   batch_size                         = local.lambda_batch_size
   maximum_batching_window_in_seconds = local.lambda_max_batching_window
-  parallelization_factor             = local.lambda_parallelization_factor
-  maximum_retry_attempts             = local.lambda_retry_attempts
-
+  parallelization_factor            = local.lambda_parallelization_factor
+  maximum_retry_attempts            = local.lambda_retry_attempts
+  
   bisect_batch_on_function_error = true
   maximum_record_age_in_seconds  = 3600
 }
@@ -775,22 +775,22 @@ resource "aws_dynamodb_table" "processed_data" {
   write_capacity = var.dynamodb_write_capacity
   hash_key       = "userId"
   range_key      = "timestamp"
-
+  
   attribute {
     name = "userId"
     type = "S"
   }
-
+  
   attribute {
     name = "timestamp"
     type = "N"
   }
-
+  
   attribute {
     name = "eventType"
     type = "S"
   }
-
+  
   global_secondary_index {
     name            = "eventTypeIndex"
     hash_key        = "eventType"
@@ -799,18 +799,18 @@ resource "aws_dynamodb_table" "processed_data" {
     read_capacity   = var.dynamodb_read_capacity
     projection_type = "ALL"
   }
-
+  
   server_side_encryption {
     enabled = true
   }
-
+  
   point_in_time_recovery {
     enabled = var.enable_pitr
   }
-
+  
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -821,7 +821,7 @@ resource "aws_dynamodb_table" "processed_data" {
 
 resource "aws_appautoscaling_target" "dynamodb_table_read_target" {
   count = var.dynamodb_read_capacity > 0 ? 1 : 0
-
+  
   max_capacity       = var.dynamodb_read_capacity * 10
   min_capacity       = var.dynamodb_read_capacity
   resource_id        = "table/${aws_dynamodb_table.processed_data.name}"
@@ -831,7 +831,7 @@ resource "aws_appautoscaling_target" "dynamodb_table_read_target" {
 
 resource "aws_appautoscaling_target" "dynamodb_table_write_target" {
   count = var.dynamodb_write_capacity > 0 ? 1 : 0
-
+  
   max_capacity       = var.dynamodb_write_capacity * 10
   min_capacity       = var.dynamodb_write_capacity
   resource_id        = "table/${aws_dynamodb_table.processed_data.name}"
@@ -841,13 +841,13 @@ resource "aws_appautoscaling_target" "dynamodb_table_write_target" {
 
 resource "aws_appautoscaling_policy" "dynamodb_table_read_policy" {
   count = var.dynamodb_read_capacity > 0 ? 1 : 0
-
+  
   name               = "${local.resource_prefix}-dynamodb-read-policy"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.dynamodb_table_read_target[0].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_table_read_target[0].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_table_read_target[0].service_namespace
-
+  
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBReadCapacityUtilization"
@@ -858,13 +858,13 @@ resource "aws_appautoscaling_policy" "dynamodb_table_read_policy" {
 
 resource "aws_appautoscaling_policy" "dynamodb_table_write_policy" {
   count = var.dynamodb_write_capacity > 0 ? 1 : 0
-
+  
   name               = "${local.resource_prefix}-dynamodb-write-policy"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.dynamodb_table_write_target[0].resource_id
   scalable_dimension = aws_appautoscaling_target.dynamodb_table_write_target[0].scalable_dimension
   service_namespace  = aws_appautoscaling_target.dynamodb_table_write_target[0].service_namespace
-
+  
   target_tracking_scaling_policy_configuration {
     predefined_metric_specification {
       predefined_metric_type = "DynamoDBWriteCapacityUtilization"
@@ -878,23 +878,23 @@ resource "aws_appautoscaling_policy" "dynamodb_table_write_policy" {
 # ============================================================================
 
 resource "aws_lb" "api" {
-  name = "${local.resource_prefix}-api-alb"
+  name               = "${local.resource_prefix}-api-alb"
   # Open to outside for E2E testing purposes
   internal           = false # lets not make it internal so we can test it
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.nat[*].id
-
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
-
+  
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.id
     prefix  = "api-alb"
     enabled = true
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -906,7 +906,7 @@ resource "aws_lb" "api" {
 # S3 Bucket for ALB Logs
 resource "aws_s3_bucket" "alb_logs" {
   bucket = "${local.resource_prefix}-alb-logs-v2"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -917,7 +917,7 @@ resource "aws_s3_bucket" "alb_logs" {
 
 resource "aws_s3_bucket_public_access_block" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -926,7 +926,7 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -938,7 +938,7 @@ data "aws_elb_service_account" "main" {}
 
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -956,12 +956,12 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 
 # Target Group
 resource "aws_lb_target_group" "api" {
-  name        = "${local.resource_prefix}-api-tg"
+  name     = "${local.resource_prefix}-api-tg"
   target_type = "lambda"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -971,9 +971,9 @@ resource "aws_lb_target_group" "api" {
     path                = "/health"
     matcher             = "200"
   }
-
+  
   deregistration_delay = 5
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -1016,8 +1016,8 @@ resource "aws_iam_role_policy" "lambda_execution_ingest" {
       },
       # Logs
       {
-        Effect   = "Allow"
-        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Effect = "Allow"
+        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "*"
       },
       {
@@ -1032,8 +1032,8 @@ resource "aws_iam_role_policy" "lambda_execution_ingest" {
         Resource = "*"
       },
       {
-        Effect   = "Allow",
-        Action   = ["kms:GenerateDataKey", "kms:DescribeKey"],
+        Effect = "Allow",
+        Action = [ "kms:GenerateDataKey", "kms:DescribeKey" ],
         Resource = aws_kms_key.kinesis[0].arn
       }
     ]
@@ -1107,7 +1107,7 @@ resource "aws_lb_target_group_attachment" "api_lambda" {
   target_id        = aws_lambda_function.stream_ingest.arn
 
   depends_on = [
-    aws_lambda_permission.allow_from_alb_tg # ensure permission exists first
+    aws_lambda_permission.allow_from_alb_tg  # ensure permission exists first
   ]
 }
 
@@ -1139,13 +1139,13 @@ resource "aws_cloudwatch_metric_alarm" "kinesis_iterator_age" {
   namespace           = "AWS/Kinesis"
   period              = "300"
   statistic           = "Maximum"
-  threshold           = "60000" # 1 minute
+  threshold           = "60000"  # 1 minute
   alarm_description   = "Kinesis iterator age is too high"
-
+  
   dimensions = {
     StreamName = aws_kinesis_stream.clickstream.name
   }
-
+  
   tags = local.common_tags
 }
 
@@ -1159,11 +1159,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   statistic           = "Sum"
   threshold           = "10"
   alarm_description   = "Lambda function error rate is too high"
-
+  
   dimensions = {
     FunctionName = aws_lambda_function.processor.function_name
   }
-
+  
   tags = local.common_tags
 }
 
@@ -1177,11 +1177,11 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles" {
   statistic           = "Sum"
   threshold           = "10"
   alarm_description   = "DynamoDB system errors detected"
-
+  
   dimensions = {
     TableName = aws_dynamodb_table.processed_data.name
   }
-
+  
   tags = local.common_tags
 }
 

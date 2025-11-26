@@ -48,7 +48,7 @@ variable "internal_cidr_block" {
 variable "redis_engine_version" {
   description = "Redis engine version"
   type        = string
-  default     = "7.0" # Latest stable version as of configuration
+  default     = "7.0"  # Latest stable version as of configuration
 }
 
 variable "node_type" {
@@ -60,7 +60,7 @@ variable "node_type" {
 variable "num_cache_clusters" {
   description = "Number of cache clusters (primary + replicas)"
   type        = number
-  default     = 3 # 1 primary + 2 replicas
+  default     = 3  # 1 primary + 2 replicas
 }
 
 variable "backup_retention_days" {
@@ -81,15 +81,15 @@ locals {
     ManagedBy   = "terraform"
     CreatedAt   = timestamp()
   }
-
+  
   cluster_name = "${var.project_name}-${var.environment}-redis-${random_string.suffix.result}"
-
+  
   # Maintenance window configuration
-  maintenance_window = "sun:03:00-sun:04:00" # Sunday 3:00-4:00 AM UTC
-
+  maintenance_window = "sun:03:00-sun:04:00"  # Sunday 3:00-4:00 AM UTC
+  
   # Backup window (1 hour before maintenance)
-  backup_window = "02:00-03:00" # 2:00-3:00 AM UTC
-
+  backup_window = "02:00-03:00"  # 2:00-3:00 AM UTC
+  
   # Select first 3 AZs for high availability
   azs = slice(data.aws_availability_zones.available.names, 0, 3)
 }
@@ -271,8 +271,8 @@ resource "aws_cloudwatch_log_group" "redis_slow_log" {
   tags = merge(
     local.common_tags,
     {
-      Name    = "${local.cluster_name}-slow-log"
-      LogType = "redis-slow-log"
+      Name     = "${local.cluster_name}-slow-log"
+      LogType  = "redis-slow-log"
     }
   )
 }
@@ -284,8 +284,8 @@ resource "aws_cloudwatch_log_group" "redis_engine_log" {
   tags = merge(
     local.common_tags,
     {
-      Name    = "${local.cluster_name}-engine-log"
-      LogType = "redis-engine-log"
+      Name     = "${local.cluster_name}-engine-log"
+      LogType  = "redis-engine-log"
     }
   )
 }
@@ -295,24 +295,24 @@ resource "aws_cloudwatch_log_group" "redis_engine_log" {
 # =============================================================================
 
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id = local.cluster_name
-  description          = "Redis cluster with automatic failover for ${var.project_name}"
-
+  replication_group_id       = local.cluster_name
+  description               = "Redis cluster with automatic failover for ${var.project_name}"
+  
   # Engine configuration
-  engine               = "redis"
-  engine_version       = var.redis_engine_version
-  node_type            = var.node_type
-  parameter_group_name = aws_elasticache_parameter_group.redis.name
-  port                 = 6379
+  engine                    = "redis"
+  engine_version           = var.redis_engine_version
+  node_type                = var.node_type
+  parameter_group_name     = aws_elasticache_parameter_group.redis.name
+  port                     = 6379
 
   # High availability configuration
-  num_cache_clusters         = var.num_cache_clusters
+  num_cache_clusters       = var.num_cache_clusters
   automatic_failover_enabled = true
-  multi_az_enabled           = true
+  multi_az_enabled         = true
 
   # Network configuration
-  subnet_group_name  = aws_elasticache_subnet_group.redis.name
-  security_group_ids = [aws_security_group.redis.id]
+  subnet_group_name        = aws_elasticache_subnet_group.redis.name
+  security_group_ids       = [aws_security_group.redis.id]
 
   # Security configuration
   at_rest_encryption_enabled = true
@@ -320,44 +320,44 @@ resource "aws_elasticache_replication_group" "redis" {
 
   # Backup configuration
   snapshot_retention_limit = var.backup_retention_days
-  snapshot_window          = local.backup_window
+  snapshot_window         = local.backup_window
   # ❌ REMOVE THIS LINE - snapshot_name is for RESTORING, not creating
   # snapshot_name           = "${local.cluster_name}-final-snapshot"
-
+  
   # ✅ ADD THIS INSTEAD (optional - for final snapshot on destroy)
   final_snapshot_identifier = "${local.cluster_name}-final-snapshot"
 
   # Maintenance configuration
-  maintenance_window         = local.maintenance_window
+  maintenance_window      = local.maintenance_window
   auto_minor_version_upgrade = true
 
   # Log configuration
   log_delivery_configuration {
     destination      = aws_cloudwatch_log_group.redis_slow_log.name
     destination_type = "cloudwatch-logs"
-    log_format       = "json"
-    log_type         = "slow-log"
+    log_format      = "json"
+    log_type        = "slow-log"
   }
 
   log_delivery_configuration {
     destination      = aws_cloudwatch_log_group.redis_engine_log.name
     destination_type = "cloudwatch-logs"
-    log_format       = "json"
-    log_type         = "engine-log"
+    log_format      = "json"
+    log_type        = "engine-log"
   }
 
   tags = merge(
     local.common_tags,
     {
-      Name             = local.cluster_name
-      Type             = "redis-replication-group"
-      BackupRetention  = var.backup_retention_days
-      HighAvailability = "enabled"
+      Name              = local.cluster_name
+      Type              = "redis-replication-group"
+      BackupRetention   = var.backup_retention_days
+      HighAvailability  = "enabled"
     }
   )
 
   apply_immediately = true
-
+  
   depends_on = [
     aws_elasticache_parameter_group.redis,
     aws_elasticache_subnet_group.redis,
@@ -379,7 +379,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
   period              = "300"
   statistic           = "Average"
   threshold           = "75"
-
+  
   dimensions = {
     CacheClusterId = aws_elasticache_replication_group.redis.id
   }
@@ -402,7 +402,7 @@ resource "aws_cloudwatch_metric_alarm" "memory_utilization" {
   period              = "300"
   statistic           = "Average"
   threshold           = "85"
-
+  
   dimensions = {
     CacheClusterId = aws_elasticache_replication_group.redis.id
   }

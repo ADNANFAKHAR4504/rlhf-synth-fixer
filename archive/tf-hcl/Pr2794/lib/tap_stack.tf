@@ -75,8 +75,8 @@ locals {
   secondary_vpc_cidr = "10.1.0.0/16"
 
   # Subnet configurations
-  primary_public_subnet_cidr    = "10.0.1.0/24"
-  primary_private_subnet_cidr   = "10.0.2.0/24"
+  primary_public_subnet_cidr  = "10.0.1.0/24"
+  primary_private_subnet_cidr = "10.0.2.0/24"
   secondary_public_subnet_cidr  = "10.1.1.0/24"
   secondary_private_subnet_cidr = "10.1.2.0/24"
 
@@ -147,7 +147,7 @@ resource "aws_vpc" "primary" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = "${local.primary_prefix}-vpc"
+    Name = "${local.primary_prefix}-vpc"
     Region = var.primary_region
   })
 }
@@ -269,7 +269,7 @@ resource "aws_vpc" "secondary" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name   = "${local.secondary_prefix}-vpc"
+    Name = "${local.secondary_prefix}-vpc"
     Region = var.secondary_region
   })
 }
@@ -835,11 +835,11 @@ resource "aws_lb_listener" "primary" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "primary" {
-  provider                  = aws.us_east_2
-  name                      = "${local.primary_prefix}-asg"
-  vpc_zone_identifier       = [aws_subnet.primary_private.id]
-  target_group_arns         = [aws_lb_target_group.primary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_east_2
+  name                = "${local.primary_prefix}-asg"
+  vpc_zone_identifier = [aws_subnet.primary_private.id]
+  target_group_arns   = [aws_lb_target_group.primary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = 1
@@ -1093,14 +1093,14 @@ resource "aws_route53_zone" "main" {
 
 # Route 53 health check for load balancer
 resource "aws_route53_health_check" "alb" {
-  fqdn                    = aws_lb.primary.dns_name
-  port                    = 80
-  type                    = "HTTP"
-  resource_path           = "/"
-  failure_threshold       = 3
-  request_interval        = 30
-  cloudwatch_alarm_region = var.primary_region
-  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.alb_health.alarm_name
+  fqdn                            = aws_lb.primary.dns_name
+  port                            = 80
+  type                            = "HTTP"
+  resource_path                   = "/"
+  failure_threshold               = 3
+  request_interval                = 30
+  cloudwatch_alarm_region         = var.primary_region
+  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.alb_health.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-health-check"
@@ -1230,21 +1230,21 @@ resource "aws_cloudwatch_metric_alarm" "asg_cpu" {
 
 # Scale up policy
 resource "aws_autoscaling_policy" "scale_up" {
-  provider               = aws.us_east_2
-  name                   = "${local.primary_prefix}-scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-scale-up"
+  scaling_adjustment = 1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Scale down policy
 resource "aws_autoscaling_policy" "scale_down" {
-  provider               = aws.us_east_2
-  name                   = "${local.primary_prefix}-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-scale-down"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 

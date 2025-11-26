@@ -38,24 +38,24 @@ variable "db_instance_class" {
 # Locals for consistent naming and configuration
 locals {
   environment = "Production"
-
+  
   # VPC Configuration
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-
+  
   # Subnet Configuration
-  primary_public_subnet_cidr    = "10.0.1.0/24"
-  primary_private_subnet_cidr   = "10.0.2.0/24"
+  primary_public_subnet_cidr  = "10.0.1.0/24"
+  primary_private_subnet_cidr = "10.0.2.0/24"
   secondary_public_subnet_cidr  = "10.1.1.0/24"
   secondary_private_subnet_cidr = "10.1.2.0/24"
-
+  
   # Common tags
   common_tags = {
     Environment = local.environment
     Project     = "TAP-Stack"
     ManagedBy   = "Terraform"
   }
-
+  
   # Naming conventions
   primary_prefix   = "tap-primary-${var.primary_region}"
   secondary_prefix = "tap-secondary-${var.secondary_region}"
@@ -82,12 +82,12 @@ data "aws_ami" "amazon_linux_primary" {
   provider    = aws.us_east_2
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -98,12 +98,12 @@ data "aws_ami" "amazon_linux_secondary" {
   provider    = aws.us_west_1
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -129,7 +129,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = local.primary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-vpc"
   })
@@ -139,7 +139,7 @@ resource "aws_vpc" "primary" {
 resource "aws_internet_gateway" "primary" {
   provider = aws.us_east_2
   vpc_id   = aws_vpc.primary.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-igw"
   })
@@ -152,7 +152,7 @@ resource "aws_subnet" "primary_public" {
   cidr_block              = local.primary_public_subnet_cidr
   availability_zone       = data.aws_availability_zones.primary.names[0]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-public-subnet"
     Type = "Public"
@@ -165,7 +165,7 @@ resource "aws_subnet" "primary_private" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.primary_private_subnet_cidr
   availability_zone = data.aws_availability_zones.primary.names[1]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-private-subnet"
     Type = "Private"
@@ -176,11 +176,11 @@ resource "aws_subnet" "primary_private" {
 resource "aws_eip" "primary_nat" {
   provider = aws.us_east_2
   domain   = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-nat-eip"
   })
-
+  
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -189,11 +189,11 @@ resource "aws_nat_gateway" "primary" {
   provider      = aws.us_east_2
   allocation_id = aws_eip.primary_nat.id
   subnet_id     = aws_subnet.primary_public.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-nat-gateway"
   })
-
+  
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -201,12 +201,12 @@ resource "aws_nat_gateway" "primary" {
 resource "aws_route_table" "primary_public" {
   provider = aws.us_east_2
   vpc_id   = aws_vpc.primary.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-public-rt"
   })
@@ -216,12 +216,12 @@ resource "aws_route_table" "primary_public" {
 resource "aws_route_table" "primary_private" {
   provider = aws.us_east_2
   vpc_id   = aws_vpc.primary.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-private-rt"
   })
@@ -248,7 +248,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = local.secondary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-vpc"
   })
@@ -258,7 +258,7 @@ resource "aws_vpc" "secondary" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.us_west_1
   vpc_id   = aws_vpc.secondary.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-igw"
   })
@@ -271,7 +271,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = local.secondary_public_subnet_cidr
   availability_zone       = data.aws_availability_zones.secondary.names[0]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-public-subnet"
     Type = "Public"
@@ -284,7 +284,7 @@ resource "aws_subnet" "secondary_private" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_private_subnet_cidr
   availability_zone = data.aws_availability_zones.secondary.names[1]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-private-subnet"
     Type = "Private"
@@ -295,11 +295,11 @@ resource "aws_subnet" "secondary_private" {
 resource "aws_eip" "secondary_nat" {
   provider = aws.us_west_1
   domain   = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-nat-eip"
   })
-
+  
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -308,11 +308,11 @@ resource "aws_nat_gateway" "secondary" {
   provider      = aws.us_west_1
   allocation_id = aws_eip.secondary_nat.id
   subnet_id     = aws_subnet.secondary_public.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-nat-gateway"
   })
-
+  
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -320,12 +320,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "secondary_public" {
   provider = aws.us_west_1
   vpc_id   = aws_vpc.secondary.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-public-rt"
   })
@@ -335,12 +335,12 @@ resource "aws_route_table" "secondary_public" {
 resource "aws_route_table" "secondary_private" {
   provider = aws.us_west_1
   vpc_id   = aws_vpc.secondary.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-private-rt"
   })
@@ -367,7 +367,7 @@ resource "aws_security_group" "ec2_primary" {
   name        = "${local.primary_prefix}-ec2-sg"
   description = "Security group for EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     from_port   = 22
     to_port     = 22
@@ -375,7 +375,7 @@ resource "aws_security_group" "ec2_primary" {
     cidr_blocks = var.allowed_ssh_cidrs
     description = "SSH access"
   }
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -383,7 +383,7 @@ resource "aws_security_group" "ec2_primary" {
     cidr_blocks = var.allowed_https_cidrs
     description = "HTTPS access"
   }
-
+  
   ingress {
     from_port       = 80
     to_port         = 80
@@ -391,7 +391,7 @@ resource "aws_security_group" "ec2_primary" {
     security_groups = [aws_security_group.elb_primary.id]
     description     = "HTTP from ELB"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -399,7 +399,7 @@ resource "aws_security_group" "ec2_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-ec2-sg"
   })
@@ -411,7 +411,7 @@ resource "aws_security_group" "ec2_secondary" {
   name        = "${local.secondary_prefix}-ec2-sg"
   description = "Security group for EC2 instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     from_port   = 22
     to_port     = 22
@@ -419,7 +419,7 @@ resource "aws_security_group" "ec2_secondary" {
     cidr_blocks = var.allowed_ssh_cidrs
     description = "SSH access"
   }
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -427,7 +427,7 @@ resource "aws_security_group" "ec2_secondary" {
     cidr_blocks = var.allowed_https_cidrs
     description = "HTTPS access"
   }
-
+  
   ingress {
     from_port       = 80
     to_port         = 80
@@ -435,7 +435,7 @@ resource "aws_security_group" "ec2_secondary" {
     security_groups = [aws_security_group.elb_secondary.id]
     description     = "HTTP from ELB"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -443,7 +443,7 @@ resource "aws_security_group" "ec2_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-ec2-sg"
   })
@@ -455,7 +455,7 @@ resource "aws_security_group" "elb_primary" {
   name        = "${local.primary_prefix}-elb-sg"
   description = "Security group for ELB in primary region"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     from_port   = 80
     to_port     = 80
@@ -463,7 +463,7 @@ resource "aws_security_group" "elb_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -471,7 +471,7 @@ resource "aws_security_group" "elb_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS access"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -479,7 +479,7 @@ resource "aws_security_group" "elb_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-elb-sg"
   })
@@ -491,7 +491,7 @@ resource "aws_security_group" "elb_secondary" {
   name        = "${local.secondary_prefix}-elb-sg"
   description = "Security group for ELB in secondary region"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     from_port   = 80
     to_port     = 80
@@ -499,7 +499,7 @@ resource "aws_security_group" "elb_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -507,7 +507,7 @@ resource "aws_security_group" "elb_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS access"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -515,7 +515,7 @@ resource "aws_security_group" "elb_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-elb-sg"
   })
@@ -527,7 +527,7 @@ resource "aws_security_group" "rds_primary" {
   name        = "${local.primary_prefix}-rds-sg"
   description = "Security group for RDS in primary region"
   vpc_id      = aws_vpc.primary.id
-
+  
   ingress {
     from_port       = 3306
     to_port         = 3306
@@ -535,7 +535,7 @@ resource "aws_security_group" "rds_primary" {
     security_groups = [aws_security_group.ec2_primary.id]
     description     = "MySQL access from EC2"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -543,7 +543,7 @@ resource "aws_security_group" "rds_primary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-rds-sg"
   })
@@ -555,7 +555,7 @@ resource "aws_security_group" "rds_secondary" {
   name        = "${local.secondary_prefix}-rds-sg"
   description = "Security group for RDS in secondary region"
   vpc_id      = aws_vpc.secondary.id
-
+  
   ingress {
     from_port       = 3306
     to_port         = 3306
@@ -563,7 +563,7 @@ resource "aws_security_group" "rds_secondary" {
     security_groups = [aws_security_group.ec2_secondary.id]
     description     = "MySQL access from EC2"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -571,7 +571,7 @@ resource "aws_security_group" "rds_secondary" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "All outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-rds-sg"
   })
@@ -580,7 +580,7 @@ resource "aws_security_group" "rds_secondary" {
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "tap-ec2-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -593,7 +593,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -601,7 +601,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "tap-ec2-profile"
   role = aws_iam_role.ec2_role.name
-
+  
   tags = local.common_tags
 }
 
@@ -609,7 +609,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
   name = "tap-ec2-cloudwatch-policy"
   role = aws_iam_role.ec2_role.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -635,17 +635,17 @@ resource "aws_launch_template" "primary" {
   name          = "${local.primary_prefix}-launch-template"
   image_id      = data.aws_ami.amazon_linux_primary.id
   instance_type = var.instance_type
-
+  
   vpc_security_group_ids = [aws_security_group.ec2_primary.id]
-
+  
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
+  
   monitoring {
     enabled = true
   }
-
+  
   user_data = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
@@ -654,14 +654,14 @@ resource "aws_launch_template" "primary" {
               systemctl start amazon-cloudwatch-agent
               EOF
   )
-
+  
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
       Name = "${local.primary_prefix}-instance"
     })
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-launch-template"
   })
@@ -673,17 +673,17 @@ resource "aws_launch_template" "secondary" {
   name          = "${local.secondary_prefix}-launch-template"
   image_id      = data.aws_ami.amazon_linux_secondary.id
   instance_type = var.instance_type
-
+  
   vpc_security_group_ids = [aws_security_group.ec2_secondary.id]
-
+  
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
+  
   monitoring {
     enabled = true
   }
-
+  
   user_data = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
@@ -692,14 +692,14 @@ resource "aws_launch_template" "secondary" {
               systemctl start amazon-cloudwatch-agent
               EOF
   )
-
+  
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
       Name = "${local.secondary_prefix}-instance"
     })
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-launch-template"
   })
@@ -707,22 +707,22 @@ resource "aws_launch_template" "secondary" {
 
 # Auto Scaling Group - Primary Region
 resource "aws_autoscaling_group" "primary" {
-  provider                  = aws.us_east_2
-  name                      = "${local.primary_prefix}-asg"
-  vpc_zone_identifier       = [aws_subnet.primary_private.id]
-  target_group_arns         = [aws_lb_target_group.primary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_east_2
+  name                = "${local.primary_prefix}-asg"
+  vpc_zone_identifier = [aws_subnet.primary_private.id]
+  target_group_arns   = [aws_lb_target_group.primary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-
+  
   min_size         = 2
   max_size         = 4
   desired_capacity = 2
-
+  
   launch_template {
     id      = aws_launch_template.primary.id
     version = "$Latest"
   }
-
+  
   enabled_metrics = [
     "GroupMinSize",
     "GroupMaxSize",
@@ -730,13 +730,13 @@ resource "aws_autoscaling_group" "primary" {
     "GroupInServiceInstances",
     "GroupTotalInstances"
   ]
-
+  
   tag {
     key                 = "Name"
     value               = "${local.primary_prefix}-asg"
     propagate_at_launch = false
   }
-
+  
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -749,22 +749,22 @@ resource "aws_autoscaling_group" "primary" {
 
 # Auto Scaling Group - Secondary Region
 resource "aws_autoscaling_group" "secondary" {
-  provider                  = aws.us_west_1
-  name                      = "${local.secondary_prefix}-asg"
-  vpc_zone_identifier       = [aws_subnet.secondary_private.id]
-  target_group_arns         = [aws_lb_target_group.secondary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_west_1
+  name                = "${local.secondary_prefix}-asg"
+  vpc_zone_identifier = [aws_subnet.secondary_private.id]
+  target_group_arns   = [aws_lb_target_group.secondary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-
+  
   min_size         = 2
   max_size         = 4
   desired_capacity = 2
-
+  
   launch_template {
     id      = aws_launch_template.secondary.id
     version = "$Latest"
   }
-
+  
   enabled_metrics = [
     "GroupMinSize",
     "GroupMaxSize",
@@ -772,13 +772,13 @@ resource "aws_autoscaling_group" "secondary" {
     "GroupInServiceInstances",
     "GroupTotalInstances"
   ]
-
+  
   tag {
     key                 = "Name"
     value               = "${local.secondary_prefix}-asg"
     propagate_at_launch = false
   }
-
+  
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -797,9 +797,9 @@ resource "aws_lb" "primary" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.elb_primary.id]
   subnets            = [aws_subnet.primary_public.id, aws_subnet.primary_private.id]
-
+  
   enable_deletion_protection = false
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-alb"
   })
@@ -813,9 +813,9 @@ resource "aws_lb" "secondary" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.elb_secondary.id]
   subnets            = [aws_subnet.secondary_public.id, aws_subnet.secondary_private.id]
-
+  
   enable_deletion_protection = false
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-alb"
   })
@@ -828,7 +828,7 @@ resource "aws_lb_target_group" "primary" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -840,7 +840,7 @@ resource "aws_lb_target_group" "primary" {
     timeout             = 5
     unhealthy_threshold = 2
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-tg"
   })
@@ -853,7 +853,7 @@ resource "aws_lb_target_group" "secondary" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -865,7 +865,7 @@ resource "aws_lb_target_group" "secondary" {
     timeout             = 5
     unhealthy_threshold = 2
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-tg"
   })
@@ -877,12 +877,12 @@ resource "aws_lb_listener" "primary" {
   load_balancer_arn = aws_lb.primary.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.primary.arn
   }
-
+  
   tags = local.common_tags
 }
 
@@ -892,12 +892,12 @@ resource "aws_lb_listener" "secondary" {
   load_balancer_arn = aws_lb.secondary.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secondary.arn
   }
-
+  
   tags = local.common_tags
 }
 
@@ -906,7 +906,7 @@ resource "aws_db_subnet_group" "primary" {
   provider   = aws.us_east_2
   name       = "${local.primary_prefix}-db-subnet-group"
   subnet_ids = [aws_subnet.primary_private.id, aws_subnet.primary_public.id]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-db-subnet-group"
   })
@@ -917,7 +917,7 @@ resource "aws_db_subnet_group" "secondary" {
   provider   = aws.us_west_1
   name       = "${local.secondary_prefix}-db-subnet-group"
   subnet_ids = [aws_subnet.secondary_private.id, aws_subnet.secondary_public.id]
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-db-subnet-group"
   })
@@ -926,44 +926,44 @@ resource "aws_db_subnet_group" "secondary" {
 # RDS Primary Database
 resource "aws_db_instance" "primary" {
   provider = aws.us_east_2
-
+  
   identifier = "${local.primary_prefix}-database"
-
+  
   # Database Configuration
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.db_instance_class
-
+  
   # Storage Configuration
   allocated_storage     = 20
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-
+  
   # Database Credentials
   db_name  = "tapdb"
   username = "a${random_string.db_username.result}"
   password = random_password.db_password.result
-
+  
   # Network Configuration
   vpc_security_group_ids = [aws_security_group.rds_primary.id]
   db_subnet_group_name   = aws_db_subnet_group.primary.name
-
+  
   # Backup Configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
   # Monitoring
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
-
+  
   # Security
   skip_final_snapshot = true
   deletion_protection = false
-
+  
   # Performance Insights
   #performance_insights_enabled = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-database"
   })
@@ -972,42 +972,42 @@ resource "aws_db_instance" "primary" {
 # RDS Read Replica in Secondary Region
 resource "aws_db_instance" "secondary" {
   provider = aws.us_west_1
-
+  
   identifier = "${local.secondary_prefix}-database-replica"
-
+  
   # Replica Configuration
   replicate_source_db = aws_db_instance.primary.arn
   instance_class      = var.db_instance_class
-
+  
   # Storage Configuration
   storage_encrypted = true
-
+  
   # Network Configuration
   vpc_security_group_ids = [aws_security_group.rds_secondary.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
-
+  
   # Monitoring
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
-
+  
   # Security
   skip_final_snapshot = true
   deletion_protection = false
-
+  
   # Performance Insights
   #performance_insights_enabled = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-database-replica"
   })
-
+  
   depends_on = [aws_db_instance.primary]
 }
 
 # IAM Role for RDS Enhanced Monitoring
 resource "aws_iam_role" "rds_monitoring" {
   name = "tap-rds-monitoring-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1020,7 +1020,7 @@ resource "aws_iam_role" "rds_monitoring" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -1033,7 +1033,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # S3 Bucket for CloudFront
 resource "aws_s3_bucket" "cloudfront_bucket" {
   bucket = "tap-cloudfront-bucket-${random_string.bucket_suffix.result}"
-
+  
   tags = merge(local.common_tags, {
     Name = "tap-cloudfront-bucket"
   })
@@ -1049,7 +1049,7 @@ resource "random_string" "bucket_suffix" {
 # S3 Bucket Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudfront_bucket" {
   bucket = aws_s3_bucket.cloudfront_bucket.id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -1060,7 +1060,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudfront_bucket
 # S3 Bucket Public Access Block
 resource "aws_s3_bucket_public_access_block" "cloudfront_bucket" {
   bucket = aws_s3_bucket.cloudfront_bucket.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -1070,7 +1070,7 @@ resource "aws_s3_bucket_public_access_block" "cloudfront_bucket" {
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "cloudfront_bucket" {
   bucket = aws_s3_bucket.cloudfront_bucket.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -1092,41 +1092,41 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     origin_access_control_id = aws_cloudfront_origin_access_control.s3_oac.id
     origin_id                = "S3-${aws_s3_bucket.cloudfront_bucket.bucket}"
   }
-
+  
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-
+  
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${aws_s3_bucket.cloudfront_bucket.bucket}"
-
+    
     forwarded_values {
       query_string = false
       cookies {
         forward = "none"
       }
     }
-
+    
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
   }
-
+  
   price_class = "PriceClass_100"
-
+  
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
-
+  
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "tap-cloudfront-distribution"
   })
@@ -1135,7 +1135,7 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
 # S3 Bucket Policy for CloudFront
 resource "aws_s3_bucket_policy" "cloudfront_bucket_policy" {
   bucket = aws_s3_bucket.cloudfront_bucket.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1162,7 +1162,7 @@ resource "aws_cloudwatch_log_group" "primary_app_logs" {
   provider          = aws.us_east_2
   name              = "/aws/ec2/${local.primary_prefix}"
   retention_in_days = 14
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-log-group"
   })
@@ -1172,7 +1172,7 @@ resource "aws_cloudwatch_log_group" "secondary_app_logs" {
   provider          = aws.us_west_1
   name              = "/aws/ec2/${local.secondary_prefix}"
   retention_in_days = 14
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-log-group"
   })
@@ -1190,11 +1190,11 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-cpu-alarm"
   })
@@ -1211,11 +1211,11 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_low" {
   statistic           = "Average"
   threshold           = "10"
   alarm_description   = "This metric monitors ec2 cpu utilization"
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-cpu-low-alarm"
   })
@@ -1233,11 +1233,11 @@ resource "aws_cloudwatch_metric_alarm" "secondary_cpu_high" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.secondary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-cpu-alarm"
   })
@@ -1254,11 +1254,11 @@ resource "aws_cloudwatch_metric_alarm" "secondary_cpu_low" {
   statistic           = "Average"
   threshold           = "10"
   alarm_description   = "This metric monitors ec2 cpu utilization"
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.secondary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-cpu-low-alarm"
   })
@@ -1266,39 +1266,39 @@ resource "aws_cloudwatch_metric_alarm" "secondary_cpu_low" {
 
 # Auto Scaling Policies - Primary Region
 resource "aws_autoscaling_policy" "primary_scale_up" {
-  provider               = aws.us_east_2
-  name                   = "${local.primary_prefix}-scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-scale-up"
+  scaling_adjustment = 1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 resource "aws_autoscaling_policy" "primary_scale_down" {
-  provider               = aws.us_east_2
-  name                   = "${local.primary_prefix}-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_2
+  name               = "${local.primary_prefix}-scale-down"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Auto Scaling Policies - Secondary Region
 resource "aws_autoscaling_policy" "secondary_scale_up" {
-  provider               = aws.us_west_1
-  name                   = "${local.secondary_prefix}-scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_west_1
+  name               = "${local.secondary_prefix}-scale-up"
+  scaling_adjustment = 1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
 resource "aws_autoscaling_policy" "secondary_scale_down" {
-  provider               = aws.us_west_1
-  name                   = "${local.secondary_prefix}-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_west_1
+  name               = "${local.secondary_prefix}-scale-down"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
@@ -1315,11 +1315,11 @@ resource "aws_cloudwatch_metric_alarm" "primary_scale_up_alarm" {
   threshold           = "70"
   alarm_description   = "This metric monitors ec2 cpu utilization for scaling up"
   alarm_actions       = [aws_autoscaling_policy.primary_scale_up.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-scale-up-alarm"
   })
@@ -1337,11 +1337,11 @@ resource "aws_cloudwatch_metric_alarm" "primary_scale_down_alarm" {
   threshold           = "20"
   alarm_description   = "This metric monitors ec2 cpu utilization for scaling down"
   alarm_actions       = [aws_autoscaling_policy.primary_scale_down.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-scale-down-alarm"
   })
@@ -1360,11 +1360,11 @@ resource "aws_cloudwatch_metric_alarm" "secondary_scale_up_alarm" {
   threshold           = "70"
   alarm_description   = "This metric monitors ec2 cpu utilization for scaling up"
   alarm_actions       = [aws_autoscaling_policy.secondary_scale_up.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.secondary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-scale-up-alarm"
   })
@@ -1382,11 +1382,11 @@ resource "aws_cloudwatch_metric_alarm" "secondary_scale_down_alarm" {
   threshold           = "20"
   alarm_description   = "This metric monitors ec2 cpu utilization for scaling down"
   alarm_actions       = [aws_autoscaling_policy.secondary_scale_down.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.secondary.name
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-scale-down-alarm"
   })
@@ -1786,4 +1786,4 @@ output "environment" {
 output "common_tags" {
   description = "Common tags applied to all resources"
   value       = local.common_tags
-}
+} 

@@ -20,7 +20,7 @@ output "public_subnet_ids" {
 }
 
 output "private_subnet_ids" {
-  description = "IDs of the private subnets"
+  description = "IDs of the private subnets" 
   value       = aws_subnet.private[*].id
 }
 
@@ -258,21 +258,21 @@ output "deployment_instructions" {
   description = "Instructions for deploying and updating the application"
   value = {
     ecr_login_command = "aws ecr get-login-password --region ${data.aws_region.current.id} | docker login --username AWS --password-stdin ${aws_ecr_repository.main.repository_url}"
-
+    
     build_and_push = [
       "docker build -t ${aws_ecr_repository.main.name} .",
       "docker tag ${aws_ecr_repository.main.name}:latest ${aws_ecr_repository.main.repository_url}:latest",
       "docker push ${aws_ecr_repository.main.repository_url}:latest"
     ]
-
+    
     update_service = "aws ecs update-service --cluster ${aws_ecs_cluster.main.name} --service ${aws_ecs_service.main.name} --force-new-deployment"
-
+    
     blue_green_deployment = {
       target_group_blue  = aws_lb_target_group.blue.arn
       target_group_green = aws_lb_target_group.green.arn
       listener_arn       = aws_lb_listener.main.arn
     }
-
+    
     monitoring_dashboards = {
       ecs_cluster_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/ecs/home?region=${data.aws_region.current.id}#/clusters/${aws_ecs_cluster.main.name}"
       rds_cluster_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/rds/home?region=${data.aws_region.current.id}#database:id=${aws_rds_cluster.main.cluster_identifier}"
@@ -289,46 +289,46 @@ output "infrastructure_summary" {
   description = "Summary of deployed infrastructure"
   value = {
     environment        = var.environment
-    project_name       = var.project_name
-    region             = data.aws_region.current.id
-    vpc_cidr           = aws_vpc.main.cidr_block
+    project_name      = var.project_name
+    region            = data.aws_region.current.id
+    vpc_cidr          = aws_vpc.main.cidr_block
     availability_zones = data.aws_availability_zones.available.names
-
+    
     ecs_configuration = {
-      cluster_name  = aws_ecs_cluster.main.name
-      service_name  = aws_ecs_service.main.name
+      cluster_name   = aws_ecs_cluster.main.name
+      service_name   = aws_ecs_service.main.name
       cpu           = local.current_config.ecs_cpu
       memory        = local.current_config.ecs_memory
       desired_count = local.current_config.ecs_desired_count
       min_capacity  = local.current_config.ecs_min_capacity
       max_capacity  = local.current_config.ecs_max_capacity
     }
-
+    
     database_configuration = {
       cluster_identifier = aws_rds_cluster.main.cluster_identifier
-      engine             = aws_rds_cluster.main.engine
-      engine_version     = aws_rds_cluster.main.engine_version
-      instance_class     = local.current_config.db_instance_class
-      backup_retention   = local.current_config.backup_retention
-      multi_az           = local.current_config.multi_az
-      encryption         = aws_rds_cluster.main.storage_encrypted
+      engine            = aws_rds_cluster.main.engine
+      engine_version    = aws_rds_cluster.main.engine_version
+      instance_class    = local.current_config.db_instance_class
+      backup_retention  = local.current_config.backup_retention
+      multi_az          = local.current_config.multi_az
+      encryption        = aws_rds_cluster.main.storage_encrypted
     }
-
+    
     security_features = {
-      vpc_isolation       = true
-      kms_encryption      = true
-      secrets_manager     = true
-      security_groups     = "least-privilege"
-      container_insights  = true
-      xray_tracing        = true
-      enhanced_monitoring = true
-      deletion_protection = local.current_config.deletion_protection
+      vpc_isolation          = true
+      kms_encryption        = true
+      secrets_manager       = true
+      security_groups       = "least-privilege"
+      container_insights    = true
+      xray_tracing         = true
+      enhanced_monitoring   = true
+      deletion_protection   = local.current_config.deletion_protection
     }
-
+    
     high_availability = {
-      multi_az_deployment   = true
-      auto_scaling_enabled  = true
-      blue_green_deployment = true
+      multi_az_deployment    = true
+      auto_scaling_enabled   = true
+      blue_green_deployment  = true
       health_checks         = true
       backup_strategy       = "automated"
     }

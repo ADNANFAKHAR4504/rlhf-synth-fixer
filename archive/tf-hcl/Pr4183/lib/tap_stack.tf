@@ -115,30 +115,30 @@ locals {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-
+  
   resource_prefix = "${var.project_name}-${var.environment}"
   unique_suffix   = random_string.suffix.result
-
+  
   # Resource names with suffix
-  vpc_name              = "${local.resource_prefix}-vpc-${local.unique_suffix}"
-  igw_name              = "${local.resource_prefix}-igw-${local.unique_suffix}"
-  nat_name_prefix       = "${local.resource_prefix}-nat"
-  public_subnet_prefix  = "${local.resource_prefix}-subnet-public"
-  private_subnet_prefix = "${local.resource_prefix}-subnet-private"
-  public_rt_name        = "${local.resource_prefix}-rt-public-${local.unique_suffix}"
-  private_rt_prefix     = "${local.resource_prefix}-rt-private"
-  rds_name              = "${local.resource_prefix}-db-${local.unique_suffix}"
-  s3_bucket_name        = "${local.resource_prefix}-bucket-${local.unique_suffix}"
-  lambda_function_name  = "${local.resource_prefix}-lambda-${local.unique_suffix}"
-  cloudtrail_name       = "${local.resource_prefix}-trail-${local.unique_suffix}"
-  cloudfront_name       = "${local.resource_prefix}-cf-${local.unique_suffix}"
-  waf_name              = "${local.resource_prefix}-waf-${local.unique_suffix}"
-  config_name           = "${local.resource_prefix}-config-${local.unique_suffix}"
-  kms_alias             = "alias/${local.resource_prefix}-kms-${local.unique_suffix}"
-  sns_topic_name        = "${local.resource_prefix}-sns-${local.unique_suffix}"
-  asg_name              = "${local.resource_prefix}-asg-${local.unique_suffix}"
-  launch_template_name  = "${local.resource_prefix}-lt-${local.unique_suffix}"
-
+  vpc_name                = "${local.resource_prefix}-vpc-${local.unique_suffix}"
+  igw_name                = "${local.resource_prefix}-igw-${local.unique_suffix}"
+  nat_name_prefix         = "${local.resource_prefix}-nat"
+  public_subnet_prefix    = "${local.resource_prefix}-subnet-public"
+  private_subnet_prefix   = "${local.resource_prefix}-subnet-private"
+  public_rt_name          = "${local.resource_prefix}-rt-public-${local.unique_suffix}"
+  private_rt_prefix       = "${local.resource_prefix}-rt-private"
+  rds_name                = "${local.resource_prefix}-db-${local.unique_suffix}"
+  s3_bucket_name          = "${local.resource_prefix}-bucket-${local.unique_suffix}"
+  lambda_function_name    = "${local.resource_prefix}-lambda-${local.unique_suffix}"
+  cloudtrail_name         = "${local.resource_prefix}-trail-${local.unique_suffix}"
+  cloudfront_name         = "${local.resource_prefix}-cf-${local.unique_suffix}"
+  waf_name                = "${local.resource_prefix}-waf-${local.unique_suffix}"
+  config_name             = "${local.resource_prefix}-config-${local.unique_suffix}"
+  kms_alias               = "alias/${local.resource_prefix}-kms-${local.unique_suffix}"
+  sns_topic_name          = "${local.resource_prefix}-sns-${local.unique_suffix}"
+  asg_name                = "${local.resource_prefix}-asg-${local.unique_suffix}"
+  launch_template_name    = "${local.resource_prefix}-lt-${local.unique_suffix}"
+  
   # Database credentials
   db_master_username = "a${random_string.db_username.result}"
   db_master_password = random_password.db_password.result
@@ -421,10 +421,10 @@ resource "aws_db_instance" "main" {
   engine_version = "8.0"
   instance_class = var.db_instance_class
 
-  allocated_storage = 20
-  storage_type      = "gp2"
-  storage_encrypted = true
-  kms_key_id        = aws_kms_key.main.arn
+  allocated_storage     = 20
+  storage_type          = "gp2"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "tapdb"
   username = local.db_master_username
@@ -433,12 +433,12 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az                   = true
-  publicly_accessible        = false
+  multi_az                = true
+  publicly_accessible     = false
   auto_minor_version_upgrade = true
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
 
@@ -469,7 +469,7 @@ resource "aws_db_instance" "read_replica" {
 
 # Secrets Manager Secret
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name       = "${local.resource_prefix}-db-creds-${local.unique_suffix}"
+  name = "${local.resource_prefix}-db-creds-${local.unique_suffix}"
   kms_key_id = aws_kms_key.main.id
 
   tags = merge(local.common_tags, {
@@ -890,8 +890,8 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
 
   tags = merge(local.common_tags, {
@@ -969,14 +969,14 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = local.asg_name
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = local.asg_name
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size                  = var.min_size
-  max_size                  = var.max_size
-  desired_capacity          = var.desired_capacity
+  min_size            = var.min_size
+  max_size            = var.max_size
+  desired_capacity    = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -1012,7 +1012,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${local.resource_prefix}-scale-up-${local.unique_suffix}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -1021,7 +1021,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${local.resource_prefix}-scale-down-${local.unique_suffix}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -1031,7 +1031,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 
 # SNS Topic for Alerts
 resource "aws_sns_topic" "alerts" {
-  name              = local.sns_topic_name
+  name = local.sns_topic_name
   kms_master_key_id = aws_kms_key.main.id
 
   tags = merge(local.common_tags, {
@@ -1056,7 +1056,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions = [
+  alarm_actions       = [
     aws_autoscaling_policy.scale_up.arn,
     aws_sns_topic.alerts.arn
   ]

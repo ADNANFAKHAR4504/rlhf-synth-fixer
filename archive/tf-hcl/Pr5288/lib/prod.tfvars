@@ -22,7 +22,7 @@ desired_capacity = 3
 # DATABASE CONFIGURATION
 # ================================
 
-db_engine                = "postgres"
+db_engine                 = "postgres"
 db_engine_version        = "15.10"
 db_instance_class        = "db.t3.medium"
 db_allocated_storage     = 100
@@ -34,7 +34,7 @@ db_maintenance_window    = "sun:02:00-sun:03:00"
 # SECURITY CONFIGURATION
 # ================================
 
-allowed_cidr_blocks  = ["10.0.0.0/8"] # Highly restrictive - adjust for your needs
+allowed_cidr_blocks  = ["10.0.0.0/8"]  # Highly restrictive - adjust for your needs
 enable_vpc_flow_logs = true
 
 # ================================

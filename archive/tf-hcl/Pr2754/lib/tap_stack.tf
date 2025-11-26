@@ -555,10 +555,10 @@ resource "aws_lb_listener" "main" {
 
 # Auto Scaling Group with 3 instances across 3 AZs
 resource "aws_autoscaling_group" "main" {
-  name                      = "tap-stack-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "tap-stack-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = 3
@@ -683,15 +683,15 @@ resource "aws_db_instance" "main" {
 
   # Automatic backups
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   # Automatic minor version upgrades
   auto_minor_version_upgrade = true
-
+  
   # Multi-AZ deployment for high availability
   multi_az = true
-
+  
   # Not publicly accessible
   publicly_accessible = false
 

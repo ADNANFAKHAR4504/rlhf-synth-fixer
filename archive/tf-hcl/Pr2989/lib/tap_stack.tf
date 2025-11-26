@@ -48,7 +48,7 @@ variable "enable_mfa" {
 locals {
   # Naming convention with suffix "4"
   name_prefix = "${var.project_name}-${var.environment}"
-
+  
   # Common tags
   common_tags = {
     Environment = var.environment
@@ -56,11 +56,11 @@ locals {
     ManagedBy   = "terraform"
     Suffix      = "4"
   }
-
+  
   # Network configuration
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-
+  
   # Dynamic subnet configurations based on available AZs
   # Primary region (us-east-2) - limit to available AZs
   primary_az_count = min(length(data.aws_availability_zones.primary4.names), 3)
@@ -69,13 +69,13 @@ locals {
     "10.0.2.0/24",
     "10.0.3.0/24"
   ], 0, local.primary_az_count)
-
+  
   primary_private_subnets = slice([
     "10.0.101.0/24",
     "10.0.102.0/24",
     "10.0.103.0/24"
   ], 0, local.primary_az_count)
-
+  
   # Secondary region (us-west-1) - limit to available AZs
   secondary_az_count = min(length(data.aws_availability_zones.secondary4.names), 3)
   secondary_public_subnets = slice([
@@ -83,7 +83,7 @@ locals {
     "10.1.2.0/24",
     "10.1.3.0/24"
   ], 0, local.secondary_az_count)
-
+  
   secondary_private_subnets = slice([
     "10.1.101.0/24",
     "10.1.102.0/24",
@@ -159,11 +159,11 @@ data "aws_ami" "amazon_linux_secondary4" {
 resource "aws_kms_key" "primary_kms4" {
   provider    = aws.us_east_2
   description = "KMS key for primary region encryption"
-
-  key_usage                = "ENCRYPT_DECRYPT"
+  
+  key_usage               = "ENCRYPT_DECRYPT"
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
-  enable_key_rotation      = true
-  deletion_window_in_days  = 7
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-primary-kms-key4"
@@ -181,11 +181,11 @@ resource "aws_kms_alias" "primary_kms_alias4" {
 resource "aws_kms_key" "secondary_kms4" {
   provider    = aws.us_west_1
   description = "KMS key for secondary region encryption"
-
-  key_usage                = "ENCRYPT_DECRYPT"
+  
+  key_usage               = "ENCRYPT_DECRYPT"
   customer_master_key_spec = "SYMMETRIC_DEFAULT"
-  enable_key_rotation      = true
-  deletion_window_in_days  = 7
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-secondary-kms-key4"
@@ -785,7 +785,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_policy4" {
         Resource = "${aws_s3_bucket.cloudtrail_logs4.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "s3:x-amz-acl" = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${var.primary_region}:${data.aws_caller_identity.current4.account_id}:trail/${local.name_prefix}-cloudtrail4"
           }
         }
@@ -951,45 +951,45 @@ resource "aws_security_group" "secondary_rds_sg4" {
 # Primary RDS Instance
 resource "aws_db_instance" "primary_db4" {
   provider = aws.us_east_2
-
+  
   identifier = "${local.name_prefix}-primary-db4"
-
+  
   # Database configuration
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.db_instance_class
-
+  
   allocated_storage     = 20
   max_allocated_storage = 100
-  storage_type          = "gp2"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.primary_kms4.arn
-
+  storage_type         = "gp2"
+  storage_encrypted    = true
+  kms_key_id          = aws_kms_key.primary_kms4.arn
+  
   # Database credentials
   db_name  = "tapstack"
   username = "a${random_string.primary_db_username4.result}"
   password = random_password.primary_db_password4.result
-
+  
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.primary_db_subnet_group4.name
   vpc_security_group_ids = [aws_security_group.primary_rds_sg4.id]
   publicly_accessible    = false
-
+  
   # High Availability
   multi_az = true
-
+  
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Monitoring
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring_role4.arn
-
+  
   # Updates
   auto_minor_version_upgrade = true
-
+  
   # Deletion protection
   deletion_protection = false
   skip_final_snapshot = true
@@ -1003,41 +1003,41 @@ resource "aws_db_instance" "primary_db4" {
 # Secondary RDS Instance
 resource "aws_db_instance" "secondary_db4" {
   provider = aws.us_west_1
-
+  
   identifier = "${local.name_prefix}-secondary-db4"
-
+  
   # Database configuration
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.db_instance_class
-
+  
   allocated_storage     = 20
   max_allocated_storage = 100
-  storage_type          = "gp2"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.secondary_kms4.arn
-
+  storage_type         = "gp2"
+  storage_encrypted    = true
+  kms_key_id          = aws_kms_key.secondary_kms4.arn
+  
   # Database credentials
   db_name  = "tapstack"
   username = "a${random_string.secondary_db_username4.result}"
   password = random_password.secondary_db_password4.result
-
+  
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.secondary_db_subnet_group4.name
   vpc_security_group_ids = [aws_security_group.secondary_rds_sg4.id]
   publicly_accessible    = false
-
+  
   # High Availability
   multi_az = true
-
+  
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Updates
   auto_minor_version_upgrade = true
-
+  
   # Deletion protection
   deletion_protection = false
   skip_final_snapshot = true
@@ -1139,7 +1139,7 @@ data "archive_file" "lambda_zip4" {
   type        = "zip"
   output_path = "lambda_function.zip"
   source {
-    content  = <<EOF
+    content = <<EOF
 import boto3
 import json
 
@@ -1240,14 +1240,14 @@ resource "aws_cloudtrail" "main4" {
   s3_key_prefix  = "cloudtrail-logs"
 
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
+  is_multi_region_trail        = true
+  enable_logging               = true
 
   kms_key_id = aws_kms_key.primary_kms4.arn
 
   event_selector {
-    read_write_type                  = "All"
-    include_management_events        = true
+    read_write_type                 = "All"
+    include_management_events       = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -1411,7 +1411,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail_log_group4" {
   provider          = aws.us_east_2
   name              = "/aws/cloudtrail/${local.name_prefix}-log-group4"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.primary_kms4.arn
+  kms_key_id       = aws_kms_key.primary_kms4.arn
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-cloudtrail-log-group4"

@@ -280,7 +280,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
         Principal = {
           AWS = "*"
         }
-        Action = "s3:*"
+        Action   = "s3:*"
         Resource = [
           aws_s3_bucket.cloudtrail_logs.arn,
           "${aws_s3_bucket.cloudtrail_logs.arn}/*"
@@ -409,7 +409,7 @@ resource "aws_s3_bucket_policy" "config_logs" {
         Principal = {
           AWS = "*"
         }
-        Action = "s3:*"
+        Action   = "s3:*"
         Resource = [
           aws_s3_bucket.config_logs.arn,
           "${aws_s3_bucket.config_logs.arn}/*"
@@ -1023,11 +1023,11 @@ resource "aws_sns_topic_subscription" "compliance_reports_email" {
 
 # DynamoDB table for violation tracking
 resource "aws_dynamodb_table" "violations" {
-  name             = "${var.project_name}-violations"
-  billing_mode     = "PAY_PER_REQUEST"
-  hash_key         = "violation_id"
-  range_key        = "timestamp"
-  stream_enabled   = true
+  name           = "${var.project_name}-violations"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "violation_id"
+  range_key      = "timestamp"
+  stream_enabled = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
@@ -1092,11 +1092,11 @@ resource "aws_dynamodb_table" "violations" {
 
 # DynamoDB table for remediation history
 resource "aws_dynamodb_table" "remediation_history" {
-  name             = "${var.project_name}-remediation-history"
-  billing_mode     = "PAY_PER_REQUEST"
-  hash_key         = "remediation_id"
-  range_key        = "timestamp"
-  stream_enabled   = true
+  name           = "${var.project_name}-remediation-history"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "remediation_id"
+  range_key      = "timestamp"
+  stream_enabled = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
@@ -1149,10 +1149,10 @@ resource "aws_dynamodb_table" "remediation_history" {
 
 # DynamoDB table for compliance state
 resource "aws_dynamodb_table" "compliance_state" {
-  name         = "${var.project_name}-compliance-state"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "account_id"
-  range_key    = "resource_id"
+  name           = "${var.project_name}-compliance-state"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "account_id"
+  range_key      = "resource_id"
 
   attribute {
     name = "account_id"
@@ -1346,7 +1346,7 @@ data "archive_file" "lambda_stop_instances" {
   output_path = "${path.module}/lambda-stop-instances.zip"
 
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os
@@ -1455,10 +1455,10 @@ resource "aws_lambda_function" "stop_non_compliant_instances" {
 
   environment {
     variables = {
-      VIOLATIONS_TABLE  = aws_dynamodb_table.violations.name
-      REMEDIATION_TABLE = aws_dynamodb_table.remediation_history.name
-      SNS_TOPIC_ARN     = aws_sns_topic.critical_violations.arn
-      AUTO_REMEDIATE    = tostring(var.auto_remediation_enabled)
+      VIOLATIONS_TABLE   = aws_dynamodb_table.violations.name
+      REMEDIATION_TABLE  = aws_dynamodb_table.remediation_history.name
+      SNS_TOPIC_ARN      = aws_sns_topic.critical_violations.arn
+      AUTO_REMEDIATE     = tostring(var.auto_remediation_enabled)
     }
   }
 
@@ -1478,7 +1478,7 @@ data "archive_file" "lambda_enable_s3_encryption" {
   output_path = "${path.module}/lambda-enable-s3-encryption.zip"
 
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os
@@ -1599,10 +1599,10 @@ resource "aws_lambda_function" "enable_s3_encryption" {
 
   environment {
     variables = {
-      VIOLATIONS_TABLE  = aws_dynamodb_table.violations.name
-      REMEDIATION_TABLE = aws_dynamodb_table.remediation_history.name
-      SNS_TOPIC_ARN     = aws_sns_topic.security_findings.arn
-      AUTO_REMEDIATE    = tostring(var.auto_remediation_enabled)
+      VIOLATIONS_TABLE   = aws_dynamodb_table.violations.name
+      REMEDIATION_TABLE  = aws_dynamodb_table.remediation_history.name
+      SNS_TOPIC_ARN      = aws_sns_topic.security_findings.arn
+      AUTO_REMEDIATE     = tostring(var.auto_remediation_enabled)
     }
   }
 
@@ -1622,7 +1622,7 @@ data "archive_file" "lambda_enable_s3_versioning" {
   output_path = "${path.module}/lambda-enable-s3-versioning.zip"
 
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os
@@ -1736,10 +1736,10 @@ resource "aws_lambda_function" "enable_s3_versioning" {
 
   environment {
     variables = {
-      VIOLATIONS_TABLE  = aws_dynamodb_table.violations.name
-      REMEDIATION_TABLE = aws_dynamodb_table.remediation_history.name
-      SNS_TOPIC_ARN     = aws_sns_topic.security_findings.arn
-      AUTO_REMEDIATE    = tostring(var.auto_remediation_enabled)
+      VIOLATIONS_TABLE   = aws_dynamodb_table.violations.name
+      REMEDIATION_TABLE  = aws_dynamodb_table.remediation_history.name
+      SNS_TOPIC_ARN      = aws_sns_topic.security_findings.arn
+      AUTO_REMEDIATE     = tostring(var.auto_remediation_enabled)
     }
   }
 
@@ -1759,7 +1759,7 @@ data "archive_file" "lambda_block_s3_public_access" {
   output_path = "${path.module}/lambda-block-s3-public-access.zip"
 
   source {
-    content  = <<EOF
+    content = <<EOF
 import json
 import boto3
 import os
@@ -1876,10 +1876,10 @@ resource "aws_lambda_function" "block_s3_public_access" {
 
   environment {
     variables = {
-      VIOLATIONS_TABLE  = aws_dynamodb_table.violations.name
-      REMEDIATION_TABLE = aws_dynamodb_table.remediation_history.name
-      SNS_TOPIC_ARN     = aws_sns_topic.critical_violations.arn
-      AUTO_REMEDIATE    = tostring(var.auto_remediation_enabled)
+      VIOLATIONS_TABLE   = aws_dynamodb_table.violations.name
+      REMEDIATION_TABLE  = aws_dynamodb_table.remediation_history.name
+      SNS_TOPIC_ARN      = aws_sns_topic.critical_violations.arn
+      AUTO_REMEDIATE     = tostring(var.auto_remediation_enabled)
     }
   }
 
@@ -2166,9 +2166,9 @@ resource "aws_cloudwatch_dashboard" "compliance_overview" {
       {
         type = "log"
         properties = {
-          query  = "SOURCE '${aws_cloudwatch_log_group.cloudtrail.name}' | fields @timestamp, @message | sort @timestamp desc | limit 20"
-          region = data.aws_region.current.name
-          title  = "Recent CloudTrail Events"
+          query   = "SOURCE '${aws_cloudwatch_log_group.cloudtrail.name}' | fields @timestamp, @message | sort @timestamp desc | limit 20"
+          region  = data.aws_region.current.name
+          title   = "Recent CloudTrail Events"
         }
       }
     ]

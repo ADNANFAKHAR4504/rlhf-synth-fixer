@@ -14,12 +14,12 @@ locals {
 
 resource "aws_kms_key" "master" {
   description                        = "Master KMS key with CloudHSM"
-  customer_master_key_spec           = "SYMMETRIC_DEFAULT"
-  key_usage                          = "ENCRYPT_DECRYPT"
-  custom_key_store_id                = aws_kms_custom_key_store.cloudhsm.id
-  enable_key_rotation                = true
-  rotation_period_in_days            = 90
-  deletion_window_in_days            = 30
+  customer_master_key_spec          = "SYMMETRIC_DEFAULT"
+  key_usage                         = "ENCRYPT_DECRYPT"
+  custom_key_store_id               = aws_kms_custom_key_store.cloudhsm.id
+  enable_key_rotation               = true
+  rotation_period_in_days           = 90
+  deletion_window_in_days           = 30
   bypass_policy_lockout_safety_check = false
 
   tags = local.tags
@@ -30,7 +30,7 @@ resource "aws_kms_custom_key_store" "cloudhsm" {
   cloud_hsm_cluster_id  = var.cloudhsm_cluster_id
 
   trust_anchor_certificate = file("${path.module}/customerCA.crt")
-  key_store_password       = random_password.keystore.result
+  key_store_password      = random_password.keystore.result
 }
 
 resource "random_password" "keystore" {
@@ -202,11 +202,11 @@ resource "aws_networkfirewall_rule_group" "suricata_rules" {
       stateful_rule {
         action = "DROP"
         header {
-          protocol         = "HTTP"
-          source           = "$HOME_NET"
-          source_port      = "ANY"
-          direction        = "ANY"
-          destination      = "$EXTERNAL_NET"
+          protocol    = "HTTP"
+          source      = "$HOME_NET"
+          source_port = "ANY"
+          direction   = "ANY"
+          destination = "$EXTERNAL_NET"
           destination_port = "ANY"
         }
         rule_option {
@@ -344,11 +344,11 @@ resource "aws_s3_bucket_policy" "logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyUnencryptedObjectUploads"
-        Effect    = "Deny"
+        Sid    = "DenyUnencryptedObjectUploads"
+        Effect = "Deny"
         Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.logs.arn}/*"
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -356,10 +356,10 @@ resource "aws_s3_bucket_policy" "logs" {
         }
       },
       {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
+        Sid    = "DenyInsecureConnections"
+        Effect = "Deny"
         Principal = "*"
-        Action    = "s3:*"
+        Action   = "s3:*"
         Resource = [
           aws_s3_bucket.logs.arn,
           "${aws_s3_bucket.logs.arn}/*"
@@ -484,7 +484,7 @@ resource "aws_cloudtrail" "main" {
 
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${var.environment_suffix}-cloudtrail-${data.aws_caller_identity.current.account_id}-${var.region}"
-
+  
   tags = local.tags
 }
 
@@ -557,11 +557,11 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         }
       },
       {
-        Sid       = "DenyUnencryptedObjectUploads"
-        Effect    = "Deny"
+        Sid    = "DenyUnencryptedObjectUploads"
+        Effect = "Deny"
         Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -569,10 +569,10 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         }
       },
       {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
+        Sid    = "DenyInsecureConnections"
+        Effect = "Deny"
         Principal = "*"
-        Action    = "s3:*"
+        Action   = "s3:*"
         Resource = [
           aws_s3_bucket.cloudtrail.arn,
           "${aws_s3_bucket.cloudtrail.arn}/*"
@@ -1074,9 +1074,9 @@ resource "aws_iam_policy" "ip_restrict" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Deny"
-        Action   = "*"
-        Resource = "*"
+        Effect    = "Deny"
+        Action    = "*"
+        Resource  = "*"
         Condition = {
           IpAddressNotEquals = {
             "aws:SourceIp" = var.allowed_ips
@@ -1109,8 +1109,8 @@ resource "random_password" "rds_master" {
 }
 
 resource "aws_secretsmanager_secret_rotation" "rds_master" {
-  secret_id           = aws_secretsmanager_secret.rds_master.id
-  rotation_lambda_arn = aws_lambda_function.rotate_secret.arn
+  secret_id               = aws_secretsmanager_secret.rds_master.id
+  rotation_lambda_arn     = aws_lambda_function.rotate_secret.arn
 
   rotation_rules {
     automatically_after_days = 30
@@ -1214,11 +1214,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data_ssec" {
 }
 
 resource "aws_ec2_host" "main" {
-  count             = 3
-  availability_zone = local.azs[count.index]
-  instance_type     = "m5.large"
-  host_recovery     = "on"
-  auto_placement    = "on"
+  count               = 3
+  availability_zone   = local.azs[count.index]
+  instance_type       = "m5.large"
+  host_recovery       = "on"
+  auto_placement      = "on"
 
   tags = merge(local.tags, {
     Name = "${var.environment_suffix}-dedicated-host-${count.index + 1}"
@@ -1229,7 +1229,7 @@ resource "aws_launch_template" "secure" {
   name_prefix = "${var.environment_suffix}-secure-"
 
   instance_type = "m5.large"
-
+  
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
@@ -1256,9 +1256,9 @@ resource "aws_launch_template" "secure" {
   }
 
   placement {
-    affinity = "host"
-    tenancy  = "host"
-    host_id  = aws_ec2_host.main[0].id
+    affinity    = "host"
+    tenancy     = "host"
+    host_id     = aws_ec2_host.main[0].id
   }
 
   iam_instance_profile {
@@ -1392,8 +1392,8 @@ resource "aws_fsx_lustre_file_system" "main" {
   security_group_ids = [aws_security_group.fsx.id]
 
   log_configuration {
-    level       = "WARN_ERROR"
-    destination = aws_cloudwatch_log_group.fsx.arn
+    level        = "WARN_ERROR"
+    destination  = aws_cloudwatch_log_group.fsx.arn
   }
 
   tags = merge(local.tags, {
@@ -1496,14 +1496,14 @@ resource "aws_security_group" "aurora" {
 }
 
 resource "aws_rds_cluster_instance" "aurora" {
-  count               = 2
-  identifier          = "${var.environment_suffix}-aurora-instance-${count.index + 1}"
-  cluster_identifier  = aws_rds_cluster.aurora.id
-  instance_class      = "db.r6g.large"
-  engine              = aws_rds_cluster.aurora.engine
-  engine_version      = aws_rds_cluster.aurora.engine_version
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.rds_monitoring.arn
+  count                = 2
+  identifier           = "${var.environment_suffix}-aurora-instance-${count.index + 1}"
+  cluster_identifier   = aws_rds_cluster.aurora.id
+  instance_class       = "db.r6g.large"
+  engine               = aws_rds_cluster.aurora.engine
+  engine_version       = aws_rds_cluster.aurora.engine_version
+  monitoring_interval  = 60
+  monitoring_role_arn  = aws_iam_role.rds_monitoring.arn
 
   performance_insights_enabled    = true
   performance_insights_kms_key_id = aws_kms_key.master.arn

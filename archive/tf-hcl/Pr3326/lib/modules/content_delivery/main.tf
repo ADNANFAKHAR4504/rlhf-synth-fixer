@@ -7,7 +7,7 @@ resource "aws_cloudfront_distribution" "main" {
   origin {
     domain_name = var.alb_dns_name
     origin_id   = "ALB"
-
+    
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -15,24 +15,24 @@ resource "aws_cloudfront_distribution" "main" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
-
+  
   origin {
     domain_name = var.s3_bucket_domain
     origin_id   = "S3"
-
+    
     s3_origin_config {
       origin_access_identity = aws_cloudfront_origin_access_identity.main.cloudfront_access_identity_path
     }
   }
-
+  
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "CloudFront distribution for media streaming platform"
   default_root_object = "index.html"
-
+  
   # Price class determines the locations where content will be served from
   price_class = "PriceClass_All"
-
+  
   # Geo-restriction
   restrictions {
     geo_restriction {
@@ -40,85 +40,85 @@ resource "aws_cloudfront_distribution" "main" {
       locations        = var.geo_restrictions.locations
     }
   }
-
+  
   # Default cache behavior (S3 origin)
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "S3"
-
+    
     forwarded_values {
       query_string = false
-
+      
       cookies {
         forward = "none"
       }
     }
-
+    
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = var.ttl_settings.min_ttl
     default_ttl            = var.ttl_settings.default_ttl
     max_ttl                = var.ttl_settings.max_ttl
     compress               = true
-
+    
     lambda_function_association {
       event_type   = "viewer-request"
       lambda_arn   = aws_lambda_function.edge_request.qualified_arn
       include_body = false
     }
   }
-
+  
   # Additional cache behavior for API requests (ALB origin)
   ordered_cache_behavior {
     path_pattern     = "/api/*"
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "ALB"
-
+    
     forwarded_values {
       query_string = true
       headers      = ["Authorization", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
-
+      
       cookies {
         forward = "all"
       }
     }
-
+    
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 0
     max_ttl                = 0
   }
-
+  
   # Cache behavior for video content
   ordered_cache_behavior {
     path_pattern     = "/videos/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "S3"
-
+    
     forwarded_values {
       query_string = true
       headers      = ["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
-
+      
       cookies {
         forward = "none"
       }
     }
-
+    
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = var.ttl_settings.min_ttl
     default_ttl            = var.ttl_settings.default_ttl
     max_ttl                = var.ttl_settings.max_ttl
     compress               = true
   }
-
+  
   viewer_certificate {
     acm_certificate_arn      = var.certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
-
+  
   tags = {
     Name = "media-streaming-cdn"
   }
@@ -127,7 +127,7 @@ resource "aws_cloudfront_distribution" "main" {
 # Lambda@Edge for request routing and A/B testing
 resource "aws_iam_role" "lambda_edge" {
   name = "lambda-edge-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -145,7 +145,7 @@ resource "aws_iam_role" "lambda_edge" {
 resource "aws_iam_role_policy" "lambda_edge" {
   name = "lambda-edge-policy"
   role = aws_iam_role.lambda_edge.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -179,7 +179,7 @@ resource "aws_lambda_function" "edge_request" {
   handler       = "index.handler"
   runtime       = "nodejs14.x"
   publish       = true
-
+  
   lifecycle {
     ignore_changes = [filename]
   }

@@ -193,12 +193,12 @@ resource "aws_iam_instance_profile" "prod_ec2_profile" {
 }
 
 resource "aws_instance" "prod_server" {
-  instance_type           = "t3.micro"
-  ami                     = data.aws_ami.amazon_linux_2.id
-  key_name                = var.key_name
-  vpc_security_group_ids  = [aws_security_group.prod_ec2_sg.id]
-  iam_instance_profile    = aws_iam_instance_profile.prod_ec2_profile.name
-  monitoring              = true
+  instance_type = "t3.micro"
+  ami           = data.aws_ami.amazon_linux_2.id
+  key_name      = var.key_name
+  vpc_security_group_ids = [aws_security_group.prod_ec2_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.prod_ec2_profile.name
+  monitoring = true
   disable_api_termination = false # Set to true in actual production
   metadata_options {
     http_endpoint               = "enabled"

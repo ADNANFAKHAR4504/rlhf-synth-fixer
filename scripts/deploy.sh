@@ -38,9 +38,6 @@ export TF_VAR_team=${TEAM}
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
 export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
 
-# Ensure terraform receives environment suffix variable
-export TF_VAR_environment_suffix=${TF_VAR_environment_suffix:-${ENVIRONMENT_SUFFIX}}
-
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "  Repository: $REPOSITORY"

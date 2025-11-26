@@ -160,7 +160,7 @@ variable "termination_policies" {
   default     = ["Default"]
   validation {
     condition = alltrue([
-      for policy in var.termination_policies :
+      for policy in var.termination_policies : 
       contains(["OldestInstance", "NewestInstance", "OldestLaunchConfiguration", "OldestLaunchTemplate", "ClosestToNextInstanceHour", "Default"], policy)
     ])
     error_message = "Termination policies must be valid ASG termination policies."
@@ -301,7 +301,7 @@ variable "block_device_mappings" {
     iops                  = number
     throughput            = number
     encrypted             = bool
-    kms_key_id            = string
+    kms_key_id           = string
     delete_on_termination = bool
   }))
   default = [
@@ -312,7 +312,7 @@ variable "block_device_mappings" {
       iops                  = 3000
       throughput            = 125
       encrypted             = true
-      kms_key_id            = ""
+      kms_key_id           = ""
       delete_on_termination = true
     }
   ]

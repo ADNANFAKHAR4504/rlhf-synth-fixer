@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: Serverless fraud detection pipeline with EventBridge, Lambda, DynamoDB, and SNS
+main: bin/tap.ts
