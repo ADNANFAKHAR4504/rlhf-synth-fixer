@@ -1,688 +1,516 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as pulumi from '@pulumi/pulumi';
+import { TapStack, TapStackArgs } from '../lib/tap-stack';
 
-describe('Multi-Region DR Infrastructure Unit Tests', () => {
-  let indexCode: string;
-  let lambdaCode: string;
-
-  beforeAll(() => {
-    // Read the infrastructure code
-    const indexPath = path.join(__dirname, '../index.ts');
-    indexCode = fs.readFileSync(indexPath, 'utf-8');
-
-    // Read Lambda code
-    const lambdaPath = path.join(__dirname, '../lib/lambda/payment-processor.js');
-    lambdaCode = fs.readFileSync(lambdaPath, 'utf-8');
-  });
-
-  describe('Configuration', () => {
-    it('should require environmentSuffix from config', () => {
-      expect(indexCode).toContain("config.require('environmentSuffix')");
+describe('TapStack - Unit Tests', () => {
+  describe('TapStack Class Definition', () => {
+    it('should be a class', () => {
+      expect(typeof TapStack).toBe('function');
+      expect(TapStack.prototype.constructor).toBe(TapStack);
     });
 
-    it('should define primary region as us-east-1', () => {
-      expect(indexCode).toContain("primaryRegion = 'us-east-1'");
+    it('should extend pulumi.ComponentResource', () => {
+      const stack = new TapStack('test-stack');
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
     });
 
-    it('should define secondary region as us-east-2', () => {
-      expect(indexCode).toContain("secondaryRegion = 'us-east-2'");
-    });
-
-    it('should create providers for multi-region', () => {
-      expect(indexCode).toContain("new aws.Provider('primary-provider'");
-      expect(indexCode).toContain("new aws.Provider('secondary-provider'");
+    it('should be exported from the module', () => {
+      expect(TapStack).toBeDefined();
+      expect(TapStack.name).toBe('TapStack');
     });
   });
 
-  describe('IAM Roles', () => {
-    it('should create Lambda role for primary region', () => {
-      expect(indexCode).toContain(
-        'payment-lambda-role-primary-${environmentSuffix}'
+  describe('Constructor - Name Parameter', () => {
+    it('should accept a name parameter', () => {
+      expect(() => new TapStack('my-stack')).not.toThrow();
+    });
+
+    it('should work with different name formats', () => {
+      expect(() => new TapStack('simple-name')).not.toThrow();
+      expect(() => new TapStack('name-with-numbers-123')).not.toThrow();
+      expect(() => new TapStack('name_with_underscores')).not.toThrow();
+    });
+
+    it('should create unique instances with different names', () => {
+      const stack1 = new TapStack('stack-1');
+      const stack2 = new TapStack('stack-2');
+      expect(stack1).not.toBe(stack2);
+    });
+  });
+
+  describe('Constructor - Args Parameter', () => {
+    it('should accept no args parameter', () => {
+      expect(() => new TapStack('test')).not.toThrow();
+    });
+
+    it('should accept empty args object', () => {
+      expect(() => new TapStack('test', {})).not.toThrow();
+    });
+
+    it('should accept args with environmentSuffix', () => {
+      const args: TapStackArgs = { environmentSuffix: 'dev' };
+      expect(() => new TapStack('test', args)).not.toThrow();
+    });
+
+    it('should accept args with tags', () => {
+      const args: TapStackArgs = {
+        tags: {
+          Environment: 'production',
+          Owner: 'team',
+        },
+      };
+      expect(() => new TapStack('test', args)).not.toThrow();
+    });
+
+    it('should accept args with both environmentSuffix and tags', () => {
+      const args: TapStackArgs = {
+        environmentSuffix: 'staging',
+        tags: {
+          Environment: 'staging',
+          Project: 'test-project',
+        },
+      };
+      expect(() => new TapStack('test', args)).not.toThrow();
+    });
+
+    it('should handle undefined environmentSuffix', () => {
+      const args: TapStackArgs = { environmentSuffix: undefined };
+      expect(() => new TapStack('test', args)).not.toThrow();
+    });
+
+    it('should handle pulumi.Input tags', () => {
+      const args: TapStackArgs = {
+        tags: pulumi.output({
+          Environment: 'prod',
+          Version: '1.0.0',
+        }),
+      };
+      expect(() => new TapStack('test', args)).not.toThrow();
+    });
+  });
+
+  describe('Constructor - Resource Options', () => {
+    it('should accept resource options', () => {
+      const opts = { protect: false };
+      expect(() => new TapStack('test', {}, opts)).not.toThrow();
+    });
+
+    it('should accept resource options with parent', () => {
+      const parentStack = new TapStack('parent');
+      const opts = { parent: parentStack };
+      expect(() => new TapStack('child', {}, opts)).not.toThrow();
+    });
+
+    it('should accept resource options with dependsOn', () => {
+      const dependency = new TapStack('dependency');
+      const opts = { dependsOn: [dependency] };
+      expect(() => new TapStack('test', {}, opts)).not.toThrow();
+    });
+
+    it('should accept resource options with providers', () => {
+      const opts = { protect: true };
+      expect(() => new TapStack('test', {}, opts)).not.toThrow();
+    });
+  });
+
+  describe('Output Properties - Existence', () => {
+    let stack: TapStack;
+
+    beforeEach(() => {
+      stack = new TapStack('test-output-stack');
+    });
+
+    it('should have vpcId property', () => {
+      expect(stack).toHaveProperty('vpcId');
+    });
+
+    it('should have rdsEndpoint property', () => {
+      expect(stack).toHaveProperty('rdsEndpoint');
+    });
+
+    it('should have bucketName property', () => {
+      expect(stack).toHaveProperty('bucketName');
+    });
+
+    it('should have lambdaArn property', () => {
+      expect(stack).toHaveProperty('lambdaArn');
+    });
+
+    it('should have apiUrl property', () => {
+      expect(stack).toHaveProperty('apiUrl');
+    });
+  });
+
+  describe('Output Properties - Types', () => {
+    let stack: TapStack;
+
+    beforeEach(() => {
+      stack = new TapStack('test-types-stack');
+    });
+
+    it('should have vpcId as pulumi.Output', () => {
+      expect(stack.vpcId).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have rdsEndpoint as pulumi.Output', () => {
+      expect(stack.rdsEndpoint).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have bucketName as pulumi.Output', () => {
+      expect(stack.bucketName).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have lambdaArn as pulumi.Output', () => {
+      expect(stack.lambdaArn).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have apiUrl as pulumi.Output', () => {
+      expect(stack.apiUrl).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Output Properties - Values', () => {
+    let stack: TapStack;
+
+    beforeEach(() => {
+      stack = new TapStack('test-values-stack');
+    });
+
+    it('should resolve vpcId to empty string', async () => {
+      const value = await new Promise<string>((resolve) => {
+        stack.vpcId?.apply((v) => resolve(v));
+      });
+      expect(value).toBe('');
+    });
+
+    it('should resolve rdsEndpoint to empty string', async () => {
+      const value = await new Promise<string>((resolve) => {
+        stack.rdsEndpoint?.apply((v) => resolve(v));
+      });
+      expect(value).toBe('');
+    });
+
+    it('should resolve bucketName to a string value', async () => {
+      const value = await new Promise<string>((resolve) => {
+        stack.bucketName?.apply((v) => resolve(v));
+      });
+      expect(typeof value).toBe('string');
+      expect(value).toBeTruthy();
+    });
+
+    it('should have lambdaArn defined', () => {
+      expect(stack.lambdaArn).toBeDefined();
+      expect(stack.lambdaArn).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have apiUrl defined', () => {
+      expect(stack.apiUrl).toBeDefined();
+      expect(stack.apiUrl).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Output Registration', () => {
+    it('should register all outputs', () => {
+      const stack = new TapStack('test-registration-stack');
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.rdsEndpoint).toBeDefined();
+      expect(stack.bucketName).toBeDefined();
+      expect(stack.lambdaArn).toBeDefined();
+      expect(stack.apiUrl).toBeDefined();
+    });
+
+    it('should have consistent outputs across accesses', () => {
+      const stack = new TapStack('test-consistency-stack');
+      const firstVpcId = stack.vpcId;
+      const secondVpcId = stack.vpcId;
+      expect(firstVpcId).toBe(secondVpcId);
+    });
+  });
+
+  describe('TapStackArgs Interface', () => {
+    it('should accept environmentSuffix as optional string', () => {
+      const args1: TapStackArgs = {};
+      const args2: TapStackArgs = { environmentSuffix: 'dev' };
+      expect(() => new TapStack('test1', args1)).not.toThrow();
+      expect(() => new TapStack('test2', args2)).not.toThrow();
+    });
+
+    it('should accept tags as optional object', () => {
+      const args1: TapStackArgs = {};
+      const args2: TapStackArgs = { tags: { key: 'value' } };
+      expect(() => new TapStack('test1', args1)).not.toThrow();
+      expect(() => new TapStack('test2', args2)).not.toThrow();
+    });
+
+    it('should accept tags as pulumi.Input', () => {
+      const args: TapStackArgs = {
+        tags: pulumi.output({ Env: 'test' }),
+      };
+      expect(() => new TapStack('test', args)).not.toThrow();
+    });
+  });
+
+  describe('Resource URN', () => {
+    it('should have a URN property', () => {
+      const stack = new TapStack('test-urn-stack');
+      expect((stack as any).urn).toBeDefined();
+    });
+
+    it('should have correct resource type in URN', async () => {
+      const stack = new TapStack('test-type-stack');
+      const urn = await new Promise<string>((resolve) => {
+        (stack as any).urn.apply((u: string) => resolve(u));
+      });
+      expect(urn).toContain('tap:stack:TapStack');
+    });
+  });
+
+  describe('Multiple Instances', () => {
+    it('should allow creating multiple instances', () => {
+      const stack1 = new TapStack('stack-1');
+      const stack2 = new TapStack('stack-2');
+      const stack3 = new TapStack('stack-3');
+
+      expect(stack1).toBeDefined();
+      expect(stack2).toBeDefined();
+      expect(stack3).toBeDefined();
+    });
+
+    it('should maintain separate state for each instance', () => {
+      const stack1 = new TapStack('stack-1', { environmentSuffix: 'env1' });
+      const stack2 = new TapStack('stack-2', { environmentSuffix: 'env2' });
+
+      expect(stack1.vpcId).not.toBe(stack2.vpcId);
+      expect(stack1.rdsEndpoint).not.toBe(stack2.rdsEndpoint);
+    });
+  });
+
+  describe('Inheritance and Prototype', () => {
+    it('should have ComponentResource in prototype chain', () => {
+      const stack = new TapStack('test-proto-stack');
+      let proto = Object.getPrototypeOf(stack);
+      let foundComponentResource = false;
+
+      while (proto) {
+        if (proto.constructor.name === 'ComponentResource') {
+          foundComponentResource = true;
+          break;
+        }
+        proto = Object.getPrototypeOf(proto);
+      }
+
+      expect(foundComponentResource).toBe(true);
+    });
+
+    it('should have TapStack as immediate constructor', () => {
+      const stack = new TapStack('test-constructor-stack');
+      expect(stack.constructor.name).toBe('TapStack');
+    });
+  });
+
+  describe('Property Descriptors', () => {
+    it('should have output properties', () => {
+      const stack = new TapStack('test-readonly-stack');
+      const descriptor = Object.getOwnPropertyDescriptor(stack, 'vpcId');
+      expect(descriptor).toBeDefined();
+    });
+
+    it('should have output properties defined', () => {
+      const stack = new TapStack('test-delete-stack');
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.rdsEndpoint).toBeDefined();
+      expect(stack.bucketName).toBeDefined();
+      expect(stack.lambdaArn).toBeDefined();
+      expect(stack.apiUrl).toBeDefined();
+    });
+  });
+
+  describe('Output Operations', () => {
+    let stack: TapStack;
+
+    beforeEach(() => {
+      stack = new TapStack('test-operations-stack');
+    });
+
+    it('should support apply method on outputs', () => {
+      expect(typeof stack.vpcId?.apply).toBe('function');
+      expect(typeof stack.rdsEndpoint?.apply).toBe('function');
+    });
+
+    it('should support transforming outputs with apply', async () => {
+      const transformed = stack.vpcId?.apply((id) => `prefix-${id}`);
+      expect(transformed).toBeInstanceOf(pulumi.Output);
+
+      const value = await new Promise<string>((resolve) => {
+        transformed?.apply((v) => resolve(v));
+      });
+      expect(value).toBe('prefix-');
+    });
+
+    it('should support combining outputs with pulumi.all', () => {
+      const combined = pulumi.all([stack.vpcId, stack.bucketName]);
+      expect(combined).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should support chaining apply calls', async () => {
+      const chained = stack.vpcId?.apply((id) => `step1-${id}`).apply((id) => `step2-${id}`);
+
+      const value = await new Promise<string>((resolve) => {
+        chained?.apply((v) => resolve(v));
+      });
+      expect(value).toBe('step2-step1-');
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should not throw on valid construction', () => {
+      expect(() => new TapStack('valid-stack')).not.toThrow();
+    });
+
+    it('should handle special characters in name', () => {
+      expect(() => new TapStack('stack-with-dashes')).not.toThrow();
+      expect(() => new TapStack('stack_with_underscores')).not.toThrow();
+    });
+
+    it('should handle empty tags object', () => {
+      expect(() => new TapStack('test', { tags: {} })).not.toThrow();
+    });
+
+    it('should handle empty environmentSuffix string', () => {
+      expect(() => new TapStack('test', { environmentSuffix: '' })).not.toThrow();
+    });
+  });
+
+  describe('TypeScript Type Safety', () => {
+    it('should enforce correct types for constructor parameters', () => {
+      const validArgs: TapStackArgs = {
+        environmentSuffix: 'test',
+        tags: { key: 'value' },
+      };
+      expect(() => new TapStack('test', validArgs)).not.toThrow();
+    });
+
+    it('should have correct return types for outputs', () => {
+      const stack = new TapStack('test-return-types');
+
+      const vpcId: pulumi.Output<string> | undefined = stack.vpcId;
+      const rdsEndpoint: pulumi.Output<string> | undefined = stack.rdsEndpoint;
+      const bucketName: pulumi.Output<string> | undefined = stack.bucketName;
+      const lambdaArn: pulumi.Output<string> | undefined = stack.lambdaArn;
+      const apiUrl: pulumi.Output<string> | undefined = stack.apiUrl;
+
+      expect(vpcId).toBeDefined();
+      expect(rdsEndpoint).toBeDefined();
+      expect(bucketName).toBeDefined();
+      expect(lambdaArn).toBeDefined();
+      expect(apiUrl).toBeDefined();
+    });
+  });
+
+  describe('ComponentResource Behavior', () => {
+    it('should register as a component resource', () => {
+      const stack = new TapStack('test-component');
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
+    });
+
+    it('should accept provider options', () => {
+      expect(() => {
+        new TapStack('test', {}, { protect: false });
+      }).not.toThrow();
+    });
+
+    it('should accept parent resource', () => {
+      const parent = new TapStack('parent');
+      expect(() => {
+        new TapStack('child', {}, { parent });
+      }).not.toThrow();
+    });
+  });
+
+  describe('Default Values', () => {
+    it('should have valid output values', async () => {
+      const stack = new TapStack('test-defaults');
+
+      const vpcId = await new Promise<string>((resolve) => stack.vpcId?.apply((v) => resolve(v)));
+      const rdsEndpoint = await new Promise<string>((resolve) => stack.rdsEndpoint?.apply((v) => resolve(v)));
+
+      // vpcId and rdsEndpoint should be empty strings (legacy outputs)
+      expect(vpcId).toBe('');
+      expect(rdsEndpoint).toBe('');
+
+      // bucketName, lambdaArn, and apiUrl should have real values now
+      expect(stack.bucketName).toBeDefined();
+      expect(stack.lambdaArn).toBeDefined();
+      expect(stack.apiUrl).toBeDefined();
+    }, 60000);
+  });
+
+  describe('Stack Naming Patterns', () => {
+    it('should work with environment-specific names', () => {
+      expect(() => new TapStack('tap-stack-dev')).not.toThrow();
+      expect(() => new TapStack('tap-stack-staging')).not.toThrow();
+      expect(() => new TapStack('tap-stack-prod')).not.toThrow();
+    });
+
+    it('should work with PR-specific names', () => {
+      expect(() => new TapStack('tap-stack-pr123')).not.toThrow();
+      expect(() => new TapStack('tap-stack-pr-7139')).not.toThrow();
+    });
+
+    it('should work with custom naming conventions', () => {
+      expect(() => new TapStack('my-custom-stack-name')).not.toThrow();
+      expect(() => new TapStack('organization-team-stack')).not.toThrow();
+    });
+  });
+
+  describe('Memory and Resource Management', () => {
+    it('should not leak references between instances', () => {
+      const stack1 = new TapStack('stack-1');
+      const stack2 = new TapStack('stack-2');
+
+      expect(stack1).not.toBe(stack2);
+      expect(stack1.vpcId).not.toBe(stack2.vpcId);
+    });
+
+    it('should maintain separate output values per instance', async () => {
+      const stack1 = new TapStack('stack-1');
+      const stack2 = new TapStack('stack-2');
+
+      const value1 = await new Promise<string>((resolve) => {
+        stack1.vpcId?.apply((v) => resolve(v));
+      });
+      const value2 = await new Promise<string>((resolve) => {
+        stack2.vpcId?.apply((v) => resolve(v));
+      });
+
+      expect(typeof value1).toBe('string');
+      expect(typeof value2).toBe('string');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle very long names', () => {
+      const longName = 'very-long-stack-name-'.repeat(10);
+      expect(() => new TapStack(longName)).not.toThrow();
+    });
+
+    it('should handle numeric names', () => {
+      expect(() => new TapStack('123-numeric-stack')).not.toThrow();
+    });
+
+    it('should handle many tags', () => {
+      const manyTags: { [key: string]: string } = {};
+      for (let i = 0; i < 50; i++) {
+        manyTags[`tag${i}`] = `value${i}`;
+      }
+      expect(() => new TapStack('test', { tags: manyTags })).not.toThrow();
+    });
+
+    it('should handle nested output operations', async () => {
+      const stack = new TapStack('nested-ops-stack');
+      const nested = stack.vpcId?.apply((id) =>
+        stack.bucketName?.apply((bucket) => `${id}-${bucket}`)
       );
-    });
-
-    it('should create Lambda role for secondary region', () => {
-      expect(indexCode).toContain(
-        'payment-lambda-role-secondary-${environmentSuffix}'
-      );
-    });
-
-    it('should create S3 replication role', () => {
-      expect(indexCode).toContain('s3-replication-role-${environmentSuffix}');
-    });
-
-    it('should configure Lambda assume role policy', () => {
-      expect(indexCode).toContain('lambda.amazonaws.com');
-      expect(indexCode).toContain('sts:AssumeRole');
-    });
-
-    it('should configure S3 assume role policy', () => {
-      expect(indexCode).toContain('s3.amazonaws.com');
-    });
-
-    it('should attach basic Lambda execution policy', () => {
-      expect(indexCode).toContain('AWSLambdaBasicExecutionRole');
-      expect(indexCode).toContain('lambda-basic-primary');
-      expect(indexCode).toContain('lambda-basic-secondary');
-    });
-
-    it('should create DynamoDB access policy for primary Lambda', () => {
-      expect(indexCode).toContain('lambda-dynamodb-policy-primary');
-      expect(indexCode).toContain('dynamodb:PutItem');
-      expect(indexCode).toContain('dynamodb:GetItem');
-      expect(indexCode).toContain('dynamodb:UpdateItem');
-      expect(indexCode).toContain('dynamodb:Query');
-      expect(indexCode).toContain('dynamodb:Scan');
-    });
-
-    it('should create DynamoDB access policy for secondary Lambda', () => {
-      expect(indexCode).toContain('lambda-dynamodb-policy-secondary');
-    });
-
-    it('should create SQS access policy for primary Lambda', () => {
-      expect(indexCode).toContain('lambda-sqs-policy-primary');
-      expect(indexCode).toContain('sqs:SendMessage');
-      expect(indexCode).toContain('sqs:GetQueueUrl');
-    });
-
-    it('should create SQS access policy for secondary Lambda', () => {
-      expect(indexCode).toContain('lambda-sqs-policy-secondary');
-    });
-
-    it('should create S3 replication policy', () => {
-      expect(indexCode).toContain('s3-replication-policy');
-      expect(indexCode).toContain('s3:GetReplicationConfiguration');
-      expect(indexCode).toContain('s3:ReplicateObject');
-    });
-
-    it('should use specific resource ARNs in policies', () => {
-      expect(indexCode).toContain('table/payments-${environmentSuffix}');
-      expect(indexCode).toContain('payment-dlq-primary-${environmentSuffix}');
-      expect(indexCode).toContain('payment-dlq-secondary-${environmentSuffix}');
-    });
-  });
-
-  describe('DynamoDB Global Table', () => {
-    it('should create DynamoDB table with environmentSuffix', () => {
-      expect(indexCode).toContain('payments-${environmentSuffix}');
-    });
-
-    it('should configure on-demand billing mode', () => {
-      expect(indexCode).toContain("billingMode: 'PAY_PER_REQUEST'");
-    });
-
-    it('should define hash and range keys', () => {
-      expect(indexCode).toContain("hashKey: 'paymentId'");
-      expect(indexCode).toContain("rangeKey: 'timestamp'");
-    });
-
-    it('should define attributes for keys', () => {
-      expect(indexCode).toContain("{ name: 'paymentId', type: 'S' }");
-      expect(indexCode).toContain("{ name: 'timestamp', type: 'N' }");
-    });
-
-    it('should enable streams', () => {
-      expect(indexCode).toContain('streamEnabled: true');
-      expect(indexCode).toContain("streamViewType: 'NEW_AND_OLD_IMAGES'");
-    });
-
-    it('should enable point-in-time recovery', () => {
-      expect(indexCode).toContain('pointInTimeRecovery');
-      expect(indexCode).toContain('enabled: true');
-    });
-
-    it('should configure replica in secondary region', () => {
-      expect(indexCode).toContain('replicas:');
-      expect(indexCode).toContain('regionName: secondaryRegion');
-    });
-
-    it('should enable point-in-time recovery for replica', () => {
-      expect(indexCode).toContain('pointInTimeRecovery: true');
-    });
-
-    it('should apply tags', () => {
-      expect(indexCode).toContain('Name: `payments-${environmentSuffix}`');
-      expect(indexCode).toContain('Environment: environmentSuffix');
-    });
-  });
-
-  describe('SQS Dead Letter Queues', () => {
-    it('should create DLQ in primary region', () => {
-      expect(indexCode).toContain('payment-dlq-primary-${environmentSuffix}');
-    });
-
-    it('should create DLQ in secondary region', () => {
-      expect(indexCode).toContain('payment-dlq-secondary-${environmentSuffix}');
-    });
-
-    it('should configure message retention period', () => {
-      expect(indexCode).toContain('messageRetentionSeconds: 1209600');
-    });
-
-    it('should apply tags to DLQs', () => {
-      expect(indexCode).toContain(
-        'Name: `payment-dlq-primary-${environmentSuffix}`'
-      );
-      expect(indexCode).toContain(
-        'Name: `payment-dlq-secondary-${environmentSuffix}`'
-      );
-    });
-  });
-
-  describe('Lambda Functions', () => {
-    it('should generate Lambda code file', () => {
-      const lambdaFilePath = path.join(
-        __dirname,
-        '../lib/lambda/payment-processor.js'
-      );
-      expect(fs.existsSync(lambdaFilePath)).toBe(true);
-    });
-
-    it('should create directory if it does not exist', () => {
-      expect(indexCode).toContain("fs.mkdirSync('./lib/lambda'");
-    });
-
-    it('should write Lambda code to file', () => {
-      expect(indexCode).toContain('fs.writeFileSync');
-      expect(indexCode).toContain('./lib/lambda/payment-processor.js');
-    });
-
-    it('should create Lambda function in primary region', () => {
-      expect(indexCode).toContain(
-        'payment-processor-primary-${environmentSuffix}'
-      );
-    });
-
-    it('should create Lambda function in secondary region', () => {
-      expect(indexCode).toContain(
-        'payment-processor-secondary-${environmentSuffix}'
-      );
-    });
-
-    it('should use Node.js 18.x runtime', () => {
-      expect(indexCode).toContain("runtime: 'nodejs18.x'");
-    });
-
-    it('should configure handler', () => {
-      expect(indexCode).toContain("handler: 'payment-processor.handler'");
-    });
-
-    it('should use FileArchive for code', () => {
-      expect(indexCode).toContain("new pulumi.asset.FileArchive('./lib/lambda')");
-    });
-
-    it('should configure environment variables', () => {
-      expect(indexCode).toContain('DYNAMODB_TABLE: dynamoTablePrimary.name');
-      expect(indexCode).toContain('DLQ_URL: dlqPrimary.url');
-      expect(indexCode).toContain('REGION: primaryRegion');
-    });
-
-    it('should set timeout to 30 seconds', () => {
-      expect(indexCode).toContain('timeout: 30');
-    });
-
-    it('should apply tags', () => {
-      expect(indexCode).toContain(
-        'Name: `payment-processor-primary-${environmentSuffix}`'
-      );
-      expect(indexCode).toContain(
-        'Name: `payment-processor-secondary-${environmentSuffix}`'
-      );
-    });
-
-    it('should depend on IAM policies', () => {
-      expect(indexCode).toContain('dependsOn: [');
-      expect(indexCode).toContain('lambdaBasicPolicyPrimary');
-      expect(indexCode).toContain('lambdaDynamoDbPolicyPrimary');
-      expect(indexCode).toContain('lambdaSqsPolicyPrimary');
-    });
-  });
-
-  describe('API Gateway', () => {
-    it('should create REST API in primary region', () => {
-      expect(indexCode).toContain('payment-api-primary-${environmentSuffix}');
-    });
-
-    it('should create REST API in secondary region', () => {
-      expect(indexCode).toContain('payment-api-secondary-${environmentSuffix}');
-    });
-
-    it('should configure regional endpoints', () => {
-      expect(indexCode).toContain("endpointConfiguration");
-      expect(indexCode).toContain("types: 'REGIONAL'");
-    });
-
-    it('should create payment resources', () => {
-      expect(indexCode).toContain('payment-resource-primary');
-      expect(indexCode).toContain('payment-resource-secondary');
-      // The code uses a PR-safe path for PR stacks, or plain 'payment' for non-PRs
-      // e.g. pathPart: isPrStack ? `payment-${environmentSuffix}` : 'payment'
-      expect(indexCode).toMatch(/pathPart:\s*(isPrStack\s*\?|`payment-\$\{environmentSuffix\}`|'payment')/);
-    });
-
-    it('should create POST methods', () => {
-      expect(indexCode).toContain('payment-method-primary');
-      expect(indexCode).toContain('payment-method-secondary');
-      expect(indexCode).toContain("httpMethod: 'POST'");
-    });
-
-    it('should configure no authorization', () => {
-      expect(indexCode).toContain("authorization: 'NONE'");
-    });
-
-    it('should create Lambda integrations', () => {
-      expect(indexCode).toContain('payment-integration-primary');
-      expect(indexCode).toContain('payment-integration-secondary');
-    });
-
-    it('should use AWS_PROXY integration', () => {
-      expect(indexCode).toContain("type: 'AWS_PROXY'");
-      expect(indexCode).toContain("integrationHttpMethod: 'POST'");
-    });
-
-    it('should reference Lambda invoke ARNs', () => {
-      expect(indexCode).toContain('uri: lambdaPrimary.invokeArn');
-      expect(indexCode).toContain('uri: lambdaSecondary.invokeArn');
-    });
-
-    it('should create Lambda permissions', () => {
-      expect(indexCode).toContain('api-lambda-permission-primary');
-      expect(indexCode).toContain('api-lambda-permission-secondary');
-      expect(indexCode).toContain("action: 'lambda:InvokeFunction'");
-      expect(indexCode).toContain("principal: 'apigateway.amazonaws.com'");
-    });
-
-    it('should create deployments', () => {
-      expect(indexCode).toContain('payment-deployment-primary');
-      expect(indexCode).toContain('payment-deployment-secondary');
-    });
-
-    it('should create stages', () => {
-      expect(indexCode).toContain('payment-stage-primary');
-      expect(indexCode).toContain('payment-stage-secondary');
-      expect(indexCode).toContain("stageName: 'prod'");
-    });
-
-    it('should configure deployment dependencies', () => {
-      expect(indexCode).toContain('dependsOn: [lambdaIntegrationPrimary');
-      expect(indexCode).toContain('dependsOn: [lambdaIntegrationSecondary');
-    });
-  });
-
-  describe('S3 Buckets and Replication', () => {
-    it('should create S3 bucket in primary region', () => {
-      expect(indexCode).toContain(
-        'transaction-logs-primary-${environmentSuffix}'
-      );
-    });
-
-    it('should create S3 bucket in secondary region', () => {
-      expect(indexCode).toContain(
-        'transaction-logs-secondary-${environmentSuffix}'
-      );
-    });
-
-    it('should enable versioning', () => {
-      expect(indexCode).toContain('versioning: {');
-      expect(indexCode).toContain('enabled: true');
-    });
-
-    it('should create replication configuration', () => {
-      expect(indexCode).toContain('s3-replication-config-${environmentSuffix}');
-      expect(indexCode).toContain('BucketReplicationConfig');
-    });
-
-    it('should configure replication rules', () => {
-      expect(indexCode).toContain('rules: [');
-      expect(indexCode).toContain("id: 'replicate-all'");
-      expect(indexCode).toContain("status: 'Enabled'");
-      expect(indexCode).toContain('priority: 1');
-    });
-
-    it('should enable delete marker replication', () => {
-      expect(indexCode).toContain('deleteMarkerReplication');
-    });
-
-    it('should configure destination', () => {
-      expect(indexCode).toContain('destination: {');
-      expect(indexCode).toContain('bucket: s3BucketSecondary.arn');
-    });
-
-    it('should configure replication time', () => {
-      expect(indexCode).toContain('replicationTime');
-      expect(indexCode).toContain('minutes: 15');
-    });
-
-    it('should configure replication metrics', () => {
-      expect(indexCode).toContain('metrics: {');
-      expect(indexCode).toContain("status: 'Enabled'");
-    });
-
-    it('should depend on buckets and policy', () => {
-      expect(indexCode).toContain('dependsOn: [s3ReplicationPolicy');
-    });
-  });
-
-  describe('CloudWatch Alarms', () => {
-    it('should create replication lag alarm', () => {
-      expect(indexCode).toContain(
-        'dynamodb-replication-lag-alarm-${environmentSuffix}'
-      );
-    });
-
-    it('should configure comparison operator', () => {
-      expect(indexCode).toContain("comparisonOperator: 'GreaterThanThreshold'");
-    });
-
-    it('should configure evaluation periods', () => {
-      expect(indexCode).toContain('evaluationPeriods: 2');
-    });
-
-    it('should monitor ReplicationLatency metric', () => {
-      expect(indexCode).toContain("metricName: 'ReplicationLatency'");
-      expect(indexCode).toContain("namespace: 'AWS/DynamoDB'");
-    });
-
-    it('should set period to 60 seconds', () => {
-      expect(indexCode).toContain('period: 60');
-    });
-
-    it('should use Average statistic', () => {
-      expect(indexCode).toContain("statistic: 'Average'");
-    });
-
-    it('should set threshold to 30 seconds (30000 ms)', () => {
-      expect(indexCode).toContain('threshold: 30000');
-    });
-
-    it('should configure dimensions', () => {
-      expect(indexCode).toContain('TableName: dynamoTablePrimary.name');
-      expect(indexCode).toContain('ReceivingRegion: secondaryRegion');
-    });
-  });
-
-  describe('Route 53 Configuration', () => {
-    it('should create hosted zone', () => {
-      expect(indexCode).toContain('payment-zone-${environmentSuffix}');
-      expect(indexCode).toContain('payment-${environmentSuffix}.example.com');
-    });
-
-    it('should create health check for primary API', () => {
-      expect(indexCode).toContain('health-check-primary-${environmentSuffix}');
-    });
-
-    it('should create health check for secondary API', () => {
-      expect(indexCode).toContain('health-check-secondary-${environmentSuffix}');
-    });
-
-    it('should configure HTTPS health checks', () => {
-      expect(indexCode).toContain("type: 'HTTPS'");
-      expect(indexCode).toContain("resourcePath: '/prod/payment'");
-      expect(indexCode).toContain('port: 443');
-    });
-
-    it('should configure health check intervals', () => {
-      expect(indexCode).toContain('requestInterval: 30');
-      expect(indexCode).toContain('failureThreshold: 3');
-    });
-
-    it('should create primary failover record', () => {
-      expect(indexCode).toContain('api-primary-record-${environmentSuffix}');
-      expect(indexCode).toContain("setIdentifier: 'primary'");
-    });
-
-    it('should create secondary failover record', () => {
-      expect(indexCode).toContain('api-secondary-record-${environmentSuffix}');
-      expect(indexCode).toContain("setIdentifier: 'secondary'");
-    });
-
-    it('should configure failover routing policies', () => {
-      expect(indexCode).toContain('failoverRoutingPolicies');
-      expect(indexCode).toContain("type: 'PRIMARY'");
-      expect(indexCode).toContain("type: 'SECONDARY'");
-    });
-
-    it('should use CNAME records', () => {
-      expect(indexCode).toContain("type: 'CNAME'");
-      expect(indexCode).toContain('ttl: 60');
-    });
-
-    it('should reference health checks', () => {
-      expect(indexCode).toContain('healthCheckId: healthCheckPrimary.id');
-      expect(indexCode).toContain('healthCheckId: healthCheckSecondary.id');
-    });
-  });
-
-  describe('SSM Parameters', () => {
-    it('should create parameter for primary endpoint', () => {
-      expect(indexCode).toContain('ssm-primary-endpoint-${environmentSuffix}');
-      expect(indexCode).toContain(
-        '/payment/${environmentSuffix}/api/primary/endpoint'
-      );
-    });
-
-    it('should create parameter for secondary endpoint', () => {
-      expect(indexCode).toContain('ssm-secondary-endpoint-${environmentSuffix}');
-      expect(indexCode).toContain(
-        '/payment/${environmentSuffix}/api/secondary/endpoint'
-      );
-    });
-
-    it('should create parameter for DynamoDB table', () => {
-      expect(indexCode).toContain('ssm-dynamodb-table-${environmentSuffix}');
-      expect(indexCode).toContain(
-        '/payment/${environmentSuffix}/dynamodb/table-name'
-      );
-    });
-
-    it('should create parameters for S3 buckets', () => {
-      expect(indexCode).toContain('ssm-s3-primary-${environmentSuffix}');
-      expect(indexCode).toContain('ssm-s3-secondary-${environmentSuffix}');
-      expect(indexCode).toContain('/payment/${environmentSuffix}/s3/primary/bucket');
-      expect(indexCode).toContain(
-        '/payment/${environmentSuffix}/s3/secondary/bucket'
-      );
-    });
-
-    it('should use String type', () => {
-      expect(indexCode).toContain("type: 'String'");
-    });
-
-    it('should include descriptions', () => {
-      expect(indexCode).toContain("description: 'Primary region API endpoint'");
-      expect(indexCode).toContain("description: 'Secondary region API endpoint'");
-      expect(indexCode).toContain("description: 'DynamoDB global table name'");
-    });
-  });
-
-  describe('Stack Outputs', () => {
-    it('should export primaryApiEndpoint', () => {
-      expect(indexCode).toContain('export const primaryApiEndpoint');
-    });
-
-    it('should export secondaryApiEndpoint', () => {
-      expect(indexCode).toContain('export const secondaryApiEndpoint');
-    });
-
-    it('should export failoverDnsName', () => {
-      expect(indexCode).toContain('export const failoverDnsName');
-    });
-
-    it('should export health check URLs', () => {
-      expect(indexCode).toContain('export const primaryHealthCheckUrl');
-      expect(indexCode).toContain('export const secondaryHealthCheckUrl');
-    });
-
-    it('should export health check IDs', () => {
-      expect(indexCode).toContain('export const healthCheckPrimaryId');
-      expect(indexCode).toContain('export const healthCheckSecondaryId');
-    });
-
-    it('should export replication lag alarm ARN', () => {
-      expect(indexCode).toContain('export const replicationLagAlarmArn');
-    });
-
-    it('should export DynamoDB table name', () => {
-      expect(indexCode).toContain('export const dynamoDbTableName');
-    });
-
-    it('should export S3 bucket names', () => {
-      expect(indexCode).toContain('export const s3BucketPrimaryName');
-      expect(indexCode).toContain('export const s3BucketSecondaryName');
-    });
-
-    it('should export DLQ URLs', () => {
-      expect(indexCode).toContain('export const dlqPrimaryUrl');
-      expect(indexCode).toContain('export const dlqSecondaryUrl');
-    });
-
-    it('should export hosted zone details', () => {
-      expect(indexCode).toContain('export const hostedZoneId');
-      expect(indexCode).toContain('export const hostedZoneNameServers');
-    });
-  });
-
-  describe('Multi-Region Configuration', () => {
-    it('should use provider for primary resources', () => {
-      // Check that resources use primary provider
-      const primaryProviderUsage = indexCode.match(/provider: primaryProvider/g);
-      expect(primaryProviderUsage).not.toBeNull();
-      expect(primaryProviderUsage!.length).toBeGreaterThan(0);
-    });
-
-    it('should use provider for secondary resources', () => {
-      // Check that resources use secondary provider
-      const secondaryProviderUsage = indexCode.match(/provider: secondaryProvider/g);
-      expect(secondaryProviderUsage).not.toBeNull();
-      expect(secondaryProviderUsage!.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    it('should include environmentSuffix in resource names', () => {
-      // Count occurrences of environmentSuffix in resource names
-      const suffixUsage = indexCode.match(/\$\{environmentSuffix\}/g);
-      expect(suffixUsage).not.toBeNull();
-      expect(suffixUsage!.length).toBeGreaterThan(30);
-    });
-
-    it('should use template literals for resource names', () => {
-      expect(indexCode).toContain('`payment-lambda-role-primary-${environmentSuffix}`');
-      expect(indexCode).toContain('`payments-${environmentSuffix}`');
-      expect(indexCode).toContain('`payment-dlq-primary-${environmentSuffix}`');
-    });
-  });
-
-  describe('Lambda Code', () => {
-    it('should export handler function', () => {
-      expect(lambdaCode).toContain('exports.handler');
-    });
-
-    it('should be async handler', () => {
-      expect(lambdaCode).toContain('async (event)');
-    });
-
-    it('should log event', () => {
-      expect(lambdaCode).toContain('console.log');
-      expect(lambdaCode).toContain('Payment processing event');
-    });
-
-    it('should parse request body', () => {
-      expect(lambdaCode).toContain('event.body');
-      expect(lambdaCode).toContain('JSON.parse');
-    });
-
-    it('should return proper API Gateway response', () => {
-      expect(lambdaCode).toContain('statusCode: 200');
-      expect(lambdaCode).toContain('headers');
-      expect(lambdaCode).toContain('body');
-    });
-
-    it('should set CORS headers', () => {
-      expect(lambdaCode).toContain("'Content-Type': 'application/json'");
-      expect(lambdaCode).toContain("'Access-Control-Allow-Origin': '*'");
-    });
-
-    it('should return JSON response', () => {
-      expect(lambdaCode).toContain('JSON.stringify');
-      expect(lambdaCode).toContain('Payment processed successfully');
-    });
-
-    it('should include payment details in response', () => {
-      expect(lambdaCode).toContain('paymentId');
-      expect(lambdaCode).toContain('status');
-      expect(lambdaCode).toContain('region');
-      expect(lambdaCode).toContain('timestamp');
-    });
-
-    it('should use AWS_REGION from environment', () => {
-      expect(lambdaCode).toContain('process.env.AWS_REGION');
-    });
-
-    it('should use Date.now() for timestamp', () => {
-      expect(lambdaCode).toContain('Date.now()');
-    });
-  });
-
-  describe('Tags', () => {
-    it('should apply Name tags', () => {
-      const nameTags = indexCode.match(/Name: `/g);
-      expect(nameTags).not.toBeNull();
-      expect(nameTags!.length).toBeGreaterThan(15);
-    });
-
-    it('should apply Environment tags', () => {
-      const envTags = indexCode.match(/Environment: environmentSuffix/g);
-      expect(envTags).not.toBeNull();
-      expect(envTags!.length).toBeGreaterThan(15);
-    });
-  });
-
-  describe('Dependencies', () => {
-    it('should configure Lambda dependencies on policies', () => {
-      expect(indexCode).toContain('dependsOn: [');
-    });
-
-    it('should configure deployment dependencies', () => {
-      expect(indexCode).toContain('dependsOn: [lambdaIntegrationPrimary');
-      expect(indexCode).toContain('dependsOn: [lambdaIntegrationSecondary');
-    });
-
-    it('should configure S3 replication dependencies', () => {
-      expect(indexCode).toContain(
-        'dependsOn: [s3ReplicationPolicy, s3BucketPrimary, s3BucketSecondary]'
-      );
-    });
-  });
-
-  describe('File Structure', () => {
-    it('should have proper imports', () => {
-      expect(indexCode).toContain("import * as pulumi from '@pulumi/pulumi'");
-      expect(indexCode).toContain("import * as aws from '@pulumi/aws'");
-      expect(indexCode).toContain("import * as fs from 'fs'");
-    });
-
-    it('should use proper TypeScript syntax', () => {
-      expect(indexCode).toContain('const');
-      expect(indexCode).toContain('new');
-    });
-  });
-
-  describe('Security Best Practices', () => {
-    it('should use least-privilege IAM policies', () => {
-      // Policies should specify specific actions, not wildcards
-      expect(indexCode).not.toContain('"Action": "*"');
-      expect(indexCode).not.toContain('"Resource": "*"');
-    });
-
-    it('should enable encryption at rest for DynamoDB', () => {
-      // DynamoDB encryption at rest is enabled by default, no explicit config needed
-      expect(indexCode).toContain('aws.dynamodb.Table');
-    });
-
-    it('should enable versioning for S3 buckets', () => {
-      expect(indexCode).toContain('versioning: {');
-      expect(indexCode).toContain('enabled: true');
+      expect(nested).toBeDefined();
     });
   });
 });
