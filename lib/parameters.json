@@ -1,0 +1,44 @@
+{
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming",
+      "Default": "prod"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging",
+      "Default": "PaymentMigration"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging",
+      "Default": "Finance"
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Description": "VPC CIDR block",
+      "Default": "10.0.0.0/16"
+    },
+    "DatabaseMasterUsername": {
+      "Type": "String",
+      "Description": "Database master username",
+      "Default": "dbadmin",
+      "NoEcho": true
+    },
+    "ECSTaskImage": {
+      "Type": "String",
+      "Description": "Docker image for payment processing application",
+      "Default": "nginx:latest"
+    },
+    "HostedZoneId": {
+      "Type": "String",
+      "Description": "Route 53 hosted zone ID for DNS management"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for the application",
+      "Default": "payments.example.com"
+    }
+  }
+}
