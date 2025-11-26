@@ -69,11 +69,13 @@ export class DatabaseComponent extends pulumi.ComponentResource {
 
     this.secretArn = dbSecret.arn;
 
-    // Create DB subnet group
+    // Create DB subnet group (name must be lowercase for AWS RDS)
+    const subnetGroupName =
+      `${args.environment}-payment-db-subnet-group`.toLowerCase();
     const dbSubnetGroup = new aws.rds.SubnetGroup(
       `${args.environment}-payment-db-subnet-group`,
       {
-        name: `${args.environment}-payment-db-subnet-group`,
+        name: subnetGroupName,
         subnetIds: args.privateSubnetIds,
         tags: {
           ...args.tags,
@@ -116,11 +118,13 @@ export class DatabaseComponent extends pulumi.ComponentResource {
       resourceOpts
     );
 
-    // Create RDS Aurora cluster
+    // Create RDS Aurora cluster (identifier must be lowercase for AWS RDS)
+    const clusterIdentifier =
+      `${args.environment}-payment-db-cluster`.toLowerCase();
     this.cluster = new aws.rds.Cluster(
       `${args.environment}-payment-db-cluster`,
       {
-        clusterIdentifier: `${args.environment}-payment-db-cluster`,
+        clusterIdentifier: clusterIdentifier,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
         engineVersion: '15.4',
@@ -143,13 +147,15 @@ export class DatabaseComponent extends pulumi.ComponentResource {
       resourceOpts
     );
 
-    // Create cluster instances
+    // Create cluster instances (identifiers must be lowercase for AWS RDS)
     this.clusterInstances = [];
     for (let i = 0; i < 2; i++) {
+      const instanceIdentifier =
+        `${args.environment}-payment-db-instance-${i}`.toLowerCase();
       const instance = new aws.rds.ClusterInstance(
         `${args.environment}-payment-db-instance-${i}`,
         {
-          identifier: `${args.environment}-payment-db-instance-${i}`,
+          identifier: instanceIdentifier,
           clusterIdentifier: this.cluster.id,
           instanceClass: args.instanceClass,
           engine: 'aurora-postgresql',
