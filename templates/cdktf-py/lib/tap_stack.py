@@ -1,9 +1,9 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
-from constructs import Construct
+from cdktf import S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
