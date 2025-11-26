@@ -1,6 +1,6 @@
 # CDKTF Python Implementation - Financial Services VPC Infrastructure (IDEAL RESPONSE)
 
-This implementation provides a production-ready, corrected VPC infrastructure for financial services using CDKTF with Python, deployed across 3 availability zones in eu-west-1.
+This implementation provides a production-ready, corrected VPC infrastructure for financial services using CDKTF with Python, deployed across 3 availability zones in us-east-1.
 
 ## File: lib/main.py
 
@@ -43,9 +43,9 @@ class VpcStack(TerraformStack):
     ):
         super().__init__(scope, stack_id)
 
-        # AWS Provider configuration for eu-west-1
+        # AWS Provider configuration for us-east-1
         AwsProvider(self, "AWS",
-            region="eu-west-1"
+            region="us-east-1"
         )
 
         # Common tags for all resources
@@ -54,8 +54,8 @@ class VpcStack(TerraformStack):
             "ManagedBy": "CDKTF"
         }
 
-        # Define availability zones for eu-west-1
-        availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+        # Define availability zones for us-east-1
+        availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
         # Create VPC with DNS support
         vpc = Vpc(self, f"vpc-{environment_suffix}",
@@ -426,7 +426,7 @@ This project deploys a production-ready, corrected VPC infrastructure for a fina
 
 The infrastructure includes:
 
-- **VPC**: Custom VPC with CIDR 10.0.0.0/16 in eu-west-1 region
+- **VPC**: Custom VPC with CIDR 10.0.0.0/16 in us-east-1 region
 - **Subnets**: 6 subnets across 3 availability zones (1 public + 1 private per AZ)
 - **Internet Gateway**: Provides internet access for public subnets
 - **NAT Gateways**: 3 NAT Gateways (one per AZ) for high availability
@@ -439,12 +439,12 @@ The infrastructure includes:
 
 | Subnet Type | AZ | CIDR Block | Purpose |
 |-------------|-----|------------|---------|
-| Public 1 | eu-west-1a | 10.0.0.0/24 | Load balancers, bastion hosts |
-| Public 2 | eu-west-1b | 10.0.1.0/24 | Load balancers, bastion hosts |
-| Public 3 | eu-west-1c | 10.0.2.0/24 | Load balancers, bastion hosts |
-| Private 1 | eu-west-1a | 10.0.10.0/24 | Application tier |
-| Private 2 | eu-west-1b | 10.0.11.0/24 | Application tier |
-| Private 3 | eu-west-1c | 10.0.12.0/24 | Application tier |
+| Public 1 | us-east-1a | 10.0.0.0/24 | Load balancers, bastion hosts |
+| Public 2 | us-east-1b | 10.0.1.0/24 | Load balancers, bastion hosts |
+| Public 3 | us-east-1c | 10.0.2.0/24 | Load balancers, bastion hosts |
+| Private 1 | us-east-1a | 10.0.10.0/24 | Application tier |
+| Private 2 | us-east-1b | 10.0.11.0/24 | Application tier |
+| Private 3 | us-east-1c | 10.0.12.0/24 | Application tier |
 
 ## Prerequisites
 
@@ -485,10 +485,10 @@ cdktf get
 
 The infrastructure is configured with:
 
-- **Region**: eu-west-1 (Ireland)
+- **Region**: us-east-1 (N. Virginia)
 - **Environment Suffix**: "prod" (can be customized)
 - **VPC CIDR**: 10.0.0.0/16
-- **Availability Zones**: eu-west-1a, eu-west-1b, eu-west-1c
+- **Availability Zones**: us-east-1a, us-east-1b, us-east-1c
 
 To use a different environment suffix, modify the `VpcStack` instantiation in `main.py`:
 
@@ -555,25 +555,25 @@ Expected result: 100% coverage
 1. Verify VPC creation:
 
 ```bash
-aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-prod" --region eu-west-1
+aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-prod" --region us-east-1
 ```
 
 2. Check subnet distribution:
 
 ```bash
-aws ec2 describe-subnets --filters "Name=vpc-id,Values=<vpc-id>" --region eu-west-1
+aws ec2 describe-subnets --filters "Name=vpc-id,Values=<vpc-id>" --region us-east-1
 ```
 
 3. Verify NAT Gateways are running:
 
 ```bash
-aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=<vpc-id>" --region eu-west-1
+aws ec2 describe-nat-gateways --filter "Name=vpc-id,Values=<vpc-id>" --region us-east-1
 ```
 
 4. Check VPC Flow Logs:
 
 ```bash
-aws ec2 describe-flow-logs --filter "Name=resource-id,Values=<vpc-id>" --region eu-west-1
+aws ec2 describe-flow-logs --filter "Name=resource-id,Values=<vpc-id>" --region us-east-1
 ```
 
 5. Verify S3 bucket and lifecycle policy:
@@ -690,7 +690,7 @@ from cdktf import S3Backend
 S3Backend(self,
     bucket="your-terraform-state-bucket",
     key="financial-vpc/terraform.tfstate",
-    region="eu-west-1"
+    region="us-east-1"
 )
 ```
 

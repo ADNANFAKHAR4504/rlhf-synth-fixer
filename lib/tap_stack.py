@@ -1,6 +1,7 @@
-#!/usr/bin/env python
+"""VPC Stack module for CDKTF Python infrastructure - Financial Services Platform."""
+
+from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
-from cdktf import App, TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -26,29 +27,51 @@ from cdktf_cdktf_provider_aws.network_acl import (
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 
 
-class VpcStack(TerraformStack):
+class TapStack(TerraformStack):
     """Production-ready VPC stack for financial services platform."""
+
     def __init__(
         self,
         scope: Construct,
-        stack_id: str,
-        environment_suffix: str = "prod"
+        construct_id: str,
+        **kwargs
     ):
-        super().__init__(scope, stack_id)
+        """Initialize the VPC stack with AWS infrastructure."""
+        super().__init__(scope, construct_id)
 
-        # AWS Provider configuration for eu-west-1
-        AwsProvider(self, "AWS",
-            region="eu-west-1"
+        # Extract configuration from kwargs
+        environment_suffix = kwargs.get('environment_suffix', 'dev')
+        aws_region = kwargs.get('aws_region', 'us-east-1')
+        state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
+        default_tags = kwargs.get('default_tags', {})
+
+        # Configure AWS Provider
+        AwsProvider(
+            self,
+            "aws",
+            region=aws_region,
+            default_tags=[default_tags],
+        )
+
+        # Configure S3 Backend with native state locking
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
         )
 
         # Common tags for all resources
+        project_name = kwargs.get('project_name', 'DigitalBanking')
         common_tags = {
-            "Project": "DigitalBanking",
+            "Project": project_name,
             "ManagedBy": "CDKTF"
         }
 
-        # Define availability zones for eu-west-1
-        availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+        # Define availability zones dynamically based on region
+        availability_zones = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
 
         # Create VPC with DNS support
         vpc = Vpc(self, f"vpc-{environment_suffix}",
@@ -74,7 +97,7 @@ class VpcStack(TerraformStack):
         flow_logs_bucket = S3Bucket(
             self,
             f"flow-logs-bucket-{environment_suffix}",
-            bucket=f"vpc-flow-logs-{environment_suffix}-{stack_id}",
+            bucket=f"vpc-flow-logs-{environment_suffix}-{construct_id}".lower(),
             force_destroy=True,
             tags={
                 **common_tags,
@@ -234,7 +257,7 @@ class VpcStack(TerraformStack):
             )
 
         # Create custom Network ACL with deny-all baseline
-        network_acl = NetworkAcl(self, f"nacl-{environment_suffix}",
+        NetworkAcl(self, f"nacl-{environment_suffix}",
             vpc_id=vpc.id,
             subnet_ids=[s.id for s in public_subnets + private_subnets],
             # Deny all inbound traffic by default
@@ -291,8 +314,3 @@ class VpcStack(TerraformStack):
             value=flow_logs_bucket.bucket,
             description="S3 bucket name for VPC Flow Logs"
         )
-
-
-app = App()
-VpcStack(app, "financial-vpc", environment_suffix="prod")
-app.synth()

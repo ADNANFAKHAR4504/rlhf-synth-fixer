@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "pipenv run python lib/main.py",
+  "app": "pipenv run python tap.py",
   "projectId": "financial-vpc-infrastructure",
   "sendCrashReports": "false",
   "terraformProviders": [

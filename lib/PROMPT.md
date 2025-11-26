@@ -2,15 +2,15 @@
 
 Hey team,
 
-We need to build a production-ready VPC infrastructure for a new digital banking platform. I've been asked to create this using **CDKTF with Python**. The business wants a secure, isolated network foundation that can support strict network segmentation between application tiers while maintaining high availability across multiple availability zones in the EU Ireland region.
+We need to build a production-ready VPC infrastructure for a new digital banking platform. I've been asked to create this using **CDKTF with Python**. The business wants a secure, isolated network foundation that can support strict network segmentation between application tiers while maintaining high availability across multiple availability zones in the US East (N. Virginia) region.
 
 A financial services company is launching their new digital banking platform and needs the network foundation to be rock-solid from day one. They're very particular about security and compliance given the regulatory requirements in the financial sector. We need to ensure proper network isolation, comprehensive logging for audit trails, and redundancy at every level to meet their SLA commitments.
 
-The infrastructure needs to span three availability zones in eu-west-1 to provide fault tolerance. Each AZ will have dedicated public and private subnets to support multi-tier applications, with NAT Gateways in each zone for high availability. They also want comprehensive network flow logging stored in S3 with lifecycle management for cost optimization.
+The infrastructure needs to span three availability zones in us-east-1 to provide fault tolerance. Each AZ will have dedicated public and private subnets to support multi-tier applications, with NAT Gateways in each zone for high availability. They also want comprehensive network flow logging stored in S3 with lifecycle management for cost optimization.
 
 ## What we need to build
 
-Create a production-ready VPC infrastructure using **CDKTF with Python** for a financial services digital banking platform deployed in the eu-west-1 region.
+Create a production-ready VPC infrastructure using **CDKTF with Python** for a financial services digital banking platform deployed in the us-east-1 region.
 
 ### Core Requirements
 
@@ -73,7 +73,7 @@ Create a production-ready VPC infrastructure using **CDKTF with Python** for a f
 - Use **Network ACLs** for subnet-level security
 - Resource names must include **environmentSuffix** for uniqueness across environments
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **eu-west-1** region (Ireland)
+- Deploy to **us-east-1** region (N. Virginia)
 - Use Python 3.8 or higher
 - Use CDKTF 0.19 or higher
 - All resources must be destroyable (no Retain deletion policies)
