@@ -11,24 +11,23 @@
     "Environment Migration"
   ],
   "aws_services": [
-    "MigrationConfig",
-    "MigrationConfigLoaderLambda",
-    "MigrationConfigLoaderLambdaRole",
-    "MigrationLogGroup",
-    "MigrationLogThrottlingMetric",
-    "MigrationLogFailureMetric",
-    "MigrationOrchestratorRole",
-    "ValidationLambdaRole",
-    "ValidationLambda",
-    "MigrationLambdaRole",
-    "MigrationLambda",
-    "RollbackLambdaRole",
+    "LogsKmsKey",
+    "LogsKmsAlias",
+    "OrchestratorLogGroup",
+    "MetricFilterErrors",
+    "MetricFilterThrottles",
+    "AlarmErrors",
+    "AlarmThrottles",
+    "LambdaExecutionRole",
+    "StepFunctionsRole",
+    "OrchestratorRole",
+    "TemplateDiffLambda",
+    "PreChecksLambda",
+    "ApplyChangeLambda",
+    "PostChecksLambda",
     "RollbackLambda",
-    "MigrationStateMachineRole",
     "MigrationStateMachine",
-    "MigrationFailureAlarm",
-    "ThrottlingAlarm",
-    "LogThrottlingAlarm",
-    "LogFailureAlarm"
+    "LogsDeliveryRole"
   ]
 }
+
