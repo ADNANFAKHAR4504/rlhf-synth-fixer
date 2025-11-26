@@ -21,5 +21,11 @@
     "IAM"
   ],
   "startedAt": "2025-11-25T00:40:45Z",
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
