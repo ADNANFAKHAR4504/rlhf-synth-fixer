@@ -327,7 +327,7 @@ resource "aws_rds_global_cluster" "main" {
   provider                  = aws.primary
   global_cluster_identifier = "aurora-global-${var.environment_suffix}"
   engine                    = "aurora-postgresql"
-  engine_version            = "14.9"  # CORRECT - fully supports Global Database
+  engine_version            = "14.11"  # CORRECT - fully supports Global Database
   database_name             = var.db_name
   storage_encrypted         = true
 }
@@ -335,7 +335,7 @@ resource "aws_rds_global_cluster" "main" {
 
 **Key Learnings**:
 - Always verify Aurora version compatibility with Global Database feature
-- Aurora PostgreSQL 14.9 is the latest stable version supporting Global Database
+- Aurora PostgreSQL 14.11 is the latest stable version supporting Global Database
 - Not all Aurora versions support all features (Global Database, Backtrack, etc.)
 - Check AWS documentation for feature availability by version
 - Use `aws rds describe-global-clusters --query 'GlobalClusters[*].[Engine,EngineVersion]'` to see supported versions

@@ -927,7 +927,7 @@ resource "aws_rds_global_cluster" "main" {
   provider                  = aws.primary
   global_cluster_identifier = "aurora-global-${var.environment_suffix}"
   engine                    = "aurora-postgresql"
-  engine_version            = "14.9"
+  engine_version            = "14.11"
   database_name             = var.db_name
   storage_encrypted         = true
 
