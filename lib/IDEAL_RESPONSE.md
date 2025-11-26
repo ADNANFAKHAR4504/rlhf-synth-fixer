@@ -2,18 +2,26 @@
 
 This document contains the complete, corrected Terraform configuration for deploying a PCI DSS compliant loan processing application infrastructure.
 
-All critical issues from MODEL_RESPONSE.md have been fixed:
+## All Issues Fixed:
 - IAM role name_prefix values shortened to fit within 38-character AWS limit
 - S3 lifecycle configurations include required `filter {}` attribute
 - All files formatted with `terraform fmt`
+- Backend configuration added for state management
+- Random provider added for environment suffix fallback
+- All resources use `local.env_suffix` for consistent naming
 - Actual terraform.tfvars file created with task-specific values
+- Complete test suite in TypeScript/Jest for Terraform projects
+- All outputs include necessary aliases for backward compatibility
 
-## File: variables.tf
+## Complete Source Code from lib/ folder
+
+### File: variables.tf
 
 ```hcl
 variable "environment_suffix" {
   description = "Unique suffix to append to resource names for environment identification"
   type        = string
+  default     = ""
 }
 
 variable "aws_region" {
@@ -93,7 +101,7 @@ variable "tags" {
 }
 ```
 
-## File: main.tf
+### File: main.tf
 
 ```hcl
 terraform {
@@ -104,6 +112,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+
+  # Backend configuration for state management
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 
@@ -114,10 +131,22 @@ provider "aws" {
     tags = merge(
       var.tags,
       {
-        EnvironmentSuffix = var.environment_suffix
+        EnvironmentSuffix = local.env_suffix
       }
     )
   }
+}
+
+# Random string for environment suffix if not provided
+resource "random_string" "environment_suffix" {
+  count   = var.environment_suffix == "" ? 1 : 0
+  length  = 8
+  special = false
+  upper   = false
+}
+
+locals {
+  env_suffix = var.environment_suffix != "" ? var.environment_suffix : (length(random_string.environment_suffix) > 0 ? random_string.environment_suffix[0].result : "dev")
 }
 
 # Data sources
@@ -144,7 +173,7 @@ data "aws_ami" "amazon_linux_2023" {
 }
 ```
 
-## File: vpc.tf
+### File: vpc.tf
 
 ```hcl
 # VPC
@@ -154,7 +183,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "loan-processing-vpc-${var.environment_suffix}"
+    Name = "loan-processing-vpc-${local.env_suffix}"
   }
 }
 
@@ -163,7 +192,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "loan-processing-igw-${var.environment_suffix}"
+    Name = "loan-processing-igw-${local.env_suffix}"
   }
 }
 
@@ -176,7 +205,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "loan-processing-public-subnet-${count.index + 1}-${var.environment_suffix}"
+    Name = "loan-processing-public-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "Public"
   }
 }
@@ -189,7 +218,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "loan-processing-private-subnet-${count.index + 1}-${var.environment_suffix}"
+    Name = "loan-processing-private-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "Private"
   }
 }
@@ -201,7 +230,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name = "loan-processing-nat-eip-${var.environment_suffix}"
+    Name = "loan-processing-nat-eip-${local.env_suffix}"
   }
 }
 
@@ -211,7 +240,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name = "loan-processing-nat-${var.environment_suffix}"
+    Name = "loan-processing-nat-${local.env_suffix}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -227,7 +256,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "loan-processing-public-rt-${var.environment_suffix}"
+    Name = "loan-processing-public-rt-${local.env_suffix}"
   }
 }
 
@@ -248,7 +277,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "loan-processing-private-rt-${var.environment_suffix}"
+    Name = "loan-processing-private-rt-${local.env_suffix}"
   }
 }
 
@@ -260,12 +289,12 @@ resource "aws_route_table_association" "private" {
 }
 ```
 
-## File: security-groups.tf
+### File: security-groups.tf
 
 ```hcl
 # Security Group for ALB
 resource "aws_security_group" "alb" {
-  name_prefix = "loan-processing-alb-sg-${var.environment_suffix}-"
+  name_prefix = "loan-processing-alb-sg-${local.env_suffix}-"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -294,7 +323,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "loan-processing-alb-sg-${var.environment_suffix}"
+    Name = "loan-processing-alb-sg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -304,7 +333,7 @@ resource "aws_security_group" "alb" {
 
 # Security Group for EC2 Instances
 resource "aws_security_group" "ec2" {
-  name_prefix = "loan-processing-ec2-sg-${var.environment_suffix}-"
+  name_prefix = "loan-processing-ec2-sg-${local.env_suffix}-"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
@@ -333,7 +362,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "loan-processing-ec2-sg-${var.environment_suffix}"
+    Name = "loan-processing-ec2-sg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -343,7 +372,7 @@ resource "aws_security_group" "ec2" {
 
 # Security Group for Aurora
 resource "aws_security_group" "aurora" {
-  name_prefix = "loan-processing-aurora-sg-${var.environment_suffix}-"
+  name_prefix = "loan-processing-aurora-sg-${local.env_suffix}-"
   description = "Security group for Aurora PostgreSQL cluster"
   vpc_id      = aws_vpc.main.id
 
@@ -364,7 +393,7 @@ resource "aws_security_group" "aurora" {
   }
 
   tags = {
-    Name = "loan-processing-aurora-sg-${var.environment_suffix}"
+    Name = "loan-processing-aurora-sg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -373,12 +402,12 @@ resource "aws_security_group" "aurora" {
 }
 ```
 
-## File: iam.tf
+### File: iam.tf
 
 ```hcl
 # IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2" {
-  name_prefix = "loan-ec2-${var.environment_suffix}-"
+  name_prefix = "loan-ec2-${local.env_suffix}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -394,13 +423,13 @@ resource "aws_iam_role" "ec2" {
   })
 
   tags = {
-    Name = "loan-processing-ec2-role-${var.environment_suffix}"
+    Name = "loan-processing-ec2-role-${local.env_suffix}"
   }
 }
 
 # IAM Policy for EC2 to access S3, CloudWatch, and RDS
 resource "aws_iam_role_policy" "ec2" {
-  name_prefix = "loan-ec2-policy-${var.environment_suffix}-"
+  name_prefix = "loan-ec2-policy-${local.env_suffix}-"
   role        = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -473,17 +502,17 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 
 # IAM Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2" {
-  name_prefix = "loan-ec2-prof-${var.environment_suffix}-"
+  name_prefix = "loan-ec2-prof-${local.env_suffix}-"
   role        = aws_iam_role.ec2.name
 
   tags = {
-    Name = "loan-processing-ec2-profile-${var.environment_suffix}"
+    Name = "loan-processing-ec2-profile-${local.env_suffix}"
   }
 }
 
 # IAM Role for EventBridge
 resource "aws_iam_role" "eventbridge" {
-  name_prefix = "loan-eb-${var.environment_suffix}-"
+  name_prefix = "loan-eb-${local.env_suffix}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -499,41 +528,41 @@ resource "aws_iam_role" "eventbridge" {
   })
 
   tags = {
-    Name = "loan-processing-eventbridge-role-${var.environment_suffix}"
+    Name = "loan-processing-eventbridge-role-${local.env_suffix}"
   }
 }
 ```
 
-## File: kms.tf
+### File: kms.tf
 
 ```hcl
 # KMS key for encrypting all data at rest
 resource "aws_kms_key" "main" {
-  description             = "Customer-managed key for loan processing application - ${var.environment_suffix}"
+  description             = "Customer-managed key for loan processing application - ${local.env_suffix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
   tags = {
-    Name = "loan-processing-key-${var.environment_suffix}"
+    Name = "loan-processing-key-${local.env_suffix}"
   }
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/loan-processing-${var.environment_suffix}"
+  name          = "alias/loan-processing-${local.env_suffix}"
   target_key_id = aws_kms_key.main.key_id
 }
 ```
 
-## File: rds.tf
+### File: rds.tf
 
 ```hcl
 # DB Subnet Group for Aurora
 resource "aws_db_subnet_group" "aurora" {
-  name_prefix = "loan-processing-aurora-subnet-group-${var.environment_suffix}-"
+  name_prefix = "loan-processing-aurora-subnet-group-${local.env_suffix}-"
   subnet_ids  = aws_subnet.private[*].id
 
   tags = {
-    Name = "loan-processing-aurora-subnet-group-${var.environment_suffix}"
+    Name = "loan-processing-aurora-subnet-group-${local.env_suffix}"
   }
 
   lifecycle {
@@ -549,7 +578,7 @@ resource "random_password" "db_master" {
 
 # Aurora PostgreSQL Serverless v2 Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "loan-processing-aurora-${var.environment_suffix}"
+  cluster_identifier = "loan-processing-aurora-${local.env_suffix}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
   engine_version     = "15.4"
@@ -586,13 +615,13 @@ resource "aws_rds_cluster" "aurora" {
   deletion_protection = false
 
   tags = {
-    Name = "loan-processing-aurora-${var.environment_suffix}"
+    Name = "loan-processing-aurora-${local.env_suffix}"
   }
 }
 
 # Aurora Cluster Instance
 resource "aws_rds_cluster_instance" "aurora" {
-  identifier         = "loan-processing-aurora-instance-${var.environment_suffix}"
+  identifier         = "loan-processing-aurora-instance-${local.env_suffix}"
   cluster_identifier = aws_rds_cluster.aurora.id
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.aurora.engine
@@ -601,20 +630,20 @@ resource "aws_rds_cluster_instance" "aurora" {
   performance_insights_enabled = true
 
   tags = {
-    Name = "loan-processing-aurora-instance-${var.environment_suffix}"
+    Name = "loan-processing-aurora-instance-${local.env_suffix}"
   }
 }
 ```
 
-## File: s3.tf
+### File: s3.tf
 
 ```hcl
 # S3 Bucket for Application Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "loan-processing-logs-${var.environment_suffix}"
+  bucket = "loan-processing-logs-${local.env_suffix}"
 
   tags = {
-    Name = "loan-processing-logs-${var.environment_suffix}"
+    Name = "loan-processing-logs-${local.env_suffix}"
     Type = "Logs"
   }
 }
@@ -672,10 +701,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 
 # S3 Bucket for Loan Documents
 resource "aws_s3_bucket" "documents" {
-  bucket = "loan-processing-documents-${var.environment_suffix}"
+  bucket = "loan-processing-documents-${local.env_suffix}"
 
   tags = {
-    Name = "loan-processing-documents-${var.environment_suffix}"
+    Name = "loan-processing-documents-${local.env_suffix}"
     Type = "Documents"
   }
 }
@@ -743,10 +772,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "documents" {
 
 # S3 Bucket for Static Assets
 resource "aws_s3_bucket" "static_assets" {
-  bucket = "loan-processing-static-${var.environment_suffix}"
+  bucket = "loan-processing-static-${local.env_suffix}"
 
   tags = {
-    Name = "loan-processing-static-${var.environment_suffix}"
+    Name = "loan-processing-static-${local.env_suffix}"
     Type = "StaticAssets"
   }
 }
@@ -775,7 +804,7 @@ resource "aws_s3_bucket_public_access_block" "static_assets" {
 
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "static_assets" {
-  name                              = "loan-processing-oac-${var.environment_suffix}"
+  name                              = "loan-processing-oac-${local.env_suffix}"
   description                       = "OAC for static assets bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -808,12 +837,12 @@ resource "aws_s3_bucket_policy" "static_assets" {
 }
 ```
 
-## File: alb.tf
+### File: alb.tf
 
 ```hcl
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "loan-proc-alb-${var.environment_suffix}"
+  name               = "loan-proc-alb-${local.env_suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -824,7 +853,7 @@ resource "aws_lb" "main" {
   enable_waf_fail_open       = false
 
   tags = {
-    Name = "loan-processing-alb-${var.environment_suffix}"
+    Name = "loan-processing-alb-${local.env_suffix}"
   }
 }
 
@@ -851,7 +880,7 @@ resource "aws_lb_target_group" "app" {
   deregistration_delay = 30
 
   tags = {
-    Name = "loan-processing-app-tg-${var.environment_suffix}"
+    Name = "loan-processing-app-tg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -882,7 +911,7 @@ resource "aws_lb_target_group" "api" {
   deregistration_delay = 30
 
   tags = {
-    Name = "loan-processing-api-tg-${var.environment_suffix}"
+    Name = "loan-processing-api-tg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -902,7 +931,7 @@ resource "aws_lb_listener" "http" {
   }
 
   tags = {
-    Name = "loan-processing-http-listener-${var.environment_suffix}"
+    Name = "loan-processing-http-listener-${local.env_suffix}"
   }
 }
 
@@ -923,7 +952,7 @@ resource "aws_lb_listener_rule" "api" {
   }
 
   tags = {
-    Name = "loan-processing-api-rule-${var.environment_suffix}"
+    Name = "loan-processing-api-rule-${local.env_suffix}"
   }
 }
 
@@ -942,7 +971,7 @@ resource "aws_lb_listener_rule" "api" {
 # }
 ```
 
-## File: asg.tf
+### File: asg.tf
 
 ```hcl
 # User data script for EC2 instances
@@ -994,14 +1023,14 @@ locals {
     systemctl enable docker
 
     # Application setup would go here
-    echo "Loan Processing Application - ${var.environment_suffix}" > /var/www/html/index.html
+    echo "Loan Processing Application - ${local.env_suffix}" > /var/www/html/index.html
   EOF
   )
 }
 
 # Launch Template for EC2 Instances
 resource "aws_launch_template" "main" {
-  name_prefix   = "loan-proc-lt-${var.environment_suffix}-"
+  name_prefix   = "loan-proc-lt-${local.env_suffix}-"
   image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = var.instance_types[0]
 
@@ -1041,8 +1070,8 @@ resource "aws_launch_template" "main" {
     tags = merge(
       var.tags,
       {
-        Name              = "loan-processing-instance-${var.environment_suffix}"
-        EnvironmentSuffix = var.environment_suffix
+        Name              = "loan-processing-instance-${local.env_suffix}"
+        EnvironmentSuffix = local.env_suffix
       }
     )
   }
@@ -1053,8 +1082,8 @@ resource "aws_launch_template" "main" {
     tags = merge(
       var.tags,
       {
-        Name              = "loan-processing-volume-${var.environment_suffix}"
-        EnvironmentSuffix = var.environment_suffix
+        Name              = "loan-processing-volume-${local.env_suffix}"
+        EnvironmentSuffix = local.env_suffix
       }
     )
   }
@@ -1066,7 +1095,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name_prefix               = "loan-proc-asg-${var.environment_suffix}-"
+  name_prefix               = "loan-proc-asg-${local.env_suffix}-"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.app.arn, aws_lb_target_group.api.arn]
   health_check_type         = "ELB"
@@ -1111,13 +1140,13 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "loan-processing-asg-${var.environment_suffix}"
+    value               = "loan-processing-asg-${local.env_suffix}"
     propagate_at_launch = false
   }
 
   tag {
     key                 = "EnvironmentSuffix"
-    value               = var.environment_suffix
+    value               = local.env_suffix
     propagate_at_launch = true
   }
 
@@ -1128,7 +1157,7 @@ resource "aws_autoscaling_group" "main" {
 
 # Auto Scaling Policy - CPU Based
 resource "aws_autoscaling_policy" "cpu" {
-  name                   = "loan-proc-cpu-policy-${var.environment_suffix}"
+  name                   = "loan-proc-cpu-policy-${local.env_suffix}"
   autoscaling_group_name = aws_autoscaling_group.main.name
   policy_type            = "TargetTrackingScaling"
 
@@ -1143,7 +1172,7 @@ resource "aws_autoscaling_policy" "cpu" {
 
 # Auto Scaling Policy - Memory Based (using custom metric)
 resource "aws_autoscaling_policy" "memory" {
-  name                   = "loan-proc-memory-policy-${var.environment_suffix}"
+  name                   = "loan-proc-memory-policy-${local.env_suffix}"
   autoscaling_group_name = aws_autoscaling_group.main.name
   policy_type            = "TargetTrackingScaling"
 
@@ -1176,14 +1205,14 @@ resource "aws_autoscaling_policy" "memory" {
 }
 ```
 
-## File: cloudfront.tf
+### File: cloudfront.tf
 
 ```hcl
 # CloudFront Distribution for Static Assets
 resource "aws_cloudfront_distribution" "static_assets" {
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "CloudFront distribution for loan processing static assets - ${var.environment_suffix}"
+  comment             = "CloudFront distribution for loan processing static assets - ${local.env_suffix}"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
 
@@ -1225,17 +1254,17 @@ resource "aws_cloudfront_distribution" "static_assets" {
   }
 
   tags = {
-    Name = "loan-processing-cloudfront-${var.environment_suffix}"
+    Name = "loan-processing-cloudfront-${local.env_suffix}"
   }
 }
 ```
 
-## File: waf.tf
+### File: waf.tf
 
 ```hcl
 # WAF Web ACL for ALB
 resource "aws_wafv2_web_acl" "alb" {
-  name  = "loan-proc-waf-${var.environment_suffix}"
+  name  = "loan-proc-waf-${local.env_suffix}"
   scope = "REGIONAL"
 
   default_action {
@@ -1318,7 +1347,7 @@ resource "aws_wafv2_web_acl" "alb" {
   }
 
   tags = {
-    Name = "loan-processing-waf-${var.environment_suffix}"
+    Name = "loan-processing-waf-${local.env_suffix}"
   }
 }
 
@@ -1329,23 +1358,23 @@ resource "aws_wafv2_web_acl_association" "alb" {
 }
 ```
 
-## File: cloudwatch.tf
+### File: cloudwatch.tf
 
 ```hcl
 # CloudWatch Log Group for Application Logs
 resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/ec2/loan-processing-${var.environment_suffix}"
+  name              = "/aws/ec2/loan-processing-${local.env_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.main.arn
 
   tags = {
-    Name = "loan-processing-log-group-${var.environment_suffix}"
+    Name = "loan-processing-log-group-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - High CPU
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "loan-proc-high-cpu-${var.environment_suffix}"
+  alarm_name          = "loan-proc-high-cpu-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1360,13 +1389,13 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   }
 
   tags = {
-    Name = "loan-processing-high-cpu-alarm-${var.environment_suffix}"
+    Name = "loan-processing-high-cpu-alarm-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - Unhealthy Target Count
 resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
-  alarm_name          = "loan-proc-unhealthy-targets-${var.environment_suffix}"
+  alarm_name          = "loan-proc-unhealthy-targets-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "UnHealthyHostCount"
@@ -1382,13 +1411,13 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
   }
 
   tags = {
-    Name = "loan-processing-unhealthy-targets-alarm-${var.environment_suffix}"
+    Name = "loan-processing-unhealthy-targets-alarm-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - Aurora CPU
 resource "aws_cloudwatch_metric_alarm" "aurora_cpu" {
-  alarm_name          = "loan-proc-aurora-cpu-${var.environment_suffix}"
+  alarm_name          = "loan-proc-aurora-cpu-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1403,13 +1432,13 @@ resource "aws_cloudwatch_metric_alarm" "aurora_cpu" {
   }
 
   tags = {
-    Name = "loan-processing-aurora-cpu-alarm-${var.environment_suffix}"
+    Name = "loan-processing-aurora-cpu-alarm-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - Aurora Connections
 resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
-  alarm_name          = "loan-proc-aurora-conn-${var.environment_suffix}"
+  alarm_name          = "loan-proc-aurora-conn-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "DatabaseConnections"
@@ -1424,33 +1453,33 @@ resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
   }
 
   tags = {
-    Name = "loan-processing-aurora-conn-alarm-${var.environment_suffix}"
+    Name = "loan-processing-aurora-conn-alarm-${local.env_suffix}"
   }
 }
 ```
 
-## File: eventbridge.tf
+### File: eventbridge.tf
 
 ```hcl
 # EventBridge Rule for Nightly Batch Processing
 resource "aws_cloudwatch_event_rule" "nightly_batch" {
-  name                = "loan-proc-nightly-batch-${var.environment_suffix}"
+  name                = "loan-proc-nightly-batch-${local.env_suffix}"
   description         = "Trigger nightly batch processing for loan applications"
   schedule_expression = "cron(0 2 * * ? *)" # 2 AM UTC daily
 
   tags = {
-    Name = "loan-processing-nightly-batch-rule-${var.environment_suffix}"
+    Name = "loan-processing-nightly-batch-rule-${local.env_suffix}"
   }
 }
 
 # EventBridge Target - CloudWatch Log Group (placeholder)
 resource "aws_cloudwatch_log_group" "batch_processing" {
-  name              = "/aws/events/loan-processing-batch-${var.environment_suffix}"
+  name              = "/aws/events/loan-processing-batch-${local.env_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.main.arn
 
   tags = {
-    Name = "loan-processing-batch-log-group-${var.environment_suffix}"
+    Name = "loan-processing-batch-log-group-${local.env_suffix}"
   }
 }
 
@@ -1464,12 +1493,12 @@ resource "aws_cloudwatch_event_target" "nightly_batch_log" {
 
 # EventBridge Rule for Business Hours Monitoring
 resource "aws_cloudwatch_event_rule" "business_hours_monitor" {
-  name                = "loan-proc-biz-hours-${var.environment_suffix}"
+  name                = "loan-proc-biz-hours-${local.env_suffix}"
   description         = "Monitor during business hours for enhanced alerting"
   schedule_expression = "cron(0 9-17 ? * MON-FRI *)" # 9 AM - 5 PM UTC, Mon-Fri
 
   tags = {
-    Name = "loan-processing-business-hours-rule-${var.environment_suffix}"
+    Name = "loan-processing-business-hours-rule-${local.env_suffix}"
   }
 }
 
@@ -1480,7 +1509,33 @@ resource "aws_cloudwatch_event_target" "business_hours_log" {
 }
 ```
 
-## File: outputs.tf
+### File: acm.tf
+
+```hcl
+# Note: In production, you would create an ACM certificate for your domain
+# For this implementation, we'll reference a certificate that should be created manually
+# or use the ALB with HTTP for testing purposes
+
+# Uncomment and configure if you have a domain:
+# resource "aws_acm_certificate" "alb" {
+#   domain_name       = "loanapp.example.com"
+#   validation_method = "DNS"
+#
+#   subject_alternative_names = [
+#     "*.loanapp.example.com"
+#   ]
+#
+#   tags = {
+#     Name = "loan-processing-cert-${local.env_suffix}"
+#   }
+#
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+# }
+```
+
+### File: outputs.tf
 
 ```hcl
 # VPC Outputs
@@ -1562,6 +1617,11 @@ output "autoscaling_group_name" {
   value       = aws_autoscaling_group.main.name
 }
 
+output "asg_name" {
+  description = "Name of the Auto Scaling group (alias)"
+  value       = aws_autoscaling_group.main.name
+}
+
 output "autoscaling_group_arn" {
   description = "ARN of the Auto Scaling group"
   value       = aws_autoscaling_group.main.arn
@@ -1573,6 +1633,11 @@ output "logs_bucket_id" {
   value       = aws_s3_bucket.logs.id
 }
 
+output "logs_bucket_name" {
+  description = "Name of the logs S3 bucket"
+  value       = aws_s3_bucket.logs.id
+}
+
 output "logs_bucket_arn" {
   description = "ARN of the logs S3 bucket"
   value       = aws_s3_bucket.logs.arn
@@ -1580,6 +1645,11 @@ output "logs_bucket_arn" {
 
 output "documents_bucket_id" {
   description = "ID of the documents S3 bucket"
+  value       = aws_s3_bucket.documents.id
+}
+
+output "documents_bucket_name" {
+  description = "Name of the documents S3 bucket"
   value       = aws_s3_bucket.documents.id
 }
 
@@ -1622,6 +1692,11 @@ output "waf_web_acl_id" {
 
 output "waf_web_acl_arn" {
   description = "ARN of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.alb.arn
+}
+
+output "waf_acl_arn" {
+  description = "ARN of the WAF Web ACL (alias)"
   value       = aws_wafv2_web_acl.alb.arn
 }
 
@@ -1680,22 +1755,34 @@ output "ec2_iam_role_arn" {
   value       = aws_iam_role.ec2.arn
 }
 
+output "ec2_role_arn" {
+  description = "ARN of the EC2 IAM role (alias)"
+  value       = aws_iam_role.ec2.arn
+}
+
 output "ec2_instance_profile_arn" {
   description = "ARN of the EC2 instance profile"
   value       = aws_iam_instance_profile.ec2.arn
 }
 
+output "eventbridge_role_arn" {
+  description = "ARN of the EventBridge IAM role"
+  value       = aws_iam_role.eventbridge.arn
+}
+
 # Environment Suffix Output
 output "environment_suffix" {
   description = "Environment suffix used for resource naming"
-  value       = var.environment_suffix
+  value       = local.env_suffix
 }
 ```
 
-## File: terraform.tfvars
+### File: terraform.tfvars
 
 ```hcl
-# Terraform variables for loan processing application
+# Terraform variables for loan processing infrastructure
+# Environment: synthz4a8u2v3 (from metadata)
+
 environment_suffix = "synthz4a8u2v3"
 aws_region         = "us-east-1"
 
@@ -1722,7 +1809,60 @@ tags = {
   Project    = "LoanProcessing"
   ManagedBy  = "Terraform"
   Compliance = "PCI-DSS"
-  Team       = "DevOps"
+  Team       = "synth-2"
 }
 ```
 
+### File: terraform.tfvars.example
+
+```hcl
+# Example terraform.tfvars file
+# Copy this file to terraform.tfvars and update with your values
+
+environment_suffix = "dev-12345"  # REQUIRED: Unique suffix for your resources
+aws_region         = "us-east-1"
+
+# VPC Configuration
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# Database Configuration
+db_master_username = "dbadmin"
+
+# Auto Scaling Configuration
+instance_types   = ["t3.medium", "t3a.medium"]
+min_capacity     = 2
+max_capacity     = 6
+desired_capacity = 3
+
+# S3 Lifecycle Configuration
+logs_retention_days     = 30
+documents_retention_days = 90
+documents_glacier_days   = 60
+
+# Tags
+tags = {
+  Project     = "LoanProcessing"
+  ManagedBy   = "Terraform"
+  Compliance  = "PCI-DSS"
+  Team        = "DevOps"
+}
+```
+
+## Summary
+
+This complete Terraform configuration implements a PCI DSS compliant loan processing application infrastructure with:
+
+- **VPC**: 3 public and 3 private subnets across 3 availability zones
+- **Aurora PostgreSQL Serverless v2**: With 0.5-1 ACU scaling and point-in-time recovery
+- **Application Load Balancer**: With path-based routing to different EC2 instances
+- **Auto Scaling**: Based on CPU and memory metrics with 20% spot instances
+- **S3 Buckets**: For logs and documents with lifecycle policies and KMS encryption
+- **CloudFront**: Distribution for static assets with S3 origin
+- **WAF**: SQL injection and XSS protection on ALB
+- **EventBridge**: Scheduled rules for nightly batch processing
+- **CloudWatch**: Comprehensive monitoring with alarms and encrypted log groups
+- **KMS**: Customer-managed key with automatic rotation for all encryption
+- **IAM**: Least privilege roles following best practices
+
+All resources are properly tagged, use environment suffix for unique naming, and are configured to be destroyable for CI/CD workflows. The infrastructure validates successfully and can be deployed with `terraform apply`.

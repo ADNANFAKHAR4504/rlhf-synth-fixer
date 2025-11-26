@@ -1,6 +1,6 @@
 # Security Group for ALB
 resource "aws_security_group" "alb" {
-  name_prefix = "loan-processing-alb-sg-${var.environment_suffix}-"
+  name_prefix = "loan-processing-alb-sg-${local.env_suffix}-"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -29,7 +29,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "loan-processing-alb-sg-${var.environment_suffix}"
+    Name = "loan-processing-alb-sg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -39,7 +39,7 @@ resource "aws_security_group" "alb" {
 
 # Security Group for EC2 Instances
 resource "aws_security_group" "ec2" {
-  name_prefix = "loan-processing-ec2-sg-${var.environment_suffix}-"
+  name_prefix = "loan-processing-ec2-sg-${local.env_suffix}-"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
@@ -68,7 +68,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "loan-processing-ec2-sg-${var.environment_suffix}"
+    Name = "loan-processing-ec2-sg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -78,7 +78,7 @@ resource "aws_security_group" "ec2" {
 
 # Security Group for Aurora
 resource "aws_security_group" "aurora" {
-  name_prefix = "loan-processing-aurora-sg-${var.environment_suffix}-"
+  name_prefix = "loan-processing-aurora-sg-${local.env_suffix}-"
   description = "Security group for Aurora PostgreSQL cluster"
   vpc_id      = aws_vpc.main.id
 
@@ -99,7 +99,7 @@ resource "aws_security_group" "aurora" {
   }
 
   tags = {
-    Name = "loan-processing-aurora-sg-${var.environment_suffix}"
+    Name = "loan-processing-aurora-sg-${local.env_suffix}"
   }
 
   lifecycle {

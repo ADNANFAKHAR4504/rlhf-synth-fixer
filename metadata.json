@@ -3,7 +3,8 @@
   "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-2",
+  "author": "raaj1021",
   "startedAt": "2025-01-26T00:00:00-08:00",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -23,8 +24,13 @@
     "RDS",
     "S3",
     "VPC",
-    "WAF"
+    "WAF",
+    "ACM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups"
   ],
   "region": "us-east-1",
-  "training_quality": 8
+  "training_quality": 9
 }

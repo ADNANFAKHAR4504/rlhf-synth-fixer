@@ -1,10 +1,10 @@
 # DB Subnet Group for Aurora
 resource "aws_db_subnet_group" "aurora" {
-  name_prefix = "loan-processing-aurora-subnet-group-${var.environment_suffix}-"
+  name_prefix = "loan-processing-aurora-subnet-group-${local.env_suffix}-"
   subnet_ids  = aws_subnet.private[*].id
 
   tags = {
-    Name = "loan-processing-aurora-subnet-group-${var.environment_suffix}"
+    Name = "loan-processing-aurora-subnet-group-${local.env_suffix}"
   }
 
   lifecycle {
@@ -20,7 +20,7 @@ resource "random_password" "db_master" {
 
 # Aurora PostgreSQL Serverless v2 Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "loan-processing-aurora-${var.environment_suffix}"
+  cluster_identifier = "loan-processing-aurora-${local.env_suffix}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
   engine_version     = "15.4"
@@ -57,13 +57,13 @@ resource "aws_rds_cluster" "aurora" {
   deletion_protection = false
 
   tags = {
-    Name = "loan-processing-aurora-${var.environment_suffix}"
+    Name = "loan-processing-aurora-${local.env_suffix}"
   }
 }
 
 # Aurora Cluster Instance
 resource "aws_rds_cluster_instance" "aurora" {
-  identifier         = "loan-processing-aurora-instance-${var.environment_suffix}"
+  identifier         = "loan-processing-aurora-instance-${local.env_suffix}"
   cluster_identifier = aws_rds_cluster.aurora.id
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.aurora.engine
@@ -72,6 +72,6 @@ resource "aws_rds_cluster_instance" "aurora" {
   performance_insights_enabled = true
 
   tags = {
-    Name = "loan-processing-aurora-instance-${var.environment_suffix}"
+    Name = "loan-processing-aurora-instance-${local.env_suffix}"
   }
 }

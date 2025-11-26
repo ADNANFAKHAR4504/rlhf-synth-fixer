@@ -1,6 +1,6 @@
 # WAF Web ACL for ALB
 resource "aws_wafv2_web_acl" "alb" {
-  name  = "loan-proc-waf-${var.environment_suffix}"
+  name  = "loan-proc-waf-${local.env_suffix}"
   scope = "REGIONAL"
 
   default_action {
@@ -83,7 +83,7 @@ resource "aws_wafv2_web_acl" "alb" {
   }
 
   tags = {
-    Name = "loan-processing-waf-${var.environment_suffix}"
+    Name = "loan-processing-waf-${local.env_suffix}"
   }
 }
 

@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "loan-processing-vpc-${var.environment_suffix}"
+    Name = "loan-processing-vpc-${local.env_suffix}"
   }
 }
 
@@ -14,7 +14,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "loan-processing-igw-${var.environment_suffix}"
+    Name = "loan-processing-igw-${local.env_suffix}"
   }
 }
 
@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "loan-processing-public-subnet-${count.index + 1}-${var.environment_suffix}"
+    Name = "loan-processing-public-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "Public"
   }
 }
@@ -40,7 +40,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "loan-processing-private-subnet-${count.index + 1}-${var.environment_suffix}"
+    Name = "loan-processing-private-subnet-${count.index + 1}-${local.env_suffix}"
     Type = "Private"
   }
 }
@@ -52,7 +52,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name = "loan-processing-nat-eip-${var.environment_suffix}"
+    Name = "loan-processing-nat-eip-${local.env_suffix}"
   }
 }
 
@@ -62,7 +62,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name = "loan-processing-nat-${var.environment_suffix}"
+    Name = "loan-processing-nat-${local.env_suffix}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -78,7 +78,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "loan-processing-public-rt-${var.environment_suffix}"
+    Name = "loan-processing-public-rt-${local.env_suffix}"
   }
 }
 
@@ -99,7 +99,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "loan-processing-private-rt-${var.environment_suffix}"
+    Name = "loan-processing-private-rt-${local.env_suffix}"
   }
 }
 

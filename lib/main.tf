@@ -6,6 +6,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+
+  # Backend configuration for state management
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 
@@ -16,10 +25,22 @@ provider "aws" {
     tags = merge(
       var.tags,
       {
-        EnvironmentSuffix = var.environment_suffix
+        EnvironmentSuffix = local.env_suffix
       }
     )
   }
+}
+
+# Random string for environment suffix if not provided
+resource "random_string" "environment_suffix" {
+  count   = var.environment_suffix == "" ? 1 : 0
+  length  = 8
+  special = false
+  upper   = false
+}
+
+locals {
+  env_suffix = var.environment_suffix != "" ? var.environment_suffix : (length(random_string.environment_suffix) > 0 ? random_string.environment_suffix[0].result : "dev")
 }
 
 # Data sources

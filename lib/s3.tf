@@ -1,9 +1,9 @@
 # S3 Bucket for Application Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "loan-processing-logs-${var.environment_suffix}"
+  bucket = "loan-processing-logs-${local.env_suffix}"
 
   tags = {
-    Name = "loan-processing-logs-${var.environment_suffix}"
+    Name = "loan-processing-logs-${local.env_suffix}"
     Type = "Logs"
   }
 }
@@ -61,10 +61,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 
 # S3 Bucket for Loan Documents
 resource "aws_s3_bucket" "documents" {
-  bucket = "loan-processing-documents-${var.environment_suffix}"
+  bucket = "loan-processing-documents-${local.env_suffix}"
 
   tags = {
-    Name = "loan-processing-documents-${var.environment_suffix}"
+    Name = "loan-processing-documents-${local.env_suffix}"
     Type = "Documents"
   }
 }
@@ -132,10 +132,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "documents" {
 
 # S3 Bucket for Static Assets
 resource "aws_s3_bucket" "static_assets" {
-  bucket = "loan-processing-static-${var.environment_suffix}"
+  bucket = "loan-processing-static-${local.env_suffix}"
 
   tags = {
-    Name = "loan-processing-static-${var.environment_suffix}"
+    Name = "loan-processing-static-${local.env_suffix}"
     Type = "StaticAssets"
   }
 }
@@ -164,7 +164,7 @@ resource "aws_s3_bucket_public_access_block" "static_assets" {
 
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "static_assets" {
-  name                              = "loan-processing-oac-${var.environment_suffix}"
+  name                              = "loan-processing-oac-${local.env_suffix}"
   description                       = "OAC for static assets bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"

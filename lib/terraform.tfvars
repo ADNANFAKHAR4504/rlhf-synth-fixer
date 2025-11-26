@@ -1,7 +1,7 @@
-# Example terraform.tfvars file
-# Copy this file to terraform.tfvars and update with your values
+# Terraform variables for loan processing infrastructure
+# Environment: synthz4a8u2v3 (from metadata)
 
-environment_suffix = "dev-12345"  # REQUIRED: Unique suffix for your resources
+environment_suffix = "synthz4a8u2v3"
 aws_region         = "us-east-1"
 
 # VPC Configuration
@@ -18,14 +18,14 @@ max_capacity     = 6
 desired_capacity = 3
 
 # S3 Lifecycle Configuration
-logs_retention_days     = 30
+logs_retention_days      = 30
 documents_retention_days = 90
 documents_glacier_days   = 60
 
 # Tags
 tags = {
-  Project     = "LoanProcessing"
-  ManagedBy   = "Terraform"
-  Compliance  = "PCI-DSS"
-  Team        = "DevOps"
+  Project    = "LoanProcessing"
+  ManagedBy  = "Terraform"
+  Compliance = "PCI-DSS"
+  Team       = "synth-2"
 }

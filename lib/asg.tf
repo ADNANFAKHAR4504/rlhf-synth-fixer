@@ -47,14 +47,14 @@ locals {
     systemctl enable docker
 
     # Application setup would go here
-    echo "Loan Processing Application - ${var.environment_suffix}" > /var/www/html/index.html
+    echo "Loan Processing Application - ${local.env_suffix}" > /var/www/html/index.html
   EOF
   )
 }
 
 # Launch Template for EC2 Instances
 resource "aws_launch_template" "main" {
-  name_prefix   = "loan-proc-lt-${var.environment_suffix}-"
+  name_prefix   = "loan-proc-lt-${local.env_suffix}-"
   image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = var.instance_types[0]
 
@@ -94,8 +94,8 @@ resource "aws_launch_template" "main" {
     tags = merge(
       var.tags,
       {
-        Name              = "loan-processing-instance-${var.environment_suffix}"
-        EnvironmentSuffix = var.environment_suffix
+        Name              = "loan-processing-instance-${local.env_suffix}"
+        EnvironmentSuffix = local.env_suffix
       }
     )
   }
@@ -106,8 +106,8 @@ resource "aws_launch_template" "main" {
     tags = merge(
       var.tags,
       {
-        Name              = "loan-processing-volume-${var.environment_suffix}"
-        EnvironmentSuffix = var.environment_suffix
+        Name              = "loan-processing-volume-${local.env_suffix}"
+        EnvironmentSuffix = local.env_suffix
       }
     )
   }
@@ -119,7 +119,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name_prefix               = "loan-proc-asg-${var.environment_suffix}-"
+  name_prefix               = "loan-proc-asg-${local.env_suffix}-"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.app.arn, aws_lb_target_group.api.arn]
   health_check_type         = "ELB"
@@ -164,13 +164,13 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "loan-processing-asg-${var.environment_suffix}"
+    value               = "loan-processing-asg-${local.env_suffix}"
     propagate_at_launch = false
   }
 
   tag {
     key                 = "EnvironmentSuffix"
-    value               = var.environment_suffix
+    value               = local.env_suffix
     propagate_at_launch = true
   }
 
@@ -181,7 +181,7 @@ resource "aws_autoscaling_group" "main" {
 
 # Auto Scaling Policy - CPU Based
 resource "aws_autoscaling_policy" "cpu" {
-  name                   = "loan-proc-cpu-policy-${var.environment_suffix}"
+  name                   = "loan-proc-cpu-policy-${local.env_suffix}"
   autoscaling_group_name = aws_autoscaling_group.main.name
   policy_type            = "TargetTrackingScaling"
 
@@ -196,7 +196,7 @@ resource "aws_autoscaling_policy" "cpu" {
 
 # Auto Scaling Policy - Memory Based (using custom metric)
 resource "aws_autoscaling_policy" "memory" {
-  name                   = "loan-proc-memory-policy-${var.environment_suffix}"
+  name                   = "loan-proc-memory-policy-${local.env_suffix}"
   autoscaling_group_name = aws_autoscaling_group.main.name
   policy_type            = "TargetTrackingScaling"
 

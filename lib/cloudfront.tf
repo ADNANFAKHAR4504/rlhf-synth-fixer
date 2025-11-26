@@ -2,7 +2,7 @@
 resource "aws_cloudfront_distribution" "static_assets" {
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "CloudFront distribution for loan processing static assets - ${var.environment_suffix}"
+  comment             = "CloudFront distribution for loan processing static assets - ${local.env_suffix}"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
 
@@ -44,6 +44,6 @@ resource "aws_cloudfront_distribution" "static_assets" {
   }
 
   tags = {
-    Name = "loan-processing-cloudfront-${var.environment_suffix}"
+    Name = "loan-processing-cloudfront-${local.env_suffix}"
   }
 }

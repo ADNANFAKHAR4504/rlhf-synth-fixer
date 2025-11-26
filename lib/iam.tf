@@ -1,6 +1,6 @@
 # IAM Role for EC2 Instances
 resource "aws_iam_role" "ec2" {
-  name_prefix = "loan-ec2-${var.environment_suffix}-"
+  name_prefix = "loan-ec2-${local.env_suffix}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -16,13 +16,13 @@ resource "aws_iam_role" "ec2" {
   })
 
   tags = {
-    Name = "loan-processing-ec2-role-${var.environment_suffix}"
+    Name = "loan-processing-ec2-role-${local.env_suffix}"
   }
 }
 
 # IAM Policy for EC2 to access S3, CloudWatch, and RDS
 resource "aws_iam_role_policy" "ec2" {
-  name_prefix = "loan-ec2-policy-${var.environment_suffix}-"
+  name_prefix = "loan-ec2-policy-${local.env_suffix}-"
   role        = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -95,17 +95,17 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 
 # IAM Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2" {
-  name_prefix = "loan-ec2-prof-${var.environment_suffix}-"
+  name_prefix = "loan-ec2-prof-${local.env_suffix}-"
   role        = aws_iam_role.ec2.name
 
   tags = {
-    Name = "loan-processing-ec2-profile-${var.environment_suffix}"
+    Name = "loan-processing-ec2-profile-${local.env_suffix}"
   }
 }
 
 # IAM Role for EventBridge
 resource "aws_iam_role" "eventbridge" {
-  name_prefix = "loan-eb-${var.environment_suffix}-"
+  name_prefix = "loan-eb-${local.env_suffix}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -121,6 +121,6 @@ resource "aws_iam_role" "eventbridge" {
   })
 
   tags = {
-    Name = "loan-processing-eventbridge-role-${var.environment_suffix}"
+    Name = "loan-processing-eventbridge-role-${local.env_suffix}"
   }
 }

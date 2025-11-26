@@ -8,7 +8,7 @@
 #   validation_method = "DNS"
 #
 #   tags = {
-#     Name = "loan-processing-cert-${var.environment_suffix}"
+#     Name = "loan-processing-cert-${local.env_suffix}"
 #   }
 #
 #   lifecycle {

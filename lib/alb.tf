@@ -1,6 +1,6 @@
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "loan-proc-alb-${var.environment_suffix}"
+  name               = "loan-proc-alb-${local.env_suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -11,7 +11,7 @@ resource "aws_lb" "main" {
   enable_waf_fail_open       = false
 
   tags = {
-    Name = "loan-processing-alb-${var.environment_suffix}"
+    Name = "loan-processing-alb-${local.env_suffix}"
   }
 }
 
@@ -38,7 +38,7 @@ resource "aws_lb_target_group" "app" {
   deregistration_delay = 30
 
   tags = {
-    Name = "loan-processing-app-tg-${var.environment_suffix}"
+    Name = "loan-processing-app-tg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -69,7 +69,7 @@ resource "aws_lb_target_group" "api" {
   deregistration_delay = 30
 
   tags = {
-    Name = "loan-processing-api-tg-${var.environment_suffix}"
+    Name = "loan-processing-api-tg-${local.env_suffix}"
   }
 
   lifecycle {
@@ -89,7 +89,7 @@ resource "aws_lb_listener" "http" {
   }
 
   tags = {
-    Name = "loan-processing-http-listener-${var.environment_suffix}"
+    Name = "loan-processing-http-listener-${local.env_suffix}"
   }
 }
 
@@ -110,7 +110,7 @@ resource "aws_lb_listener_rule" "api" {
   }
 
   tags = {
-    Name = "loan-processing-api-rule-${var.environment_suffix}"
+    Name = "loan-processing-api-rule-${local.env_suffix}"
   }
 }
 

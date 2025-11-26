@@ -1,17 +1,17 @@
 # CloudWatch Log Group for Application Logs
 resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/ec2/loan-processing-${var.environment_suffix}"
+  name              = "/aws/ec2/loan-processing-${local.env_suffix}"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.main.arn
 
   tags = {
-    Name = "loan-processing-log-group-${var.environment_suffix}"
+    Name = "loan-processing-log-group-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - High CPU
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "loan-proc-high-cpu-${var.environment_suffix}"
+  alarm_name          = "loan-proc-high-cpu-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -26,13 +26,13 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   }
 
   tags = {
-    Name = "loan-processing-high-cpu-alarm-${var.environment_suffix}"
+    Name = "loan-processing-high-cpu-alarm-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - Unhealthy Target Count
 resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
-  alarm_name          = "loan-proc-unhealthy-targets-${var.environment_suffix}"
+  alarm_name          = "loan-proc-unhealthy-targets-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "UnHealthyHostCount"
@@ -48,13 +48,13 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
   }
 
   tags = {
-    Name = "loan-processing-unhealthy-targets-alarm-${var.environment_suffix}"
+    Name = "loan-processing-unhealthy-targets-alarm-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - Aurora CPU
 resource "aws_cloudwatch_metric_alarm" "aurora_cpu" {
-  alarm_name          = "loan-proc-aurora-cpu-${var.environment_suffix}"
+  alarm_name          = "loan-proc-aurora-cpu-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -69,13 +69,13 @@ resource "aws_cloudwatch_metric_alarm" "aurora_cpu" {
   }
 
   tags = {
-    Name = "loan-processing-aurora-cpu-alarm-${var.environment_suffix}"
+    Name = "loan-processing-aurora-cpu-alarm-${local.env_suffix}"
   }
 }
 
 # CloudWatch Alarm - Aurora Connections
 resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
-  alarm_name          = "loan-proc-aurora-conn-${var.environment_suffix}"
+  alarm_name          = "loan-proc-aurora-conn-${local.env_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "DatabaseConnections"
@@ -90,6 +90,6 @@ resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
   }
 
   tags = {
-    Name = "loan-processing-aurora-conn-alarm-${var.environment_suffix}"
+    Name = "loan-processing-aurora-conn-alarm-${local.env_suffix}"
   }
 }

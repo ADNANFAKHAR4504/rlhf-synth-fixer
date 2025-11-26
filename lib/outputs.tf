@@ -77,6 +77,11 @@ output "autoscaling_group_name" {
   value       = aws_autoscaling_group.main.name
 }
 
+output "asg_name" {
+  description = "Name of the Auto Scaling group (alias)"
+  value       = aws_autoscaling_group.main.name
+}
+
 output "autoscaling_group_arn" {
   description = "ARN of the Auto Scaling group"
   value       = aws_autoscaling_group.main.arn
@@ -88,6 +93,11 @@ output "logs_bucket_id" {
   value       = aws_s3_bucket.logs.id
 }
 
+output "logs_bucket_name" {
+  description = "Name of the logs S3 bucket"
+  value       = aws_s3_bucket.logs.id
+}
+
 output "logs_bucket_arn" {
   description = "ARN of the logs S3 bucket"
   value       = aws_s3_bucket.logs.arn
@@ -95,6 +105,11 @@ output "logs_bucket_arn" {
 
 output "documents_bucket_id" {
   description = "ID of the documents S3 bucket"
+  value       = aws_s3_bucket.documents.id
+}
+
+output "documents_bucket_name" {
+  description = "Name of the documents S3 bucket"
   value       = aws_s3_bucket.documents.id
 }
 
@@ -137,6 +152,11 @@ output "waf_web_acl_id" {
 
 output "waf_web_acl_arn" {
   description = "ARN of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.alb.arn
+}
+
+output "waf_acl_arn" {
+  description = "ARN of the WAF Web ACL (alias)"
   value       = aws_wafv2_web_acl.alb.arn
 }
 
@@ -195,13 +215,23 @@ output "ec2_iam_role_arn" {
   value       = aws_iam_role.ec2.arn
 }
 
+output "ec2_role_arn" {
+  description = "ARN of the EC2 IAM role (alias)"
+  value       = aws_iam_role.ec2.arn
+}
+
 output "ec2_instance_profile_arn" {
   description = "ARN of the EC2 instance profile"
   value       = aws_iam_instance_profile.ec2.arn
 }
 
+output "eventbridge_role_arn" {
+  description = "ARN of the EventBridge IAM role"
+  value       = aws_iam_role.eventbridge.arn
+}
+
 # Environment Suffix Output
 output "environment_suffix" {
   description = "Environment suffix used for resource naming"
-  value       = var.environment_suffix
+  value       = local.env_suffix
 }
