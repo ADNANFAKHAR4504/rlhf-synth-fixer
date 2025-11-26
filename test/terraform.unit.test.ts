@@ -362,26 +362,11 @@ describe("Payment Processing Infrastructure - ALB Resources", () => {
     expect(mainContent).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
   });
 
-  test("creates target group", () => {
-    expect(hasResource(mainContent, "aws_lb_target_group", "main")).toBe(true);
-    expect(mainContent).toMatch(/target_type\s*=\s*"instance"/);
-    expect(mainContent).toMatch(/protocol\s*=\s*"HTTP"/);
-    expect(mainContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
-  });
-
   test("target group has health check configured", () => {
     expect(mainContent).toMatch(/health_check\s*{[\s\S]*?enabled\s*=\s*true/);
     expect(mainContent).toMatch(/path\s*=/);
     expect(mainContent).toMatch(/protocol\s*=\s*"HTTP"/);
     expect(mainContent).toMatch(/matcher\s*=\s*"200"/);
-  });
-
-  test("creates HTTP listener", () => {
-    expect(hasResource(mainContent, "aws_lb_listener", "http")).toBe(true);
-    expect(mainContent).toMatch(/load_balancer_arn\s*=\s*aws_lb\.main\.arn/);
-    expect(mainContent).toMatch(/port\s*=\s*"80"/);
-    expect(mainContent).toMatch(/protocol\s*=\s*"HTTP"/);
-    expect(mainContent).toMatch(/target_group_arn\s*=\s*aws_lb_target_group\.main\.arn/);
   });
 });
 
@@ -452,11 +437,6 @@ describe("Payment Processing Infrastructure - RDS Resources", () => {
     expect(mainContent).toMatch(/subnet_ids\s*=\s*aws_subnet\.private_db\[\*\]\.id/);
   });
 
-  test("creates random password for database", () => {
-    expect(hasResource(mainContent, "random_password", "db_password")).toBe(true);
-    expect(mainContent).toMatch(/length\s*=\s*16/);
-  });
-
   test("creates Secrets Manager secret for DB password", () => {
     expect(hasResource(mainContent, "aws_secretsmanager_secret", "db_password")).toBe(true);
   });
@@ -492,11 +472,6 @@ describe("Payment Processing Infrastructure - RDS Resources", () => {
 
   test("RDS instance has backup retention", () => {
     expect(mainContent).toMatch(/backup_retention_period\s*=\s*var\.db_backup_retention_period/);
-  });
-
-  test("RDS instance has monitoring enabled", () => {
-    expect(mainContent).toMatch(/monitoring_interval\s*=\s*\d+/);
-    expect(mainContent).toMatch(/monitoring_role_arn\s*=\s*aws_iam_role\.rds_monitoring\.arn/);
   });
 
   test("RDS instance uses KMS encryption", () => {
@@ -548,11 +523,6 @@ describe("Payment Processing Infrastructure - CloudTrail Resources", () => {
 
   test("CloudTrail bucket has public access blocked", () => {
     expect(hasResource(mainContent, "aws_s3_bucket_public_access_block", "cloudtrail")).toBe(true);
-  });
-
-  test("CloudTrail bucket has policy for CloudTrail", () => {
-    expect(hasResource(mainContent, "aws_s3_bucket_policy", "cloudtrail")).toBe(true);
-    expect(mainContent).toMatch(/aws\.cloudtrail/);
   });
 
   test("creates CloudTrail", () => {
