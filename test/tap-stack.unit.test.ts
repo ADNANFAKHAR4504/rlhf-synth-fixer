@@ -153,16 +153,16 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
     });
 
-    test('S3ReplicationRole should be conditional on IsSourceRegion', () => {
+    test('S3ReplicationRole should be conditional on EnableS3Replication', () => {
       const role = template.Resources.S3ReplicationRole;
-      expect(role.Condition).toBe('IsSourceRegion');
+      expect(role.Condition).toBe('EnableS3Replication');
     });
 
     test('should have S3ReplicationConfigFunction for replication configuration', () => {
       const functionResource = template.Resources.S3ReplicationConfigFunction;
       expect(functionResource).toBeDefined();
       expect(functionResource.Type).toBe('AWS::Lambda::Function');
-      expect(functionResource.Condition).toBe('IsSourceRegion');
+      expect(functionResource.Condition).toBe('EnableS3Replication');
       expect(functionResource.Properties.Runtime).toBe('python3.11');
     });
 
@@ -170,7 +170,7 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       const role = template.Resources.S3ReplicationConfigRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Condition).toBe('IsSourceRegion');
+      expect(role.Condition).toBe('EnableS3Replication');
       expect(role.Properties.Policies).toBeDefined();
       const policy = role.Properties.Policies[0];
       expect(policy.PolicyDocument.Statement).toBeDefined();
@@ -185,7 +185,7 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       const customResource = template.Resources.S3ReplicationConfigResource;
       expect(customResource).toBeDefined();
       expect(customResource.Type).toBe('AWS::CloudFormation::CustomResource');
-      expect(customResource.Condition).toBe('IsSourceRegion');
+      expect(customResource.Condition).toBe('EnableS3Replication');
       expect(customResource.Properties.ServiceToken).toBeDefined();
       expect(customResource.Properties.SourceBucket).toBeDefined();
       expect(customResource.Properties.DestBucket).toBeDefined();

@@ -36,6 +36,15 @@
       "Default": "",
       "AllowedPattern": "^$|^vpc-[0-9a-f]{8,17}$",
       "ConstraintDescription": "Must be a valid VPC ID (vpc-xxxxxxxx) or empty string"
+    },
+    "EnableCrossRegionFeatures": {
+      "Description": "Enable cross-region features (S3 replication, VPC peering). Set to false for initial single-region deployment, then true after both regions are deployed.",
+      "Type": "String",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Default": "false"
     }
   },
   "Conditions": {
@@ -59,8 +68,38 @@
         }
       ]
     },
+    "EnableS3Replication": {
+      "Fn::And": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableCrossRegionFeatures"
+            },
+            "true"
+          ]
+        },
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AWS::Region"
+            },
+            {
+              "Ref": "SourceRegion"
+            }
+          ]
+        }
+      ]
+    },
     "CreateVPCPeering": {
       "Fn::And": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableCrossRegionFeatures"
+            },
+            "true"
+          ]
+        },
         {
           "Fn::Equals": [
             {
@@ -166,7 +205,7 @@
     },
     "S3ReplicationRole": {
       "Type": "AWS::IAM::Role",
-      "Condition": "IsSourceRegion",
+      "Condition": "EnableS3Replication",
       "Properties": {
         "RoleName": {
           "Fn::Sub": "s3-replication-role-${EnvironmentSuffix}"
@@ -229,7 +268,7 @@
     },
     "S3ReplicationConfigFunction": {
       "Type": "AWS::Lambda::Function",
-      "Condition": "IsSourceRegion",
+      "Condition": "EnableS3Replication",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "s3-replication-config-${EnvironmentSuffix}"
@@ -350,7 +389,7 @@
     },
     "S3ReplicationConfigRole": {
       "Type": "AWS::IAM::Role",
-      "Condition": "IsSourceRegion",
+      "Condition": "EnableS3Replication",
       "Properties": {
         "RoleName": {
           "Fn::Sub": "s3-replication-config-role-${EnvironmentSuffix}"
@@ -406,7 +445,7 @@
     },
     "S3ReplicationConfigResource": {
       "Type": "AWS::CloudFormation::CustomResource",
-      "Condition": "IsSourceRegion",
+      "Condition": "EnableS3Replication",
       "DependsOn": [
         "TradingDataBucket"
       ],
