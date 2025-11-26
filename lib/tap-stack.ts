@@ -329,7 +329,7 @@ export class TapStack extends pulumi.ComponentResource {
       'primary-cluster-instance',
       {
         clusterIdentifier: primaryCluster.id,
-        instanceClass: 'db.t3.medium',
+        instanceClass: 'db.r5.large', // Global databases require memory-optimized instances
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
       },
@@ -394,7 +394,7 @@ export class TapStack extends pulumi.ComponentResource {
       'secondary-cluster-instance',
       {
         clusterIdentifier: secondaryCluster.id,
-        instanceClass: 'db.t3.medium',
+        instanceClass: 'db.r5.large', // Global databases require memory-optimized instances
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
       },
