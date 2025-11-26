@@ -142,10 +142,8 @@ elif [ "$PLATFORM" = "cfn" ]; then
         fi
 
         echo "🔍 Linting templates under lib/ using pipenv environment..."
-        # Get AWS region from lib/AWS_REGION file or use default
-        AWS_REGION=$(cat lib/AWS_REGION 2>/dev/null | tr -d '\n' || echo "us-east-1")
         find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-            -exec pipenv run cfn-lint {} --regions "${AWS_REGION}" \;
+            -print0 | xargs -0 -r pipenv run cfn-lint -t
 
     else
         echo "ℹ️ No Pipfile found — using system Python environment"
@@ -155,10 +153,8 @@ elif [ "$PLATFORM" = "cfn" ]; then
         fi
 
         echo "🔍 Linting templates under lib/ ..."
-        # Get AWS region from lib/AWS_REGION file or use default
-        AWS_REGION=$(cat lib/AWS_REGION 2>/dev/null | tr -d '\n' || echo "us-east-1")
         find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-            -exec cfn-lint {} --regions "${AWS_REGION}" \;
+            -print0 | xargs -0 -r cfn-lint -t
     fi
 
 elif [ "$PLATFORM" = "cicd" ] && [ "$LANGUAGE" = "yml" ]; then
