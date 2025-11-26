@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-26T11:56:42.231431",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "po_id": "101912705",
   "aws_services": [
     "EC2",
@@ -19,5 +21,7 @@
     "ACM"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
