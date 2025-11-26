@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "po_id": "101912655",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T05:33:22+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "IAM"
+  ],
+  "training_quality": 6,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
