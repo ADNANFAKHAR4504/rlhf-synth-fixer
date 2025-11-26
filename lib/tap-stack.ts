@@ -601,37 +601,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // FIXED: Use data source for secondary region AMI
-    const secondaryAmi = aws.ec2.getAmi(
-      {
-        mostRecent: true,
-        owners: ['amazon'],
-        filters: [
-          {
-            name: 'name',
-            values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-          },
-        ],
-      },
-      { provider: euProvider }
-    );
-
-    // Secondary region EC2 (FIXED: Dynamic AMI)
-    const secondaryInstance = new aws.ec2.Instance(
-      'secondary-instance',
-      {
-        instanceType: 't3.micro',
-        ami: secondaryAmi.then(ami => ami.id), // FIXED: Dynamic AMI lookup
-        subnetId: secondarySubnets[0].id,
-        rootBlockDevice: {
-          encrypted: false, // Disable EBS encryption to avoid KMS key issues
-        },
-        tags: {
-          Name: `secondary-instance-${environmentSuffix}`,
-        },
-      },
-      { provider: euProvider, parent: this }
-    );
+    // Note: Secondary EC2 instance removed due to KMS key encryption issues in eu-west-1
+    // The secondary ALB will be created without backend instances for now
 
     const secondaryAlbSg = new aws.ec2.SecurityGroup(
       'secondary-alb-sg',
@@ -692,14 +663,8 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: euProvider, parent: this }
     );
 
-    const _secondaryAttachment = new aws.lb.TargetGroupAttachment(
-      'secondary-attachment',
-      {
-        targetGroupArn: secondaryTargetGroup.arn,
-        targetId: secondaryInstance.id,
-      },
-      { provider: euProvider, parent: this }
-    );
+    // Note: Secondary instance attachment removed due to KMS encryption issues
+    // The target group exists but has no registered targets
 
     const _secondaryListener = new aws.lb.Listener(
       'secondary-listener',
