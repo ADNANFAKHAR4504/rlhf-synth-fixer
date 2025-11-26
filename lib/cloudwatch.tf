@@ -105,4 +105,56 @@ resource "aws_cloudwatch_metric_alarm" "primary_connections" {
   )
 }
 
-# Note: Secondary region alarm removed as we're using single-region HA setup
+# CloudWatch alarm for replication lag in secondary region
+resource "aws_cloudwatch_metric_alarm" "secondary_replication_lag" {
+  provider            = aws.secondary
+  alarm_name          = "aurora-replication-lag-secondary-${var.environment_suffix}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "AuroraGlobalDBReplicationLag"
+  namespace           = "AWS/RDS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 60000
+  alarm_description   = "Alert when replication lag exceeds 60 seconds in secondary region"
+  alarm_actions       = [aws_sns_topic.secondary_db_events.arn]
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.secondary.id
+  }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name   = "replication-lag-alarm-secondary-${var.environment_suffix}"
+      Region = var.secondary_region
+    }
+  )
+}
+
+# CloudWatch alarm for CPU utilization in secondary region
+resource "aws_cloudwatch_metric_alarm" "secondary_cpu" {
+  provider            = aws.secondary
+  alarm_name          = "aurora-cpu-secondary-${var.environment_suffix}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "Alert when CPU utilization exceeds 80% in secondary region"
+  alarm_actions       = [aws_sns_topic.secondary_db_events.arn]
+
+  dimensions = {
+    DBClusterIdentifier = aws_rds_cluster.secondary.id
+  }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name   = "cpu-alarm-secondary-${var.environment_suffix}"
+      Region = var.secondary_region
+    }
+  )
+}

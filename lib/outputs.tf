@@ -1,3 +1,8 @@
+output "global_cluster_id" {
+  description = "ID of the Aurora Global Database cluster"
+  value       = aws_rds_global_cluster.global.id
+}
+
 output "primary_cluster_endpoint" {
   description = "Endpoint for the primary Aurora cluster"
   value       = aws_rds_cluster.primary.endpoint
@@ -6,6 +11,16 @@ output "primary_cluster_endpoint" {
 output "primary_cluster_reader_endpoint" {
   description = "Reader endpoint for the primary Aurora cluster"
   value       = aws_rds_cluster.primary.reader_endpoint
+}
+
+output "secondary_cluster_endpoint" {
+  description = "Endpoint for the secondary Aurora cluster"
+  value       = aws_rds_cluster.secondary.endpoint
+}
+
+output "secondary_cluster_reader_endpoint" {
+  description = "Reader endpoint for the secondary Aurora cluster"
+  value       = aws_rds_cluster.secondary.reader_endpoint
 }
 
 output "primary_backup_bucket" {
@@ -35,7 +50,17 @@ output "primary_sns_topic_arn" {
   value       = aws_sns_topic.primary_db_events.arn
 }
 
+output "secondary_sns_topic_arn" {
+  description = "ARN of the SNS topic for secondary database events"
+  value       = aws_sns_topic.secondary_db_events.arn
+}
+
 output "primary_kms_key_id" {
   description = "ID of the KMS key for primary region encryption"
   value       = aws_kms_key.primary_db.id
+}
+
+output "secondary_kms_key_id" {
+  description = "ID of the KMS key for secondary region encryption"
+  value       = aws_kms_key.secondary_db.id
 }

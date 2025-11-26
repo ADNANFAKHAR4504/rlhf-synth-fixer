@@ -115,4 +115,15 @@ resource "aws_secretsmanager_secret" "secondary_db" {
   )
 }
 
-# Note: Secondary secret version removed - secret exists for backup replication but no cluster
+resource "aws_secretsmanager_secret_version" "secondary_db" {
+  provider  = aws.secondary
+  secret_id = aws_secretsmanager_secret.secondary_db.id
+  secret_string = jsonencode({
+    username = var.master_username
+    password = random_password.master_password.result
+    engine   = "postgres"
+    host     = aws_rds_cluster.secondary.endpoint
+    port     = aws_rds_cluster.secondary.port
+    dbname   = var.database_name
+  })
+}

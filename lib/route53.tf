@@ -14,7 +14,21 @@ resource "aws_route53_health_check" "primary_db" {
   )
 }
 
-# Note: Secondary health check removed - no secondary cluster in single-region HA setup
+# Health check for secondary database using CloudWatch alarm
+resource "aws_route53_health_check" "secondary_db" {
+  type                            = "CLOUDWATCH_METRIC"
+  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.secondary_replication_lag.alarm_name
+  cloudwatch_alarm_region         = var.secondary_region
+  insufficient_data_health_status = "Unhealthy"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name   = "health-check-secondary-${var.environment_suffix}"
+      Region = var.secondary_region
+    }
+  )
+}
 
 # IAM role for Route 53 to access CloudWatch
 resource "aws_iam_role" "route53_health_check" {
