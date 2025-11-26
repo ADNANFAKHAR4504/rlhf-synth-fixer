@@ -45,10 +45,13 @@ describe('CloudFormation Template Unit Tests', () => {
 
     test('should have VPC configuration parameters', () => {
       expect(template.Parameters.VpcId).toBeDefined();
-      expect(template.Parameters.VpcId.Type).toBe('AWS::EC2::VPC::Id');
+      expect(template.Parameters.VpcId.Type).toBe('String');
       expect(template.Parameters.PrivateSubnet1).toBeDefined();
+      expect(template.Parameters.PrivateSubnet1.Type).toBe('String');
       expect(template.Parameters.PrivateSubnet2).toBeDefined();
+      expect(template.Parameters.PrivateSubnet2.Type).toBe('String');
       expect(template.Parameters.PrivateSubnet3).toBeDefined();
+      expect(template.Parameters.PrivateSubnet3.Type).toBe('String');
     });
 
     test('should have database configuration parameters', () => {
