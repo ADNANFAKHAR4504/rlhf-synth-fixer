@@ -22,5 +22,10 @@
     "AWS Config"
   ],
   "region": "us-east-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
