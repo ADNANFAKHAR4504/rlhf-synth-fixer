@@ -599,7 +599,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/loan-processing-${local.env_suffix}-${random_string.unique_suffix.result}"
+  name          = "alias/kms-${local.env_suffix}-${random_string.unique_suffix.result}"
   target_key_id = aws_kms_key.main.key_id
 }
 ```
@@ -629,7 +629,7 @@ resource "random_password" "db_master" {
 
 # Aurora PostgreSQL Serverless v2 Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "loan-processing-aurora-${local.env_suffix}-${random_string.unique_suffix.result}"
+  cluster_identifier = "aurora-${local.env_suffix}-${random_string.unique_suffix.result}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
   engine_version     = "14.6" # Use supported version for Serverless v2
@@ -672,7 +672,7 @@ resource "aws_rds_cluster" "aurora" {
 
 # Aurora Cluster Instance
 resource "aws_rds_cluster_instance" "aurora" {
-  identifier         = "loan-processing-aurora-instance-${local.env_suffix}-${random_string.unique_suffix.result}"
+  identifier         = "aurora-inst-${local.env_suffix}-${random_string.unique_suffix.result}"
   cluster_identifier = aws_rds_cluster.aurora.id
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.aurora.engine
@@ -691,7 +691,7 @@ resource "aws_rds_cluster_instance" "aurora" {
 ```hcl
 # S3 Bucket for Application Logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "loan-processing-logs-${local.env_suffix}-${random_string.unique_suffix.result}"
+  bucket = "logs-${local.env_suffix}-${random_string.unique_suffix.result}"
 
   tags = {
     Name = "loan-processing-logs-${local.env_suffix}"
@@ -752,7 +752,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 
 # S3 Bucket for Loan Documents
 resource "aws_s3_bucket" "documents" {
-  bucket = "loan-processing-documents-${local.env_suffix}-${random_string.unique_suffix.result}"
+  bucket = "docs-${local.env_suffix}-${random_string.unique_suffix.result}"
 
   tags = {
     Name = "loan-processing-documents-${local.env_suffix}"
@@ -823,7 +823,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "documents" {
 
 # S3 Bucket for Static Assets
 resource "aws_s3_bucket" "static_assets" {
-  bucket = "loan-processing-static-${local.env_suffix}-${random_string.unique_suffix.result}"
+  bucket = "static-${local.env_suffix}-${random_string.unique_suffix.result}"
 
   tags = {
     Name = "loan-processing-static-${local.env_suffix}"
@@ -855,7 +855,7 @@ resource "aws_s3_bucket_public_access_block" "static_assets" {
 
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "static_assets" {
-  name                              = "loan-processing-oac-${local.env_suffix}-${random_string.unique_suffix.result}"
+  name                              = "oac-${local.env_suffix}-${random_string.unique_suffix.result}"
   description                       = "OAC for static assets bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -893,7 +893,7 @@ resource "aws_s3_bucket_policy" "static_assets" {
 ```hcl
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "loan-proc-alb-${local.env_suffix}-${random_string.unique_suffix.result}"
+  name               = "alb-${local.env_suffix}-${random_string.unique_suffix.result}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -1315,7 +1315,7 @@ resource "aws_cloudfront_distribution" "static_assets" {
 ```hcl
 # WAF Web ACL for ALB
 resource "aws_wafv2_web_acl" "alb" {
-  name  = "loan-proc-waf-${local.env_suffix}-${random_string.unique_suffix.result}"
+  name  = "waf-${local.env_suffix}-${random_string.unique_suffix.result}"
   scope = "REGIONAL"
 
   default_action {
@@ -1922,13 +1922,14 @@ To prevent naming conflicts during deployments, the configuration uses a two-par
 1. **Environment Suffix** (`local.env_suffix`): Identifies the deployment environment
 2. **Random Suffix** (`random_string.unique_suffix`): 6-character random string ensuring uniqueness
 
-Resources prone to naming conflicts include the random suffix:
-- ALB: `loan-proc-alb-${env_suffix}-${unique_suffix}`
-- S3 Buckets: `loan-processing-{type}-${env_suffix}-${unique_suffix}`
-- Aurora Cluster: `loan-processing-aurora-${env_suffix}-${unique_suffix}`
-- KMS Alias: `alias/loan-processing-${env_suffix}-${unique_suffix}`
-- WAF Web ACL: `loan-proc-waf-${env_suffix}-${unique_suffix}`
-- CloudFront OAC: `loan-processing-oac-${env_suffix}-${unique_suffix}`
+Resources prone to naming conflicts include the random suffix (shortened to meet AWS naming limits):
+- ALB: `alb-${env_suffix}-${unique_suffix}` (max 32 chars)
+- S3 Buckets: `{logs|docs|static}-${env_suffix}-${unique_suffix}` (max 63 chars)
+- Aurora Cluster: `aurora-${env_suffix}-${unique_suffix}` (max 63 chars)
+- Aurora Instance: `aurora-inst-${env_suffix}-${unique_suffix}` (max 63 chars)
+- KMS Alias: `alias/kms-${env_suffix}-${unique_suffix}` (max 256 chars)
+- WAF Web ACL: `waf-${env_suffix}-${unique_suffix}` (max 128 chars)
+- CloudFront OAC: `oac-${env_suffix}-${unique_suffix}` (max 64 chars)
 
 This ensures resources are:
 - **Idempotent**: Within the same Terraform state

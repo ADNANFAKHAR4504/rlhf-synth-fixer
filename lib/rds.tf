@@ -20,7 +20,7 @@ resource "random_password" "db_master" {
 
 # Aurora PostgreSQL Serverless v2 Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "loan-processing-aurora-${local.env_suffix}-${random_string.unique_suffix.result}"
+  cluster_identifier = "aurora-${local.env_suffix}-${random_string.unique_suffix.result}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
   engine_version     = "14.6" # Use supported version for Serverless v2
@@ -63,7 +63,7 @@ resource "aws_rds_cluster" "aurora" {
 
 # Aurora Cluster Instance
 resource "aws_rds_cluster_instance" "aurora" {
-  identifier         = "loan-processing-aurora-instance-${local.env_suffix}-${random_string.unique_suffix.result}"
+  identifier         = "aurora-inst-${local.env_suffix}-${random_string.unique_suffix.result}"
   cluster_identifier = aws_rds_cluster.aurora.id
   instance_class     = "db.serverless"
   engine             = aws_rds_cluster.aurora.engine

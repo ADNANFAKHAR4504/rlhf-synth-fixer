@@ -1,6 +1,6 @@
 # WAF Web ACL for ALB
 resource "aws_wafv2_web_acl" "alb" {
-  name  = "loan-proc-waf-${local.env_suffix}-${random_string.unique_suffix.result}"
+  name  = "waf-${local.env_suffix}-${random_string.unique_suffix.result}"
   scope = "REGIONAL"
 
   default_action {
