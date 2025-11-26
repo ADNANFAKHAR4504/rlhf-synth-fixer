@@ -36,5 +36,10 @@
       "failed": 0
     }
   },
-  "training_quality": 6
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
