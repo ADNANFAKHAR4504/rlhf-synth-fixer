@@ -305,28 +305,6 @@
         "Description": "Allow MySQL to RDS Aurora"
       }
     },
-    "S3VPCEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "VpcEndpointType": "Gateway",
-        "VpcId": {"Ref": "VPC"},
-        "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.s3"},
-        "RouteTableIds": [
-          {"Ref": "PrivateRouteTable"}
-        ]
-      }
-    },
-    "DynamoDBVPCEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "VpcEndpointType": "Gateway",
-        "VpcId": {"Ref": "VPC"},
-        "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"},
-        "RouteTableIds": [
-          {"Ref": "PrivateRouteTable"}
-        ]
-      }
-    },
     "ECRVPCEndpoint": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
