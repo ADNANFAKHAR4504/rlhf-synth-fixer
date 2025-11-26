@@ -36,11 +36,11 @@ export class Route53Stack extends pulumi.ComponentResource {
     this.hostedZone = new aws.route53.Zone(
       `${name}-zone`,
       {
-        name: `dr-app-${envSuffix}.example.com`,
+        name: `dr-app-${envSuffix}-as.example.com`,
         comment: 'Hosted zone for multi-region DR application',
         tags: {
           ...tags,
-          Name: `${name}-hosted-zone-${envSuffix}`,
+          Name: `${name}-hosted-zone-${envSuffix}-as`,
           Purpose: 'multi-region-dr',
         },
       },
@@ -56,7 +56,7 @@ export class Route53Stack extends pulumi.ComponentResource {
         childHealthchecks: [],
         tags: {
           ...tags,
-          Name: `${name}-primary-health-${envSuffix}`,
+          Name: `${name}-primary-health-${envSuffix}-as`,
           Region: args.primaryRegion,
         },
       },
@@ -72,7 +72,7 @@ export class Route53Stack extends pulumi.ComponentResource {
         childHealthchecks: [],
         tags: {
           ...tags,
-          Name: `${name}-secondary-health-${envSuffix}`,
+          Name: `${name}-secondary-health-${envSuffix}-as`,
           Region: args.secondaryRegion,
         },
       },
@@ -84,7 +84,7 @@ export class Route53Stack extends pulumi.ComponentResource {
       `${name}-primary-record`,
       {
         zoneId: this.hostedZone.zoneId,
-        name: `app.dr-app-${envSuffix}.example.com`,
+        name: `app.dr-app-${envSuffix}-as.example.com`,
         type: 'CNAME',
         ttl: 60,
         records: [args.primaryEndpoint],
@@ -104,7 +104,7 @@ export class Route53Stack extends pulumi.ComponentResource {
       `${name}-secondary-record`,
       {
         zoneId: this.hostedZone.zoneId,
-        name: `app.dr-app-${envSuffix}.example.com`,
+        name: `app.dr-app-${envSuffix}-as.example.com`,
         type: 'CNAME',
         ttl: 60,
         records: [args.secondaryEndpoint],

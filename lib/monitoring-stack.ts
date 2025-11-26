@@ -3,8 +3,8 @@
  *
  * Defines CloudWatch alarms and SNS topics for monitoring and alerting.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface MonitoringStackArgs {
   region: string;
@@ -34,11 +34,11 @@ export class MonitoringStack extends pulumi.ComponentResource {
     this.snsTopic = new aws.sns.Topic(
       `${name}-alerts`,
       {
-        name: `${name}-alerts-${envSuffix}`,
+        name: `${name}-alerts-${envSuffix}-as`,
         displayName: 'DR Infrastructure Alerts',
         tags: {
           ...tags,
-          Name: `${name}-sns-topic-${envSuffix}`,
+          Name: `${name}-sns-topic-${envSuffix}-as`,
           Region: region,
         },
       },
@@ -60,7 +60,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     this.lambdaErrorAlarm = new aws.cloudwatch.MetricAlarm(
       `${name}-lambda-errors`,
       {
-        name: `${name}-lambda-errors-${envSuffix}`,
+        name: `${name}-lambda-errors-${envSuffix}-as`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         metricName: 'Errors',
@@ -85,7 +85,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${name}-lambda-duration`,
       {
-        name: `${name}-lambda-duration-${envSuffix}`,
+        name: `${name}-lambda-duration-${envSuffix}-as`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'Duration',
@@ -110,7 +110,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${name}-aurora-cpu`,
       {
-        name: `${name}-aurora-cpu-${envSuffix}`,
+        name: `${name}-aurora-cpu-${envSuffix}-as`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -135,7 +135,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${name}-aurora-connections`,
       {
-        name: `${name}-aurora-connections-${envSuffix}`,
+        name: `${name}-aurora-connections-${envSuffix}-as`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         metricName: 'DatabaseConnections',

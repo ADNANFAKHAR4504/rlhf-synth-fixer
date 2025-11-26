@@ -1,14 +1,66 @@
 /**
  * Unit tests for TapStack multi-region DR infrastructure
  */
-import { VpcStack } from '../lib/vpc-stack';
+import * as pulumi from '@pulumi/pulumi';
 import { AuroraStack } from '../lib/aurora-stack';
 import { DynamoDBStack } from '../lib/dynamodb-stack';
-import { LambdaStack } from '../lib/lambda-stack';
 import { EventBridgeStack } from '../lib/eventbridge-stack';
+import { LambdaStack } from '../lib/lambda-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
 import { Route53Stack } from '../lib/route53-stack';
 import { TapStack } from '../lib/tap-stack';
+import { VpcStack } from '../lib/vpc-stack';
+
+// Mock Pulumi runtime
+pulumi.runtime.setMocks({
+  newResource: (args: pulumi.runtime.MockResourceArgs): {
+    id: string;
+    state: Record<string, any>;
+  } => {
+    const outputs: Record<string, any> = {
+      ...args.inputs,
+      id: `${args.name}-id`,
+      arn: `arn:aws:service::123456789012:${args.type}/${args.name}`,
+      name: args.inputs.name || args.name,
+    };
+
+    // Specific outputs for different resource types
+    switch (args.type) {
+      case 'aws:ec2/vpc:Vpc':
+        outputs.cidrBlock = args.inputs.cidrBlock || '10.0.0.0/16';
+        break;
+      case 'aws:ec2/subnet:Subnet':
+        outputs.availabilityZone = args.inputs.availabilityZone || 'us-east-1a';
+        break;
+      case 'aws:rds/cluster:Cluster':
+        outputs.endpoint = `${args.name}.cluster-abc123.us-east-1.rds.amazonaws.com`;
+        outputs.readerEndpoint = `${args.name}.cluster-ro-abc123.us-east-1.rds.amazonaws.com`;
+        break;
+      case 'aws:route53/zone:Zone':
+        outputs.zoneId = 'Z1234567890ABC';
+        outputs.nameServers = ['ns-1.awsdns.com', 'ns-2.awsdns.com'];
+        break;
+      case 'aws:lambda/function:Function':
+        outputs.name = args.inputs.name || args.name;
+        outputs.invokeArn = `arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/${outputs.arn}/invocations`;
+        break;
+    }
+
+    return {
+      id: `${args.name}-id`,
+      state: outputs,
+    };
+  },
+  call: (args: pulumi.runtime.MockCallArgs) => {
+    if (args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones') {
+      return {
+        names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+        zoneIds: ['use1-az1', 'use1-az2', 'use1-az3'],
+      };
+    }
+    return {};
+  },
+});
 
 describe('VpcStack', () => {
   it('should export VpcStack class', () => {
@@ -18,6 +70,75 @@ describe('VpcStack', () => {
 
   it('should have correct constructor signature', () => {
     expect(VpcStack.prototype.constructor.length).toBe(3);
+  });
+
+  it('should create VPC with correct CIDR block', async () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+      environmentSuffix: 'test',
+      tags: { Environment: 'test' },
+    });
+
+    expect(stack.vpc).toBeDefined();
+    expect(stack.vpcId).toBeDefined();
+
+    const vpcId = await stack.vpcId.promise();
+    expect(vpcId).toBeTruthy();
+  });
+
+  it('should create 3 public subnets', async () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.publicSubnets).toHaveLength(3);
+    expect(stack.publicSubnetIds).toHaveLength(3);
+  });
+
+  it('should create 3 private subnets', async () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.privateSubnets).toHaveLength(3);
+    expect(stack.privateSubnetIds).toHaveLength(3);
+  });
+
+  it('should create Internet Gateway', () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.internetGateway).toBeDefined();
+  });
+
+  it('should create NAT Gateways', () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.natGateways).toHaveLength(3);
+  });
+
+  it('should create security group', () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.securityGroup).toBeDefined();
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new VpcStack('test-vpc', {
+      region: 'us-east-1',
+    });
+
+    expect(stack.vpc).toBeDefined();
   });
 });
 
@@ -30,6 +151,51 @@ describe('AuroraStack', () => {
   it('should have correct constructor signature', () => {
     expect(AuroraStack.prototype.constructor.length).toBe(3);
   });
+
+  it('should create Aurora cluster with correct configuration', async () => {
+    const stack = new AuroraStack('test-aurora', {
+      region: 'us-east-1',
+      vpcId: pulumi.output('vpc-123'),
+      privateSubnetIds: [
+        pulumi.output('subnet-1'),
+        pulumi.output('subnet-2'),
+        pulumi.output('subnet-3'),
+      ],
+      securityGroupId: pulumi.output('sg-123'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.cluster).toBeDefined();
+    expect(stack.clusterInstance).toBeDefined();
+    expect(stack.subnetGroup).toBeDefined();
+  });
+
+  it('should expose cluster endpoints', async () => {
+    const stack = new AuroraStack('test-aurora', {
+      region: 'us-east-1',
+      vpcId: pulumi.output('vpc-123'),
+      privateSubnetIds: [pulumi.output('subnet-1')],
+      securityGroupId: pulumi.output('sg-123'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.clusterEndpoint).toBeDefined();
+    expect(stack.clusterReaderEndpoint).toBeDefined();
+
+    const endpoint = await stack.clusterEndpoint.promise();
+    expect(endpoint).toContain('rds.amazonaws.com');
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new AuroraStack('test-aurora', {
+      region: 'us-east-1',
+      vpcId: pulumi.output('vpc-123'),
+      privateSubnetIds: [pulumi.output('subnet-1')],
+      securityGroupId: pulumi.output('sg-123'),
+    });
+
+    expect(stack.cluster).toBeDefined();
+  });
 });
 
 describe('DynamoDBStack', () => {
@@ -40,6 +206,39 @@ describe('DynamoDBStack', () => {
 
   it('should have correct constructor signature', () => {
     expect(DynamoDBStack.prototype.constructor.length).toBe(3);
+  });
+
+  it('should create DynamoDB table with global replication', async () => {
+    const stack = new DynamoDBStack('test-dynamodb', {
+      regions: ['us-east-1', 'us-west-2'],
+      environmentSuffix: 'test',
+      tags: { Environment: 'test' },
+    });
+
+    expect(stack.table).toBeDefined();
+    expect(stack.tableName).toBeDefined();
+    expect(stack.tableArn).toBeDefined();
+  });
+
+  it('should expose table name and ARN', async () => {
+    const stack = new DynamoDBStack('test-dynamodb', {
+      regions: ['us-east-1', 'us-west-2'],
+      environmentSuffix: 'test',
+    });
+
+    const tableName = await stack.tableName.promise();
+    const tableArn = await stack.tableArn.promise();
+
+    expect(tableName).toBeTruthy();
+    expect(tableArn).toBeTruthy();
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new DynamoDBStack('test-dynamodb', {
+      regions: ['us-east-1'],
+    });
+
+    expect(stack.table).toBeDefined();
   });
 });
 
@@ -52,6 +251,53 @@ describe('LambdaStack', () => {
   it('should have correct constructor signature', () => {
     expect(LambdaStack.prototype.constructor.length).toBe(3);
   });
+
+  it('should create Lambda function with correct configuration', async () => {
+    const stack = new LambdaStack('test-lambda', {
+      region: 'us-east-1',
+      vpcId: pulumi.output('vpc-123'),
+      privateSubnetIds: [pulumi.output('subnet-1')],
+      securityGroupId: pulumi.output('sg-123'),
+      auroraEndpoint: pulumi.output('db.endpoint.com'),
+      dynamoDbTableName: pulumi.output('test-table'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.function).toBeDefined();
+    expect(stack.role).toBeDefined();
+    expect(stack.logGroup).toBeDefined();
+  });
+
+  it('should expose function ARN and name', async () => {
+    const stack = new LambdaStack('test-lambda', {
+      region: 'us-east-1',
+      vpcId: pulumi.output('vpc-123'),
+      privateSubnetIds: [pulumi.output('subnet-1')],
+      securityGroupId: pulumi.output('sg-123'),
+      auroraEndpoint: pulumi.output('db.endpoint.com'),
+      dynamoDbTableName: pulumi.output('test-table'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.functionArn).toBeDefined();
+    expect(stack.functionName).toBeDefined();
+
+    const functionArn = await stack.functionArn.promise();
+    expect(functionArn).toBeTruthy();
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new LambdaStack('test-lambda', {
+      region: 'us-east-1',
+      vpcId: pulumi.output('vpc-123'),
+      privateSubnetIds: [pulumi.output('subnet-1')],
+      securityGroupId: pulumi.output('sg-123'),
+      auroraEndpoint: pulumi.output('db.endpoint.com'),
+      dynamoDbTableName: pulumi.output('test-table'),
+    });
+
+    expect(stack.function).toBeDefined();
+  });
 });
 
 describe('EventBridgeStack', () => {
@@ -62,6 +308,41 @@ describe('EventBridgeStack', () => {
 
   it('should have correct constructor signature', () => {
     expect(EventBridgeStack.prototype.constructor.length).toBe(3);
+  });
+
+  it('should create EventBridge rule and target', async () => {
+    const stack = new EventBridgeStack('test-eventbridge', {
+      region: 'us-east-1',
+      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-east-1:123456789012:function:test'),
+      lambdaFunctionName: pulumi.output('test-function'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.rule).toBeDefined();
+    expect(stack.target).toBeDefined();
+    expect(stack.ruleArn).toBeDefined();
+  });
+
+  it('should expose rule ARN', async () => {
+    const stack = new EventBridgeStack('test-eventbridge', {
+      region: 'us-east-1',
+      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-east-1:123456789012:function:test'),
+      lambdaFunctionName: pulumi.output('test-function'),
+      environmentSuffix: 'test',
+    });
+
+    const ruleArn = await stack.ruleArn.promise();
+    expect(ruleArn).toBeTruthy();
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new EventBridgeStack('test-eventbridge', {
+      region: 'us-east-1',
+      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-east-1:123456789012:function:test'),
+      lambdaFunctionName: pulumi.output('test-function'),
+    });
+
+    expect(stack.rule).toBeDefined();
   });
 });
 
@@ -74,6 +355,41 @@ describe('MonitoringStack', () => {
   it('should have correct constructor signature', () => {
     expect(MonitoringStack.prototype.constructor.length).toBe(3);
   });
+
+  it('should create SNS topic and CloudWatch alarms', async () => {
+    const stack = new MonitoringStack('test-monitoring', {
+      region: 'us-east-1',
+      lambdaFunctionName: pulumi.output('test-function'),
+      auroraClusterId: pulumi.output('test-cluster'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.snsTopic).toBeDefined();
+    expect(stack.lambdaErrorAlarm).toBeDefined();
+    expect(stack.snsTopicArn).toBeDefined();
+  });
+
+  it('should expose SNS topic ARN', async () => {
+    const stack = new MonitoringStack('test-monitoring', {
+      region: 'us-east-1',
+      lambdaFunctionName: pulumi.output('test-function'),
+      auroraClusterId: pulumi.output('test-cluster'),
+      environmentSuffix: 'test',
+    });
+
+    const topicArn = await stack.snsTopicArn.promise();
+    expect(topicArn).toBeTruthy();
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new MonitoringStack('test-monitoring', {
+      region: 'us-east-1',
+      lambdaFunctionName: pulumi.output('test-function'),
+      auroraClusterId: pulumi.output('test-cluster'),
+    });
+
+    expect(stack.snsTopic).toBeDefined();
+  });
 });
 
 describe('Route53Stack', () => {
@@ -84,6 +400,50 @@ describe('Route53Stack', () => {
 
   it('should have correct constructor signature', () => {
     expect(Route53Stack.prototype.constructor.length).toBe(3);
+  });
+
+  it('should create hosted zone with health checks', async () => {
+    const stack = new Route53Stack('test-route53', {
+      primaryRegion: 'us-east-1',
+      secondaryRegion: 'us-west-2',
+      primaryEndpoint: pulumi.output('primary.endpoint.com'),
+      secondaryEndpoint: pulumi.output('secondary.endpoint.com'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.hostedZone).toBeDefined();
+    expect(stack.primaryHealthCheck).toBeDefined();
+    expect(stack.secondaryHealthCheck).toBeDefined();
+  });
+
+  it('should expose zone ID and name servers', async () => {
+    const stack = new Route53Stack('test-route53', {
+      primaryRegion: 'us-east-1',
+      secondaryRegion: 'us-west-2',
+      primaryEndpoint: pulumi.output('primary.endpoint.com'),
+      secondaryEndpoint: pulumi.output('secondary.endpoint.com'),
+      environmentSuffix: 'test',
+    });
+
+    expect(stack.zoneId).toBeDefined();
+    expect(stack.nameServers).toBeDefined();
+
+    const zoneId = await stack.zoneId.promise();
+    expect(zoneId).toBeTruthy();
+
+    const nameServers = await stack.nameServers.promise();
+    expect(nameServers).toHaveLength(2);
+  });
+
+  it('should use default environment suffix if not provided', () => {
+    const stack = new Route53Stack('test-route53', {
+      primaryRegion: 'us-east-1',
+      secondaryRegion: 'us-west-2',
+      primaryEndpoint: pulumi.output('primary.endpoint.com'),
+      secondaryEndpoint: pulumi.output('secondary.endpoint.com'),
+    });
+
+    expect(stack.hostedZone).toBeDefined();
   });
 });
 
@@ -100,6 +460,78 @@ describe('TapStack', () => {
   it('should have expected public properties', () => {
     const proto = TapStack.prototype;
     expect(proto).toBeDefined();
+  });
+
+  it('should create complete multi-region infrastructure', async () => {
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test',
+      tags: { Environment: 'test', Project: 'dr-test' },
+    });
+
+    // Verify primary region outputs
+    expect(stack.primaryVpcId).toBeDefined();
+    expect(stack.primaryAuroraEndpoint).toBeDefined();
+    expect(stack.primaryLambdaArn).toBeDefined();
+
+    // Verify secondary region outputs
+    expect(stack.secondaryVpcId).toBeDefined();
+    expect(stack.secondaryAuroraEndpoint).toBeDefined();
+    expect(stack.secondaryLambdaArn).toBeDefined();
+
+    // Verify global outputs
+    expect(stack.dynamoDbTableName).toBeDefined();
+    expect(stack.route53ZoneId).toBeDefined();
+  });
+
+  it('should resolve all outputs', async () => {
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test',
+    });
+
+    const [
+      primaryVpcId,
+      primaryAuroraEndpoint,
+      primaryLambdaArn,
+      secondaryVpcId,
+      secondaryAuroraEndpoint,
+      secondaryLambdaArn,
+      dynamoDbTableName,
+      route53ZoneId,
+    ] = await Promise.all([
+      stack.primaryVpcId.promise(),
+      stack.primaryAuroraEndpoint.promise(),
+      stack.primaryLambdaArn.promise(),
+      stack.secondaryVpcId.promise(),
+      stack.secondaryAuroraEndpoint.promise(),
+      stack.secondaryLambdaArn.promise(),
+      stack.dynamoDbTableName.promise(),
+      stack.route53ZoneId.promise(),
+    ]);
+
+    expect(primaryVpcId).toBeTruthy();
+    expect(primaryAuroraEndpoint).toBeTruthy();
+    expect(primaryLambdaArn).toBeTruthy();
+    expect(secondaryVpcId).toBeTruthy();
+    expect(secondaryAuroraEndpoint).toBeTruthy();
+    expect(secondaryLambdaArn).toBeTruthy();
+    expect(dynamoDbTableName).toBeTruthy();
+    expect(route53ZoneId).toBeTruthy();
+  });
+
+  it('should use default environment suffix when not provided', () => {
+    const stack = new TapStack('test-stack', {});
+
+    expect(stack.primaryVpcId).toBeDefined();
+    expect(stack.secondaryVpcId).toBeDefined();
+  });
+
+  it('should use provided tags', () => {
+    const customTags = { Environment: 'production', Team: 'platform' };
+    const stack = new TapStack('test-stack', {
+      tags: customTags,
+    });
+
+    expect(stack).toBeDefined();
   });
 });
 

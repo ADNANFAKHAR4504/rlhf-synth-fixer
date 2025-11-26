@@ -44,7 +44,7 @@ export class LambdaStack extends pulumi.ComponentResource {
         }),
         tags: {
           ...tags,
-          Name: `${name}-lambda-role-${envSuffix}`,
+          Name: `${name}-lambda-role-${envSuffix}-as`,
           Region: region,
         },
       },
@@ -102,7 +102,7 @@ export class LambdaStack extends pulumi.ComponentResource {
     this.logGroup = new aws.cloudwatch.LogGroup(
       `${name}-lambda-logs`,
       {
-        name: `/aws/lambda/${name}-data-processor-${envSuffix}`,
+        name: `/aws/lambda/${name}-data-processor-${envSuffix}-as`,
         retentionInDays: 7,
         tags: {
           ...tags,
@@ -141,7 +141,7 @@ exports.handler = async (event) => {
     this.function = new aws.lambda.Function(
       `${name}-data-processor`,
       {
-        name: `${name}-data-processor-${envSuffix}`,
+        name: `${name}-data-processor-${envSuffix}-as`,
         runtime: 'nodejs20.x',
         handler: 'index.handler',
         role: this.role.arn,
@@ -163,7 +163,7 @@ exports.handler = async (event) => {
         },
         tags: {
           ...tags,
-          Name: `${name}-lambda-${envSuffix}`,
+          Name: `${name}-lambda-${envSuffix}-as`,
           Region: region,
           Purpose: 'data-processing',
         },

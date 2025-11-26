@@ -4,16 +4,16 @@
  * Main Pulumi ComponentResource for multi-region disaster recovery infrastructure.
  * Orchestrates VPC, Aurora, DynamoDB, Lambda, EventBridge, Route 53, and monitoring.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { VpcStack } from './vpc-stack';
 import { AuroraStack } from './aurora-stack';
 import { DynamoDBStack } from './dynamodb-stack';
-import { LambdaStack } from './lambda-stack';
 import { EventBridgeStack } from './eventbridge-stack';
+import { LambdaStack } from './lambda-stack';
 import { MonitoringStack } from './monitoring-stack';
 import { Route53Stack } from './route53-stack';
+import { VpcStack } from './vpc-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -252,7 +252,7 @@ export class TapStack extends pulumi.ComponentResource {
         autoAccept: false,
         tags: {
           ...tags,
-          Name: `${name}-vpc-peering-${environmentSuffix}`,
+          Name: `${name}-vpc-peering-${environmentSuffix}-as`,
           Purpose: 'multi-region-dr',
         },
       },
@@ -267,7 +267,7 @@ export class TapStack extends pulumi.ComponentResource {
         autoAccept: true,
         tags: {
           ...tags,
-          Name: `${name}-vpc-peering-accepter-${environmentSuffix}`,
+          Name: `${name}-vpc-peering-accepter-${environmentSuffix}-as`,
         },
       },
       { parent: this, provider: secondaryProvider }

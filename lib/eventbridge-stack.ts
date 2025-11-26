@@ -34,12 +34,12 @@ export class EventBridgeStack extends pulumi.ComponentResource {
     this.rule = new aws.cloudwatch.EventRule(
       `${name}-schedule-rule`,
       {
-        name: `${name}-schedule-${envSuffix}`,
+        name: `${name}-schedule-${envSuffix}-as`,
         description: 'Trigger Lambda every 5 minutes',
         scheduleExpression: 'rate(5 minutes)',
         tags: {
           ...tags,
-          Name: `${name}-eventbridge-rule-${envSuffix}`,
+          Name: `${name}-eventbridge-rule-${envSuffix}-as`,
           Region: region,
         },
       },
