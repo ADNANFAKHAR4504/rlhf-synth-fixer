@@ -29,6 +29,8 @@ export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 # Provide non-interactive defaults for TF variables if not set (CI safe)
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
 export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
+# Make environment suffix available to Terraform as an input variable
+export TF_VAR_environment_suffix=${TF_VAR_environment_suffix:-${ENVIRONMENT_SUFFIX}}
 
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
