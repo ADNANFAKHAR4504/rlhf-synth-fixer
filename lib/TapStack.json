@@ -350,8 +350,7 @@
           "character_set_server": "utf8mb4",
           "collation_server": "utf8mb4_unicode_ci",
           "time_zone": "UTC",
-          "binlog_format": "ROW",
-          "aurora_enhanced_binlog": "1"
+          "binlog_format": "ROW"
         },
         "Tags": [
           {
@@ -379,6 +378,30 @@
         ]
       }
     },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": { "Fn::Sub": "trading-db-secret-${EnvironmentSuffix}" },
+        "Description": "Secret for Aurora database master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": { "Fn::Sub": "{\"username\": \"${DBUsername}\", \"fallback_password\": \"${DBPassword}\"}" },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": { "Ref": "KMSKey" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-secret-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      }
+    },
     "GlobalCluster": {
       "Type": "AWS::RDS::GlobalCluster",
       "Properties": {
@@ -396,8 +419,8 @@
         "DBClusterIdentifier": { "Fn::Sub": "trading-db-us-east-1-cluster-${EnvironmentSuffix}" },
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
-        "MasterUsername": { "Ref": "DBUsername" },
-        "MasterUserPassword": { "Ref": "DBPassword" },
+        "MasterUsername": { "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}" },
         "DatabaseName": "tradingdb",
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
         "DBClusterParameterGroupName": { "Ref": "DBClusterParameterGroup" },
@@ -431,6 +454,14 @@
         ]
       },
       "DeletionPolicy": "Delete"
+    },
+    "SecretTargetAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": { "Ref": "DBSecret" },
+        "TargetId": { "Ref": "PrimaryDBCluster" },
+        "TargetType": "AWS::RDS::DBCluster"
+      }
     },
     "EnhancedMonitoringRole": {
       "Type": "AWS::IAM::Role",
@@ -727,6 +758,10 @@
           {
             "Key": "Region",
             "Value": "us-east-1"
+          },
+          {
+            "Key": "DomainName",
+            "Value": { "Ref": "DomainName" }
           }
         ]
       },
