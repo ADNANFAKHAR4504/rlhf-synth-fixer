@@ -433,6 +433,20 @@ class TapStack(Stack):
             ]
         )
 
+        # Add S3 read permissions for VPC endpoint testing
+        instance_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "s3:ListBucket",
+                    "s3:ListAllMyBuckets",
+                    "s3:GetObject",
+                    "s3:PutObject"
+                ],
+                resources=["*"]
+            )
+        )
+
         # Launch template
         launch_template = ec2.LaunchTemplate(
             self, "ComputeLaunchTemplate",

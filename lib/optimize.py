@@ -758,14 +758,15 @@ class InfrastructureOptimizer:
 def main():
     """Main entry point for optimization script."""
     import argparse
+    import os
 
     parser = argparse.ArgumentParser(
         description='Infrastructure optimization based on CloudWatch metrics'
     )
     parser.add_argument(
         '--region',
-        default='us-east-1',
-        help='AWS region to analyze'
+        default=None,
+        help='AWS region to analyze (if not specified, analyzes all deployed regions)'
     )
     parser.add_argument(
         '--days',
@@ -787,25 +788,70 @@ def main():
 
     args = parser.parse_args()
 
-    # Initialize optimizer
-    optimizer = InfrastructureOptimizer(region=args.region)
+    # Determine regions to analyze
+    regions_to_analyze = []
 
-    # Run analysis
-    recommendations = optimizer.run_optimization_analysis(
-        days=args.days,
-        confidence_threshold=args.confidence
-    )
+    if args.region:
+        # Use specified region
+        regions_to_analyze = [args.region]
+    else:
+        # Auto-detect regions from outputs file or use default multi-region setup
+        outputs_file = 'cfn-outputs/flat-outputs.json'
+        if os.path.exists(outputs_file):
+            try:
+                with open(outputs_file, 'r') as f:
+                    outputs = json.load(f)
+                    region_from_outputs = outputs.get('Region')
+                    if region_from_outputs:
+                        regions_to_analyze.append(region_from_outputs)
+            except Exception as e:
+                logger.warning(f"Could not read outputs file: {e}")
 
-    # Generate reports
-    optimizer.generate_reports(recommendations)
+        # Default to multi-region deployment (main + secondary)
+        if not regions_to_analyze:
+            regions_to_analyze = ['eu-central-1', 'eu-west-2']
 
-    # Optionally apply recommendations
-    if args.apply:
-        response = input("\nAre you sure you want to apply these recommendations? (yes/no): ")
-        if response.lower() == 'yes':
-            optimizer.apply_recommendations(recommendations, dry_run=False)
-        else:
-            logger.info("Recommendations not applied")
+    logger.info(f"Analyzing regions: {', '.join(regions_to_analyze)}")
+
+    all_recommendations = []
+
+    # Analyze each region
+    for region in regions_to_analyze:
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Analyzing region: {region}")
+        logger.info(f"{'='*60}")
+
+        # Initialize optimizer for this region
+        optimizer = InfrastructureOptimizer(region=region)
+
+        # Run analysis
+        recommendations = optimizer.run_optimization_analysis(
+            days=args.days,
+            confidence_threshold=args.confidence
+        )
+
+        all_recommendations.extend(recommendations)
+
+    # Generate combined reports
+    if all_recommendations:
+        logger.info(f"\n{'='*60}")
+        logger.info("COMBINED RESULTS FROM ALL REGIONS")
+        logger.info(f"{'='*60}")
+
+        # Use the last optimizer instance for reporting
+        optimizer.generate_reports(all_recommendations)
+
+        # Optionally apply recommendations
+        if args.apply:
+            response = input("\nAre you sure you want to apply these recommendations? (yes/no): ")
+            if response.lower() == 'yes':
+                optimizer.apply_recommendations(all_recommendations, dry_run=False)
+            else:
+                logger.info("Recommendations not applied")
+    else:
+        logger.info("\n" + "="*60)
+        logger.info("NO OPTIMIZATION RECOMMENDATIONS FOUND IN ANY REGION")
+        logger.info("="*60)
 
 
 if __name__ == "__main__":
