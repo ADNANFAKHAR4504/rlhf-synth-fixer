@@ -9,11 +9,6 @@ terraform {
       version = ">= 5.0"
     }
   }
-
-  # Local backend for QA testing
-  backend "local" {
-    path = "terraform.tfstate"
-  }
 }
 
 # Primary AWS provider for general resources

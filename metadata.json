@@ -1,20 +1,13 @@
 {
-  "platform": "Terraform",
-  "language": "HCL",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "expert",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-26T08:53:16+00:00",
-  "subtask": "PCI DSS compliant payment processing infrastructure",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "VPC",
-    "ECS",
-    "Aurora",
-    "CloudWatch",
-    "S3",
-    "CloudFront",
-    "WAF",
-    "Route53"
+    "Cloud Environment Setup"
   ],
   "po_id": "101912699",
   "aws_services": [
@@ -34,5 +27,7 @@
     "ACM",
     "ALB"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
