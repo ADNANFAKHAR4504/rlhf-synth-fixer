@@ -1,0 +1,94 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Systems Manager Parameter Store for configuration",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String"
+    },
+    "BlueDBEndpoint": {
+      "Type": "String"
+    },
+    "GreenDBEndpoint": {
+      "Type": "String"
+    },
+    "ALBDNSName": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "BlueDBEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/blue/db-endpoint"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "BlueDBEndpoint"
+        },
+        "Description": "Blue database endpoint"
+      }
+    },
+    "GreenDBEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/green/db-endpoint"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "GreenDBEndpoint"
+        },
+        "Description": "Green database endpoint"
+      }
+    },
+    "ALBDNSParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/alb-dns"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "ALBDNSName"
+        },
+        "Description": "Application Load Balancer DNS name"
+      }
+    },
+    "ActiveEnvironmentParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/active-environment"
+        },
+        "Type": "String",
+        "Value": "blue",
+        "Description": "Currently active environment (blue or green)"
+      }
+    }
+  },
+  "Outputs": {
+    "BlueDBEndpointParameter": {
+      "Description": "Blue DB Endpoint Parameter Name",
+      "Value": {
+        "Ref": "BlueDBEndpointParameter"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueDBEndpointParameter"
+        }
+      }
+    },
+    "GreenDBEndpointParameter": {
+      "Description": "Green DB Endpoint Parameter Name",
+      "Value": {
+        "Ref": "GreenDBEndpointParameter"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenDBEndpointParameter"
+        }
+      }
+    }
+  }
+}

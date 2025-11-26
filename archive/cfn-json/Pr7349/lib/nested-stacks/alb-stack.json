@@ -1,0 +1,297 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Application Load Balancer with weighted target groups for blue-green deployment",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "VpcId": {
+      "Type": "String",
+      "Description": "VPC ID"
+    },
+    "PublicSubnet1": {
+      "Type": "String",
+      "Description": "Public Subnet 1"
+    },
+    "PublicSubnet2": {
+      "Type": "String",
+      "Description": "Public Subnet 2"
+    },
+    "PublicSubnet3": {
+      "Type": "String",
+      "Description": "Public Subnet 3"
+    },
+    "ALBSecurityGroup": {
+      "Type": "String",
+      "Description": "ALB Security Group"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging"
+    }
+  },
+  "Resources": {
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-alb-${EnvironmentSuffix}"
+        },
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          },
+          {
+            "Ref": "PublicSubnet3"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "ALBSecurityGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-alb-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "blue-tg-${EnvironmentSuffix}"
+        },
+        "Port": 8080,
+        "Protocol": "HTTP",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "TargetType": "ip",
+        "HealthCheckEnabled": true,
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "Matcher": {
+          "HttpCode": "200"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-tg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "green-tg-${EnvironmentSuffix}"
+        },
+        "Port": 8080,
+        "Protocol": "HTTP",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "TargetType": "ip",
+        "HealthCheckEnabled": true,
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "Matcher": {
+          "HttpCode": "200"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-tg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "HTTPListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "ForwardConfig": {
+              "TargetGroups": [
+                {
+                  "TargetGroupArn": {
+                    "Ref": "BlueTargetGroup"
+                  },
+                  "Weight": 100
+                },
+                {
+                  "TargetGroupArn": {
+                    "Ref": "GreenTargetGroup"
+                  },
+                  "Weight": 0
+                }
+              ],
+              "TargetGroupStickinessConfig": {
+                "Enabled": false
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ALBArn": {
+      "Description": "Application Load Balancer ARN",
+      "Value": {
+        "Ref": "ApplicationLoadBalancer"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALBArn"
+        }
+      }
+    },
+    "ALBDNSName": {
+      "Description": "Application Load Balancer DNS Name",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALBDNSName"
+        }
+      }
+    },
+    "ALBHostedZoneId": {
+      "Description": "Application Load Balancer Hosted Zone ID",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "CanonicalHostedZoneID"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALBHostedZoneId"
+        }
+      }
+    },
+    "BlueTargetGroup": {
+      "Description": "Blue Target Group ARN",
+      "Value": {
+        "Ref": "BlueTargetGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueTargetGroup"
+        }
+      }
+    },
+    "GreenTargetGroup": {
+      "Description": "Green Target Group ARN",
+      "Value": {
+        "Ref": "GreenTargetGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenTargetGroup"
+        }
+      }
+    },
+    "ListenerArn": {
+      "Description": "ALB Listener ARN",
+      "Value": {
+        "Ref": "HTTPListener"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ListenerArn"
+        }
+      }
+    }
+  }
+}
