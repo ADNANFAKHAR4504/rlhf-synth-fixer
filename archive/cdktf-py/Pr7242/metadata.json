@@ -1,0 +1,34 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "b3b2i2w1",
+  "team": "synth",
+  "startedAt": "2025-11-25T13:02:00+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security, Compliance, and Governance"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS-Aurora-PostgreSQL",
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "CloudWatch",
+    "ALB",
+    "IAM",
+    "KMS",
+    "VPC-Endpoints",
+    "Systems-Manager"
+  ],
+  "region": "us-east-1",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
