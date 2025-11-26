@@ -25,9 +25,7 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 import json
-import base64
 
 
 class TapStack(TerraformStack):
@@ -66,8 +64,9 @@ class TapStack(TerraformStack):
             default_tags=[merged_tags],
         )
 
-        # Configure S3 Backend only in CI/CD environment
-        # Local deployments will use local backend
+        # Configure S3 Backend - backend configuration is managed by tap.py
+        # which passes state_bucket and state_bucket_region to this stack
+        # The actual backend configuration should be in cdktf.json or passed via CLI
         import os
         if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
             S3Backend(
@@ -82,26 +81,6 @@ class TapStack(TerraformStack):
         # Get current AWS account and region
         current = DataAwsCallerIdentity(self, "current")
         region_data = DataAwsRegion(self, "region")
-
-        # Create DynamoDB table for Terraform state locking
-        # This table is used by the S3 backend for state locking
-        state_lock_table = DynamodbTable(
-            self,
-            "terraform_state_lock",
-            name="iac-rlhf-tf-locks",
-            billing_mode="PAY_PER_REQUEST",
-            hash_key="LockID",
-            attribute=[
-                {
-                    "name": "LockID",
-                    "type": "S"
-                }
-            ],
-            tags={
-                "Name": "terraform-state-lock",
-                "Purpose": "Terraform state locking",
-            },
-        )
 
         # Create VPC
         vpc = Vpc(
@@ -534,68 +513,8 @@ class TapStack(TerraformStack):
             policy_arn=kms_policy.arn,
         )
 
-        # Create Lambda function code
-        lambda_code = '''
-import json
-import boto3
-import os
-
-s3_client = boto3.client('s3')
-secrets_client = boto3.client('secretsmanager')
-
-def lambda_handler(event, context):
-    """
-    Secure data processor that reads from and writes to S3.
-    Demonstrates secure access to S3 and Secrets Manager through VPC endpoints.
-    """
-    bucket_name = os.environ.get('BUCKET_NAME')
-    secret_name = os.environ.get('SECRET_NAME')
-
-    try:
-        # Retrieve database credentials from Secrets Manager
-        secret_response = secrets_client.get_secret_value(SecretId=secret_name)
-        db_credentials = json.loads(secret_response['SecretString'])
-        print(f"Successfully retrieved credentials for database: {db_credentials.get('dbname')}")
-
-        # Test S3 write operation
-        test_key = 'test-data.json'
-        test_data = {
-            'message': 'Secure data processing',
-            'status': 'operational',
-            'timestamp': context.request_id
-        }
-
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key=test_key,
-            Body=json.dumps(test_data),
-            ServerSideEncryption='AES256'
-        )
-        print(f"Successfully wrote object to S3: {test_key}")
-
-        # Test S3 read operation
-        response = s3_client.get_object(Bucket=bucket_name, Key=test_key)
-        data = json.loads(response['Body'].read())
-        print(f"Successfully read object from S3: {data}")
-
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': 'Data processing completed successfully',
-                'data': data
-            })
-        }
-
-    except Exception as e:
-        print(f"Error processing data: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'message': 'Error processing data',
-                'error': str(e)
-            })
-        }
-'''
+        # Lambda function code is in lib/lambda/index.py
+        # It is packaged separately into lambda_function.zip during deployment
 
         # Create Lambda function
         lambda_function = LambdaFunction(
