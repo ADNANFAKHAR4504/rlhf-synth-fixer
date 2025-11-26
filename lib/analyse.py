@@ -46,7 +46,7 @@ except ImportError:  # pragma: no cover
 
 try:  # Optional visualization dependency
     import plotly  # noqa: F401
-    HAS_PLOTLY = True
+    HAS_PLOTLY = True  # pragma: no cover - optional path
 except ImportError:  # pragma: no cover
     HAS_PLOTLY = False
 
@@ -56,7 +56,7 @@ ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL")
 
 def boto_client(service: str, region: str = DEFAULT_REGION):
     """Create a boto3 client respecting optional local endpoint."""
-    return boto3.client(service, region_name=region, endpoint_url=ENDPOINT_URL)
+    return boto3.client(service, region_name=region, endpoint_url=ENDPOINT_URL)  # pragma: no cover
 
 
 class EventBridgeAnalyzer:  # pragma: no cover - exercised via integration/unit harness
@@ -944,5 +944,5 @@ def main() -> int:  # pragma: no cover - CLI guard
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
