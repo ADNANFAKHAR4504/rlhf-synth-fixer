@@ -1,3 +1,0 @@
-config:
-  payment-app:environmentSuffix: stage-001
-  payment-app:environment: staging

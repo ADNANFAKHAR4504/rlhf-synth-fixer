@@ -1,3 +1,0 @@
-config:
-  payment-app:environmentSuffix: prod-001
-  payment-app:environment: production

@@ -25,7 +25,8 @@ class MyMocks implements pulumi.runtime.Mocks {
         break;
       case 'aws:lb/loadBalancer:LoadBalancer':
         outputs.dnsName = 'mock-alb.elb.amazonaws.com';
-        outputs.arn = 'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock/123';
+        outputs.arn =
+          'arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/mock/123';
         outputs.arnSuffix = 'app/mock/123';
         break;
       case 'aws:kms/key:Key':
@@ -125,7 +126,9 @@ class MyMocks implements pulumi.runtime.Mocks {
     if (args.token === 'aws:ec2/getAmi:getAmi') {
       return { id: 'ami-12345678', imageId: 'ami-12345678' };
     }
-    if (args.token === 'aws:secretsmanager/getRandomPassword:getRandomPassword') {
+    if (
+      args.token === 'aws:secretsmanager/getRandomPassword:getRandomPassword'
+    ) {
       return { randomPassword: 'MockPassword123456789012345678901234' };
     }
     return {};
@@ -140,7 +143,7 @@ describe('Payment App Infrastructure Stack', () => {
   let exports: any;
 
   beforeAll(async () => {
-    exports = require('../lib/index');
+    exports = require('../lib/tap-stack');
   });
 
   describe('Configuration', () => {
@@ -734,4 +737,3 @@ describe('Payment App Infrastructure Stack', () => {
     });
   });
 });
-
