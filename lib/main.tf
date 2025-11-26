@@ -20,18 +20,80 @@ module "vpc" {
   tags               = local.common_tags
 }
 
-# IAM Module - Phase 1: Create basic IAM roles (cluster and node group roles)
-# These don't require OIDC provider, so can be created first
-module "iam" {
-  source = "./modules/iam"
+# IAM Module - Creates all IAM roles including IRSA roles
+# Note: This must be created after EKS module to get OIDC provider
+# However, EKS needs the cluster role, so we use a two-step approach:
+# 1. Create IAM resources separately (moved to separate module)
+# 2. Create EKS cluster
+# 3. Create IRSA roles with OIDC provider
 
-  environment_suffix = var.environment_suffix
-  # Pass empty strings for OIDC - module will conditionally create IRSA roles
-  oidc_provider_arn  = ""
-  oidc_provider_id   = ""
-  tags               = local.common_tags
+# For now, we'll create basic IAM roles inline to break the circular dependency
+resource "aws_iam_role" "eks_cluster" {
+  name = "eks-cluster-role-${var.environment_suffix}"
 
-  depends_on = [module.vpc]
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "eks.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "eks-cluster-role-${var.environment_suffix}"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+resource "aws_iam_role" "eks_node_group" {
+  name = "eks-node-group-role-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "eks-node-group-role-${var.environment_suffix}"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_node_group.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_node_group.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_node_group.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_ssm_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  role       = aws_iam_role.eks_node_group.name
 }
 
 # EKS Cluster Module - Creates cluster and OIDC provider
@@ -40,7 +102,7 @@ module "eks" {
 
   environment_suffix      = var.environment_suffix
   eks_version             = var.eks_version
-  cluster_role_arn        = module.iam.eks_cluster_role_arn
+  cluster_role_arn        = aws_iam_role.eks_cluster.arn
   vpc_id                  = module.vpc.vpc_id
   vpc_cidr                = module.vpc.vpc_cidr
   private_subnet_ids      = module.vpc.private_subnet_ids
@@ -53,11 +115,15 @@ module "eks" {
   ebs_csi_driver_role_arn = ""
   tags                    = local.common_tags
 
-  depends_on = [module.vpc, module.iam]
+  depends_on = [
+    module.vpc,
+    aws_iam_role.eks_cluster,
+    aws_iam_role_policy_attachment.eks_cluster_policy,
+    aws_iam_role_policy_attachment.eks_vpc_resource_controller
+  ]
 }
 
-# IAM Module - Phase 2: Create IRSA roles after OIDC provider exists
-# This creates ALB controller, cluster autoscaler, and EBS CSI driver roles
+# IAM Module - Create IRSA roles after OIDC provider exists
 module "iam_irsa" {
   source = "./modules/iam"
 
@@ -75,7 +141,7 @@ module "node_groups" {
 
   cluster_name                  = module.eks.cluster_name
   eks_version                   = var.eks_version
-  node_role_arn                 = module.iam.eks_node_group_role_arn
+  node_role_arn                 = aws_iam_role.eks_node_group.arn
   private_subnet_ids            = module.vpc.private_subnet_ids
   environment_suffix            = var.environment_suffix
   frontend_instance_type        = var.frontend_instance_type
@@ -86,7 +152,14 @@ module "node_groups" {
   desired_nodes                 = var.desired_nodes
   tags                          = local.common_tags
 
-  depends_on = [module.eks, module.iam, module.iam_irsa]
+  depends_on = [
+    module.eks,
+    aws_iam_role.eks_node_group,
+    aws_iam_role_policy_attachment.eks_worker_node_policy,
+    aws_iam_role_policy_attachment.eks_cni_policy,
+    aws_iam_role_policy_attachment.eks_container_registry_policy,
+    aws_iam_role_policy_attachment.eks_ssm_policy
+  ]
 }
 
 # Kubernetes and Helm provider configuration

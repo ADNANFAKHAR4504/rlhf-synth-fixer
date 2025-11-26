@@ -4,11 +4,11 @@
 resource "aws_secretsmanager_secret" "frontend" {
   name                    = "frontend-secrets-${var.environment_suffix}"
   description             = "Secrets for frontend microservices"
-  recovery_window_in_days = 0  # Force delete without recovery period for testing
+  recovery_window_in_days = 0 # Force delete without recovery period for testing
 
   tags = merge(var.tags, {
-    Name      = "frontend-secrets-${var.environment_suffix}"
-    Workload  = "frontend"
+    Name     = "frontend-secrets-${var.environment_suffix}"
+    Workload = "frontend"
   })
 }
 
@@ -26,11 +26,11 @@ resource "aws_secretsmanager_secret_version" "frontend" {
 resource "aws_secretsmanager_secret" "backend" {
   name                    = "backend-secrets-${var.environment_suffix}"
   description             = "Secrets for backend microservices"
-  recovery_window_in_days = 0  # Force delete without recovery period for testing
+  recovery_window_in_days = 0 # Force delete without recovery period for testing
 
   tags = merge(var.tags, {
-    Name      = "backend-secrets-${var.environment_suffix}"
-    Workload  = "backend"
+    Name     = "backend-secrets-${var.environment_suffix}"
+    Workload = "backend"
   })
 }
 
@@ -50,11 +50,11 @@ resource "aws_secretsmanager_secret_version" "backend" {
 resource "aws_secretsmanager_secret" "data_processing" {
   name                    = "data-processing-secrets-${var.environment_suffix}"
   description             = "Secrets for data processing microservices"
-  recovery_window_in_days = 0  # Force delete without recovery period for testing
+  recovery_window_in_days = 0 # Force delete without recovery period for testing
 
   tags = merge(var.tags, {
-    Name      = "data-processing-secrets-${var.environment_suffix}"
-    Workload  = "data-processing"
+    Name     = "data-processing-secrets-${var.environment_suffix}"
+    Workload = "data-processing"
   })
 }
 

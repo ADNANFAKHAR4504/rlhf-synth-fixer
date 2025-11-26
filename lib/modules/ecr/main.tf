@@ -14,8 +14,8 @@ resource "aws_ecr_repository" "frontend" {
   }
 
   tags = merge(var.tags, {
-    Name      = "frontend-${var.environment_suffix}"
-    Workload  = "frontend"
+    Name     = "frontend-${var.environment_suffix}"
+    Workload = "frontend"
   })
 }
 
@@ -33,8 +33,8 @@ resource "aws_ecr_repository" "backend" {
   }
 
   tags = merge(var.tags, {
-    Name      = "backend-${var.environment_suffix}"
-    Workload  = "backend"
+    Name     = "backend-${var.environment_suffix}"
+    Workload = "backend"
   })
 }
 
@@ -52,8 +52,8 @@ resource "aws_ecr_repository" "data_processing" {
   }
 
   tags = merge(var.tags, {
-    Name      = "data-processing-${var.environment_suffix}"
-    Workload  = "data-processing"
+    Name     = "data-processing-${var.environment_suffix}"
+    Workload = "data-processing"
   })
 }
 
@@ -67,9 +67,9 @@ resource "aws_ecr_lifecycle_policy" "frontend" {
         rulePriority = 1
         description  = "Keep last 30 images"
         selection = {
-          tagStatus     = "any"
-          countType     = "imageCountMoreThan"
-          countNumber   = 30
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
         }
         action = {
           type = "expire"
@@ -89,9 +89,9 @@ resource "aws_ecr_lifecycle_policy" "backend" {
         rulePriority = 1
         description  = "Keep last 30 images"
         selection = {
-          tagStatus     = "any"
-          countType     = "imageCountMoreThan"
-          countNumber   = 30
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
         }
         action = {
           type = "expire"
@@ -111,9 +111,9 @@ resource "aws_ecr_lifecycle_policy" "data_processing" {
         rulePriority = 1
         description  = "Keep last 30 images"
         selection = {
-          tagStatus     = "any"
-          countType     = "imageCountMoreThan"
-          countNumber   = 30
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 30
         }
         action = {
           type = "expire"

@@ -1,12 +1,12 @@
 # provider.tf - Updated to include Kubernetes and Helm providers
 
 terraform {
-  required_version = ">= 1.5.0"  # Updated to match PROMPT requirement
+  required_version = ">= 1.5.0" # Updated to match PROMPT requirement
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"  # Changed from ~> to >= for better compatibility
+      version = ">= 5.0" # Changed from ~> to >= for better compatibility
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -36,7 +36,7 @@ terraform {
 
 # Primary AWS provider for general resources
 provider "aws" {
-  region = var.aws_region  # Using aws_region instead of region
+  region = var.aws_region # Using aws_region instead of region
 
   default_tags {
     tags = merge(var.tags, {

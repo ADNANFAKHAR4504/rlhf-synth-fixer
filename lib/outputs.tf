@@ -77,22 +77,22 @@ output "data_processing_node_group_id" {
 # IAM Outputs
 output "eks_cluster_role_arn" {
   description = "ARN of the EKS cluster IAM role"
-  value       = module.iam.eks_cluster_role_arn
+  value       = aws_iam_role.eks_cluster.arn
 }
 
 output "eks_node_group_role_arn" {
   description = "ARN of the EKS node group IAM role"
-  value       = module.iam.eks_node_group_role_arn
+  value       = aws_iam_role.eks_node_group.arn
 }
 
 output "alb_controller_role_arn" {
   description = "ARN of the ALB controller IAM role"
-  value       = module.iam.alb_controller_role_arn
+  value       = module.iam_irsa.alb_controller_role_arn
 }
 
 output "cluster_autoscaler_role_arn" {
   description = "ARN of the cluster autoscaler IAM role"
-  value       = module.iam.cluster_autoscaler_role_arn
+  value       = module.iam_irsa.cluster_autoscaler_role_arn
 }
 
 # ALB Controller Outputs
@@ -146,11 +146,11 @@ output "secrets_manager_secrets" {
 output "deployment_summary" {
   description = "Summary of deployed infrastructure"
   value = {
-    region              = var.aws_region
-    environment         = var.environment_suffix
-    eks_version         = var.eks_version
-    vpc_cidr            = var.vpc_cidr
-    availability_zones  = var.availability_zones
+    region             = var.aws_region
+    environment        = var.environment_suffix
+    eks_version        = var.eks_version
+    vpc_cidr           = var.vpc_cidr
+    availability_zones = var.availability_zones
     node_groups = {
       frontend = {
         instance_type = var.frontend_instance_type

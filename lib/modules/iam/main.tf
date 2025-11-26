@@ -78,10 +78,8 @@ resource "aws_iam_role_policy_attachment" "eks_ssm_policy" {
 }
 
 # IRSA Role for ALB Ingress Controller
-# Only create if OIDC provider ARN is provided
 resource "aws_iam_role" "alb_controller" {
-  count = var.oidc_provider_arn != "" ? 1 : 0
-  name  = "alb-controller-role-${var.environment_suffix}"
+  name = "alb-controller-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -107,7 +105,6 @@ resource "aws_iam_role" "alb_controller" {
 
 # ALB Controller IAM Policy
 resource "aws_iam_policy" "alb_controller" {
-  count       = var.oidc_provider_arn != "" ? 1 : 0
   name        = "alb-controller-policy-${var.environment_suffix}"
   description = "IAM policy for AWS Load Balancer Controller"
 
@@ -360,15 +357,13 @@ resource "aws_iam_policy" "alb_controller" {
 
 # Attach ALB Controller Policy to Role
 resource "aws_iam_role_policy_attachment" "alb_controller" {
-  count      = var.oidc_provider_arn != "" ? 1 : 0
-  policy_arn = aws_iam_policy.alb_controller[0].arn
-  role       = aws_iam_role.alb_controller[0].name
+  policy_arn = aws_iam_policy.alb_controller.arn
+  role       = aws_iam_role.alb_controller.name
 }
 
 # IRSA Role for Cluster Autoscaler
 resource "aws_iam_role" "cluster_autoscaler" {
-  count = var.oidc_provider_arn != "" ? 1 : 0
-  name  = "cluster-autoscaler-role-${var.environment_suffix}"
+  name = "cluster-autoscaler-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -394,7 +389,6 @@ resource "aws_iam_role" "cluster_autoscaler" {
 
 # Cluster Autoscaler IAM Policy
 resource "aws_iam_policy" "cluster_autoscaler" {
-  count       = var.oidc_provider_arn != "" ? 1 : 0
   name        = "cluster-autoscaler-policy-${var.environment_suffix}"
   description = "IAM policy for Cluster Autoscaler"
 
@@ -440,15 +434,13 @@ resource "aws_iam_policy" "cluster_autoscaler" {
 
 # Attach Cluster Autoscaler Policy to Role
 resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
-  count      = var.oidc_provider_arn != "" ? 1 : 0
-  policy_arn = aws_iam_policy.cluster_autoscaler[0].arn
-  role       = aws_iam_role.cluster_autoscaler[0].name
+  policy_arn = aws_iam_policy.cluster_autoscaler.arn
+  role       = aws_iam_role.cluster_autoscaler.name
 }
 
 # IRSA Role for EBS CSI Driver
 resource "aws_iam_role" "ebs_csi_driver" {
-  count = var.oidc_provider_arn != "" ? 1 : 0
-  name  = "ebs-csi-driver-role-${var.environment_suffix}"
+  name = "ebs-csi-driver-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -474,7 +466,6 @@ resource "aws_iam_role" "ebs_csi_driver" {
 
 # Attach AWS managed EBS CSI Driver policy
 resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
-  count      = var.oidc_provider_arn != "" ? 1 : 0
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  role       = aws_iam_role.ebs_csi_driver[0].name
+  role       = aws_iam_role.ebs_csi_driver.name
 }
