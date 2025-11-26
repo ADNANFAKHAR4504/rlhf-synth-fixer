@@ -136,9 +136,9 @@ class TestSubnetResources:
             return json.loads(synth)
 
     def test_correct_number_of_subnets_created(self, resources):
-        """4 subnets are created (2 public + 2 private)."""
+        """6 subnets are created (3 public + 3 private for 3 AZs)."""
         subnets = resources.get("resource", {}).get("aws_subnet", {})
-        assert len(subnets) == 4
+        assert len(subnets) == 6
 
     def test_public_subnets_have_correct_cidr(self, resources):
         """Public subnets have correct CIDR blocks."""
@@ -201,14 +201,14 @@ class TestNatGatewayResources:
             return json.loads(synth)
 
     def test_nat_gateways_created(self, resources):
-        """2 NAT Gateways are created (one per AZ)."""
+        """3 NAT Gateways are created (one per AZ)."""
         nats = resources.get("resource", {}).get("aws_nat_gateway", {})
-        assert len(nats) == 2
+        assert len(nats) == 3
 
     def test_elastic_ips_created(self, resources):
-        """2 Elastic IPs are created for NAT Gateways."""
+        """3 Elastic IPs are created for NAT Gateways (one per AZ)."""
         eips = resources.get("resource", {}).get("aws_eip", {})
-        assert len(eips) == 2
+        assert len(eips) == 3
 
     def test_elastic_ips_have_vpc_domain(self, resources):
         """Elastic IPs have VPC domain."""
@@ -230,14 +230,14 @@ class TestRouteTableResources:
             return json.loads(synth)
 
     def test_route_tables_created(self, resources):
-        """3 route tables are created (1 public + 2 private)."""
+        """4 route tables are created (1 public + 3 private for 3 AZs)."""
         route_tables = resources.get("resource", {}).get("aws_route_table", {})
-        assert len(route_tables) == 3
+        assert len(route_tables) == 4
 
     def test_route_table_associations_created(self, resources):
-        """Route table associations are created."""
+        """Route table associations are created (3 public + 3 private for 3 AZs)."""
         associations = resources.get("resource", {}).get("aws_route_table_association", {})
-        assert len(associations) == 4  # 2 public + 2 private
+        assert len(associations) == 6  # 3 public + 3 private
 
     def test_public_route_table_has_internet_route(self, resources):
         """Public route table has route to internet gateway."""
