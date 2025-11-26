@@ -57,8 +57,7 @@ export class TapStack extends pulumi.ComponentResource {
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    const config = new pulumi.Config();
-    const environmentSuffix = config.require('environmentSuffix');
+    const environmentSuffix = args.environmentSuffix || 'dev';
 
     // Primary region (us-east-1) VPC
     const primaryVpc = new aws.ec2.Vpc(
@@ -90,7 +89,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Primary region subnets (3 AZs) - NOW PUBLIC for ALB (FIXED)
-    const primarySubnets = [0, 1, 2].map((i) => {
+    const primarySubnets = [0, 1, 2].map(i => {
       return new aws.ec2.Subnet(
         `primary-subnet-${i}`,
         {
@@ -176,7 +175,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Secondary region subnets (3 AZs) - NOW PUBLIC (FIXED)
-    const secondarySubnets = [0, 1, 2].map((i) => {
+    const secondarySubnets = [0, 1, 2].map(i => {
       return new aws.ec2.Subnet(
         `secondary-subnet-${i}`,
         {
@@ -277,7 +276,7 @@ export class TapStack extends pulumi.ComponentResource {
     const primaryDbSubnetGroup = new aws.rds.SubnetGroup(
       'primary-db-subnet',
       {
-        subnetIds: primarySubnets.map((s) => s.id),
+        subnetIds: primarySubnets.map(s => s.id),
         tags: {
           Name: `primary-db-subnet-${environmentSuffix}`,
         },
@@ -315,7 +314,7 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         databaseName: 'trading',
         masterUsername: 'admin',
-        masterPassword: dbMasterPasswordVersion.secretString.apply((s) => {
+        masterPassword: dbMasterPasswordVersion.secretString.apply(s => {
           const parsed = JSON.parse(s as string) as { password: string };
           return parsed.password || 'defaultPassword123!';
         }), // FIXED: Using Secrets Manager
@@ -343,7 +342,7 @@ export class TapStack extends pulumi.ComponentResource {
     const secondaryDbSubnetGroup = new aws.rds.SubnetGroup(
       'secondary-db-subnet',
       {
-        subnetIds: secondarySubnets.map((s) => s.id),
+        subnetIds: secondarySubnets.map(s => s.id),
         tags: {
           Name: `secondary-db-subnet-${environmentSuffix}`,
         },
@@ -504,7 +503,7 @@ export class TapStack extends pulumi.ComponentResource {
       'primary-instance',
       {
         instanceType: 't3.micro',
-        ami: primaryAmi.then((ami) => ami.id), // FIXED: Dynamic AMI lookup
+        ami: primaryAmi.then(ami => ami.id), // FIXED: Dynamic AMI lookup
         subnetId: primarySubnets[0].id,
         tags: {
           Name: `primary-instance-${environmentSuffix}`,
@@ -545,7 +544,7 @@ export class TapStack extends pulumi.ComponentResource {
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [primaryAlbSg.id],
-        subnets: primarySubnets.map((s) => s.id), // FIXED: Now public subnets with IGW
+        subnets: primarySubnets.map(s => s.id), // FIXED: Now public subnets with IGW
         tags: {
           Name: `primary-alb-${environmentSuffix}`,
         },
@@ -621,7 +620,7 @@ export class TapStack extends pulumi.ComponentResource {
       'secondary-instance',
       {
         instanceType: 't3.micro',
-        ami: secondaryAmi.then((ami) => ami.id), // FIXED: Dynamic AMI lookup
+        ami: secondaryAmi.then(ami => ami.id), // FIXED: Dynamic AMI lookup
         subnetId: secondarySubnets[0].id,
         tags: {
           Name: `secondary-instance-${environmentSuffix}`,
@@ -661,7 +660,7 @@ export class TapStack extends pulumi.ComponentResource {
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [secondaryAlbSg.id],
-        subnets: secondarySubnets.map((s) => s.id), // FIXED: Now public subnets
+        subnets: secondarySubnets.map(s => s.id), // FIXED: Now public subnets
         tags: {
           Name: `secondary-alb-${environmentSuffix}`,
         },
@@ -1051,7 +1050,11 @@ def handler(event, context):
               type: 'metric',
               properties: {
                 metrics: [
-                  ['AWS/Lambda', 'Invocations', { stat: 'Sum', region: 'us-east-1' }],
+                  [
+                    'AWS/Lambda',
+                    'Invocations',
+                    { stat: 'Sum', region: 'us-east-1' },
+                  ],
                   ['...', { stat: 'Sum', region: 'eu-west-1' }],
                 ],
                 period: 300,
