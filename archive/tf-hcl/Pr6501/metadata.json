@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-11-13T13:51:40.382Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Amazon EMR",
+    "Amazon S3",
+    "AWS Identity and Access Management (IAM)",
+    "Amazon Virtual Private Cloud (VPC)",
+    "Amazon EC2",
+    "Amazon EC2 Auto Scaling",
+    "Amazon CloudWatch",
+    "AWS Key Management Service (KMS)",
+    "AWS CloudTrail",
+    "AWS Glue",
+    "Amazon Simple Notification Service (SNS)"
+  ],
+  "training_quality": 9,
+  "background": "Terraform-managed EMR platform for daily financial trading analytics workloads",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

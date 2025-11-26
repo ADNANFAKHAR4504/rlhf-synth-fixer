@@ -1,0 +1,534 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Aurora MySQL clusters for blue and green environments",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "PrivateSubnet1": {
+      "Type": "String",
+      "Description": "Private Subnet 1"
+    },
+    "PrivateSubnet2": {
+      "Type": "String",
+      "Description": "Private Subnet 2"
+    },
+    "PrivateSubnet3": {
+      "Type": "String",
+      "Description": "Private Subnet 3"
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "String",
+      "Description": "Database Security Group"
+    },
+    "KMSKeyId": {
+      "Type": "String",
+      "Description": "KMS Key ID for encryption"
+    },
+    "DatabaseMasterUsername": {
+      "Type": "String",
+      "Description": "Database master username",
+      "NoEcho": true
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging"
+    }
+  },
+  "Resources": {
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": {
+          "Fn::Sub": "Subnet group for databases-${EnvironmentSuffix}"
+        },
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueDBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "blue-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "Blue environment database credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DatabaseMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": {
+          "Ref": "KMSKeyId"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueDBSecretRotationSchedule": {
+      "Type": "AWS::SecretsManager::RotationSchedule",
+      "DependsOn": [
+        "BlueDBCluster"
+      ],
+      "Properties": {
+        "SecretId": {
+          "Ref": "BlueDBSecret"
+        },
+        "RotationLambdaARN": {
+          "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rotation-lambda"
+        },
+        "RotationRules": {
+          "AutomaticallyAfterDays": 30
+        }
+      }
+    },
+    "GreenDBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "green-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "Green environment database credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DatabaseMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "KmsKeyId": {
+          "Ref": "KMSKeyId"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenDBSecretRotationSchedule": {
+      "Type": "AWS::SecretsManager::RotationSchedule",
+      "DependsOn": [
+        "GreenDBCluster"
+      ],
+      "Properties": {
+        "SecretId": {
+          "Ref": "GreenDBSecret"
+        },
+        "RotationLambdaARN": {
+          "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:rotation-lambda"
+        },
+        "RotationRules": {
+          "AutomaticallyAfterDays": 30
+        }
+      }
+    },
+    "BlueDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.10.0",
+        "DatabaseName": "paymentdb",
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${BlueDBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${BlueDBSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "KMSKeyId"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "DeletionProtection": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-db-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueDBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "BlueDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-db-instance-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BlueDBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "BlueDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-db-instance-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.10.0",
+        "DatabaseName": "paymentdb",
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${GreenDBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${GreenDBSecret}:SecretString:password}}"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "KMSKeyId"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "DeletionProtection": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-db-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenDBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "GreenDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-db-instance-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenDBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "GreenDBCluster"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-db-instance-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "green"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "BlueDBClusterId": {
+      "Description": "Blue database cluster ID",
+      "Value": {
+        "Ref": "BlueDBCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueDBClusterId"
+        }
+      }
+    },
+    "BlueDBEndpoint": {
+      "Description": "Blue database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "BlueDBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueDBEndpoint"
+        }
+      }
+    },
+    "BlueDBSecretArn": {
+      "Description": "Blue database secret ARN",
+      "Value": {
+        "Ref": "BlueDBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueDBSecretArn"
+        }
+      }
+    },
+    "GreenDBClusterId": {
+      "Description": "Green database cluster ID",
+      "Value": {
+        "Ref": "GreenDBCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenDBClusterId"
+        }
+      }
+    },
+    "GreenDBEndpoint": {
+      "Description": "Green database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "GreenDBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenDBEndpoint"
+        }
+      }
+    },
+    "GreenDBSecretArn": {
+      "Description": "Green database secret ARN",
+      "Value": {
+        "Ref": "GreenDBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenDBSecretArn"
+        }
+      }
+    }
+  }
+}

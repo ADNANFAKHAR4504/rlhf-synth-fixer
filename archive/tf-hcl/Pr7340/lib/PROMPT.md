@@ -1,0 +1,13 @@
+We need a Terraform configuration that sets up a complete serverless fraud-detection workflow. The system should start with an API Gateway REST API that exposes two endpoints: a POST /transactions route for ingesting incoming transaction data, and a GET /transactions/{id} route for retrieving stored records. Both endpoints should be fully functional and protected with a Lambda-based authorizer that validates incoming tokens before requests are passed through.
+
+The backend processing will rely on three Lambda functions. One function should handle validating incoming transactions, another should run the fraud-scoring logic, and the third should be dedicated to notification processing. All Lambda functions must run on Python 3.11, use customer-managed KMS keys for encryption, and log to CloudWatch with a 30-day retention period. Each function should have reserved concurrency so that the system stays stable under load.
+
+Store transaction data in a DynamoDB table that uses a transaction_id partition key and a timestamp sort key. The table should use point-in-time recovery and encrypt data with a KMS key. High-risk transactions should trigger further processing using EventBridge rules that call the notification Lambda.
+
+Processed transaction records need to be archived in an S3 bucket. The bucket must have server-side encryption using a customer-managed KMS key, versioning enabled, and a lifecycle policy that moves older objects to Glacier after 90 days.
+
+Asynchronous processing will be handled through an SQS queue backed by a dead-letter queue for failed messages. The notification Lambda should be wired to this queue and triggered automatically. All queues should use SSE-KMS and integrate with VPC endpoints so no traffic leaves the AWS network.
+
+For networking, deploy VPC endpoints for all AWS services the Lambdas will communicate with, including S3, DynamoDB, SQS, and CloudWatch. No NAT Gateways are required since everything should run through these endpoints. CloudWatch alarms should be created to monitor Lambda error rates and notify the team whenever error counts exceed 1%.
+
+The Terraform output should include the API Gateway invoke URL and a CloudWatch dashboard URL for easy access once everything is deployed. The final configuration should follow least-privilege IAM patterns, use explicit denies where useful, and enforce all encryption and retention policies required for financial-grade auditability.

@@ -175,6 +175,82 @@ if jq -e '.subject_labels' "$METADATA_FILE" > /dev/null 2>&1; then
         SUBJECT_LABELS_COUNT=$(jq '.subject_labels | length' "$METADATA_FILE")
         log_info "subject_labels: array with $SUBJECT_LABELS_COUNT items"
     fi
+else
+    log_error "Missing required field: subject_labels"
+    ((ERRORS++))
+fi
+
+# 8a. Validate subject_labels values against reference file
+REFERENCE_FILE=".claude/docs/references/iac-subtasks-subject-labels.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REFERENCE_FILE_ALT="$SCRIPT_DIR/../docs/references/iac-subtasks-subject-labels.json"
+
+# Try to find reference file
+if [ -f "$REFERENCE_FILE" ]; then
+    REFERENCE_PATH="$REFERENCE_FILE"
+elif [ -f "$REFERENCE_FILE_ALT" ]; then
+    REFERENCE_PATH="$REFERENCE_FILE_ALT"
+else
+    REFERENCE_PATH=""
+fi
+
+if [ -n "$REFERENCE_PATH" ] && jq -e '.subject_labels' "$METADATA_FILE" > /dev/null 2>&1; then
+    METADATA_SUBTASK=$(jq -r '.subtask // empty' "$METADATA_FILE")
+    
+    if [ -n "$METADATA_SUBTASK" ]; then
+        # Get valid labels for this subtask from reference file
+        VALID_LABELS=$(jq -r --arg subtask "$METADATA_SUBTASK" '
+            .iac_subtasks_and_subject_labels[] | 
+            select(.subtask == $subtask) | 
+            .subject_labels[]
+        ' "$REFERENCE_PATH" 2>/dev/null)
+        
+        if [ -n "$VALID_LABELS" ]; then
+            # Check each subject_label in metadata.json
+            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels[]?' "$METADATA_FILE" 2>/dev/null)
+            
+            if [ -n "$METADATA_SUBJECT_LABELS" ]; then
+                ALL_LABELS_VALID=true
+                INVALID_LABELS=()
+                
+                while IFS= read -r label; do
+                    if [ -n "$label" ]; then
+                        LABEL_VALID=false
+                        while IFS= read -r valid_label; do
+                            if [ "$label" = "$valid_label" ]; then
+                                LABEL_VALID=true
+                                break
+                            fi
+                        done <<< "$VALID_LABELS"
+                        
+                        if [ "$LABEL_VALID" = false ]; then
+                            ALL_LABELS_VALID=false
+                            INVALID_LABELS+=("$label")
+                        fi
+                    fi
+                done <<< "$METADATA_SUBJECT_LABELS"
+                
+                if [ "$ALL_LABELS_VALID" = false ]; then
+                    for invalid_label in "${INVALID_LABELS[@]}"; do
+                        log_error "Invalid subject_label: '$invalid_label' for subtask '$METADATA_SUBTASK'"
+                    done
+                    log_warn "Valid subject_labels for subtask '$METADATA_SUBTASK' are:"
+                    while IFS= read -r valid_label; do
+                        if [ -n "$valid_label" ]; then
+                            echo "    - $valid_label" >&2
+                        fi
+                    done <<< "$VALID_LABELS"
+                    ((ERRORS++))
+                else
+                    log_info "subject_labels validation: All labels are valid for subtask '$METADATA_SUBTASK'"
+                fi
+            fi
+        else
+            log_warn "Could not find valid subject_labels for subtask: '$METADATA_SUBTASK' in reference file"
+        fi
+    fi
+elif [ -z "$REFERENCE_PATH" ]; then
+    log_warn "Reference file not found: $REFERENCE_FILE (subject_labels values not validated)"
 fi
 
 # 9. Validate region format (if present)

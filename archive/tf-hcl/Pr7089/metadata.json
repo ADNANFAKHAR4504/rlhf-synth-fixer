@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7082",
+  "team": "5",
+  "startedAt": "2025-11-22T10:25:07.987Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "active-passive disaster recovery solution for payment processing with 3-minute failover and zero data loss",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "Route 53",
+    "CloudWatch",
+    "SNS",
+    "Systems Manager",
+    "IAM",
+    "KMS"
+  ],
+  "training_quality": 9.8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
