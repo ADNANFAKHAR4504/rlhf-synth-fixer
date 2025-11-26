@@ -33,45 +33,43 @@ export class TapStack extends pulumi.ComponentResource {
       {
         description: 'KMS key for financial data encryption',
         enableKeyRotation: true,
-        policy: pulumi
-          .all([accountId])
-          .apply(([acctId]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Sid: 'Enable IAM User Permissions',
-                  Effect: 'Allow',
-                  Principal: {
-                    AWS: `arn:aws:iam::${acctId}:root`,
-                  },
-                  Action: 'kms:*',
-                  Resource: '*',
+        policy: pulumi.all([accountId]).apply(([acctId]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${acctId}:root`,
                 },
-                {
-                  Sid: 'Allow services to use the key',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: [
-                      's3.amazonaws.com',
-                      'dynamodb.amazonaws.com',
-                      'logs.amazonaws.com',
-                      'lambda.amazonaws.com',
-                      'config.amazonaws.com',
-                    ],
-                  },
-                  Action: [
-                    'kms:Decrypt',
-                    'kms:Encrypt',
-                    'kms:GenerateDataKey',
-                    'kms:DescribeKey',
-                    'kms:CreateGrant',
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow services to use the key',
+                Effect: 'Allow',
+                Principal: {
+                  Service: [
+                    's3.amazonaws.com',
+                    'dynamodb.amazonaws.com',
+                    'logs.amazonaws.com',
+                    'lambda.amazonaws.com',
+                    'config.amazonaws.com',
                   ],
-                  Resource: '*',
                 },
-              ],
-            })
-          ),
+                Action: [
+                  'kms:Decrypt',
+                  'kms:Encrypt',
+                  'kms:GenerateDataKey',
+                  'kms:DescribeKey',
+                  'kms:CreateGrant',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
         tags: {
           Environment: props.environmentSuffix,
           DataClassification: 'PCI-DSS',
