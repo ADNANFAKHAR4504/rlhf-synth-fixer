@@ -25,7 +25,7 @@ from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.iam_role import IamRole, IamRoleInlinePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lb import Lb
-from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup, LbTargetGroupHealthCheck
+from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
 from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
 from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
 from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
@@ -655,19 +655,7 @@ class TapStack(TerraformStack):
             self,
             "target_group_blue",
             name=f"tg-blue-{self.environment_suffix}",
-            port=80,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
             target_type="lambda",
-            health_check=LbTargetGroupHealthCheck(
-                enabled=True,
-                path="/health",
-                interval=30,
-                timeout=5,
-                healthy_threshold=2,
-                unhealthy_threshold=2,
-            ),
-            deregistration_delay="30",
             tags={
                 "Name": f"tg-blue-{self.environment_suffix}",
                 "DeploymentColor": "blue",
@@ -679,19 +667,7 @@ class TapStack(TerraformStack):
             self,
             "target_group_green",
             name=f"tg-green-{self.environment_suffix}",
-            port=80,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
             target_type="lambda",
-            health_check=LbTargetGroupHealthCheck(
-                enabled=True,
-                path="/health",
-                interval=30,
-                timeout=5,
-                healthy_threshold=2,
-                unhealthy_threshold=2,
-            ),
-            deregistration_delay="30",
             tags={
                 "Name": f"tg-green-{self.environment_suffix}",
                 "DeploymentColor": "green",
