@@ -58,8 +58,10 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Configuration
     const config = new pulumi.Config();
-    const environmentSuffix =
+    const baseEnvironmentSuffix =
       args.environmentSuffix || config.get('environmentSuffix') || 'dev';
+    // Add "-ak" suffix to all resource names to avoid conflicts
+    const environmentSuffix = `${baseEnvironmentSuffix}-ak`;
     const region = aws.config.region || 'us-east-1';
 
     // Database password - can be configured via Pulumi config or uses default for testing
