@@ -1,0 +1,24 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912706",
+  "team": "synth",
+  "startedAt": "2025-11-26T11:54:37+00:00",
+  "subtask": "Lambda",
+  "subject_labels": [
+    "Lambda",
+    "DynamoDB",
+    "EventBridge"
+  ],
+  "aws_services": [
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "SQS"
+  ],
+  "training_quality": 10
+}
