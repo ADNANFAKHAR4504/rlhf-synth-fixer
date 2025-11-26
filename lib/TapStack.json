@@ -31,7 +31,7 @@
       "UpdateReplacePolicy": "Delete",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+          "Fn::Sub": "TurnAroundPromptTable-v1-${EnvironmentSuffix}"
         },
         "AttributeDefinitions": [
           {

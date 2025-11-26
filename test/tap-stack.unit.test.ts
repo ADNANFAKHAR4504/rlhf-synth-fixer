@@ -73,7 +73,7 @@ describe('TapStack CloudFormation Template', () => {
       const properties = table.Properties;
 
       expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'TurnAroundPromptTable-v1-${EnvironmentSuffix}',
       });
       expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
       expect(properties.DeletionProtectionEnabled).toBe(false);
@@ -189,7 +189,7 @@ describe('TapStack CloudFormation Template', () => {
       const tableName = table.Properties.TableName;
 
       expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'TurnAroundPromptTable-v1-${EnvironmentSuffix}',
       });
     });
 
