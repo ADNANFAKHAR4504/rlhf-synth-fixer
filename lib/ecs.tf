@@ -116,8 +116,8 @@ resource "aws_ecs_service" "app" {
     container_port   = 8080
   }
 
-  health_check_grace_period_seconds = 60
-  deployment_maximum_percent        = 200
+  health_check_grace_period_seconds  = 60
+  deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
   tags = {
