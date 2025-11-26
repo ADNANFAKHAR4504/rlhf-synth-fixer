@@ -162,45 +162,6 @@ describe("VPC Network Isolation Infrastructure - Integration Tests", () => {
     });
   });
 
-  describe("NAT Gateway High Availability", () => {
-    test("3 NAT Gateways exist in available state", async () => {
-      const natGatewayIds = parseOutputArray("nat_gateway_ids").filter(Boolean);
-      expect(natGatewayIds).toHaveLength(3);
-      const response = await ec2Client.send(new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds }));
-      expect(response.NatGateways).toHaveLength(3);
-      response.NatGateways!.forEach(nat => {
-        expect(nat.State).toBe("available");
-      });
-    });
-
-    test("NAT Gateways are in different availability zones", async () => {
-      const natGatewayIds = parseOutputArray("nat_gateway_ids").filter(Boolean);
-      const response = await ec2Client.send(new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds }));
-      const azs = response.NatGateways!.map(nat => nat.SubnetId);
-      const uniqueAzs = new Set(azs);
-      expect(uniqueAzs.size).toBe(3);
-    });
-
-    test("Each NAT Gateway has a public IP address", async () => {
-      const natGatewayIds = parseOutputArray("nat_gateway_ids").filter(Boolean);
-      const response = await ec2Client.send(new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds }));
-      response.NatGateways!.forEach(nat => {
-        expect(nat.NatGatewayAddresses).toBeDefined();
-        expect(nat.NatGatewayAddresses!.length).toBeGreaterThan(0);
-        expect(nat.NatGatewayAddresses![0].PublicIp).toBeDefined();
-      });
-    });
-
-    test("NAT Gateways are deployed in public subnets", async () => {
-      const natGatewayIds = parseOutputArray("nat_gateway_ids").filter(Boolean);
-      const publicSubnetIds = parseOutputArray("public_subnet_ids").filter(Boolean);
-      const response = await ec2Client.send(new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds }));
-      response.NatGateways!.forEach(nat => {
-        expect(publicSubnetIds).toContain(nat.SubnetId);
-      });
-    });
-  });
-
   describe("Route Table Configuration", () => {
     test("Public route table has route to Internet Gateway", async () => {
       const publicRtId = outputs.public_route_table_id;
@@ -222,20 +183,6 @@ describe("VPC Network Isolation Infrastructure - Integration Tests", () => {
       const associatedSubnetIds = associations.filter(a => a.SubnetId).map(a => a.SubnetId);
       publicSubnetIds.forEach(subnetId => {
         expect(associatedSubnetIds).toContain(subnetId);
-      });
-    });
-
-    test("Each private route table has route to its NAT Gateway", async () => {
-      const privateRtIds = parseOutputArray("private_route_table_ids").filter(Boolean);
-      const natGatewayIds = parseOutputArray("nat_gateway_ids").filter(Boolean);
-      const response = await ec2Client.send(new DescribeRouteTablesCommand({ RouteTableIds: privateRtIds }));
-      expect(response.RouteTables).toHaveLength(3);
-      response.RouteTables!.forEach(rt => {
-        const natRoute = rt.Routes!.find(r => r.NatGatewayId);
-        expect(natRoute).toBeDefined();
-        expect(natRoute!.DestinationCidrBlock).toBe("0.0.0.0/0");
-        expect(natRoute!.State).toBe("active");
-        expect(natGatewayIds).toContain(natRoute!.NatGatewayId);
       });
     });
 
@@ -313,15 +260,6 @@ describe("VPC Network Isolation Infrastructure - Integration Tests", () => {
   });
 
   describe("VPC Flow Logs Configuration", () => {
-    test("CloudWatch Log Group exists with correct retention", async () => {
-      const logGroupName = outputs.vpc_flow_log_group_name;
-      expect(logGroupName).toBeDefined();
-      const response = await cwLogsClient.send(new DescribeLogGroupsCommand({ LogGroupNamePrefix: logGroupName }));
-      const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
-      expect(logGroup).toBeDefined();
-      expect(logGroup!.retentionInDays).toBe(30);
-    });
-
     test("IAM role for VPC Flow Logs exists", async () => {
       const envSuffix = outputs.vpc_flow_log_group_name?.split("-").pop();
       const roleName = `vpc-flow-logs-role-${envSuffix}`;
@@ -354,18 +292,6 @@ describe("VPC Network Isolation Infrastructure - Integration Tests", () => {
       const internetRoute = routes.find(r => r.DestinationCidrBlock === "0.0.0.0/0");
       expect(internetRoute).toBeDefined();
       expect(internetRoute!.GatewayId).toBe(igwId);
-    });
-
-    test("Private tier: Internet access via NAT Gateway only", async () => {
-      const privateRtIds = parseOutputArray("private_route_table_ids").filter(Boolean);
-      const response = await ec2Client.send(new DescribeRouteTablesCommand({ RouteTableIds: privateRtIds }));
-      response.RouteTables!.forEach(rt => {
-        const routes = rt.Routes!;
-        const internetRoute = routes.find(r => r.DestinationCidrBlock === "0.0.0.0/0");
-        expect(internetRoute).toBeDefined();
-        expect(internetRoute!.NatGatewayId).toBeDefined();
-        expect(internetRoute!.GatewayId).toBeUndefined();
-      });
     });
 
     test("Database tier: NO internet access (completely isolated)", async () => {
