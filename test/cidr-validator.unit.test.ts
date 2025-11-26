@@ -47,7 +47,7 @@ describe('CIDR Validator', () => {
     it('should handle empty CIDR list', () => {
       expect(() => {
         validateCidrOverlap([], 'dev', '10.0.0.0/16');
-      }).toThrow(); // No matching environment
+      }).not.toThrow(); // Should allow dynamic environments not in list
     });
 
     it('should handle single CIDR', () => {
@@ -79,10 +79,10 @@ describe('CIDR Validator', () => {
       }
     });
 
-    it('should throw error when environment not found in CIDR list', () => {
+    it('should allow dynamic environments not in CIDR list', () => {
       expect(() => {
         validateCidrOverlap(validCidrs, 'production', '10.3.0.0/16');
-      }).toThrow();
+      }).not.toThrow(); // Should allow dynamic environments (e.g., PR stacks)
     });
 
     it('should handle CIDR with different subnet masks', () => {
@@ -146,15 +146,10 @@ describe('CIDR Validator', () => {
       }
     });
 
-    it('should provide clear error message for missing environment', () => {
-      try {
+    it('should allow dynamic environments with unique CIDR', () => {
+      expect(() => {
         validateCidrOverlap(cidrs, 'test', '10.3.0.0/16');
-        fail('Should have thrown');
-      } catch (error) {
-        if (error instanceof Error) {
-          expect(error.message).toBeTruthy();
-        }
-      }
+      }).not.toThrow(); // Should allow dynamic environments not in predefined list
     });
   });
 });

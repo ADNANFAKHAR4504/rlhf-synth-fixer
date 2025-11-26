@@ -36,20 +36,20 @@ export function validateCidrOverlap(
     return (network1 & mask) === (network2 & mask);
   };
 
-  // Find the expected CIDR for the current environment
+  // Find the expected CIDR for the current environment (if it exists in the list)
   const expectedConfig = allCidrs.find(config => config.env === currentEnv);
 
-  // If environment not found in CIDR list, throw error
-  if (!expectedConfig) {
-    throw new Error(
-      `Environment '${currentEnv}' not found in CIDR configuration list`
-    );
-  }
-
-  // If current CIDR doesn't match expected CIDR for this environment, throw error
-  if (currentCidr !== expectedConfig.cidr) {
-    throw new Error(
-      `CIDR mismatch: ${currentEnv} expected ${expectedConfig.cidr} but got ${currentCidr}`
+  // If environment is in the list, validate it matches the expected CIDR
+  if (expectedConfig) {
+    if (currentCidr !== expectedConfig.cidr) {
+      throw new Error(
+        `CIDR mismatch: ${currentEnv} expected ${expectedConfig.cidr} but got ${currentCidr}`
+      );
+    }
+  } else {
+    // For dynamic environments (like PR stacks), just log that it's not in the predefined list
+    pulumi.log.info(
+      `Environment '${currentEnv}' is not in predefined CIDR list. Validating for overlaps only.`
     );
   }
 
