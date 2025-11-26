@@ -28,7 +28,7 @@ This is the corrected and production-ready implementation of the ECS Fargate fra
 |-------------|-------------|--------|-------|
 | Existing VPC integration | 80, 96 | ❌ CRITICAL | Creates VPC instead |
 | 3 tasks desired count | 33 | ❌ CRITICAL | Has 2 tasks |
-| Container port 8080 | 24 | ❌ CRITICAL | Defaults to 80 |
+| Container port 8080 | 24 | ❌ CRITICAL | Defaults  to 80 |
 | Health check /health | 28, 76 | ❌ CRITICAL | Uses "/" and port 80 |
 | Fargate platform 1.4.0 | 84 | ✅ PASS | Correct |
 | 2 vCPU, 4GB memory | 21 | ✅ PASS | Correct |
