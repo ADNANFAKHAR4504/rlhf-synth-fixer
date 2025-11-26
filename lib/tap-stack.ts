@@ -76,7 +76,7 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const kmsAlias = new aws.kms.Alias(
+    const _kmsAlias = new aws.kms.Alias(
       `fraud-detection-kms-alias-${environmentSuffix}`,
       {
         name: `alias/fraud-detection-${environmentSuffix}`,
@@ -119,7 +119,7 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Email subscription for SNS topic
-    const emailSubscription = new aws.sns.TopicSubscription(
+    const _emailSubscription = new aws.sns.TopicSubscription(
       `fraud-alerts-email-${environmentSuffix}`,
       {
         topic: fraudAlertsTopic.arn,
@@ -183,7 +183,7 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Policy for transaction-processor Lambda
-    const transactionProcessorPolicy = new aws.iam.RolePolicy(
+    const _transactionProcessorPolicy = new aws.iam.RolePolicy(
       `transaction-processor-policy-${environmentSuffix}`,
       {
         role: transactionProcessorRole.id,
@@ -261,7 +261,7 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Policy for fraud-detector Lambda
-    const fraudDetectorPolicy = new aws.iam.RolePolicy(
+    const _fraudDetectorPolicy = new aws.iam.RolePolicy(
       `fraud-detector-policy-${environmentSuffix}`,
       {
         role: fraudDetectorRole.id,
@@ -602,7 +602,7 @@ Action Required: Review this transaction immediately.
       { parent: this }
     );
 
-    const eventBridgePolicy = new aws.iam.RolePolicy(
+    const _eventBridgePolicy = new aws.iam.RolePolicy(
       `eventbridge-policy-${environmentSuffix}`,
       {
         role: eventBridgeRole.id,
@@ -650,7 +650,7 @@ Action Required: Review this transaction immediately.
     );
 
     // EventBridge target for fraud-detector Lambda with DLQ
-    const fraudDetectionTarget = new aws.cloudwatch.EventTarget(
+    const _fraudDetectionTarget = new aws.cloudwatch.EventTarget(
       `fraud-detection-target-${environmentSuffix}`,
       {
         rule: fraudDetectionRule.name,
@@ -669,7 +669,7 @@ Action Required: Review this transaction immediately.
     );
 
     // Permission for EventBridge to invoke fraud-detector Lambda
-    const fraudDetectorEventPermission = new aws.lambda.Permission(
+    const _fraudDetectorEventPermission = new aws.lambda.Permission(
       `fraud-detector-event-permission-${environmentSuffix}`,
       {
         action: 'lambda:InvokeFunction',

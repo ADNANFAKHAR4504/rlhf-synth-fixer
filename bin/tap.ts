@@ -17,13 +17,17 @@ import { FraudDetectionStack } from '../lib/tap-stack';
 const config = new pulumi.Config();
 
 // Get the environment suffix from config, defaulting to 'dev'.
-const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get AWS region from config or environment
 const region = config.get('region') || process.env.AWS_REGION || 'us-east-1';
 
 // Get email address for SNS alerts
-const emailAddress = config.get('emailAddress') || process.env.EMAIL_ADDRESS || 'alerts@example.com';
+const emailAddress =
+  config.get('emailAddress') ||
+  process.env.EMAIL_ADDRESS ||
+  'alerts@example.com';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
@@ -70,9 +74,11 @@ const stack = new FraudDetectionStack(
 export const eventBridgeBusArn = stack.eventBridgeBusArn;
 export const snsTopicArn = stack.snsTopicArn;
 export const dynamoDbTableName = stack.dynamoDbTableName;
-export const transactionProcessorFunctionName = stack.transactionProcessorFunctionName;
+export const transactionProcessorFunctionName =
+  stack.transactionProcessorFunctionName;
 export const fraudDetectorFunctionName = stack.fraudDetectorFunctionName;
-export const transactionProcessorFunctionArn = stack.transactionProcessorFunctionArn;
+export const transactionProcessorFunctionArn =
+  stack.transactionProcessorFunctionArn;
 export const kmsKeyId = stack.kmsKeyId;
 export const transactionProcessorDLQUrl = stack.transactionProcessorDLQUrl;
 export const fraudDetectorDLQUrl = stack.fraudDetectorDLQUrl;
