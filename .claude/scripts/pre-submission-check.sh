@@ -186,6 +186,7 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
 else
   # Get changed files
   invalid_files=$(git diff --name-only origin/main...HEAD 2>/dev/null | \
+    grep -v '^\.claude/' | \
     grep -v '^bin/' | \
     grep -v '^lib/' | \
     grep -v '^test/' | \
