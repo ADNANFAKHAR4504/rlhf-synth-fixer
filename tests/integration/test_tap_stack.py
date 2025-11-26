@@ -62,8 +62,19 @@ class TestPaymentMigrationIntegration(unittest.TestCase):
         vpc = response['Vpcs'][0]
         
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
+        
+        # Check DNS attributes separately
+        dns_response = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsHostnames'
+        )
+        self.assertTrue(dns_response['EnableDnsHostnames']['Value'])
+        
+        dns_support_response = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsSupport'
+        )
+        self.assertTrue(dns_support_response['EnableDnsSupport']['Value'])
 
     @mark.it("has 6 subnets across 3 availability zones")
     def test_subnet_configuration(self):
@@ -359,18 +370,22 @@ class TestPaymentMigrationIntegration(unittest.TestCase):
             self.skipTest("Stack outputs not found - stack may not be deployed")
         
         # Check for key alarms
+        # Use broader prefix to catch all payment alarms
         response = self.cloudwatch_client.describe_alarms(
-            AlarmNamePrefix=f"payment-{os.getenv('ENVIRONMENT_SUFFIX', 'dev')}"
+            AlarmNamePrefix="payment-"
         )
         
         alarms = response['MetricAlarms']
         
+        # Filter to current environment's alarms
+        env_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        env_alarms = [a for a in alarms if env_suffix in a['AlarmName']]
+        
         # Should have alarms for key metrics
-        alarm_types = [a['MetricName'] for a in alarms]
         expected_metrics = ['CPUUtilization', 'DatabaseConnections', 'Latency']
         
         for metric in expected_metrics:
-            matching_alarms = [a for a in alarms if metric in a['MetricName']]
+            matching_alarms = [a for a in env_alarms if a['MetricName'] == metric]
             self.assertGreaterEqual(len(matching_alarms), 1, 
                                    f"No alarm found for metric: {metric}")
 
