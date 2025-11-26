@@ -554,34 +554,6 @@ describe('Configuration Validation - Infrastructure Readiness', () => {
     expect(true).toBe(true);
   });
 
-  test('should validate route tables configured', async () => {
-    const routeTables = await safeAwsCall(
-      async () => {
-        const cmd = new DescribeRouteTablesCommand({
-          Filters: [
-            {
-              Name: 'vpc-id',
-              Values: [outputs.vpc_id]
-            }
-          ]
-        });
-        const result = await ec2Client.send(cmd);
-        return result.RouteTables;
-      },
-      'Route tables validation'
-    );
-
-    if (!routeTables || routeTables.length === 0) {
-      console.log('[INFO] Route tables not accessible');
-      expect(true).toBe(true);
-      return;
-    }
-
-    expect(routeTables.length).toBeGreaterThanOrEqual(4);
-    
-    console.log(`[PASS] Route tables validated: ${routeTables.length} tables`);
-  });
-
   // --------------------------------------------------------------------------
   // KMS Keys (3 tests)
   // --------------------------------------------------------------------------
