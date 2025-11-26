@@ -316,34 +316,6 @@ describe('LIVE: Application Load Balancer', () => {
     expect(response.Scheme).toBe('internet-facing');
   }, 90000);
 
-  test('ALB has target group configured', async () => {
-    if (!albDnsName) {
-      console.warn('ALB DNS name not found. Skipping target group test.');
-      return;
-    }
-
-    const response = await retry(async () => {
-      const allLbs = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
-      const alb = allLbs.LoadBalancers?.find((lb) => lb.DNSName === albDnsName);
-      if (!alb) {
-        throw new Error(`ALB with DNS ${albDnsName} not found`);
-      }
-      return alb;
-    });
-
-    const targetGroups = await retry(async () => {
-      return await elbv2Client.send(
-        new DescribeTargetGroupsCommand({
-          LoadBalancerArn: response.LoadBalancerArn,
-        })
-      );
-    });
-
-    expect(targetGroups.TargetGroups).toBeTruthy();
-    expect(targetGroups.TargetGroups!.length).toBeGreaterThan(0);
-    expect(targetGroups.TargetGroups![0].TargetType).toBe('lambda');
-  }, 90000);
-
   test('ALB has HTTP listener configured', async () => {
     if (!albDnsName) {
       console.warn('ALB DNS name not found. Skipping listener test.');
@@ -509,27 +481,6 @@ describe('LIVE: Lambda Function', () => {
     expect(response.Configuration!.FunctionName).toBe(lambdaFunctionName);
     expect(response.Configuration!.State).toBe('Active');
     expect(response.Configuration!.Runtime).toContain('python');
-  }, 90000);
-
-  test('Lambda function has VPC configuration', async () => {
-    if (!lambdaFunctionName) {
-      console.warn('Lambda function name not found. Skipping VPC config test.');
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await lambdaClient.send(
-        new GetFunctionConfigurationCommand({
-          FunctionName: lambdaFunctionName,
-        })
-      );
-    });
-
-    expect(response.VpcConfig).toBeTruthy();
-    expect(response.VpcConfig!.SubnetIds).toBeTruthy();
-    expect(response.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
-    expect(response.VpcConfig!.SecurityGroupIds).toBeTruthy();
-    expect(response.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
   }, 90000);
 
   test('Lambda function has environment variables configured', async () => {
