@@ -292,7 +292,7 @@ const auroraCluster = new aws.rds.Cluster(
   {
     engine: 'aurora-postgresql',
     engineMode: 'provisioned',
-    engineVersion: '15.4',
+    engineVersion: '15.5',
     databaseName: 'webapp',
     masterUsername: 'dbadmin',
     masterPassword: config.requireSecret('dbPassword'),
@@ -317,7 +317,7 @@ new aws.rds.ClusterInstance(`aurora-instance-${environmentSuffix}`, {
   clusterIdentifier: auroraCluster.id,
   instanceClass: 'db.serverless',
   engine: 'aurora-postgresql',
-  engineVersion: '15.4',
+  engineVersion: '15.5',
   publiclyAccessible: false,
   tags: { ...commonTags, Name: `aurora-instance-${environmentSuffix}` },
 });
@@ -494,7 +494,7 @@ const launchTemplate = new aws.ec2.LaunchTemplate(
   `launch-template-${environmentSuffix}`,
   {
     namePrefix: `webapp-${environmentSuffix}`,
-    imageId: 'ami-0f1a5f5ada0e7da53', // Amazon Linux 2 ARM64 in us-west-2
+    imageId: 'ami-0d081196e3df05f4d', // Amazon Linux 2023 ARM64 in us-west-2
     instanceType: 't4g.micro', // ARM-based Graviton2
     iamInstanceProfile: {
       arn: ec2InstanceProfile.arn,
