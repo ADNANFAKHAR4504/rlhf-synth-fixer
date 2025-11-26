@@ -1,28 +1,3 @@
-# Aurora Global Database CloudFormation Implementation (IDEAL)
-
-This is the corrected implementation for Aurora Global Database cross-region disaster recovery using CloudFormation JSON.
-
-## Key Corrections from MODEL_RESPONSE
-
-1. **Complete VPC infrastructure** with public and private subnets across multiple AZs
-2. **Functional Route 53 health checks** using CloudWatch metrics
-3. **CloudWatch dashboard** for centralized monitoring
-4. **SNS topic policy** for CloudWatch alarm integration
-5. **Comprehensive CloudWatch alarms** for CPU, memory, connections, replication lag, IOPS, and deadlocks
-6. **Proper security group configuration** with VPC CIDR restriction
-7. **KMS encryption** with key rotation enabled
-8. **Enhanced monitoring** with 60-second granularity
-
-## Architecture Overview
-
-- **Primary Region (us-east-1)**: Complete VPC + Aurora MySQL 8.0 cluster (1 writer, 1 reader)
-- **Route 53**: CloudWatch-based health checks for failover routing
-- **Monitoring**: CloudWatch dashboard, comprehensive alarms, SNS notifications
-- **Security**: KMS encryption, VPC-scoped security groups, IAM database authentication
-
-## File: lib/TapStack.json
-
-```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Aurora Global Database for Cross-Region Disaster Recovery - Financial Trading Platform with 99.99% uptime SLA",
@@ -36,6 +11,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "String",
       "Description": "Master username for Aurora database",
       "Default": "admin",
+      "NoEcho": true,
       "MinLength": 1,
       "MaxLength": 16,
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
@@ -67,15 +43,26 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "trading-vpc-${EnvironmentSuffix}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-vpc-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
         ]
       }
     },
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-igw-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-igw-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "VPCGatewayAttachment": {
@@ -92,7 +79,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "CidrBlock": "10.0.1.0/24",
         "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-public-subnet-1-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-public-subnet-1-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PublicSubnet2": {
@@ -102,7 +94,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "CidrBlock": "10.0.2.0/24",
         "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-public-subnet-2-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-public-subnet-2-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PrivateSubnet1": {
@@ -111,7 +108,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.10.0/24",
         "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-private-subnet-1-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-subnet-1-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PrivateSubnet2": {
@@ -120,7 +122,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.11.0/24",
         "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-private-subnet-2-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-subnet-2-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PrivateSubnet3": {
@@ -129,14 +136,24 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.12.0/24",
         "AvailabilityZone": { "Fn::Select": [2, { "Fn::GetAZs": "" }] },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-private-subnet-3-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-subnet-3-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-public-rt-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-public-rt-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PublicRoute": {
@@ -166,7 +183,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-private-rt-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-private-rt-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "PrivateSubnet1RouteTableAssociation": {
@@ -197,24 +219,71 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EnableKeyRotation": true,
         "KeyPolicy": {
           "Version": "2012-10-17",
+          "Id": "aurora-key-policy",
           "Statement": [
             {
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
-              "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" } },
+              "Principal": {
+                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+              },
               "Action": "kms:*",
               "Resource": "*"
             },
             {
               "Sid": "Allow RDS to use the key",
               "Effect": "Allow",
-              "Principal": { "Service": "rds.amazonaws.com" },
-              "Action": ["kms:Decrypt", "kms:GenerateDataKey", "kms:CreateGrant", "kms:ReEncrypt*", "kms:DescribeKey"],
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant",
+                "kms:ReEncrypt*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:CallerAccount": { "Ref": "AWS::AccountId" }
+                }
+              }
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": { "Fn::Sub": "logs.${AWS::Region}.amazonaws.com" }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
               "Resource": "*"
             }
           ]
         },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-kms-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-kms-us-east-1-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": { "Fn::Sub": "alias/trading-db-us-east-1-${EnvironmentSuffix}" },
+        "TargetKeyId": { "Ref": "KMSKey" }
       },
       "DeletionPolicy": "Delete"
     },
@@ -222,22 +291,53 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": { "Fn::Sub": "trading-db-sg-${EnvironmentSuffix}" },
-        "GroupDescription": "Security group for Aurora database access - restricts to VPC CIDR only",
+        "GroupDescription": "Security group for Aurora database access - restricts to application tier only",
         "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
-          { "IpProtocol": "tcp", "FromPort": 3306, "ToPort": 3306, "CidrIp": { "Ref": "VpcCidr" }, "Description": "MySQL access from VPC" }
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.0.0/16",
+            "Description": "MySQL access from VPC application tier"
+          }
         ],
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-sg-${EnvironmentSuffix}" } }]
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-sg-${EnvironmentSuffix}" }
+          }
+        ]
       },
       "DeletionPolicy": "Delete"
     },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": { "Fn::Sub": "trading-db-subnets-${EnvironmentSuffix}" },
-        "DBSubnetGroupDescription": "Subnet group for Aurora Global Database spanning multiple AZs",
-        "SubnetIds": [{ "Ref": "PrivateSubnet1" }, { "Ref": "PrivateSubnet2" }, { "Ref": "PrivateSubnet3" }],
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-subnets-${EnvironmentSuffix}" } }]
+        "DBSubnetGroupName": { "Fn::Sub": "trading-db-subnets-us-east-1-${EnvironmentSuffix}" },
+        "DBSubnetGroupDescription": "Subnet group for Aurora Global Database primary cluster spanning multiple AZs",
+        "SubnetIds": [
+          { "Ref": "PrivateSubnet1" },
+          { "Ref": "PrivateSubnet2" },
+          { "Ref": "PrivateSubnet3" }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-subnets-us-east-1-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
+        ]
       },
       "DeletionPolicy": "Delete"
     },
@@ -249,9 +349,15 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "Parameters": {
           "character_set_server": "utf8mb4",
           "collation_server": "utf8mb4_unicode_ci",
-          "time_zone": "UTC"
+          "time_zone": "UTC",
+          "aurora_enhanced_binlog": "1"
         },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-cluster-params-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-cluster-params-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "DBParameterGroup": {
@@ -264,7 +370,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
           "long_query_time": "2",
           "log_output": "FILE"
         },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-instance-params-${EnvironmentSuffix}" } }]
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-instance-params-${EnvironmentSuffix}" }
+          }
+        ]
       }
     },
     "GlobalCluster": {
@@ -281,7 +392,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
     "PrimaryDBCluster": {
       "Type": "AWS::RDS::DBCluster",
       "Properties": {
-        "DBClusterIdentifier": { "Fn::Sub": "trading-db-cluster-${EnvironmentSuffix}" },
+        "DBClusterIdentifier": { "Fn::Sub": "trading-db-us-east-1-cluster-${EnvironmentSuffix}" },
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": { "Ref": "DBUsername" },
@@ -300,8 +411,22 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "CopyTagsToSnapshot": true,
         "EnableIAMDatabaseAuthentication": true,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "trading-db-cluster-${EnvironmentSuffix}" } },
-          { "Key": "Role", "Value": "Primary" }
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-us-east-1-cluster-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Region",
+            "Value": "us-east-1"
+          },
+          {
+            "Key": "Role",
+            "Value": "Primary"
+          },
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentSuffix" }
+          }
         ]
       },
       "DependsOn": ["GlobalCluster"],
@@ -313,16 +438,32 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "RoleName": { "Fn::Sub": "rds-enhanced-monitoring-role-${EnvironmentSuffix}" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
-          "Statement": [{ "Effect": "Allow", "Principal": { "Service": "monitoring.rds.amazonaws.com" }, "Action": "sts:AssumeRole" }]
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "monitoring.rds.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
         },
-        "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"]
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "rds-enhanced-monitoring-role-${EnvironmentSuffix}" }
+          }
+        ]
       },
       "DeletionPolicy": "Delete"
     },
     "PrimaryDBInstanceWriter": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": { "Fn::Sub": "trading-db-writer-${EnvironmentSuffix}" },
+        "DBInstanceIdentifier": { "Fn::Sub": "trading-db-us-east-1-writer-${EnvironmentSuffix}" },
         "DBClusterIdentifier": { "Ref": "PrimaryDBCluster" },
         "Engine": "aurora-mysql",
         "DBInstanceClass": "db.r6g.2xlarge",
@@ -333,7 +474,17 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "PerformanceInsightsRetentionPeriod": 7,
         "MonitoringInterval": 60,
         "MonitoringRoleArn": { "Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"] },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-writer-${EnvironmentSuffix}" } }, { "Key": "Role", "Value": "Writer" }]
+        "AutoMinorVersionUpgrade": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-us-east-1-writer-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Role",
+            "Value": "Writer"
+          }
+        ]
       },
       "DependsOn": ["PrimaryDBCluster"],
       "DeletionPolicy": "Delete"
@@ -341,7 +492,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
     "PrimaryDBInstanceReader": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": { "Fn::Sub": "trading-db-reader-${EnvironmentSuffix}" },
+        "DBInstanceIdentifier": { "Fn::Sub": "trading-db-us-east-1-reader-${EnvironmentSuffix}" },
         "DBClusterIdentifier": { "Ref": "PrimaryDBCluster" },
         "Engine": "aurora-mysql",
         "DBInstanceClass": "db.r6g.2xlarge",
@@ -352,7 +503,17 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "PerformanceInsightsRetentionPeriod": 7,
         "MonitoringInterval": 60,
         "MonitoringRoleArn": { "Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"] },
-        "Tags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-reader-${EnvironmentSuffix}" } }, { "Key": "Role", "Value": "Reader" }]
+        "AutoMinorVersionUpgrade": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-us-east-1-reader-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Role",
+            "Value": "Reader"
+          }
+        ]
       },
       "DependsOn": ["PrimaryDBInstanceWriter"],
       "DeletionPolicy": "Delete"
@@ -362,7 +523,13 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Properties": {
         "TopicName": { "Fn::Sub": "trading-db-alerts-${EnvironmentSuffix}" },
         "DisplayName": "Aurora Global Database Critical Alerts",
-        "KmsMasterKeyId": { "Ref": "KMSKey" }
+        "KmsMasterKeyId": { "Ref": "KMSKey" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-alerts-${EnvironmentSuffix}" }
+          }
+        ]
       },
       "DeletionPolicy": "Delete"
     },
@@ -371,13 +538,17 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Properties": {
         "PolicyDocument": {
           "Version": "2012-10-17",
-          "Statement": [{
-            "Sid": "AllowCloudWatchAlarms",
-            "Effect": "Allow",
-            "Principal": { "Service": "cloudwatch.amazonaws.com" },
-            "Action": "sns:Publish",
-            "Resource": { "Ref": "SNSTopic" }
-          }]
+          "Statement": [
+            {
+              "Sid": "AllowCloudWatchAlarms",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudwatch.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": { "Ref": "SNSTopic" }
+            }
+          ]
         },
         "Topics": [{ "Ref": "SNSTopic" }]
       }
@@ -386,7 +557,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": { "Fn::Sub": "trading-db-writer-cpu-high-${EnvironmentSuffix}" },
-        "AlarmDescription": "Alert when writer instance CPU exceeds 80%",
+        "AlarmDescription": "Alert when writer instance CPU exceeds 80% - indicates potential performance bottleneck",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",
         "Statistic": "Average",
@@ -394,7 +565,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EvaluationPeriods": 2,
         "Threshold": 80,
         "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [{ "Name": "DBInstanceIdentifier", "Value": { "Ref": "PrimaryDBInstanceWriter" } }],
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceWriter" }
+          }
+        ],
         "AlarmActions": [{ "Ref": "SNSTopic" }],
         "OKActions": [{ "Ref": "SNSTopic" }],
         "TreatMissingData": "notBreaching"
@@ -412,8 +588,14 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EvaluationPeriods": 2,
         "Threshold": 80,
         "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [{ "Name": "DBInstanceIdentifier", "Value": { "Ref": "PrimaryDBInstanceReader" } }],
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceReader" }
+          }
+        ],
         "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "OKActions": [{ "Ref": "SNSTopic" }],
         "TreatMissingData": "notBreaching"
       }
     },
@@ -421,7 +603,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": { "Fn::Sub": "trading-db-connections-high-${EnvironmentSuffix}" },
-        "AlarmDescription": "Alert when database connections exceed threshold",
+        "AlarmDescription": "Alert when database connections exceed threshold - may indicate connection leak or high load",
         "MetricName": "DatabaseConnections",
         "Namespace": "AWS/RDS",
         "Statistic": "Average",
@@ -429,7 +611,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EvaluationPeriods": 2,
         "Threshold": 100,
         "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [{ "Name": "DBClusterIdentifier", "Value": { "Ref": "PrimaryDBCluster" } }],
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "PrimaryDBCluster" }
+          }
+        ],
         "AlarmActions": [{ "Ref": "SNSTopic" }],
         "TreatMissingData": "notBreaching"
       }
@@ -438,7 +625,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": { "Fn::Sub": "trading-db-memory-low-${EnvironmentSuffix}" },
-        "AlarmDescription": "Alert when freeable memory drops below 1GB",
+        "AlarmDescription": "Alert when freeable memory drops below 1GB - risk of OOM",
         "MetricName": "FreeableMemory",
         "Namespace": "AWS/RDS",
         "Statistic": "Average",
@@ -446,7 +633,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EvaluationPeriods": 2,
         "Threshold": 1073741824,
         "ComparisonOperator": "LessThanThreshold",
-        "Dimensions": [{ "Name": "DBInstanceIdentifier", "Value": { "Ref": "PrimaryDBInstanceWriter" } }],
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceWriter" }
+          }
+        ],
         "AlarmActions": [{ "Ref": "SNSTopic" }],
         "TreatMissingData": "notBreaching"
       }
@@ -455,7 +647,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": { "Fn::Sub": "trading-db-replication-lag-high-${EnvironmentSuffix}" },
-        "AlarmDescription": "Alert when global replication lag exceeds 1000ms",
+        "AlarmDescription": "Alert when global replication lag exceeds 1000ms - critical for disaster recovery RPO",
         "MetricName": "AuroraGlobalDBReplicationLag",
         "Namespace": "AWS/RDS",
         "Statistic": "Average",
@@ -463,7 +655,34 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EvaluationPeriods": 3,
         "Threshold": 1000,
         "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [{ "Name": "DBClusterIdentifier", "Value": { "Ref": "PrimaryDBCluster" } }],
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "PrimaryDBCluster" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "SNSTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "WriteIOPSAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "trading-db-write-iops-high-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alert when write IOPS are consistently high",
+        "MetricName": "VolumeWriteIOPs",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 3,
+        "Threshold": 10000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "PrimaryDBCluster" }
+          }
+        ],
         "AlarmActions": [{ "Ref": "SNSTopic" }],
         "TreatMissingData": "notBreaching"
       }
@@ -472,7 +691,7 @@ This is the corrected implementation for Aurora Global Database cross-region dis
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": { "Fn::Sub": "trading-db-deadlocks-${EnvironmentSuffix}" },
-        "AlarmDescription": "Alert when deadlocks are detected",
+        "AlarmDescription": "Alert when deadlocks are detected - indicates transaction contention issues",
         "MetricName": "Deadlocks",
         "Namespace": "AWS/RDS",
         "Statistic": "Sum",
@@ -480,7 +699,12 @@ This is the corrected implementation for Aurora Global Database cross-region dis
         "EvaluationPeriods": 1,
         "Threshold": 1,
         "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-        "Dimensions": [{ "Name": "DBInstanceIdentifier", "Value": { "Ref": "PrimaryDBInstanceWriter" } }],
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": { "Ref": "PrimaryDBInstanceWriter" }
+          }
+        ],
         "AlarmActions": [{ "Ref": "SNSTopic" }],
         "TreatMissingData": "notBreaching"
       }
@@ -496,15 +720,53 @@ This is the corrected implementation for Aurora Global Database cross-region dis
           },
           "InsufficientDataHealthStatus": "Healthy"
         },
-        "HealthCheckTags": [{ "Key": "Name", "Value": { "Fn::Sub": "trading-db-primary-health-${EnvironmentSuffix}" } }]
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-primary-health-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Region",
+            "Value": "us-east-1"
+          }
+        ]
       },
       "DependsOn": ["CPUAlarmWriter"]
+    },
+    "SecondaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "CALCULATED",
+          "ChildHealthChecks": [],
+          "HealthThreshold": 1
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-secondary-health-${EnvironmentSuffix}" }
+          },
+          {
+            "Key": "Region",
+            "Value": "eu-west-1"
+          }
+        ]
+      }
     },
     "CloudWatchDashboard": {
       "Type": "AWS::CloudWatch::Dashboard",
       "Properties": {
         "DashboardName": { "Fn::Sub": "TradingDB-Health-${EnvironmentSuffix}" },
-        "DashboardBody": { "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"title\":\"CPU Utilization\",\"metrics\":[[\"AWS/RDS\",\"CPUUtilization\",\"DBInstanceIdentifier\",\"${PrimaryDBInstanceWriter}\"],[\"AWS/RDS\",\"CPUUtilization\",\"DBInstanceIdentifier\",\"${PrimaryDBInstanceReader}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"properties\":{\"title\":\"Database Connections\",\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",\"DBClusterIdentifier\",\"${PrimaryDBCluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"properties\":{\"title\":\"Freeable Memory\",\"metrics\":[[\"AWS/RDS\",\"FreeableMemory\",\"DBInstanceIdentifier\",\"${PrimaryDBInstanceWriter}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"properties\":{\"title\":\"Replication Lag\",\"metrics\":[[\"AWS/RDS\",\"AuroraGlobalDBReplicationLag\",\"DBClusterIdentifier\",\"${PrimaryDBCluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}}]}" }
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"x\":0,\"y\":0,\"width\":12,\"height\":6,\"properties\":{\"title\":\"CPU Utilization\",\"metrics\":[[\"AWS/RDS\",\"CPUUtilization\",\"DBInstanceIdentifier\",\"${WriterInstance}\"],[\"AWS/RDS\",\"CPUUtilization\",\"DBInstanceIdentifier\",\"${ReaderInstance}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":12,\"y\":0,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Database Connections\",\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":0,\"y\":6,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Freeable Memory\",\"metrics\":[[\"AWS/RDS\",\"FreeableMemory\",\"DBInstanceIdentifier\",\"${WriterInstance}\"],[\"AWS/RDS\",\"FreeableMemory\",\"DBInstanceIdentifier\",\"${ReaderInstance}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":12,\"y\":6,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Global Replication Lag\",\"metrics\":[[\"AWS/RDS\",\"AuroraGlobalDBReplicationLag\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":0,\"y\":12,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Write IOPS\",\"metrics\":[[\"AWS/RDS\",\"VolumeWriteIOPs\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}},{\"type\":\"metric\",\"x\":12,\"y\":12,\"width\":12,\"height\":6,\"properties\":{\"title\":\"Read IOPS\",\"metrics\":[[\"AWS/RDS\",\"VolumeReadIOPs\",\"DBClusterIdentifier\",\"${Cluster}\"]],\"period\":60,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"}}]}",
+            {
+              "WriterInstance": { "Ref": "PrimaryDBInstanceWriter" },
+              "ReaderInstance": { "Ref": "PrimaryDBInstanceReader" },
+              "Cluster": { "Ref": "PrimaryDBCluster" }
+            }
+          ]
+        }
       }
     }
   },
@@ -512,104 +774,93 @@ This is the corrected implementation for Aurora Global Database cross-region dis
     "VpcId": {
       "Description": "VPC ID for the trading platform",
       "Value": { "Ref": "VPC" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-VpcId" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-VpcId" }
+      }
     },
     "GlobalClusterIdentifier": {
       "Description": "Aurora Global Cluster Identifier",
       "Value": { "Ref": "GlobalCluster" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-GlobalClusterId" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-GlobalClusterId" }
+      }
     },
     "PrimaryClusterEndpoint": {
-      "Description": "Primary cluster writer endpoint",
+      "Description": "Primary cluster writer endpoint for real-time transactions",
       "Value": { "Fn::GetAtt": ["PrimaryDBCluster", "Endpoint.Address"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryEndpoint" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryEndpoint" }
+      }
     },
     "PrimaryClusterReadEndpoint": {
-      "Description": "Primary cluster reader endpoint",
+      "Description": "Primary cluster reader endpoint for read replicas",
       "Value": { "Fn::GetAtt": ["PrimaryDBCluster", "ReadEndpoint.Address"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryReadEndpoint" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryReadEndpoint" }
+      }
+    },
+    "PrimaryClusterPort": {
+      "Description": "Aurora cluster port",
+      "Value": { "Fn::GetAtt": ["PrimaryDBCluster", "Endpoint.Port"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryPort" }
+      }
     },
     "KMSKeyId": {
       "Description": "KMS Key ID for Aurora encryption",
       "Value": { "Ref": "KMSKey" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyId" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyId" }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN for Aurora encryption",
+      "Value": { "Fn::GetAtt": ["KMSKey", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyArn" }
+      }
     },
     "SNSTopicArn": {
-      "Description": "SNS Topic ARN for alerts",
+      "Description": "SNS Topic ARN for critical database alerts",
       "Value": { "Ref": "SNSTopic" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-SNSTopicArn" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SNSTopicArn" }
+      }
+    },
+    "DBSecurityGroupId": {
+      "Description": "Security Group ID for database access",
+      "Value": { "Ref": "DBSecurityGroup" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-DBSecurityGroupId" }
+      }
     },
     "PrimaryHealthCheckId": {
       "Description": "Route53 Health Check ID for primary region",
       "Value": { "Ref": "PrimaryHealthCheck" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryHealthCheckId" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-PrimaryHealthCheckId" }
+      }
+    },
+    "SecondaryHealthCheckId": {
+      "Description": "Route53 Health Check ID for secondary region",
+      "Value": { "Ref": "SecondaryHealthCheck" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SecondaryHealthCheckId" }
+      }
     },
     "CloudWatchDashboardName": {
-      "Description": "CloudWatch Dashboard name",
+      "Description": "CloudWatch Dashboard name for database health monitoring",
       "Value": { "Fn::Sub": "TradingDB-Health-${EnvironmentSuffix}" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-DashboardName" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-DashboardName" }
+      }
+    },
+    "EnhancedMonitoringRoleArn": {
+      "Description": "IAM Role ARN for RDS Enhanced Monitoring",
+      "Value": { "Fn::GetAtt": ["EnhancedMonitoringRole", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-MonitoringRoleArn" }
+      }
     }
   }
 }
-```
-
-## Deployment Instructions
-
-### Deploy Stack
-
-```bash
-export ENVIRONMENT_SUFFIX="dev"
-export DB_PASSWORD="YourSecurePassword123!"
-
-aws cloudformation create-stack \
-  --stack-name TapStack-${ENVIRONMENT_SUFFIX} \
-  --template-body file://lib/TapStack.json \
-  --parameters \
-    ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
-    ParameterKey=DBUsername,ParameterValue=admin \
-    ParameterKey=DBPassword,ParameterValue=$DB_PASSWORD \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-
-# Wait for completion (20-30 minutes typical)
-aws cloudformation wait stack-create-complete \
-  --stack-name TapStack-${ENVIRONMENT_SUFFIX} \
-  --region us-east-1
-```
-
-## Key Improvements Over Original MODEL_RESPONSE
-
-1. **Complete VPC infrastructure** - No manual VPC creation required
-2. **Functional health checks** - CloudWatch alarm-based health monitoring
-3. **Comprehensive alarms** - CPU, memory, connections, replication lag, deadlocks
-4. **CloudWatch dashboard** - Centralized monitoring view
-5. **SNS topic policy** - Proper CloudWatch integration
-6. **Security group restriction** - VPC CIDR only (not overly permissive)
-7. **Parameter groups** - Cluster and instance level customization
-8. **KMS encryption** - With key rotation enabled
-9. **Enhanced monitoring** - 60-second granularity (meets 1-minute requirement)
-10. **Performance Insights** - Enabled with KMS encryption
-
-## Cost Estimate
-
-- Aurora instances: ~$794/month (2x db.r6g.2xlarge)
-- KMS key: $1/month
-- VPC: Free
-- Route 53 health check: $0.50/month
-- SNS: Free tier
-- CloudWatch dashboard: Free (first 3)
-- Enhanced monitoring: ~$15/month
-
-**Total**: ~$811/month
-
-## Testing and Validation
-
-After deployment, validate:
-
-1. **Primary cluster**: Writer and reader instances operational
-2. **VPC**: Public and private subnets created correctly
-3. **Health checks**: CloudWatch-based health check showing healthy
-4. **CloudWatch alarms**: All configured and in OK state
-5. **Dashboard**: Metrics displaying correctly
-6. **Encryption**: KMS key with rotation enabled
-7. **Enhanced monitoring**: 60-second granularity active
