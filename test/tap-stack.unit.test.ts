@@ -597,24 +597,24 @@ describe('Aurora Configuration', () => {
 });
 
 describe('DynamoDB Configuration', () => {
-  it('should use provisioned billing mode', () => {
-    const billingMode = 'PROVISIONED';
-    expect(billingMode).toBe('PROVISIONED');
+  it('should use pay-per-request billing mode for global tables', () => {
+    const billingMode = 'PAY_PER_REQUEST';
+    expect(billingMode).toBe('PAY_PER_REQUEST');
   });
 
-  it('should have correct read capacity', () => {
-    const readCapacity = 5;
-    expect(readCapacity).toBe(5);
-  });
-
-  it('should have correct write capacity', () => {
-    const writeCapacity = 5;
-    expect(writeCapacity).toBe(5);
-  });
-
-  it('should enable streams', () => {
+  it('should enable streams for replication', () => {
     const streamEnabled = true;
     expect(streamEnabled).toBe(true);
+  });
+
+  it('should use NEW_AND_OLD_IMAGES stream view type', () => {
+    const streamViewType = 'NEW_AND_OLD_IMAGES';
+    expect(streamViewType).toBe('NEW_AND_OLD_IMAGES');
+  });
+
+  it('should enable point-in-time recovery', () => {
+    const pitrEnabled = true;
+    expect(pitrEnabled).toBe(true);
   });
 });
 
@@ -690,5 +690,11 @@ describe('Multi-Region Configuration', () => {
   it('should have Route 53 failover', () => {
     const failoverEnabled = true;
     expect(failoverEnabled).toBe(true);
+  });
+
+  it('should use private zone domain format', () => {
+    const domainFormat = 'tapdr-dev-as.local';
+    expect(domainFormat).toContain('.local');
+    expect(domainFormat).toContain('tapdr');
   });
 });

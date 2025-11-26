@@ -36,7 +36,7 @@ export class Route53Stack extends pulumi.ComponentResource {
     this.hostedZone = new aws.route53.Zone(
       `${name}-zone`,
       {
-        name: `dr-app-${envSuffix}-as.example.com`,
+        name: `tapdr-${envSuffix}-as.local`,
         comment: 'Hosted zone for multi-region DR application',
         tags: {
           ...tags,
@@ -84,7 +84,7 @@ export class Route53Stack extends pulumi.ComponentResource {
       `${name}-primary-record`,
       {
         zoneId: this.hostedZone.zoneId,
-        name: `app.dr-app-${envSuffix}-as.example.com`,
+        name: `app.tapdr-${envSuffix}-as.local`,
         type: 'CNAME',
         ttl: 60,
         records: [args.primaryEndpoint],
@@ -104,7 +104,7 @@ export class Route53Stack extends pulumi.ComponentResource {
       `${name}-secondary-record`,
       {
         zoneId: this.hostedZone.zoneId,
-        name: `app.dr-app-${envSuffix}-as.example.com`,
+        name: `app.tapdr-${envSuffix}-as.local`,
         type: 'CNAME',
         ttl: 60,
         records: [args.secondaryEndpoint],

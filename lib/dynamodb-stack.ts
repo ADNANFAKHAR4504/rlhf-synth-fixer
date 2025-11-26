@@ -32,9 +32,7 @@ export class DynamoDBStack extends pulumi.ComponentResource {
       `${name}-table`,
       {
         name: `${name}-dr-table-${envSuffix}-as`,
-        billingMode: 'PROVISIONED',
-        readCapacity: 5,
-        writeCapacity: 5,
+        billingMode: 'PAY_PER_REQUEST',
         hashKey: 'id',
         rangeKey: 'timestamp',
         attributes: [
