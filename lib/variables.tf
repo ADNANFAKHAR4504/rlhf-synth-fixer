@@ -1,13 +1,13 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource isolation and naming"
   type        = string
-  default     = "dev"
+  default     = "dev28"
 }
 
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "eu-central-1"
+  default     = "eu-west-2"
 }
 
 variable "vpc_cidr" {

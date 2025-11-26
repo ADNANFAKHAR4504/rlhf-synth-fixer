@@ -66,7 +66,7 @@ This document describes the complete architecture and implementation of a produc
 ### Network Architecture
 
 ```
-Region: eu-central-1 (3 Availability Zones)
+Region: eu-west-2 (3 Availability Zones)
 
 VPC: 10.0.0.0/16
 ├── Public Subnets (3)
@@ -265,6 +265,7 @@ image_scanning_configuration {
 ```
 
 **Process**:
+
 1. Push image to ECR
 2. Automatic vulnerability scan triggers
 3. View results in ECR console or via AWS CLI
@@ -280,6 +281,7 @@ image_scanning_configuration {
 4. Optional: Istio service mesh (commented in architecture)
 
 **Network Policy Example**:
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -288,8 +290,8 @@ metadata:
 spec:
   podSelector: {}
   policyTypes:
-  - Ingress
-  - Egress
+    - Ingress
+    - Egress
 ```
 
 ### 3. Autoscaling Response Time
@@ -304,6 +306,7 @@ set {
 ```
 
 **Behavior**:
+
 - Scale up: Immediate when pods are unschedulable
 - Scale down: 90 seconds after node becomes underutilized
 - Meets requirement: Autoscaling responds within 90 seconds
@@ -317,9 +320,10 @@ set {
 - Data-processing: c5.2xlarge (8 vCPU, 16GB RAM)
 
 **Workload Placement**:
+
 ```yaml
 nodeSelector:
-  role: frontend  # or backend, data-processing
+  role: frontend # or backend, data-processing
 ```
 
 ### 5. Secrets in Secrets Manager
@@ -327,11 +331,13 @@ nodeSelector:
 **Implementation**: Secrets Manager with CSI driver
 
 **Setup**:
+
 1. Secrets stored in AWS Secrets Manager
 2. CSI driver deployed via Helm
 3. Pods mount secrets via SecretProviderClass
 
 **Usage Example**:
+
 ```yaml
 apiVersion: secrets-store.csi.x-k8s.io/v1
 kind: SecretProviderClass
@@ -350,11 +356,13 @@ spec:
 **Implementation**: ConfigMap with network policies
 
 **Policies Defined**:
+
 1. Default deny all ingress/egress
 2. Allow DNS queries to kube-system
 3. Allow same-namespace communication
 
 **Application**:
+
 ```bash
 kubectl apply -f network-policy-config.yaml
 ```
@@ -448,17 +456,20 @@ kubectl apply -f network-policy-config.yaml
 ## Resource Naming Convention
 
 All resources follow the naming pattern:
+
 ```
 {resource-type}-{purpose}-{environment_suffix}
 ```
 
 Examples:
+
 - `eks-cluster-prod`
 - `eks-frontend-nodegroup-prod`
 - `eks-vpc-prod`
 - `eks-alb-controller-role-prod`
 
 This ensures:
+
 - Uniqueness across environments
 - Easy identification of resources
 - Consistent tagging and cost allocation
@@ -469,42 +480,52 @@ This ensures:
 ### Monthly Cost Breakdown (Approximate)
 
 **EKS Control Plane**: $73
+
 - 1 cluster × $0.10/hour × 730 hours
 
 **EC2 Instances** (with initial scaling): $560-$1,120
+
 - Frontend: 2-10 × t3.large × $0.0832/hour
 - Backend: 2-10 × m5.xlarge × $0.192/hour
 - Data-processing: 2-10 × c5.2xlarge × $0.34/hour
 
 **NAT Gateways**: $97.20
+
 - 3 × $0.045/hour × 730 hours
 - Plus data transfer costs
 
 **EBS Volumes**: $30-$150
+
 - 6-30 volumes × 50GB × $0.10/GB
 
 **Data Transfer**: Variable
+
 - NAT Gateway data: $0.045/GB
 - Internet egress: $0.09/GB
 
 **CloudWatch**: $10-$50
+
 - Logs ingestion: $0.50/GB
 - Metrics: Custom metrics
 - Alarms: $0.10 each
 
 **Fargate**: $10-$30
+
 - CoreDNS and ALB Controller pods
 - $0.04048/vCPU/hour + $0.004445/GB/hour
 
 **ECR**: $1-$10
+
 - Storage: $0.10/GB
 - Data transfer out: $0.09/GB
 
 **Secrets Manager**: $1-$5
+
 - $0.40 per secret per month
 - $0.05 per 10,000 API calls
 
 **Total Estimated Monthly Cost**: $782-$1,545
+
 - Minimum (with autoscaling to min): ~$800/month
 - Average (moderate load): ~$1,000/month
 - Maximum (scaled to max): ~$1,500/month
@@ -523,6 +544,7 @@ This ensures:
 ### Scaling Operations
 
 **Manual Scaling of Node Group**:
+
 ```bash
 aws eks update-nodegroup-config \
   --cluster-name eks-cluster-prod \
@@ -531,6 +553,7 @@ aws eks update-nodegroup-config \
 ```
 
 **Verify Autoscaler**:
+
 ```bash
 kubectl logs -n kube-system deployment/cluster-autoscaler
 ```
@@ -538,12 +561,14 @@ kubectl logs -n kube-system deployment/cluster-autoscaler
 ### Updating Applications
 
 **Rolling Update**:
+
 ```bash
 kubectl set image deployment/app container=image:v2
 kubectl rollout status deployment/app
 ```
 
 **Rollback**:
+
 ```bash
 kubectl rollout undo deployment/app
 ```
@@ -551,6 +576,7 @@ kubectl rollout undo deployment/app
 ### Managing Secrets
 
 **Update Secret in Secrets Manager**:
+
 ```bash
 aws secretsmanager update-secret \
   --secret-id eks-app-secrets-prod \
@@ -558,6 +584,7 @@ aws secretsmanager update-secret \
 ```
 
 **Rotate Pods** (to pick up new secrets):
+
 ```bash
 kubectl rollout restart deployment/app
 ```
@@ -565,11 +592,13 @@ kubectl rollout restart deployment/app
 ### Monitoring and Alerts
 
 **View Container Insights**:
+
 1. AWS Console > CloudWatch > Container Insights
 2. Select cluster
 3. View performance metrics
 
 **Check Logs**:
+
 ```bash
 # Control plane logs
 aws logs tail /aws/eks/eks-cluster-prod/cluster --follow
@@ -579,6 +608,7 @@ kubectl logs -f deployment/app
 ```
 
 **Configure Additional Alarms**:
+
 ```bash
 aws cloudwatch put-metric-alarm \
   --alarm-name eks-pod-restart \
@@ -594,12 +624,14 @@ aws cloudwatch put-metric-alarm \
 ### Backup and Recovery
 
 **Backup Strategy**:
+
 1. Infrastructure: Terraform state in S3 with versioning
 2. Kubernetes resources: Velero or similar tool
 3. Application data: Database backups, S3 replication
 4. Secrets: Secrets Manager automatic backup
 
 **Recovery Procedure**:
+
 1. Redeploy infrastructure: `terraform apply`
 2. Restore Kubernetes resources: `velero restore`
 3. Verify all pods are running
@@ -608,6 +640,7 @@ aws cloudwatch put-metric-alarm \
 ### Upgrading EKS
 
 **Process**:
+
 1. Update `cluster_version` variable
 2. Run `terraform plan` to review changes
 3. Run `terraform apply` to upgrade control plane
@@ -637,6 +670,7 @@ Located in `test/` directory:
 5. **TestMonitoring**: Monitoring setup
 
 Run tests:
+
 ```bash
 cd test
 go test -v -timeout 90m
@@ -666,6 +700,7 @@ go test -v -timeout 90m
 **Symptoms**: Nodes show in EC2 but not in `kubectl get nodes`
 
 **Diagnosis**:
+
 ```bash
 # Check node group status
 aws eks describe-nodegroup --cluster-name eks-cluster-prod --nodegroup-name frontend-prod
@@ -675,6 +710,7 @@ aws ec2 get-console-output --instance-id <instance-id>
 ```
 
 **Resolution**:
+
 1. Verify security group rules allow cluster communication
 2. Check IAM role has required permissions
 3. Verify subnet routing to internet (for initial join)
@@ -685,12 +721,14 @@ aws ec2 get-console-output --instance-id <instance-id>
 **Symptoms**: Pods stuck in Pending state
 
 **Diagnosis**:
+
 ```bash
 kubectl describe pod <pod-name> -n kube-system
 kubectl get events -n kube-system
 ```
 
 **Resolution**:
+
 1. Verify Fargate profile selector matches pod labels
 2. Check Fargate execution role permissions
 3. Verify private subnet configuration
@@ -701,12 +739,14 @@ kubectl get events -n kube-system
 **Symptoms**: Ingress created but no ALB in AWS
 
 **Diagnosis**:
+
 ```bash
 kubectl logs -n kube-system deployment/aws-load-balancer-controller
 kubectl describe ingress <ingress-name>
 ```
 
 **Resolution**:
+
 1. Verify ingress class annotation
 2. Check ALB controller logs for errors
 3. Verify subnets are tagged for ALB
@@ -718,11 +758,13 @@ kubectl describe ingress <ingress-name>
 **Symptoms**: Pods pending but no new nodes
 
 **Diagnosis**:
+
 ```bash
 kubectl logs -n kube-system deployment/cluster-autoscaler
 ```
 
 **Resolution**:
+
 1. Check autoscaler has permission to modify ASGs
 2. Verify node group tags for autoscaler
 3. Check if max node count reached
@@ -733,6 +775,7 @@ kubectl logs -n kube-system deployment/cluster-autoscaler
 **Symptoms**: Unexpectedly high AWS bill
 
 **Diagnosis**:
+
 ```bash
 # Check VPC Flow Logs
 aws logs filter-log-events \
@@ -741,6 +784,7 @@ aws logs filter-log-events \
 ```
 
 **Resolution**:
+
 1. Verify VPC endpoints are being used
 2. Check for unnecessary cross-AZ traffic
 3. Enable S3 endpoint for ECR image pulls

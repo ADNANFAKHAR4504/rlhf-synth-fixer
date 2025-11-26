@@ -6,7 +6,7 @@ This Terraform configuration deploys a complete production-ready Amazon EKS clus
 
 This infrastructure code provisions a highly available, scalable, and secure EKS 1.28 cluster with the following capabilities:
 
-- Multi-AZ deployment across 3 availability zones in eu-central-1
+- Multi-AZ deployment across 3 availability zones in eu-west-2
 - Dedicated node groups for different workload types
 - Fargate profiles for system workloads
 - IAM Roles for Service Accounts (IRSA) for secure pod-level AWS access
@@ -74,6 +74,7 @@ This infrastructure code provisions a highly available, scalable, and secure EKS
 ### AWS Permissions
 
 The AWS credentials used must have permissions for:
+
 - EKS cluster management
 - VPC and networking resources
 - IAM roles and policies
@@ -92,9 +93,10 @@ cp terraform.tfvars.example terraform.tfvars
 ```
 
 Edit terraform.tfvars:
+
 ```hcl
 environment_suffix = "prod"
-aws_region = "eu-central-1"
+aws_region = "eu-west-2"
 cluster_version = "1.28"
 ```
 
@@ -111,7 +113,7 @@ Deployment time: ~20-30 minutes
 ### 3. Configure kubectl
 
 ```bash
-aws eks update-kubeconfig --region eu-central-1 --name eks-cluster-prod
+aws eks update-kubeconfig --region eu-west-2 --name eks-cluster-prod
 kubectl get nodes
 ```
 
@@ -142,7 +144,7 @@ kubectl get daemonset -n amazon-cloudwatch
 
 ### Optional Variables
 
-- `aws_region`: AWS region (default: "eu-central-1")
+- `aws_region`: AWS region (default: "eu-west-2")
 - `vpc_cidr`: VPC CIDR block (default: "10.0.0.0/16")
 - `cluster_version`: Kubernetes version (default: "1.28")
 - `cluster_name`: Base cluster name (default: "eks-cluster")
@@ -175,6 +177,7 @@ After deployment, Terraform provides these outputs:
 ### Example: Deploy a Sample Application
 
 1. Create a deployment:
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -193,13 +196,14 @@ spec:
       nodeSelector:
         role: frontend
       containers:
-      - name: app
-        image: <ecr_repository_url>:latest
-        ports:
-        - containerPort: 8080
+        - name: app
+          image: <ecr_repository_url>:latest
+          ports:
+            - containerPort: 8080
 ```
 
 2. Create a service with ALB ingress:
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -210,8 +214,8 @@ spec:
   selector:
     app: sample-app
   ports:
-  - port: 80
-    targetPort: 8080
+    - port: 80
+      targetPort: 8080
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -223,20 +227,21 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
 spec:
   rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: sample-app
-            port:
-              number: 80
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sample-app
+                port:
+                  number: 80
 ```
 
 ### Using Secrets Manager
 
 1. Create a SecretProviderClass:
+
 ```yaml
 apiVersion: secrets-store.csi.x-k8s.io/v1
 kind: SecretProviderClass
@@ -251,14 +256,15 @@ spec:
 ```
 
 2. Mount in pod:
+
 ```yaml
 volumes:
-- name: secrets-store
-  csi:
-    driver: secrets-store.csi.k8s.io
-    readOnly: true
-    volumeAttributes:
-      secretProviderClass: "app-secrets"
+  - name: secrets-store
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: 'app-secrets'
 ```
 
 ## Monitoring
@@ -266,6 +272,7 @@ volumes:
 ### CloudWatch Container Insights
 
 Access metrics in AWS Console:
+
 1. Navigate to CloudWatch > Container Insights
 2. Select your EKS cluster
 3. View metrics: CPU, Memory, Network, Disk
@@ -273,6 +280,7 @@ Access metrics in AWS Console:
 ### CloudWatch Alarms
 
 Pre-configured alarms:
+
 - High CPU utilization (>80%)
 - High memory utilization (>80%)
 
@@ -311,6 +319,7 @@ VPC Flow Logs are enabled for network traffic analysis.
 ### Network Policies
 
 Default network policies are configured via ConfigMap for:
+
 - Default deny all ingress/egress
 - Allow DNS queries
 - Allow same-namespace communication
@@ -322,6 +331,7 @@ Apply additional policies as needed for your workloads.
 ### Cluster Autoscaler
 
 The Cluster Autoscaler is configured to:
+
 - Scale up when pods are unschedulable
 - Scale down after 90 seconds of low utilization
 - Respect min/max node counts
@@ -344,12 +354,12 @@ spec:
   minReplicas: 2
   maxReplicas: 10
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
 ```
 
 ## Cost Optimization
@@ -398,10 +408,10 @@ spec:
 
 ```bash
 # Check cluster status
-aws eks describe-cluster --name <cluster-name> --region eu-central-1
+aws eks describe-cluster --name <cluster-name> --region eu-west-2
 
 # Check node groups
-aws eks list-nodegroups --cluster-name <cluster-name> --region eu-central-1
+aws eks list-nodegroups --cluster-name <cluster-name> --region eu-west-2
 
 # Check pod logs
 kubectl logs -n kube-system <pod-name>
@@ -421,6 +431,7 @@ kubectl logs -n kube-system deployment/aws-load-balancer-controller
 Comprehensive integration tests are provided in the `test/` directory using Terratest.
 
 Run tests:
+
 ```bash
 cd test
 go mod download
@@ -428,6 +439,7 @@ go test -v -timeout 90m
 ```
 
 Tests validate:
+
 - EKS cluster deployment
 - Node group creation and scaling
 - Fargate profile configuration
@@ -441,11 +453,13 @@ Tests validate:
 ### Upgrading EKS Version
 
 1. Update cluster version:
+
    ```hcl
    cluster_version = "1.29"
    ```
 
 2. Apply changes:
+
    ```bash
    terraform apply
    ```
@@ -458,6 +472,7 @@ Tests validate:
 ### Updating Add-ons
 
 Add-on versions are automatically set to latest. To update:
+
 ```bash
 terraform apply
 ```

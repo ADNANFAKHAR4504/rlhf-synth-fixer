@@ -5,6 +5,7 @@ This document contains the complete Terraform HCL implementation for deploying a
 ## Architecture Overview
 
 The implementation includes:
+
 - EKS 1.28 cluster with OIDC provider
 - VPC with 3 public and 3 private subnets across 3 availability zones
 - 3 managed node groups (frontend, backend, data-processing)
@@ -33,7 +34,6 @@ The implementation includes:
 10. monitoring.tf - CloudWatch Container Insights
 11. security.tf - ECR, Secrets Manager, network policies
 12. outputs.tf - All output values
-
 
 ## File: lib/versions.tf
 
@@ -75,7 +75,7 @@ variable "environment_suffix" {
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
-  default     = "eu-central-1"
+  default     = "eu-west-2"
 }
 
 variable "vpc_cidr" {
@@ -2418,37 +2418,43 @@ output "cluster_info" {
 ### Deployment Steps
 
 1. Clone and navigate to the directory:
+
    ```bash
    cd lib
    ```
 
 2. Initialize Terraform:
+
    ```bash
    terraform init
    ```
 
 3. Create terraform.tfvars:
+
    ```hcl
    environment_suffix = "prod"
-   aws_region = "eu-central-1"
+   aws_region = "eu-west-2"
    cluster_version = "1.28"
    node_group_min_size = 2
    node_group_max_size = 10
    ```
 
 4. Plan the deployment:
+
    ```bash
    terraform plan
    ```
 
 5. Apply the configuration:
+
    ```bash
    terraform apply
    ```
 
 6. Configure kubectl:
+
    ```bash
-   aws eks update-kubeconfig --region eu-central-1 --name eks-cluster-<suffix>
+   aws eks update-kubeconfig --region eu-west-2 --name eks-cluster-<suffix>
    ```
 
 7. Verify deployment:
@@ -2460,16 +2466,19 @@ output "cluster_info" {
 ### Post-Deployment Configuration
 
 1. Verify Fargate profiles:
+
    ```bash
    kubectl get pods -n kube-system -o wide
    ```
 
 2. Test ALB controller:
+
    ```bash
    kubectl get deployment -n kube-system aws-load-balancer-controller
    ```
 
 3. Verify cluster autoscaler:
+
    ```bash
    kubectl get deployment -n kube-system cluster-autoscaler
    ```
@@ -2482,6 +2491,7 @@ output "cluster_info" {
 ### Testing
 
 Run integration tests:
+
 ```bash
 cd ../test
 go mod download
@@ -2491,6 +2501,7 @@ go test -v -timeout 90m
 ### Cleanup
 
 To destroy all resources:
+
 ```bash
 terraform destroy
 ```
@@ -2525,6 +2536,7 @@ terraform destroy
 ## Outputs
 
 After deployment, use these outputs:
+
 - cluster_endpoint - EKS cluster API endpoint
 - oidc_provider_arn - For creating additional IRSA roles
 - kubectl_config_command - Command to configure kubectl
