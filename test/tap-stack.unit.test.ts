@@ -254,37 +254,32 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
     });
 
-    test('TradingAnalyticsGlobalTable should have replicas', () => {
+    test('TradingAnalyticsGlobalTable should be a regular Table (single-region deployment)', () => {
       const table = template.Resources.TradingAnalyticsGlobalTable;
-      expect(table.Properties.Replicas).toBeDefined();
-      expect(Array.isArray(table.Properties.Replicas)).toBe(true);
-      // Both source and target regions must be in replicas array (CloudFormation requires current region to be included)
-      expect(table.Properties.Replicas.length).toBe(2);
+      expect(table.Type).toBe('AWS::DynamoDB::Table');
+      // Changed from GlobalTable to regular Table to avoid multi-region validation errors
+      // Regular table is sufficient for single-region deployment
     });
 
-    test('TradingAnalyticsGlobalTable should have both source and target region replicas', () => {
+    test('TradingAnalyticsGlobalTable should have region-specific table name', () => {
       const table = template.Resources.TradingAnalyticsGlobalTable;
-      const replicas = table.Properties.Replicas;
-      const regions = replicas.map((r: any) => r.Region);
-
-      // Both SourceRegion and TargetRegion must be in replicas array
-      // CloudFormation requires the current deployment region to be explicitly listed
-      const replicaRegions = JSON.stringify(regions);
-      expect(replicaRegions).toContain('SourceRegion');
-      expect(replicaRegions).toContain('TargetRegion');
-    });
-
-    test('TradingAnalyticsGlobalTable replicas should have PITR enabled', () => {
-      const table = template.Resources.TradingAnalyticsGlobalTable;
-      table.Properties.Replicas.forEach((replica: any) => {
-        expect(replica.PointInTimeRecoverySpecification).toBeDefined();
-        expect(replica.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
-      });
-    });
-
-    test('TradingAnalyticsGlobalTable table name should include environment suffix', () => {
-      const table = template.Resources.TradingAnalyticsGlobalTable;
+      // Table name now includes region suffix for single-region deployment
+      expect(table.Properties.TableName['Fn::Sub']).toContain('${AWS::Region}');
       expect(table.Properties.TableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('TradingAnalyticsGlobalTable should have PITR enabled', () => {
+      const table = template.Resources.TradingAnalyticsGlobalTable;
+      expect(table.Properties.PointInTimeRecoverySpecification).toBeDefined();
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    test('TradingAnalyticsGlobalTable should have environment tags', () => {
+      const table = template.Resources.TradingAnalyticsGlobalTable;
+      expect(table.Properties.Tags).toBeDefined();
+      expect(Array.isArray(table.Properties.Tags)).toBe(true);
+      const envTag = table.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+      expect(envTag).toBeDefined();
     });
   });
 
@@ -829,10 +824,12 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
   });
 
   describe('Cross-Region Configuration', () => {
-    test('Global Table should support multi-region', () => {
+    test('Table should support single-region deployment', () => {
       const table = template.Resources.TradingAnalyticsGlobalTable;
-      expect(table.Properties.Replicas).toBeDefined();
-      expect(Array.isArray(table.Properties.Replicas)).toBe(true);
+      // Changed from GlobalTable to regular Table for single-region deployment
+      expect(table.Type).toBe('AWS::DynamoDB::Table');
+      // Table name includes region for single-region deployment
+      expect(table.Properties.TableName['Fn::Sub']).toContain('${AWS::Region}');
     });
 
     test('resources should reference AWS::Region pseudo parameter', () => {

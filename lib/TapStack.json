@@ -1081,43 +1081,6 @@
         }
       }
     },
-    "NATGatewayEIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "nat-eip-${EnvironmentSuffix}-${AWS::Region}"
-            }
-          }
-        ]
-      }
-    },
-    "NATGateway": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGatewayEIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "nat-gateway-${EnvironmentSuffix}-${AWS::Region}"
-            }
-          }
-        ]
-      }
-    },
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -1132,18 +1095,6 @@
             }
           }
         ]
-      }
-    },
-    "PrivateRoute": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway"
-        }
       }
     },
     "PrivateSubnetRouteTableAssociation1": {
