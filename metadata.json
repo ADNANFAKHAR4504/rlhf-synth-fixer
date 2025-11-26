@@ -29,5 +29,7 @@
     "SSM"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342"
 }
