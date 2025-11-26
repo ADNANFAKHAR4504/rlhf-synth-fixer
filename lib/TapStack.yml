@@ -934,7 +934,7 @@ Resources:
     Properties:
       LaunchTemplateName: webapp-launch-template
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:${LatestAmiIdParameter}}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
