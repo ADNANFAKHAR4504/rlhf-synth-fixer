@@ -11,6 +11,23 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["S3", "Lambda", "DynamoDB", "SQS", "CloudWatch", "KMS", "SNS", "VPC", "X-Ray", "IAM"],
-  "training_quality": 9.8
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "CloudWatch",
+    "KMS",
+    "SNS",
+    "VPC",
+    "X-Ray",
+    "IAM"
+  ],
+  "training_quality": 9.8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
