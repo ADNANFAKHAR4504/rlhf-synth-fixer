@@ -1,0 +1,749 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Fraud Detection Pipeline - Expert Level CloudFormation Template",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to support multiple environments",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    }
+  },
+  "Resources": {
+    "TransactionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "fraud-transactions-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transactionId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transactionId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "FraudDetection"
+          }
+        ]
+      }
+    },
+    "ArchiveBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "fraud-archive-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "IntelligentTieringConfigurations": [
+          {
+            "Id": "ArchiveConfig",
+            "Status": "Enabled",
+            "Tierings": [
+              {
+                "AccessTier": "ARCHIVE_ACCESS",
+                "Days": 90
+              },
+              {
+                "AccessTier": "DEEP_ARCHIVE_ACCESS",
+                "Days": 180
+              }
+            ]
+          }
+        ],
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "ComplianceTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "fraud-compliance-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Fraud Detection Compliance Alerts",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/fraud-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "PostProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/fraud-post-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "TransactionProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "fraud-processor-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TransactionProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["TransactionTable", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["TransactionProcessorLogGroup", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "ComplianceTopic"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PostProcessorRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "fraud-post-processor-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "PostProcessorPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["TransactionTable", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ArchiveBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["PostProcessorLogGroup", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": ["TransactionProcessorLogGroup"],
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "fraud-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["TransactionProcessorRole", "Arn"]
+        },
+        "MemorySize": 1024,
+        "Timeout": 60,
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TransactionTable"
+            },
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceTopic"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import os",
+                "import boto3",
+                "import time",
+                "from decimal import Decimal",
+                "",
+                "dynamodb = boto3.resource('dynamodb')",
+                "sns = boto3.client('sns')",
+                "",
+                "def lambda_handler(event, context):",
+                "    table_name = os.environ['TABLE_NAME']",
+                "    sns_topic = os.environ['SNS_TOPIC_ARN']",
+                "    table = dynamodb.Table(table_name)",
+                "    ",
+                "    try:",
+                "        transaction_id = event.get('transactionId', 'unknown')",
+                "        amount = Decimal(str(event.get('amount', 0)))",
+                "        merchant = event.get('merchant', 'unknown')",
+                "        timestamp = int(time.time())",
+                "        ",
+                "        # Simple risk scoring logic",
+                "        risk_score = 0",
+                "        if amount > 1000:",
+                "            risk_score += 50",
+                "        if amount > 5000:",
+                "            risk_score += 30",
+                "        ",
+                "        risk_level = 'HIGH' if risk_score >= 70 else 'MEDIUM' if risk_score >= 40 else 'LOW'",
+                "        ",
+                "        # Store transaction in DynamoDB",
+                "        item = {",
+                "            'transactionId': transaction_id,",
+                "            'timestamp': timestamp,",
+                "            'amount': amount,",
+                "            'merchant': merchant,",
+                "            'riskScore': risk_score,",
+                "            'riskLevel': risk_level,",
+                "            'status': 'PROCESSED'",
+                "        }",
+                "        table.put_item(Item=item)",
+                "        ",
+                "        # Alert on high-risk transactions",
+                "        if risk_level == 'HIGH':",
+                "            sns.publish(",
+                "                TopicArn=sns_topic,",
+                "                Subject='High-Risk Transaction Alert',",
+                "                Message=f'Transaction {transaction_id} flagged as HIGH RISK with score {risk_score}'",
+                "            )",
+                "        ",
+                "        return {",
+                "            'statusCode': 200,",
+                "            'transactionId': transaction_id,",
+                "            'timestamp': timestamp,",
+                "            'riskScore': risk_score,",
+                "            'riskLevel': risk_level",
+                "        }",
+                "    except Exception as e:",
+                "        print(f'Error processing transaction: {str(e)}')",
+                "        raise"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PostProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": ["PostProcessorLogGroup"],
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "fraud-post-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["PostProcessorRole", "Arn"]
+        },
+        "MemorySize": 512,
+        "Timeout": 60,
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TransactionTable"
+            },
+            "BUCKET_NAME": {
+              "Ref": "ArchiveBucket"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import os",
+                "import boto3",
+                "from datetime import datetime",
+                "",
+                "s3 = boto3.client('s3')",
+                "dynamodb = boto3.resource('dynamodb')",
+                "",
+                "def lambda_handler(event, context):",
+                "    table_name = os.environ['TABLE_NAME']",
+                "    bucket_name = os.environ['BUCKET_NAME']",
+                "    ",
+                "    try:",
+                "        transaction_id = event.get('transactionId', 'unknown')",
+                "        timestamp = event.get('timestamp')",
+                "        ",
+                "        # Retrieve transaction from DynamoDB",
+                "        table = dynamodb.Table(table_name)",
+                "        response = table.get_item(",
+                "            Key={",
+                "                'transactionId': transaction_id,",
+                "                'timestamp': timestamp",
+                "            }",
+                "        )",
+                "        ",
+                "        if 'Item' in response:",
+                "            transaction = response['Item']",
+                "            ",
+                "            # Archive to S3",
+                "            date_prefix = datetime.now().strftime('%Y/%m/%d')",
+                "            s3_key = f'transactions/{date_prefix}/{transaction_id}.json'",
+                "            ",
+                "            # Convert Decimal to float for JSON serialization",
+                "            transaction_json = json.dumps(transaction, default=str)",
+                "            ",
+                "            s3.put_object(",
+                "                Bucket=bucket_name,",
+                "                Key=s3_key,",
+                "                Body=transaction_json,",
+                "                ContentType='application/json'",
+                "            )",
+                "            ",
+                "            return {",
+                "                'statusCode': 200,",
+                "                'message': 'Transaction archived successfully',",
+                "                's3Key': s3_key",
+                "            }",
+                "        else:",
+                "            return {",
+                "                'statusCode': 404,",
+                "                'message': 'Transaction not found'",
+                "            }",
+                "    except Exception as e:",
+                "        print(f'Error archiving transaction: {str(e)}')",
+                "        raise"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "StepFunctionsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "fraud-stepfunctions-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "states.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StepFunctionsExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["TransactionProcessorFunction", "Arn"]
+                    },
+                    {
+                      "Fn::GetAtt": ["PostProcessorFunction", "Arn"]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "FraudDetectionStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": {
+          "Fn::Sub": "fraud-detection-workflow-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": ["StepFunctionsRole", "Arn"]
+        },
+        "TracingConfiguration": {
+          "Enabled": true
+        },
+        "DefinitionString": {
+          "Fn::Sub": [
+            "{\n  \"Comment\": \"Fraud Detection Workflow with Parallel Processing\",\n  \"StartAt\": \"ProcessTransaction\",\n  \"States\": {\n    \"ProcessTransaction\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${ProcessorArn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0\n        }\n      ],\n      \"Next\": \"ParallelProcessing\",\n      \"ResultPath\": \"$.processingResult\"\n    },\n    \"ParallelProcessing\": {\n      \"Type\": \"Parallel\",\n      \"Branches\": [\n        {\n          \"StartAt\": \"CheckRiskLevel\",\n          \"States\": {\n            \"CheckRiskLevel\": {\n              \"Type\": \"Choice\",\n              \"Choices\": [\n                {\n                  \"Variable\": \"$.processingResult.Payload.riskLevel\",\n                  \"StringEquals\": \"HIGH\",\n                  \"Next\": \"HighRiskDetected\"\n                }\n              ],\n              \"Default\": \"RiskCheckComplete\"\n            },\n            \"HighRiskDetected\": {\n              \"Type\": \"Pass\",\n              \"Result\": \"High risk transaction flagged\",\n              \"End\": true\n            },\n            \"RiskCheckComplete\": {\n              \"Type\": \"Pass\",\n              \"Result\": \"Risk check passed\",\n              \"End\": true\n            }\n          }\n        },\n        {\n          \"StartAt\": \"ArchiveTransaction\",\n          \"States\": {\n            \"ArchiveTransaction\": {\n              \"Type\": \"Task\",\n              \"Resource\": \"arn:aws:states:::lambda:invoke\",\n              \"Parameters\": {\n                \"FunctionName\": \"${PostProcessorArn}\",\n                \"Payload\": {\n                  \"transactionId.$\": \"$.transactionId\",\n                  \"timestamp.$\": \"$.processingResult.Payload.timestamp\"\n                }\n              },\n              \"Retry\": [\n                {\n                  \"ErrorEquals\": [\"States.TaskFailed\"],\n                  \"IntervalSeconds\": 2,\n                  \"MaxAttempts\": 3,\n                  \"BackoffRate\": 2.0\n                }\n              ],\n              \"End\": true\n            }\n          }\n        }\n      ],\n      \"Next\": \"WorkflowComplete\"\n    },\n    \"WorkflowComplete\": {\n      \"Type\": \"Succeed\"\n    }\n  }\n}",
+            {
+              "ProcessorArn": {
+                "Fn::GetAtt": ["TransactionProcessorFunction", "Arn"]
+              },
+              "PostProcessorArn": {
+                "Fn::GetAtt": ["PostProcessorFunction", "Arn"]
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "EventBridgeRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "fraud-eventbridge-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "EventBridgeExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "states:StartExecution"
+                  ],
+                  "Resource": {
+                    "Ref": "FraudDetectionStateMachine"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "fraud-transaction-rule-${EnvironmentSuffix}"
+        },
+        "Description": "Triggers fraud detection workflow for high-value transactions",
+        "EventPattern": {
+          "source": ["custom.frauddetection"],
+          "detail-type": ["Transaction Received"],
+          "detail": {
+            "amount": [
+              {
+                "numeric": [">=", 100]
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "FraudDetectionStateMachine"
+            },
+            "RoleArn": {
+              "Fn::GetAtt": ["EventBridgeRole", "Arn"]
+            },
+            "Id": "FraudDetectionTarget"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "StateMachineArn": {
+      "Description": "ARN of the Step Functions state machine for fraud detection",
+      "Value": {
+        "Ref": "FraudDetectionStateMachine"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "FraudDetectionStateMachine-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ArchiveBucketName": {
+      "Description": "Name of the S3 bucket for transaction archival",
+      "Value": {
+        "Ref": "ArchiveBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "ArchiveBucket-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "ComplianceTopicArn": {
+      "Description": "ARN of the SNS topic for compliance alerts",
+      "Value": {
+        "Ref": "ComplianceTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "ComplianceTopic-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "TransactionTableName": {
+      "Description": "Name of the DynamoDB table for transactions",
+      "Value": {
+        "Ref": "TransactionTable"
+      }
+    },
+    "ProcessorFunctionArn": {
+      "Description": "ARN of the transaction processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["TransactionProcessorFunction", "Arn"]
+      }
+    },
+    "PostProcessorFunctionArn": {
+      "Description": "ARN of the post-processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["PostProcessorFunction", "Arn"]
+      }
+    }
+  }
+}
