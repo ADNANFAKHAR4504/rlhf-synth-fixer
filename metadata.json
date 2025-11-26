@@ -11,6 +11,8 @@
     "Event-driven Architecture",
     "Serverless Applications"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "aws_services": [
     "Lambda",
     "DynamoDB",
