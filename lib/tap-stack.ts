@@ -1274,7 +1274,7 @@ def lambda_handler(event, context):
       `primary-db-record-${environmentSuffix}`,
       {
         zoneId: hostedZone.zoneId,
-        name: `db.internal.${environmentSuffix}`,
+        name: `rds.db.internal.${environmentSuffix}`,
         type: 'CNAME',
         ttl: 60,
         records: [primaryCluster.endpoint],
@@ -1298,7 +1298,7 @@ def lambda_handler(event, context):
       `secondary-db-record-${environmentSuffix}`,
       {
         zoneId: hostedZone.zoneId,
-        name: `db.internal.${environmentSuffix}`,
+        name: `rds.db.internal.${environmentSuffix}`,
         type: 'CNAME',
         ttl: 60,
         records: [secondaryCluster.endpoint],
