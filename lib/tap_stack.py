@@ -698,7 +698,14 @@ artifacts:
 
             for service in microservices:
                 # Target Group for Blue environment
-                blue_name = f"{env}-{service}-blue-{environment_suffix}"[:32].rstrip('-')
+                # Ensure unique names by including color suffix before truncation
+                base_name = f"{env}-{service}-{environment_suffix}"
+                # Calculate available space for base name to fit "-blu" suffix
+                max_base_len = 32 - 4  # Reserve 4 chars for "-blu"
+                if len(base_name) > max_base_len:
+                    base_name = base_name[:max_base_len].rstrip('-')
+                blue_name = f"{base_name}-blu"
+
                 tg_blue = LbTargetGroup(
                     self,
                     f"tg_{env}_{service.replace('-', '_')}_blue",
@@ -721,7 +728,13 @@ artifacts:
                 )
 
                 # Target Group for Green environment
-                green_name = f"{env}-{service}-grn-{environment_suffix}"[:32].rstrip('-')
+                # Calculate available space for base name to fit "-grn" suffix
+                base_name = f"{env}-{service}-{environment_suffix}"
+                max_base_len = 32 - 4  # Reserve 4 chars for "-grn"
+                if len(base_name) > max_base_len:
+                    base_name = base_name[:max_base_len].rstrip('-')
+                green_name = f"{base_name}-grn"
+
                 tg_green = LbTargetGroup(
                     self,
                     f"tg_{env}_{service.replace('-', '_')}_green",
@@ -1035,6 +1048,7 @@ def lambda_handler(event, context):
         # Write Lambda function code to lib/lambda directory
         import os as os_module
         import pathlib
+        import zipfile
         # Use relative path from the current file location
         current_file = pathlib.Path(__file__).parent
         lambda_dir = current_file / "lambda"
@@ -1044,6 +1058,11 @@ def lambda_handler(event, context):
         with open(lambda_file_path, "w") as f:
             f.write(lambda_code)
 
+        # Create zip file for Lambda deployment
+        lambda_zip_path = lambda_dir / "health_check.zip"
+        with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(lambda_file_path, "health_check.py")
+
         # Lambda function
         health_check_lambda = LambdaFunction(
             self,
@@ -1052,7 +1071,7 @@ def lambda_handler(event, context):
             runtime="python3.9",
             handler="health_check.lambda_handler",
             role=lambda_role.arn,
-            filename=str(lambda_file_path),
+            filename=str(lambda_zip_path),
             timeout=300,
             memory_size=256,
             environment=LambdaFunctionEnvironment(
