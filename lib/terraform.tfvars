@@ -10,7 +10,7 @@ database_name   = "transactiondb"
 master_username = "dbadmin"
 
 # Use smaller instance class for testing (cost optimization)
-db_instance_class = "db.t3.medium"
+db_instance_class = "db.r6g.large"
 
 # Reduce backup retention for testing
 backup_retention_period = 7

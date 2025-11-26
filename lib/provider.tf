@@ -12,8 +12,15 @@ terraform {
     }
   }
 
-  # Using local backend for self-sufficient deployment
-  # In production, migrate to S3 backend with proper state management
+  backend "s3" {}
+}
+
+
+# Generate a random suffix to avoid resource naming conflicts
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 # Primary region provider
