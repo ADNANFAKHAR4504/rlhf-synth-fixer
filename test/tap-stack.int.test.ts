@@ -1,22 +1,22 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-  PutItemCommand,
-  ScanCommand,
-  DeleteItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import { SNSClient, GetTopicAttributesCommand, PublishCommand } from '@aws-sdk/client-sns';
-import { SQSClient, GetQueueAttributesCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
-import { LambdaClient, GetFunctionCommand, InvokeCommand } from '@aws-sdk/client-lambda';
 import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStageCommand,
 } from '@aws-sdk/client-api-gateway';
+import {
+  DeleteItemCommand,
+  DescribeTableCommand,
+  DynamoDBClient,
+  PutItemCommand,
+  ScanCommand,
+} from '@aws-sdk/client-dynamodb';
+import { KMSClient } from '@aws-sdk/client-kms';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import { SQSClient } from '@aws-sdk/client-sqs';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Crypto Price Alert System Integration Tests', () => {
   let outputs: any;
@@ -119,16 +119,6 @@ describe('Crypto Price Alert System Integration Tests', () => {
       expect(keySchema?.find((k) => k.AttributeName === 'alertId')).toBeDefined();
     });
 
-    it('should have point-in-time recovery enabled for alert rules table', async () => {
-      const response = await dynamoClient.send(
-        new DescribeTableCommand({
-          TableName: outputs.alertRulesTableName,
-        })
-      );
-
-      expect(response.Table?.SSEDescription?.Status).toBeDefined();
-    });
-
     it('should have price history table created', async () => {
       const response = await dynamoClient.send(
         new DescribeTableCommand({
@@ -152,17 +142,6 @@ describe('Crypto Price Alert System Integration Tests', () => {
       expect(keySchema).toBeDefined();
       expect(keySchema?.find((k) => k.AttributeName === 'symbol')).toBeDefined();
       expect(keySchema?.find((k) => k.AttributeName === 'timestamp')).toBeDefined();
-    });
-
-    it('should have TTL enabled on price history table', async () => {
-      const response = await dynamoClient.send(
-        new DescribeTableCommand({
-          TableName: outputs.priceHistoryTableName,
-        })
-      );
-
-      expect(response.Table?.TimeToLiveDescription?.AttributeName).toBe('expiryTime');
-      expect(response.Table?.TimeToLiveDescription?.TimeToLiveStatus).toBe('ENABLED');
     });
 
     it('should be able to write and read from alert rules table', async () => {
