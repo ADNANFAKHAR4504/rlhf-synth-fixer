@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912175",
+  "team": "4",
+  "startedAt": "2025-11-23T07:39:15.758Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "VPC",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "Secrets Manager",
+    "NAT Gateway",
+    "Internet Gateway",
+    "DynamoDB"
+  ],
+  "training_quality": 9,
+  "background": "Multi-region financial services payment platform infrastructure using Terraform with comprehensive security, high availability, and monitoring. Implements complex multi-provider patterns, VPC peering mesh, encrypted Aurora MySQL clusters, Lambda functions, API Gateway endpoints, and enterprise-grade security controls across us-east-1, eu-west-1, and ap-southeast-1 regions.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}
