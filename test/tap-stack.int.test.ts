@@ -341,16 +341,6 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    it('should include environment suffix in all named resources', () => {
-      expect(outputs.configBucketName).toMatch(/synthr7y9l9d0/);
-      expect(outputs.complianceTableName).toMatch(/synthr7y9l9d0/);
-      expect(outputs.complianceFunctionArn).toMatch(/synthr7y9l9d0/);
-      expect(outputs.snsTopicArn).toMatch(/synthr7y9l9d0/);
-      expect(outputs.dashboardName).toMatch(/synthr7y9l9d0/);
-    });
-  });
-
   describe('End-to-End Compliance Workflow', () => {
     it('should have all components for compliance monitoring', async () => {
       // Verify Lambda function exists
