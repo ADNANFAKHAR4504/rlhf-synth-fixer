@@ -29,6 +29,7 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+    const environmentSuffixLower = environmentSuffix.toLowerCase();
     const tags = args.tags || {};
     const githubBranch = args.githubBranch || 'main';
 
@@ -64,7 +65,7 @@ export class TapStack extends pulumi.ComponentResource {
     const artifactBucket = new aws.s3.Bucket(
       `pipeline-artifacts-${environmentSuffix}`,
       {
-        bucket: `pipeline-artifacts-${environmentSuffix}`,
+        bucket: `pipeline-artifacts-${environmentSuffixLower}`,
         forceDestroy: true,
         serverSideEncryptionConfiguration: {
           rule: {
@@ -114,7 +115,7 @@ export class TapStack extends pulumi.ComponentResource {
       stateBuckets[env] = new aws.s3.Bucket(
         `pulumi-state-${env}-${environmentSuffix}`,
         {
-          bucket: `pulumi-state-${env}-${environmentSuffix}`,
+          bucket: `pulumi-state-${env}-${environmentSuffixLower}`,
           forceDestroy: true,
           serverSideEncryptionConfiguration: {
             rule: {
