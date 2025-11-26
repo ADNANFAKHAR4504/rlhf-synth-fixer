@@ -688,17 +688,30 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       const vpcs = await ec2Client.send(vpcCommand);
       expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
 
-      // Verify KMS key exists
-      const aliasCommand = new ListAliasesCommand({});
-      const aliases = await kmsClient.send(aliasCommand);
-      const kmsAlias = aliases.Aliases?.find(a =>
-        a.AliasName?.includes(`${appName}-${environmentSuffix}`)
-      );
-      expect(kmsAlias).toBeDefined();
+      // Verify KMS key exists - check by key ID from outputs or discover by alias
+      let kmsKeyFound = false;
+      if (outputs.kmsKeyId) {
+        // Use key ID from outputs to verify
+        const keyCommand = new DescribeKeyCommand({ KeyId: outputs.kmsKeyId });
+        const keyResponse = await kmsClient.send(keyCommand);
+        expect(keyResponse.KeyMetadata?.KeyId).toBeDefined();
+        kmsKeyFound = true;
+      } else {
+        // Discover by alias name (format: alias/payment-app-${environmentSuffix})
+        const aliasCommand = new ListAliasesCommand({});
+        const aliases = await kmsClient.send(aliasCommand);
+        const kmsAlias = aliases.Aliases?.find(
+          a =>
+            a.AliasName === `alias/${appName}-${environmentSuffix}` ||
+            a.AliasName?.includes(`${appName}-${environmentSuffix}`)
+        );
+        kmsKeyFound = kmsAlias !== undefined;
+      }
+      expect(kmsKeyFound).toBe(true);
 
       console.log(`\n✅ Verified core resources exist via AWS API`);
       console.log(`   - VPCs found: ${vpcs.Vpcs?.length}`);
-      console.log(`   - KMS alias found: ${kmsAlias ? 'Yes' : 'No'}`);
+      console.log(`   - KMS key found: ${kmsKeyFound ? 'Yes' : 'No'}`);
     });
 
     it('VPC peering connects production and staging', () => {
