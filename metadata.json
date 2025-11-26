@@ -1,0 +1,17 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "po_id": "101912655",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T05:33:22+00:00",
+  "subtask": "",
+  "subject_labels": [],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "IAM"
+  ],
+  "training_quality": 6
+}

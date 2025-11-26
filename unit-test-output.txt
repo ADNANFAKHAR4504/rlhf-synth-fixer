@@ -1,0 +1,140 @@
+
+> tap@0.1.0 test:unit
+> jest --coverage --testPathPattern=\.unit\.test\.ts$
+
+ts-jest[ts-jest-transformer] (WARN) Define `ts-jest` config under `globals` is deprecated. Please do
+transform: {
+    <transform_regex>: ['ts-jest', { /* ts-jest config goes here in Jest */ }],
+},
+See more at https://kulshekhar.github.io/ts-jest/docs/getting-started/presets#advanced
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in /var/www/turing/iac-test-automations/worktree/synth-101912655/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+FAIL test/tap-stack.unit.test.ts
+  TapStack CloudFormation Template - EKS Cluster
+    Template Structure
+      ✓ should have valid CloudFormation format version (3 ms)
+      ✓ should have a description
+      ✓ should have metadata section (1 ms)
+      ✓ should have valid JSON structure
+      ✓ should not have any undefined or null required sections (1 ms)
+    Parameters
+      ✓ should have EnvironmentSuffix parameter
+      ✓ EnvironmentSuffix parameter should have correct properties
+      ✓ should have VPC CIDR parameters (1 ms)
+      ✓ should have subnet CIDR parameters
+      ✓ should have EKS configuration parameters (2 ms)
+      ✓ should have correct number of parameters (1 ms)
+    VPC Resources
+      ✓ should have VPC resource (1 ms)
+      ✓ VPC should have correct deletion policy
+      ✓ VPC should have DNS support enabled
+      ✓ VPC should include environment suffix in name
+      ✓ should have Internet Gateway (1 ms)
+      ✓ should have Internet Gateway Attachment
+    Subnet Resources
+      ✓ should have three public subnets (1 ms)
+      ✓ public subnets should be in different availability zones
+      ✓ public subnets should have MapPublicIpOnLaunch enabled (1 ms)
+      ✓ public subnets should have kubernetes.io/role/elb tag (1 ms)
+      ✓ should have three private subnets (1 ms)
+      ✓ private subnets should be in different availability zones
+      ✓ private subnets should have MapPublicIpOnLaunch disabled
+      ✓ private subnets should have kubernetes.io/role/internal-elb tag (1 ms)
+      ✓ all subnets should have deletion policy Delete (1 ms)
+    NAT Gateway Resources
+      ✓ should have three Elastic IPs for NAT Gateways (1 ms)
+      ✓ Elastic IPs should have domain vpc
+      ✓ Elastic IPs should depend on Internet Gateway Attachment (1 ms)
+      ✓ should have three NAT Gateways (5 ms)
+      ✓ NAT Gateways should be in public subnets
+      ✓ NAT Gateways should use correct Elastic IPs (1 ms)
+    Route Table Resources
+      ✓ should have public route table
+      ✓ should have default public route to Internet Gateway (1 ms)
+      ✓ should have three private route tables
+      ✓ should have default private routes to NAT Gateways
+      ✓ should have route table associations for all subnets
+    IAM Resources
+      ✓ should have EKS Cluster Role (1 ms)
+      ✓ EKS Cluster Role should have correct assume role policy
+      ✓ EKS Cluster Role should have correct managed policies
+      ✓ EKS Cluster Role should include environment suffix in name
+      ✓ should have Node Group Role (1 ms)
+      ✓ Node Group Role should have correct assume role policy
+      ✓ Node Group Role should have correct managed policies
+      ✓ Node Group Role should include environment suffix in name
+    EKS Cluster Resources
+      ✓ should have EKS Cluster Security Group (1 ms)
+      ✓ EKS Cluster Security Group should allow all outbound traffic
+      ✓ should have EKS Cluster
+      ✓ EKS Cluster should use correct Kubernetes version (1 ms)
+      ✓ EKS Cluster should include environment suffix in name
+      ✓ EKS Cluster should have correct VPC configuration
+      ✓ EKS Cluster should have all logging types enabled (1 ms)
+      ✓ should have OIDC Provider
+      ✓ OIDC Provider should have correct client ID
+      ✓ OIDC Provider should have thumbprint
+    Launch Template and Node Group
+      ✓ should have Node Launch Template
+      ✓ Launch Template should enforce IMDSv2 (1 ms)
+      ✓ Launch Template should have EBS configuration
+      ✓ Launch Template should have instance and volume tag specifications
+      ✓ should have EKS Node Group (1 ms)
+      ✓ Node Group should depend on EKS Cluster and Node Group Role
+      ✓ Node Group should include environment suffix in name
+      ✓ Node Group should use private subnets
+      ✓ Node Group should have correct scaling configuration
+      ✓ Node Group should use AL2 AMI type
+      ✓ Node Group should use launch template
+      ✓ Node Group should have update configuration
+    Outputs
+      ✓ should have all required outputs
+      ✓ should have exactly 12 outputs
+      ✓ VPCId output should be correct (1 ms)
+      ✓ EKSClusterName output should be correct
+      ✓ EKSClusterEndpoint output should be correct
+      ✓ OIDCIssuerURL output should be correct (1 ms)
+      ✓ NodeGroupArn output should be correct
+      ✓ EnvironmentSuffix output should be correct
+      ✓ all outputs should have export names (1 ms)
+    Resource Naming Convention
+      ✓ resources should include environment suffix in names
+      ✓ all resources should have Production and CloudFormation tags (3 ms)
+    Deletion Policy
+      ✓ all resources should have DeletionPolicy Delete
+      ✓ no resources should have Retain policy (1 ms)
+    Resource Count Validation
+      ✓ should have expected number of resources
+      ✓ should have correct IAM resource count
+      ✕ should have correct EC2 resource count (1 ms)
+      ✓ should have correct EKS resource count
+
+  ● TapStack CloudFormation Template - EKS Cluster › Resource Count Validation › should have correct EC2 resource count
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 30
+    Received length: 31
+    Received array:  ["VPC", "InternetGateway", "InternetGatewayAttachment", "PublicSubnet1", "PublicSubnet2", "PublicSubnet3", "PrivateSubnet1", "PrivateSubnet2", "PrivateSubnet3", "EIPNatGateway1", …]
+
+      685 |         template.Resources[key].Type.startsWith('AWS::EC2::')
+      686 |       );
+    > 687 |       expect(ec2Resources).toHaveLength(30); // VPC, IGW, IGWAttach, 6 Subnets, 3 EIPs, 3 NATs, 4 RTs, 4 Routes, 6 RTAssociations, 1 SG, 1 LaunchTemplate
+          |                            ^
+      688 |     });
+      689 |
+      690 |     test('should have correct EKS resource count', () => {
+
+      at Object.<anonymous> (test/tap-stack.unit.test.ts:687:28)
+
+----------|---------|----------|---------|---------|-------------------
+File      | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+----------|---------|----------|---------|---------|-------------------
+All files |       0 |        0 |       0 |       0 |                   
+----------|---------|----------|---------|---------|-------------------
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 83 passed, 84 total
+Snapshots:   0 total
+Time:        1.033 s
+Ran all test suites matching /.unit.test.ts$/i.

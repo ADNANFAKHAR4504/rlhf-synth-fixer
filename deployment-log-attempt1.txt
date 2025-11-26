@@ -1,0 +1,12 @@
+Deploying CloudFormation stack...
+  Stack Name: TapStacksynth101912655
+  Environment Suffix: synth101912655
+  Region: us-east-1
+  Account: 342597974367
+Uploading to synth101912655/f2599a4ed53a10e7b41c147d4e2b7fd1.template  32126 / 32126.0  (100.00%)
+Waiting for changeset to be created..
+Waiting for stack create/update to complete
+
+Failed to create/update the stack. Run the following command
+to fetch the list of events leading up to the failure
+aws cloudformation describe-stack-events --stack-name TapStacksynth101912655
