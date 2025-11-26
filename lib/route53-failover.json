@@ -1,0 +1,153 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Route 53 DNS Failover Configuration for Aurora Global Database",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming uniqueness",
+      "Default": "prod"
+    },
+    "HostedZoneId": {
+      "Type": "AWS::Route53::HostedZone::Id",
+      "Description": "Route 53 Hosted Zone ID"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for the database endpoint (e.g., db.example.com)"
+    },
+    "PrimaryClusterEndpoint": {
+      "Type": "String",
+      "Description": "Primary Aurora cluster endpoint (us-east-1)"
+    },
+    "SecondaryClusterEndpoint": {
+      "Type": "String",
+      "Description": "Secondary Aurora cluster endpoint (eu-west-1)"
+    },
+    "PrimaryHealthCheckIP": {
+      "Type": "String",
+      "Description": "IP address for primary region health check"
+    },
+    "SecondaryHealthCheckIP": {
+      "Type": "String",
+      "Description": "IP address for secondary region health check"
+    }
+  },
+  "Resources": {
+    "PrimaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/",
+          "FullyQualifiedDomainName": {
+            "Ref": "PrimaryHealthCheckIP"
+          },
+          "Port": 443,
+          "RequestInterval": 10,
+          "FailureThreshold": 2
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-primary-health-check-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/",
+          "FullyQualifiedDomainName": {
+            "Ref": "SecondaryHealthCheckIP"
+          },
+          "Port": 443,
+          "RequestInterval": 10,
+          "FailureThreshold": 2
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-secondary-health-check-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrimaryRecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "HostedZoneId"
+        },
+        "Name": {
+          "Ref": "DomainName"
+        },
+        "Type": "CNAME",
+        "TTL": "60",
+        "SetIdentifier": {
+          "Fn::Sub": "primary-${EnvironmentSuffix}"
+        },
+        "Weight": 100,
+        "HealthCheckId": {
+          "Ref": "PrimaryHealthCheck"
+        },
+        "ResourceRecords": [
+          {
+            "Ref": "PrimaryClusterEndpoint"
+          }
+        ]
+      }
+    },
+    "SecondaryRecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "HostedZoneId"
+        },
+        "Name": {
+          "Ref": "DomainName"
+        },
+        "Type": "CNAME",
+        "TTL": "60",
+        "SetIdentifier": {
+          "Fn::Sub": "secondary-${EnvironmentSuffix}"
+        },
+        "Weight": 0,
+        "HealthCheckId": {
+          "Ref": "SecondaryHealthCheck"
+        },
+        "ResourceRecords": [
+          {
+            "Ref": "SecondaryClusterEndpoint"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DatabaseEndpoint": {
+      "Description": "Route 53 managed database endpoint",
+      "Value": {
+        "Ref": "DomainName"
+      }
+    },
+    "PrimaryHealthCheckId": {
+      "Description": "Primary region health check ID",
+      "Value": {
+        "Ref": "PrimaryHealthCheck"
+      }
+    },
+    "SecondaryHealthCheckId": {
+      "Description": "Secondary region health check ID",
+      "Value": {
+        "Ref": "SecondaryHealthCheck"
+      }
+    }
+  }
+}
