@@ -76,14 +76,6 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const _kmsAlias = new aws.kms.Alias(
-      `fraud-detection-kms-alias-${environmentSuffix}`,
-      {
-        name: `alias/fraud-detection-${environmentSuffix}`,
-        targetKeyId: kmsKey.keyId,
-      },
-      { parent: this }
-    );
 
     // DynamoDB table for transactions with composite key
     const transactionsTable = new aws.dynamodb.Table(
@@ -119,15 +111,6 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Email subscription for SNS topic
-    const _emailSubscription = new aws.sns.TopicSubscription(
-      `fraud-alerts-email-${environmentSuffix}`,
-      {
-        topic: fraudAlertsTopic.arn,
-        protocol: 'email',
-        endpoint: emailAddress,
-      },
-      { parent: this }
-    );
 
     // EventBridge custom event bus
     const fraudDetectionBus = new aws.cloudwatch.EventBus(
@@ -183,60 +166,6 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Policy for transaction-processor Lambda
-    const _transactionProcessorPolicy = new aws.iam.RolePolicy(
-      `transaction-processor-policy-${environmentSuffix}`,
-      {
-        role: transactionProcessorRole.id,
-        policy: pulumi
-          .all([
-            transactionsTable.arn,
-            fraudDetectionBus.arn,
-            transactionProcessorDLQ.arn,
-            kmsKey.arn,
-          ])
-          .apply(([tableArn, busArn, dlqArn, kmsArn]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'dynamodb:PutItem',
-                    'dynamodb:GetItem',
-                    'dynamodb:UpdateItem',
-                  ],
-                  Resource: tableArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['events:PutEvents'],
-                  Resource: busArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['sqs:SendMessage'],
-                  Resource: dlqArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['kms:Decrypt'],
-                  Resource: kmsArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'logs:CreateLogGroup',
-                    'logs:CreateLogStream',
-                    'logs:PutLogEvents',
-                  ],
-                  Resource: 'arn:aws:logs:*:*:*',
-                },
-              ],
-            })
-          ),
-      },
-      { parent: this }
-    );
 
     // IAM role for fraud-detector Lambda
     const fraudDetectorRole = new aws.iam.Role(
@@ -261,56 +190,6 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Policy for fraud-detector Lambda
-    const _fraudDetectorPolicy = new aws.iam.RolePolicy(
-      `fraud-detector-policy-${environmentSuffix}`,
-      {
-        role: fraudDetectorRole.id,
-        policy: pulumi
-          .all([
-            transactionsTable.arn,
-            fraudAlertsTopic.arn,
-            fraudDetectorDLQ.arn,
-            kmsKey.arn,
-          ])
-          .apply(([tableArn, topicArn, dlqArn, kmsArn]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: ['dynamodb:GetItem', 'dynamodb:Query'],
-                  Resource: tableArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['sns:Publish'],
-                  Resource: topicArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['sqs:SendMessage'],
-                  Resource: dlqArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['kms:Decrypt'],
-                  Resource: kmsArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'logs:CreateLogGroup',
-                    'logs:CreateLogStream',
-                    'logs:PutLogEvents',
-                  ],
-                  Resource: 'arn:aws:logs:*:*:*',
-                },
-              ],
-            })
-          ),
-      },
-      { parent: this }
-    );
 
     // CloudWatch Log Group for transaction-processor
     const transactionProcessorLogGroup = new aws.cloudwatch.LogGroup(
@@ -602,32 +481,6 @@ Action Required: Review this transaction immediately.
       { parent: this }
     );
 
-    const _eventBridgePolicy = new aws.iam.RolePolicy(
-      `eventbridge-policy-${environmentSuffix}`,
-      {
-        role: eventBridgeRole.id,
-        policy: pulumi
-          .all([fraudDetectorFunction.arn, fraudDetectorDLQ.arn])
-          .apply(([lambdaArn, dlqArn]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: 'lambda:InvokeFunction',
-                  Resource: lambdaArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: 'sqs:SendMessage',
-                  Resource: dlqArn,
-                },
-              ],
-            })
-          ),
-      },
-      { parent: this }
-    );
 
     // EventBridge rule to trigger fraud-detector for high-value transactions
     const fraudDetectionRule = new aws.cloudwatch.EventRule(
@@ -650,35 +503,8 @@ Action Required: Review this transaction immediately.
     );
 
     // EventBridge target for fraud-detector Lambda with DLQ
-    const _fraudDetectionTarget = new aws.cloudwatch.EventTarget(
-      `fraud-detection-target-${environmentSuffix}`,
-      {
-        rule: fraudDetectionRule.name,
-        eventBusName: fraudDetectionBus.name,
-        arn: fraudDetectorFunction.arn,
-        roleArn: eventBridgeRole.arn,
-        deadLetterConfig: {
-          arn: fraudDetectorDLQ.arn,
-        },
-        retryPolicy: {
-          maximumRetryAttempts: 2,
-          maximumEventAgeInSeconds: 3600, // 1 hour
-        },
-      },
-      { parent: this }
-    );
 
     // Permission for EventBridge to invoke fraud-detector Lambda
-    const _fraudDetectorEventPermission = new aws.lambda.Permission(
-      `fraud-detector-event-permission-${environmentSuffix}`,
-      {
-        action: 'lambda:InvokeFunction',
-        function: fraudDetectorFunction.name,
-        principal: 'events.amazonaws.com',
-        sourceArn: fraudDetectionRule.arn,
-      },
-      { parent: this }
-    );
 
     // Register outputs
     this.eventBridgeBusArn = fraudDetectionBus.arn;
