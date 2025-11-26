@@ -53,13 +53,14 @@ resource "aws_security_group" "lambda_primary" {
 
 # Lambda rotation function for primary
 resource "aws_lambda_function" "rotation_primary" {
-  provider      = aws.primary
-  filename      = "${path.module}/lambda/rotation.zip"
-  function_name = "secrets-rotation-primary-${var.environment_suffix}"
-  role          = aws_iam_role.rotation_lambda_primary.arn
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  timeout       = 30
+  provider                       = aws.primary
+  filename                       = "${path.module}/lambda/rotation.zip"
+  function_name                  = "secrets-rotation-primary-${var.environment_suffix}"
+  role                           = aws_iam_role.rotation_lambda_primary.arn
+  handler                        = "index.handler"
+  runtime                        = "python3.11"
+  timeout                        = 120
+  reserved_concurrent_executions = 1
 
   vpc_config {
     subnet_ids         = aws_subnet.primary_private[*].id
@@ -211,13 +212,14 @@ resource "aws_security_group" "lambda_secondary" {
 
 # Lambda rotation function for secondary
 resource "aws_lambda_function" "rotation_secondary" {
-  provider      = aws.secondary
-  filename      = "${path.module}/lambda/rotation.zip"
-  function_name = "secrets-rotation-secondary-${var.environment_suffix}"
-  role          = aws_iam_role.rotation_lambda_secondary.arn
-  handler       = "index.handler"
-  runtime       = "python3.11"
-  timeout       = 30
+  provider                       = aws.secondary
+  filename                       = "${path.module}/lambda/rotation.zip"
+  function_name                  = "secrets-rotation-secondary-${var.environment_suffix}"
+  role                           = aws_iam_role.rotation_lambda_secondary.arn
+  handler                        = "index.handler"
+  runtime                        = "python3.11"
+  timeout                        = 120
+  reserved_concurrent_executions = 1
 
   vpc_config {
     subnet_ids         = aws_subnet.secondary_private[*].id

@@ -80,6 +80,7 @@ def create_secret(service_client, arn, token):
 def set_secret(service_client, arn, token):
     """Set the password in the database."""
     import psycopg2
+    from psycopg2 import sql
 
     current_dict = get_secret_dict(service_client, arn, "AWSCURRENT")
     pending_dict = get_secret_dict(service_client, arn, "AWSPENDING", token)
@@ -97,8 +98,10 @@ def set_secret(service_client, arn, token):
 
         with conn.cursor() as cur:
             cur.execute(
-                "ALTER USER %s WITH PASSWORD %s",
-                (pending_dict['username'], pending_dict['password'])
+                sql.SQL("ALTER USER {} WITH PASSWORD %s").format(
+                    sql.Identifier(pending_dict['username'])
+                ),
+                (pending_dict['password'],)
             )
         conn.close()
         logger.info(f"setSecret: Successfully set password for user {pending_dict['username']} in database")

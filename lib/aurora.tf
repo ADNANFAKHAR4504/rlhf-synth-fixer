@@ -94,6 +94,18 @@ resource "aws_security_group" "aurora_primary" {
   }
 }
 
+# Security group rule to allow Lambda rotation function to access Aurora - Primary
+resource "aws_security_group_rule" "aurora_from_lambda_primary" {
+  provider                 = aws.primary
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda_primary.id
+  security_group_id        = aws_security_group.aurora_primary.id
+  description              = "PostgreSQL from Lambda rotation function"
+}
+
 # Security group for Aurora in secondary
 resource "aws_security_group" "aurora_secondary" {
   provider    = aws.secondary
@@ -122,6 +134,18 @@ resource "aws_security_group" "aurora_secondary" {
     Environment = "production"
     DR-Tier     = "critical"
   }
+}
+
+# Security group rule to allow Lambda rotation function to access Aurora - Secondary
+resource "aws_security_group_rule" "aurora_from_lambda_secondary" {
+  provider                 = aws.secondary
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda_secondary.id
+  security_group_id        = aws_security_group.aurora_secondary.id
+  description              = "PostgreSQL from Lambda rotation function"
 }
 
 # Parameter group with pg_stat_statements
