@@ -8,7 +8,7 @@
   "startedAt": "2025-11-24T18:04:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Security, Compliance, and Governance"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "AWS Lambda",
