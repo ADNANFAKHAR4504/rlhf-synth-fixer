@@ -485,7 +485,6 @@
           }
         ],
         "AllocatedStorage": 200,
-        "EngineVersion": "3.4.6",
         "MultiAZ": true,
         "PubliclyAccessible": false,
         "Tags": [
