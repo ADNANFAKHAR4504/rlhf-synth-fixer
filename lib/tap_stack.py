@@ -598,7 +598,7 @@ phases:
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-      - IMAGE_TAG=${{COMMIT_HASH:=latest}}
+      - IMAGE_TAG=$${{COMMIT_HASH:=latest}}
   build:
     commands:
       - echo Build started on `date`
@@ -698,10 +698,11 @@ artifacts:
 
             for service in microservices:
                 # Target Group for Blue environment
+                blue_name = f"{env}-{service}-blue-{environment_suffix}"[:32].rstrip('-')
                 tg_blue = LbTargetGroup(
                     self,
                     f"tg_{env}_{service.replace('-', '_')}_blue",
-                    name=f"{env}-{service}-blue-{environment_suffix}"[:32],
+                    name=blue_name,
                     port=80,
                     protocol="HTTP",
                     vpc_id=vpc.id,
@@ -720,10 +721,11 @@ artifacts:
                 )
 
                 # Target Group for Green environment
+                green_name = f"{env}-{service}-grn-{environment_suffix}"[:32].rstrip('-')
                 tg_green = LbTargetGroup(
                     self,
                     f"tg_{env}_{service.replace('-', '_')}_green",
-                    name=f"{env}-{service}-grn-{environment_suffix}"[:32],
+                    name=green_name,
                     port=80,
                     protocol="HTTP",
                     vpc_id=vpc.id,
