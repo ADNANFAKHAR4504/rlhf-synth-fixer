@@ -1,5 +1,5 @@
 {
-  "platform": "terraform",
+  "platform": "tf",
   "language": "hcl",
   "complexity": "expert",
   "team": "synth",
@@ -18,5 +18,7 @@
     "IAM"
   ],
   "po_id": "101912685",
-  "training_quality": 10
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355"
 }
