@@ -224,9 +224,9 @@ output "database_connection_info" {
 output "monitoring_endpoints" {
   description = "Monitoring and observability endpoints"
   value = {
-    dashboard_name      = aws_cloudwatch_dashboard.main.dashboard_name
-    sns_topic_arn       = aws_sns_topic.alerts.arn
-    log_group_rds       = aws_cloudwatch_log_group.rds_postgresql.name
-    log_group_lambda    = aws_cloudwatch_log_group.lambda_failover.name
+    dashboard_name   = aws_cloudwatch_dashboard.main.dashboard_name
+    sns_topic_arn    = aws_sns_topic.alerts.arn
+    log_group_rds    = aws_cloudwatch_log_group.rds_postgresql.name
+    log_group_lambda = aws_cloudwatch_log_group.lambda_failover.name
   }
 }

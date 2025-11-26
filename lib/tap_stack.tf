@@ -798,6 +798,8 @@ resource "aws_lambda_function" "backup_verifier" {
     }
   }
 
+  layers = [aws_lambda_layer_version.db_layer.arn]
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-backup-verifier"
   })
