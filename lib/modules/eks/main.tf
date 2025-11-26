@@ -76,9 +76,9 @@ resource "aws_security_group" "cluster_additional" {
 
 # EKS Add-ons
 resource "aws_eks_addon" "vpc_cni" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "vpc-cni"
-  addon_version            = var.vpc_cni_version
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "vpc-cni"
+  addon_version               = var.vpc_cni_version
   resolve_conflicts_on_update = "PRESERVE"
 
   tags = merge(var.tags, {
@@ -89,9 +89,9 @@ resource "aws_eks_addon" "vpc_cni" {
 }
 
 resource "aws_eks_addon" "kube_proxy" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "kube-proxy"
-  addon_version            = var.kube_proxy_version
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "kube-proxy"
+  addon_version               = var.kube_proxy_version
   resolve_conflicts_on_update = "PRESERVE"
 
   tags = merge(var.tags, {
@@ -102,9 +102,9 @@ resource "aws_eks_addon" "kube_proxy" {
 }
 
 resource "aws_eks_addon" "coredns" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "coredns"
-  addon_version            = var.coredns_version
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "coredns"
+  addon_version               = var.coredns_version
   resolve_conflicts_on_update = "PRESERVE"
 
   tags = merge(var.tags, {
@@ -115,10 +115,11 @@ resource "aws_eks_addon" "coredns" {
 }
 
 resource "aws_eks_addon" "ebs_csi_driver" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "aws-ebs-csi-driver"
-  addon_version            = var.ebs_csi_driver_version
-  service_account_role_arn = var.ebs_csi_driver_role_arn
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "aws-ebs-csi-driver"
+  addon_version               = var.ebs_csi_driver_version
+  # Only set service account role if provided (not empty string)
+  service_account_role_arn    = var.ebs_csi_driver_role_arn != "" ? var.ebs_csi_driver_role_arn : null
   resolve_conflicts_on_update = "PRESERVE"
 
   tags = merge(var.tags, {
