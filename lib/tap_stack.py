@@ -444,7 +444,7 @@ class TapStack(TerraformStack):
             engine_mode="provisioned",
             engine_version="15.7",
             database_name="payments",
-            master_username="admin",
+            master_username="dbadmin",
             master_password="ChangeMe123!",  # Should be from secrets manager in production
             db_subnet_group_name=self.db_subnet_group.name,
             vpc_security_group_ids=[self.rds_sg.id],
