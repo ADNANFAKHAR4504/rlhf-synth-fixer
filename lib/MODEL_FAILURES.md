@@ -105,7 +105,7 @@ const deliveryChannel = new aws.cfg.DeliveryChannel(
   {
     name: `config-delivery-${environmentSuffix}`,
     s3BucketName: configBucket.id,
-    dependsOn: [configRecorder],  // ❌ WRONG - not a valid property
+    dependsOn: [configRecorder],  //  WRONG - not a valid property
   },
   { parent: this }
 );
@@ -120,7 +120,7 @@ const deliveryChannel = new aws.cfg.DeliveryChannel(
     name: `config-delivery-${environmentSuffix}`,
     s3BucketName: configBucket.id,
   },
-  { parent: this, dependsOn: [configRecorder] }  // ✅ CORRECT - in options
+  { parent: this, dependsOn: [configRecorder] }  //  CORRECT - in options
 );
 ```
 
