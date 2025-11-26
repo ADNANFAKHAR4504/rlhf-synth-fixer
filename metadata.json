@@ -8,11 +8,7 @@
   "startedAt": "2025-11-26T04:11:27+05:30",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "EC2 Auto Scaling groups must use only private endpoint access with no public API exposure",
-    "Node groups must use only Bottlerocket AMI for enhanced container security",
-    "All worker nodes must be spread across exactly 3 availability zones with no single-AZ deployments",
-    "Pod-to-pod communication must be encrypted using AWS VPC CNI network policies",
-    "Cluster autoscaler must scale between 3-15 nodes based on CPU utilization only"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "EKS",
