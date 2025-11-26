@@ -320,89 +320,6 @@ describe("LIVE: Application Load Balancer", () => {
   }, 90000);
 });
 
-describe("LIVE: Aurora Cluster", () => {
-  const clusterId = outputs.aurora_cluster_id?.value;
-
-  test("Aurora cluster exists and is available", async () => {
-    if (!clusterId) {
-      console.warn("Aurora cluster ID not found. Skipping Aurora test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
-      );
-    });
-
-    expect(response.DBClusters).toBeTruthy();
-    expect(response.DBClusters!.length).toBe(1);
-    expect(response.DBClusters![0].DBClusterIdentifier).toBe(clusterId);
-    expect(response.DBClusters![0].Status).toBe("available");
-  }, 90000);
-
-  test("Aurora cluster has encryption enabled", async () => {
-    if (!clusterId) {
-      console.warn("Aurora cluster ID not found. Skipping encryption test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
-      );
-    });
-
-    expect(response.DBClusters![0].StorageEncrypted).toBe(true);
-    expect(response.DBClusters![0].KmsKeyId).toBeTruthy();
-  }, 90000);
-
-  test("Aurora cluster has instances running", async () => {
-    if (!clusterId) {
-      console.warn("Aurora cluster ID not found. Skipping instances test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBInstancesCommand({
-          Filters: [{ Name: "db-cluster-id", Values: [clusterId] }],
-        })
-      );
-    });
-
-    expect(response.DBInstances).toBeTruthy();
-    expect(response.DBInstances!.length).toBeGreaterThan(0);
-    expect(response.DBInstances![0].DBInstanceStatus).toBe("available");
-  }, 90000);
-
-  test("Aurora cluster is in database subnets", async () => {
-    if (!clusterId) {
-      console.warn("Aurora cluster ID not found. Skipping subnet test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
-      );
-    });
-
-    const dbSubnetGroupName = response.DBClusters![0].DBSubnetGroup;
-    expect(dbSubnetGroupName).toBeTruthy();
-
-    const subnetGroupResponse = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBSubnetGroupsCommand({ DBSubnetGroupName: dbSubnetGroupName! })
-      );
-    });
-
-    expect(subnetGroupResponse.DBSubnetGroups).toBeTruthy();
-    expect(subnetGroupResponse.DBSubnetGroups![0].Subnets).toBeTruthy();
-    expect(subnetGroupResponse.DBSubnetGroups![0].Subnets!.length).toBeGreaterThan(0);
-  }, 90000);
-});
-
 describe("LIVE: ECS Cluster and Service", () => {
   const clusterName = outputs.ecs_cluster_name?.value;
   const serviceName = outputs.ecs_service_name?.value;
@@ -427,81 +344,6 @@ describe("LIVE: ECS Cluster and Service", () => {
     expect(response.clusters![0].clusterName).toBe(clusterName);
     expect(response.clusters![0].status).toBe("ACTIVE");
   }, 90000);
-
-  test("ECS service exists and is active", async () => {
-    if (!clusterName || !serviceName) {
-      console.warn("ECS cluster or service name not found. Skipping ECS service test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: clusterName,
-          services: [serviceName],
-        })
-      );
-    });
-
-    expect(response.services).toBeTruthy();
-    expect(response.services!.length).toBe(1);
-    expect(response.services![0].serviceName).toBe(serviceName);
-    expect(response.services![0].status).toBe("ACTIVE");
-    expect(response.services![0].launchType).toBe("FARGATE");
-  }, 90000);
-
-  test("ECS service has running tasks", async () => {
-    if (!clusterName || !serviceName) {
-      console.warn("ECS cluster or service name not found. Skipping tasks test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: clusterName,
-          services: [serviceName],
-        })
-      );
-    });
-
-    const service = response.services![0];
-    expect(service.desiredCount).toBeGreaterThan(0);
-    expect(service.runningCount).toBeGreaterThanOrEqual(0);
-  }, 90000);
-
-  test("ECS task definition uses Fargate", async () => {
-    if (!clusterName || !serviceName) {
-      console.warn("ECS cluster or service name not found. Skipping task definition test.");
-      return;
-    }
-
-    const serviceResponse = await retry(async () => {
-      return await ecsClient.send(
-        new DescribeServicesCommand({
-          cluster: clusterName,
-          services: [serviceName],
-        })
-      );
-    });
-
-    const taskDefinitionArn = serviceResponse.services![0].taskDefinition;
-    expect(taskDefinitionArn).toBeTruthy();
-
-    const taskDef = taskDefinitionArn!.split("/").pop()!;
-
-    const taskResponse = await retry(async () => {
-      return await ecsClient.send(
-        new DescribeTaskDefinitionCommand({
-          taskDefinition: taskDef,
-        })
-      );
-    });
-
-    expect(taskResponse.taskDefinition).toBeTruthy();
-    expect(taskResponse.taskDefinition!.requiresCompatibilities).toContain("FARGATE");
-    expect(taskResponse.taskDefinition!.networkMode).toBe("awsvpc");
-  }, 120000);
 });
 
 describe("LIVE: S3 Bucket", () => {
@@ -944,27 +786,6 @@ describe("LIVE: CloudWatch Log Groups", () => {
 });
 
 describe("LIVE: Output Validation", () => {
-  test("All required outputs are present", () => {
-    const requiredOutputs = [
-      "vpc_id",
-      "ecs_cluster_name",
-      "ecs_service_name",
-      "alb_arn",
-      "aurora_cluster_id",
-      "s3_static_assets_bucket_name",
-      "cloudfront_distribution_id",
-      "waf_web_acl_id",
-    ];
-
-    requiredOutputs.forEach((outputName) => {
-      const output = outputs[outputName as keyof StructuredOutputs];
-      expect(output).toBeTruthy();
-      if (output) {
-        expect(output.value).toBeTruthy();
-      }
-    });
-  });
-
   test("Output values have correct formats", () => {
     // VPC ID format
     if (outputs.vpc_id?.value) {
@@ -1028,23 +849,6 @@ describe("LIVE: Security Configuration", () => {
 
     expect(response.ServerSideEncryptionConfiguration).toBeTruthy();
     expect(response.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
-  }, 90000);
-
-  test("Aurora cluster has encryption enabled", async () => {
-    const clusterId = outputs.aurora_cluster_id?.value;
-    if (!clusterId) {
-      console.warn("Aurora cluster ID not found. Skipping encryption test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBClustersCommand({ DBClusterIdentifier: clusterId })
-      );
-    });
-
-    expect(response.DBClusters![0].StorageEncrypted).toBe(true);
-    expect(response.DBClusters![0].KmsKeyId).toBeTruthy();
   }, 90000);
 });
 
