@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T04:08:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Use JSON format exclusively for the CloudFormation template",
+    "Primary region must be us-east-1 with failover to us-west-2",
+    "RTO must be under 15 minutes and RPO under 5 minutes",
+    "All data must be encrypted at rest using CMKs",
+    "Route 53 health checks must monitor both regions continuously",
+    "DynamoDB global tables must have point-in-time recovery enabled",
+    "Lambda functions must use reserved concurrency of at least 100",
+    "Cross-region replication must use S3 Transfer Acceleration",
+    "All resources must be fully destroyable without DeletionPolicy Retain",
+    "CloudWatch alarms must trigger notifications for any failover events"
+  ],
+  "po_id": "f6z4c7l4",
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "Route53",
+    "Lambda",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10
+}
