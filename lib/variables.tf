@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to support multiple environments"
   type        = string
+  default     = "pr7338"
 }
 
 variable "aws_region" {
