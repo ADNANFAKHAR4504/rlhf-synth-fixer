@@ -1,19 +1,145 @@
 import fs from 'fs';
 import path from 'path';
-import {
-  loadTemplate,
-  validateTemplate,
-  getResource,
-  getResourcesByType,
-  validateResourceNaming,
-  getParameterDefault,
-  validateResourceTags,
-  hasRetainPolicy,
-  getOutputs,
-  validateEncryption,
-} from '../lib/TapStack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+// Helper function interfaces
+interface CloudFormationTemplate {
+  AWSTemplateFormatVersion?: string;
+  Description?: string;
+  Parameters?: Record<string, any>;
+  Resources: Record<string, any>;
+  Outputs?: Record<string, any>;
+}
+
+interface ResourceEntry {
+  logicalId: string;
+  resource: any;
+}
+
+// Helper functions defined inline
+function loadTemplate(): CloudFormationTemplate {
+  const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+  const templateContent = fs.readFileSync(templatePath, 'utf8');
+  return JSON.parse(templateContent);
+}
+
+function validateTemplate(template: CloudFormationTemplate): boolean {
+  if (!template.AWSTemplateFormatVersion) {
+    throw new Error('Missing AWSTemplateFormatVersion');
+  }
+  if (template.AWSTemplateFormatVersion !== '2010-09-09') {
+    throw new Error('Invalid CloudFormation version');
+  }
+  if (!template.Resources || Object.keys(template.Resources).length === 0) {
+    throw new Error('Template must have at least one resource');
+  }
+  return true;
+}
+
+function getResource(
+  template: CloudFormationTemplate,
+  logicalId: string
+): any | undefined {
+  return template.Resources?.[logicalId];
+}
+
+function getResourcesByType(
+  template: CloudFormationTemplate,
+  type: string
+): ResourceEntry[] {
+  const resources: ResourceEntry[] = [];
+  if (template.Resources) {
+    for (const [logicalId, resource] of Object.entries(template.Resources)) {
+      if (resource.Type === type) {
+        resources.push({ logicalId, resource });
+      }
+    }
+  }
+  return resources;
+}
+
+function validateResourceNaming(nameValue: any, suffix: string): boolean {
+  if (typeof nameValue === 'string') {
+    return nameValue.includes(suffix);
+  }
+  if (nameValue && typeof nameValue === 'object' && 'Fn::Sub' in nameValue) {
+    const subValue = nameValue['Fn::Sub'];
+    if (typeof subValue === 'string') {
+      return subValue.includes('${EnvironmentSuffix}');
+    }
+  }
+  return false;
+}
+
+function getParameterDefault(
+  template: CloudFormationTemplate,
+  paramName: string
+): any | undefined {
+  return template.Parameters?.[paramName]?.Default;
+}
+
+function validateResourceTags(
+  template: CloudFormationTemplate,
+  requiredTags: string[]
+): string[] {
+  const missingTags: string[] = [];
+  if (template.Resources) {
+    for (const [logicalId, resource] of Object.entries(template.Resources)) {
+      const tags = resource.Properties?.Tags;
+      if (tags && Array.isArray(tags)) {
+        for (const requiredTag of requiredTags) {
+          const hasTag = tags.some((tag: any) => tag.Key === requiredTag);
+          if (!hasTag) {
+            missingTags.push(`${logicalId} missing ${requiredTag}`);
+          }
+        }
+      }
+    }
+  }
+  return missingTags;
+}
+
+function hasRetainPolicy(resource: any): boolean {
+  if (resource.DeletionPolicy === 'Retain') {
+    return true;
+  }
+  if (resource.UpdateReplacePolicy === 'Retain') {
+    return true;
+  }
+  if (resource.Properties?.DeletionProtectionEnabled === true) {
+    return true;
+  }
+  return false;
+}
+
+function getOutputs(template: CloudFormationTemplate): string[] {
+  if (template.Outputs) {
+    return Object.keys(template.Outputs);
+  }
+  return [];
+}
+
+function validateEncryption(template: CloudFormationTemplate): string[] {
+  const unencryptedResources: string[] = [];
+  if (template.Resources) {
+    for (const [logicalId, resource] of Object.entries(template.Resources)) {
+      if (resource.Type === 'AWS::DynamoDB::Table') {
+        const sseSpec = resource.Properties?.SSESpecification;
+        if (!sseSpec || sseSpec.SSEEnabled !== true) {
+          unencryptedResources.push(logicalId);
+        }
+      }
+      if (resource.Type === 'AWS::S3::Bucket') {
+        const encryption = resource.Properties?.BucketEncryption;
+        if (!encryption) {
+          unencryptedResources.push(logicalId);
+        }
+      }
+    }
+  }
+  return unencryptedResources;
+}
 
 describe('TapStack CloudFormation Template - Fraud Detection Pipeline', () => {
   let template: any;

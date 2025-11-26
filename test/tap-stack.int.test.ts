@@ -6,11 +6,7 @@ import {
   GetItemCommand,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
-import {
-  S3Client,
-  ListObjectsV2Command,
-  GetObjectCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import {
   SFNClient,
   StartExecutionCommand,
@@ -32,9 +28,6 @@ import {
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
-
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK Clients
 const region = process.env.AWS_REGION || 'us-east-1';
