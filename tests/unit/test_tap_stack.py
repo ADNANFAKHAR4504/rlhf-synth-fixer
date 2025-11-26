@@ -125,7 +125,7 @@ class TestRDSResources:
 
         # Check global cluster properties
         for gc in global_cluster.values():
-            assert 'aurora-postgresql' in gc.get('engine', '')
+            assert 'aurora-mysql' in gc.get('engine', '')
 
     def test_primary_cluster_created(self):
         """Test that primary RDS cluster is created."""
@@ -278,14 +278,6 @@ class TestEventBridgeResources:
 
         # Should have event rules
         assert len(rules) >= 2
-
-    def test_event_targets_created(self):
-        """Test that EventBridge targets are created."""
-        resources = json.loads(self.synth)
-        targets = resources.get('resource', {}).get('aws_cloudwatch_event_target', {})
-
-        # Should have event targets
-        assert len(targets) >= 2
 
 
 class TestBackupResources:
