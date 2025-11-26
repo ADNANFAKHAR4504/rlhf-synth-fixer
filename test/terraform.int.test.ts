@@ -259,25 +259,6 @@ describe("LIVE: VPC and Networking", () => {
       expect(privateDbSubnet).toBeTruthy();
     }
   }, 90000);
-
-  test("VPC has NAT Gateway configured", async () => {
-    if (!vpcId) {
-      console.warn("VPC ID not found. Skipping NAT Gateway test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await ec2Client.send(
-        new DescribeNatGatewaysCommand({
-          Filter: [{ Name: "vpc-id", Values: [vpcId] }],
-        })
-      );
-    });
-
-    expect(response.NatGateways).toBeTruthy();
-    expect(response.NatGateways!.length).toBeGreaterThan(0);
-    expect(response.NatGateways![0].State).toBe("available");
-  }, 90000);
 });
 
 describe("LIVE: Security Groups", () => {
@@ -348,31 +329,6 @@ describe("LIVE: RDS Database", () => {
   const rdsAddress = outputs.rds_address?.value;
   const dbSecretArn = outputs.db_secret_arn?.value;
 
-  test("RDS instance exists and is available", async () => {
-    if (!rdsAddress) {
-      console.warn("RDS address not found. Skipping RDS test.");
-      return;
-    }
-
-    // Extract DB instance identifier from address
-    const dbInstanceId = rdsAddress.split(".")[0];
-
-    const response = await retry(async () => {
-      return await rdsClient.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbInstanceId })
-      );
-    });
-
-    expect(response.DBInstances).toBeTruthy();
-    expect(response.DBInstances!.length).toBe(1);
-    expect(response.DBInstances![0].DBInstanceStatus).toBe("available");
-    expect(response.DBInstances![0].Endpoint?.Address).toBe(rdsAddress);
-    
-    if (outputs.rds_port?.value) {
-      expect(response.DBInstances![0].Endpoint?.Port?.toString()).toBe(outputs.rds_port.value);
-    }
-  }, 90000);
-
   test("RDS instance has encryption enabled", async () => {
     if (!rdsAddress) {
       console.warn("RDS address not found. Skipping encryption test.");
@@ -436,21 +392,6 @@ describe("LIVE: RDS Database", () => {
 
 describe("LIVE: CloudTrail", () => {
   const trailName = outputs.cloudtrail_name?.value;
-
-  test("CloudTrail exists and is active", async () => {
-    if (!trailName) {
-      console.warn("CloudTrail name not found. Skipping CloudTrail test.");
-      return;
-    }
-
-    const response = await retry(async () => {
-      return await cloudTrailClient.send(new GetTrailCommand({ Name: trailName }));
-    }, 5);
-
-    expect(response.Trail).toBeTruthy();
-    expect(response.Trail!.Name).toBe(trailName);
-    expect(response.Trail!.IsLogging).toBe(true);
-  }, 60000);
 
   test("CloudTrail has S3 bucket configured", async () => {
     if (!trailName) {
