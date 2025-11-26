@@ -898,7 +898,7 @@ Resources:
       Port: 80
       Protocol: HTTP
       
-  # HTTPS Listener (conditional)
+  # HTTPS Listener
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HasSSLCertificate
