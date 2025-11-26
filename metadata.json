@@ -25,5 +25,5 @@
     "SSM"
   ],
   "region": "us-east-1",
-  "training_quality": 8.0
+  "training_quality": 10
 }
