@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "z6e4u8s8",
+  "team": "synth",
+  "startedAt": "2025-11-25T18:20:56+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "KMS",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "Step Functions",
+    "EventBridge Pipes",
+    "IAM",
+    "X-Ray"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
