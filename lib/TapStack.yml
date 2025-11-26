@@ -1354,10 +1354,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/ApplicationELB", "TargetResponseTime", {"stat": "Average"}],
-                  [".", "RequestCount", {"stat": "Sum"}],
-                  [".", "HTTPCode_Target_2XX_Count", {"stat": "Sum"}],
-                  [".", "HTTPCode_Target_5XX_Count", {"stat": "Sum"}]
+                  ["AWS/ApplicationELB", "TargetResponseTime"],
+                  [".", "RequestCount"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -1369,8 +1367,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/EC2", "CPUUtilization", {"stat": "Average", "dimensions": {"AutoScalingGroupName": "${AutoScalingGroup}"}}],
-                  [".", "NetworkIn", {"stat": "Sum", "dimensions": {"AutoScalingGroupName": "${AutoScalingGroup}"}}]
+                  ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "${AutoScalingGroup}"],
+                  [".", "NetworkIn", ".", "."]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -1382,8 +1380,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/RDS", "CPUUtilization", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${DatabaseInstance}"}}],
-                  [".", "DatabaseConnections", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${DatabaseInstance}"}}]
+                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${DatabaseInstance}"],
+                  [".", "DatabaseConnections", ".", "."]
                 ],
                 "period": 300,
                 "stat": "Average",
