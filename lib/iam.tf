@@ -100,13 +100,20 @@ resource "aws_iam_role" "backup_role" {
     }]
   })
 
-  managed_policy_arns = [
-    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
-    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
-  ]
-
   tags = merge(local.common_tags, {
     Name    = "backup-role-${var.environment_suffix}"
     DR-Role = "both"
   })
+}
+
+# IAM Policy Attachment for Backup Service
+resource "aws_iam_role_policy_attachment" "backup_service" {
+  role       = aws_iam_role.backup_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+}
+
+# IAM Policy Attachment for Backup Restores
+resource "aws_iam_role_policy_attachment" "backup_restores" {
+  role       = aws_iam_role.backup_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
 }

@@ -557,6 +557,12 @@ describe('Terraform Configuration Structure', () => {
       expect(iamContent).toMatch(/resource\s+"aws_iam_role"\s+"backup_role"/);
     });
 
+    test('creates backup role policy attachments (not managed_policy_arns)', () => {
+      expect(iamContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"backup_service"/);
+      expect(iamContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"backup_restores"/);
+      expect(iamContent).not.toMatch(/managed_policy_arns/);
+    });
+
     test('creates EC2 instance profile', () => {
       expect(iamContent).toMatch(/resource\s+"aws_iam_instance_profile"/);
     });
