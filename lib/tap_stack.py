@@ -7,8 +7,10 @@ from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 # S3 configuration classes removed due to import issues with AWS provider naming inconsistencies
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
@@ -191,29 +193,40 @@ class TapStack(TerraformStack):
             )
             self.public_subnets.append(subnet)
 
-        # VPC Endpoint for S3
-        self.s3_endpoint = VpcEndpoint(
+        # Create Internet Gateway for public subnets
+        self.igw = InternetGateway(
             self,
-            "s3_endpoint",
+            "internet_gateway",
             vpc_id=self.vpc.id,
-            service_name=f"com.amazonaws.{self.aws_region}.s3",
-            vpc_endpoint_type="Gateway",
             tags={
-                "Name": f"s3-endpoint-{self.environment_suffix}",
+                "Name": f"igw-{self.environment_suffix}",
             }
         )
 
-        # VPC Endpoint for DynamoDB
-        self.dynamodb_endpoint = VpcEndpoint(
+        # Create route table for public subnets
+        self.public_route_table = RouteTable(
             self,
-            "dynamodb_endpoint",
+            "public_route_table",
             vpc_id=self.vpc.id,
-            service_name=f"com.amazonaws.{self.aws_region}.dynamodb",
-            vpc_endpoint_type="Gateway",
+            route=[
+                RouteTableRoute(
+                    cidr_block="0.0.0.0/0",
+                    gateway_id=self.igw.id,
+                )
+            ],
             tags={
-                "Name": f"dynamodb-endpoint-{self.environment_suffix}",
+                "Name": f"public-rt-{self.environment_suffix}",
             }
         )
+
+        # Associate public subnets with route table
+        for i, subnet in enumerate(self.public_subnets):
+            RouteTableAssociation(
+                self,
+                f"public_subnet_rt_assoc_{i}",
+                subnet_id=subnet.id,
+                route_table_id=self.public_route_table.id,
+            )
 
         # Security group for RDS
         self.rds_sg = SecurityGroup(
@@ -429,7 +442,7 @@ class TapStack(TerraformStack):
             cluster_identifier=f"payment-cluster-{self.environment_suffix}",
             engine="aurora-postgresql",
             engine_mode="provisioned",
-            engine_version="15.4",
+            engine_version="15.5",
             database_name="payments",
             master_username="admin",
             master_password="ChangeMe123!",  # Should be from secrets manager in production

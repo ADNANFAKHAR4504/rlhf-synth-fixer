@@ -97,15 +97,15 @@ class TestVPCInfrastructure:
         assert hasattr(self.stack, 'public_subnets')
         assert len(self.stack.public_subnets) == 3
 
-    def test_s3_vpc_endpoint_created(self):
-        """Test that S3 VPC endpoint is created."""
-        assert hasattr(self.stack, 's3_endpoint')
-        assert self.stack.s3_endpoint is not None
+    def test_internet_gateway_created(self):
+        """Test that Internet Gateway is created for public subnets."""
+        assert hasattr(self.stack, 'igw')
+        assert self.stack.igw is not None
 
-    def test_dynamodb_vpc_endpoint_created(self):
-        """Test that DynamoDB VPC endpoint is created."""
-        assert hasattr(self.stack, 'dynamodb_endpoint')
-        assert self.stack.dynamodb_endpoint is not None
+    def test_public_route_table_created(self):
+        """Test that public route table is created with IGW route."""
+        assert hasattr(self.stack, 'public_route_table')
+        assert self.stack.public_route_table is not None
 
     def test_rds_security_group_created(self):
         """Test that RDS security group is created."""

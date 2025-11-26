@@ -80,8 +80,8 @@ class TestVPCAndNetworkingIntegration:
         assert stack.vpc is not None
         assert len(stack.private_subnets) == 3
         assert len(stack.public_subnets) == 3
-        assert stack.s3_endpoint is not None
-        assert stack.dynamodb_endpoint is not None
+        assert stack.igw is not None
+        assert stack.public_route_table is not None
 
         # Verify security groups
         assert stack.rds_sg is not None
@@ -478,8 +478,8 @@ class TestEndToEndInfrastructureIntegration:
         assert stack.vpc is not None
         assert len(stack.private_subnets) == 3
         assert len(stack.public_subnets) == 3
-        assert stack.s3_endpoint is not None
-        assert stack.dynamodb_endpoint is not None
+        assert stack.igw is not None
+        assert stack.public_route_table is not None
 
         # Security
         assert stack.kms_rds is not None
