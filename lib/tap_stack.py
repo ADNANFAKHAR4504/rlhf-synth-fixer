@@ -442,7 +442,7 @@ class TapStack(TerraformStack):
             cluster_identifier=f"payment-cluster-{self.environment_suffix}",
             engine="aurora-postgresql",
             engine_mode="provisioned",
-            engine_version="15.5",
+            engine_version="15.7",
             database_name="payments",
             master_username="admin",
             master_password="ChangeMe123!",  # Should be from secrets manager in production
