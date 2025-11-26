@@ -2,6 +2,58 @@
 
 This implementation provides a complete CloudFormation JSON template for deploying an ECS Fargate-based fraud detection service with high availability, auto-scaling, and comprehensive monitoring.
 
+---
+
+## ⚠️ Code Review Alert - Critical Issues Found
+
+**Review Date:** 2025-11-26
+**Branch:** synth-101912669
+**Assessment:** Current implementation has 4 critical deviations from requirements
+
+### 🔴 Critical Issue #1: VPC Infrastructure Created (Should Be Parameterized)
+**Location:** lib/TapStack.json lines 47-423
+**Problem:** Template creates complete VPC infrastructure (VPC, subnets, NAT gateways, IGW)
+**Requirement:** PROMPT.md specifies "Existing VPC integration - reference vpc-0123456789abcdef0"
+**Impact:**
+- Unnecessary cost: $98.55/month for NAT gateways
+- Cannot integrate with existing RDS Aurora
+- Violates explicit requirement
+
+**Fix:** Remove VPC resources, add parameters:
+```json
+"Parameters": {
+  "VpcId": {"Type": "AWS::EC2::VPC::Id", "Default": "vpc-0123456789abcdef0"},
+  "PublicSubnet1": {"Type": "AWS::EC2::Subnet::Id"},
+  "PublicSubnet2": {"Type": "AWS::EC2::Subnet::Id"},
+  "PublicSubnet3": {"Type": "AWS::EC2::Subnet::Id"},
+  "PrivateSubnet1": {"Type": "AWS::EC2::Subnet::Id"},
+  "PrivateSubnet2": {"Type": "AWS::EC2::Subnet::Id"},
+  "PrivateSubnet3": {"Type": "AWS::EC2::Subnet::Id"}
+}
+```
+
+### 🔴 Critical Issue #2: Wrong Desired Count
+**Location:** lib/TapStack.json line 954
+**Current:** `"DesiredCount": 2`
+**Required:** `"DesiredCount": 3`
+**Source:** PROMPT.md line 33: "Deploy ECS service with desired count of 3 tasks"
+**Impact:** 33% less capacity, reduced HA across 3 AZs
+
+### 🔴 Critical Issue #3: Wrong Container Port Default
+**Location:** lib/TapStack.json lines 40-43
+**Current:** `"Default": 80`
+**Required:** `"Default": 8080`
+**Source:** PROMPT.md line 24: "Container must expose port 8080"
+**Impact:** Application won't be accessible if listening on 8080
+
+### 🔴 Critical Issue #4: Health Check Port Hardcoded
+**Location:** lib/TapStack.json line 712
+**Current:** `"wget --quiet --tries=1 --spider http://localhost:80/ || exit 1"`
+**Required:** `{"Fn::Sub": "curl -f http://localhost:${ContainerPort}/health || exit 1"}`
+**Impact:** Health checks will fail, ECS marks healthy containers as unhealthy
+
+---
+
 ## File: lib/TapStack.json
 
 ```json

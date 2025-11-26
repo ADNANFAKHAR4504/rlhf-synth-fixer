@@ -2,6 +2,33 @@
 
 This is the corrected and production-ready implementation of the ECS Fargate fraud detection service infrastructure.
 
+---
+
+## 🔍 Code Review Findings - PR #7345
+
+**Review Date:** 2025-11-26
+**Status:** ⚠️ Implementation deviates from IDEAL response in 4 critical areas
+
+### Deviations from IDEAL Implementation
+
+| Issue | Current Implementation | IDEAL Implementation | Impact |
+|-------|----------------------|---------------------|---------|
+| VPC Infrastructure | Creates new VPC (lines 47-423) | Parameters for existing VPC | 🔴 Cost + Integration failure |
+| Desired Count | DesiredCount: 2 | DesiredCount: 3 | 🔴 33% less capacity |
+| Container Port | Default: 80 | Default: 8080 | 🔴 App won't be accessible |
+| Health Check | Hardcoded port 80 | ${ContainerPort}/health | 🔴 Health checks fail |
+
+### What IDEAL Implementation Shows
+This document demonstrates the **correct** approach:
+- ✅ VPC/subnet parameters (lines 56-94)
+- ✅ Desired count of 3 (line 88)
+- ✅ Container port 8080 (line 92)
+- ✅ Proper health check with parameter substitution
+
+**Current template must be updated to match IDEAL response.**
+
+---
+
 ## Infrastructure Overview
 
 A complete CloudFormation template deploying:
