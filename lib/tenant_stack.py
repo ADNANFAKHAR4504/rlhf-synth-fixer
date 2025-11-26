@@ -370,8 +370,8 @@ class TenantStack(TerraformStack):
     def _create_lambda_functions(self) -> None:
         """Create Lambda functions for tenant API endpoints."""
         import os
-        # Get absolute path to lambda_function.zip in project root
-        lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lambda_function.zip"))
+        # Get absolute path to lambda_function.zip in lib directory
+        lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "lambda_function.zip"))
 
         self.lambda_function = LambdaFunction(
             self,
