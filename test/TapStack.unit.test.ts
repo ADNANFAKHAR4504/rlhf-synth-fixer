@@ -86,12 +86,6 @@ describe('TapStack Template', () => {
       expect(template.Parameters.LambdaImageUri.Default).toBe('');
     });
 
-    test('should have TemplatesBucketName parameter', () => {
-      expect(template.Parameters.TemplatesBucketName).toBeDefined();
-      expect(template.Parameters.TemplatesBucketName.Type).toBe('String');
-      expect(template.Parameters.TemplatesBucketName.Default).toBe('');
-      expect(template.Parameters.TemplatesBucketName.Description).toBeDefined();
-    });
   });
 
   describe('Conditions', () => {
@@ -106,15 +100,6 @@ describe('TapStack Template', () => {
       expect(condition[1]).toBe('prod');
     });
 
-    test('should have CreateTemplatesBucket condition', () => {
-      expect(template.Conditions.CreateTemplatesBucket).toBeDefined();
-      expect(template.Conditions.CreateTemplatesBucket['Fn::Equals']).toBeDefined();
-    });
-
-    test('should have UseProvidedBucket condition', () => {
-      expect(template.Conditions.UseProvidedBucket).toBeDefined();
-      expect(template.Conditions.UseProvidedBucket['Fn::Not']).toBeDefined();
-    });
   });
 
   describe('Nested Stacks', () => {
@@ -123,15 +108,10 @@ describe('TapStack Template', () => {
       expect(template.Resources.NetworkStack.Type).toBe('AWS::CloudFormation::Stack');
     });
 
-    test('NetworkStack should reference TemplatesBucketName or TemplatesBucket conditionally', () => {
+    test('NetworkStack should reference local template file for packaging', () => {
       const templateURL = template.Resources.NetworkStack.Properties.TemplateURL;
-      expect(templateURL['Fn::If']).toBeDefined();
-      expect(templateURL['Fn::If'][0]).toBe('UseProvidedBucket');
-      // Check both branches of the condition
-      expect(templateURL['Fn::If'][1]['Fn::Sub']).toContain('${TemplatesBucketName}');
-      expect(templateURL['Fn::If'][1]['Fn::Sub']).toContain('NetworkStack.json');
-      expect(templateURL['Fn::If'][2]['Fn::Sub']).toContain('${TemplatesBucket}');
-      expect(templateURL['Fn::If'][2]['Fn::Sub']).toContain('NetworkStack.json');
+      expect(templateURL).toBe('NetworkStack.json');
+      expect(typeof templateURL).toBe('string');
     });
 
     test('NetworkStack should pass EnvironmentSuffix parameter', () => {
@@ -201,11 +181,6 @@ describe('TapStack Template', () => {
   });
 
   describe('Root Level Resources', () => {
-    test('should have TemplatesBucket resource (conditional)', () => {
-      expect(template.Resources.TemplatesBucket).toBeDefined();
-      expect(template.Resources.TemplatesBucket.Type).toBe('AWS::S3::Bucket');
-      expect(template.Resources.TemplatesBucket.Condition).toBe('CreateTemplatesBucket');
-    });
 
     test('should have SessionTable DynamoDB table', () => {
       expect(template.Resources.SessionTable).toBeDefined();
