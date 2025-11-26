@@ -12,6 +12,8 @@
     "IAM Cross-Account Roles",
     "Audit Logging"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "po_id": "101912648",
   "aws_services": [
     "CloudWatch",

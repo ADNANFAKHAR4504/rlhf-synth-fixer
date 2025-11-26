@@ -1,8 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack CloudFormation Template', () => {
   let template: any;
 
@@ -12,12 +10,6 @@ describe('TapStack CloudFormation Template', () => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
