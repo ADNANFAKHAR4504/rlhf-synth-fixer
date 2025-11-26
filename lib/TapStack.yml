@@ -1370,8 +1370,7 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/EC2", "CPUUtilization", {"stat": "Average", "dimensions": {"AutoScalingGroupName": "${AutoScalingGroup}"}}],
-                  [".", "NetworkIn", {"stat": "Sum", "dimensions": {"AutoScalingGroupName": "${AutoScalingGroup}"}}],
-                  [".", "NetworkOut", {"stat": "Sum", "dimensions": {"AutoScalingGroupName": "${AutoScalingGroup}"}}]
+                  [".", "NetworkIn", {"stat": "Sum", "dimensions": {"AutoScalingGroupName": "${AutoScalingGroup}"}}]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -1384,8 +1383,7 @@ Resources:
               "properties": {
                 "metrics": [
                   ["AWS/RDS", "CPUUtilization", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${DatabaseInstance}"}}],
-                  [".", "DatabaseConnections", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${DatabaseInstance}"}}],
-                  [".", "FreeStorageSpace", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${DatabaseInstance}"}}]
+                  [".", "DatabaseConnections", {"stat": "Average", "dimensions": {"DBInstanceIdentifier": "${DatabaseInstance}"}}]
                 ],
                 "period": 300,
                 "stat": "Average",
