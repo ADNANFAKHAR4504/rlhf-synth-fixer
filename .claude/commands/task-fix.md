@@ -234,7 +234,12 @@ You MUST iterate until BOTH conditions are true:
 If after 10 iterations ANY condition is false:
 - Post escalation comment to PR
 - Document remaining issues
-- Exit with error code 1
+- Exit with code 2 (BLOCKED - manual intervention)
+
+**Exit Codes** (agent will use):
+- 0 = SUCCESS (production ready)
+- 1 = ERROR (unrecoverable error, can retry)
+- 2 = BLOCKED (manual intervention required)
 
 **NO PARTIAL SUCCESS** - Either production ready or escalate
 
@@ -243,10 +248,10 @@ Begin the fix workflow now.
 
 ### Step 5: Monitor Agent Progress
 
-The agent will report status at each phase. Monitor for:
-- BLOCKED status (requires user intervention)
-- ERROR status (issue escalation needed)
-- SUCCESS status (all fixes applied, PR ready)
+The agent will report status at each phase. Monitor for exit codes:
+- Exit code `0` = SUCCESS (production ready)
+- Exit code `1` = ERROR (unrecoverable, can retry)
+- Exit code `2` = BLOCKED (manual intervention)
 
 ### Step 6: Post-Completion Actions and Verification
 

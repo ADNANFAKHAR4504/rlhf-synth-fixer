@@ -45,63 +45,66 @@ All of the following MUST pass:
    - OR branch name (e.g., synth-abc123)
    - Extract task_id from branch name
 
-2. **Add assignee to PR**:
+2. **Verify required scripts exist**:
    ```bash
-   # Get current GitHub user
-   GITHUB_USER=$(gh api user --jq '.login')
-   echo "Current GitHub user: ${GITHUB_USER}"
+   # Verify all required scripts exist before starting
+   REQUIRED_SCRIPTS=(
+     ".claude/scripts/verify-worktree.sh"
+     ".claude/scripts/validate-metadata.sh"
+     ".claude/scripts/validate-code-platform.sh"
+     ".claude/scripts/pre-submission-check.sh"
+     ".claude/scripts/cicd-job-checker.sh"
+     ".claude/scripts/iac-synth-trainer/add-assignee.sh"
+     ".claude/scripts/iac-synth-trainer/setup-worktree.sh"
+     ".claude/scripts/iac-synth-trainer/validate-file-path.sh"
+     ".claude/scripts/iac-synth-trainer/wait-for-cicd.sh"
+     ".claude/scripts/retry-operation.sh"
+   )
 
-   # Add as assignee to PR (if PR number provided)
-   if [ -n "$PR_NUMBER" ]; then
-     gh pr edit ${PR_NUMBER} --add-assignee "${GITHUB_USER}"
-     echo "✅ Added ${GITHUB_USER} as assignee to PR #${PR_NUMBER}"
-   fi
+   for script in "${REQUIRED_SCRIPTS[@]}"; do
+     if [ ! -f "$script" ]; then
+       echo "❌ ERROR: Required script missing: $script"
+       exit 1
+     fi
+   done
+
+   echo "✅ All required scripts present"
    ```
 
-3. **Create isolated worktree** (CRITICAL for parallel execution):
+3. **Add assignee to PR** (extracted to script):
    ```bash
-   # ALWAYS work in isolated worktree to support parallel agents
-   REPO_ROOT=$(git rev-parse --show-toplevel)
-
-   # Extract task_id from branch (format: synth-{task_id})
-   if [ -n "$PR_NUMBER" ]; then
-     BRANCH_NAME=$(gh pr view ${PR_NUMBER} --json headRefName -q '.headRefName')
-   fi
-
-   TASK_ID=$(echo "${BRANCH_NAME}" | sed 's/^synth-//')
-   echo "Task ID: ${TASK_ID}"
-
-   WORKTREE_PATH="${REPO_ROOT}/worktree/synth-${TASK_ID}"
-
-   # Check if worktree already exists
-   if git worktree list | grep -q "${WORKTREE_PATH}"; then
-     echo "Worktree already exists at ${WORKTREE_PATH}"
-     cd "${WORKTREE_PATH}"
-   else
-     echo "Creating isolated worktree for parallel execution..."
-     cd "${REPO_ROOT}"
-
-     # Fetch the branch if it doesn't exist locally
-     git fetch origin ${BRANCH_NAME}:${BRANCH_NAME} || echo "Branch already exists locally"
-
-     # Create worktree
-     git worktree add "${WORKTREE_PATH}" ${BRANCH_NAME}
-     cd "${WORKTREE_PATH}"
-
-     echo "✅ Created isolated worktree at ${WORKTREE_PATH}"
-   fi
-
-   # Verify worktree structure
-   bash .claude/scripts/verify-worktree.sh || exit 1
-   echo "✅ Worktree validated - safe for parallel execution"
+   # Use helper script with retry logic
+   bash .claude/scripts/iac-synth-trainer/add-assignee.sh ${PR_NUMBER}
    ```
 
-4. **Fetch CI/CD job status and create checklist**:
+4. **Create isolated worktree** (extracted to script with cleanup):
+   ```bash
+   # Use helper script that handles:
+   # - Existing worktree detection
+   # - Worktree validation with cleanup on failure
+   # - Parallel execution safety
+   WORKTREE_PATH=$(bash .claude/scripts/iac-synth-trainer/setup-worktree.sh ${BRANCH_NAME} ${TASK_ID})
+
+   if [ $? -ne 0 ]; then
+     echo "❌ Failed to setup worktree"
+     exit 1
+   fi
+
+   # Change to worktree
+   cd "${WORKTREE_PATH}"
+   echo "✅ Working in isolated worktree: ${WORKTREE_PATH}"
+   ```
+
+5. **Fetch CI/CD job status and create checklist**:
    ```bash
    echo "📋 Fetching CI/CD pipeline status for PR #${PR_NUMBER}..."
 
-   # Get all workflow runs for this PR
-   gh pr checks ${PR_NUMBER} --json name,state,conclusion,detailsUrl > ci_checks.json
+   # Wait briefly for GitHub to register any recent pushes
+   echo "⏳ Allowing time for GitHub to process recent changes..."
+   sleep 10
+
+   # Get all workflow runs for this PR with retry
+   bash .claude/scripts/retry-operation.sh "gh pr checks ${PR_NUMBER} --json name,state,conclusion,detailsUrl > ci_checks.json" 3 5
 
    # Parse and display checklist
    echo "## CI/CD Pipeline Checklist"
@@ -641,42 +644,22 @@ After applying fixes:
        gh pr comment ${PR_NUMBER} --body "${ESCALATION_COMMENT}"
 
        echo "❌ BLOCKED - Manual intervention required"
-       exit 1
+       exit 2  # Exit code 2 = BLOCKED (manual intervention needed)
      fi
    fi
    ```
 
-3. **Wait for CI/CD between iterations** (if needed):
+**Exit Codes**:
+- `0` = SUCCESS (production ready)
+- `1` = ERROR (unrecoverable error, can retry)
+- `2` = BLOCKED (manual intervention required)
+
+3. **Wait for CI/CD between iterations** (extracted to script):
    ```bash
-   # After pushing fixes, wait for CI/CD to start processing
+   # After pushing fixes, wait for CI/CD to complete
+   # Handles: sleep, polling, queued state, timeout
    if [ -n "$PR_NUMBER" ]; then
-     echo "⏳ Waiting for CI/CD to process changes..."
-     sleep 60  # Give CI/CD time to start
-
-     # Poll CI/CD status
-     MAX_WAIT=600  # 10 minutes
-     WAIT_TIME=0
-     CICD_PROCESSING=true
-
-     while [ $WAIT_TIME -lt $MAX_WAIT ] && [ "$CICD_PROCESSING" == "true" ]; do
-       bash .claude/scripts/cicd-job-checker.sh ${PR_NUMBER} > /dev/null 2>&1
-
-       IN_PROGRESS=$(jq -r '.in_progress' cicd_summary.json)
-       PENDING=$(jq -r '.pending' cicd_summary.json)
-
-       if [ "$IN_PROGRESS" -eq 0 ] && [ "$PENDING" -eq 0 ]; then
-         CICD_PROCESSING=false
-         echo "✅ CI/CD processing complete"
-       else
-         echo "⏳ CI/CD still processing (${WAIT_TIME}s elapsed)..."
-         sleep 30
-         WAIT_TIME=$((WAIT_TIME + 30))
-       fi
-     done
-
-     if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-       echo "⏰ CI/CD timeout - continuing with next iteration"
-     fi
+     bash .claude/scripts/iac-synth-trainer/wait-for-cicd.sh ${PR_NUMBER} 600
    fi
    ```
 
@@ -989,23 +972,30 @@ Report BLOCKED with:
 - ❌ `.gitignore`, `.gitattributes`
 - ❌ Any other root-level configuration files
 
-**Validation Before Any Modification**:
+**Validation Before Any Modification** (extracted to script):
 ```bash
 # Before modifying ANY file, verify it's in allowed directory
 FILE_TO_MODIFY="path/to/file"
 
-if [[ "$FILE_TO_MODIFY" == lib/* ]] || \
-   [[ "$FILE_TO_MODIFY" == bin/* ]] || \
-   [[ "$FILE_TO_MODIFY" == test/* ]] || \
-   [[ "$FILE_TO_MODIFY" == tests/* ]] || \
-   [[ "$FILE_TO_MODIFY" == "metadata.json" ]] || \
-   [[ "$FILE_TO_MODIFY" =~ ^(package|cdk|cdktf|Pulumi|tap|setup|Pipfile|build\.gradle|pom)\. ]]; then
-  echo "✅ File in allowed directory: ${FILE_TO_MODIFY}"
+# Use helper script with fixed regex for Pipfile.lock, etc.
+if bash .claude/scripts/iac-synth-trainer/validate-file-path.sh "${FILE_TO_MODIFY}"; then
+  # Proceed with modification
+  echo "✅ File validation passed: ${FILE_TO_MODIFY}"
 else
-  echo "❌ FORBIDDEN: Cannot modify ${FILE_TO_MODIFY}"
-  echo "Only lib/, bin/, test/, tests/ and specific root files allowed"
+  echo "❌ File validation failed: ${FILE_TO_MODIFY}"
   exit 1
 fi
+```
+
+**Pre-commit Enforcement**:
+```bash
+# Before git add, validate all modified files
+for file in $(git diff --name-only); do
+  if ! bash .claude/scripts/iac-synth-trainer/validate-file-path.sh "$file"; then
+    echo "❌ Cannot commit forbidden file: $file"
+    exit 1
+  fi
+done
 ```
 
 **If validation/build scripts need updates**: Report to user - DO NOT modify
@@ -1021,13 +1011,140 @@ This agent may invoke:
 ## Usage Pattern
 
 ```bash
-# Via command
+# Via command (recommended)
 /task-fix 1234
 
-# Direct agent invocation
-# Provide: PR number or branch name
+# Via Claude Code Agent Tool
+# Use the Task tool with subagent_type=iac-synth-trainer
+# Provide: PR number or branch name in prompt
 # Agent will handle complete fix workflow
 ```
+
+## Troubleshooting Common Scenarios
+
+### 1. Worktree Already Exists from Failed Previous Run
+
+**Symptom**: "Worktree already exists" error
+
+**Solution**: The setup-worktree.sh script handles this automatically:
+- Checks if worktree is on correct branch → Reuses it
+- Checks if worktree is on wrong branch → Removes and recreates
+- Checks if worktree directory missing → Prunes and recreates
+
+**Manual cleanup if needed**:
+```bash
+git worktree remove worktree/synth-{task_id} --force
+git worktree prune
+```
+
+### 2. PR Was Force-Pushed During Fix
+
+**Symptom**: Git conflicts or "diverged branches"
+
+**Solution**:
+```bash
+cd worktree/synth-{task_id}
+git fetch origin {branch_name}
+git reset --hard origin/{branch_name}
+# Resume fixing
+```
+
+**Prevention**: Agent should check for divergence before each push:
+```bash
+git fetch origin ${BRANCH_NAME}
+LOCAL_COMMIT=$(git rev-parse HEAD)
+REMOTE_COMMIT=$(git rev-parse origin/${BRANCH_NAME})
+if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+  echo "⚠️ Branch was updated remotely, syncing..."
+  git rebase origin/${BRANCH_NAME}
+fi
+```
+
+### 3. Deployment Takes Longer Than 10 Minutes
+
+**Symptom**: "CI/CD timeout" message
+
+**Current Behavior**: Agent continues to next iteration after 10min timeout
+
+**Impact**: May check CI/CD status while deployment still running
+
+**Solution**:
+- wait-for-cicd.sh already handles this with timeout
+- Agent will check again in next iteration
+- If deployment consistently takes >10min:
+  - Increase MAX_WAIT in wait-for-cicd.sh call
+  - Or add `MAX_DEPLOYMENT_WAIT` variable to agent
+
+**Adjustment**:
+```bash
+# For tasks known to have long deployments
+bash .claude/scripts/iac-synth-trainer/wait-for-cicd.sh ${PR_NUMBER} 900  # 15 minutes
+```
+
+### 4. GitHub API Rate Limiting
+
+**Symptom**: "API rate limit exceeded" errors
+
+**Solution**: Already handled by retry-operation.sh with exponential backoff
+
+**Manual workaround**:
+```bash
+# Check rate limit status
+gh api rate_limit
+
+# Wait for reset
+# Or use GitHub App authentication (higher limits)
+```
+
+### 5. Multiple Failed Jobs with Same Root Cause
+
+**Symptom**: Many jobs fail due to one issue (e.g., metadata.json)
+
+**Optimization**: Priority validation already handles this by:
+1. Detecting metadata failure first
+2. Fixing it
+3. Re-running dependent validations
+
+**Manual skip**: If you know a fix needs time:
+```bash
+# Temporarily skip specific jobs by adding [skip-jobs] to commit message
+git commit -m "fix: intermediate changes [skip-jobs]"
+```
+
+### 6. Stuck in Iteration Loop
+
+**Symptom**: Agent reaches max iterations without progress
+
+**Possible Causes**:
+- External dependency not resolving (AWS quota, permission)
+- Test flakiness causing intermittent failures
+- CI/CD timing issues
+
+**Solution**:
+- Agent will escalate after 10 iterations
+- Review escalation comment for root cause
+- May require manual intervention for:
+  - AWS service quota increases
+  - IAM permission adjustments
+  - Test stability improvements
+
+### 7. Comment Flood on PR
+
+**Symptom**: Too many bot comments
+
+**Prevention**: post-fix-comment.sh includes deduplication
+
+**Cleanup** (if needed):
+```bash
+# List all bot comments
+gh api "/repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" \
+  --jq '.[] | select(.user.login == "github-actions[bot]") | {id, created_at}'
+
+# Delete specific comment
+gh api -X DELETE "/repos/{owner}/{repo}/issues/comments/{comment_id}"
+```
+
+**Future Enhancement**: Consider editing single "status" comment instead of posting multiple
 
 ## Success Criteria
 

@@ -2,6 +2,10 @@
 # CI/CD Job Status Checker and Analyzer
 # Fetches CI/CD pipeline status for a PR and creates actionable checklist
 
+# ⚠️ IMPORTANT: Job names must match .github/workflows/ci-cd.yml
+# If workflow job names change, update JOB_MAP below
+# This script depends on GitHub Actions job naming convention
+
 set -e
 
 # Colors for output
@@ -132,6 +136,10 @@ for job_name in "${!JOB_MAP[@]}"; do
     ICON="${BLUE}🔄${NC}"
     STATUS_TEXT="${BLUE}IN_PROGRESS${NC}"
     IN_PROGRESS_JOBS=$((IN_PROGRESS_JOBS + 1))
+  elif [ "$STATE" == "queued" ]; then
+    ICON="${YELLOW}⏳${NC}"
+    STATUS_TEXT="${YELLOW}QUEUED${NC}"
+    PENDING_JOBS=$((PENDING_JOBS + 1))
   else
     ICON="⏸️"
     STATUS_TEXT="PENDING"
