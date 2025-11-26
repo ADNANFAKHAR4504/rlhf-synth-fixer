@@ -9,7 +9,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming"
   type        = string
-  default     = "dev"
+  default     = "dev11"
 
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment_suffix))
