@@ -435,18 +435,18 @@
       }
     },
     "TradingAnalyticsGlobalTable": {
-      "Type": "AWS::DynamoDB::GlobalTable",
+      "Type": "AWS::DynamoDB::Table",
       "DeletionPolicy": "Retain",
       "UpdateReplacePolicy": "Retain",
       "Metadata": {
         "AWS::CloudFormation::Designer": {
           "id": "TradingAnalyticsGlobalTable"
         },
-        "Note": "Both SourceRegion and TargetRegion must be in Replicas array. CloudFormation requires the current deployment region to be explicitly listed. DeletionPolicy: Retain prevents accidental deletion but AWS enforces a 24-hour cooldown when removing replicas that have been used as sources."
+        "Note": "Changed from GlobalTable to Table for single-region deployment. This avoids AWS Early Validation errors when target region doesn't exist yet. Can be converted to GlobalTable later when both regions are deployed."
       },
       "Properties": {
         "TableName": {
-          "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"
+          "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
         },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
@@ -498,34 +498,21 @@
           "SSEEnabled": true,
           "SSEType": "KMS"
         },
-        "Replicas": [
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
           {
-            "Region": {
-              "Ref": "SourceRegion"
-            },
-            "PointInTimeRecoverySpecification": {
-              "PointInTimeRecoveryEnabled": true
-            },
-            "Tags": [
-              {
-                "Key": "ReplicaType",
-                "Value": "Source"
-              }
-            ]
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           },
           {
-            "Region": {
-              "Ref": "TargetRegion"
-            },
-            "PointInTimeRecoverySpecification": {
-              "PointInTimeRecoveryEnabled": true
-            },
-            "Tags": [
-              {
-                "Key": "ReplicaType",
-                "Value": "Target"
-              }
-            ]
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
           }
         ]
       }
@@ -608,7 +595,7 @@
         "Environment": {
           "Variables": {
             "TABLE_NAME": {
-              "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"
+              "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
             },
             "BUCKET_NAME": {
               "Ref": "TradingDataBucket"
@@ -671,10 +658,10 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}"
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
                     },
                     {
-                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}/index/*"
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}-${AWS::Region}/index/*"
                     }
                   ]
                 },
@@ -779,7 +766,7 @@
                 "Ref": "TradingDataBucket"
               },
               "Table": {
-                "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"
+                "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
               },
               "Stream": {
                 "Ref": "MarketDataStream"
@@ -1695,7 +1682,7 @@
               ]
             },
             {
-              "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}"
+              "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
             }
           ]
         }
@@ -1845,7 +1832,7 @@
     "TradingAnalyticsTableName": {
       "Description": "DynamoDB Global Table name for analytics",
       "Value": {
-        "Fn::Sub": "trading-analytics-${EnvironmentSuffix}"
+        "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
       },
       "Export": {
         "Name": {
