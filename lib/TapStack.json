@@ -1,0 +1,900 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack — Serverless baseline with Lambda alias+versions (blue/green ready), optional CodeDeploy, S3 artifacts bucket, CloudWatch logging/alarms, and SNS notifications. Region-agnostic.\n",
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "tapstack",
+            "AllowedPattern": "^[a-z][a-z0-9-]{1,31}$",
+            "ConstraintDescription": "Must start with a lowercase letter and contain only lowercase letters, numbers, and hyphens.",
+            "Description": "Short project slug used in names and tags."
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev-us",
+            "AllowedPattern": "^[a-z0-9-]{2,32}$",
+            "ConstraintDescription": "2-32 chars; lowercase letters, numbers, hyphens (examples: dev, qa, prod-us, production).",
+            "Description": "Suffix added to ALL names to avoid collisions across environments."
+        },
+        "LambdaRuntime": {
+            "Type": "String",
+            "Default": "python3.11",
+            "AllowedValues": [
+                "python3.10",
+                "python3.11",
+                "python3.12"
+            ],
+            "Description": "Runtime for all Lambda functions."
+        },
+        "LambdaMemoryMb": {
+            "Type": "Number",
+            "Default": 256,
+            "MinValue": 128,
+            "MaxValue": 10240,
+            "Description": "Memory size (MB) for primary and hook Lambdas."
+        },
+        "LambdaTimeoutSec": {
+            "Type": "Number",
+            "Default": 30,
+            "MinValue": 1,
+            "MaxValue": 900,
+            "Description": "Timeout (seconds) for primary and hook Lambdas."
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 14,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ],
+            "Description": "CloudWatch Logs retention for all log groups."
+        },
+        "AlarmEmail": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional email for SNS topic subscription. Leave blank to skip."
+        },
+        "EnableDLQ": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Create an SQS dead-letter queue and attach to primary Lambda when true."
+        },
+        "LambdaLogLevel": {
+            "Type": "String",
+            "Default": "INFO",
+            "AllowedValues": [
+                "DEBUG",
+                "INFO",
+                "WARNING",
+                "ERROR",
+                "CRITICAL"
+            ],
+            "Description": "Log level for Lambda environment variable LOG_LEVEL."
+        },
+        "EnableCodeDeploy": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "When true, create Lambda CodeDeploy app+group (fresh, Lambda-only, collision-proof)."
+        }
+    },
+    "Conditions": {
+        "HasAlarmEmail": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AlarmEmail"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateDLQ": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableDLQ"
+                },
+                "true"
+            ]
+        },
+        "CreateCodeDeploy": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableCodeDeploy"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "ArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "NonCurrentVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "StorageClass": "GLACIER",
+                                    "TransitionInDays": 90
+                                }
+                            ],
+                            "NoncurrentVersionExpiration": {
+                                "NoncurrentDays": 3650
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
+        },
+        "ArtifactsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ArtifactsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ArtifactsBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "StackEventsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "KmsMasterKeyId": "alias/aws/sns",
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "StackEventsSubscriptionEmail": {
+            "Type": "AWS::SNS::Subscription",
+            "Condition": "HasAlarmEmail",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "StackEventsTopic"
+                },
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlarmEmail"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-lambda-inline-${EnvironmentSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "sns:Publish",
+                                    "Resource": {
+                                        "Ref": "StackEventsTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Condition": "CreateDLQ",
+            "Properties": {
+                "MessageRetentionPeriod": 1209600,
+                "KmsMasterKeyId": "alias/aws/sqs",
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppHandlerLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "${ProjectName} primary handler (blue/green ready via alias) — ${EnvironmentSuffix}"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": {
+                    "Ref": "LambdaRuntime"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemoryMb"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeoutSec"
+                },
+                "Handler": "index.lambda_handler",
+                "Environment": {
+                    "Variables": {
+                        "PROJECT_NAME": {
+                            "Ref": "ProjectName"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        },
+                        "LOG_LEVEL": {
+                            "Ref": "LambdaLogLevel"
+                        },
+                        "NOTIFY_TOPIC_ARN": {
+                            "Ref": "StackEventsTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json, os, logging\nlog = logging.getLogger()\nlog.setLevel(os.getenv(\"LOG_LEVEL\",\"INFO\"))\ndef lambda_handler(event, context):\n    log.info({\"msg\":\"hello from app\", \"env\": os.getenv(\"ENVIRONMENT_SUFFIX\")})\n    return {\"statusCode\": 200, \"body\": json.dumps({\"ok\": True, \"env\": os.getenv(\"ENVIRONMENT_SUFFIX\")})}\n"
+                },
+                "TracingConfig": {
+                    "Mode": "PassThrough"
+                },
+                "DeadLetterConfig": {
+                    "Fn::If": [
+                        "CreateDLQ",
+                        {
+                            "TargetArn": {
+                                "Fn::GetAtt": [
+                                    "AppDLQ",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "AppHandlerLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${AppHandlerLambda}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
+        },
+        "AppHandlerVersion": {
+            "Type": "AWS::Lambda::Version",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "AppHandlerLambda"
+                },
+                "Description": {
+                    "Fn::Sub": "Initial published version for ${ProjectName}-app-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "AppLiveAlias": {
+            "Type": "AWS::Lambda::Alias",
+            "Properties": {
+                "Name": "live",
+                "FunctionName": {
+                    "Ref": "AppHandlerLambda"
+                },
+                "FunctionVersion": {
+                    "Fn::GetAtt": [
+                        "AppHandlerVersion",
+                        "Version"
+                    ]
+                },
+                "Description": {
+                    "Fn::Sub": "Live alias for ${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PreTrafficHookLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": {
+                    "Ref": "LambdaRuntime"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemoryMb"
+                },
+                "Timeout": 10,
+                "Handler": "index.lambda_handler",
+                "Code": {
+                    "ZipFile": "import logging\nlog = logging.getLogger()\nlog.setLevel(\"INFO\")\ndef lambda_handler(event, context):\n    log.info({\"hook\":\"pre-traffic\", \"event\":event})\n    return {\"status\":\"OK\"}\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PreTrafficLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${PreTrafficHookLambda}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
+        },
+        "PostTrafficHookLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": {
+                    "Ref": "LambdaRuntime"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemoryMb"
+                },
+                "Timeout": 10,
+                "Handler": "index.lambda_handler",
+                "Code": {
+                    "ZipFile": "import logging\nlog = logging.getLogger()\nlog.setLevel(\"INFO\")\ndef lambda_handler(event, context):\n    log.info({\"hook\":\"post-traffic\", \"event\":event})\n    return {\"status\":\"OK\"}\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PostTrafficLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${PostTrafficHookLambda}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
+        },
+        "AppErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": {
+                    "Fn::Sub": "Errors > 0 on live alias for ${AppHandlerLambda}"
+                },
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Errors",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "AppHandlerLambda"
+                        }
+                    },
+                    {
+                        "Name": "Resource",
+                        "Value": {
+                            "Fn::Sub": "${AppHandlerLambda}:live"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "Threshold": 0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "ActionsEnabled": true,
+                "AlarmActions": [
+                    {
+                        "Ref": "StackEventsTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "StackEventsTopic"
+                    }
+                ]
+            }
+        },
+        "AppThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmDescription": {
+                    "Fn::Sub": "Throttles > 0 on live alias for ${AppHandlerLambda}"
+                },
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Throttles",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "AppHandlerLambda"
+                        }
+                    },
+                    {
+                        "Name": "Resource",
+                        "Value": {
+                            "Fn::Sub": "${AppHandlerLambda}:live"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "Threshold": 0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "TreatMissingData": "notBreaching",
+                "ActionsEnabled": true,
+                "AlarmActions": [
+                    {
+                        "Ref": "StackEventsTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "StackEventsTopic"
+                    }
+                ]
+            }
+        },
+        "CodeDeployServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "CreateCodeDeploy",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codedeploy.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda"
+                ],
+                "Tags": [
+                    {
+                        "Key": "project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "CodeDeployLambdaApplication": {
+            "Type": "AWS::CodeDeploy::Application",
+            "Condition": "CreateCodeDeploy",
+            "Properties": {
+                "ComputePlatform": "Lambda",
+                "ApplicationName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "ProjectName"
+                            },
+                            "lam",
+                            {
+                                "Ref": "EnvironmentSuffix"
+                            },
+                            {
+                                "Fn::Select": [
+                                    2,
+                                    {
+                                        "Fn::Split": [
+                                            "/",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                }
+            }
+        },
+        "CodeDeployLambdaDeploymentGroup": {
+            "Type": "AWS::CodeDeploy::DeploymentGroup",
+            "Condition": "CreateCodeDeploy",
+            "Properties": {
+                "ApplicationName": {
+                    "Ref": "CodeDeployLambdaApplication"
+                },
+                "ServiceRoleArn": {
+                    "Fn::GetAtt": [
+                        "CodeDeployServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DeploymentConfigName": "CodeDeployDefault.LambdaCanary10Percent5Minutes",
+                "DeploymentGroupName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "ProjectName"
+                            },
+                            "dg",
+                            {
+                                "Ref": "EnvironmentSuffix"
+                            },
+                            {
+                                "Fn::Select": [
+                                    2,
+                                    {
+                                        "Fn::Split": [
+                                            "/",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                },
+                "AlarmConfiguration": {
+                    "Enabled": true,
+                    "IgnorePollAlarmFailure": false,
+                    "Alarms": [
+                        {
+                            "Name": {
+                                "Ref": "AppErrorAlarm"
+                            }
+                        },
+                        {
+                            "Name": {
+                                "Ref": "AppThrottleAlarm"
+                            }
+                        }
+                    ]
+                },
+                "AutoRollbackConfiguration": {
+                    "Enabled": true,
+                    "Events": [
+                        "DEPLOYMENT_FAILURE",
+                        "DEPLOYMENT_STOP_ON_ALARM",
+                        "DEPLOYMENT_STOP_ON_REQUEST"
+                    ]
+                },
+                "TriggerConfigurations": [
+                    {
+                        "TriggerEvents": [
+                            "DeploymentSuccess",
+                            "DeploymentFailure",
+                            "DeploymentRollback",
+                            "DeploymentStop"
+                        ],
+                        "TriggerTargetArn": {
+                            "Ref": "StackEventsTopic"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ArtifactsBucketName": {
+            "Description": "Name of the versioned artifacts bucket.",
+            "Value": {
+                "Ref": "ArtifactsBucket"
+            }
+        },
+        "ArtifactsBucketArn": {
+            "Description": "ARN of the artifacts bucket.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ArtifactsBucket",
+                    "Arn"
+                ]
+            }
+        },
+        "StackEventsSnsTopicArn": {
+            "Description": "SNS topic ARN for stack/deployment notifications.",
+            "Value": {
+                "Ref": "StackEventsTopic"
+            }
+        },
+        "PrimaryLambdaName": {
+            "Description": "Deployed primary Lambda name.",
+            "Value": {
+                "Ref": "AppHandlerLambda"
+            }
+        },
+        "PrimaryLambdaArn": {
+            "Description": "Deployed primary Lambda ARN.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppHandlerLambda",
+                    "Arn"
+                ]
+            }
+        },
+        "PrimaryLambdaAliasName": {
+            "Description": "Stable alias used for live traffic.",
+            "Value": {
+                "Ref": "AppLiveAlias"
+            }
+        },
+        "PrimaryLambdaAliasArn": {
+            "Description": "Alias ARN for the live alias.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppLiveAlias",
+                    "AliasArn"
+                ]
+            }
+        },
+        "CodeDeployApplicationName": {
+            "Condition": "CreateCodeDeploy",
+            "Description": "Name of the CodeDeploy Application (created when EnableCodeDeploy=true).",
+            "Value": {
+                "Ref": "CodeDeployLambdaApplication"
+            }
+        },
+        "CodeDeployDeploymentGroupName": {
+            "Condition": "CreateCodeDeploy",
+            "Description": "Name of the CodeDeploy Deployment Group (created when EnableCodeDeploy=true).",
+            "Value": {
+                "Ref": "CodeDeployLambdaDeploymentGroup"
+            }
+        },
+        "AlarmErrorArn": {
+            "Description": "ARN of the Lambda Errors alarm.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppErrorAlarm",
+                    "Arn"
+                ]
+            }
+        },
+        "AlarmThrottleArn": {
+            "Description": "ARN of the Lambda Throttles alarm.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppThrottleAlarm",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}
