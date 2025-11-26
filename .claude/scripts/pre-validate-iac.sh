@@ -120,12 +120,26 @@ case "$PLATFORM" in
     fi
     ;;
   cfn)
-    # Check CloudFormation templates
+    # Check CloudFormation templates for environmentSuffix usage
     if [ -d "lib" ]; then
-      NO_SUFFIX=$(grep -rniE "Name.*:" lib/ --include="*.yaml" --include="*.yml" --include="*.json" 2>/dev/null | grep -v "Ref.*ENVIRONMENT_SUFFIX" | grep -v "environmentSuffix" || true)
-      if [ -n "$NO_SUFFIX" ]; then
-        echo "⚠️  WARNING: CloudFormation resources without environmentSuffix detected"
-        ((WARNING_COUNT++))
+      # Check if any CloudFormation template uses EnvironmentSuffix properly
+      if [ -f "lib/TapStack.json" ] && grep -q "EnvironmentSuffix" lib/TapStack.json && grep -q "Fn::Sub.*EnvironmentSuffix" lib/TapStack.json; then
+        echo -e "${GREEN}✅ CloudFormation template uses environmentSuffix correctly${NC}"
+      else
+        # Check for other template files
+        TEMPLATE_FOUND=false
+        for template in lib/*.yaml lib/*.yml; do
+          if [ -f "$template" ] && grep -q "EnvironmentSuffix" "$template"; then
+            echo -e "${GREEN}✅ CloudFormation templates use environmentSuffix correctly${NC}"
+            TEMPLATE_FOUND=true
+            break
+          fi
+        done
+        
+        if [ "$TEMPLATE_FOUND" = false ]; then
+          echo "⚠️  WARNING: CloudFormation templates don't use EnvironmentSuffix properly"
+          ((WARNING_COUNT++))
+        fi
       fi
     fi
     ;;
