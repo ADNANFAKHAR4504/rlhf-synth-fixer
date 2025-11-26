@@ -75,7 +75,6 @@ class TapStack(TerraformStack):
                 key=f"{environment_suffix}/{construct_id}.tfstate",
                 region=state_bucket_region,
                 encrypt=True,
-                dynamodb_table="iac-rlhf-tf-locks",
             )
 
         # Get current AWS account and region
