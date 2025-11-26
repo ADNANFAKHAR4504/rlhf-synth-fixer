@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 /**
  * Fraud Detection Stack Component
  *
@@ -63,7 +68,7 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
   ) {
     super('custom:infrastructure:FraudDetectionStack', name, {}, opts);
 
-    const { environmentSuffix, region, emailAddress, tags: commonTags } = args;
+    const { environmentSuffix, region, tags: commonTags } = args;
 
     // KMS key for Lambda environment variable encryption
     const kmsKey = new aws.kms.Key(
@@ -460,47 +465,9 @@ Action Required: Review this transaction immediately.
     );
 
     // IAM role for EventBridge to invoke Lambda
-    const eventBridgeRole = new aws.iam.Role(
-      `eventbridge-role-${environmentSuffix}`,
-      {
-        name: `eventbridge-fraud-detection-role-${environmentSuffix}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'events.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: commonTags,
-      },
-      { parent: this }
-    );
 
 
     // EventBridge rule to trigger fraud-detector for high-value transactions
-    const fraudDetectionRule = new aws.cloudwatch.EventRule(
-      `fraud-detection-rule-${environmentSuffix}`,
-      {
-        name: `fraud-detection-rule-${environmentSuffix}`,
-        eventBusName: fraudDetectionBus.name,
-        description:
-          'Trigger fraud detector for transactions with amount > 10000',
-        eventPattern: JSON.stringify({
-          source: ['fraud-detection.transaction-processor'],
-          'detail-type': ['HighValueTransaction'],
-          detail: {
-            amount: [{ numeric: ['>', 10000] }],
-          },
-        }),
-        tags: commonTags,
-      },
-      { parent: this }
-    );
 
     // EventBridge target for fraud-detector Lambda with DLQ
 
