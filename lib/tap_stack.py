@@ -1,40 +1,59 @@
 """Advanced Observability Platform Stack for CDKTF Python."""
 
+import base64
+import io
 import json
-from cdktf import TerraformStack, S3Backend, Fn
-from constructs import Construct
-from cdktf_cdktf_provider_aws.provider import AwsProvider
+import zipfile
+
+from cdktf import Fn, S3Backend, TerraformStack
+from cdktf_cdktf_provider_aws.cloudwatch_composite_alarm import \
+    CloudwatchCompositeAlarm
 from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_log_metric_filter import CloudwatchLogMetricFilter
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
-    CloudwatchMetricAlarm,
-    CloudwatchMetricAlarmMetricQuery,
-    CloudwatchMetricAlarmMetricQueryMetric
-)
-from cdktf_cdktf_provider_aws.cloudwatch_composite_alarm import CloudwatchCompositeAlarm
-from cdktf_cdktf_provider_aws.cloudwatch_metric_stream import CloudwatchMetricStream
 from cdktf_cdktf_provider_aws.cloudwatch_event_rule import CloudwatchEventRule
-from cdktf_cdktf_provider_aws.cloudwatch_event_target import CloudwatchEventTarget
-from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
-from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
-from cdktf_cdktf_provider_aws.synthetics_canary import SyntheticsCanary
+from cdktf_cdktf_provider_aws.cloudwatch_event_target import \
+    CloudwatchEventTarget
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.cloudwatch_log_metric_filter import \
+    CloudwatchLogMetricFilter
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
+    CloudwatchMetricAlarm, CloudwatchMetricAlarmMetricQuery,
+    CloudwatchMetricAlarmMetricQueryMetric)
+from cdktf_cdktf_provider_aws.cloudwatch_metric_stream import \
+    CloudwatchMetricStream
+from cdktf_cdktf_provider_aws.data_aws_caller_identity import \
+    DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import \
+    S3BucketServerSideEncryptionConfigurationA
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfigurationA
 from cdktf_cdktf_provider_aws.s3_object import S3Object
-from cdktf_cdktf_provider_aws.xray_sampling_rule import XraySamplingRule
+from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
+from cdktf_cdktf_provider_aws.synthetics_canary import SyntheticsCanary
 from cdktf_cdktf_provider_aws.xray_group import XrayGroup
-from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
+from cdktf_cdktf_provider_aws.xray_sampling_rule import XraySamplingRule
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
     """CDKTF Python stack for Advanced Observability Platform."""
+
+    @staticmethod
+    def create_zip_base64(code: str, filename: str) -> str:
+        """Create a base64-encoded zip file from code string."""
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr(filename, code)
+        zip_buffer.seek(0)
+        return base64.b64encode(zip_buffer.read()).decode('utf-8')
 
     def __init__(
         self,
@@ -305,8 +324,7 @@ class TapStack(TerraformStack):
         )
 
         # Lambda function code
-        lambda_code = '''
-import json
+        lambda_code = '''import json
 import boto3
 import os
 from aws_xray_sdk.core import xray_recorder
@@ -384,13 +402,16 @@ def lambda_handler(event, context):
         raise
 '''
 
+        # Create zip file with Lambda code
+        lambda_zip_content = self.create_zip_base64(lambda_code, "index.py")
+        
         # Upload Lambda code to S3
         lambda_code_object = S3Object(
             self,
             "lambda_code_object",
             bucket=lambda_bucket.id,
             key="remediation_lambda.zip",
-            content=lambda_code,
+            content_base64=lambda_zip_content,
             content_type="application/zip"
         )
 
@@ -633,8 +654,7 @@ def lambda_handler(event, context):
         )
 
         # Canary script
-        canary_script = '''
-const synthetics = require('Synthetics');
+        canary_script = '''const synthetics = require('Synthetics');
 const log = require('SyntheticsLogger');
 
 const apiCanaryBlueprint = async function () {
@@ -665,6 +685,9 @@ exports.handler = async () => {
 };
 '''
 
+        # Create zip file with Canary code
+        canary_zip_content = self.create_zip_base64(canary_script, "nodejs/node_modules/index.js")
+
         # Create Synthetics Canary
         synthetics_canary = SyntheticsCanary(
             self,
@@ -673,7 +696,7 @@ exports.handler = async () => {
             artifact_s3_location=f"s3://{canary_bucket.id}/",
             execution_role_arn=canary_role.arn,
             handler="index.handler",
-            zip_file=canary_script,
+            zip_file=canary_zip_content,
             runtime_version="syn-nodejs-puppeteer-6.2",
             start_canary=True,
             schedule={
