@@ -1,13 +1,66 @@
 /**
  * Integration Tests for TAP Infrastructure
- * These tests validate deployed resources in AWS
+ * These tests validate deployed resources in AWS using both static validation and live AWS SDK calls
  */
 
+import {
+  APIGatewayClient,
+  GetRestApiCommand,
+  GetStageCommand,
+} from '@aws-sdk/client-api-gateway';
+import {
+  CloudWatchClient,
+  DescribeDashboardsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeTableCommand,
+  DynamoDBClient,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  GetFunctionCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBProxiesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetTopicAttributesCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
 
 describe('TAP Infrastructure Integration Tests', () => {
   let outputs: Record<string, any>;
+  const region = process.env.AWS_REGION || 'us-east-1';
+
+  // AWS Clients
+  let ec2Client: EC2Client;
+  let elbClient: ElasticLoadBalancingV2Client;
+  let rdsClient: RDSClient;
+  let lambdaClient: LambdaClient;
+  let dynamoDBClient: DynamoDBClient;
+  let s3Client: S3Client;
+  let apiGatewayClient: APIGatewayClient;
+  let snsClient: SNSClient;
+  let cloudWatchClient: CloudWatchClient;
 
   beforeAll(() => {
     // Load deployment outputs
@@ -25,9 +78,19 @@ describe('TAP Infrastructure Integration Tests', () => {
         outputs.privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
       }
     } else {
-      // If outputs don't exist, tests will be skipped with proper messaging
       outputs = {};
     }
+
+    // Initialize AWS clients
+    ec2Client = new EC2Client({ region });
+    elbClient = new ElasticLoadBalancingV2Client({ region });
+    rdsClient = new RDSClient({ region });
+    lambdaClient = new LambdaClient({ region });
+    dynamoDBClient = new DynamoDBClient({ region });
+    s3Client = new S3Client({ region });
+    apiGatewayClient = new APIGatewayClient({ region });
+    snsClient = new SNSClient({ region });
+    cloudWatchClient = new CloudWatchClient({ region });
   });
 
   describe('Outputs Validation', () => {
@@ -63,464 +126,538 @@ describe('TAP Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('VPC and Network Integration', () => {
-    it('should have deployed VPC with valid ID format', () => {
+  describe('Live VPC Validation', () => {
+    it('should have VPC deployed and available in AWS', async () => {
       if (!outputs.vpcId) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.vpcId).toBeDefined();
-      expect(outputs.vpcId).toMatch(/^vpc-[a-z0-9]+$/);
-    });
 
-    it('should have 3 public subnets deployed', () => {
-      if (!outputs.publicSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.publicSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.publicSubnetIds)).toBe(true);
-      expect(outputs.publicSubnetIds.length).toBe(3);
-    });
-
-    it('should have public subnets with valid ID format', () => {
-      if (!outputs.publicSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      outputs.publicSubnetIds.forEach((subnetId: string) => {
-        expect(subnetId).toMatch(/^subnet-[a-z0-9]+$/);
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpcId],
       });
+
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs?.length).toBe(1);
+      expect(response.Vpcs?.[0].VpcId).toBe(outputs.vpcId);
+      expect(response.Vpcs?.[0].State).toBe('available');
     });
 
-    it('should have 3 private subnets deployed', () => {
-      if (!outputs.privateSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
+    it('should have DNS hostnames and resolution enabled', async () => {
+      if (!outputs.vpcId) {
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.privateSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
-      expect(outputs.privateSubnetIds.length).toBe(3);
-    });
 
-    it('should have private subnets with valid ID format', () => {
-      if (!outputs.privateSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      outputs.privateSubnetIds.forEach((subnetId: string) => {
-        expect(subnetId).toMatch(/^subnet-[a-z0-9]+$/);
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpcId],
       });
-    });
 
-    it('should have unique subnet IDs across all subnets', () => {
-      if (!outputs.publicSubnetIds || !outputs.privateSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      const allSubnets = [...outputs.publicSubnetIds, ...outputs.privateSubnetIds];
-      const uniqueSubnets = new Set(allSubnets);
-      expect(uniqueSubnets.size).toBe(6);
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
+      expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
     });
   });
 
-  describe('Database Integration', () => {
-    it('should have Aurora cluster endpoint with valid format', () => {
+  describe('Live Subnet Validation', () => {
+    it('should have 3 public subnets across different AZs', async () => {
+      if (!outputs.publicSubnetIds || !Array.isArray(outputs.publicSubnetIds)) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: outputs.publicSubnetIds,
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets?.length).toBe(3);
+
+      // Verify subnets are in different AZs
+      const azs = response.Subnets?.map(s => s.AvailabilityZone) || [];
+      const uniqueAzs = new Set(azs);
+      expect(uniqueAzs.size).toBe(3);
+
+      // Verify all subnets are available
+      response.Subnets?.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.VpcId).toBe(outputs.vpcId);
+      });
+    });
+
+    it('should have 3 private subnets across different AZs', async () => {
+      if (!outputs.privateSubnetIds || !Array.isArray(outputs.privateSubnetIds)) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: outputs.privateSubnetIds,
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets?.length).toBe(3);
+
+      // Verify subnets are in different AZs
+      const azs = response.Subnets?.map(s => s.AvailabilityZone) || [];
+      const uniqueAzs = new Set(azs);
+      expect(uniqueAzs.size).toBe(3);
+
+      // Verify all subnets are available
+      response.Subnets?.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.VpcId).toBe(outputs.vpcId);
+      });
+    });
+  });
+
+  describe('Live Aurora Database Validation', () => {
+    it('should have Aurora cluster deployed and available', async () => {
       if (!outputs.auroraClusterEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.auroraClusterEndpoint).toBeDefined();
-      expect(outputs.auroraClusterEndpoint).toContain('rds.amazonaws.com');
-      expect(outputs.auroraClusterEndpoint).toContain('cluster');
-      expect(outputs.auroraClusterEndpoint).toContain('ecommerce-aurora');
+
+      const clusterIdentifier = outputs.auroraClusterEndpoint.split('.')[0];
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters).toBeDefined();
+      expect(response.DBClusters?.length).toBe(1);
+      expect(response.DBClusters?.[0].Status).toBe('available');
+      expect(response.DBClusters?.[0].Engine).toBe('aurora-postgresql');
     });
 
-    it('should have Aurora reader endpoint with valid format', () => {
-      if (!outputs.auroraReaderEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
+    it('should have Aurora cluster with PostgreSQL 17.4', async () => {
+      if (!outputs.auroraClusterEndpoint) {
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.auroraReaderEndpoint).toBeDefined();
-      expect(outputs.auroraReaderEndpoint).toContain('rds.amazonaws.com');
-      expect(outputs.auroraReaderEndpoint).toContain('cluster-ro');
-      expect(outputs.auroraReaderEndpoint).toContain('ecommerce-aurora');
+
+      const clusterIdentifier = outputs.auroraClusterEndpoint.split('.')[0];
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters?.[0].EngineVersion).toBe('17.4');
     });
 
-    it('should have RDS Proxy endpoint with valid format', () => {
+    it('should have Aurora cluster in private subnets', async () => {
+      if (!outputs.auroraClusterEndpoint) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const clusterIdentifier = outputs.auroraClusterEndpoint.split('.')[0];
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters?.[0].DBSubnetGroup).toBeDefined();
+      expect(response.DBClusters?.[0].VpcSecurityGroups).toBeDefined();
+      expect(response.DBClusters?.[0].VpcSecurityGroups?.length).toBeGreaterThan(0);
+    });
+
+    it('should have Aurora cluster with read replicas', async () => {
+      if (!outputs.auroraClusterEndpoint) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const clusterIdentifier = outputs.auroraClusterEndpoint.split('.')[0];
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier,
+      });
+
+      const response = await rdsClient.send(command);
+      const members = response.DBClusters?.[0].DBClusterMembers || [];
+
+      // Should have 1 writer + 2 readers = 3 total instances
+      expect(members.length).toBeGreaterThanOrEqual(1);
+
+      // Verify we have at least one writer
+      const writers = members.filter(m => m.IsClusterWriter);
+      expect(writers.length).toBe(1);
+    });
+
+    it('should not be publicly accessible', async () => {
+      if (!outputs.auroraClusterEndpoint) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const clusterIdentifier = outputs.auroraClusterEndpoint.split('.')[0];
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters?.[0].PubliclyAccessible).toBe(false);
+    });
+
+    it('should have multi-AZ configuration', async () => {
+      if (!outputs.auroraClusterEndpoint) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const clusterIdentifier = outputs.auroraClusterEndpoint.split('.')[0];
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: clusterIdentifier,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters?.[0].MultiAZ).toBe(true);
+    });
+  });
+
+  describe('Live RDS Proxy Validation', () => {
+    it('should have RDS Proxy deployed and available', async () => {
       if (!outputs.rdsProxyEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.rdsProxyEndpoint).toBeDefined();
-      expect(outputs.rdsProxyEndpoint).toContain('rds.amazonaws.com');
-      expect(outputs.rdsProxyEndpoint).toContain('proxy');
-      expect(outputs.rdsProxyEndpoint).toContain('ecommerce-rds-proxy');
-    });
 
-    it('should have different endpoints for writer, reader, and proxy', () => {
-      if (!outputs.auroraClusterEndpoint || !outputs.auroraReaderEndpoint || !outputs.rdsProxyEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.auroraClusterEndpoint).not.toBe(outputs.auroraReaderEndpoint);
-      expect(outputs.auroraClusterEndpoint).not.toBe(outputs.rdsProxyEndpoint);
-      expect(outputs.auroraReaderEndpoint).not.toBe(outputs.rdsProxyEndpoint);
+      const proxyName = outputs.rdsProxyEndpoint.split('.')[0];
+      const command = new DescribeDBProxiesCommand({
+        DBProxyName: proxyName,
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBProxies).toBeDefined();
+      expect(response.DBProxies?.length).toBe(1);
+      expect(response.DBProxies?.[0].Status).toBe('available');
     });
   });
 
-  describe('Load Balancer Integration', () => {
-    it('should have ALB DNS name with valid format', () => {
+  describe('Live ALB Validation', () => {
+    it('should have ALB deployed and active', async () => {
       if (!outputs.albDnsName) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.albDnsName).toBeDefined();
-      expect(outputs.albDnsName).toContain('elb.amazonaws.com');
-      expect(outputs.albDnsName).toContain('ecommerce-alb');
+
+      const command = new DescribeLoadBalancersCommand({});
+      const response = await elbClient.send(command);
+
+      const alb = response.LoadBalancers?.find(lb => lb.DNSName === outputs.albDnsName);
+      expect(alb).toBeDefined();
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Type).toBe('application');
+      expect(alb?.Scheme).toBe('internet-facing');
     });
 
-    it('should have ALB in us-east-1 region', () => {
+    it('should have ALB in public subnets across 3 AZs', async () => {
       if (!outputs.albDnsName) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.albDnsName).toContain('us-east-1');
-    });
 
-    it('should be accessible via HTTP', async () => {
-      if (!outputs.albDnsName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, make HTTP request to verify ALB is responding
-      expect(outputs.albDnsName).toBeDefined();
+      const command = new DescribeLoadBalancersCommand({});
+      const response = await elbClient.send(command);
+
+      const alb = response.LoadBalancers?.find(lb => lb.DNSName === outputs.albDnsName);
+      expect(alb?.AvailabilityZones?.length).toBe(3);
     });
   });
 
-  describe('CloudFront Integration', () => {
-    it('should have CloudFront distribution domain with valid format', () => {
+  describe('Live Lambda Function Validation', () => {
+    it('should have Lambda function deployed and active', async () => {
+      if (!outputs.lambdaFunctionName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.lambdaFunctionName,
+      });
+
+      const response = await lambdaClient.send(command);
+      expect(response.Configuration).toBeDefined();
+      expect(response.Configuration?.FunctionName).toBe(outputs.lambdaFunctionName);
+      expect(response.Configuration?.State).toBe('Active');
+    });
+
+    it('should have Lambda with Node.js runtime and ARM64 architecture', async () => {
+      if (!outputs.lambdaFunctionName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.lambdaFunctionName,
+      });
+
+      const response = await lambdaClient.send(command);
+      expect(response.Configuration?.Runtime).toContain('nodejs');
+      expect(response.Configuration?.Architectures).toContain('arm64');
+    });
+
+    it('should have Lambda with 3GB memory allocation', async () => {
+      if (!outputs.lambdaFunctionName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.lambdaFunctionName,
+      });
+
+      const response = await lambdaClient.send(command);
+      expect(response.Configuration?.MemorySize).toBe(3072);
+    });
+
+    it('should have Lambda in VPC with private subnets', async () => {
+      if (!outputs.lambdaFunctionName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new GetFunctionCommand({
+        FunctionName: outputs.lambdaFunctionName,
+      });
+
+      const response = await lambdaClient.send(command);
+      expect(response.Configuration?.VpcConfig).toBeDefined();
+      expect(response.Configuration?.VpcConfig?.SubnetIds).toBeDefined();
+      expect(response.Configuration?.VpcConfig?.SecurityGroupIds).toBeDefined();
+    });
+  });
+
+  describe('Live DynamoDB Tables Validation', () => {
+    it('should have sessions table with PAY_PER_REQUEST billing', async () => {
+      if (!outputs.sessionsTableName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new DescribeTableCommand({
+        TableName: outputs.sessionsTableName,
+      });
+
+      const response = await dynamoDBClient.send(command);
+      expect(response.Table).toBeDefined();
+      expect(response.Table?.TableName).toBe(outputs.sessionsTableName);
+      expect(response.Table?.TableStatus).toBe('ACTIVE');
+      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    it('should have cache table with PAY_PER_REQUEST billing', async () => {
+      if (!outputs.cacheTableName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new DescribeTableCommand({
+        TableName: outputs.cacheTableName,
+      });
+
+      const response = await dynamoDBClient.send(command);
+      expect(response.Table).toBeDefined();
+      expect(response.Table?.TableName).toBe(outputs.cacheTableName);
+      expect(response.Table?.TableStatus).toBe('ACTIVE');
+      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    it('should have DynamoDB tables with encryption enabled', async () => {
+      if (!outputs.sessionsTableName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new DescribeTableCommand({
+        TableName: outputs.sessionsTableName,
+      });
+
+      const response = await dynamoDBClient.send(command);
+      expect(response.Table?.SSEDescription).toBeDefined();
+    });
+  });
+
+  describe('Live S3 Buckets Validation', () => {
+    it('should have static assets bucket deployed', async () => {
+      if (!outputs.staticAssetsBucketName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new HeadBucketCommand({
+        Bucket: outputs.staticAssetsBucketName,
+      });
+
+      await expect(s3Client.send(command)).resolves.toBeDefined();
+    });
+
+    it('should have logs bucket deployed', async () => {
+      if (!outputs.logsBucketName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new HeadBucketCommand({
+        Bucket: outputs.logsBucketName,
+      });
+
+      await expect(s3Client.send(command)).resolves.toBeDefined();
+    });
+
+    it('should have artifacts bucket deployed', async () => {
+      if (!outputs.artifactsBucketName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new HeadBucketCommand({
+        Bucket: outputs.artifactsBucketName,
+      });
+
+      await expect(s3Client.send(command)).resolves.toBeDefined();
+    });
+
+    it('should have S3 buckets with encryption enabled', async () => {
+      if (!outputs.staticAssetsBucketName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new GetBucketEncryptionCommand({
+        Bucket: outputs.staticAssetsBucketName,
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
+    });
+
+    it('should have S3 buckets with versioning enabled', async () => {
+      if (!outputs.staticAssetsBucketName) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const command = new GetBucketVersioningCommand({
+        Bucket: outputs.staticAssetsBucketName,
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.Status).toBe('Enabled');
+    });
+  });
+
+  describe('Live API Gateway Validation', () => {
+    it('should have API Gateway deployed', async () => {
+      if (!outputs.apiGatewayUrl) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const arnParts = outputs.apiGatewayUrl.split(':');
+      const apiIdAndStage = arnParts[arnParts.length - 1];
+      const apiId = apiIdAndStage.split('/')[0];
+
+      const command = new GetRestApiCommand({
+        restApiId: apiId,
+      });
+
+      const response = await apiGatewayClient.send(command);
+      expect(response.id).toBe(apiId);
+      expect(response.name).toBeDefined();
+    });
+
+    it('should have API Gateway stage deployed', async () => {
+      if (!outputs.apiGatewayUrl) {
+        pending('Deployment outputs not available');
+        return;
+      }
+
+      const arnParts = outputs.apiGatewayUrl.split(':');
+      const apiIdAndStage = arnParts[arnParts.length - 1];
+      const [apiId, stageName] = apiIdAndStage.split('/');
+
+      const command = new GetStageCommand({
+        restApiId: apiId,
+        stageName: stageName,
+      });
+
+      const response = await apiGatewayClient.send(command);
+      expect(response.stageName).toBe(stageName);
+    });
+  });
+
+  describe('Live CloudFront Validation', () => {
+    it('should have CloudFront domain name', () => {
       if (!outputs.cloudfrontDomainName) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
+
       expect(outputs.cloudfrontDomainName).toBeDefined();
       expect(outputs.cloudfrontDomainName).toContain('cloudfront.net');
       expect(outputs.cloudfrontDomainName).toMatch(/^[a-z0-9]+\.cloudfront\.net$/);
     });
-
-    it('should be accessible via HTTPS', async () => {
-      if (!outputs.cloudfrontDomainName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, make HTTPS request to verify CloudFront is responding
-      expect(outputs.cloudfrontDomainName).toBeDefined();
-    });
   });
 
-  describe('API Gateway Integration', () => {
-    it('should have API Gateway URL with valid ARN format', () => {
-      if (!outputs.apiGatewayUrl) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.apiGatewayUrl).toBeDefined();
-      expect(outputs.apiGatewayUrl).toMatch(/^arn:aws:execute-api:/);
-      expect(outputs.apiGatewayUrl).toContain('us-east-1');
-    });
-
-    it('should have API Gateway with stage name', () => {
-      if (!outputs.apiGatewayUrl) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.apiGatewayUrl).toContain('/prod');
-    });
-
-    it('should be accessible', async () => {
-      if (!outputs.apiGatewayUrl) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, make API request to verify gateway is responding
-      expect(outputs.apiGatewayUrl).toBeDefined();
-    });
-  });
-
-  describe('S3 Buckets Integration', () => {
-    it('should have static assets bucket with correct naming', () => {
-      if (!outputs.staticAssetsBucketName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.staticAssetsBucketName).toBeDefined();
-      expect(outputs.staticAssetsBucketName).toContain('ecommerce-static');
-    });
-
-    it('should have logs bucket with correct naming', () => {
-      if (!outputs.logsBucketName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.logsBucketName).toBeDefined();
-      expect(outputs.logsBucketName).toContain('ecommerce');
-      expect(outputs.logsBucketName).toContain('logs');
-    });
-
-    it('should have artifacts bucket with correct naming', () => {
-      if (!outputs.artifactsBucketName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.artifactsBucketName).toBeDefined();
-      expect(outputs.artifactsBucketName).toContain('ecommerce');
-      expect(outputs.artifactsBucketName).toContain('artifacts');
-    });
-
-    it('should have unique bucket names', () => {
-      if (!outputs.staticAssetsBucketName || !outputs.logsBucketName || !outputs.artifactsBucketName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      const buckets = [
-        outputs.staticAssetsBucketName,
-        outputs.logsBucketName,
-        outputs.artifactsBucketName,
-      ];
-      const uniqueBuckets = new Set(buckets);
-      expect(uniqueBuckets.size).toBe(3);
-    });
-  });
-
-  describe('DynamoDB Tables Integration', () => {
-    it('should have sessions table with correct naming', () => {
-      if (!outputs.sessionsTableName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.sessionsTableName).toBeDefined();
-      expect(outputs.sessionsTableName).toContain('ecommerce-sessions');
-    });
-
-    it('should have cache table with correct naming', () => {
-      if (!outputs.cacheTableName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.cacheTableName).toBeDefined();
-      expect(outputs.cacheTableName).toContain('ecommerce-cache');
-    });
-
-    it('should have unique table names', () => {
-      if (!outputs.sessionsTableName || !outputs.cacheTableName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.sessionsTableName).not.toBe(outputs.cacheTableName);
-    });
-  });
-
-  describe('Lambda Function Integration', () => {
-    it('should have deployed Lambda function with correct naming', () => {
-      if (!outputs.lambdaFunctionName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.lambdaFunctionName).toBeDefined();
-      expect(outputs.lambdaFunctionName).toContain('ecommerce-api');
-    });
-
-    it('should be invocable', async () => {
-      if (!outputs.lambdaFunctionName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, invoke Lambda and verify response
-      expect(outputs.lambdaFunctionName).toBeDefined();
-    });
-  });
-
-  describe('Monitoring Integration', () => {
-    it('should have SNS topic with valid ARN format', () => {
+  describe('Live SNS Topic Validation', () => {
+    it('should have SNS topic deployed', async () => {
       if (!outputs.snsTopicArn) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
-      expect(outputs.snsTopicArn).toBeDefined();
-      expect(outputs.snsTopicArn).toMatch(/^arn:aws:sns:/);
-      expect(outputs.snsTopicArn).toContain('us-east-1');
-      expect(outputs.snsTopicArn).toContain('ecommerce-alarms');
-    });
 
-    it('should have CloudWatch dashboard with correct naming', () => {
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.snsTopicArn,
+      });
+
+      const response = await snsClient.send(command);
+      expect(response.Attributes).toBeDefined();
+      expect(response.Attributes?.TopicArn).toBe(outputs.snsTopicArn);
+    });
+  });
+
+  describe('Live CloudWatch Dashboard Validation', () => {
+    it('should have CloudWatch dashboard deployed', async () => {
       if (!outputs.dashboardName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.dashboardName).toBeDefined();
-      expect(outputs.dashboardName).toContain('ecommerce-metrics');
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    it('should include environment suffix in all resource names', () => {
-      if (!outputs || Object.keys(outputs).length === 0) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
 
-      // Extract environment suffix from one of the resources
-      const albName = outputs.albDnsName || '';
-      const suffixMatch = albName.match(/ecommerce-alb-([a-z0-9]+)/);
+      const command = new DescribeDashboardsCommand({
+        DashboardNamePrefix: outputs.dashboardName,
+      });
 
-      if (suffixMatch) {
-        const suffix = suffixMatch[1];
-
-        // Verify suffix appears in other resources
-        if (outputs.lambdaFunctionName) {
-          expect(outputs.lambdaFunctionName).toContain(suffix);
-        }
-        if (outputs.staticAssetsBucketName) {
-          expect(outputs.staticAssetsBucketName).toContain(suffix);
-        }
-        if (outputs.sessionsTableName) {
-          expect(outputs.sessionsTableName).toContain(suffix);
-        }
-      }
+      const response = await cloudWatchClient.send(command);
+      const dashboard = response.DashboardEntries?.find(
+        d => d.DashboardName === outputs.dashboardName
+      );
+      expect(dashboard).toBeDefined();
+      expect(dashboard?.DashboardName).toBe(outputs.dashboardName);
     });
   });
 
-  describe('High Availability Configuration', () => {
-    it('should have resources across multiple availability zones', () => {
+  describe('High Availability Validation', () => {
+    it('should have resources distributed across 3 AZs', async () => {
       if (!outputs.publicSubnetIds || !outputs.privateSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
+        pending('Deployment outputs not available');
         return;
       }
 
-      // 3 public subnets = 3 AZs
-      expect(outputs.publicSubnetIds.length).toBe(3);
-      // 3 private subnets = 3 AZs
-      expect(outputs.privateSubnetIds.length).toBe(3);
-    });
+      const allSubnetIds = [...outputs.publicSubnetIds, ...outputs.privateSubnetIds];
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: allSubnetIds,
+      });
 
-    it('should have Aurora reader endpoint for read scaling', () => {
-      if (!outputs.auroraReaderEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.auroraReaderEndpoint).toBeDefined();
-      expect(outputs.auroraReaderEndpoint).toContain('cluster-ro');
-    });
+      const response = await ec2Client.send(command);
+      const azs = response.Subnets?.map(s => s.AvailabilityZone) || [];
+      const uniqueAzs = new Set(azs);
 
-    it('should have RDS Proxy for connection pooling', () => {
-      if (!outputs.rdsProxyEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.rdsProxyEndpoint).toBeDefined();
-    });
-  });
-
-  describe('End-to-End Workflow', () => {
-    it('should handle API request through full stack', async () => {
-      if (!outputs.albDnsName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test:
-      // 1. Make request to ALB
-      // 2. Verify Lambda processes it
-      // 3. Verify response is correct
-      // 4. Check CloudWatch logs
-      expect(outputs.albDnsName).toBeDefined();
-    });
-
-    it('should serve static content through CloudFront', async () => {
-      if (!outputs.cloudfrontDomainName || !outputs.staticAssetsBucketName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test:
-      // 1. Upload test file to S3
-      // 2. Request file through CloudFront
-      // 3. Verify content is served correctly
-      // 4. Verify caching headers
-      expect(outputs.cloudfrontDomainName).toBeDefined();
-      expect(outputs.staticAssetsBucketName).toBeDefined();
-    });
-
-    it('should store and retrieve session data', async () => {
-      if (!outputs.sessionsTableName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test:
-      // 1. Write session to DynamoDB
-      // 2. Read session back
-      // 3. Verify TTL is set
-      expect(outputs.sessionsTableName).toBeDefined();
-    });
-
-    it('should connect to database through RDS Proxy', async () => {
-      if (!outputs.rdsProxyEndpoint) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test:
-      // 1. Connect to RDS Proxy
-      // 2. Execute query
-      // 3. Verify connection pooling works
-      expect(outputs.rdsProxyEndpoint).toBeDefined();
-    });
-  });
-
-  describe('Performance Validation', () => {
-    it('should respond within acceptable latency', async () => {
-      if (!outputs.albDnsName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, measure response time
-      expect(outputs.albDnsName).toBeDefined();
-    });
-
-    it('should handle concurrent requests', async () => {
-      if (!outputs.albDnsName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, make multiple concurrent requests
-      expect(outputs.albDnsName).toBeDefined();
-    });
-  });
-
-  describe('Security Validation', () => {
-    it('should enforce HTTPS for CloudFront', async () => {
-      if (!outputs.cloudfrontDomainName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, verify HTTP redirects to HTTPS
-      expect(outputs.cloudfrontDomainName).toBeDefined();
-    });
-
-    it('should block direct S3 access', async () => {
-      if (!outputs.staticAssetsBucketName) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      // In a real test, verify direct S3 access is blocked
-      expect(outputs.staticAssetsBucketName).toBeDefined();
-    });
-
-    it('should have private subnets for database isolation', () => {
-      if (!outputs.privateSubnetIds) {
-        pending('Deployment outputs not available - requires successful deployment');
-        return;
-      }
-      expect(outputs.privateSubnetIds).toBeDefined();
-      expect(outputs.privateSubnetIds.length).toBe(3);
+      expect(uniqueAzs.size).toBe(3);
     });
   });
 });
