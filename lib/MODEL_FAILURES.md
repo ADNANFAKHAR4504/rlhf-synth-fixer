@@ -282,3 +282,77 @@ All 13 AWS services from metadata.json successfully implemented:
 ## Conclusion
 
 All identified issues have been resolved, resulting in a production-ready multi-region disaster recovery architecture. The implementation follows Terraform and AWS best practices, includes comprehensive testing, and provides complete documentation for future reference and training purposes.
+
+## Additional Issues Found During Deployment
+
+### 4. Aurora PostgreSQL Version Not Supporting Global Database
+
+**Impact Level**: High (Deployment Blocker)
+
+**What Went Wrong**:
+The initial implementation used Aurora PostgreSQL 15.4, which does not support Global Database functionality:
+
+```hcl
+resource "aws_rds_global_cluster" "main" {
+  provider                  = aws.primary
+  global_cluster_identifier = "aurora-global-${var.environment_suffix}"
+  engine                    = "aurora-postgresql"
+  engine_version            = "15.4"  # WRONG - doesn't support Global Database
+  database_name             = var.db_name
+  storage_encrypted         = true
+}
+```
+
+**Evidence**:
+```
+Error: creating RDS Global Cluster (aurora-global-synthr1z4o2a6): 
+operation error RDS: CreateGlobalCluster, 
+https response error StatusCode: 400, RequestID: 25559fad-45a1-4c0b-a361-0fec4ea3a21a, 
+api error InvalidParameterValue: The requested engine version was not found 
+or does not support global functionality
+```
+
+**Root Cause**:
+Aurora PostgreSQL 15.x versions do not yet support Aurora Global Database functionality. Only specific versions of Aurora PostgreSQL support Global Database:
+- 11.9 and higher
+- 12.4 and higher
+- 13.3 and higher
+- 14.3 and higher (including 14.9)
+- 15.x NOT YET SUPPORTED
+
+**Correct Implementation**:
+
+```hcl
+resource "aws_rds_global_cluster" "main" {
+  provider                  = aws.primary
+  global_cluster_identifier = "aurora-global-${var.environment_suffix}"
+  engine                    = "aurora-postgresql"
+  engine_version            = "14.9"  # CORRECT - fully supports Global Database
+  database_name             = var.db_name
+  storage_encrypted         = true
+}
+```
+
+**Key Learnings**:
+- Always verify Aurora version compatibility with Global Database feature
+- Aurora PostgreSQL 14.9 is the latest stable version supporting Global Database
+- Not all Aurora versions support all features (Global Database, Backtrack, etc.)
+- Check AWS documentation for feature availability by version
+- Use `aws rds describe-global-clusters --query 'GlobalClusters[*].[Engine,EngineVersion]'` to see supported versions
+
+**AWS Documentation Reference**:
+https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html
+
+**Files Modified**:
+- `lib/aurora-global-database.tf` - Changed engine_version from "15.4" to "14.9"
+- `lib/IDEAL_RESPONSE.md` - Updated to reflect correct version
+
+**Deployment Impact**:
+This was a deployment blocker. Without this fix, the entire infrastructure deployment fails at the Aurora Global Cluster creation step, preventing all subsequent resources from being created.
+
+**Prevention**:
+- Check Aurora version compatibility during planning phase
+- Use AWS CLI to verify supported versions before deployment
+- Add version validation to CI/CD pipeline
+- Include version compatibility in documentation
+
