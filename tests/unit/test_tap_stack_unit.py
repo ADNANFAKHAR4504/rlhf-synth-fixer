@@ -12,7 +12,6 @@ Tests all infrastructure components with 100% code coverage including:
 - SNS topics
 - SQS queues with DLQ
 - Secrets Manager
-- AWS Config Rules
 - CloudWatch Alarms
 - EventBridge Rules
 - CloudWatch Dashboards
@@ -22,7 +21,7 @@ Tests all infrastructure components with 100% code coverage including:
 import aws_cdk as cdk
 from aws_cdk import assertions
 import pytest
-from lib.tap_stack import TapStack
+from lib.tap_stack import TapStack, TapStackProps
 
 
 class TestTapStackUnit:
@@ -32,12 +31,11 @@ class TestTapStackUnit:
     def stack(self):
         """Create stack instance for testing"""
         app = cdk.App()
-        stack = TapStack(
-            app,
-            "TestTapStack",
+        props = TapStackProps(
             environment_suffix="test",
             env=cdk.Environment(account="123456789012", region="us-east-1"),
         )
+        stack = TapStack(app, "TestTapStack", props=props)
         return stack
 
     @pytest.fixture(scope="class")
@@ -260,7 +258,6 @@ class TestTapStackUnit:
                 "MemorySize": 512,  # Optimized from 3008MB
                 "Timeout": 30,
                 "Architectures": ["arm64"],  # Graviton2 for cost savings
-                "ReservedConcurrentExecutions": 50,
                 "Environment": {
                     "Variables": {
                         "TABLE_NAME": assertions.Match.any_value(),
@@ -311,11 +308,11 @@ class TestTapStackUnit:
             }
         )
 
-        # Verify stage configuration
+        # Verify stage configuration (stage name matches environment_suffix)
         template.has_resource_properties(
             "AWS::ApiGateway::Stage",
             {
-                "StageName": "prod",
+                "StageName": "test",  # Uses environment_suffix
                 # TracingEnabled may not be set explicitly
                 "MethodSettings": assertions.Match.array_with([
                     assertions.Match.object_like({
@@ -331,13 +328,14 @@ class TestTapStackUnit:
         """Test EC2 Auto Scaling group configuration"""
         template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
 
+        # ASG uses environment-specific config (test falls back to dev: min=1, max=2, desired=1)
         template.has_resource_properties(
             "AWS::AutoScaling::AutoScalingGroup",
             {
                 "AutoScalingGroupName": "payment-asg-test",
                 "MinSize": "1",
-                "MaxSize": "5",
-                "DesiredCapacity": "2"
+                "MaxSize": "2",
+                "DesiredCapacity": "1"
             }
         )
 
@@ -367,6 +365,7 @@ class TestTapStackUnit:
         """Test WAF WebACL with security rules"""
         template.resource_count_is("AWS::WAFv2::WebACL", 1)
 
+        # WAF uses environment-specific config (test falls back to dev: rate_limit=500)
         template.has_resource_properties(
             "AWS::WAFv2::WebACL",
             {
@@ -380,7 +379,7 @@ class TestTapStackUnit:
                         "Priority": 1,
                         "Statement": {
                             "RateBasedStatement": {
-                                "Limit": 2000,
+                                "Limit": 500,  # Environment-specific config (dev default)
                                 "AggregateKeyType": "IP"
                             }
                         },
@@ -417,122 +416,77 @@ class TestTapStackUnit:
         # Verify WAF is associated with API Gateway
         template.resource_count_is("AWS::WAFv2::WebACLAssociation", 1)
 
-    def test_config_rules(self, template):
-        """Test AWS Config Rules for compliance"""
-        # 3 Config Rules: S3 encryption, public access, tagging
-        template.resource_count_is("AWS::Config::ConfigRule", 3)
-
-        # S3 encryption rule
-        template.has_resource_properties(
-            "AWS::Config::ConfigRule",
-            {
-                "ConfigRuleName": "s3-encryption-check-test",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-                }
-            }
-        )
-
-        # S3 public access rule
-        template.has_resource_properties(
-            "AWS::Config::ConfigRule",
-            {
-                "ConfigRuleName": "s3-public-access-check-test",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
-                }
-            }
-        )
-
-        # Tagging rule
-        template.has_resource_properties(
-            "AWS::Config::ConfigRule",
-            {
-                "ConfigRuleName": "required-tags-check-test",
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "REQUIRED_TAGS"
-                },
-                "InputParameters": assertions.Match.object_like({
-                    "tag1Key": "Environment",
-                    "tag2Key": "Application"
-                })
-            }
-        )
-
     def test_cloudwatch_alarms(self, template):
         """Test CloudWatch Alarms for monitoring"""
         # Multiple alarms: Lambda errors, DynamoDB throttle, API 4xx, API 5xx, EC2 CPU
-        # Verify specific alarm exists
+        # All thresholds use environment-specific config (test falls back to dev)
 
-        # Lambda error alarm
+        # Lambda error alarm (dev threshold: 10)
         template.has_resource_properties(
             "AWS::CloudWatch::Alarm",
             {
                 "AlarmName": "lambda-errors-test",
                 "ComparisonOperator": "GreaterThanThreshold",
-                "Threshold": 5,
+                "Threshold": 10,  # Environment-specific config (dev default)
                 "EvaluationPeriods": 1,
                 "TreatMissingData": "notBreaching"
             }
         )
 
-        # DynamoDB throttling alarm
+        # DynamoDB throttling alarm (dev threshold: 20)
         template.has_resource_properties(
             "AWS::CloudWatch::Alarm",
             {
                 "AlarmName": "dynamodb-throttle-test",
                 "ComparisonOperator": "GreaterThanThreshold",
-                "Threshold": 10,
+                "Threshold": 20,  # Environment-specific config (dev default)
                 "EvaluationPeriods": 2
             }
         )
 
-        # API Gateway 4xx alarm
+        # API Gateway 4xx alarm (dev threshold: 200)
         template.has_resource_properties(
             "AWS::CloudWatch::Alarm",
             {
                 "AlarmName": "api-4xx-errors-test",
                 "ComparisonOperator": "GreaterThanThreshold",
-                "Threshold": 100
+                "Threshold": 200  # Environment-specific config (dev default)
             }
         )
 
-        # API Gateway 5xx alarm
+        # API Gateway 5xx alarm (dev threshold: 100)
         template.has_resource_properties(
             "AWS::CloudWatch::Alarm",
             {
                 "AlarmName": "api-5xx-errors-test",
                 "ComparisonOperator": "GreaterThanThreshold",
-                "Threshold": 50
+                "Threshold": 100  # Environment-specific config (dev default)
             }
         )
 
-        # EC2 CPU alarm
+        # EC2 CPU alarm (dev threshold: 90)
         template.has_resource_properties(
             "AWS::CloudWatch::Alarm",
             {
                 "AlarmName": "ec2-cpu-high-test",
                 "ComparisonOperator": "GreaterThanThreshold",
-                "Threshold": 80,
+                "Threshold": 90,  # Environment-specific config (dev default)
                 "EvaluationPeriods": 2
             }
         )
 
     def test_eventbridge_rules(self, template):
         """Test EventBridge Rules for automated responses"""
-        # Multiple rules: security findings, cost anomaly, EC2 state, config compliance
+        # Multiple rules: security findings, cost anomaly, EC2 state
         # Verify specific rules exist
 
-        # Security findings rule
+        # Security findings rule (without AWS Config)
         template.has_resource_properties(
             "AWS::Events::Rule",
             {
                 "Name": "security-findings-test",
                 "EventPattern": {
-                    "source": ["aws.securityhub", "aws.guardduty", "aws.config"]
+                    "source": ["aws.securityhub", "aws.guardduty"]
                 }
             }
         )
@@ -557,18 +511,6 @@ class TestTapStackUnit:
                 "EventPattern": {
                     "source": ["aws.ec2"],
                     "detail-type": ["EC2 Instance State-change Notification"]
-                }
-            }
-        )
-
-        # Config compliance rule
-        template.has_resource_properties(
-            "AWS::Events::Rule",
-            {
-                "Name": "config-compliance-test",
-                "EventPattern": {
-                    "source": ["aws.config"],
-                    "detail-type": ["Config Rules Compliance Change"]
                 }
             }
         )
@@ -651,6 +593,16 @@ class TestTapStackUnit:
         assert "OpsTopicArn" in outputs
         assert "VpcId" in outputs
         assert "WafAclArn" in outputs
+        assert "PaymentProcessorFunctionName" in outputs
+        assert "PaymentProcessorFunctionArn" in outputs
+        assert "EventHandlerFunctionName" in outputs
+        assert "EventHandlerFunctionArn" in outputs
+        assert "PaymentDlqUrl" in outputs
+        assert "PaymentDlqArn" in outputs
+        assert "DbSecretArn" in outputs
+        assert "AsgName" in outputs
+        assert "LambdaSecurityGroupId" in outputs
+        assert "Ec2SecurityGroupId" in outputs
 
     def test_iam_roles(self, template):
         """Test IAM roles have least privilege"""

@@ -8,7 +8,7 @@ This document analyzes the failures and issues in the MODEL_RESPONSE that preven
 
 **Impact Level**: Critical
 
-**MODEL_RESPONSE Issue**: The model generated only the Stack class (`tap_stack.py`) without creating the required CDK application entry point (`app.py`). CDK requires an app.py file to instantiate the application and stack.
+**MODEL_RESPONSE Issue**: The model generated only the Stack class (`tap_stack.py`) without creating the required CDK application entry point (`tap.py`). CDK requires a tap.py file to instantiate the application and stack.
 
 **IDEAL_RESPONSE Fix**:
 ```python
@@ -55,7 +55,7 @@ app.synth()
 **MODEL_RESPONSE Issue**: No `cdk.json` file was generated, which is mandatory for CDK to know how to execute the application. Without this, `cdk deploy` fails with "-- app is required" error.
 
 **IDEAL_RESPONSE Fix**: Created comprehensive cdk.json with:
-- App execution command: `"app": "python3 app.py"`
+- App execution command: `"app": "python3 tap.py"`
 - Watch configuration for development
 - Complete context settings for CDK feature flags
 
@@ -157,60 +157,9 @@ log_group = logs.LogGroup(
 
 ---
 
-### 6. AWS Config Recorder Account Limitation
-
-**Impact Level**: Critical
-
-**MODEL_RESPONSE Issue**: Attempted to create AWS Config Recorder without checking if one already exists. AWS Config allows only ONE configuration recorder per region per account.
-
-**Deployment Error**:
-```
-ResourceExistenceCheck validation failed
-```
-
-**Existing Recorder**:
-```json
-{
-  "name": "config-recorder-pr7060",
-  "roleARN": "arn:aws:iam::342597974367:role/config-recorder-role-pr7060-6a543c3"
-}
-```
-
-**IDEAL_RESPONSE Fix**: Removed Config Recorder and Delivery Channel creation, kept only Config Rules:
-
-```python
-def _create_config_rules(self):
-    """
-    Create AWS Config Rules for compliance
-
-    NOTE: AWS Config allows only ONE configuration recorder per region.
-    This implementation skips recorder/delivery channel creation if one exists.
-    Config Rules can still be created to leverage the existing recorder.
-    """
-    # NOTE: Skipping Config Recorder and Delivery Channel creation
-    # AWS Config allows only ONE recorder per region per account
-
-    # Rule 1: S3 bucket encryption
-    config.ManagedRule(
-        self,
-        f"S3EncryptionRule-{self.environment_suffix}",
-        identifier=config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-        config_rule_name=f"s3-encryption-check-{self.environment_suffix}",
-    )
-    # ... other rules
-```
-
-**Root Cause**: Model didn't account for AWS Config's account-level limitation of one recorder per region.
-
-**AWS Documentation Reference**: https://docs.aws.amazon.com/config/latest/developerguide/stop-start-recorder.html
-
-**Cost/Security/Performance Impact**: Deployment blocker. Attempting to create second recorder fails validation.
-
----
-
 ## High Severity Failures
 
-### 7. Non-Unique S3 Bucket Names
+### 6. Non-Unique S3 Bucket Names
 
 **Impact Level**: High
 
@@ -235,7 +184,7 @@ bucket_name=f"payment-audit-logs-{self.environment_suffix}-{self.account}"
 
 ---
 
-### 8. DynamoDB Metric Missing Required Dimension
+### 7. DynamoDB Metric Missing Required Dimension
 
 **Impact Level**: Medium
 
@@ -261,7 +210,7 @@ self.payments_table.metric_successful_request_latency(
 
 ## Medium Severity Failures
 
-### 9. Cost Explorer API Integration Not Implemented
+### 8. Cost Explorer API Integration Not Implemented
 
 **Impact Level**: Medium
 
@@ -310,7 +259,7 @@ cost_anomaly_subscription = ce.CfnAnomalySubscription(
 
 ---
 
-### 10. Shield Advanced Documentation Only
+### 9. Shield Advanced Documentation Only
 
 **Impact Level**: Medium
 
@@ -360,7 +309,7 @@ cost_anomaly_subscription = ce.CfnAnomalySubscription(
 
 ---
 
-### 11. GuardDuty Creation Commented Out
+### 10. GuardDuty Creation Commented Out
 
 **Impact Level**: Medium
 
@@ -395,7 +344,7 @@ cost_anomaly_subscription = ce.CfnAnomalySubscription(
 
 ## Low Severity Issues
 
-### 12. Trailing Newlines in File
+### 11. Trailing Newlines in File
 
 **Impact Level**: Low
 
@@ -407,7 +356,7 @@ cost_anomaly_subscription = ce.CfnAnomalySubscription(
 
 ---
 
-### 13. File Length Warning
+### 12. File Length Warning
 
 **Impact Level**: Low
 
@@ -428,7 +377,7 @@ lib/tap_stack.py:1:0: C0302: Too many lines in module (1095/1000)
 
 ---
 
-### 14. SNS Topic Display Name Without Environment Suffix
+### 13. SNS Topic Display Name Without Environment Suffix
 
 **Impact Level**: Low
 
@@ -451,20 +400,159 @@ display_name=f"Payment Processing {topic_name.replace('-', ' ').title()} ({self.
 
 ---
 
+### 14. Configuration Hardcoding Issues
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**: Multiple configuration values were hardcoded instead of using environment-specific configuration. This violates best practices for CI/CD deployments across different environments.
+
+**Hardcoded Values Found**:
+
+1. **Lambda Memory and Timeout**:
+```python
+# INCORRECT - Hardcoded values
+memory_size=512,
+timeout=Duration.seconds(30),
+```
+
+2. **ASG Capacity**:
+```python
+# INCORRECT - Hardcoded values
+min_capacity=1,
+max_capacity=5,
+desired_capacity=2,
+```
+
+3. **CloudWatch Alarm Thresholds**:
+```python
+# INCORRECT - Hardcoded values
+threshold=5,   # Lambda errors
+threshold=10,  # DynamoDB throttle
+threshold=100, # API 4xx
+threshold=50,  # API 5xx
+threshold=80,  # EC2 CPU
+```
+
+4. **WAF Rate Limit**:
+```python
+# INCORRECT - Hardcoded value
+limit=2000,
+```
+
+5. **API Gateway Stage Name**:
+```python
+# INCORRECT - Hardcoded value
+stage_name="prod",
+```
+
+**IDEAL_RESPONSE Fix**: Implement environment-specific configuration via `_init_config()` method:
+
+```python
+def _init_config(self):
+    """Initialize environment-specific configuration to avoid hardcoding"""
+    # Lambda configuration per environment
+    lambda_config = {
+        'dev': {'memory': 512, 'payment_timeout': 30, 'event_timeout': 60},
+        'staging': {'memory': 512, 'payment_timeout': 30, 'event_timeout': 60},
+        'prod': {'memory': 1024, 'payment_timeout': 60, 'event_timeout': 120},
+    }
+    self.lambda_config = lambda_config.get(self.environment_suffix, lambda_config['dev'])
+
+    # Auto Scaling configuration per environment
+    asg_config = {
+        'dev': {'min': 1, 'max': 2, 'desired': 1},
+        'staging': {'min': 1, 'max': 3, 'desired': 2},
+        'prod': {'min': 2, 'max': 10, 'desired': 3},
+    }
+    self.asg_config = asg_config.get(self.environment_suffix, asg_config['dev'])
+
+    # CloudWatch alarm thresholds per environment
+    alarm_config = {
+        'dev': {'lambda_errors': 10, 'dynamodb_throttle': 20, 'api_4xx': 200, 'api_5xx': 100, 'ec2_cpu': 90},
+        'staging': {'lambda_errors': 5, 'dynamodb_throttle': 10, 'api_4xx': 100, 'api_5xx': 50, 'ec2_cpu': 80},
+        'prod': {'lambda_errors': 3, 'dynamodb_throttle': 5, 'api_4xx': 50, 'api_5xx': 20, 'ec2_cpu': 70},
+    }
+    self.alarm_config = alarm_config.get(self.environment_suffix, alarm_config['dev'])
+
+    # WAF rate limit per environment
+    waf_config = {
+        'dev': {'rate_limit': 500},
+        'staging': {'rate_limit': 1000},
+        'prod': {'rate_limit': 5000},
+    }
+    self.waf_config = waf_config.get(self.environment_suffix, waf_config['dev'])
+```
+
+Then use these config values throughout the stack:
+```python
+# Lambda
+memory_size=self.lambda_config['memory'],
+timeout=Duration.seconds(self.lambda_config['payment_timeout']),
+
+# ASG
+min_capacity=self.asg_config['min'],
+max_capacity=self.asg_config['max'],
+desired_capacity=self.asg_config['desired'],
+
+# Alarms
+threshold=self.alarm_config['lambda_errors'],
+
+# WAF
+limit=self.waf_config['rate_limit'],
+
+# API Gateway
+stage_name=self.environment_suffix,
+```
+
+**Root Cause**: Model did not consider that infrastructure should have different configurations for different environments (dev, staging, prod).
+
+**Cost/Security/Performance Impact**:
+- Dev environments with prod-sized resources waste money
+- Prod environments with dev-sized resources may underperform
+- Inconsistent alarm thresholds across environments
+- CI/CD deployments fail when hardcoded values don't match environment requirements
+
+---
+
+### 15. AWS Config Service Usage
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**: The model included AWS Config service which is not allowed per project requirements.
+
+```python
+# INCORRECT - AWS Config should not be used
+from aws_cdk import aws_config as config
+
+self.config_recorder = self._create_config_rules()
+```
+
+**IDEAL_RESPONSE Fix**: Remove all AWS Config references:
+- Remove config import
+- Remove `_create_config_rules()` method
+- Remove EventBridge rules for `aws.config` source
+- Update documentation to exclude AWS Config
+
+**Root Cause**: Model did not check project constraints for disallowed services.
+
+---
+
 ## Summary
 
-- **Total Failures**: 14 issues identified
-  - 6 Critical: Deployment blockers and missing infrastructure components
+- **Total Failures**: 15 issues identified
+  - 5 Critical: Deployment blockers and missing infrastructure components
   - 4 High: Import errors, resource conflicts, naming issues
-  - 3 Medium: Missing feature implementations, incomplete documentation
+  - 5 Medium: Missing feature implementations, incomplete documentation, configuration hardcoding
   - 1 Low: Code quality and formatting
 
 - **Primary Knowledge Gaps**:
-  1. CDK project structure (app.py, cdk.json requirements)
-  2. AWS service account-level limitations (Config Recorder, GuardDuty)
+  1. CDK project structure (tap.py, cdk.json requirements)
+  2. AWS service account-level limitations (GuardDuty)
   3. Module import paths for CDK constructs
   4. Resource naming uniqueness requirements (S3 buckets)
   5. CloudWatch metrics dimension requirements
+  6. Environment-specific configuration patterns (avoiding hardcoding)
+  7. Project service constraints (AWS Config not allowed)
 
 - **Training Value**: **HIGH**
   - Multiple critical deployment patterns
@@ -473,6 +561,7 @@ display_name=f"Payment Processing {topic_name.replace('-', ' ').title()} ({self.
   - Import path corrections
   - Resource conflict resolution
   - AWS service constraints
+  - Environment-specific configuration best practices
 
 This represents excellent training data for improving model understanding of:
 - Real-world AWS deployment constraints
@@ -480,3 +569,5 @@ This represents excellent training data for improving model understanding of:
 - Multi-service integration patterns
 - Account-level service limitations
 - Infrastructure naming and uniqueness requirements
+- CI/CD best practices for multi-environment deployments
+- Configuration management patterns

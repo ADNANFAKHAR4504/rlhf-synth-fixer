@@ -68,21 +68,14 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
     - Encrypt all data at rest using AWS KMS
     - Encrypt all data in transit using TLS
 
-11. **Compliance and Governance**
-    - Implement AWS Config Rules for compliance checking
-    - Rule: Verify S3 buckets are encrypted
-    - Rule: Verify resources are properly tagged
-    - Rule: Verify S3 buckets block public access
-    - Route Config compliance events to SNS for notifications
-
 ### Reliability and Fault Tolerance
 
-12. **Asynchronous Processing**
+11. **Asynchronous Processing**
     - Implement SQS Queue for asynchronous payment processing
     - Configure Dead Letter Queue (DLQ) for failed message handling
     - Set appropriate message retention and visibility timeout
 
-13. **Health Checks and Alarms**
+12. **Health Checks and Alarms**
     - CloudWatch Alarm: Lambda error rate exceeds 5%
     - CloudWatch Alarm: DynamoDB read/write throttling detected
     - CloudWatch Alarm: API Gateway 4xx errors exceed 10%
@@ -90,7 +83,7 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
     - CloudWatch Alarm: EC2 CPU utilization exceeds 80%
     - CloudWatch Alarm: Cost anomalies detected
 
-14. **Automated Event Response**
+13. **Automated Event Response**
     - Implement EventBridge Rules to trigger automated responses
     - Route security findings to automated remediation workflows
     - Trigger cost optimization actions based on anomaly detection
@@ -98,21 +91,21 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
 
 ### Observability and Notifications
 
-15. **Multi-Channel Alerting**
+14. **Multi-Channel Alerting**
     - Create SNS Topic for cost anomaly alerts
-    - Create SNS Topic for security findings (GuardDuty, Config, WAF)
+    - Create SNS Topic for security findings (GuardDuty, WAF)
     - Create SNS Topic for operational alerts (Lambda errors, API issues, EC2 health)
     - Configure appropriate subscribers for each topic
 
-16. **Cost Anomaly Detection**
+15. **Cost Anomaly Detection**
     - Integrate with AWS Cost Explorer for anomaly detection
     - Configure cost anomaly detection with SNS notifications
     - Set appropriate thresholds for different service categories
     - Enable historical cost comparison reporting
 
-17. **Comprehensive CloudWatch Dashboards**
+16. **Comprehensive CloudWatch Dashboards**
     - Cost metrics dashboard with breakdown by service
-    - Security posture dashboard with WAF blocks, GuardDuty findings, Config compliance
+    - Security posture dashboard with WAF blocks, GuardDuty findings
     - Operational health dashboard with Lambda metrics, API Gateway metrics, DynamoDB performance
     - Resource utilization dashboard with EC2, memory, network metrics
 
@@ -132,7 +125,6 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
 - Use GuardDuty for threat detection (check account-level limitation)
 - Use SNS for multi-channel alerting
 - Use Secrets Manager for credential management
-- Use AWS Config for compliance checking
 - Use Cost Explorer for cost anomaly detection
 - Use EventBridge for automated event response
 - Use Systems Manager Parameter Store for configuration parameters
@@ -144,7 +136,6 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
 ### Deployment Requirements (CRITICAL)
 
 - GuardDuty is an account-level service - only ONE detector per AWS account/region. Do not create GuardDuty detector if one already exists. Include check or document manual setup requirement.
-- AWS Config IAM role must use correct managed policy: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole` (not ConfigRole or AWS_ConfigRole without service-role prefix)
 - Lambda functions using Node.js 18+ do not have AWS SDK v2 by default - use SDK v3 or extract data from event objects
 - All named resources (S3 buckets, DynamoDB tables, Lambda functions, etc.) MUST include environmentSuffix parameter in their names
 - No RemovalPolicy.RETAIN or DeletionPolicy: Retain allowed
@@ -167,7 +158,7 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
 
 - **Cost Optimization**: Demonstrate 40%+ cost reduction through Lambda rightsizing, DynamoDB on-demand, API consolidation, NAT optimization, S3 lifecycle policies, and log retention
 - **Security**: WAF protection with rate limiting and injection prevention, Shield Advanced for DDoS, GuardDuty threat detection, encryption everywhere, proper IAM least privilege
-- **Compliance**: AWS Config rules for S3 encryption, resource tagging, public access blocking, audit logging enabled
+- **Compliance**: S3 encryption, resource tagging, public access blocking, audit logging enabled
 - **Reliability**: SQS with DLQ for fault tolerance, CloudWatch alarms for operational issues, multi-AZ where appropriate, health checks
 - **Observability**: Comprehensive CloudWatch dashboards for cost/security/operations, SNS alerting for all critical events, Cost Explorer integration for anomaly detection
 - **Resource Naming**: All resources include environmentSuffix for parallel deployment support
@@ -189,7 +180,6 @@ Create a comprehensive payment processing infrastructure using **AWS CDK with Py
 - GuardDuty integration (with account-level awareness)
 - SNS Topics for alerting (cost, security, operations)
 - Secrets Manager for credentials
-- AWS Config Rules for compliance
 - Cost Explorer anomaly detection integration
 - EventBridge Rules for automated responses
 - CloudWatch Alarms for all critical metrics

@@ -1,7 +1,12 @@
 # pylint: disable=too-many-lines
 # Comprehensive payment processing infrastructure with 18 AWS services
+from dataclasses import dataclass
+from typing import Optional
+
 from aws_cdk import (
     Stack,
+    StackProps,
+    Environment,
     aws_lambda as lambda_,
     aws_dynamodb as dynamodb,
     aws_apigateway as apigateway,
@@ -18,7 +23,6 @@ from aws_cdk import (
     aws_sns as sns,
     aws_sqs as sqs,
     aws_secretsmanager as secretsmanager,
-    aws_config as config,
     aws_events as events,
     aws_events_targets as targets,
     aws_ssm as ssm,
@@ -27,6 +31,14 @@ from aws_cdk import (
     CfnOutput,
 )
 from constructs import Construct
+
+
+@dataclass
+class TapStackProps:
+    """Properties for TapStack"""
+    environment_suffix: str
+    env: Optional[Environment] = None
+    description: Optional[str] = None
 
 
 class TapStack(Stack):
@@ -40,13 +52,20 @@ class TapStack(Stack):
     - Advanced security (WAF, Shield, GuardDuty)
     - Comprehensive monitoring and alerting
     - Cost anomaly detection
-    - Compliance controls (AWS Config)
     """
 
-    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
+    def __init__(self, scope: Construct, construct_id: str, props: TapStackProps) -> None:
+        super().__init__(
+            scope,
+            construct_id,
+            env=props.env,
+            description=props.description,
+        )
 
-        self.environment_suffix = environment_suffix
+        self.environment_suffix = props.environment_suffix
+
+        # Environment-specific configuration (avoid hardcoding)
+        self._init_config()
 
         # Create VPC with optimized networking
         self.vpc = self._create_vpc()
@@ -96,9 +115,6 @@ class TapStack(Stack):
         # Uncomment if this is the first stack in the account
         # self.guardduty_detector = self._create_guardduty()
 
-        # Create AWS Config Rules
-        self._create_config_rules()
-
         # Create CloudWatch Alarms
         self._create_cloudwatch_alarms()
 
@@ -113,6 +129,70 @@ class TapStack(Stack):
 
         # Outputs
         self._create_outputs()
+
+    def _init_config(self):
+        """Initialize environment-specific configuration to avoid hardcoding"""
+        # Lambda configuration per environment
+        lambda_config = {
+            'dev': {'memory': 512, 'payment_timeout': 30, 'event_timeout': 60},
+            'staging': {'memory': 512, 'payment_timeout': 30, 'event_timeout': 60},
+            'prod': {'memory': 1024, 'payment_timeout': 60, 'event_timeout': 120},
+        }
+        self.lambda_config = lambda_config.get(
+            self.environment_suffix,
+            lambda_config['dev']
+        )
+
+        # Auto Scaling configuration per environment
+        asg_config = {
+            'dev': {'min': 1, 'max': 2, 'desired': 1},
+            'staging': {'min': 1, 'max': 3, 'desired': 2},
+            'prod': {'min': 2, 'max': 10, 'desired': 3},
+        }
+        self.asg_config = asg_config.get(
+            self.environment_suffix,
+            asg_config['dev']
+        )
+
+        # CloudWatch alarm thresholds per environment
+        alarm_config = {
+            'dev': {
+                'lambda_errors': 10,
+                'dynamodb_throttle': 20,
+                'api_4xx': 200,
+                'api_5xx': 100,
+                'ec2_cpu': 90,
+            },
+            'staging': {
+                'lambda_errors': 5,
+                'dynamodb_throttle': 10,
+                'api_4xx': 100,
+                'api_5xx': 50,
+                'ec2_cpu': 80,
+            },
+            'prod': {
+                'lambda_errors': 3,
+                'dynamodb_throttle': 5,
+                'api_4xx': 50,
+                'api_5xx': 20,
+                'ec2_cpu': 70,
+            },
+        }
+        self.alarm_config = alarm_config.get(
+            self.environment_suffix,
+            alarm_config['dev']
+        )
+
+        # WAF rate limit per environment
+        waf_config = {
+            'dev': {'rate_limit': 500},
+            'staging': {'rate_limit': 1000},
+            'prod': {'rate_limit': 5000},
+        }
+        self.waf_config = waf_config.get(
+            self.environment_suffix,
+            waf_config['dev']
+        )
 
     def _create_vpc(self) -> ec2.Vpc:
         """Create VPC with optimized NAT configuration"""
@@ -380,10 +460,10 @@ def handler(event, context):
         }
 """),
             role=lambda_role,
-            memory_size=512,  # Optimized from 3008MB to 512MB
-            timeout=Duration.seconds(30),
+            memory_size=self.lambda_config['memory'],
+            timeout=Duration.seconds(self.lambda_config['payment_timeout']),
             architecture=lambda_.Architecture.ARM_64,  # Graviton2 for cost savings
-            reserved_concurrent_executions=50,  # Concurrency limit
+            # reserved_concurrent_executions removed - using on-demand concurrency
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[self.lambda_sg],
@@ -456,8 +536,8 @@ def handler(event, context):
     return {'statusCode': 200}
 """),
             role=lambda_role,
-            memory_size=512,  # Optimized memory
-            timeout=Duration.seconds(60),
+            memory_size=self.lambda_config['memory'],
+            timeout=Duration.seconds(self.lambda_config['event_timeout']),
             architecture=lambda_.Architecture.ARM_64,  # Graviton2
             environment={
                 "TABLE_NAME": self.payments_table.table_name,
@@ -481,7 +561,7 @@ def handler(event, context):
             rest_api_name=f"payment-api-{self.environment_suffix}",
             description="Consolidated Payment Processing API",
             deploy_options=apigateway.StageOptions(
-                stage_name="prod",
+                stage_name=self.environment_suffix,
                 throttling_rate_limit=1000,
                 throttling_burst_limit=2000,
                 logging_level=apigateway.MethodLoggingLevel.INFO,
@@ -553,9 +633,9 @@ def handler(event, context):
             role=ec2_role,
             security_group=self.ec2_sg,
             user_data=user_data,
-            min_capacity=1,
-            max_capacity=5,
-            desired_capacity=2,
+            min_capacity=self.asg_config['min'],
+            max_capacity=self.asg_config['max'],
+            desired_capacity=self.asg_config['desired'],
         )
 
         # CPU-based scaling
@@ -604,7 +684,7 @@ def handler(event, context):
                     priority=1,
                     statement=wafv2.CfnWebACL.StatementProperty(
                         rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(
-                            limit=2000,
+                            limit=self.waf_config['rate_limit'],
                             aggregate_key_type="IP",
                         )
                     ),
@@ -657,12 +737,15 @@ def handler(event, context):
     def _associate_waf_with_api(self):
         """Associate WAF WebACL with API Gateway"""
         # Create WAF association after API deployment
-        wafv2.CfnWebACLAssociation(
+        # Use the actual stage ARN from the deployed API Gateway
+        waf_association = wafv2.CfnWebACLAssociation(
             self,
             f"WafApiAssociation-{self.environment_suffix}",
-            resource_arn=f"arn:aws:apigateway:{self.region}::/restapis/{self.api.rest_api_id}/stages/prod",
+            resource_arn=self.api.deployment_stage.stage_arn,
             web_acl_arn=self.waf_acl.attr_arn,
         )
+        # Ensure WAF association happens after API Gateway deployment
+        waf_association.node.add_dependency(self.api)
 
     def _create_guardduty(self) -> guardduty.CfnDetector:
         """
@@ -693,61 +776,6 @@ def handler(event, context):
 
         return detector
 
-    def _create_config_rules(self):
-        """
-        Create AWS Config Rules for compliance
-
-        NOTE: AWS Config allows only ONE configuration recorder per region.
-        This implementation skips recorder/delivery channel creation if one exists.
-        Config Rules can still be created to leverage the existing recorder.
-        """
-        # NOTE: Skipping Config Recorder and Delivery Channel creation
-        # AWS Config allows only ONE recorder per region per account
-        # If no recorder exists, this stack won't create Config Rules
-        # In production, either:
-        # 1. Use existing Config infrastructure, or
-        # 2. Check for existing recorder and conditionally create one
-
-        # Rule 1: S3 bucket encryption
-        config.ManagedRule(
-            self,
-            f"S3EncryptionRule-{self.environment_suffix}",
-            identifier=config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-            config_rule_name=f"s3-encryption-check-{self.environment_suffix}",
-        )
-
-        # Rule 2: S3 public access block
-        config.ManagedRule(
-            self,
-            f"S3PublicAccessRule-{self.environment_suffix}",
-            identifier=config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
-            config_rule_name=f"s3-public-access-check-{self.environment_suffix}",
-        )
-
-        # Rule 3: Resource tagging
-        config.ManagedRule(
-            self,
-            f"TaggingRule-{self.environment_suffix}",
-            identifier=config.ManagedRuleIdentifiers.REQUIRED_TAGS,
-            config_rule_name=f"required-tags-check-{self.environment_suffix}",
-            input_parameters={
-                "tag1Key": "Environment",
-                "tag2Key": "Application",
-            },
-        )
-
-        # Create EventBridge rule for Config compliance changes
-        config_rule = events.Rule(
-            self,
-            f"ConfigComplianceRule-{self.environment_suffix}",
-            rule_name=f"config-compliance-{self.environment_suffix}",
-            event_pattern=events.EventPattern(
-                source=["aws.config"],
-                detail_type=["Config Rules Compliance Change"],
-            ),
-        )
-        config_rule.add_target(targets.SnsTopic(self.security_topic))
-
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for monitoring"""
         # Lambda error rate alarm
@@ -759,7 +787,7 @@ def handler(event, context):
                 statistic="Sum",
                 period=Duration.minutes(5),
             ),
-            threshold=5,
+            threshold=self.alarm_config['lambda_errors'],
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -775,7 +803,7 @@ def handler(event, context):
                 statistic="Sum",
                 period=Duration.minutes(5),
             ),
-            threshold=10,
+            threshold=self.alarm_config['dynamodb_throttle'],
             evaluation_periods=2,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         )
@@ -791,7 +819,7 @@ def handler(event, context):
             f"Api4xxAlarm-{self.environment_suffix}",
             alarm_name=f"api-4xx-errors-{self.environment_suffix}",
             metric=api_4xx,
-            threshold=100,
+            threshold=self.alarm_config['api_4xx'],
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         )
@@ -807,7 +835,7 @@ def handler(event, context):
             f"Api5xxAlarm-{self.environment_suffix}",
             alarm_name=f"api-5xx-errors-{self.environment_suffix}",
             metric=api_5xx,
-            threshold=50,
+            threshold=self.alarm_config['api_5xx'],
             evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         )
@@ -827,7 +855,7 @@ def handler(event, context):
                 statistic="Average",
                 period=Duration.minutes(5),
             ),
-            threshold=80,
+            threshold=self.alarm_config['ec2_cpu'],
             evaluation_periods=2,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         )
@@ -841,7 +869,7 @@ def handler(event, context):
             f"SecurityFindingsRule-{self.environment_suffix}",
             rule_name=f"security-findings-{self.environment_suffix}",
             event_pattern=events.EventPattern(
-                source=["aws.securityhub", "aws.guardduty", "aws.config"],
+                source=["aws.securityhub", "aws.guardduty"],
             ),
         )
         security_rule.add_target(targets.SnsTopic(self.security_topic))
@@ -1049,4 +1077,74 @@ def handler(event, context):
             "WafAclArn",
             value=self.waf_acl.attr_arn,
             description="WAF WebACL ARN",
+        )
+
+        CfnOutput(
+            self,
+            "PaymentProcessorFunctionName",
+            value=self.payment_processor.function_name,
+            description="Payment processor Lambda function name",
+        )
+
+        CfnOutput(
+            self,
+            "PaymentProcessorFunctionArn",
+            value=self.payment_processor.function_arn,
+            description="Payment processor Lambda function ARN",
+        )
+
+        CfnOutput(
+            self,
+            "EventHandlerFunctionName",
+            value=self.event_handler.function_name,
+            description="Event handler Lambda function name",
+        )
+
+        CfnOutput(
+            self,
+            "EventHandlerFunctionArn",
+            value=self.event_handler.function_arn,
+            description="Event handler Lambda function ARN",
+        )
+
+        CfnOutput(
+            self,
+            "PaymentDlqUrl",
+            value=self.dlq.queue_url,
+            description="Payment dead letter queue URL",
+        )
+
+        CfnOutput(
+            self,
+            "PaymentDlqArn",
+            value=self.dlq.queue_arn,
+            description="Payment dead letter queue ARN",
+        )
+
+        CfnOutput(
+            self,
+            "DbSecretArn",
+            value=self.db_secret.secret_arn,
+            description="Database credentials secret ARN",
+        )
+
+        CfnOutput(
+            self,
+            "AsgName",
+            value=self.asg.auto_scaling_group_name,
+            description="Auto Scaling group name",
+        )
+
+        CfnOutput(
+            self,
+            "LambdaSecurityGroupId",
+            value=self.lambda_sg.security_group_id,
+            description="Lambda security group ID",
+        )
+
+        CfnOutput(
+            self,
+            "Ec2SecurityGroupId",
+            value=self.ec2_sg.security_group_id,
+            description="EC2 security group ID",
         )

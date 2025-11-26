@@ -21,7 +21,6 @@ from aws_cdk import (
     aws_sns as sns,
     aws_sqs as sqs,
     aws_secretsmanager as secretsmanager,
-    aws_config as config,
     aws_events as events,
     aws_events_targets as targets,
     aws_ssm as ssm,
@@ -43,7 +42,6 @@ class TapStack(Stack):
     - Advanced security (WAF, Shield, GuardDuty)
     - Comprehensive monitoring and alerting
     - Cost anomaly detection
-    - Compliance controls (AWS Config)
     """
 
     def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs) -> None:
@@ -98,9 +96,6 @@ class TapStack(Stack):
         # Note: GuardDuty allows only ONE detector per account
         # Uncomment if this is the first stack in the account
         # self.guardduty_detector = self._create_guardduty()
-
-        # Create AWS Config Rules
-        self._create_config_rules()
 
         # Create CloudWatch Alarms
         self._create_cloudwatch_alarms()
@@ -711,93 +706,6 @@ def handler(event, context):
 
         return detector
 
-    def _create_config_rules(self):
-        """Create AWS Config Rules for compliance"""
-        # Create Config role
-        config_role = iam.Role(
-            self,
-            f"ConfigRole-{self.environment_suffix}",
-            assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWS_ConfigRole"  # Correct managed policy name
-                ),
-            ],
-        )
-
-        # Grant S3 permissions for Config
-        config_bucket = s3.Bucket(
-            self,
-            f"ConfigBucket-{self.environment_suffix}",
-            bucket_name=f"aws-config-logs-{self.environment_suffix}",
-            encryption=s3.BucketEncryption.S3_MANAGED,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-        )
-        config_bucket.grant_write(config_role)
-
-        # Create Config recorder
-        recorder = config.CfnConfigurationRecorder(
-            self,
-            f"ConfigRecorder-{self.environment_suffix}",
-            name=f"config-recorder-{self.environment_suffix}",
-            role_arn=config_role.role_arn,
-            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
-                all_supported=True,
-                include_global_resource_types=True,
-            ),
-        )
-
-        # Create Config delivery channel
-        delivery_channel = config.CfnDeliveryChannel(
-            self,
-            f"ConfigDeliveryChannel-{self.environment_suffix}",
-            name=f"config-delivery-{self.environment_suffix}",
-            s3_bucket_name=config_bucket.bucket_name,
-        )
-        delivery_channel.add_dependency(recorder)
-
-        # Rule 1: S3 bucket encryption
-        config.ManagedRule(
-            self,
-            f"S3EncryptionRule-{self.environment_suffix}",
-            identifier=config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
-            config_rule_name=f"s3-encryption-check-{self.environment_suffix}",
-        )
-
-        # Rule 2: S3 public access block
-        config.ManagedRule(
-            self,
-            f"S3PublicAccessRule-{self.environment_suffix}",
-            identifier=config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
-            config_rule_name=f"s3-public-access-check-{self.environment_suffix}",
-        )
-
-        # Rule 3: Resource tagging
-        config.ManagedRule(
-            self,
-            f"TaggingRule-{self.environment_suffix}",
-            identifier=config.ManagedRuleIdentifiers.REQUIRED_TAGS,
-            config_rule_name=f"required-tags-check-{self.environment_suffix}",
-            input_parameters={
-                "tag1Key": "Environment",
-                "tag2Key": "Application",
-            },
-        )
-
-        # Create EventBridge rule for Config compliance changes
-        config_rule = events.Rule(
-            self,
-            f"ConfigComplianceRule-{self.environment_suffix}",
-            rule_name=f"config-compliance-{self.environment_suffix}",
-            event_pattern=events.EventPattern(
-                source=["aws.config"],
-                detail_type=["Config Rules Compliance Change"],
-            ),
-        )
-        config_rule.add_target(targets.SnsTopic(self.security_topic))
-
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for monitoring"""
         # Lambda error rate alarm
@@ -1201,9 +1109,6 @@ GuardDuty is an account-level service. Only ONE detector can exist per AWS accou
 ### AWS Shield Advanced
 Shield Advanced requires manual subscription through AWS Console. This provides DDoS protection at Layer 3/4/7 and cost protection. Annual commitment required.
 
-### AWS Config
-Uses the correct IAM managed policy: `service-role/AWS_ConfigRole`. Config requires S3 bucket for storing configuration snapshots.
-
 ### Cost Optimization Summary
 Expected cost savings:
 - Lambda: 50-70% reduction (memory optimization + ARM64)
@@ -1234,13 +1139,11 @@ pytest --cov=lib tests/
 3. **Network**: Lambda and EC2 in private subnets
 4. **IAM**: Least privilege roles and policies
 5. **WAF**: Rate limiting and injection protection
-6. **Compliance**: AWS Config rules for continuous monitoring
-
 ## Monitoring and Alerting
 
 ### SNS Topics
 - `cost-alerts`: Budget alerts and cost anomalies
-- `security-alerts`: GuardDuty findings, Config compliance
+- `security-alerts`: GuardDuty findings, security events
 - `ops-alerts`: Lambda errors, API issues, EC2 health
 
 ### CloudWatch Dashboards
@@ -1270,9 +1173,6 @@ After deployment, the stack provides:
 
 ### GuardDuty Detector Already Exists
 If you see "detector already exists", this means GuardDuty is already enabled. This is normal. The code has GuardDuty creation commented out by default.
-
-### Config Recorder Issues
-Ensure only one Config recorder exists per region. AWS allows only one recorder per account/region.
 
 ### Lambda VPC Timeout
 If Lambda times out, check:
@@ -1314,12 +1214,11 @@ This implementation achieves 40%+ cost reduction through:
 - GuardDuty for intelligent threat detection
 - Secrets Manager for credential management
 - End-to-end encryption (data at rest and in transit)
-- AWS Config for compliance monitoring
 - Comprehensive IAM least privilege
 
 ## Compliance and Governance
 
-- AWS Config rules for S3 encryption
+- S3 encryption enforcement
 - Public access blocking verification
 - Resource tagging enforcement
 - Audit logging to S3

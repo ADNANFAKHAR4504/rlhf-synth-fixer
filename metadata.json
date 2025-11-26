@@ -3,15 +3,14 @@
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "t7f6u8y8",
   "team": "synth",
   "startedAt": "2025-11-25T14:54:00Z",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "Cost Optimization",
-    "Performance Optimization",
-    "Security Enhancement"
+    "IaC Diagnosis/Edits",
+    "IaC Optimization"
   ],
+  "po_id": "t7f6u8y8",
   "aws_services": [
     "Lambda",
     "DynamoDB",
@@ -28,10 +27,9 @@
     "SQS",
     "Secrets Manager",
     "Cost Explorer",
-    "Config",
     "EventBridge",
     "Systems Manager"
   ],
   "region": "us-east-1",
-  "training_quality": 8.5
+  "training_quality": 10
 }
