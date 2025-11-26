@@ -816,7 +816,7 @@ artifacts:
                     tags={"Environment": env, "Service": service}
                 )
 
-                # ECS Service with Blue/Green deployment
+                # ECS Service with rolling deployment
                 ecs_service = EcsService(
                     self,
                     f"ecs_service_{env}_{service.replace('-', '_')}",
@@ -826,7 +826,7 @@ artifacts:
                     desired_count=2,
                     launch_type="FARGATE",
                     deployment_controller=EcsServiceDeploymentController(
-                        type="CODE_DEPLOY"
+                        type="ECS"
                     ),
                     network_configuration=EcsServiceNetworkConfiguration(
                         subnets=[subnet.id for subnet in private_subnets],
