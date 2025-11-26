@@ -79,6 +79,18 @@ resource "aws_kms_key_policy" "main" {
         }
       },
       {
+        Sid    = "Allow EKS nodes to use the key without ViaService condition"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.eks_nodes.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "Allow EC2 service to use the key"
         Effect = "Allow"
         Principal = {
@@ -557,6 +569,45 @@ resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
   role       = aws_iam_role.eks_nodes.name
 }
 
+# Additional inline policy for EC2 operations required during node group creation
+# This is needed for launch template operations and instance/volume descriptions
+resource "aws_iam_role_policy" "eks_nodes_ec2" {
+  name = "${var.cluster_name}-node-ec2-policy-${var.pr_number}"
+  role = aws_iam_role.eks_nodes.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeInstanceAttribute",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeVolumeAttribute",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:DescribeImages",
+          "ec2:DescribeSnapshots",
+          "ec2:DescribeTags",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name     = "${var.cluster_name}-node-ec2-policy-${var.pr_number}"
+      PRNumber = var.pr_number
+    }
+  )
+}
+
 # Critical Node Group (Bottlerocket)
 resource "aws_eks_node_group" "critical" {
   cluster_name    = aws_eks_cluster.main.name
@@ -598,6 +649,7 @@ resource "aws_eks_node_group" "critical" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
+    aws_iam_role_policy.eks_nodes_ec2,
     aws_launch_template.critical,
     aws_kms_key_policy.main
   ]
@@ -694,6 +746,7 @@ resource "aws_eks_node_group" "general" {
     aws_iam_role_policy_attachment.eks_worker_node_policy,
     aws_iam_role_policy_attachment.eks_cni_policy,
     aws_iam_role_policy_attachment.eks_container_registry_policy,
+    aws_iam_role_policy.eks_nodes_ec2,
     aws_launch_template.general,
     aws_kms_key_policy.main
   ]
