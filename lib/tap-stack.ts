@@ -24,7 +24,7 @@ export class TapStack extends pulumi.ComponentResource {
     const defaultResourceOptions: pulumi.ResourceOptions = { parent: this };
 
     // Add unique suffix to all resource names to avoid conflicts
-    const suffix = `${suffix}-aj`;
+    const suffix = `${props.environmentSuffix}-aj`;
 
     // Get current AWS account
     const current = aws.getCallerIdentity({});
