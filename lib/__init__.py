@@ -1,1 +1,0 @@
-"""Payment Infrastructure CDKTF Module"""
