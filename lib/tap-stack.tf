@@ -2,11 +2,10 @@
 
 # Local variables for dynamic naming
 locals {
-  # Extract unique stack identifier from environment_suffix for parallel deployments
-  # If environment_suffix contains "pr" prefix (e.g., "pr123"), use it directly
-  # Otherwise use the environment_suffix as-is (e.g., "dev")
-  # This enables parallel PR deployments: pr123, pr456, etc.
-  name_suffix = var.environment_suffix
+  # Use PR number for unique naming if available, otherwise use environment_suffix
+  # GitHub Actions exports TF_VAR_pr_number, so we use that for parallel deployments
+  # PR deployments: pr123, pr456 | Manual/dev deployments: dev
+  name_suffix = var.pr_number != "unknown" ? "pr${var.pr_number}" : var.environment_suffix
 }
 
 # KMS keys for encryption
