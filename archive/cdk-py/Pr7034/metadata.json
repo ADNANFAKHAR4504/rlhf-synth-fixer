@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7045",
+  "team": "2",
+  "startedAt": "2025-11-19T18:44:16.682Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "Aurora PostgreSQL",
+    "EC2",
+    "Auto Scaling",
+    "EBS",
+    "ElastiCache Redis",
+    "DynamoDB",
+    "DAX",
+    "VPC",
+    "Direct Connect (VPN simulation)",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Logs Insights",
+    "X-Ray",
+    "SageMaker",
+    "SageMaker Endpoints",
+    "SageMaker Training",
+    "AWS VPN",
+    "IAM",
+    "S3",
+    "AWS Cost Explorer"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

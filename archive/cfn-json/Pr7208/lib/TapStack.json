@@ -1,0 +1,720 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Production-ready EKS Cluster with Auto Scaling Node Groups for Microservices Workloads",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "PrivateSubnetIds"
+          ]
+        },
+        {
+          "Label": {
+            "default": "EKS Configuration"
+          },
+          "Parameters": [
+            "EksVersion",
+            "NodeInstanceType",
+            "NodeGroupMinSize",
+            "NodeGroupMaxSize",
+            "NodeGroupDesiredSize"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Default": "vpc-09c4bdbdfef55e103",
+      "Description": "VPC ID where EKS cluster will be deployed"
+    },
+    "PrivateSubnetIds": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
+      "Description": "List of private subnet IDs across 3 availability zones (minimum 3 required)"
+    },
+    "EksVersion": {
+      "Type": "String",
+      "Default": "1.28",
+      "Description": "EKS cluster version (must be 1.28 or higher)",
+      "AllowedValues": [
+        "1.28",
+        "1.29",
+        "1.30"
+      ]
+    },
+    "NodeInstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "Description": "EC2 instance type for EKS node group"
+    },
+    "NodeGroupMinSize": {
+      "Type": "Number",
+      "Default": 3,
+      "MinValue": 3,
+      "Description": "Minimum number of nodes in the node group"
+    },
+    "NodeGroupMaxSize": {
+      "Type": "Number",
+      "Default": 6,
+      "MinValue": 3,
+      "Description": "Maximum number of nodes in the node group"
+    },
+    "NodeGroupDesiredSize": {
+      "Type": "Number",
+      "Default": 3,
+      "MinValue": 3,
+      "Description": "Desired number of nodes in the node group"
+    }
+  },
+  "Resources": {
+    "EksKmsKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for EKS secrets encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow EKS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "eks.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "eks.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-kms-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EksKmsKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/eks-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "EksKmsKey"
+        }
+      }
+    },
+    "EksClusterRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "eks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EksClusterSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "eks-cluster-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for EKS cluster control plane",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EksNodeSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "eks-node-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for EKS worker nodes",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-node-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": {
+              "Fn::Sub": "kubernetes.io/cluster/eks-cluster-${EnvironmentSuffix}"
+            },
+            "Value": "owned"
+          }
+        ]
+      }
+    },
+    "NodeSecurityGroupIngressHttps": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "Description": "Allow HTTPS traffic between nodes"
+      }
+    },
+    "NodeSecurityGroupIngressKubelet": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 10250,
+        "ToPort": 10250,
+        "SourceSecurityGroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "Description": "Allow kubelet communication between nodes"
+      }
+    },
+    "NodeSecurityGroupIngressDns": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 53,
+        "ToPort": 53,
+        "SourceSecurityGroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "Description": "Allow DNS TCP traffic between nodes"
+      }
+    },
+    "NodeSecurityGroupIngressDnsUdp": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "IpProtocol": "udp",
+        "FromPort": 53,
+        "ToPort": 53,
+        "SourceSecurityGroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "Description": "Allow DNS UDP traffic between nodes"
+      }
+    },
+    "NodeSecurityGroupIngressFromCluster": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "EksClusterSecurityGroup"
+        },
+        "Description": "Allow control plane to communicate with nodes"
+      }
+    },
+    "ClusterSecurityGroupIngressFromNodes": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EksClusterSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "EksNodeSecurityGroup"
+        },
+        "Description": "Allow nodes to communicate with control plane"
+      }
+    },
+    "EksClusterLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/eks/eks-cluster-${EnvironmentSuffix}/cluster"
+        },
+        "RetentionInDays": 7,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-logs-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EksCluster": {
+      "Type": "AWS::EKS::Cluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+        },
+        "Version": {
+          "Ref": "EksVersion"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "EksClusterRole",
+            "Arn"
+          ]
+        },
+        "ResourcesVpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "EksClusterSecurityGroup"
+            }
+          ],
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          },
+          "EndpointPrivateAccess": true,
+          "EndpointPublicAccess": false
+        },
+        "EncryptionConfig": [
+          {
+            "Provider": {
+              "KeyArn": {
+                "Fn::GetAtt": [
+                  "EksKmsKey",
+                  "Arn"
+                ]
+              }
+            },
+            "Resources": [
+              "secrets"
+            ]
+          }
+        ],
+        "Logging": {
+          "ClusterLogging": {
+            "EnabledTypes": [
+              {
+                "Type": "api"
+              },
+              {
+                "Type": "audit"
+              },
+              {
+                "Type": "authenticator"
+              },
+              {
+                "Type": "controllerManager"
+              },
+              {
+                "Type": "scheduler"
+              }
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EksNodeRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "eks-node-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+          "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "eks-node-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "EksNodeGroup": {
+      "Type": "AWS::EKS::Nodegroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "NodegroupName": {
+          "Fn::Sub": "eks-node-group-${EnvironmentSuffix}"
+        },
+        "ClusterName": {
+          "Ref": "EksCluster"
+        },
+        "NodeRole": {
+          "Fn::GetAtt": [
+            "EksNodeRole",
+            "Arn"
+          ]
+        },
+        "Subnets": {
+          "Ref": "PrivateSubnetIds"
+        },
+        "ScalingConfig": {
+          "MinSize": {
+            "Ref": "NodeGroupMinSize"
+          },
+          "MaxSize": {
+            "Ref": "NodeGroupMaxSize"
+          },
+          "DesiredSize": {
+            "Ref": "NodeGroupDesiredSize"
+          }
+        },
+        "InstanceTypes": [
+          {
+            "Ref": "NodeInstanceType"
+          }
+        ],
+        "AmiType": "AL2_x86_64",
+        "Labels": {
+          "Environment": "Production",
+          "ManagedBy": "CloudFormation"
+        },
+        "Tags": {
+          "Name": {
+            "Fn::Sub": "eks-node-group-${EnvironmentSuffix}"
+          },
+          "Environment": "Production",
+          "ManagedBy": "CloudFormation"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "EksClusterName": {
+      "Description": "Name of the EKS cluster",
+      "Value": {
+        "Ref": "EksCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksClusterName-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksClusterArn": {
+      "Description": "ARN of the EKS cluster",
+      "Value": {
+        "Fn::GetAtt": [
+          "EksCluster",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksClusterArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksClusterEndpoint": {
+      "Description": "API endpoint of the EKS cluster",
+      "Value": {
+        "Fn::GetAtt": [
+          "EksCluster",
+          "Endpoint"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksClusterEndpoint-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksClusterSecurityGroupId": {
+      "Description": "Security group ID for the EKS cluster control plane",
+      "Value": {
+        "Ref": "EksClusterSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksClusterSecurityGroupId-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksNodeSecurityGroupId": {
+      "Description": "Security group ID for the EKS worker nodes",
+      "Value": {
+        "Ref": "EksNodeSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksNodeSecurityGroupId-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksKmsKeyId": {
+      "Description": "KMS key ID for EKS secrets encryption",
+      "Value": {
+        "Ref": "EksKmsKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksKmsKeyId-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksKmsKeyArn": {
+      "Description": "KMS key ARN for EKS secrets encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "EksKmsKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksKmsKeyArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksOidcIssuer": {
+      "Description": "OIDC issuer URL for the EKS cluster (for IRSA)",
+      "Value": {
+        "Fn::GetAtt": [
+          "EksCluster",
+          "OpenIdConnectIssuerUrl"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksOidcIssuer-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksNodeGroupName": {
+      "Description": "Name of the EKS managed node group",
+      "Value": {
+        "Ref": "EksNodeGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksNodeGroupName-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksClusterRoleArn": {
+      "Description": "ARN of the EKS cluster IAM role",
+      "Value": {
+        "Fn::GetAtt": [
+          "EksClusterRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksClusterRoleArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EksNodeRoleArn": {
+      "Description": "ARN of the EKS node IAM role",
+      "Value": {
+        "Fn::GetAtt": [
+          "EksNodeRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EksNodeRoleArn-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-20T09:04:07.781913",
+  "po_id": "101912516",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "migration",
+    "containers",
+    "database-replication",
+    "multi-az",
+    "ecs-fargate",
+    "aurora",
+    "dms",
+    "route53",
+    "zero-downtime"
+  ],
+  "aws_services": [
+    "ApplicationAutoScaling",
+    "CloudWatch",
+    "DMS",
+    "EC2",
+    "ECR",
+    "ECS",
+    "ELB",
+    "IAM",
+    "RDS",
+    "Route53",
+    "SNS",
+    "SecretsManager",
+    "VPC"
+  ],
+  "region": "us-west-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

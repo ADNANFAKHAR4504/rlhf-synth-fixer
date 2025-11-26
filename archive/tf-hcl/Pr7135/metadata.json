@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "startedAt": "2025-11-24T05:18:04+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Lambda Functions",
+    "Serverless Architecture"
+  ],
+  "po_id": "101912607",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "API Gateway",
+    "EventBridge",
+    "ECR",
+    "SQS",
+    "CloudWatch Logs",
+    "KMS",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
