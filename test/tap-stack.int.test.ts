@@ -302,7 +302,10 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
         )
       );
       expect(clusterSG).toBeDefined();
-      expect(clusterSG?.Description).toContain('cluster');
+      // EKS managed security group has AWS-generated description
+      expect(clusterSG?.Description).toMatch(
+        /EKS created security group|cluster/i
+      );
     });
 
     it('should have node security group', () => {

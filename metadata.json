@@ -7,16 +7,7 @@
   "startedAt": "2025-11-25T18:07:05+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "EC2 Auto Scaling groups must use version 1.28 or higher with managed node groups",
-    "Implement IRSA (IAM Roles for Service Accounts) for pod-level AWS permissions",
-    "Node groups must use Graviton3 (ARM) instances for cost optimization",
-    "Enable EC2 add-ons: VPC CNI, CoreDNS, kube-proxy, and AWS EBS CSI Driver",
-    "Configure OIDC provider for the cluster to enable IRSA functionality",
-    "Implement cluster autoscaling with minimum 2 and maximum 10 nodes per group",
-    "Use private subnets only for worker nodes with no direct internet access",
-    "Enable EC2 control plane logging for api, audit, authenticator, controllerManager, and scheduler",
-    "Tag all resources with Environment, Team, and CostCenter for billing tracking",
-    "Configure AWS CLI access through IAM roles, not static credentials"
+    "Web Application Deployment"
   ],
   "po_id": "r1n6n4t7",
   "aws_services": [
