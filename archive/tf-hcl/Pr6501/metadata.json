@@ -24,5 +24,11 @@
     "Amazon Simple Notification Service (SNS)"
   ],
   "training_quality": 9,
-  "background": "Terraform-managed EMR platform for daily financial trading analytics workloads"
+  "background": "Terraform-managed EMR platform for daily financial trading analytics workloads",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
 }
