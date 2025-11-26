@@ -536,7 +536,7 @@ class TapStack(TerraformStack):
         # =================================================================
 
         # S3 Bucket for static assets
-        static_bucket = S3Bucket(
+        self.bucket = S3Bucket(
             self,
             f"static_bucket_{environment_suffix}",
             bucket=f"ecommerce-static-assets-{environment_suffix}",
@@ -549,10 +549,10 @@ class TapStack(TerraformStack):
         )
 
         # Block public access
-        S3BucketPublicAccessBlock(
+        self.bucket_encryption = S3BucketPublicAccessBlock(
             self,
             f"static_bucket_public_access_block_{environment_suffix}",
-            bucket=static_bucket.id,
+            bucket=self.bucket.id,
             block_public_acls=True,
             block_public_policy=True,
             ignore_public_acls=True,
@@ -560,10 +560,10 @@ class TapStack(TerraformStack):
         )
 
         # Enable versioning
-        S3BucketVersioningA(
+        self.bucket_versioning = S3BucketVersioningA(
             self,
             f"static_bucket_versioning_{environment_suffix}",
-            bucket=static_bucket.id,
+            bucket=self.bucket.id,
             versioning_configuration={
                 "status": "Enabled"
             }
@@ -580,7 +580,7 @@ class TapStack(TerraformStack):
         bucket_policy = S3BucketPolicy(
             self,
             f"static_bucket_policy_{environment_suffix}",
-            bucket=static_bucket.id,
+            bucket=self.bucket.id,
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -589,7 +589,7 @@ class TapStack(TerraformStack):
                         "AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai.id}"
                     },
                     "Action": "s3:GetObject",
-                    "Resource": f"{static_bucket.arn}/*"
+                    "Resource": f"{self.bucket.arn}/*"
                 }]
             })
         )
@@ -604,8 +604,8 @@ class TapStack(TerraformStack):
             price_class="PriceClass_100",
             origin=[
                 CloudfrontDistributionOrigin(
-                    domain_name=static_bucket.bucket_regional_domain_name,
-                    origin_id=f"S3-{static_bucket.id}",
+                    domain_name=self.bucket.bucket_regional_domain_name,
+                    origin_id=f"S3-{self.bucket.id}",
                     s3_origin_config={
                         "origin_access_identity": oai.cloudfront_access_identity_path
                     }
@@ -614,7 +614,7 @@ class TapStack(TerraformStack):
             default_cache_behavior=CloudfrontDistributionDefaultCacheBehavior(
                 allowed_methods=["GET", "HEAD", "OPTIONS"],
                 cached_methods=["GET", "HEAD"],
-                target_origin_id=f"S3-{static_bucket.id}",
+                target_origin_id=f"S3-{self.bucket.id}",
                 viewer_protocol_policy="redirect-to-https",
                 compress=True,
                 min_ttl=0,
@@ -898,7 +898,7 @@ class TapStack(TerraformStack):
                             "s3:GetObject",
                             "s3:PutObject"
                         ],
-                        "Resource": f"{static_bucket.arn}/*"
+                        "Resource": f"{self.bucket.arn}/*"
                     }
                 ]
             })
@@ -946,7 +946,7 @@ class TapStack(TerraformStack):
                         },
                         {
                             "name": "STATIC_BUCKET",
-                            "value": static_bucket.bucket
+                            "value": self.bucket.bucket
                         }
                     ],
                     "logConfiguration": {
@@ -1038,7 +1038,7 @@ class TapStack(TerraformStack):
         # OUTPUTS - For integration testing
         # =================================================================
         TerraformOutput(self, "vpc_id", value=vpc.id)
-        TerraformOutput(self, "s3_bucket_name", value=static_bucket.id)
+        TerraformOutput(self, "s3_bucket_name", value=self.bucket.id)
         TerraformOutput(self, "cloudfront_distribution_id", value=cloudfront.id)
         TerraformOutput(self, "cloudfront_domain_name", value=cloudfront.domain_name)
         TerraformOutput(self, "aurora_cluster_endpoint", value=aurora_cluster.endpoint)
