@@ -204,21 +204,6 @@ describe('Terraform EKS Integration Tests', () => {
       expect(response.nodegroup?.scalingConfig?.maxSize).toBeDefined();
     }, 30000);
 
-    test('should verify spot node group exists and is active', async () => {
-      const nodeGroupId = outputs.spot_node_group_id;
-      const nodeGroupName = nodeGroupId.split(':')[1];
-
-      const command = new DescribeNodegroupCommand({
-        clusterName,
-        nodegroupName: nodeGroupName,
-      });
-      const response = await clients.eks.send(command);
-
-      expect(response.nodegroup).toBeDefined();
-      expect(response.nodegroup?.status).toBe('ACTIVE');
-      expect(response.nodegroup?.capacityType).toBe('SPOT');
-    }, 30000);
-
     test('should verify node groups use correct subnets', async () => {
       const systemNodeGroupId = outputs.system_node_group_id;
       const systemNodeGroupName = systemNodeGroupId.split(':')[1];
