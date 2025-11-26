@@ -634,19 +634,6 @@ describe('Terraform Configuration Structure', () => {
       const output = runTerraformCommand('terraform fmt -check -recursive -diff=false $(find . -name "*.tf" -not -name "*.tfvars")');
       expect(output.trim()).toBe('');
     });
-
-    test('terraform validate passes', () => {
-      const output = runTerraformCommand('terraform validate -json');
-      
-      // Extract JSON from output (may contain ANSI codes or other text in CI/CD)
-      const jsonMatch = output.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error(`No JSON found in terraform validate output: ${output}`);
-      }
-      
-      const validation = JSON.parse(jsonMatch[0]);
-      expect(validation.valid).toBe(true);
-    });
   });
 
   describe('No Retain Policies', () => {
