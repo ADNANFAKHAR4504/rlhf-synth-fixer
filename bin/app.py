@@ -10,7 +10,7 @@ environment_suffix = app.node.try_get_context("environmentSuffix") or os.environ
 
 TapStack(
     app,
-    f"TapStack-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv("CDK_DEFAULT_ACCOUNT"),

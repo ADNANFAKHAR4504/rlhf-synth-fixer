@@ -2,6 +2,7 @@ from aws_cdk import (
     Stack,
     RemovalPolicy,
     Duration,
+    CfnOutput,
     aws_ec2 as ec2,
     aws_rds as rds,
     aws_dynamodb as dynamodb,
@@ -57,6 +58,74 @@ class TapStack(Stack):
 
         # Create EventBridge rules for backup monitoring
         self._create_eventbridge_rules()
+
+        # Create CloudFormation outputs for all resources
+        self._create_outputs()
+
+    def _create_outputs(self) -> None:
+        """Create CloudFormation outputs for all resources"""
+        # VPC outputs
+        CfnOutput(self, "VpcId", value=self.vpc.vpc_id,
+                  description="VPC ID")
+        CfnOutput(self, "VpcCidr", value=self.vpc.vpc_cidr_block,
+                  description="VPC CIDR block")
+
+        # KMS key outputs
+        CfnOutput(self, "AuroraKmsKeyArn", value=self.aurora_key.key_arn,
+                  description="Aurora KMS key ARN")
+        CfnOutput(self, "S3KmsKeyArn", value=self.s3_key.key_arn,
+                  description="S3 KMS key ARN")
+
+        # Aurora outputs
+        CfnOutput(self, "AuroraClusterIdentifier",
+                  value=self.aurora_cluster.cluster_identifier,
+                  description="Aurora cluster identifier")
+        CfnOutput(self, "AuroraClusterEndpoint",
+                  value=self.aurora_cluster.cluster_endpoint.hostname,
+                  description="Aurora cluster endpoint")
+        CfnOutput(self, "AuroraClusterReaderEndpoint",
+                  value=self.aurora_cluster.cluster_read_endpoint.hostname,
+                  description="Aurora cluster reader endpoint")
+        CfnOutput(self, "AuroraSecretArn",
+                  value=self.aurora_cluster.secret.secret_arn,
+                  description="Aurora secret ARN")
+
+        # DynamoDB outputs
+        CfnOutput(self, "DynamoDBTableName",
+                  value=self.dynamodb_table.table_name,
+                  description="DynamoDB table name")
+        CfnOutput(self, "DynamoDBTableArn",
+                  value=self.dynamodb_table.table_arn,
+                  description="DynamoDB table ARN")
+
+        # S3 outputs
+        CfnOutput(self, "S3BucketName",
+                  value=self.s3_bucket.bucket_name,
+                  description="S3 bucket name")
+        CfnOutput(self, "S3BucketArn",
+                  value=self.s3_bucket.bucket_arn,
+                  description="S3 bucket ARN")
+
+        # Lambda outputs
+        CfnOutput(self, "LambdaFunctionName",
+                  value=self.lambda_function.function_name,
+                  description="Lambda function name")
+        CfnOutput(self, "LambdaFunctionArn",
+                  value=self.lambda_function.function_arn,
+                  description="Lambda function ARN")
+
+        # SNS outputs
+        CfnOutput(self, "SnsTopicArn",
+                  value=self.sns_topic.topic_arn,
+                  description="SNS topic ARN")
+        CfnOutput(self, "SnsTopicName",
+                  value=self.sns_topic.topic_name,
+                  description="SNS topic name")
+
+        # Region output
+        CfnOutput(self, "Region",
+                  value=self.region,
+                  description="Deployment region")
 
     def _create_vpc(self) -> ec2.Vpc:
         """Create VPC with Multi-AZ subnets across 3 availability zones"""

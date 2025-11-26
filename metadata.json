@@ -3,13 +3,13 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "l0p2s2y4",
   "team": "synth",
   "startedAt": "2025-11-25T14:10:00+05:30",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Failure Recovery and High Availability"
+    "Failure Recovery Automation"
   ],
+  "po_id": "l0p2s2y4",
   "aws_services": [
     "Aurora",
     "DynamoDB",
@@ -22,5 +22,6 @@
     "EventBridge",
     "IAM"
   ],
+  "region": "us-east-1",
   "training_quality": 10
 }

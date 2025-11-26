@@ -28,7 +28,7 @@ class TestTapStack(unittest.TestCase):
         self.template.resource_count_is("AWS::DynamoDB::Table", 1)
         self.template.resource_count_is("AWS::S3::Bucket", 1)
         # Lambda: 1 main function + 1 CustomResource for S3 auto-delete
-        self.assertGreaterEqual(self.template.find_resources("AWS::Lambda::Function").__len__(), 1)
+        self.assertGreaterEqual(len(self.template.find_resources("AWS::Lambda::Function")), 1)
         self.template.resource_count_is("AWS::SNS::Topic", 1)
         self.template.resource_count_is("AWS::Backup::BackupPlan", 1)
         self.template.resource_count_is("AWS::CloudWatch::Alarm", 3)
