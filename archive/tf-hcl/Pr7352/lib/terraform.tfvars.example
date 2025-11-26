@@ -1,0 +1,86 @@
+# terraform.tfvars.example
+# Copy this file to terraform.tfvars and update with your specific values
+
+# AWS Configuration
+aws_region = "eu-central-1"
+
+# Environment Configuration
+environment_suffix = "blue"  # or "green" for the other environment
+
+# Tagging Configuration
+repository     = "iac-test-automations"
+commit_author  = "team-synth"
+pr_number      = "12345"
+team           = "synth"
+project_name   = "payment-migration"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+availability_zones = [
+  "eu-central-1a",
+  "eu-central-1b",
+  "eu-central-1c"
+]
+
+# Aurora PostgreSQL Configuration
+aurora_engine_version        = "14.6"
+aurora_instance_class        = "db.r6g.large"
+aurora_backup_retention_days = 35
+aurora_master_username       = "dbadmin"
+aurora_master_password       = "CHANGE_ME_STRONG_PASSWORD_HERE"  # Change this!
+
+# DMS Configuration
+dms_replication_instance_class = "dms.c5.large"
+
+# On-Premises Database Configuration
+onprem_db_endpoint = "192.168.1.100"  # Replace with actual on-premises database endpoint
+onprem_db_port     = 5432
+onprem_db_name     = "payment_db"
+onprem_db_username = "dms_user"
+onprem_db_password = "CHANGE_ME_ONPREM_PASSWORD"  # Change this!
+
+# Lambda Configuration
+lambda_memory_size         = 1024
+lambda_reserved_concurrency = 10
+
+# ALB Configuration
+alb_target_weight_blue  = 50  # Adjust for gradual traffic shifting
+alb_target_weight_green = 50  # Ensure blue + green = 100
+
+# Route53 Configuration
+domain_name              = "example.com"  # Replace with your actual domain
+health_check_threshold   = 5  # Error rate percentage threshold for failback
+
+# S3 Configuration
+s3_logs_retention_days = 90
+
+# Cross-Account Configuration
+blue_account_id  = "123456789012"  # Replace with actual blue account ID
+green_account_id = "234567890123"  # Replace with actual green account ID
+
+# Transit Gateway Configuration
+transit_gateway_id = "tgw-0123456789abcdef0"  # Replace with actual Transit Gateway ID
+onprem_cidr        = "192.168.0.0/16"  # Replace with actual on-premises CIDR
+
+# SNS Configuration
+alert_email = "alerts@example.com"  # Replace with actual email for alerts
+
+# DynamoDB Configuration
+dynamodb_billing_mode = "PAY_PER_REQUEST"
+
+# Example Blue Environment Configuration:
+# environment_suffix = "blue"
+# alb_target_weight_blue = 100
+# alb_target_weight_green = 0
+
+# Example Green Environment Configuration:
+# environment_suffix = "green"
+# alb_target_weight_blue = 0
+# alb_target_weight_green = 100
+
+# Example Gradual Traffic Shift Configuration:
+# Phase 1 (10% green): alb_target_weight_blue = 90, alb_target_weight_green = 10
+# Phase 2 (25% green): alb_target_weight_blue = 75, alb_target_weight_green = 25
+# Phase 3 (50% green): alb_target_weight_blue = 50, alb_target_weight_green = 50
+# Phase 4 (75% green): alb_target_weight_blue = 25, alb_target_weight_green = 75
+# Phase 5 (100% green): alb_target_weight_blue = 0, alb_target_weight_green = 100
