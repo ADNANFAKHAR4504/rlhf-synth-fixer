@@ -196,6 +196,8 @@ else
     grep -v '^Pulumi.yaml$' | \
     grep -v '^package.json$' | \
     grep -v '^package-lock.json$' | \
+    grep -v '^Pipfile$' | \
+    grep -v '^Pipfile.lock$' | \
     grep -v '^tap.py$' | \
     grep -v '^tap.go$' || true)
 
