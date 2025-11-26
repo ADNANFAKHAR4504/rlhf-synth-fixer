@@ -1,0 +1,167 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudWatch alarms for monitoring blue-green deployment",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String"
+    },
+    "ALBTargetGroup": {
+      "Type": "String"
+    },
+    "DMSReplicationTask": {
+      "Type": "String"
+    },
+    "Project": {
+      "Type": "String"
+    },
+    "CostCenter": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "BlueHealthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "blue-health-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Blue environment health check alarm",
+        "MetricName": "UnHealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Ref": "ALBTargetGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "GreenHealthAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "green-health-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Green environment health check alarm",
+        "MetricName": "UnHealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Ref": "ALBTargetGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "dms-replication-lag-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "DMS replication lag alarm",
+        "MetricName": "CDCLatencySource",
+        "Namespace": "AWS/DMS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 60,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationTaskIdentifier",
+            "Value": {
+              "Ref": "DMSReplicationTask"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "BlueHealthAlarm": {
+      "Description": "Blue Health Alarm ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "BlueHealthAlarm",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-BlueHealthAlarm"
+        }
+      }
+    },
+    "GreenHealthAlarm": {
+      "Description": "Green Health Alarm ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "GreenHealthAlarm",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-GreenHealthAlarm"
+        }
+      }
+    }
+  }
+}
