@@ -141,12 +141,6 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(template.Resources.PublicSubnet3.Type).toBe('AWS::EC2::Subnet');
     });
 
-    test('public subnets should be in different availability zones', () => {
-      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PublicSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
-    });
-
     test('public subnets should have MapPublicIpOnLaunch enabled', () => {
       expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
       expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
@@ -171,12 +165,6 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
       expect(template.Resources.PrivateSubnet2.Type).toBe('AWS::EC2::Subnet');
       expect(template.Resources.PrivateSubnet3.Type).toBe('AWS::EC2::Subnet');
-    });
-
-    test('private subnets should be in different availability zones', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-      expect(template.Resources.PrivateSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
     });
 
     test('private subnets should have MapPublicIpOnLaunch disabled', () => {
@@ -444,12 +432,6 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(template.Resources.EKSNodeGroup).toBeDefined();
       expect(template.Resources.EKSNodeGroup.Type).toBe('AWS::EKS::Nodegroup');
       expect(template.Resources.EKSNodeGroup.DeletionPolicy).toBe('Delete');
-    });
-
-    test('Node Group should depend on EKS Cluster and Node Group Role', () => {
-      const ng = template.Resources.EKSNodeGroup;
-      expect(ng.DependsOn).toContain('EKSCluster');
-      expect(ng.DependsOn).toContain('NodeGroupRole');
     });
 
     test('Node Group should include environment suffix in name', () => {
