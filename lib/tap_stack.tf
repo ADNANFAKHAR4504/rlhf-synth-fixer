@@ -387,7 +387,9 @@ resource "aws_launch_template" "main" {
     yum install -y httpd
     systemctl start httpd
     systemctl enable httpd
-        echo "<h1>${title(var.project_name)} Server - Healthy</h1>" > /var/www/html/index.html    # Configure CloudWatch agent
+    echo "<h1>${title(var.project_name)} Server - Healthy</h1>" > /var/www/html/index.html
+    
+    # Configure CloudWatch agent
     amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s
   EOF
   )
