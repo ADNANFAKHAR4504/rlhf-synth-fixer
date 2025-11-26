@@ -408,7 +408,7 @@ TapStack(
 # Synthesize the app to generate Terraform configuration
 app.synth()
 
-print(f"✅ Successfully synthesized infrastructure for environment: {environment_suffix}")
+print(f"Successfully synthesized infrastructure for environment: {environment_suffix}")
 ```
 
 ## File: cdktf.json
@@ -716,17 +716,17 @@ If private subnets can't reach internet:
 
 ```
 .
-├── lib/
-│   ├── __init__.py
-│   ├── tap_stack.py          # Main stack implementation
-│   ├── PROMPT.md              # Task requirements
-│   ├── MODEL_RESPONSE.md      # Initial implementation
-│   ├── IDEAL_RESPONSE.md      # Production-ready implementation
-│   └── README.md              # This file
-├── tap.py                      # Entry point
-├── cdktf.json                  # CDKTF configuration
-├── requirements.txt            # Python dependencies
-└── metadata.json               # Task metadata
++-- lib/
+|   +-- __init__.py
+|   +-- tap_stack.py          # Main stack implementation
+|   +-- PROMPT.md              # Task requirements
+|   +-- MODEL_RESPONSE.md      # Initial implementation
+|   +-- IDEAL_RESPONSE.md      # Production-ready implementation
+|   +-- README.md              # This file
++-- tap.py                      # Entry point
++-- cdktf.json                  # CDKTF configuration
++-- requirements.txt            # Python dependencies
++-- metadata.json               # Task metadata
 ```
 
 ### Adding Resources

@@ -1,16 +1,17 @@
 #!/usr/bin/env python
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys
 
 from cdktf import App
-from lib.tap_stack import TapStack
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from lib.tap_stack import TapStack  # pylint: disable=wrong-import-position
 
 # Get environment suffix from environment or use default
 environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
 
 # Calculate the stack name
-stack_name = f"tap-{environment_suffix}"
+stack_name = f"tapstack{environment_suffix}"
 
 app = App()
 

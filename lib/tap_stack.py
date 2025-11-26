@@ -1,3 +1,4 @@
+import os
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -19,12 +20,32 @@ from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.network_acl import NetworkAcl, NetworkAclEgress, NetworkAclIngress
 
 
+def get_aws_region():
+    """Read AWS region from lib/AWS_REGION file or environment variable."""
+    # First check environment variable
+    region = os.getenv("AWS_REGION")
+    if region:
+        return region.strip()
+
+    # Fall back to reading from file
+    region_file = os.path.join(os.path.dirname(__file__), "AWS_REGION")
+    if os.path.exists(region_file):
+        with open(region_file, "r", encoding="utf-8") as f:
+            return f.read().strip()
+
+    # Default fallback
+    return "us-east-1"
+
+
 class TapStack(TerraformStack):
     def __init__(self, scope: Construct, stack_id: str, environment_suffix: str):
         super().__init__(scope, stack_id)
 
+        # Get AWS region from file or environment
+        aws_region = get_aws_region()
+
         # AWS Provider
-        AwsProvider(self, "aws", region="eu-west-1")
+        AwsProvider(self, "aws", region=aws_region)
 
         # Common tags
         common_tags = {
@@ -50,8 +71,8 @@ class TapStack(TerraformStack):
             tags={**common_tags, "Name": f"igw-{environment_suffix}"}
         )
 
-        # Availability Zones
-        azs = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+        # Availability Zones (2 AZs to stay within EIP limits)
+        azs = [f"{aws_region}a", f"{aws_region}b"]
 
         # Create subnets
         public_subnets = []
