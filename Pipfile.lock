@@ -789,11 +789,11 @@
         },
         "jsii": {
             "hashes": [
-                "sha256:5ba9b8a5420ce66f58b1a71ca57a4566c67f04b469140be335bd74abb91d5e0b",
-                "sha256:888855ddb7d124795e0c92c43d858d7d27f5372996210ec447a2a9af3a6c4315"
+                "sha256:9203200ed5289ecc6198783513cbd7abef53d4f6eac0046181d647fa56eda6ab",
+                "sha256:9f87508908bfa51dd9aac59fdbbeff347ae76377758ea5e5f83f149052211514"
             ],
             "markers": "python_version ~= '3.9'",
-            "version": "==1.120.0"
+            "version": "==1.119.0"
         },
         "jsonpatch": {
             "hashes": [
@@ -946,11 +946,11 @@
         },
         "networkx": {
             "hashes": [
-                "sha256:285276002ad1f7f7da0f7b42f004bcba70d381e936559166363707fdad3d72ad",
-                "sha256:cdb395b105806062473d3be36458d8f1459a4e4b98e236a66c3a48996e07684f"
+                "sha256:0030d386a9a06dee3565298b4a734b68589749a544acbb6c412dc9e2489ec6ec",
+                "sha256:d4c6f9cf81f52d69230866796b82afbccdec3db7ae4fbd1b65ea750feed50037"
             ],
             "markers": "python_version >= '3.11'",
-            "version": "==3.6"
+            "version": "==3.5"
         },
         "numpy": {
             "hashes": [
@@ -1172,12 +1172,12 @@
         },
         "pulumi-kubernetes": {
             "hashes": [
-                "sha256:8fb33c77c334bc364cfa4b7fe3bb46817484557da94fdcee69ec562bc90f387d",
-                "sha256:eec10ab03cc6370d348e21eaaa9241b1d6509153d3eede9f0cc48b45d5d862bc"
+                "sha256:c37c594fad32c1b954302ef79c87f7c8734063ff3ecbc558c9d4940fec5db5da",
+                "sha256:d8514c6116be369e23cb28a2c77f9bcc707696564e0670268a838ec62139f76c"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.9'",
-            "version": "==4.24.1"
+            "version": "==4.24.0"
         },
         "pulumi-random": {
             "hashes": [
@@ -1766,11 +1766,11 @@
         },
         "typeguard": {
             "hashes": [
-                "sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4",
-                "sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1"
+                "sha256:7da3bd46e61f03e0852f8d251dcbdc2a336aa495d7daff01e092b55327796eb8",
+                "sha256:c556a1b95948230510070ca53fa0341fb0964611bd05d598d87fb52115d65fee"
             ],
-            "markers": "python_full_version >= '3.5.3'",
-            "version": "==2.13.3"
+            "markers": "python_version >= '3.8'",
+            "version": "==4.2.1"
         },
         "typing-extensions": {
             "hashes": [
@@ -2774,11 +2774,11 @@
         },
         "networkx": {
             "hashes": [
-                "sha256:285276002ad1f7f7da0f7b42f004bcba70d381e936559166363707fdad3d72ad",
-                "sha256:cdb395b105806062473d3be36458d8f1459a4e4b98e236a66c3a48996e07684f"
+                "sha256:0030d386a9a06dee3565298b4a734b68589749a544acbb6c412dc9e2489ec6ec",
+                "sha256:d4c6f9cf81f52d69230866796b82afbccdec3db7ae4fbd1b65ea750feed50037"
             ],
             "markers": "python_version >= '3.11'",
-            "version": "==3.6"
+            "version": "==3.5"
         },
         "openapi-schema-validator": {
             "hashes": [
