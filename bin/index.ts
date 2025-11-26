@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from './lib/tap-stack';
+import { TapStack } from '../lib/tap-stack';
 
 // Load configuration
 const config = new pulumi.Config();

@@ -1,6 +1,7 @@
 name: TapStack
 description: Self-managed CI/CD pipeline for deploying Pulumi stacks
 runtime: nodejs
+main: bin/index.ts
 
 config:
   githubOwner:
