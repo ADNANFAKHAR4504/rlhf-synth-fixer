@@ -507,6 +507,7 @@ class TapStack(TerraformStack):
         )
 
         # Lambda function for versioning remediation
+        lambda_zip_path = os.path.join(os.path.dirname(__file__), "lambda_function.zip")
         self.versioning_lambda = LambdaFunction(
             self,
             f"versioning_remediation_{self.environment_suffix}",
@@ -514,8 +515,8 @@ class TapStack(TerraformStack):
             runtime="python3.9",
             handler="index.lambda_handler",
             role=lambda_role.arn,
-            filename="lambda_function.zip",
-            source_code_hash="${filebase64sha256(\"lambda_function.zip\")}",
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             timeout=300,
             memory_size=256,
             architectures=["arm64"],
@@ -541,8 +542,8 @@ class TapStack(TerraformStack):
             runtime="python3.9",
             handler="index.lambda_handler",
             role=lambda_role.arn,
-            filename="lambda_function.zip",
-            source_code_hash="${filebase64sha256(\"lambda_function.zip\")}",
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             timeout=300,
             memory_size=256,
             architectures=["arm64"],
