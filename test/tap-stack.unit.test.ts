@@ -55,3 +55,59 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 });
+
+describe('Master Stack Validation', () => {
+  let masterTemplate: any;
+
+  beforeAll(() => {
+    const templatePath = path.join(__dirname, '../lib/master-stack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    masterTemplate = JSON.parse(templateContent);
+  });
+
+  test('should have 11 nested stacks', () => {
+    const resources = Object.keys(masterTemplate.Resources);
+    expect(resources.length).toBe(11);
+    resources.forEach(resource => {
+      expect(masterTemplate.Resources[resource].Type).toBe('AWS::CloudFormation::Stack');
+    });
+  });
+
+  test('should have required parameters', () => {
+    expect(masterTemplate.Parameters.EnvironmentSuffix).toBeDefined();
+    expect(masterTemplate.Parameters.Project).toBeDefined();
+    expect(masterTemplate.Parameters.CostCenter).toBeDefined();
+    expect(masterTemplate.Parameters.VpcCidr).toBeDefined();
+    expect(masterTemplate.Parameters.DatabaseMasterUsername).toBeDefined();
+    expect(masterTemplate.Parameters.ECSTaskImage).toBeDefined();
+    expect(masterTemplate.Parameters.HostedZoneId).toBeDefined();
+    expect(masterTemplate.Parameters.DomainName).toBeDefined();
+  });
+
+  test('should have outputs for key components', () => {
+    expect(masterTemplate.Outputs.VpcId).toBeDefined();
+    expect(masterTemplate.Outputs.BlueDBEndpoint).toBeDefined();
+    expect(masterTemplate.Outputs.GreenDBEndpoint).toBeDefined();
+    expect(masterTemplate.Outputs.ALBDNSName).toBeDefined();
+    expect(masterTemplate.Outputs.ApplicationURL).toBeDefined();
+  });
+});
+
+describe('Nested Stacks Validation', () => {
+  test('Database stack should have Aurora clusters', () => {
+    const dbTemplatePath = path.join(__dirname, '../lib/nested-stacks/database-stack.json');
+    const dbTemplate = JSON.parse(fs.readFileSync(dbTemplatePath, 'utf8'));
+    expect(dbTemplate.Resources.BlueDBCluster).toBeDefined();
+    expect(dbTemplate.Resources.GreenDBCluster).toBeDefined();
+    expect(dbTemplate.Resources.BlueDBCluster.Type).toBe('AWS::RDS::DBCluster');
+  });
+
+  test('ECS stack should have services and target groups', () => {
+    const ecsTemplatePath = path.join(__dirname, '../lib/nested-stacks/ecs-stack.json');
+    const ecsTemplate = JSON.parse(fs.readFileSync(ecsTemplatePath, 'utf8'));
+    expect(ecsTemplate.Resources.BlueService).toBeDefined();
+    expect(ecsTemplate.Resources.GreenService).toBeDefined();
+    expect(ecsTemplate.Resources.BlueTargetGroup).toBeDefined();
+    expect(ecsTemplate.Resources.GreenTargetGroup).toBeDefined();
+  });
+});
