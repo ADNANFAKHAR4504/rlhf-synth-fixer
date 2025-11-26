@@ -536,17 +536,20 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
-  
+
   if [ -z "$TERRAFORM_STATE_BUCKET" ]; then
     echo "❌ TERRAFORM_STATE_BUCKET environment variable is required for Terraform projects"
     exit 1
   fi
-  
+
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
-  
+
   cd lib
-  
+
+  # Export Terraform variables
+  export TF_VAR_environment_suffix="${ENVIRONMENT_SUFFIX}"
+
   # Determine var-file to use based on metadata.json
   VAR_FILE=""
   if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then

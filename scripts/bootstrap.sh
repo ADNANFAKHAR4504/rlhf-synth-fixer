@@ -120,6 +120,9 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Run terraform plan
   echo "Running Terraform plan..."
+  # Export Terraform variables
+  export TF_VAR_environment_suffix="${ENVIRONMENT_SUFFIX}"
+
   # If task_sub_category indicates multi-env mgmt, read deploy_env from metadata.json
   # and pass it as -var-file to terraform plan via TF_CLI_ARGS_plan
   if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
