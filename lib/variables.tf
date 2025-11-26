@@ -1,7 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource isolation and naming"
   type        = string
-  default     = "dev28"
+  default     = "dev29"
 }
 
 variable "aws_region" {
