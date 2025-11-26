@@ -23,47 +23,38 @@
  * - ENVIRONMENT_SUFFIX (default: inttest)
  */
 
-import * as pulumi from '@pulumi/pulumi';
-import {
-  RDSClient,
-  DescribeGlobalClustersCommand,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeVpcPeeringConnectionsCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  Route53Client,
-  GetHostedZoneCommand,
-  GetHealthCheckCommand,
-  ListResourceRecordSetsCommand,
-} from '@aws-sdk/client-route-53';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  IAMClient,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcPeeringConnectionsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
   GetRoleCommand,
   GetRolePolicyCommand,
+  IAMClient,
 } from '@aws-sdk/client-iam';
 import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from '@aws-sdk/client-sns';
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-} from '@aws-sdk/client-kms';
+  DescribeDBClustersCommand,
+  DescribeGlobalClustersCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetHealthCheckCommand,
+  GetHostedZoneCommand,
+  ListResourceRecordSetsCommand,
+  Route53Client,
+} from '@aws-sdk/client-route-53';
 import { TapStack } from '../lib/tap-stack';
 
 // Test configuration
@@ -340,7 +331,7 @@ describe('TapStack Integration Tests - Real AWS Deployment', () => {
       expect(result.GlobalClusters).toBeDefined();
       expect(result.GlobalClusters!.length).toBeGreaterThan(0);
       expect(result.GlobalClusters![0].Engine).toBe('aurora-postgresql');
-      expect(result.GlobalClusters![0].EngineVersion).toBe('15.4');
+      expect(result.GlobalClusters![0].EngineVersion).toBe('14.6');
       expect(result.GlobalClusters![0].StorageEncrypted).toBe(true);
     }, TEST_TIMEOUT);
 
@@ -359,7 +350,7 @@ describe('TapStack Integration Tests - Real AWS Deployment', () => {
 
       const cluster = result.DBClusters![0];
       expect(cluster.Engine).toBe('aurora-postgresql');
-      expect(cluster.EngineVersion).toBe('15.4');
+      expect(cluster.EngineVersion).toBe('14.6');
       expect(cluster.StorageEncrypted).toBe(true);
       expect(cluster.BackupRetentionPeriod).toBe(7);
       expect(cluster.DeletionProtection).toBe(false);
@@ -380,7 +371,7 @@ describe('TapStack Integration Tests - Real AWS Deployment', () => {
 
       const cluster = result.DBClusters![0];
       expect(cluster.Engine).toBe('aurora-postgresql');
-      expect(cluster.EngineVersion).toBe('15.4');
+      expect(cluster.EngineVersion).toBe('14.6');
       expect(cluster.StorageEncrypted).toBe(true);
       expect(cluster.DeletionProtection).toBe(false);
     }, TEST_TIMEOUT);
