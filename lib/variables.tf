@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = contains(["dev", "staging", "prod"], var.environment)
     error_message = "Environment must be dev, staging, or prod."
@@ -22,12 +23,14 @@ variable "project_name" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across environments"
   type        = string
+  default     = "dev"
 }
 
 # VPC Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
+  default     = "10.0.0.0/16"
 }
 
 variable "availability_zones" {
@@ -40,27 +43,32 @@ variable "availability_zones" {
 variable "instance_type" {
   description = "EC2 instance type for application servers"
   type        = string
+  default     = "t3.medium"
 }
 
 variable "asg_min_size" {
   description = "Minimum number of instances in Auto Scaling Group"
   type        = number
+  default     = 1
 }
 
 variable "asg_max_size" {
   description = "Maximum number of instances in Auto Scaling Group"
   type        = number
+  default     = 3
 }
 
 variable "asg_desired_capacity" {
   description = "Desired number of instances in Auto Scaling Group"
   type        = number
+  default     = 1
 }
 
 # Database Configuration
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
+  default     = "db.t3.medium"
 }
 
 variable "db_allocated_storage" {
@@ -72,11 +80,13 @@ variable "db_allocated_storage" {
 variable "db_multi_az" {
   description = "Enable Multi-AZ deployment for RDS"
   type        = bool
+  default     = false
 }
 
 variable "db_backup_retention_period" {
   description = "Number of days to retain database backups"
   type        = number
+  default     = 7
 }
 
 variable "db_name" {

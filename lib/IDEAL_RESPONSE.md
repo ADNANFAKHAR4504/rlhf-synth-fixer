@@ -1551,12 +1551,12 @@ aws secretsmanager get-secret-value \
 
 This infrastructure is designed to support PCI DSS compliance:
 
-- ✅ Encryption at rest and in transit
-- ✅ Network segmentation
-- ✅ Audit logging (CloudTrail)
-- ✅ Access controls (IAM, Security Groups)
-- ✅ Monitoring and alerting
-- ✅ Automated backups
+- Encryption at rest and in transit
+- Network segmentation
+- Audit logging (CloudTrail)
+- Access controls (IAM, Security Groups)
+- Monitoring and alerting
+- Automated backups
 
 ## Maintenance
 
