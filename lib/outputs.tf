@@ -163,15 +163,15 @@ output "alb_logs_bucket_arn" {
   value       = aws_s3_bucket.alb_logs.arn
 }
 
-# Route53 Outputs
+# Route53 Outputs (only if hosted zone exists)
 output "route53_zone_id" {
   description = "The ID of the Route53 hosted zone"
-  value       = aws_route53_zone.main.zone_id
+  value       = try(aws_route53_zone.main[0].zone_id, null)
 }
 
 output "route53_name_servers" {
   description = "The name servers of the Route53 hosted zone"
-  value       = aws_route53_zone.main.name_servers
+  value       = try(aws_route53_zone.main[0].name_servers, null)
 }
 
 output "route53_health_check_blue_id" {
@@ -195,15 +195,15 @@ output "cloudwatch_dashboard_name" {
   value       = aws_cloudwatch_dashboard.migration.dashboard_name
 }
 
-# IAM Outputs
+# IAM Outputs (only if roles exist)
 output "cross_account_blue_role_arn" {
   description = "The ARN of the cross-account role for blue environment"
-  value       = aws_iam_role.cross_account_blue.arn
+  value       = try(aws_iam_role.cross_account_blue[0].arn, null)
 }
 
 output "cross_account_green_role_arn" {
   description = "The ARN of the cross-account role for green environment"
-  value       = aws_iam_role.cross_account_green.arn
+  value       = try(aws_iam_role.cross_account_green[0].arn, null)
 }
 
 output "lambda_role_arn" {
@@ -216,10 +216,10 @@ output "dms_service_role_arn" {
   value       = aws_iam_role.dms_service.arn
 }
 
-# Transit Gateway Outputs
+# Transit Gateway Outputs (only if attachment exists)
 output "transit_gateway_attachment_id" {
   description = "The ID of the Transit Gateway VPC attachment"
-  value       = aws_ec2_transit_gateway_vpc_attachment.main.id
+  value       = try(aws_ec2_transit_gateway_vpc_attachment.main[0].id, null)
 }
 
 # VPC Endpoint Outputs

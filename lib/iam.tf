@@ -1,8 +1,10 @@
 # iam.tf - IAM Roles and Policies for Cross-Account Access with Session Tags
 
 # IAM Role for Cross-Account Access from Blue Environment
+# Only create if blue_account_id is not the placeholder value
 resource "aws_iam_role" "cross_account_blue" {
-  name = "cross-account-blue-${var.environment_suffix}"
+  count = var.blue_account_id != "123456789012" ? 1 : 0
+  name  = "cross-account-blue-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -29,8 +31,10 @@ resource "aws_iam_role" "cross_account_blue" {
 }
 
 # IAM Role for Cross-Account Access from Green Environment
+# Only create if green_account_id is not the placeholder value
 resource "aws_iam_role" "cross_account_green" {
-  name = "cross-account-green-${var.environment_suffix}"
+  count = var.green_account_id != "123456789012" ? 1 : 0
+  name  = "cross-account-green-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -58,8 +62,9 @@ resource "aws_iam_role" "cross_account_green" {
 
 # IAM Policy for Cross-Account Blue Access
 resource "aws_iam_role_policy" "cross_account_blue" {
-  name = "cross-account-blue-policy-${var.environment_suffix}"
-  role = aws_iam_role.cross_account_blue.id
+  count = var.blue_account_id != "123456789012" ? 1 : 0
+  name  = "cross-account-blue-policy-${var.environment_suffix}"
+  role  = aws_iam_role.cross_account_blue[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -132,8 +137,9 @@ resource "aws_iam_role_policy" "cross_account_blue" {
 
 # IAM Policy for Cross-Account Green Access
 resource "aws_iam_role_policy" "cross_account_green" {
-  name = "cross-account-green-policy-${var.environment_suffix}"
-  role = aws_iam_role.cross_account_green.id
+  count = var.green_account_id != "123456789012" ? 1 : 0
+  name  = "cross-account-green-policy-${var.environment_suffix}"
+  role  = aws_iam_role.cross_account_green[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -308,10 +314,10 @@ data "aws_iam_policy_document" "session_tags_example" {
 
     principals {
       type = "AWS"
-      identifiers = [
-        "arn:aws:iam::${var.blue_account_id}:root",
-        "arn:aws:iam::${var.green_account_id}:root"
-      ]
+      identifiers = concat(
+        var.blue_account_id != "123456789012" ? ["arn:aws:iam::${var.blue_account_id}:root"] : [],
+        var.green_account_id != "123456789012" ? ["arn:aws:iam::${var.green_account_id}:root"] : []
+      )
     }
 
     condition {
@@ -376,11 +382,13 @@ resource "aws_iam_policy" "audit_trail" {
 
 # Attach Audit Trail Policy to Cross-Account Roles
 resource "aws_iam_role_policy_attachment" "blue_audit" {
-  role       = aws_iam_role.cross_account_blue.name
+  count      = var.blue_account_id != "123456789012" ? 1 : 0
+  role       = aws_iam_role.cross_account_blue[0].name
   policy_arn = aws_iam_policy.audit_trail.arn
 }
 
 resource "aws_iam_role_policy_attachment" "green_audit" {
-  role       = aws_iam_role.cross_account_green.name
+  count      = var.green_account_id != "123456789012" ? 1 : 0
+  role       = aws_iam_role.cross_account_green[0].name
   policy_arn = aws_iam_policy.audit_trail.arn
 }

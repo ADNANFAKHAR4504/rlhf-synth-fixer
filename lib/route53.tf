@@ -1,17 +1,20 @@
 # route53.tf - Route53 Health Checks and DNS Configuration
 
-# Route53 Hosted Zone (assuming it exists or needs to be created)
+# Route53 Hosted Zone (only create if domain is not reserved by AWS)
+# Skip if domain is "example.com" which is reserved by AWS
 resource "aws_route53_zone" "main" {
-  name = var.domain_name
+  count = var.domain_name != "example.com" ? 1 : 0
+  name  = var.domain_name
 
   tags = {
     Name = "route53-zone-${var.environment_suffix}"
   }
 }
 
-# Route53 Record for ALB
+# Route53 Record for ALB (only if hosted zone exists)
 resource "aws_route53_record" "alb" {
-  zone_id = aws_route53_zone.main.zone_id
+  count   = var.domain_name != "example.com" ? 1 : 0
+  zone_id = aws_route53_zone.main[0].zone_id
   name    = var.domain_name
   type    = "A"
 
@@ -22,7 +25,7 @@ resource "aws_route53_record" "alb" {
   }
 }
 
-# Route53 Health Check for Blue Environment
+# Route53 Health Check for Blue Environment (using ALB DNS name directly)
 resource "aws_route53_health_check" "blue" {
   type              = "HTTPS"
   resource_path     = "/health"
@@ -31,6 +34,7 @@ resource "aws_route53_health_check" "blue" {
   request_interval  = 30
   failure_threshold = 3
   measure_latency   = true
+  disabled          = false
 
   tags = {
     Name = "health-check-blue-${var.environment_suffix}"

@@ -143,7 +143,7 @@ variable "alb_target_weight_green" {
 variable "domain_name" {
   description = "Domain name for Route53 hosted zone"
   type        = string
-  default     = "example.com"
+  default     = "test-migration.local"
 }
 
 variable "health_check_threshold" {

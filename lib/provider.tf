@@ -14,9 +14,13 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  # For testing, using local backend. Uncomment for production deployment with S3.
-  # backend "s3" {}
+  # S3 backend configuration
+  # Backend values are provided via -backend-config flags during terraform init
+  # This allows the bootstrap script to dynamically set bucket, key, and region
+  backend "s3" {
+    # Values are provided via -backend-config during terraform init
+    # bucket, key, region, and encrypt are set by the bootstrap script
+  }
 }
 
 # Primary AWS provider for general resources

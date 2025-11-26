@@ -135,7 +135,7 @@ resource "aws_lambda_function" "data_transformation" {
       AURORA_SECRET_ARN  = aws_secretsmanager_secret.aurora_credentials.arn
       LOG_BUCKET         = aws_s3_bucket.migration_logs.id
       DYNAMODB_TABLE     = aws_dynamodb_table.session_state.name
-      AWS_REGION         = var.aws_region
+      # AWS_REGION is a reserved environment variable and cannot be set
     }
   }
 

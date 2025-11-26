@@ -61,8 +61,9 @@ resource "aws_subnet" "database" {
 }
 
 # Elastic IPs for NAT Gateways
+# Use only 2 NAT gateways to avoid EIP limit issues
 resource "aws_eip" "nat" {
-  count  = length(var.availability_zones)
+  count  = min(2, length(var.availability_zones))
   domain = "vpc"
 
   tags = {
@@ -73,8 +74,9 @@ resource "aws_eip" "nat" {
 }
 
 # NAT Gateways
+# Use only 2 NAT gateways to avoid EIP limit issues
 resource "aws_nat_gateway" "main" {
-  count         = length(var.availability_zones)
+  count         = min(2, length(var.availability_zones))
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
@@ -113,12 +115,17 @@ resource "aws_route_table" "private" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    # Map AZs to NAT gateways: first 2 AZs get their own NAT, 3rd+ AZs share the last NAT
+    nat_gateway_id = aws_nat_gateway.main[min(count.index, length(aws_nat_gateway.main) - 1)].id
   }
 
-  route {
-    cidr_block         = var.onprem_cidr
-    transit_gateway_id = var.transit_gateway_id
+  # Only add transit gateway route if transit gateway ID is not placeholder
+  dynamic "route" {
+    for_each = var.transit_gateway_id != "tgw-00000000000000000" ? [1] : []
+    content {
+      cidr_block         = var.onprem_cidr
+      transit_gateway_id = var.transit_gateway_id
+    }
   }
 
   tags = {
@@ -140,7 +147,8 @@ resource "aws_route_table" "database" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    # Map AZs to NAT gateways: first 2 AZs get their own NAT, 3rd+ AZs share the last NAT
+    nat_gateway_id = aws_nat_gateway.main[min(count.index, length(aws_nat_gateway.main) - 1)].id
   }
 
   tags = {
