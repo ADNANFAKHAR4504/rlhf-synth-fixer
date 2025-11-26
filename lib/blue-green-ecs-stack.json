@@ -24,6 +24,25 @@
       "Type": "Number",
       "Default": 80,
       "Description": "Port exposed by the container"
+    },
+    "ECSAMI": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id",
+      "Description": "ECS optimized AMI ID"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "Description": "EC2 instance type for ECS cluster"
+    },
+    "KeyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "EC2 key pair name (optional)"
+    },
+    "DesiredCapacity": {
+      "Type": "Number",
+      "Default": 3,
+      "Description": "Desired number of EC2 instances per ASG"
     }
   },
   "Resources": {
@@ -688,6 +707,40 @@
         ]
       }
     },
+    "EC2InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "ecs-instance-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for ECS EC2 instances",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ecs-instance-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
@@ -843,6 +896,14 @@
             "Value": "enabled"
           }
         ],
+        "CapacityProviders": [
+          {
+            "Ref": "BlueCapacityProvider"
+          },
+          {
+            "Ref": "GreenCapacityProvider"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
@@ -960,6 +1021,248 @@
             "Key": "Name",
             "Value": {
               "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-instance-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ecs-instance-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "ecs-instance-profile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "EC2InstanceRole"
+          }
+        ]
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {
+          "Fn::Sub": "ecs-launch-template-${EnvironmentSuffix}"
+        },
+        "LaunchTemplateData": {
+          "ImageId": {
+            "Ref": "ECSAMI"
+          },
+          "InstanceType": {
+            "Ref": "InstanceType"
+          },
+          "KeyName": {
+            "Ref": "KeyName"
+          },
+          "IamInstanceProfile": {
+            "Arn": {
+              "Fn::GetAtt": [
+                "EC2InstanceProfile",
+                "Arn"
+              ]
+            }
+          },
+          "SecurityGroupIds": [
+            {
+              "Ref": "EC2InstanceSecurityGroup"
+            }
+          ],
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\necho ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config\nyum update -y\necho 'ECS_AVAILABLE_LOGGING_DRIVERS=[\"json-file\",\"awslogs\"]' >> /etc/ecs/ecs.config"
+            }
+          },
+          "Monitoring": {
+            "Enabled": true
+          },
+          "Tags": [
+            {
+              "Key": "Name",
+              "Value": {
+                "Fn::Sub": "ecs-instance-${EnvironmentSuffix}"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BlueASG": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Fn::Sub": "blue-asg-${EnvironmentSuffix}"
+        },
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": "$Latest"
+        },
+        "MinSize": "1",
+        "MaxSize": "10",
+        "DesiredCapacity": {
+          "Ref": "DesiredCapacity"
+        },
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-ecs-instance-${EnvironmentSuffix}"
+            },
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Environment",
+            "Value": "blue",
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "GreenASG": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Fn::Sub": "green-asg-${EnvironmentSuffix}"
+        },
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref": "LaunchTemplate"
+          },
+          "Version": "$Latest"
+        },
+        "MinSize": "1",
+        "MaxSize": "10",
+        "DesiredCapacity": {
+          "Ref": "DesiredCapacity"
+        },
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-ecs-instance-${EnvironmentSuffix}"
+            },
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Environment",
+            "Value": "green",
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "BlueCapacityProvider": {
+      "Type": "AWS::ECS::CapacityProvider",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "blue-capacity-provider-${EnvironmentSuffix}"
+        },
+        "AutoScalingGroupProvider": {
+          "AutoScalingGroupArn": {
+            "Fn::GetAtt": [
+              "BlueASG",
+              "Arn"
+            ]
+          },
+          "ManagedScaling": {
+            "Status": "ENABLED",
+            "TargetCapacity": 80,
+            "MinimumScalingStepSize": 1,
+            "MaximumScalingStepSize": 10
+          },
+          "ManagedTerminationProtection": "ENABLED"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "blue-capacity-provider-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "GreenCapacityProvider": {
+      "Type": "AWS::ECS::CapacityProvider",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "green-capacity-provider-${EnvironmentSuffix}"
+        },
+        "AutoScalingGroupProvider": {
+          "AutoScalingGroupArn": {
+            "Fn::GetAtt": [
+              "GreenASG",
+              "Arn"
+            ]
+          },
+          "ManagedScaling": {
+            "Status": "ENABLED",
+            "TargetCapacity": 80,
+            "MinimumScalingStepSize": 1,
+            "MaximumScalingStepSize": 10
+          },
+          "ManagedTerminationProtection": "ENABLED"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "green-capacity-provider-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1130,8 +1433,14 @@
           "Ref": "TaskDefinition"
         },
         "DesiredCount": 3,
-        "LaunchType": "EC2",
-        "PlatformVersion": "1.4.0",
+        "CapacityProviderStrategy": [
+          {
+            "CapacityProvider": {
+              "Ref": "BlueCapacityProvider"
+            },
+            "Weight": 1
+          }
+        ],
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",
@@ -1209,8 +1518,14 @@
           "Ref": "TaskDefinition"
         },
         "DesiredCount": 3,
-        "LaunchType": "EC2",
-        "PlatformVersion": "1.4.0",
+        "CapacityProviderStrategy": [
+          {
+            "CapacityProvider": {
+              "Ref": "GreenCapacityProvider"
+            },
+            "Weight": 1
+          }
+        ],
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "DISABLED",

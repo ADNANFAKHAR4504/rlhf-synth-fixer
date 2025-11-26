@@ -1656,18 +1656,6 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
 
 ## Summary of Fixes
 
-### Critical Fixes
-1. **EC2 Launch Type**: Changed from FARGATE to EC2 with proper Auto Scaling Groups
-2. **Auto Scaling Groups**: Added separate BlueAutoScalingGroup and GreenAutoScalingGroup
-3. **EC2 Infrastructure**: Added ECSInstanceRole, ECSInstanceProfile, and ECSLaunchTemplate
-4. **AMI Parameter**: Added ECSOptimizedAMI parameter using SSM Parameter Store
-5. **Platform Version**: Removed (not applicable to EC2 launch type)
-
-### High Priority Fixes
-1. **Path-Based Routing**: Added BluePathRule and GreenPathRule for /blue/* and /green/* paths
-2. **Network ACLs**: Added explicit NetworkAclEntryInboundDenyAll rule
-3. **Secrets Manager**: Created DatabaseCredentials and APIKey secrets with injection into task definition
-
 ### Medium Priority Fixes
 1. **Circuit Breaker Threshold**: Added BlueHealthThresholdAlarm and GreenHealthThresholdAlarm for 50% threshold monitoring
 2. **ASG Scaling Policies**: Converted from ECS Application Auto Scaling to ASG target tracking policies
@@ -1680,11 +1668,10 @@ This CloudFormation template creates a complete blue-green deployment infrastruc
 ## Deployment Notes
 
 1. **Prerequisites**: Ensure ECS-optimized AMI is available in your region (automatically retrieved via SSM)
-2. **Cost**: EC2 launch type reduces steady-state costs by 20-30% compared to FARGATE (~$200/month savings)
-3. **Instance Type**: Default t3.medium instances, adjustable via parameter
-4. **Secrets**: Update DatabaseCredentials and APIKey in AWS Secrets Manager console after deployment
-5. **DNS**: Blue and green services available at blue.${EnvironmentSuffix}.local and green.${EnvironmentSuffix}.local
-6. **Path Testing**: Test environments via /blue and /green paths before traffic shifting
+2. **Instance Type**: Default t3.medium instances, adjustable via parameter
+3. **Secrets**: Update DatabaseCredentials and APIKey in AWS Secrets Manager console after deployment
+4. **DNS**: Blue and green services available at blue.${EnvironmentSuffix}.local and green.${EnvironmentSuffix}.local
+5. **Path Testing**: Test environments via /blue and /green paths before traffic shifting
 
 ## Architecture Highlights
 

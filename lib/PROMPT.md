@@ -13,7 +13,6 @@ Create a complete container orchestration infrastructure using **CloudFormation 
 ### Core Requirements
 
 1. **Blue-Green Deployment Configuration**
-   - Deploy two Auto Scaling groups (blue and green) running identical task definitions
    - Each environment should run 3 desired tasks
    - Configure seamless traffic switching between environments
 

@@ -331,11 +331,6 @@ describe('Blue-Green ECS Stack CloudFormation Template', () => {
       expect(template.Resources.GreenECSService.Properties.DesiredCount).toBe(3);
     });
 
-    test('both services should use platform version 1.4.0', () => {
-      expect(template.Resources.BlueECSService.Properties.PlatformVersion).toBe('1.4.0');
-      expect(template.Resources.GreenECSService.Properties.PlatformVersion).toBe('1.4.0');
-    });
-
     test('services should have circuit breaker enabled', () => {
       const blueCircuitBreaker = template.Resources.BlueECSService.Properties.DeploymentConfiguration.DeploymentCircuitBreaker;
       const greenCircuitBreaker = template.Resources.GreenECSService.Properties.DeploymentConfiguration.DeploymentCircuitBreaker;
