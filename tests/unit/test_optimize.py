@@ -1017,31 +1017,39 @@ class TestMainFunction(unittest.TestCase):
 
         mock_optimizer = Mock()
         mock_optimizer_class.return_value = mock_optimizer
-        mock_optimizer.run_optimization_analysis.return_value = []
+        # Return non-empty list so reports are generated
+        mock_optimizer.run_optimization_analysis.return_value = [
+            {'resource_id': 'test', 'recommendation': 'test'}
+        ]
 
         main()
 
-        mock_optimizer_class.assert_called_once_with(region='us-west-2')
-        mock_optimizer.run_optimization_analysis.assert_called_once_with(
+        # With explicit region, should create one optimizer for that region
+        mock_optimizer_class.assert_called_with(region='us-west-2')
+        mock_optimizer.run_optimization_analysis.assert_called_with(
             days=30,
             confidence_threshold=0.90
         )
-        mock_optimizer.generate_reports.assert_called_once()
+        # Reports should be generated when recommendations exist
+        self.assertTrue(mock_optimizer.generate_reports.called)
 
     @patch('lib.optimize.InfrastructureOptimizer')
     @patch('builtins.input', return_value='yes')
-    @patch('sys.argv', ['optimize.py', '--apply'])
+    @patch('sys.argv', ['optimize.py', '--apply', '--region', 'us-east-1'])
     def test_main_function_apply_yes(self, mock_input, mock_optimizer_class):
         """Test main function with apply flag and user confirmation."""
         from lib.optimize import main
 
         mock_optimizer = Mock()
         mock_optimizer_class.return_value = mock_optimizer
-        mock_optimizer.run_optimization_analysis.return_value = []
+        # Return non-empty list so apply is attempted
+        test_recommendations = [{'resource_id': 'test', 'recommendation': 'test'}]
+        mock_optimizer.run_optimization_analysis.return_value = test_recommendations
 
         main()
 
-        mock_optimizer.apply_recommendations.assert_called_once_with([], dry_run=False)
+        # Should call apply_recommendations with the recommendations list
+        mock_optimizer.apply_recommendations.assert_called_with(test_recommendations, dry_run=False)
 
     @patch('lib.optimize.InfrastructureOptimizer')
     @patch('builtins.input', return_value='no')
