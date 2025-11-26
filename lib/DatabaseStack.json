@@ -140,7 +140,9 @@
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "ManageMasterUserPassword": true,
+        "MasterUserPassword": {
+          "Fn::Sub": "TempPassword123!${EnvironmentSuffix}"
+        },
         "DatabaseName": "transactions",
         "Port": 3306,
         "DBSubnetGroupName": {
