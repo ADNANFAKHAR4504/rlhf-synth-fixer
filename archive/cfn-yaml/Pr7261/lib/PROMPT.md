@@ -1,0 +1,13 @@
+Create a single CloudFormation template that architects a production ready web application infrastructure for a new startup launching their online platform. 
+
+The architecture should seamlessly integrate a static website hosting solution using Amazon S3 that will serve as the primary content repository for your web assets, working in conjunction with a CloudFront distribution to ensure optimal content delivery performance across global markets. This content delivery network should be intelligently configured to cache and serve your static resources while maintaining proper origin configurations and cache behaviors that align with modern web application requirements.
+
+For the compute layer, provision an EC2 instance using AMI and ensuring it has the necessary IAM role permissions to interact with AWS services as required by your application. This instance should maintain a consistent network identity through an Elastic IP address, which is critical for your DNS configuration and third party service integrations. The network security architecture must be carefully designed with a security group that permits HTTP traffic on port 80 for web access and SSH on port 22 for administrative purposes, while maintaining the principle of least privilege.
+
+Your data persistence layer requires an RDS PostgreSQL database instance with a specific instance type that balances performance requirements with cost optimization. This database will store critical application data and must be configured with appropriate network settings to allow secure communication with your EC2 instance while preventing unauthorized access.
+
+Implement comprehensive VPC flow logging to capture all network traffic flowing in and out of your VPC infrastructure. This audit trail is non negotiable and must be properly configured to store logs in a secure, accessible manner for compliance reviews.
+
+Throughout the entire infrastructure, maintain consistent resource tagging with 'Environment', 'Owner', and 'Project' tags on all resources. These tags are essential for cost allocation, resource management, and organizational governance as the startup scales.
+
+Your CloudFormation template should demonstrate infrastructure as code best practices, including proper use of parameters for reusability, outputs for resource reference, and logical organization of resources. The template must successfully pass AWS CloudFormation validation and be deployable without manual intervention, creating a fully functional web application environment ready for the  development team to begin deployment.
