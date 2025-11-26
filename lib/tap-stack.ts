@@ -180,6 +180,60 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Policy for transaction-processor Lambda
+    new aws.iam.RolePolicy(
+      `transaction-processor-policy-${environmentSuffix}`,
+      {
+        role: transactionProcessorRole.id,
+        policy: pulumi
+          .all([
+            transactionsTable.arn,
+            fraudDetectionBus.arn,
+            transactionProcessorDLQ.arn,
+            kmsKey.arn,
+          ])
+          .apply(([tableArn, busArn, dlqArn, kmsArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:PutItem',
+                    'dynamodb:GetItem',
+                    'dynamodb:UpdateItem',
+                  ],
+                  Resource: tableArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['events:PutEvents'],
+                  Resource: busArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['sqs:SendMessage'],
+                  Resource: dlqArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ],
+                  Resource: 'arn:aws:logs:*:*:*',
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // IAM role for fraud-detector Lambda
     const fraudDetectorRole = new aws.iam.Role(
@@ -204,6 +258,56 @@ export class FraudDetectionStack extends pulumi.ComponentResource {
     );
 
     // Policy for fraud-detector Lambda
+    new aws.iam.RolePolicy(
+      `fraud-detector-policy-${environmentSuffix}`,
+      {
+        role: fraudDetectorRole.id,
+        policy: pulumi
+          .all([
+            transactionsTable.arn,
+            fraudAlertsTopic.arn,
+            fraudDetectorDLQ.arn,
+            kmsKey.arn,
+          ])
+          .apply(([tableArn, topicArn, dlqArn, kmsArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['dynamodb:GetItem', 'dynamodb:Query'],
+                  Resource: tableArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['sns:Publish'],
+                  Resource: topicArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['sqs:SendMessage'],
+                  Resource: dlqArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsArn,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ],
+                  Resource: 'arn:aws:logs:*:*:*',
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
     // CloudWatch Log Group for transaction-processor
     const transactionProcessorLogGroup = new aws.cloudwatch.LogGroup(
