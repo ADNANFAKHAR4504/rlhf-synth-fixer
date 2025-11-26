@@ -311,7 +311,7 @@ export class TapStack extends pulumi.ComponentResource {
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'trading',
-        masterUsername: 'admin',
+        masterUsername: 'dbadmin',
         masterPassword: dbMasterPasswordVersion.secretString.apply(s => {
           const parsed = JSON.parse(s as string) as { password: string };
           return parsed.password || 'defaultPassword123!';
@@ -791,62 +791,9 @@ export class TapStack extends pulumi.ComponentResource {
       {
         secretId: primarySecret.id,
         secretString: JSON.stringify({
-          username: 'admin',
+          username: 'dbadmin',
           password: 'tempPassword123!',
         }),
-      },
-      { parent: this }
-    );
-
-    // FIXED: Add rotation configuration for Secrets Manager
-    const primaryRotationLambdaRole = new aws.iam.Role(
-      'primary-rotation-lambda-role',
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-              Effect: 'Allow',
-            },
-          ],
-        }),
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          'arn:aws:iam::aws:policy/SecretsManagerReadWrite',
-        ],
-      },
-      { parent: this }
-    );
-
-    const primaryRotationLambda = new aws.lambda.Function(
-      'primary-rotation-lambda',
-      {
-        runtime: aws.lambda.Runtime.Python3d9,
-        role: primaryRotationLambdaRole.arn,
-        handler: 'index.handler',
-        code: new pulumi.asset.AssetArchive({
-          'index.py': new pulumi.asset.StringAsset(`
-def handler(event, context):
-    # Simplified rotation logic
-    return {'statusCode': 200}
-        `),
-        }),
-      },
-      { parent: this }
-    );
-
-    const _primarySecretRotation = new aws.secretsmanager.SecretRotation(
-      'primary-secret-rotation',
-      {
-        secretId: primarySecret.id,
-        rotationLambdaArn: primaryRotationLambda.arn,
-        rotationRules: {
-          automaticallyAfterDays: 30, // FIXED: 30-day rotation
-        },
       },
       { parent: this }
     );
@@ -866,62 +813,9 @@ def handler(event, context):
       {
         secretId: secondarySecret.id,
         secretString: JSON.stringify({
-          username: 'admin',
+          username: 'dbadmin',
           password: 'tempPassword123!',
         }),
-      },
-      { provider: euProvider, parent: this }
-    );
-
-    // FIXED: Add rotation for secondary secret too
-    const secondaryRotationLambdaRole = new aws.iam.Role(
-      'secondary-rotation-lambda-role',
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-              Effect: 'Allow',
-            },
-          ],
-        }),
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-          'arn:aws:iam::aws:policy/SecretsManagerReadWrite',
-        ],
-      },
-      { provider: euProvider, parent: this }
-    );
-
-    const secondaryRotationLambda = new aws.lambda.Function(
-      'secondary-rotation-lambda',
-      {
-        runtime: aws.lambda.Runtime.Python3d9,
-        role: secondaryRotationLambdaRole.arn,
-        handler: 'index.handler',
-        code: new pulumi.asset.AssetArchive({
-          'index.py': new pulumi.asset.StringAsset(`
-def handler(event, context):
-    # Simplified rotation logic
-    return {'statusCode': 200}
-        `),
-        }),
-      },
-      { provider: euProvider, parent: this }
-    );
-
-    const _secondarySecretRotation = new aws.secretsmanager.SecretRotation(
-      'secondary-secret-rotation',
-      {
-        secretId: secondarySecret.id,
-        rotationLambdaArn: secondaryRotationLambda.arn,
-        rotationRules: {
-          automaticallyAfterDays: 30, // FIXED: 30-day rotation
-        },
       },
       { provider: euProvider, parent: this }
     );
