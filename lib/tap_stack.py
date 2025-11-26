@@ -71,8 +71,8 @@ class TapStack(TerraformStack):
             tags={**common_tags, "Name": f"igw-{environment_suffix}"}
         )
 
-        # Availability Zones (2 AZs to stay within EIP limits)
-        azs = [f"{aws_region}a", f"{aws_region}b"]
+        # Availability Zones (3 AZs for high availability as per requirements)
+        azs = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
 
         # Create subnets
         public_subnets = []

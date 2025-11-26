@@ -4,7 +4,7 @@ Hey team,
 
 We need to build a production-ready VPC infrastructure for a new digital banking platform. A financial services company is launching their digital banking solution and needs a secure, isolated network foundation in AWS. I've been asked to create this in Python using CDKTF. The business wants a highly available network that can support strict segmentation between application tiers while maintaining redundancy across multiple availability zones.
 
-The infrastructure needs to be deployed in eu-west-1 (Ireland) and must meet financial services compliance requirements including comprehensive network monitoring and explicit security controls. This is going to be the foundation for their multi-tier banking applications, so it needs to be rock solid from day one.
+The infrastructure needs to support dynamic region configuration via AWS_REGION environment variable or a lib/AWS_REGION file (with us-east-1 as default fallback) and must meet financial services compliance requirements including comprehensive network monitoring and explicit security controls. This is going to be the foundation for their multi-tier banking applications, so it needs to be rock solid from day one.
 
 The key challenge here is balancing high availability with security. We need NAT Gateways in each availability zone for redundancy, but that comes with cost implications. We also need to ensure all traffic is logged for compliance, with proper lifecycle management to control storage costs. The network design must accommodate future growth while maintaining strict isolation between public and private resources.
 
@@ -20,7 +20,7 @@ Create a production-grade VPC network infrastructure using **CDKTF with Python**
    - Must accommodate at least 4096 available IPs per subnet for future growth
 
 2. **Multi-AZ Subnet Architecture**
-   - Deploy 6 subnets total across 3 availability zones in eu-west-1
+   - Deploy 6 subnets total across 3 availability zones in the configured region
    - Each AZ must have exactly one public subnet and one private subnet
    - All subnets must use /24 CIDR blocks (256 IPs each)
    - CIDR blocks must be non-overlapping within the VPC range
@@ -72,7 +72,7 @@ Create a production-grade VPC network infrastructure using **CDKTF with Python**
 - Use **VPC Flow Logs** for network monitoring and compliance
 - Use **S3 Bucket** for flow log storage with lifecycle policies
 - Use **Network ACLs** for subnet-level security
-- Deploy to **eu-west-1** region
+- Support **dynamic region configuration** via AWS_REGION environment variable or lib/AWS_REGION file (default: us-east-1)
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
 - Code must be compatible with Python 3.8+, CDKTF 0.19+, and Terraform 1.5+
@@ -94,7 +94,7 @@ Create a production-grade VPC network infrastructure using **CDKTF with Python**
 
 - VPC CIDR must be 10.0.0.0/16 (exactly as specified)
 - Subnet CIDR blocks must be /24 and non-overlapping
-- Must deploy across exactly 3 availability zones in eu-west-1
+- Must deploy across exactly 3 availability zones in the configured region
 - Each AZ requires both public and private subnet
 - NAT Gateways cannot be shared across availability zones
 - Flow logs must capture accepted, rejected, and all traffic types
@@ -120,7 +120,7 @@ Create a production-grade VPC network infrastructure using **CDKTF with Python**
 
 - Complete CDKTF Python implementation with all infrastructure components
 - VPC with DNS support and specified CIDR block
-- Six subnets across three availability zones (public and private pairs)
+- Six subnets across three availability zones in the configured region (public and private pairs)
 - Internet Gateway attached to VPC
 - Three NAT Gateways with Elastic IPs (one per AZ)
 - Route tables for public and private subnets with appropriate routes
