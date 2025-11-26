@@ -25,5 +25,10 @@
   "po_id": "o8b8r8m6",
   "training_quality": 10,
   "author": "mayanksethi-turing",
-  "reviewer": "balasl342"
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
