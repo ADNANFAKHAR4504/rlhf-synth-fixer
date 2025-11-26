@@ -8,9 +8,7 @@
   "startedAt": "2025-11-26T00:00:00Z",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Monitoring and Threat Detection",
-    "Compliance and Audit Logging",
-    "Network Security and Access Control"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "Aurora Serverless v2",
@@ -35,5 +33,6 @@
     "VPC Flow Logs"
   ],
   "region": "us-east-1",
+  "author": "mayanksethi-turing",
   "training_quality": 10
 }
