@@ -5,6 +5,7 @@
     "EnvironmentSuffix": {
       "Description": "Unique suffix for resource naming to ensure uniqueness across deployments",
       "Type": "String",
+      "Default": "dev",
       "MinLength": 3,
       "MaxLength": 20,
       "AllowedPattern": "[a-z0-9-]+",
@@ -98,7 +99,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "trading-data-${EnvironmentSuffix}-${AWS::Region}"
+          "Fn::Sub": "trading-data-${EnvironmentSuffix}-${AWS::Region}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -1635,7 +1636,7 @@
       "Type": "AWS::Backup::BackupVault",
       "Properties": {
         "BackupVaultName": {
-          "Fn::Sub": "trading-platform-backup-${EnvironmentSuffix}"
+          "Fn::Sub": "trading-platform-backup-${EnvironmentSuffix}-${AWS::Region}"
         },
         "EncryptionKeyArn": {
           "Fn::GetAtt": [
