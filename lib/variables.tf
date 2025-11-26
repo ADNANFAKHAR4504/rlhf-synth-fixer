@@ -9,7 +9,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming"
   type        = string
-  default     = "dev45"
+  default     = "dev46"
 }
 
 variable "repository" {
