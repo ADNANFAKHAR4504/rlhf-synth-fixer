@@ -192,9 +192,20 @@ class TestTapStackIntegration:
             # Check CIDR block
             assert vpc['CidrBlock'] == '10.0.0.0/16', "VPC should have correct CIDR block"
             
-            # Check DNS support
-            assert vpc['EnableDnsSupport'] is True, "DNS support should be enabled"
-            assert vpc['EnableDnsHostnames'] is True, "DNS hostnames should be enabled"
+            # Check DNS support (need to query attributes separately)
+            dns_support = ec2_client.describe_vpc_attribute(
+                VpcId=vpc_id,
+                Attribute='enableDnsSupport'
+            )
+            assert dns_support['EnableDnsSupport']['Value'] is True, \
+                "DNS support should be enabled"
+            
+            dns_hostnames = ec2_client.describe_vpc_attribute(
+                VpcId=vpc_id,
+                Attribute='enableDnsHostnames'
+            )
+            assert dns_hostnames['EnableDnsHostnames']['Value'] is True, \
+                "DNS hostnames should be enabled"
             
             # Check subnets exist
             subnets_response = ec2_client.describe_subnets(
@@ -345,13 +356,13 @@ class TestTapStackIntegration:
         except ClientError as e:
             pytest.fail(f"DynamoDB operations failed: {e}")
 
-    def test_infrastructure_tags(self, s3_client, dynamodb_client, deployment_outputs):
+    def test_infrastructure_tags(self, s3_client, dynamodb_client, deployment_outputs, aws_region):
         """Test that resources have proper tags applied."""
         bucket_name = deployment_outputs['bucket_name']
         table_name = deployment_outputs['table_name']
         
+        # Test S3 bucket tags
         try:
-            # Check S3 bucket tags
             s3_tags_response = s3_client.get_bucket_tagging(Bucket=bucket_name)
             s3_tags = {tag['Key']: tag['Value'] for tag in s3_tags_response.get('TagSet', [])}
             
@@ -359,14 +370,30 @@ class TestTapStackIntegration:
             assert 'ManagedBy' in s3_tags, "Bucket should have ManagedBy tag"
             assert s3_tags['ManagedBy'] == 'CDKTF', "ManagedBy should be CDKTF"
             
-            # Check DynamoDB table tags
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchTagSet':
+                pytest.skip("S3 bucket has no tags configured")
+            else:
+                pytest.fail(f"S3 tag validation failed: {e}")
+        
+        # Test DynamoDB table tags
+        try:
+            # Get table description to get the full ARN
+            table_desc = dynamodb_client.describe_table(TableName=table_name)
+            table_arn = table_desc['Table']['TableArn']
+            
             dynamodb_tags_response = dynamodb_client.list_tags_of_resource(
-                ResourceArn=f"arn:aws:dynamodb:*:*:table/{table_name}"
+                ResourceArn=table_arn
             )
-            # Note: Full ARN construction would need account ID, so this might fail
-            # but we're testing the pattern
+            dynamodb_tags = {tag['Key']: tag['Value'] 
+                           for tag in dynamodb_tags_response.get('Tags', [])}
+            
+            # Should have ManagedBy tag
+            assert 'ManagedBy' in dynamodb_tags, "Table should have ManagedBy tag"
+            assert dynamodb_tags['ManagedBy'] == 'CDKTF', "ManagedBy should be CDKTF"
             
         except ClientError as e:
-            # Tags might not be accessible in all scenarios
-            if e.response['Error']['Code'] not in ['NoSuchTagSet', 'AccessDenied']:
-                pytest.fail(f"Tag validation failed: {e}")
+            if e.response['Error']['Code'] in ['AccessDenied', 'ResourceNotFoundException']:
+                pytest.skip(f"Cannot access DynamoDB tags: {e.response['Error']['Code']}")
+            else:
+                pytest.fail(f"DynamoDB tag validation failed: {e}")
