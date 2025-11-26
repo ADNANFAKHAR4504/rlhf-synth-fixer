@@ -6,7 +6,6 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 # S3 configuration classes removed due to import issues with AWS provider naming inconsistencies
 from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.data_aws_vpc import DataAwsVpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
@@ -148,14 +147,7 @@ class TapStack(TerraformStack):
 
     def _create_vpc_infrastructure(self):
         """Create VPC infrastructure with endpoints."""
-        # Import existing development VPC for reference
-        self.dev_vpc_data = DataAwsVpc(
-            self,
-            "dev_vpc",
-            id="vpc-0a1b2c3d4e5f",
-        )
-
-        # Create production VPC with same CIDR but different tags
+        # Create production VPC
         self.vpc = Vpc(
             self,
             "production_vpc",
