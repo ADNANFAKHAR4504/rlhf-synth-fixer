@@ -22,7 +22,7 @@ data "aws_region" "current" {}
 
 locals {
   name_prefix = "ha-postgres-${var.environment_suffix}"
-  
+
   common_tags = {
     Environment = var.environment_suffix
     Repository  = var.repository
@@ -268,16 +268,16 @@ resource "aws_db_subnet_group" "aurora" {
 
 # Aurora PostgreSQL Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier      = "${local.name_prefix}-aurora-cluster"
-  engine                  = "aurora-postgresql"
-  engine_version          = "15.6"
-  engine_mode             = "provisioned"
-  database_name           = "financialdb"
-  master_username         = "postgres"
-  master_password         = random_password.master_password.result
-  db_subnet_group_name    = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids  = [aws_security_group.rds.id]
-  
+  cluster_identifier     = "${local.name_prefix}-aurora-cluster"
+  engine                 = "aurora-postgresql"
+  engine_version         = "15.6"
+  engine_mode            = "provisioned"
+  database_name          = "financialdb"
+  master_username        = "postgres"
+  master_password        = random_password.master_password.result
+  db_subnet_group_name   = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+
   # Serverless v2 scaling configuration
   serverlessv2_scaling_configuration {
     max_capacity = 16.0
@@ -288,7 +288,7 @@ resource "aws_rds_cluster" "aurora" {
   backup_retention_period      = 7
   preferred_backup_window      = "03:00-04:00"
   preferred_maintenance_window = "mon:04:00-mon:05:00"
-  
+
   # Encryption
   storage_encrypted = true
   kms_key_id        = aws_kms_key.rds.arn
@@ -320,8 +320,8 @@ resource "aws_rds_cluster_instance" "aurora_instances" {
   engine_version     = aws_rds_cluster.aurora.engine_version
 
   # Performance Insights
-  performance_insights_enabled    = true
-  performance_insights_kms_key_id = aws_kms_key.rds.arn
+  performance_insights_enabled          = true
+  performance_insights_kms_key_id       = aws_kms_key.rds.arn
   performance_insights_retention_period = 7
 
   # Enhanced Monitoring
@@ -725,11 +725,11 @@ resource "aws_lambda_function" "health_checker" {
 
   environment {
     variables = {
-      DB_ENDPOINT       = aws_rds_cluster.aurora.endpoint
-      READER_ENDPOINT   = aws_rds_cluster.aurora.reader_endpoint
-      SECRET_ARN        = aws_secretsmanager_secret.db_credentials.arn
-      HEALTH_CHECK_SQL  = "SELECT 1"
-      SNS_TOPIC_ARN     = aws_sns_topic.alerts.arn
+      DB_ENDPOINT      = aws_rds_cluster.aurora.endpoint
+      READER_ENDPOINT  = aws_rds_cluster.aurora.reader_endpoint
+      SECRET_ARN       = aws_secretsmanager_secret.db_credentials.arn
+      HEALTH_CHECK_SQL = "SELECT 1"
+      SNS_TOPIC_ARN    = aws_sns_topic.alerts.arn
     }
   }
 
@@ -1220,7 +1220,7 @@ resource "aws_iam_role_policy" "eventbridge_fis" {
         Action = [
           "fis:StartExperiment"
         ]
-        Resource = aws_fis_experiment_template.aurora_failover.arn
+        Resource = "arn:aws:fis:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:experiment-template/${aws_fis_experiment_template.aurora_failover.id}"
       }
     ]
   })
