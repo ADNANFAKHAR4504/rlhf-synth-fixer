@@ -20,11 +20,6 @@
       "Description": "External ID for cross-account assume role security",
       "MinLength": 8,
       "NoEcho": true
-    },
-    "TargetAccountIds": {
-      "Type": "CommaDelimitedList",
-      "Description": "Comma-separated list of AWS account IDs to scan",
-      "Default": ""
     }
   },
   "Resources": {
