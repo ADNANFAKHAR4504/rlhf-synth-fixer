@@ -132,7 +132,7 @@ describe('ECS Fargate Fraud Detection Service Integration Tests', () => {
       const lb = service.loadBalancers![0];
       expect(lb.targetGroupArn).toBeDefined();
       expect(lb.containerName).toBe('fraud-detector');
-      expect(lb.containerPort).toBe(8080);
+      expect(lb.containerPort).toBe(80);
     });
 
     skipIfNoOutputs('should have health check grace period configured', async () => {
@@ -191,9 +191,9 @@ describe('ECS Fargate Fraud Detection Service Integration Tests', () => {
 
       // Verify port mappings
       expect(container.portMappings).toBeDefined();
-      const port8080 = container.portMappings?.find(pm => pm.containerPort === 8080);
-      expect(port8080).toBeDefined();
-      expect(port8080?.protocol).toBe('tcp');
+      const port80 = container.portMappings?.find(pm => pm.containerPort === 80);
+      expect(port80).toBeDefined();
+      expect(port80?.protocol).toBe('tcp');
 
       // Verify health check
       expect(container.healthCheck).toBeDefined();
@@ -251,7 +251,7 @@ describe('ECS Fargate Fraud Detection Service Integration Tests', () => {
       expect(targetGroup?.TargetType).toBe('ip');
       expect(targetGroup?.Protocol).toBe('HTTP');
       expect(targetGroup?.HealthCheckEnabled).toBe(true);
-      expect(targetGroup?.HealthCheckPath).toBe('/health');
+      expect(targetGroup?.HealthCheckPath).toBe('/');
       expect(targetGroup?.HealthCheckProtocol).toBe('HTTP');
       expect(targetGroup?.HealthCheckIntervalSeconds).toBe(30);
       expect(targetGroup?.HealthCheckTimeoutSeconds).toBe(5);
