@@ -45,7 +45,6 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly acceleratorDns: pulumi.Output<string>;
   public readonly primarySecretArn: pulumi.Output<string>;
   public readonly secondarySecretArn: pulumi.Output<string>;
-  public readonly configBucketName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -974,82 +973,6 @@ def handler(event, context):
       { parent: this }
     );
 
-    // AWS Config (FIXED: Corrected IAM policy name)
-    const configRole = new aws.iam.Role(
-      'config-role',
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Principal: {
-                Service: 'config.amazonaws.com',
-              },
-              Effect: 'Allow',
-            },
-          ],
-        }),
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole', // FIXED: Added service-role/ prefix
-        ],
-      },
-      { parent: this }
-    );
-
-    const configBucket = new aws.s3.Bucket(
-      'config-bucket',
-      {
-        bucket: `config-bucket-${environmentSuffix}`,
-        forceDestroy: true,
-      },
-      { parent: this }
-    );
-
-    const configRecorder = new aws.cfg.Recorder(
-      'config-recorder',
-      {
-        name: `config-recorder-${environmentSuffix}`,
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      },
-      { parent: this }
-    );
-
-    const configDeliveryChannel = new aws.cfg.DeliveryChannel(
-      'config-delivery',
-      {
-        name: `config-delivery-${environmentSuffix}`,
-        s3BucketName: configBucket.bucket,
-      },
-      { dependsOn: [configRecorder], parent: this }
-    );
-
-    const configRecorderStatus = new aws.cfg.RecorderStatus(
-      'config-recorder-status',
-      {
-        name: configRecorder.name,
-        isEnabled: true,
-      },
-      { dependsOn: [configDeliveryChannel], parent: this }
-    );
-
-    // AWS Config Rule
-    const _configRule = new aws.cfg.Rule(
-      'config-rule',
-      {
-        name: `encrypted-volumes-${environmentSuffix}`,
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'ENCRYPTED_VOLUMES',
-        },
-      },
-      { dependsOn: [configRecorderStatus], parent: this }
-    );
-
     // Set public outputs
     this.primaryVpcId = primaryVpc.id;
     this.secondaryVpcId = secondaryVpc.id;
@@ -1060,7 +983,6 @@ def handler(event, context):
     this.acceleratorDns = accelerator.dnsName;
     this.primarySecretArn = primarySecret.arn;
     this.secondarySecretArn = secondarySecret.arn;
-    this.configBucketName = configBucket.bucket;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -1073,7 +995,6 @@ def handler(event, context):
       acceleratorDns: this.acceleratorDns,
       primarySecretArn: this.primarySecretArn,
       secondarySecretArn: this.secondarySecretArn,
-      configBucketName: this.configBucketName,
     });
   }
 }
