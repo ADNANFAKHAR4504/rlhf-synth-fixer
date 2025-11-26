@@ -3,6 +3,7 @@
 variable "environment_suffix" {
   description = "Environment suffix for resource naming (e.g., blue, green)"
   type        = string
+  default     = "dev"
 }
 
 variable "repository" {
@@ -71,6 +72,7 @@ variable "aurora_master_password" {
   description = "Master password for Aurora cluster"
   type        = string
   sensitive   = true
+  default     = "TempAuroraPassword123!"
 }
 
 # DMS Configuration
@@ -83,6 +85,7 @@ variable "dms_replication_instance_class" {
 variable "onprem_db_endpoint" {
   description = "On-premises database endpoint"
   type        = string
+  default     = "onprem-db.example.com"
 }
 
 variable "onprem_db_port" {
@@ -94,17 +97,20 @@ variable "onprem_db_port" {
 variable "onprem_db_name" {
   description = "On-premises database name"
   type        = string
+  default     = "testdb"
 }
 
 variable "onprem_db_username" {
   description = "On-premises database username"
   type        = string
+  default     = "onprem_admin"
 }
 
 variable "onprem_db_password" {
   description = "On-premises database password"
   type        = string
   sensitive   = true
+  default     = "TempOnpremPassword123!"
 }
 
 # Lambda Configuration
@@ -137,6 +143,7 @@ variable "alb_target_weight_green" {
 variable "domain_name" {
   description = "Domain name for Route53 hosted zone"
   type        = string
+  default     = "example.com"
 }
 
 variable "health_check_threshold" {
@@ -156,17 +163,20 @@ variable "s3_logs_retention_days" {
 variable "blue_account_id" {
   description = "AWS account ID for blue environment"
   type        = string
+  default     = "123456789012"
 }
 
 variable "green_account_id" {
   description = "AWS account ID for green environment"
   type        = string
+  default     = "123456789012"
 }
 
 # Transit Gateway Configuration
 variable "transit_gateway_id" {
   description = "Transit Gateway ID for on-premises connectivity"
   type        = string
+  default     = "tgw-00000000000000000"
 }
 
 variable "onprem_cidr" {
@@ -179,6 +189,7 @@ variable "onprem_cidr" {
 variable "alert_email" {
   description = "Email address for CloudWatch alarm notifications"
   type        = string
+  default     = "alerts@example.com"
 }
 
 # DynamoDB Configuration
