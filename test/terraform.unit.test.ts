@@ -26,6 +26,7 @@ function runTerraformCommand(command: string): string {
       env: {
         ...process.env,
         TF_IN_AUTOMATION: '1',
+        NO_COLOR: '1', // Disable ANSI color codes for CI/CD compatibility
       },
     });
   } catch (error: any) {
@@ -636,7 +637,14 @@ describe('Terraform Configuration Structure', () => {
 
     test('terraform validate passes', () => {
       const output = runTerraformCommand('terraform validate -json');
-      const validation = JSON.parse(output);
+      
+      // Extract JSON from output (may contain ANSI codes or other text in CI/CD)
+      const jsonMatch = output.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error(`No JSON found in terraform validate output: ${output}`);
+      }
+      
+      const validation = JSON.parse(jsonMatch[0]);
       expect(validation.valid).toBe(true);
     });
   });
