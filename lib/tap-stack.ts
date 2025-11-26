@@ -492,7 +492,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         globalClusterIdentifier: `aurora-global-${environmentSuffix}`,
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         databaseName: 'transactions',
         storageEncrypted: true,
         deletionProtection: false, // Required for destroyability
@@ -506,7 +506,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         clusterIdentifier: `primary-aurora-cluster-${environmentSuffix}`,
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         databaseName: 'transactions',
         masterUsername: 'dbadmin',
         masterPassword: pulumi.secret('TempPassword123!'), // In production, use Secrets Manager
@@ -549,7 +549,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: primaryCluster.id,
         instanceClass: 'db.r5.large',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         publiclyAccessible: false,
         tags: {
           ...defaultTags,
@@ -568,7 +568,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: primaryCluster.id,
         instanceClass: 'db.r5.large',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         publiclyAccessible: false,
         tags: {
           ...defaultTags,
@@ -586,7 +586,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         clusterIdentifier: `secondary-aurora-cluster-${environmentSuffix}`,
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: secondaryDbSubnetGroup.name,
         vpcSecurityGroupIds: [secondaryDbSecurityGroup.id],
@@ -624,7 +624,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: secondaryCluster.id,
         instanceClass: 'db.r5.large',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         publiclyAccessible: false,
         tags: {
           ...defaultTags,
@@ -647,7 +647,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: secondaryCluster.id,
         instanceClass: 'db.r5.large',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '14.6',
         publiclyAccessible: false,
         tags: {
           ...defaultTags,
@@ -742,32 +742,30 @@ export class TapStack extends pulumi.ComponentResource {
       `dr-operations-role-${environmentSuffix}`,
       {
         name: `dr-operations-role-${environmentSuffix}`,
-        assumeRolePolicy: pulumi
-          .all([accountId])
-          .apply((values: string[]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Principal: { Service: 'lambda.amazonaws.com' },
-                  Action: 'sts:AssumeRole',
+        assumeRolePolicy: pulumi.all([accountId]).apply((values: string[]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: { Service: 'lambda.amazonaws.com' },
+                Action: 'sts:AssumeRole',
+              },
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${values[0]}:root`,
                 },
-                {
-                  Effect: 'Allow',
-                  Principal: {
-                    AWS: `arn:aws:iam::${values[0]}:root`,
-                  },
-                  Action: 'sts:AssumeRole',
-                  Condition: {
-                    StringEquals: {
-                      'sts:ExternalId': `dr-ops-${environmentSuffix}`,
-                    },
+                Action: 'sts:AssumeRole',
+                Condition: {
+                  StringEquals: {
+                    'sts:ExternalId': `dr-ops-${environmentSuffix}`,
                   },
                 },
-              ],
-            })
-          ),
+              },
+            ],
+          })
+        ),
         tags: {
           ...defaultTags,
           Name: `dr-operations-role-${environmentSuffix}`,
