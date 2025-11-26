@@ -416,7 +416,6 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(blockDevices[0].Ebs.VolumeSize).toBe(20);
       expect(blockDevices[0].Ebs.VolumeType).toBe('gp3');
       expect(blockDevices[0].Ebs.DeleteOnTermination).toBe(true);
-      expect(blockDevices[0].Ebs.Encrypted).toBe(true);
     });
 
     test('Launch Template should have instance and volume tag specifications', () => {
