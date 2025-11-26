@@ -5,7 +5,7 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-26T07:46:00Z",
-  "subtask": "",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Migration",
     "Blue-Green Deployment",

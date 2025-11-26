@@ -1,11 +1,5 @@
 # variables.tf
 
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "eu-central-1"
-}
-
 variable "environment_suffix" {
   description = "Environment suffix for resource naming (e.g., blue, green)"
   type        = string
