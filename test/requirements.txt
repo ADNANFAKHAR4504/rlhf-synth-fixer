@@ -1,0 +1,6 @@
+# Test requirements for CloudFormation Compliance Analyzer
+pytest>=7.0.0
+pytest-cov>=3.0.0
+boto3>=1.26.0
+moto>=4.0.0
+aws-xray-sdk>=2.12.0
