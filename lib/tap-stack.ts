@@ -66,8 +66,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Get configuration
     const config = new pulumi.Config();
+    // Get environmentSuffix from args, config, or environment variable
+    // The deploy script sets ENVIRONMENT_SUFFIX as an environment variable
     const environmentSuffix =
-      args.environmentSuffix || config.require('environmentSuffix');
+      args.environmentSuffix || 
+      config.get('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev'; // Default fallback
     const environment = config.get('environment') || 'production';
     const appName = 'payment-app';
 
@@ -1085,7 +1090,11 @@ echo "Application would start here"
 // Pulumi application entry point
 // Get configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Get environmentSuffix from config or environment variable
+// The deploy script sets ENVIRONMENT_SUFFIX as an environment variable
+const environmentSuffix = config.get('environmentSuffix') || 
+  process.env.ENVIRONMENT_SUFFIX || 
+  'dev'; // Default fallback
 const environment = config.get('environment') || 'production';
 
 // Get metadata from environment variables for tagging purposes.
