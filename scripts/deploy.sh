@@ -347,16 +347,11 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
-    # Ensure required project config values are set (some projects require environmentSuffix)
-    FULL_STACK="${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
-    pipenv run pulumi config set --stack "$FULL_STACK" environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
 
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
-    # Ensure environmentSuffix is configured for the stack before applying other config
-    pulumi config set --stack "$FULL_STACK" environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
     echo "Deploying infrastructure ..."
@@ -371,62 +366,10 @@ elif [ "$PLATFORM" = "pulumi" ]; then
       }
     fi
     cd ..
-  elif [ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "js" ]; then
-    echo "🔧 TypeScript/JavaScript Pulumi project detected"
-    # Determine Pulumi project name from Pulumi.yaml (prefers lib/Pulumi.yaml if present)
-    if [ -f "lib/Pulumi.yaml" ]; then
-      PROJECT_FILE="lib/Pulumi.yaml"
-    else
-      PROJECT_FILE="Pulumi.yaml"
-    fi
-
-    # Extract the project name, strip quotes if present
-    PULUMI_PROJECT_NAME=$(sed -n 's/^name:[[:space:]]*//p' "$PROJECT_FILE" | tr -d '"' | tr -d "'" | head -n1)
-    PULUMI_PROJECT_NAME=${PULUMI_PROJECT_NAME:-TapStack}
-
-    # Project directory where Pulumi.yaml lives
-    PROJECT_DIR=$(dirname "$PROJECT_FILE")
-
-    pulumi login "$PULUMI_BACKEND_URL"
-    # Build TypeScript if present so Pulumi has compiled output
-    if [ -f "package.json" ]; then
-      npm run build || true
-    fi
-
-    pushd "$PROJECT_DIR" >/dev/null || true
-    echo "Selecting or creating Pulumi stack for project: $PULUMI_PROJECT_NAME"
-    FULL_STACK="${PULUMI_ORG}/${PULUMI_PROJECT_NAME}/${PULUMI_PROJECT_NAME}${ENVIRONMENT_SUFFIX}"
-    pulumi stack select "$FULL_STACK" --create
-
-    # Clear any existing locks before deployment
-    echo "🔓 Clearing any stuck locks..."
-    pulumi cancel --stack "$FULL_STACK" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
-
-    # Ensure environmentSuffix is configured for the stack before applying other config
-    pulumi config set --stack "$FULL_STACK" environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
-    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
-
-    echo "Deploying infrastructure ..."
-    if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/${PULUMI_PROJECT_NAME}/${PULUMI_PROJECT_NAME}${ENVIRONMENT_SUFFIX}"; then
-      echo "⚠️ Deployment failed, attempting lock recovery..."
-      pulumi cancel --stack "${PULUMI_ORG}/${PULUMI_PROJECT_NAME}/${PULUMI_PROJECT_NAME}${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
-      echo "🔄 Retrying deployment after lock cancellation..."
-      pulumi up --yes --refresh --stack "${PULUMI_ORG}/${PULUMI_PROJECT_NAME}/${PULUMI_PROJECT_NAME}${ENVIRONMENT_SUFFIX}" || {
-        echo "❌ Deployment failed after retry"
-        popd >/dev/null || true
-        exit 1
-      }
-    fi
-    popd >/dev/null || true
-
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
     pipenv run pulumi-create-stack
-    # Ensure required config is present for newly-created stack
-    # Determine the full stack path (pulumi stack command will create the stack using PULUMI_ORG/TapStack/TapStack${ENVIRONMENT_SUFFIX})
-    FULL_STACK="${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
-    pipenv run pulumi config set --stack "$FULL_STACK" environmentSuffix "$ENVIRONMENT_SUFFIX" || echo "Could not set environmentSuffix on stack, continuing"
     
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."

@@ -1,4 +1,0 @@
-encryptionsalt: v1:zjEj864VrBE=:v1:4zLzZrbZUtJQ1Mcg:SJqzvGIde6ZtyOz2UiyNZOb0JBFTYA==
-config:
-  payment-dr-infrastructure:environmentSuffix: test123
-  aws:region: us-east-1
