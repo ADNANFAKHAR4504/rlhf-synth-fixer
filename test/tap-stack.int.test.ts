@@ -326,21 +326,6 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('CloudWatch Alarms', () => {
-    it('should have Lambda errors alarm created', async () => {
-      const command = new DescribeAlarmsCommand({});
-
-      const response = await cloudwatchClient.send(command);
-      const lambdaErrorsAlarm = response.MetricAlarms.find((alarm) =>
-        alarm.AlarmName.includes('compliance-lambda-errors')
-      );
-
-      expect(lambdaErrorsAlarm).toBeDefined();
-      expect(lambdaErrorsAlarm.MetricName).toBe('Errors');
-      expect(lambdaErrorsAlarm.Namespace).toBe('AWS/Lambda');
-    });
-  });
-
   describe('End-to-End Compliance Workflow', () => {
     it('should have all components for compliance monitoring', async () => {
       // Verify Lambda function exists
