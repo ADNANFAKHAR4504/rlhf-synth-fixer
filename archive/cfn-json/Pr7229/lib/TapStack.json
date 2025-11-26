@@ -1,0 +1,752 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Credit Scoring Web Application - CloudFormation Template",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix for resource names to ensure uniqueness",
+      "Default": "prod"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center tag for billing",
+      "Default": "fintech"
+    },
+    "Environment": {
+      "Type": "String",
+      "Description": "Environment tag",
+      "Default": "production",
+      "AllowedValues": ["development", "staging", "production"]
+    },
+    "DataClassification": {
+      "Type": "String",
+      "Description": "Data classification tag",
+      "Default": "confidential",
+      "AllowedValues": ["public", "internal", "confidential", "restricted"]
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Description": "Master username for Aurora database",
+      "Default": "dbadmin",
+      "NoEcho": true
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "vpc-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.12.0/24",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.13.0/24",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "EIP1": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "eip-nat-1-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "EIP2": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "eip-nat-2-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "EIP3": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "eip-nat-3-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "NATGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["EIP1", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "nat-gateway-1-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "NATGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["EIP2", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "nat-gateway-2-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "NATGateway3": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {"Fn::GetAtt": ["EIP3", "AllocationId"]},
+        "SubnetId": {"Ref": "PublicSubnet3"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "nat-gateway-3-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "public-rt-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet3"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "private-rt-1-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway1"}
+      }
+    },
+    "PrivateSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "RouteTableId": {"Ref": "PrivateRouteTable1"}
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "private-rt-2-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway2"}
+      }
+    },
+    "PrivateSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "RouteTableId": {"Ref": "PrivateRouteTable2"}
+      }
+    },
+    "PrivateRouteTable3": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "private-rt-3-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "PrivateRoute3": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {"Ref": "PrivateRouteTable3"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {"Ref": "NATGateway3"}
+      }
+    },
+    "PrivateSubnetRouteTableAssociation3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet3"},
+        "RouteTableId": {"Ref": "PrivateRouteTable3"}
+      }
+    },
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "KMS key for credit scoring application encryption",
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {"AWS": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}},
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {"Service": "rds.amazonaws.com"},
+              "Action": ["kms:Decrypt", "kms:GenerateDataKey", "kms:CreateGrant"],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs",
+              "Effect": "Allow",
+              "Principal": {"Service": {"Fn::Sub": "logs.${AWS::Region}.amazonaws.com"}},
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "kms-key-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {"Fn::Sub": "alias/credit-scoring-${EnvironmentSuffix}"},
+        "TargetKeyId": {"Ref": "KMSKey"}
+      }
+    },
+    "ALBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Application Load Balancer",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "CidrIp": "0.0.0.0/0"},
+          {"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "0.0.0.0/0"}
+        ],
+        "SecurityGroupEgress": [{"IpProtocol": "-1", "CidrIp": "0.0.0.0/0"}],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "alb-sg-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupEgress": [{"IpProtocol": "-1", "CidrIp": "0.0.0.0/0"}],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "lambda-sg-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora database",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {"Ref": "LambdaSecurityGroup"}
+          }
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "rds-sg-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for Aurora database",
+        "SubnetIds": [
+          {"Ref": "PrivateSubnet1"},
+          {"Ref": "PrivateSubnet2"},
+          {"Ref": "PrivateSubnet3"}
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "DBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "EngineMode": "provisioned",
+        "EngineVersion": "15.8",
+        "DatabaseName": "creditscoring",
+        "MasterUsername": {"Ref": "DBMasterUsername"},
+        "ManageMasterUserPassword": true,
+        "MasterUserSecret": {
+          "KmsKeyId": {"Ref": "KMSKey"}
+        },
+        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
+        "VpcSecurityGroupIds": [{"Ref": "RDSSecurityGroup"}],
+        "StorageEncrypted": true,
+        "KmsKeyId": {"Ref": "KMSKey"},
+        "BackupRetentionPeriod": 30,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": ["postgresql"],
+        "ServerlessV2ScalingConfiguration": {
+          "MinCapacity": 0.5,
+          "MaxCapacity": 1
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "DBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {"Ref": "DBCluster"},
+        "DBInstanceClass": "db.serverless",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"Service": "lambda.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"],
+        "Policies": [
+          {
+            "PolicyName": "LambdaAuroraAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds-data:ExecuteStatement",
+                    "rds-data:BatchExecuteStatement",
+                    "rds-data:BeginTransaction",
+                    "rds-data:CommitTransaction",
+                    "rds-data:RollbackTransaction"
+                  ],
+                  "Resource": {"Fn::GetAtt": ["DBCluster", "DBClusterArn"]}
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["secretsmanager:GetSecretValue"],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "LambdaLogging",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "lambda-role-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/lambda/credit-scoring-${EnvironmentSuffix}"},
+        "RetentionInDays": 365,
+        "KmsKeyId": {"Fn::GetAtt": ["KMSKey", "Arn"]},
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "lambda-log-group-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "CreditScoringFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": "LambdaLogGroup",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "credit-scoring-${EnvironmentSuffix}"},
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => {\n  console.log('Credit scoring request received:', JSON.stringify(event, null, 2));\n  \n  let body;\n  try {\n    body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;\n  } catch (error) {\n    return {\n      statusCode: 400,\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ error: 'Invalid JSON in request body' })\n    };\n  }\n  \n  const { income, creditHistory, debtRatio } = body;\n  \n  if (!income || !creditHistory || debtRatio === undefined) {\n    return {\n      statusCode: 400,\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify({ error: 'Missing required fields: income, creditHistory, debtRatio' })\n    };\n  }\n  \n  let score = 300;\n  \n  if (income > 50000) score += 100;\n  if (income > 75000) score += 100;\n  if (income > 100000) score += 100;\n  \n  if (creditHistory === 'excellent') score += 200;\n  else if (creditHistory === 'good') score += 150;\n  else if (creditHistory === 'fair') score += 50;\n  \n  if (debtRatio < 0.2) score += 100;\n  else if (debtRatio < 0.4) score += 50;\n  else if (debtRatio > 0.6) score -= 100;\n  \n  score = Math.min(850, Math.max(300, score));\n  \n  const result = {\n    creditScore: score,\n    rating: score >= 750 ? 'Excellent' : score >= 700 ? 'Good' : score >= 650 ? 'Fair' : 'Poor',\n    timestamp: new Date().toISOString(),\n    requestId: event.requestContext?.requestId || 'N/A'\n  };\n  \n  console.log('Credit score calculated:', result);\n  \n  return {\n    statusCode: 200,\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(result)\n  };\n};\n"
+        },
+        "Environment": {
+          "Variables": {
+            "DB_CLUSTER_ARN": {"Fn::GetAtt": ["DBCluster", "DBClusterArn"]},
+            "DB_NAME": "creditscoring",
+            "ENVIRONMENT": {"Ref": "Environment"}
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1"},
+            {"Ref": "PrivateSubnet2"},
+            {"Ref": "PrivateSubnet3"}
+          ]
+        },
+        "ReservedConcurrentExecutions": 10,
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "credit-scoring-lambda-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "CreditScoringFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "elasticloadbalancing.amazonaws.com",
+        "SourceArn": {"Fn::Sub": "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/tg-${EnvironmentSuffix}/*"}
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {"Fn::Sub": "alb-${EnvironmentSuffix}"},
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          {"Ref": "PublicSubnet1"},
+          {"Ref": "PublicSubnet2"},
+          {"Ref": "PublicSubnet3"}
+        ],
+        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "alb-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "ALBLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {"Fn::Sub": "/aws/alb/credit-scoring-${EnvironmentSuffix}"},
+        "RetentionInDays": 365,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "alb-log-group-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {"Fn::Sub": "tg-${EnvironmentSuffix}"},
+        "TargetType": "lambda",
+        "Targets": [{"Id": {"Fn::GetAtt": ["CreditScoringFunction", "Arn"]}}],
+        "HealthCheckEnabled": false,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "target-group-${EnvironmentSuffix}"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "DataClassification", "Value": {"Ref": "DataClassification"}}
+        ]
+      }
+    },
+    "HTTPListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {"Ref": "TargetGroup"}
+          }
+        ],
+        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "Port": 80,
+        "Protocol": "HTTP"
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {"Ref": "VPC"},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}}
+    },
+    "ALBDNSName": {
+      "Description": "DNS name of the Application Load Balancer",
+      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-ALBDNSName"}}
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the credit scoring Lambda function",
+      "Value": {"Fn::GetAtt": ["CreditScoringFunction", "Arn"]},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-LambdaArn"}}
+    },
+    "DBClusterEndpoint": {
+      "Description": "Aurora cluster endpoint",
+      "Value": {"Fn::GetAtt": ["DBCluster", "Endpoint.Address"]},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-DBEndpoint"}}
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {"Ref": "KMSKey"},
+      "Export": {"Name": {"Fn::Sub": "${AWS::StackName}-KMSKeyId"}}
+    }
+  }
+}

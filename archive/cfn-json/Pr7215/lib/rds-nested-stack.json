@@ -1,0 +1,95 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "RDS Aurora PostgreSQL nested stack with encryption, automated backups, and read replicas",
+  "Parameters": {
+    "Environment": {"Type": "String", "Description": "Environment name"},
+    "EnvironmentSuffix": {"Type": "String", "Description": "Unique suffix for resource naming"},
+    "ProjectName": {"Type": "String", "Description": "Project name for tagging"},
+    "CostCenter": {"Type": "String", "Description": "Cost center for billing"},
+    "PrivateSubnet1": {"Type": "String", "Description": "Private Subnet 1 ID"},
+    "PrivateSubnet2": {"Type": "String", "Description": "Private Subnet 2 ID"},
+    "DBSecurityGroup": {"Type": "String", "Description": "Database Security Group ID"},
+    "DBMasterUsername": {"Type": "String", "NoEcho": true, "Description": "Master username for database"},
+    "DBPasswordSecretArn": {"Type": "String", "Description": "ARN of Secrets Manager secret containing database password"},
+    "DBInstanceClass": {"Type": "String", "Description": "RDS instance class"}
+  },
+  "Resources": {
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": {"Fn::Sub": "Subnet group for ${Environment} RDS Aurora cluster"},
+        "SubnetIds": [{"Ref": "PrivateSubnet1"}, {"Ref": "PrivateSubnet2"}],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "db-subnet-group-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "15.7",
+        "DatabaseName": {"Fn::Sub": "appdb${Environment}"},
+        "MasterUsername": {"Ref": "DBMasterUsername"},
+        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}"},
+        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
+        "VpcSecurityGroupIds": [{"Ref": "DBSecurityGroup"}],
+        "StorageEncrypted": true,
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": ["postgresql"],
+        "DeletionProtection": false,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "aurora-cluster-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {"Ref": "DBCluster"},
+        "DBInstanceClass": {"Ref": "DBInstanceClass"},
+        "PubliclyAccessible": false,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "aurora-instance-1-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {"Ref": "DBCluster"},
+        "DBInstanceClass": {"Ref": "DBInstanceClass"},
+        "PubliclyAccessible": false,
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "aurora-instance-2-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "DBClusterId": {"Description": "RDS Cluster ID", "Value": {"Ref": "DBCluster"}},
+    "DBClusterEndpoint": {"Description": "RDS Cluster Write Endpoint", "Value": {"Fn::GetAtt": ["DBCluster", "Endpoint.Address"]}},
+    "DBClusterReadEndpoint": {"Description": "RDS Cluster Read Endpoint", "Value": {"Fn::GetAtt": ["DBCluster", "ReadEndpoint.Address"]}},
+    "DBClusterPort": {"Description": "RDS Cluster Port", "Value": {"Fn::GetAtt": ["DBCluster", "Endpoint.Port"]}}
+  }
+}

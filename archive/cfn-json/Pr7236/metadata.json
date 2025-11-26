@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T11:16:00-08:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "v1h3r8l0",
+  "aws_services": [
+    "DMS",
+    "RDS",
+    "EC2",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "SSM"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

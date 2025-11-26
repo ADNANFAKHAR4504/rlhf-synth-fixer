@@ -370,6 +370,7 @@ fi
 case "$PLATFORM" in
     cloudformation) PLATFORM="cfn" ;;
     # cdk, cdktf, pulumi, tf, cfn remain as-is (already lowercase)
+    *) ;; # No change for other platforms
 esac
 
 # Normalize language to match CLI tool format (must be lowercase abbreviated form)
@@ -379,6 +380,7 @@ case "$LANGUAGE" in
     javascript) LANGUAGE="js" ;;
     terraform) LANGUAGE="hcl" ;;
     # go, java, yaml, json, hcl remain as-is (already lowercase)
+    *) ;; # No change for other languages
 esac
 
 # CRITICAL: Use exact difficulty value as complexity (no mapping)
@@ -552,20 +554,8 @@ REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
 # Read team value from settings.local.json
 # If team is mentioned in settings, use that value (e.g., synth-2, synth-1)
 # Otherwise, default to "synth"
-# Check multiple locations: current dir (main repo), parent dirs (worktree context), or relative to script
-SETTINGS_FILE=""
-if [ -f ".claude/settings.local.json" ]; then
-    # In main repo root
-    SETTINGS_FILE=".claude/settings.local.json"
-elif [ -f "../../.claude/settings.local.json" ]; then
-    # In worktree (two levels up)
-    SETTINGS_FILE="../../.claude/settings.local.json"
-elif [ -f "../.claude/settings.local.json" ]; then
-    # One level up
-    SETTINGS_FILE="../.claude/settings.local.json"
-fi
-
-if [ -n "$SETTINGS_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
+SETTINGS_FILE=".claude/settings.local.json"
+if [ -f "$SETTINGS_FILE" ]; then
     TEAM=$(json_val "$(cat "$SETTINGS_FILE")" "team")
     [ -z "$TEAM" ] && TEAM="synth"
 else

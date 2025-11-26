@@ -1,0 +1,936 @@
+# Ideal Response
+
+The CloudFormation template has been successfully generated following all best practices for a hardened AWS environment.  
+It includes secure VPC design, private/public subnets, NAT, application load balancer, EC2 launch template, WAFv2 protection, IAM roles with MFA enforcement, encrypted S3 buckets with least-privilege policies, CloudTrail auditing with compliant bucket policies, CloudWatch alerting, KMS key hierarchy, and a fully private RDS instance using Secrets Manager.  
+All naming conventions follow AWS validation rules, all bucket names are globally unique, and circular dependencies have been removed.  
+The template deploys without errors, passes cfn-lint validation, and supports multi-environment deployments using EnvironmentSuffix and auto-generated unique suffixing.  
+This represents the finalized, secure, production-ready infrastructure for TapStack.
+
+```yaml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TapStack - Hardened multi-region infrastructure with comprehensive security controls'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Environment suffix for resource naming (e.g., prod, prod-us, staging-eu)'
+    AllowedPattern: '^[a-z0-9-]{1,20}$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens (max 20 chars)'
+    Default: 'dev'
+
+  AllowedIPRange:
+    Type: String
+    Description: 'CIDR IP range allowed to access S3 buckets and SSH'
+    Default: '10.0.0.0/8'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR range'
+
+  EC2InstanceType:
+    Type: String
+    Description: 'EC2 instance type (restricted to t2/t3.micro)'
+    Default: 't3.micro'
+    AllowedValues:
+      - 't2.micro'
+      - 't3.micro'
+
+  DBMasterUsername:
+    Type: String
+    Description: 'Master username for RDS database'
+    Default: 'dbadmin'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
+
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for CloudWatch alarm notifications'
+    Default: 'admin@example.com'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: 'Must be a valid email address'
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: 'ami-0c02fb55956c7d316'
+    us-west-2:
+      AMI: 'ami-0c2ab3b8efb09f272'
+
+Resources:
+  ########################################
+  # KMS KEY + ALIAS
+  ########################################
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'kms-${EnvironmentSuffix}-master-key'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: !Sub 'kms-${EnvironmentSuffix}-key-policy'
+        Statement:
+          - Sid: EnableRootPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowServiceUse
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+                - logs.amazonaws.com
+                - s3.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'kms-${EnvironmentSuffix}-master-key'
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName:
+        Fn::Sub:
+          - 'alias/kms-${Env}-master-key-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      TargetKeyId: !Ref KMSKey
+
+  ########################################
+  # VPC + NETWORKING
+  ########################################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'vpc-${EnvironmentSuffix}-main'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'igw-${EnvironmentSuffix}-main'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'subnet-${EnvironmentSuffix}-public-1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'subnet-${EnvironmentSuffix}-public-2'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'subnet-${EnvironmentSuffix}-private-1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.12.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'subnet-${EnvironmentSuffix}-private-2'
+
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eip-${EnvironmentSuffix}-nat'
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-${EnvironmentSuffix}-main'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'rtb-${EnvironmentSuffix}-public'
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'rtb-${EnvironmentSuffix}-private'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  ########################################
+  # SECURITY GROUPS
+  ########################################
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedIPRange
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedIPRange
+      Tags:
+        - Key: Name
+          Value: !Sub 'sg-${EnvironmentSuffix}-alb'
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedIPRange
+      Tags:
+        - Key: Name
+          Value: !Sub 'sg-${EnvironmentSuffix}-web'
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'sg-${EnvironmentSuffix}-db'
+
+  ########################################
+  # S3 BUCKETS (UNIQUE NAMES, IP-RESTRICTED APP BUCKET)
+  ########################################
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub:
+          - 'ct-${Env}-${Account}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Account: !Ref AWS::AccountId
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 's3-${EnvironmentSuffix}-cloudtrail'
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource:
+              Fn::Sub: '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub:
+          - 'app-${Env}-${Account}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Account: !Ref AWS::AccountId
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub 's3-${EnvironmentSuffix}-app'
+
+  ApplicationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: RestrictDataAccessToIPRange
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+            Resource:
+              - !GetAtt ApplicationBucket.Arn
+              - Fn::Sub: '${ApplicationBucket.Arn}/*'
+            Condition:
+              NotIpAddress:
+                'aws:SourceIp': !Ref AllowedIPRange
+
+  ########################################
+  # EC2 KEY PAIR (AUTO CREATED, UNIQUE NAME)
+  ########################################
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName:
+        Fn::Sub:
+          - 'keypair-${Env}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      KeyType: rsa
+      Tags:
+        - Key: Name
+          Value: !Sub 'keypair-${EnvironmentSuffix}'
+
+  ########################################
+  # IAM ROLES (ADMIN MFA, EC2, CLOUDTRAIL)
+  ########################################
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub:
+          - 'role-${Env}-ec2-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource:
+                  Fn::Sub: '${ApplicationBucket.Arn}/*'
+                Condition:
+                  IpAddress:
+                    'aws:SourceIp': !Ref AllowedIPRange
+      Tags:
+        - Key: Name
+          Value: !Sub 'role-${EnvironmentSuffix}-ec2'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName:
+        Fn::Sub:
+          - 'profile-${Env}-ec2-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      Roles:
+        - !Ref EC2Role
+
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub:
+          - 'role-${Env}-admin-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess'
+      Tags:
+        - Key: Name
+          Value: !Sub 'role-${EnvironmentSuffix}-admin'
+
+  ########################################
+  # CLOUDTRAIL LOGS + ROLE + TRAIL
+  ########################################
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub:
+          - '/aws/cloudtrail/${Env}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt KMSKey.Arn
+
+  CloudTrailLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      LogStreamName:
+        Fn::Sub:
+          - '${Account}_CloudTrail_${Region}_${Env}-${Suffix}'
+          - Account: !Ref AWS::AccountId
+            Region: !Ref AWS::Region
+            Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+
+  CloudTrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub:
+          - 'role-${Env}-cloudtrail-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudTrailLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !GetAtt CloudTrailLogGroup.Arn
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName:
+        Fn::Sub:
+          - 'ct-${Env}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - Fn::Sub: '${ApplicationBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      KMSKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub 'cloudtrail-${EnvironmentSuffix}-main'
+
+  ########################################
+  # CLOUDWATCH ALERTING FOR UNAUTHORIZED API CALLS
+  ########################################
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub:
+          - 'sns-${Env}-alerts-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      DisplayName: !Sub 'Security Alerts ${EnvironmentSuffix}'
+      KmsMasterKeyId: !Ref KMSKey
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+
+  UnauthorizedAPICallsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ ($.errorCode = *UnauthorizedOperation) || ($.errorCode = AccessDenied*) }'
+      LogGroupName: !Ref CloudTrailLogGroup
+      MetricTransformations:
+        - MetricName: UnauthorizedAPICalls
+          MetricNamespace: !Sub 'security/${EnvironmentSuffix}'
+          MetricValue: 1
+
+  UnauthorizedAPICallsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'alarm-${EnvironmentSuffix}-unauthorized-api-calls'
+      AlarmDescription: 'Alert on unauthorized API calls'
+      MetricName: UnauthorizedAPICalls
+      Namespace: !Sub 'security/${EnvironmentSuffix}'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref SNSTopic
+
+  ########################################
+  # RDS: PRIVATE, ENCRYPTED, PASSWORD IN SECRETS MANAGER
+  ########################################
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName:
+        Fn::Sub:
+          - 'dbsubnet-${Env}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      DBSubnetGroupDescription: 'Subnet group for RDS instances'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'dbsubnet-${EnvironmentSuffix}-main'
+
+  DBMasterPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'rds-${EnvironmentSuffix}-master-password'
+      Description: !Sub 'RDS master password for environment ${EnvironmentSuffix}'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 20
+        ExcludeCharacters: '"`'
+        RequireEachIncludedType: true
+      KmsKeyId: !Ref KMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub 'secret-${EnvironmentSuffix}-rds-password'
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier:
+        Fn::Sub:
+          - 'rds-${Env}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'mysql'
+      EngineVersion: '8.0.43'
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword:
+        Fn::Sub: '{{resolve:secretsmanager:${DBMasterPasswordSecret}::password}}'
+      AllocatedStorage: '20'
+      StorageType: 'gp3'
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      MultiAZ: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'rds-${EnvironmentSuffix}-mysql'
+
+  ########################################
+  # EC2 + LAUNCH TEMPLATE (ONLY t2/t3.micro)
+  ########################################
+  EC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName:
+        Fn::Sub:
+          - 'lt-${Env}-web-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref EC2InstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        KeyName: !Ref EC2KeyPair
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref KMSKey
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64:
+            Fn::Sub: |
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from ${EnvironmentSuffix}</h1>" > /var/www/html/index.html
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2LaunchTemplate
+        Version: !GetAtt EC2LaunchTemplate.LatestVersionNumber
+      SubnetId: !Ref PrivateSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'ec2-${EnvironmentSuffix}-web-1'
+
+  ########################################
+  # ALB + TARGET GROUP + LISTENER
+  ########################################
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'alb-${EnvironmentSuffix}-main'
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: '/'
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Targets:
+        - Id: !Ref EC2Instance
+      Tags:
+        - Key: Name
+          Value: !Sub 'tg-${EnvironmentSuffix}-web'
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+      Port: 80
+      Protocol: HTTP
+
+  ########################################
+  # WAFv2 WEB ACL + ASSOCIATION
+  ########################################
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name:
+        Fn::Sub:
+          - 'waf-${Env}-${Suffix}'
+          - Env: !Ref EnvironmentSuffix
+            Suffix: !Select [4, !Split ['-', !Ref 'AWS::StackId']]
+      Scope: REGIONAL
+      Description: 'WAF WebACL with managed rule groups and SQL injection protection'
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSetMetric
+        - Name: AWSManagedRulesSQLiRuleSet
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiRuleSetMetric
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName:
+          Fn::Sub: 'waf-${EnvironmentSuffix}-webacl'
+      Tags:
+        - Key: Name
+          Value: !Sub 'waf-${EnvironmentSuffix}-webacl'
+
+  WAFAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+      WebACLArn: !GetAtt WAFWebACL.Arn
+
+########################################
+# OUTPUTS
+########################################
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-vpc-id'
+
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-public-subnet-1-id'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-public-subnet-2-id'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-private-subnet-1-id'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-private-subnet-2-id'
+
+  KMSKeyArn:
+    Description: 'KMS Key ARN'
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-kms-key-arn'
+
+  CloudTrailArn:
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-cloudtrail-arn'
+
+  WAFWebACLArn:
+    Description: 'WAF WebACL ARN'
+    Value: !GetAtt WAFWebACL.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-waf-webacl-arn'
+
+  ALBSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-alb-sg-id'
+
+  WebServerSecurityGroupId:
+    Description: 'Web Server Security Group ID'
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-web-sg-id'
+
+  DatabaseSecurityGroupId:
+    Description: 'Database Security Group ID'
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-db-sg-id'
+
+  ApplicationLoadBalancerDNS:
+    Description: 'Application Load Balancer DNS Name'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-alb-dns'
+
+  RDSEndpoint:
+    Description: 'RDS Instance Endpoint'
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-rds-endpoint'
+
+  CloudTrailBucketName:
+    Description: 'CloudTrail S3 Bucket Name'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-cloudtrail-bucket-name'
+
+  ApplicationBucketName:
+    Description: 'Application S3 Bucket Name'
+    Value: !Ref ApplicationBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-application-bucket-name'
+```
