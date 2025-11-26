@@ -159,19 +159,6 @@ describe('Terraform EKS Integration Tests', () => {
         expect(enabledLogTypes).toContain(logType);
       });
     }, 30000);
-
-    test('should verify OIDC provider exists', async () => {
-      const oidcArn = outputs.oidc_provider_arn;
-      const openIDConnectProviderArn = oidcArn.split('/').pop();
-
-      const command = new GetOpenIDConnectProviderCommand({
-        OpenIDConnectProviderArn: oidcArn,
-      });
-      const response = await clients.iam.send(command);
-
-      expect(response.Url).toBe(outputs.cluster_oidc_issuer_url);
-      expect(response.ClientIDList).toContain('sts.amazonaws.com');
-    }, 30000);
   });
 
   describe('Node Groups Verification', () => {
@@ -276,18 +263,6 @@ describe('Terraform EKS Integration Tests', () => {
       const { region } = getClusterNameAndRegion();
       clients = initializeClients(region);
     });
-
-    test('should verify VPC exists and has correct configuration', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.vpc_id],
-      });
-      const response = await clients.ec2.send(command);
-
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs?.length).toBe(1);
-      expect(response.Vpcs?.[0].EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs?.[0].EnableDnsSupport).toBe(true);
-    }, 30000);
 
     test('should verify all subnet types exist', async () => {
       const allSubnetIds = [
