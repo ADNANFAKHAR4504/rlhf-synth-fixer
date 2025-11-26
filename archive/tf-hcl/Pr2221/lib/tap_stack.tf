@@ -124,7 +124,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr_block
   enable_dns_hostnames = var.enable_dns_hostnames
   enable_dns_support   = var.enable_dns_support
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-vpc"
   })
@@ -133,7 +133,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-igw"
   })
@@ -146,7 +146,7 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = local.availability_zones[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}"
     Type = "public"
@@ -159,7 +159,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = local.availability_zones[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}"
     Type = "private"
@@ -169,12 +169,12 @@ resource "aws_subnet" "private" {
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-rt"
   })
@@ -190,7 +190,7 @@ resource "aws_route_table_association" "public" {
 # NAT Gateway (for private subnet internet access)
 resource "aws_eip" "nat" {
   domain = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-eip"
   })
@@ -199,7 +199,7 @@ resource "aws_eip" "nat" {
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-gateway"
   })
@@ -208,12 +208,12 @@ resource "aws_nat_gateway" "main" {
 # Route Table for Private Subnets
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-rt"
   })
@@ -235,7 +235,7 @@ resource "aws_security_group" "web" {
   name        = "${var.project_name}-web-sg"
   description = "Web security group for HTTP/HTTPS traffic"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     description = "HTTP"
     from_port   = 80
@@ -243,7 +243,7 @@ resource "aws_security_group" "web" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   ingress {
     description = "HTTPS"
     from_port   = 443
@@ -251,7 +251,7 @@ resource "aws_security_group" "web" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   ingress {
     description = "SSH"
     from_port   = 22
@@ -259,14 +259,14 @@ resource "aws_security_group" "web" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-web-sg"
   })
@@ -277,7 +277,7 @@ resource "aws_security_group" "app" {
   name        = "${var.project_name}-app-sg"
   description = "Application security group for internal traffic"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     description     = "Application traffic from web tier"
     from_port       = 8080
@@ -285,22 +285,22 @@ resource "aws_security_group" "app" {
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
-  
+
   ingress {
-    description = "SSH from web tier"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
+    description     = "SSH from web tier"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-app-sg"
   })
@@ -311,7 +311,7 @@ resource "aws_security_group" "database" {
   name        = "${var.project_name}-db-sg"
   description = "Database security group"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     description     = "MySQL from app tier"
     from_port       = 3306
@@ -319,14 +319,14 @@ resource "aws_security_group" "database" {
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-db-sg"
   })
@@ -340,7 +340,7 @@ resource "aws_security_group" "database" {
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-db-subnet-group"
   })
@@ -367,7 +367,7 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot     = true
   deletion_protection     = false
   multi_az                = false
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-database"
   })
@@ -380,7 +380,7 @@ resource "aws_db_instance" "main" {
 # S3 Bucket
 resource "aws_s3_bucket" "main" {
   bucket = "${var.project_name}-bucket-${var.environment}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-bucket"
   })
@@ -397,7 +397,7 @@ resource "aws_s3_bucket_versioning" "main" {
 # S3 Bucket Server Side Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   bucket = aws_s3_bucket.main.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -408,7 +408,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 # S3 Bucket Public Access Block
 resource "aws_s3_bucket_public_access_block" "main" {
   bucket = aws_s3_bucket.main.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -421,7 +421,7 @@ resource "aws_s3_object" "test_file" {
   key     = "test.txt"
   content = "integration test file - migrated to ${var.aws_region}"
   acl     = "private"
-  
+
   tags = merge(local.common_tags, {
     Name = "test-file"
   })

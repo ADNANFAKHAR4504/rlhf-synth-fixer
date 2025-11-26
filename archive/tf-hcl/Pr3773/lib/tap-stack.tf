@@ -29,7 +29,7 @@ variable "tags" {
 
 locals {
   name_prefix = "ebooks-${var.environment_suffix}"
-  
+
   common_tags = merge(
     {
       Environment = var.environment_suffix
@@ -180,9 +180,9 @@ resource "aws_s3_bucket_policy" "ebooks_bucket_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontOAI"
-        Action = "s3:GetObject"
-        Effect = "Allow"
+        Sid      = "AllowCloudFrontOAI"
+        Action   = "s3:GetObject"
+        Effect   = "Allow"
         Resource = "${aws_s3_bucket.ebooks_bucket.arn}/*"
         Principal = {
           AWS = aws_cloudfront_origin_access_identity.oai.iam_arn

@@ -91,7 +91,7 @@ variable "lambda_runtime" {
 variable "enable_nat_gateway" {
   description = "Enable NAT Gateway (requires available EIP quota)"
   type        = bool
-  default     = false  # Set to false to avoid EIP quota issues
+  default     = false # Set to false to avoid EIP quota issues
 }
 
 # Data sources
@@ -397,8 +397,8 @@ resource "aws_iam_role_policy" "vpc_flow" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow",
-        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"],
+        Effect   = "Allow",
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"],
         Resource = "*"
       }
     ]
@@ -526,13 +526,13 @@ resource "aws_s3_bucket_policy" "static_tls_only" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "DenyInsecureTransport",
-        Effect: "Deny",
-        Principal: "*",
-        Action: "s3:*",
-        Resource: [aws_s3_bucket.static.arn, "${aws_s3_bucket.static.arn}/*"],
-        Condition: {
-          Bool: {"aws:SecureTransport": false}
+        Sid : "DenyInsecureTransport",
+        Effect : "Deny",
+        Principal : "*",
+        Action : "s3:*",
+        Resource : [aws_s3_bucket.static.arn, "${aws_s3_bucket.static.arn}/*"],
+        Condition : {
+          Bool : { "aws:SecureTransport" : false }
         }
       }
     ]
@@ -621,27 +621,27 @@ resource "aws_db_parameter_group" "mysql" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier                = "${var.project}-db"
-  allocated_storage         = 20
-  storage_type              = "gp3"
-  engine                    = "mysql"
-  engine_version            = "8.0"
-  instance_class            = var.rds_instance_class
-  db_name                   = var.db_name
-  username                  = var.db_username
-  password                  = var.db_password
-  parameter_group_name      = aws_db_parameter_group.mysql.name
-  db_subnet_group_name      = aws_db_subnet_group.main.name
-  vpc_security_group_ids    = [aws_security_group.rds.id]
-  multi_az                  = true
-  storage_encrypted         = true
-  kms_key_id                = aws_kms_key.data.arn
-  backup_retention_period   = 7
-  copy_tags_to_snapshot     = true
-  deletion_protection       = true
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.project}-db-final"
-  publicly_accessible       = false
+  identifier                  = "${var.project}-db"
+  allocated_storage           = 20
+  storage_type                = "gp3"
+  engine                      = "mysql"
+  engine_version              = "8.0"
+  instance_class              = var.rds_instance_class
+  db_name                     = var.db_name
+  username                    = var.db_username
+  password                    = var.db_password
+  parameter_group_name        = aws_db_parameter_group.mysql.name
+  db_subnet_group_name        = aws_db_subnet_group.main.name
+  vpc_security_group_ids      = [aws_security_group.rds.id]
+  multi_az                    = true
+  storage_encrypted           = true
+  kms_key_id                  = aws_kms_key.data.arn
+  backup_retention_period     = 7
+  copy_tags_to_snapshot       = true
+  deletion_protection         = true
+  skip_final_snapshot         = false
+  final_snapshot_identifier   = "${var.project}-db-final"
+  publicly_accessible         = false
   auto_minor_version_upgrade  = true
   allow_major_version_upgrade = false
 
@@ -723,9 +723,9 @@ resource "aws_iam_role" "ec2" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ec2.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -740,23 +740,23 @@ resource "aws_iam_role" "ec2" {
 resource "aws_iam_policy" "ec2_least" {
   name        = "${var.project}-ec2-policy"
   description = "Least-privilege EC2 policy for S3 read and CW logs"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Effect: "Allow",
-        Action: ["s3:GetObject", "s3:ListBucket"],
-        Resource: [aws_s3_bucket.static.arn, "${aws_s3_bucket.static.arn}/*"]
+        Effect : "Allow",
+        Action : ["s3:GetObject", "s3:ListBucket"],
+        Resource : [aws_s3_bucket.static.arn, "${aws_s3_bucket.static.arn}/*"]
       },
       {
-        Effect: "Allow",
-        Action: ["kms:Decrypt", "kms:GenerateDataKey"],
-        Resource: aws_kms_key.data.arn
+        Effect : "Allow",
+        Action : ["kms:Decrypt", "kms:GenerateDataKey"],
+        Resource : aws_kms_key.data.arn
       },
       {
-        Effect: "Allow",
-        Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-        Resource: "arn:${data.aws_partition.current.partition}:logs:*:${data.aws_caller_identity.current.account_id}:*"
+        Effect : "Allow",
+        Action : ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+        Resource : "arn:${data.aws_partition.current.partition}:logs:*:${data.aws_caller_identity.current.account_id}:*"
       }
     ]
   })
@@ -773,11 +773,11 @@ resource "aws_iam_instance_profile" "ec2" {
 }
 
 resource "aws_instance" "web" {
-  ami                         = data.aws_ami.al2023.id
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.private[0].id
-  vpc_security_group_ids      = [aws_security_group.ec2.id]
-  iam_instance_profile        = aws_iam_instance_profile.ec2.name
+  ami                    = data.aws_ami.al2023.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.private[0].id
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
   root_block_device {
     volume_type           = "gp3"
@@ -819,9 +819,9 @@ resource "aws_iam_role" "lambda" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "lambda.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -836,30 +836,30 @@ resource "aws_iam_role" "lambda" {
 resource "aws_iam_policy" "lambda_least" {
   name        = "${var.project}-lambda-policy"
   description = "Least-privilege Lambda policy"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Effect: "Allow",
-        Action: [
-          "dynamodb:GetItem","dynamodb:PutItem","dynamodb:UpdateItem","dynamodb:DeleteItem","dynamodb:Query","dynamodb:Scan"
+        Effect : "Allow",
+        Action : [
+          "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"
         ],
-        Resource: aws_dynamodb_table.app.arn
+        Resource : aws_dynamodb_table.app.arn
       },
       {
-        Effect: "Allow",
-        Action: ["kms:Decrypt","kms:GenerateDataKey"],
-        Resource: aws_kms_key.data.arn
+        Effect : "Allow",
+        Action : ["kms:Decrypt", "kms:GenerateDataKey"],
+        Resource : aws_kms_key.data.arn
       },
       {
-        Effect: "Allow",
-        Action: ["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"],
-        Resource: "arn:${data.aws_partition.current.partition}:logs:*:${data.aws_caller_identity.current.account_id}:*"
+        Effect : "Allow",
+        Action : ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+        Resource : "arn:${data.aws_partition.current.partition}:logs:*:${data.aws_caller_identity.current.account_id}:*"
       },
       {
-        Effect: "Allow",
-        Action: ["ec2:CreateNetworkInterface","ec2:DescribeNetworkInterfaces","ec2:DeleteNetworkInterface"],
-        Resource: "*"
+        Effect : "Allow",
+        Action : ["ec2:CreateNetworkInterface", "ec2:DescribeNetworkInterfaces", "ec2:DeleteNetworkInterface"],
+        Resource : "*"
       }
     ]
   })
@@ -999,7 +999,7 @@ resource "aws_cloudwatch_log_group" "apigw" {
 }
 
 resource "aws_api_gateway_deployment" "api" {
-  depends_on = [aws_api_gateway_integration.lambda_proxy]
+  depends_on  = [aws_api_gateway_integration.lambda_proxy]
   rest_api_id = aws_api_gateway_rest_api.api.id
   lifecycle { create_before_destroy = true }
 }
@@ -1126,14 +1126,14 @@ resource "aws_cloudfront_distribution" "cdn" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
-    
+
     forwarded_values {
       query_string = false
       cookies {
         forward = "none"
       }
     }
-    
+
     min_ttl     = 0
     default_ttl = 3600
     max_ttl     = 86400
@@ -1145,7 +1145,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    
+
     forwarded_values {
       query_string = true
       headers      = ["Authorization", "Host"]
@@ -1153,7 +1153,7 @@ resource "aws_cloudfront_distribution" "cdn" {
         forward = "all"
       }
     }
-    
+
     min_ttl     = 0
     default_ttl = 0
     max_ttl     = 0
@@ -1189,16 +1189,16 @@ resource "aws_sns_topic" "alerts" {
 }
 
 resource "aws_sns_topic_policy" "alerts" {
-  arn    = aws_sns_topic.alerts.arn
+  arn = aws_sns_topic.alerts.arn
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "AllowCloudWatch",
-        Effect: "Allow",
-        Principal: { Service: "cloudwatch.amazonaws.com" },
-        Action: "SNS:Publish",
-        Resource: aws_sns_topic.alerts.arn
+        Sid : "AllowCloudWatch",
+        Effect : "Allow",
+        Principal : { Service : "cloudwatch.amazonaws.com" },
+        Action : "SNS:Publish",
+        Resource : aws_sns_topic.alerts.arn
       }
     ]
   })
@@ -1276,9 +1276,9 @@ resource "aws_iam_role" "cloudtrail" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "cloudtrail.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -1297,9 +1297,9 @@ resource "aws_iam_role_policy" "cloudtrail" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect: "Allow",
-        Action: ["logs:CreateLogStream","logs:PutLogEvents","logs:CreateLogGroup"],
-        Resource: "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+        Effect : "Allow",
+        Action : ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"],
+        Resource : "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
       }
     ]
   })
@@ -1335,7 +1335,7 @@ resource "aws_cloudtrail" "main" {
 
 # GuardDuty in primary and secondary + findings to SNS via EventBridge
 resource "aws_guardduty_detector" "primary" {
-  enable = true
+  enable                       = true
   finding_publishing_frequency = "SIX_HOURS"
 
   tags = {
@@ -1352,8 +1352,8 @@ provider "aws" {
 }
 
 resource "aws_guardduty_detector" "secondary" {
-  provider = aws.secondary
-  enable   = true
+  provider                     = aws.secondary
+  enable                       = true
   finding_publishing_frequency = "SIX_HOURS"
 
   tags = {
@@ -1368,7 +1368,7 @@ resource "aws_cloudwatch_event_rule" "guardduty_findings" {
   name        = "${var.project}-guardduty-findings"
   description = "Route GuardDuty findings to SNS"
   event_pattern = jsonencode({
-    source = ["aws.guardduty"],
+    source      = ["aws.guardduty"],
     detail-type = ["GuardDuty Finding"]
   })
 
@@ -1400,9 +1400,9 @@ resource "aws_iam_role" "devsecops" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -1417,22 +1417,22 @@ resource "aws_iam_role" "devsecops" {
 resource "aws_iam_policy" "security_change_guard" {
   name        = "${var.project}-security-change-guard"
   description = "Read-only policy for DevSecOps to review security configuration"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "ReadOnlySecurityResources",
-        Effect: "Allow",
-        Action: [
-          "iam:Get*","iam:List*",
+        Sid : "ReadOnlySecurityResources",
+        Effect : "Allow",
+        Action : [
+          "iam:Get*", "iam:List*",
           "ec2:Describe*",
-          "wafv2:Get*","wafv2:List*",
-          "kms:Describe*","kms:List*","kms:GetKeyPolicy",
-          "cloudtrail:Get*","cloudtrail:List*","cloudtrail:LookupEvents",
-          "guardduty:Get*","guardduty:List*",
-          "logs:Describe*","logs:Get*","logs:List*"
+          "wafv2:Get*", "wafv2:List*",
+          "kms:Describe*", "kms:List*", "kms:GetKeyPolicy",
+          "cloudtrail:Get*", "cloudtrail:List*", "cloudtrail:LookupEvents",
+          "guardduty:Get*", "guardduty:List*",
+          "logs:Describe*", "logs:Get*", "logs:List*"
         ],
-        Resource: "*"
+        Resource : "*"
       }
     ]
   })

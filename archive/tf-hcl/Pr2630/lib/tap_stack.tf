@@ -49,9 +49,9 @@ variable "notification_email" {
 locals {
   # Common tags for all resources
   common_tags = {
-    Environment   = "Production"
-    ownership     = "self"
-    departmental  = "businessunit"
+    Environment  = "Production"
+    ownership    = "self"
+    departmental = "businessunit"
   }
 
   # Naming convention
@@ -607,14 +607,14 @@ resource "aws_security_group" "ec2_secondary" {
 
 # Primary RDS Instance
 resource "aws_db_instance" "primary" {
-  provider               = aws.us_east_2
-  identifier             = "${local.primary_prefix}-database"
-  engine                 = "mysql"
-  engine_version         = "8.0"
-  instance_class         = "db.t3.micro"
-  allocated_storage      = 20
-  storage_type           = "gp2"
-  storage_encrypted      = true
+  provider          = aws.us_east_2
+  identifier        = "${local.primary_prefix}-database"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  storage_type      = "gp2"
+  storage_encrypted = true
 
   db_name  = "primarydb"
   username = "a${random_string.rds_username_primary.result}"
@@ -623,16 +623,16 @@ resource "aws_db_instance" "primary" {
   vpc_security_group_ids = [aws_security_group.rds_primary.id]
   db_subnet_group_name   = aws_db_subnet_group.primary.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                   = true
+  publicly_accessible        = false
   auto_minor_version_upgrade = true
 
   skip_final_snapshot = true
   deletion_protection = false
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-database"
@@ -641,14 +641,14 @@ resource "aws_db_instance" "primary" {
 
 # Secondary RDS Instance
 resource "aws_db_instance" "secondary" {
-  provider               = aws.us_west_1
-  identifier             = "${local.secondary_prefix}-database"
-  engine                 = "mysql"
-  engine_version         = "8.0"
-  instance_class         = "db.t3.micro"
-  allocated_storage      = 20
-  storage_type           = "gp2"
-  storage_encrypted      = true
+  provider          = aws.us_west_1
+  identifier        = "${local.secondary_prefix}-database"
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  storage_type      = "gp2"
+  storage_encrypted = true
 
   db_name  = "secondarydb"
   username = "a${random_string.rds_username_secondary.result}"
@@ -657,16 +657,16 @@ resource "aws_db_instance" "secondary" {
   vpc_security_group_ids = [aws_security_group.rds_secondary.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                   = true
+  publicly_accessible        = false
   auto_minor_version_upgrade = true
 
   skip_final_snapshot = true
   deletion_protection = false
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-database"
@@ -1061,20 +1061,20 @@ resource "aws_ebs_snapshot" "secondary_snapshot" {
 
 # Lambda function for primary RDS backup
 resource "aws_lambda_function" "rds_backup_primary" {
-  provider         = aws.us_east_2
-  filename         = "rds_backup_lambda.zip"
-  function_name    = "${local.primary_prefix}-rds-backup"
-  role            = aws_iam_role.lambda_rds_backup_primary.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.9"
-  timeout         = 300
+  provider      = aws.us_east_2
+  filename      = "rds_backup_lambda.zip"
+  function_name = "${local.primary_prefix}-rds-backup"
+  role          = aws_iam_role.lambda_rds_backup_primary.arn
+  handler       = "index.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 300
 
   source_code_hash = data.archive_file.lambda_zip_primary.output_base64sha256
 
   environment {
     variables = {
       DB_INSTANCE_IDENTIFIER = aws_db_instance.primary.id
-      REGION                = var.primary_region
+      REGION                 = var.primary_region
     }
   }
 
@@ -1085,20 +1085,20 @@ resource "aws_lambda_function" "rds_backup_primary" {
 
 # Lambda function for secondary RDS backup
 resource "aws_lambda_function" "rds_backup_secondary" {
-  provider         = aws.us_west_1
-  filename         = "rds_backup_lambda.zip"
-  function_name    = "${local.secondary_prefix}-rds-backup"
-  role            = aws_iam_role.lambda_rds_backup_secondary.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.9"
-  timeout         = 300
+  provider      = aws.us_west_1
+  filename      = "rds_backup_lambda.zip"
+  function_name = "${local.secondary_prefix}-rds-backup"
+  role          = aws_iam_role.lambda_rds_backup_secondary.arn
+  handler       = "index.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 300
 
   source_code_hash = data.archive_file.lambda_zip_secondary.output_base64sha256
 
   environment {
     variables = {
       DB_INSTANCE_IDENTIFIER = aws_db_instance.secondary.id
-      REGION                = var.secondary_region
+      REGION                 = var.secondary_region
     }
   }
 
@@ -1112,7 +1112,7 @@ data "archive_file" "lambda_zip_primary" {
   type        = "zip"
   output_path = "rds_backup_lambda.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import boto3
 import os
 from datetime import datetime
@@ -1145,7 +1145,7 @@ data "archive_file" "lambda_zip_secondary" {
   type        = "zip"
   output_path = "rds_backup_lambda.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import boto3
 import os
 from datetime import datetime
@@ -1263,13 +1263,13 @@ resource "aws_api_gateway_method" "api_method" {
 
 # API Gateway Integration
 resource "aws_api_gateway_integration" "api_integration" {
-  provider            = aws.us_east_2
-  rest_api_id         = aws_api_gateway_rest_api.main.id
-  resource_id         = aws_api_gateway_resource.api_resource.id
-  http_method         = aws_api_gateway_method.api_method.http_method
+  provider                = aws.us_east_2
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.api_resource.id
+  http_method             = aws_api_gateway_method.api_method.http_method
   integration_http_method = "POST"
-  type                = "AWS_PROXY"
-  uri                 = aws_lambda_function.rds_backup_primary.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.rds_backup_primary.invoke_arn
 }
 
 # API Gateway Deployment
@@ -1580,8 +1580,8 @@ resource "aws_cloudtrail" "main" {
   enable_logging                = true
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {

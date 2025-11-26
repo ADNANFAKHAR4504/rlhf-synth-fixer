@@ -4,16 +4,16 @@ variable "approved_cidrs" {
   type        = list(string)
   # More restrictive CIDR blocks for production
   # Consider using your organization's specific IP ranges
-  default     = [
-    "172.16.0.0/12",    # Private network range (RFC 1918)
-    "192.168.0.0/16"    # Private network range (RFC 1918)
+  default = [
+    "172.16.0.0/12", # Private network range (RFC 1918)
+    "192.168.0.0/16" # Private network range (RFC 1918)
   ]
-  
+
   validation {
-    condition = length(var.approved_cidrs) > 0
+    condition     = length(var.approved_cidrs) > 0
     error_message = "At least one CIDR block must be specified for approved access."
   }
-  
+
   validation {
     condition = alltrue([
       for cidr in var.approved_cidrs : can(cidrhost(cidr, 0))
@@ -229,7 +229,7 @@ resource "aws_security_group" "private" {
 resource "aws_secretsmanager_secret" "main" {
   name                    = "${local.name_prefix}-${var.secret_name}-${random_id.secret_suffix.hex}"
   description             = "Application secret for production workload"
-  recovery_window_in_days = 0  # Allow immediate deletion for testing
+  recovery_window_in_days = 0 # Allow immediate deletion for testing
 
   tags = {
     Name = "${local.name_prefix}-${var.secret_name}"
@@ -245,7 +245,7 @@ resource "aws_secretsmanager_secret_version" "main" {
 data "aws_iam_policy_document" "ec2_trust_policy" {
   statement {
     actions = ["sts:AssumeRole"]
-    
+
     principals {
       type        = "Service"
       identifiers = ["ec2.amazonaws.com"]
@@ -262,7 +262,7 @@ data "aws_iam_policy_document" "secrets_policy" {
       "secretsmanager:GetSecretValue"
     ]
     resources = [aws_secretsmanager_secret.main.arn]
-    
+
     condition {
       test     = "Bool"
       variable = "aws:SecureTransport"
@@ -380,6 +380,6 @@ output "public_security_group_id" {
 }
 
 output "private_security_group_id" {
-  description = "ID of the private security group"  
+  description = "ID of the private security group"
   value       = aws_security_group.private.id
 }

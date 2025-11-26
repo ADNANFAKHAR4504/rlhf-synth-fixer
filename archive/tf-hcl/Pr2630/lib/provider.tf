@@ -20,8 +20,8 @@ terraform {
 #}
 
 provider "aws" {
-  alias  = "us_east_2"
-  region = var.primary_region
+  alias      = "us_east_2"
+  region     = var.primary_region
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
 
@@ -32,8 +32,8 @@ provider "aws" {
 }
 
 provider "aws" {
-  alias  = "us_west_1"
-  region = var.secondary_region
+  alias      = "us_west_1"
+  region     = var.secondary_region
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
 

@@ -63,7 +63,7 @@ data "aws_availability_zones" "available" {
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
@@ -266,7 +266,7 @@ resource "aws_subnet" "database" {
 resource "aws_eip" "nat" {
   count = 2
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = {
@@ -635,7 +635,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
         Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-cloudtrail"
           }
         }
@@ -657,8 +657,8 @@ resource "aws_cloudtrail" "main" {
   kms_key_id = aws_kms_key.main.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -699,7 +699,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = var.db_username
@@ -708,11 +708,11 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.database.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -818,10 +818,10 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "${var.project_name}-web-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.web.arn]
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-web-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.web.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -939,8 +939,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -963,8 +963,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                                 = "KnownBadInputsRuleSetMetric"
-      sampled_requests_enabled    = true
+      metric_name                = "KnownBadInputsRuleSetMetric"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -990,20 +990,20 @@ resource "aws_sns_topic" "alarms" {
 
 # CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${var.project_name}-high-cpu"
-  alarm_description   = "Alarm when CPU exceeds 80%"
-  namespace            = "AWS/EC2"
-  metric_name         = "CPUUtilization"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-high-cpu"
+  alarm_description = "Alarm when CPU exceeds 80%"
+  namespace         = "AWS/EC2"
+  metric_name       = "CPUUtilization"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 80
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 80
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1012,20 +1012,20 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "low_disk_space" {
-  alarm_name          = "${var.project_name}-low-disk-space"
-  alarm_description   = "Alarm when disk space is below 10%"
-  namespace            = "AWS/EC2"
-  metric_name         = "DiskSpaceUtilization"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-low-disk-space"
+  alarm_description = "Alarm when disk space is below 10%"
+  namespace         = "AWS/EC2"
+  metric_name       = "DiskSpaceUtilization"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 10
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 10
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1034,20 +1034,20 @@ resource "aws_cloudwatch_metric_alarm" "low_disk_space" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_memory" {
-  alarm_name          = "${var.project_name}-high-memory"
-  alarm_description   = "Alarm when Memory usage exceeds 80%"
-  namespace            = "AWS/EC2"
-  metric_name         = "MemoryUtilization"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-high-memory"
+  alarm_description = "Alarm when Memory usage exceeds 80%"
+  namespace         = "AWS/EC2"
+  metric_name       = "MemoryUtilization"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 80
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 80
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1056,20 +1056,20 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_backup_failure" {
-  alarm_name          = "${var.project_name}-rds-backup-failure"
-  alarm_description   = "Alarm when RDS backup fails"
-  namespace            = "AWS/RDS"
-  metric_name         = "BackupRetentionPeriod"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-backup-failure"
+  alarm_description = "Alarm when RDS backup fails"
+  namespace         = "AWS/RDS"
+  metric_name       = "BackupRetentionPeriod"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 1
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 1
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1078,20 +1078,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_backup_failure" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
-  alarm_name          = "${var.project_name}-elb-5xx"
-  alarm_description   = "Alarm when ELB 5XX error rate exceeds 1%"
-  namespace            = "AWS/ApplicationELB"
-  metric_name         = "HTTPCode_ELB_5XX"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-elb-5xx"
+  alarm_description = "Alarm when ELB 5XX error rate exceeds 1%"
+  namespace         = "AWS/ApplicationELB"
+  metric_name       = "HTTPCode_ELB_5XX"
+  dimensions = {
     LoadBalancer = aws_lb.main.id
   }
-  statistic            = "Sum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 1
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Sum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 1
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1100,20 +1100,20 @@ resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
-  alarm_name          = "${var.project_name}-rds-cpu-utilization"
-  alarm_description   = "Alarm when RDS CPU utilization exceeds 80%"
-  namespace            = "AWS/RDS"
-  metric_name         = "CPUUtilization"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-cpu-utilization"
+  alarm_description = "Alarm when RDS CPU utilization exceeds 80%"
+  namespace         = "AWS/RDS"
+  metric_name       = "CPUUtilization"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 80
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 80
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1122,20 +1122,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_storage_space" {
-  alarm_name          = "${var.project_name}-rds-storage-space"
-  alarm_description   = "Alarm when RDS storage space is below 10%"
-  namespace            = "AWS/RDS"
-  metric_name         = "FreeStorageSpace"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-storage-space"
+  alarm_description = "Alarm when RDS storage space is below 10%"
+  namespace         = "AWS/RDS"
+  metric_name       = "FreeStorageSpace"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 10
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 10
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1144,20 +1144,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage_space" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "elb_request_count" {
-  alarm_name          = "${var.project_name}-elb-request-count"
-  alarm_description   = "Alarm when ELB request count is less than 100 in 5 minutes"
-  namespace            = "AWS/ApplicationELB"
-  metric_name         = "RequestCount"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-elb-request-count"
+  alarm_description = "Alarm when ELB request count is less than 100 in 5 minutes"
+  namespace         = "AWS/ApplicationELB"
+  metric_name       = "RequestCount"
+  dimensions = {
     LoadBalancer = aws_lb.main.id
   }
-  statistic            = "Sum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 100
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Sum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 100
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1166,20 +1166,20 @@ resource "aws_cloudwatch_metric_alarm" "elb_request_count" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_network_in" {
-  alarm_name          = "${var.project_name}-high-network-in"
-  alarm_description   = "Alarm when network in exceeds 1 GB"
-  namespace            = "AWS/EC2"
-  metric_name         = "NetworkIn"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-high-network-in"
+  alarm_description = "Alarm when network in exceeds 1 GB"
+  namespace         = "AWS/EC2"
+  metric_name       = "NetworkIn"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Sum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 1073741824
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Sum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 1073741824
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1188,20 +1188,20 @@ resource "aws_cloudwatch_metric_alarm" "high_network_in" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_network_out" {
-  alarm_name          = "${var.project_name}-high-network-out"
-  alarm_description   = "Alarm when network out exceeds 1 GB"
-  namespace            = "AWS/EC2"
-  metric_name         = "NetworkOut"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-high-network-out"
+  alarm_description = "Alarm when network out exceeds 1 GB"
+  namespace         = "AWS/EC2"
+  metric_name       = "NetworkOut"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Sum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 1073741824
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Sum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 1073741824
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1210,20 +1210,20 @@ resource "aws_cloudwatch_metric_alarm" "high_network_out" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "instance_reboot" {
-  alarm_name          = "${var.project_name}-instance-reboot"
-  alarm_description   = "Alarm when EC2 instance is rebooted"
-  namespace            = "AWS/EC2"
-  metric_name         = "StatusCheckFailed"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-instance-reboot"
+  alarm_description = "Alarm when EC2 instance is rebooted"
+  namespace         = "AWS/EC2"
+  metric_name       = "StatusCheckFailed"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Maximum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 1
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Maximum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 1
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1232,20 +1232,20 @@ resource "aws_cloudwatch_metric_alarm" "instance_reboot" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "instance_termination" {
-  alarm_name          = "${var.project_name}-instance-termination"
-  alarm_description   = "Alarm when EC2 instance is terminated"
-  namespace            = "AWS/EC2"
-  metric_name         = "StatusCheckFailed"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-instance-termination"
+  alarm_description = "Alarm when EC2 instance is terminated"
+  namespace         = "AWS/EC2"
+  metric_name       = "StatusCheckFailed"
+  dimensions = {
     InstanceId = aws_db_instance.main.id
   }
-  statistic            = "Maximum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 1
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Maximum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 1
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1254,20 +1254,20 @@ resource "aws_cloudwatch_metric_alarm" "instance_termination" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_reboot" {
-  alarm_name          = "${var.project_name}-rds-reboot"
-  alarm_description   = "Alarm when RDS instance is rebooted"
-  namespace            = "AWS/RDS"
-  metric_name         = "Status"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-reboot"
+  alarm_description = "Alarm when RDS instance is rebooted"
+  namespace         = "AWS/RDS"
+  metric_name       = "Status"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Maximum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 0
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Maximum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 0
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1276,20 +1276,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_reboot" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_termination" {
-  alarm_name          = "${var.project_name}-rds-termination"
-  alarm_description   = "Alarm when RDS instance is terminated"
-  namespace            = "AWS/RDS"
-  metric_name         = "Status"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-termination"
+  alarm_description = "Alarm when RDS instance is terminated"
+  namespace         = "AWS/RDS"
+  metric_name       = "Status"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Maximum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 0
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Maximum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 0
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1298,20 +1298,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_termination" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "elb_active_connection_count" {
-  alarm_name          = "${var.project_name}-elb-active-connection-count"
-  alarm_description   = "Alarm when ELB active connection count is less than 10"
-  namespace            = "AWS/ApplicationELB"
-  metric_name         = "ActiveConnectionCount"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-elb-active-connection-count"
+  alarm_description = "Alarm when ELB active connection count is less than 10"
+  namespace         = "AWS/ApplicationELB"
+  metric_name       = "ActiveConnectionCount"
+  dimensions = {
     LoadBalancer = aws_lb.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 10
-  comparison_operator  = "LessThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 10
+  comparison_operator       = "LessThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1320,20 +1320,20 @@ resource "aws_cloudwatch_metric_alarm" "elb_active_connection_count" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_read_latency" {
-  alarm_name          = "${var.project_name}-rds-read-latency"
-  alarm_description   = "Alarm when RDS read latency exceeds 100ms"
-  namespace            = "AWS/RDS"
-  metric_name         = "ReadLatency"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-read-latency"
+  alarm_description = "Alarm when RDS read latency exceeds 100ms"
+  namespace         = "AWS/RDS"
+  metric_name       = "ReadLatency"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 0.1
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 0.1
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1342,20 +1342,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_read_latency" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_write_latency" {
-  alarm_name          = "${var.project_name}-rds-write-latency"
-  alarm_description   = "Alarm when RDS write latency exceeds 100ms"
-  namespace            = "AWS/RDS"
-  metric_name         = "WriteLatency"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-write-latency"
+  alarm_description = "Alarm when RDS write latency exceeds 100ms"
+  namespace         = "AWS/RDS"
+  metric_name       = "WriteLatency"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 0.1
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 0.1
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1364,20 +1364,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_write_latency" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_deadlock_count" {
-  alarm_name          = "${var.project_name}-rds-deadlock-count"
-  alarm_description   = "Alarm when RDS deadlock count exceeds 0"
-  namespace            = "AWS/RDS"
-  metric_name         = "Deadlocks"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-deadlock-count"
+  alarm_description = "Alarm when RDS deadlock count exceeds 0"
+  namespace         = "AWS/RDS"
+  metric_name       = "Deadlocks"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Sum"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 0
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Sum"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 0
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {
@@ -1386,20 +1386,20 @@ resource "aws_cloudwatch_metric_alarm" "rds_deadlock_count" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_replica_lag" {
-  alarm_name          = "${var.project_name}-rds-replica-lag"
-  alarm_description   = "Alarm when RDS replica lag exceeds 5 seconds"
-  namespace            = "AWS/RDS"
-  metric_name         = "ReplicaLag"
-  dimensions          = {
+  alarm_name        = "${var.project_name}-rds-replica-lag"
+  alarm_description = "Alarm when RDS replica lag exceeds 5 seconds"
+  namespace         = "AWS/RDS"
+  metric_name       = "ReplicaLag"
+  dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  statistic            = "Average"
-  period               = 300
-  evaluation_periods   = 1
-  threshold            = 5
-  comparison_operator  = "GreaterThanThreshold"
-  alarm_actions        = [aws_sns_topic.alarms.arn]
-  ok_actions           = [aws_sns_topic.alarms.arn]
+  statistic                 = "Average"
+  period                    = 300
+  evaluation_periods        = 1
+  threshold                 = 5
+  comparison_operator       = "GreaterThanThreshold"
+  alarm_actions             = [aws_sns_topic.alarms.arn]
+  ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
   tags = {

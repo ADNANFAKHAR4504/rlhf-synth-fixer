@@ -23,55 +23,55 @@ locals {
   # Environment-specific configurations (non-overlapping CIDR blocks)
   environment_config = {
     dev = {
-      vpc_cidr               = "10.1.0.0/16"
-      public_subnet_cidrs    = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
-      private_subnet_cidrs   = ["10.1.10.0/24", "10.1.20.0/24", "10.1.30.0/24"]
-      database_subnet_cidrs  = ["10.1.100.0/24", "10.1.200.0/24", "10.1.210.0/24"]
-      ecs_cpu                = 256
-      ecs_memory             = 512
-      ecs_desired_count      = 2
-      ecs_min_capacity       = 2
-      ecs_max_capacity       = 6
-      db_instance_class      = "db.t3.medium"
-      backup_retention       = 1
-      deletion_protection    = false
-      multi_az               = false
+      vpc_cidr              = "10.1.0.0/16"
+      public_subnet_cidrs   = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
+      private_subnet_cidrs  = ["10.1.10.0/24", "10.1.20.0/24", "10.1.30.0/24"]
+      database_subnet_cidrs = ["10.1.100.0/24", "10.1.200.0/24", "10.1.210.0/24"]
+      ecs_cpu               = 256
+      ecs_memory            = 512
+      ecs_desired_count     = 2
+      ecs_min_capacity      = 2
+      ecs_max_capacity      = 6
+      db_instance_class     = "db.t3.medium"
+      backup_retention      = 1
+      deletion_protection   = false
+      multi_az              = false
     }
     staging = {
-      vpc_cidr               = "10.2.0.0/16"
-      public_subnet_cidrs    = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
-      private_subnet_cidrs   = ["10.2.10.0/24", "10.2.20.0/24", "10.2.30.0/24"]
-      database_subnet_cidrs  = ["10.2.100.0/24", "10.2.200.0/24", "10.2.210.0/24"]
-      ecs_cpu                = 512
-      ecs_memory             = 1024
-      ecs_desired_count      = 3
-      ecs_min_capacity       = 2
-      ecs_max_capacity       = 8
-      db_instance_class      = "db.t3.medium"
-      backup_retention       = 3
-      deletion_protection    = false
-      multi_az               = true
+      vpc_cidr              = "10.2.0.0/16"
+      public_subnet_cidrs   = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
+      private_subnet_cidrs  = ["10.2.10.0/24", "10.2.20.0/24", "10.2.30.0/24"]
+      database_subnet_cidrs = ["10.2.100.0/24", "10.2.200.0/24", "10.2.210.0/24"]
+      ecs_cpu               = 512
+      ecs_memory            = 1024
+      ecs_desired_count     = 3
+      ecs_min_capacity      = 2
+      ecs_max_capacity      = 8
+      db_instance_class     = "db.t3.medium"
+      backup_retention      = 3
+      deletion_protection   = false
+      multi_az              = true
     }
     prod = {
-      vpc_cidr               = "10.3.0.0/16"
-      public_subnet_cidrs    = ["10.3.1.0/24", "10.3.2.0/24", "10.3.3.0/24"]
-      private_subnet_cidrs   = ["10.3.10.0/24", "10.3.20.0/24", "10.3.30.0/24"]
-      database_subnet_cidrs  = ["10.3.100.0/24", "10.3.200.0/24", "10.3.210.0/24"]
-      ecs_cpu                = 1024
-      ecs_memory             = 2048
-      ecs_desired_count      = 4
-      ecs_min_capacity       = 4
-      ecs_max_capacity       = 20
-      db_instance_class      = "db.r5.large"
-      backup_retention       = 7
-      deletion_protection    = false
-      multi_az               = true
+      vpc_cidr              = "10.3.0.0/16"
+      public_subnet_cidrs   = ["10.3.1.0/24", "10.3.2.0/24", "10.3.3.0/24"]
+      private_subnet_cidrs  = ["10.3.10.0/24", "10.3.20.0/24", "10.3.30.0/24"]
+      database_subnet_cidrs = ["10.3.100.0/24", "10.3.200.0/24", "10.3.210.0/24"]
+      ecs_cpu               = 1024
+      ecs_memory            = 2048
+      ecs_desired_count     = 4
+      ecs_min_capacity      = 4
+      ecs_max_capacity      = 20
+      db_instance_class     = "db.r5.large"
+      backup_retention      = 7
+      deletion_protection   = false
+      multi_az              = true
     }
   }
 
   # Current environment configuration
   current_config = local.environment_config[var.environment]
-  
+
   # Common tags
   common_tags = {
     Environment = var.environment
@@ -83,7 +83,7 @@ locals {
 
   # Resource naming
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   # Truncated name prefix for resources with length limits (like ALB)
   short_name_prefix = substr("${var.project_name}-${var.environment}", 0, 20)
 }
@@ -508,7 +508,7 @@ resource "aws_ecr_repository" "main" {
 
   encryption_configuration {
     encryption_type = "KMS"
-    kms_key        = aws_kms_key.main.arn
+    kms_key         = aws_kms_key.main.arn
   }
 
   tags = merge(local.common_tags, {
@@ -736,11 +736,11 @@ resource "aws_iam_role_policy" "lambda_rotation_policy" {
 resource "aws_lambda_function" "rotate_secret" {
   filename         = "lambda_rotation.zip"
   function_name    = "${local.name_prefix}-rotate-secret"
-  role            = aws_iam_role.lambda_rotation_role.arn
-  handler         = "lambda_function.lambda_handler"
+  role             = aws_iam_role.lambda_rotation_role.arn
+  handler          = "lambda_function.lambda_handler"
   source_code_hash = data.archive_file.lambda_rotation_zip.output_base64sha256
-  runtime         = "python3.9"
-  timeout         = 30
+  runtime          = "python3.9"
+  timeout          = 30
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -761,7 +761,7 @@ data "archive_file" "lambda_rotation_zip" {
   type        = "zip"
   output_path = "lambda_rotation.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import json
 def lambda_handler(event, context):
     return {'statusCode': 200, 'body': json.dumps('Secret rotation placeholder')}
@@ -832,9 +832,9 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name  = "xray-daemon"
-      image = "public.ecr.aws/xray/aws-xray-daemon:latest"
-      cpu   = 32
+      name   = "xray-daemon"
+      image  = "public.ecr.aws/xray/aws-xray-daemon:latest"
+      cpu    = 32
       memory = 256
       portMappings = [
         {
@@ -853,10 +853,10 @@ resource "aws_ecs_task_definition" "app" {
       user = "1337"
     },
     {
-      name  = "app"
-      image = "${aws_ecr_repository.main.repository_url}:latest"
-      cpu   = local.current_config.ecs_cpu - 32
-      memory = local.current_config.ecs_memory - 256
+      name      = "app"
+      image     = "${aws_ecr_repository.main.repository_url}:latest"
+      cpu       = local.current_config.ecs_cpu - 32
+      memory    = local.current_config.ecs_memory - 256
       essential = true
       portMappings = [
         {
@@ -1036,7 +1036,7 @@ resource "aws_ecs_service" "main" {
 
   network_configuration {
     security_groups  = [aws_security_group.ecs.id]
-    subnets         = aws_subnet.private[*].id
+    subnets          = aws_subnet.private[*].id
     assign_public_ip = false
   }
 
@@ -1056,7 +1056,7 @@ resource "aws_ecs_service" "main" {
   }
 
   health_check_grace_period_seconds = 60
-  enable_execute_command           = true
+  enable_execute_command            = true
 
   depends_on = [
     aws_lb_listener.main,

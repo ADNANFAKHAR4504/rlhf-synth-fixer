@@ -15,7 +15,7 @@ Format:
   }
 }
 EOT
-  type    = map(object({
+  type = map(object({
     email              = string
     invitation_message = string
   }))

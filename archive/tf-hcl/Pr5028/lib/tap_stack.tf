@@ -57,7 +57,7 @@ resource "aws_kms_key" "KMSKey" {
   deletion_window_in_days = 30
 
   policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [
       {
         Sid       = "Enable IAM User Permissions"
@@ -70,14 +70,14 @@ resource "aws_kms_key" "KMSKey" {
         Sid       = "Allow CloudWatch Logs"
         Effect    = "Allow"
         Principal = { Service = "logs.${data.aws_region.current.name}.amazonaws.com" }
-        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"]
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"]
         Resource  = "*"
       },
       {
         Sid       = "AllowLambdaServiceToUseKey"
         Effect    = "Allow"
         Principal = { Service = "lambda.amazonaws.com" }
-        Action    = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey","kms:CreateGrant"]
+        Action    = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey", "kms:CreateGrant"]
         Resource  = "*"
         Condition = {
           "StringEquals" = { "kms:ViaService" = "lambda.${data.aws_region.current.name}.amazonaws.com" },
@@ -137,7 +137,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "S3LoggingBucket" {
 resource "aws_s3_bucket_policy" "LoggingBucketPolicy" {
   bucket = aws_s3_bucket.S3LoggingBucket.id
   policy = jsonencode({
-    Version   = "2012-10-17",
+    Version = "2012-10-17",
     Statement = [
       {
         Sid       = "GrantLoggingServiceWriteAccess"
@@ -226,7 +226,7 @@ resource "aws_dynamodb_table" "DynamoDBTable" {
 resource "aws_iam_role" "LambdaExecutionRole" {
   name = "${var.ProjectName}-${var.Environment}-lambda-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
   tags = merge(local.base_tags, { Name = "${var.ProjectName}-${var.Environment}-lambda-role" })
@@ -243,8 +243,8 @@ resource "aws_iam_role_policy" "LambdaExecutionRole_S3Access" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
-      Action = ["s3:GetObject","s3:PutObject","s3:ListBucket"],
+      Effect   = "Allow",
+      Action   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
       Resource = [aws_s3_bucket.S3Bucket.arn, "${aws_s3_bucket.S3Bucket.arn}/*"]
     }]
   })
@@ -256,8 +256,8 @@ resource "aws_iam_role_policy" "LambdaExecutionRole_DynamoDBAccess" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
-      Action = ["dynamodb:GetItem","dynamodb:PutItem","dynamodb:UpdateItem","dynamodb:DeleteItem","dynamodb:Query","dynamodb:Scan"],
+      Effect   = "Allow",
+      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"],
       Resource = aws_dynamodb_table.DynamoDBTable.arn
     }]
   })
@@ -269,8 +269,8 @@ resource "aws_iam_role_policy" "LambdaExecutionRole_KMSAccess" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
-      Action = ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"],
+      Effect   = "Allow",
+      Action   = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
       Resource = aws_kms_key.KMSKey.arn
     }]
   })
@@ -282,8 +282,8 @@ resource "aws_iam_role_policy" "LambdaExecutionRole_S3NotificationAccess" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
-      Action = ["s3:PutBucketNotification","s3:GetBucketNotification"],
+      Effect   = "Allow",
+      Action   = ["s3:PutBucketNotification", "s3:GetBucketNotification"],
       Resource = aws_s3_bucket.S3Bucket.arn
     }]
   })
@@ -293,7 +293,7 @@ data "archive_file" "LambdaFunction_zip" {
   type        = "zip"
   output_path = "./lambda_processor.zip"
   source {
-    content = <<PY
+    content  = <<PY
 import json, boto3, os
 from datetime import datetime
 def lambda_handler(event, context):
@@ -333,14 +333,14 @@ PY
 }
 
 resource "aws_lambda_function" "LambdaFunction" {
-  function_name = "${var.ProjectName}-${var.Environment}-processor"
-  role          = aws_iam_role.LambdaExecutionRole.arn
-  runtime       = "python3.9"
-  handler       = "index.lambda_handler"
+  function_name    = "${var.ProjectName}-${var.Environment}-processor"
+  role             = aws_iam_role.LambdaExecutionRole.arn
+  runtime          = "python3.9"
+  handler          = "index.lambda_handler"
   filename         = data.archive_file.LambdaFunction_zip.output_path
   source_code_hash = data.archive_file.LambdaFunction_zip.output_base64sha256
-  timeout     = 30
-  memory_size = 256
+  timeout          = 30
+  memory_size      = 256
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.DynamoDBTable.name
@@ -416,16 +416,16 @@ resource "aws_api_gateway_integration" "ApiGatewayIntegrationLambda" {
 }
 
 resource "aws_api_gateway_method_response" "ApiGatewayMethod_200" {
-  rest_api_id = aws_api_gateway_rest_api.ApiGateway.id
-  resource_id = aws_api_gateway_resource.ApiGatewayResource.id
-  http_method = aws_api_gateway_method.ApiGatewayMethod.http_method
-  status_code = "200"
+  rest_api_id     = aws_api_gateway_rest_api.ApiGateway.id
+  resource_id     = aws_api_gateway_resource.ApiGatewayResource.id
+  http_method     = aws_api_gateway_method.ApiGatewayMethod.http_method
+  status_code     = "200"
   response_models = { "application/json" = "Empty" }
 }
 
 resource "aws_api_gateway_deployment" "ApiGatewayDeployment" {
   rest_api_id = aws_api_gateway_rest_api.ApiGateway.id
-  depends_on  = [
+  depends_on = [
     aws_api_gateway_integration.ApiGatewayIntegrationLambda,
     aws_api_gateway_method_response.ApiGatewayMethod_200
   ]
@@ -434,7 +434,7 @@ resource "aws_api_gateway_deployment" "ApiGatewayDeployment" {
 resource "aws_iam_role" "APIGatewayCloudWatchLogsRole" {
   name = "APIGatewayCloudWatchLogsRole"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Effect = "Allow", Principal = { Service = "apigateway.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
@@ -493,7 +493,7 @@ data "aws_ssm_parameter" "al2023_ami" {
 resource "aws_iam_role" "EC2InstanceRole" {
   name = "${var.ProjectName}-${var.Environment}-ec2-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
   tags = merge(local.base_tags, { Name = "${var.ProjectName}-${var.Environment}-ec2-role" })
@@ -514,7 +514,7 @@ resource "aws_iam_role_policy" "EC2InstanceAccess" {
       {
         Sid      = "S3PutObjectContentBucket"
         Effect   = "Allow"
-        Action   = ["s3:PutObject","s3:ListBucket","s3:PutObjectTagging"]
+        Action   = ["s3:PutObject", "s3:ListBucket", "s3:PutObjectTagging"]
         Resource = [aws_s3_bucket.S3Bucket.arn, "${aws_s3_bucket.S3Bucket.arn}/*"]
       },
       {
@@ -526,7 +526,7 @@ resource "aws_iam_role_policy" "EC2InstanceAccess" {
       {
         Sid      = "KMSForSSEKMSOnBucket"
         Effect   = "Allow"
-        Action   = ["kms:Encrypt","kms:GenerateDataKey","kms:GenerateDataKeyWithoutPlaintext","kms:DescribeKey"]
+        Action   = ["kms:Encrypt", "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext", "kms:DescribeKey"]
         Resource = aws_kms_key.KMSKey.arn
       }
     ]
@@ -562,7 +562,7 @@ resource "aws_instance" "EC2TestInstance" {
   iam_instance_profile        = aws_iam_instance_profile.EC2InstanceProfile.name
   associate_public_ip_address = true
 
-    user_data = <<-BASH
+  user_data = <<-BASH
     #!/usr/bin/env bash
     set -euxo pipefail
     exec > >(tee -a /var/log/user-data.log) 2>&1
@@ -639,42 +639,42 @@ output "Environment" {
   description = "Environment suffix"
 }
 
-output "StackName"         { 
-  value = "${var.ProjectName}-${var.Environment}" 
+output "StackName" {
+  value = "${var.ProjectName}-${var.Environment}"
 }
-output "S3BucketName"      { 
-  value = aws_s3_bucket.S3Bucket.id 
+output "S3BucketName" {
+  value = aws_s3_bucket.S3Bucket.id
 }
-output "S3BucketArn"       { 
-  value = aws_s3_bucket.S3Bucket.arn 
+output "S3BucketArn" {
+  value = aws_s3_bucket.S3Bucket.arn
 }
-output "DynamoDBTableName" { 
-  value = aws_dynamodb_table.DynamoDBTable.name 
+output "DynamoDBTableName" {
+  value = aws_dynamodb_table.DynamoDBTable.name
 }
-output "DynamoDBTableArn"  { 
-  value = aws_dynamodb_table.DynamoDBTable.arn 
+output "DynamoDBTableArn" {
+  value = aws_dynamodb_table.DynamoDBTable.arn
 }
-output "LambdaFunctionName"{ 
-  value = aws_lambda_function.LambdaFunction.function_name 
+output "LambdaFunctionName" {
+  value = aws_lambda_function.LambdaFunction.function_name
 }
-output "LambdaFunctionArn" { 
-  value = aws_lambda_function.LambdaFunction.arn 
+output "LambdaFunctionArn" {
+  value = aws_lambda_function.LambdaFunction.arn
 }
 output "ApiGatewayUrl" {
   value = "https://${aws_api_gateway_rest_api.ApiGateway.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_stage.ApiGatewayStage.stage_name}/process"
 }
-output "ApiGatewayId"  { 
-  value = aws_api_gateway_rest_api.ApiGateway.id 
+output "ApiGatewayId" {
+  value = aws_api_gateway_rest_api.ApiGateway.id
 }
-output "KMSKeyId"      { 
-  value = aws_kms_key.KMSKey.key_id 
+output "KMSKeyId" {
+  value = aws_kms_key.KMSKey.key_id
 }
-output "KMSKeyArn"     { 
-  value = aws_kms_key.KMSKey.arn 
+output "KMSKeyArn" {
+  value = aws_kms_key.KMSKey.arn
 }
-output "EC2InstanceId" { 
-  value = aws_instance.EC2TestInstance.id 
+output "EC2InstanceId" {
+  value = aws_instance.EC2TestInstance.id
 }
-output "EC2PublicIp"   { 
-  value = aws_instance.EC2TestInstance.public_ip 
+output "EC2PublicIp" {
+  value = aws_instance.EC2TestInstance.public_ip
 }

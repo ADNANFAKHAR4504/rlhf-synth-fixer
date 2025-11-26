@@ -78,7 +78,7 @@ resource "aws_subnet" "database" {
 resource "aws_eip" "nat" {
   count = length(local.azs)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -285,15 +285,15 @@ resource "aws_db_instance" "main" {
   publicly_accessible    = false
 
   # Multi-AZ and backup configuration
-  multi_az               = local.rds_multi_az[local.environment]
-  backup_retention_period = local.rds_backup_retention[local.environment]
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  multi_az                 = local.rds_multi_az[local.environment]
+  backup_retention_period  = local.rds_backup_retention[local.environment]
+  backup_window            = "03:00-04:00"
+  maintenance_window       = "sun:04:00-sun:05:00"
   delete_automated_backups = true
 
   # Security and monitoring
-  deletion_protection = false
-  skip_final_snapshot = local.environment == "dev" ? true : false
+  deletion_protection       = false
+  skip_final_snapshot       = local.environment == "dev" ? true : false
   final_snapshot_identifier = local.environment != "dev" ? "${var.project_name}-${local.environment}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   # Performance insights

@@ -66,7 +66,7 @@ locals {
 
   # Naming conventions
   name_prefix = "${var.project_name}-${lower(var.environment)}"
-  
+
   # Subnet CIDRs
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
@@ -647,8 +647,8 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   publicly_accessible = false
@@ -771,8 +771,8 @@ resource "aws_cloudfront_origin_access_control" "main" {
 # WAF Web ACL
 resource "aws_wafv2_web_acl" "main" {
   provider = aws.us_east_1
-  name  = "${local.name_prefix}-waf"
-  scope = "CLOUDFRONT"
+  name     = "${local.name_prefix}-waf"
+  scope    = "CLOUDFRONT"
 
   default_action {
     allow {}
@@ -795,8 +795,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = false
-      metric_name                 = "CommonRuleSetMetric"
-      sampled_requests_enabled    = false
+      metric_name                = "CommonRuleSetMetric"
+      sampled_requests_enabled   = false
     }
   }
 
@@ -804,8 +804,8 @@ resource "aws_wafv2_web_acl" "main" {
 
   visibility_config {
     cloudwatch_metrics_enabled = false
-    metric_name                 = "${local.name_prefix}-waf"
-    sampled_requests_enabled    = false
+    metric_name                = "${local.name_prefix}-waf"
+    sampled_requests_enabled   = false
   }
 }
 
@@ -948,8 +948,8 @@ resource "aws_cloudtrail" "main" {
   kms_key_id = aws_kms_key.cloudtrail.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {

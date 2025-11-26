@@ -26,18 +26,18 @@ locals {
     Project     = var.project_name
     ManagedBy   = "Terraform"
   }
-  
+
   primary_region   = "us-east-1"
   secondary_region = "us-west-2"
-  
+
   # CIDR blocks
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-  
+
   # Subnet CIDRs for primary region (us-east-1)
   primary_public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-  
+
   # Subnet CIDRs for secondary region (us-west-2)
   secondary_public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnet_cidrs = ["10.1.10.0/24", "10.1.20.0/24"]
@@ -59,12 +59,12 @@ data "aws_ami" "amazon_linux_primary" {
   provider    = aws.us_east_1
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-  
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -76,12 +76,12 @@ data "aws_ami" "amazon_linux_secondary" {
   provider    = aws.us_west_2
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-  
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -90,8 +90,8 @@ data "aws_ami" "amazon_linux_secondary" {
 
 # Random password for RDS master password
 resource "random_password" "rds_master_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?^_"
 }
 
@@ -108,7 +108,7 @@ resource "aws_kms_key" "s3_primary" {
   provider                = aws.us_east_1
   description             = "KMS key for S3 encryption in primary region"
   deletion_window_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-s3-kms-primary"
   })
@@ -125,7 +125,7 @@ resource "aws_kms_key" "s3_secondary" {
   provider                = aws.us_west_2
   description             = "KMS key for S3 encryption in secondary region"
   deletion_window_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-s3-kms-secondary"
   })
@@ -143,7 +143,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = local.primary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-vpc-primary"
   })
@@ -153,7 +153,7 @@ resource "aws_vpc" "primary" {
 resource "aws_internet_gateway" "primary" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-igw-primary"
   })
@@ -167,7 +167,7 @@ resource "aws_subnet" "primary_public" {
   cidr_block              = local.primary_public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.primary.names[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}-primary"
     Type = "Public"
@@ -181,7 +181,7 @@ resource "aws_subnet" "primary_private" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.primary_private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.primary.names[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}-primary"
     Type = "Private"
@@ -193,9 +193,9 @@ resource "aws_eip" "primary_nat" {
   provider = aws.us_east_1
   count    = length(local.primary_public_subnet_cidrs)
   domain   = "vpc"
-  
+
   depends_on = [aws_internet_gateway.primary]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-eip-nat-${count.index + 1}-primary"
   })
@@ -207,9 +207,9 @@ resource "aws_nat_gateway" "primary" {
   count         = length(local.primary_public_subnet_cidrs)
   allocation_id = aws_eip.primary_nat[count.index].id
   subnet_id     = aws_subnet.primary_public[count.index].id
-  
+
   depends_on = [aws_internet_gateway.primary]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-${count.index + 1}-primary"
   })
@@ -219,12 +219,12 @@ resource "aws_nat_gateway" "primary" {
 resource "aws_route_table" "primary_public" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rt-public-primary"
   })
@@ -243,12 +243,12 @@ resource "aws_route_table" "primary_private" {
   provider = aws.us_east_1
   count    = length(aws_subnet.primary_private)
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary[count.index].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rt-private-${count.index + 1}-primary"
   })
@@ -268,7 +268,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = local.secondary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-vpc-secondary"
   })
@@ -278,7 +278,7 @@ resource "aws_vpc" "secondary" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-igw-secondary"
   })
@@ -292,7 +292,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = local.secondary_public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.secondary.names[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}-secondary"
     Type = "Public"
@@ -306,7 +306,7 @@ resource "aws_subnet" "secondary_private" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.secondary.names[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}-secondary"
     Type = "Private"
@@ -318,9 +318,9 @@ resource "aws_eip" "secondary_nat" {
   provider = aws.us_west_2
   count    = length(local.secondary_public_subnet_cidrs)
   domain   = "vpc"
-  
+
   depends_on = [aws_internet_gateway.secondary]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-eip-nat-${count.index + 1}-secondary"
   })
@@ -332,9 +332,9 @@ resource "aws_nat_gateway" "secondary" {
   count         = length(local.secondary_public_subnet_cidrs)
   allocation_id = aws_eip.secondary_nat[count.index].id
   subnet_id     = aws_subnet.secondary_public[count.index].id
-  
+
   depends_on = [aws_internet_gateway.secondary]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-${count.index + 1}-secondary"
   })
@@ -344,12 +344,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "secondary_public" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rt-public-secondary"
   })
@@ -368,12 +368,12 @@ resource "aws_route_table" "secondary_private" {
   provider = aws.us_west_2
   count    = length(aws_subnet.secondary_private)
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary[count.index].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rt-private-${count.index + 1}-secondary"
   })
@@ -394,7 +394,7 @@ resource "aws_vpc_peering_connection" "primary_to_secondary" {
   peer_vpc_id = aws_vpc.secondary.id
   peer_region = local.secondary_region
   auto_accept = false
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-peering-primary-to-secondary"
   })
@@ -405,7 +405,7 @@ resource "aws_vpc_peering_connection_accepter" "secondary" {
   provider                  = aws.us_west_2
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
   auto_accept               = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-peering-accepter-secondary"
   })
@@ -447,7 +447,7 @@ resource "aws_route" "secondary_private_to_primary" {
 # IAM role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "${var.project_name}-ec2-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -460,7 +460,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -468,7 +468,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_role_policy" "ec2_policy" {
   name = "${var.project_name}-ec2-policy"
   role = aws_iam_role.ec2_role.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -501,7 +501,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.project_name}-ec2-profile"
   role = aws_iam_role.ec2_role.name
-  
+
   tags = local.common_tags
 }
 
@@ -512,28 +512,28 @@ resource "aws_security_group" "alb_primary" {
   name        = "${var.project_name}-alb-sg-primary"
   description = "Security group for Application Load Balancer in primary region"
   vpc_id      = aws_vpc.primary.id
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-sg-primary"
   })
@@ -545,28 +545,28 @@ resource "aws_security_group" "ec2_primary" {
   name        = "${var.project_name}-ec2-sg-primary"
   description = "Security group for EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
-  
+
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_primary.id]
   }
-  
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [local.primary_vpc_cidr]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-ec2-sg-primary"
   })
@@ -578,28 +578,28 @@ resource "aws_security_group" "alb_secondary" {
   name        = "${var.project_name}-alb-sg-secondary"
   description = "Security group for Application Load Balancer in secondary region"
   vpc_id      = aws_vpc.secondary.id
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-sg-secondary"
   })
@@ -611,28 +611,28 @@ resource "aws_security_group" "ec2_secondary" {
   name        = "${var.project_name}-ec2-sg-secondary"
   description = "Security group for EC2 instances in secondary region"
   vpc_id      = aws_vpc.secondary.id
-  
+
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_secondary.id]
   }
-  
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = [local.secondary_vpc_cidr]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-ec2-sg-secondary"
   })
@@ -644,14 +644,14 @@ resource "aws_security_group" "rds_primary" {
   name        = "${var.project_name}-rds-sg-primary"
   description = "Security group for RDS PostgreSQL"
   vpc_id      = aws_vpc.primary.id
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2_primary.id]
   }
-  
+
   # Allow connection from secondary region for read replica
   ingress {
     from_port   = 5432
@@ -659,14 +659,14 @@ resource "aws_security_group" "rds_primary" {
     protocol    = "tcp"
     cidr_blocks = [local.secondary_vpc_cidr]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-sg-primary"
   })
@@ -678,21 +678,21 @@ resource "aws_security_group" "rds_secondary" {
   name        = "${var.project_name}-rds-sg-secondary"
   description = "Security group for RDS read replica"
   vpc_id      = aws_vpc.secondary.id
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2_secondary.id]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-sg-secondary"
   })
@@ -833,28 +833,28 @@ resource "aws_launch_template" "secondary" {
 # Auto Scaling Group for primary region
 # Auto Scaling Group for primary region
 resource "aws_autoscaling_group" "primary" {
-  provider            = aws.us_east_1
-  name                = "${var.project_name}-asg-primary"
-  vpc_zone_identifier = aws_subnet.primary_private[*].id
-  target_group_arns   = [aws_lb_target_group.primary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_east_1
+  name                      = "${var.project_name}-asg-primary"
+  vpc_zone_identifier       = aws_subnet.primary_private[*].id
+  target_group_arns         = [aws_lb_target_group.primary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  
+
   min_size         = 3
   max_size         = 6
   desired_capacity = 3
-  
+
   launch_template {
     id      = aws_launch_template.primary.id
     version = "$Latest"
   }
-  
+
   tag {
     key                 = "Name"
     value               = "${var.project_name}-asg-primary"
     propagate_at_launch = false
   }
-  
+
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -867,28 +867,28 @@ resource "aws_autoscaling_group" "primary" {
 
 # Auto Scaling Group for secondary region
 resource "aws_autoscaling_group" "secondary" {
-  provider            = aws.us_west_2
-  name                = "${var.project_name}-asg-secondary"
-  vpc_zone_identifier = aws_subnet.secondary_private[*].id
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_west_2
+  name                      = "${var.project_name}-asg-secondary"
+  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
+  target_group_arns         = [aws_lb_target_group.secondary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  
+
   min_size         = 3
   max_size         = 6
   desired_capacity = 3
-  
+
   launch_template {
     id      = aws_launch_template.secondary.id
     version = "$Latest"
   }
-  
+
   tag {
     key                 = "Name"
     value               = "${var.project_name}-asg-secondary"
     propagate_at_launch = false
   }
-  
+
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -908,9 +908,9 @@ resource "aws_lb" "primary" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_primary.id]
   subnets            = aws_subnet.primary_public[*].id
-  
+
   enable_deletion_protection = false
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-primary"
   })
@@ -923,7 +923,7 @@ resource "aws_lb_target_group" "primary" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -935,7 +935,7 @@ resource "aws_lb_target_group" "primary" {
     timeout             = 5
     unhealthy_threshold = 2
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-tg-primary"
   })
@@ -947,12 +947,12 @@ resource "aws_lb_listener" "primary" {
   load_balancer_arn = aws_lb.primary.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.primary.arn
   }
-  
+
   tags = local.common_tags
 }
 
@@ -964,9 +964,9 @@ resource "aws_lb" "secondary" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_secondary.id]
   subnets            = aws_subnet.secondary_public[*].id
-  
+
   enable_deletion_protection = false
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-secondary"
   })
@@ -979,7 +979,7 @@ resource "aws_lb_target_group" "secondary" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -991,7 +991,7 @@ resource "aws_lb_target_group" "secondary" {
     timeout             = 5
     unhealthy_threshold = 2
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-tg-secondary"
   })
@@ -1003,12 +1003,12 @@ resource "aws_lb_listener" "secondary" {
   load_balancer_arn = aws_lb.secondary.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secondary.arn
   }
-  
+
   tags = local.common_tags
 }
 
@@ -1017,7 +1017,7 @@ resource "aws_lb_listener" "secondary" {
 resource "aws_s3_bucket" "primary" {
   provider = aws.us_east_1
   bucket   = "${var.project_name}-bucket-primary-${random_string.bucket_suffix.result}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-bucket-primary"
   })
@@ -1043,7 +1043,7 @@ resource "aws_s3_bucket_versioning" "primary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.primary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_primary.arn
@@ -1056,7 +1056,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
 resource "aws_s3_bucket_public_access_block" "primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.primary.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -1067,7 +1067,7 @@ resource "aws_s3_bucket_public_access_block" "primary" {
 resource "aws_s3_bucket" "secondary" {
   provider = aws.us_west_2
   bucket   = "${var.project_name}-bucket-secondary-${random_string.bucket_suffix.result}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-bucket-secondary"
   })
@@ -1086,7 +1086,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.secondary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_secondary.arn
@@ -1099,7 +1099,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
 resource "aws_s3_bucket_public_access_block" "secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.secondary.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -1133,66 +1133,66 @@ resource "aws_cloudfront_distribution" "main" {
     origin_id                = "S3-${aws_s3_bucket.primary.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.primary.id
   }
-  
+
   # Secondary origin (S3 bucket in us-west-2)
   origin {
     domain_name              = aws_s3_bucket.secondary.bucket_regional_domain_name
     origin_id                = "S3-${aws_s3_bucket.secondary.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.secondary.id
   }
-  
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  
+
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${aws_s3_bucket.primary.id}"
-    
+
     forwarded_values {
       query_string = false
       cookies {
         forward = "none"
       }
     }
-    
+
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
   }
-  
+
   # Failover to secondary origin
   ordered_cache_behavior {
     path_pattern     = "*"
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${aws_s3_bucket.secondary.id}"
-    
+
     forwarded_values {
       query_string = false
       cookies {
         forward = "none"
       }
     }
-    
+
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
   }
-  
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
-  
+
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-cloudfront"
   })
@@ -1202,7 +1202,7 @@ resource "aws_cloudfront_distribution" "main" {
 resource "aws_s3_bucket_policy" "primary_cloudfront" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.primary.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1228,7 +1228,7 @@ resource "aws_s3_bucket_policy" "primary_cloudfront" {
 resource "aws_s3_bucket_policy" "secondary_cloudfront" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.secondary.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1256,7 +1256,7 @@ resource "aws_db_subnet_group" "primary" {
   provider   = aws.us_east_1
   name       = "${var.project_name}-db-subnet-group-primary"
   subnet_ids = aws_subnet.primary_private[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-db-subnet-group-primary"
   })
@@ -1267,7 +1267,7 @@ resource "aws_db_subnet_group" "secondary" {
   provider   = aws.us_west_2
   name       = "${var.project_name}-db-subnet-group-secondary"
   subnet_ids = aws_subnet.secondary_private[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-db-subnet-group-secondary"
   })
@@ -1282,34 +1282,34 @@ resource "aws_db_subnet_group" "secondary" {
 
 resource "aws_db_instance" "primary" {
   provider = aws.us_east_1
-  
+
   identifier     = "${var.project_name}-postgres-primary"
   engine         = "postgres"
   engine_version = 15
   instance_class = "db.t3.micro"
-  
+
   allocated_storage     = 20
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-  
+
   db_name  = "tapstackdb"
   username = random_string.rds_master_username.result
   password = random_password.rds_master_password.result
-  
+
   vpc_security_group_ids = [aws_security_group.rds_primary.id]
   db_subnet_group_name   = aws_db_subnet_group.primary.name
-  
+
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   skip_final_snapshot = true
   deletion_protection = false
-  
+
   # Enable automated backups for read replica
   copy_tags_to_snapshot = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-postgres-primary"
   })
@@ -1334,18 +1334,18 @@ resource "aws_kms_alias" "rds_secondary" {
 # RDS read replica in secondary region
 resource "aws_db_instance" "secondary" {
   provider = aws.us_west_2
-  
-  identifier                = "${var.project_name}-postgres-replica"
-  replicate_source_db       = aws_db_instance.primary.arn
-  instance_class            = "db.t3.micro"
-  storage_encrypted         = true
-  kms_key_id                = aws_kms_key.rds_secondary.arn
+
+  identifier             = "${var.project_name}-postgres-replica"
+  replicate_source_db    = aws_db_instance.primary.arn
+  instance_class         = "db.t3.micro"
+  storage_encrypted      = true
+  kms_key_id             = aws_kms_key.rds_secondary.arn
   vpc_security_group_ids = [aws_security_group.rds_secondary.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
-  
+
   skip_final_snapshot = true
   deletion_protection = false
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-postgres-replica"
   })
@@ -1357,7 +1357,7 @@ resource "aws_cloudwatch_log_group" "primary" {
   provider          = aws.us_east_1
   name              = "/aws/ec2/${var.project_name}-primary"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-log-group-primary"
   })
@@ -1368,7 +1368,7 @@ resource "aws_cloudwatch_log_group" "secondary" {
   provider          = aws.us_west_2
   name              = "/aws/ec2/${var.project_name}-secondary"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-log-group-secondary"
   })
@@ -1379,7 +1379,7 @@ resource "aws_cloudwatch_log_group" "rds" {
   provider          = aws.us_east_1
   name              = "/aws/rds/instance/${aws_db_instance.primary.id}/postgresql"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-log-group"
   })
@@ -1392,7 +1392,7 @@ resource "random_id" "domain_suffix" {
 }
 resource "aws_route53_zone" "main" {
   name = "${var.project_name}-${random_id.domain_suffix.hex}.internal"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-hosted-zone"
   })
@@ -1400,13 +1400,13 @@ resource "aws_route53_zone" "main" {
 
 # Route 53 health check for primary ALB
 resource "aws_route53_health_check" "primary" {
-  fqdn                            = aws_lb.primary.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/"
-  failure_threshold               = 3
-  request_interval                = 30
-  
+  fqdn              = aws_lb.primary.dns_name
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/"
+  failure_threshold = 3
+  request_interval  = 30
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-health-check-primary"
   })
@@ -1414,13 +1414,13 @@ resource "aws_route53_health_check" "primary" {
 
 # Route 53 health check for secondary ALB
 resource "aws_route53_health_check" "secondary" {
-  fqdn                            = aws_lb.secondary.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/"
-  failure_threshold               = 3
-  request_interval                = 30
-  
+  fqdn              = aws_lb.secondary.dns_name
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/"
+  failure_threshold = 3
+  request_interval  = 30
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-health-check-secondary"
   })
@@ -1431,15 +1431,15 @@ resource "aws_route53_record" "primary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${aws_route53_zone.main.name}"
   type    = "A"
-  
+
   set_identifier = "primary"
-  
+
   failover_routing_policy {
     type = "PRIMARY"
   }
-  
+
   health_check_id = aws_route53_health_check.primary.id
-  
+
   alias {
     name                   = aws_lb.primary.dns_name
     zone_id                = aws_lb.primary.zone_id
@@ -1452,13 +1452,13 @@ resource "aws_route53_record" "secondary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${aws_route53_zone.main.name}"
   type    = "A"
-  
+
   set_identifier = "secondary"
-  
+
   failover_routing_policy {
     type = "SECONDARY"
   }
-  
+
   alias {
     name                   = aws_lb.secondary.dns_name
     zone_id                = aws_lb.secondary.zone_id
@@ -1537,12 +1537,12 @@ output "ami_ids" {
 output "security_group_ids" {
   description = "Security Group IDs"
   value = {
-    alb_primary     = aws_security_group.alb_primary.id
-    alb_secondary   = aws_security_group.alb_secondary.id
-    ec2_primary     = aws_security_group.ec2_primary.id
-    ec2_secondary   = aws_security_group.ec2_secondary.id
-    rds_primary     = aws_security_group.rds_primary.id
-    rds_secondary   = aws_security_group.rds_secondary.id
+    alb_primary   = aws_security_group.alb_primary.id
+    alb_secondary = aws_security_group.alb_secondary.id
+    ec2_primary   = aws_security_group.ec2_primary.id
+    ec2_secondary = aws_security_group.ec2_secondary.id
+    rds_primary   = aws_security_group.rds_primary.id
+    rds_secondary = aws_security_group.rds_secondary.id
   }
 }
 

@@ -3,32 +3,32 @@
 # ============================================================================
 
 resource "aws_dynamodb_table" "payment_transactions" {
-  name = "payment-transactions"
-  billing_mode = "PAY_PER_REQUEST"  # On-demand billing mode
+  name         = "payment-transactions"
+  billing_mode = "PAY_PER_REQUEST" # On-demand billing mode
 
   # Primary key configuration
-  hash_key = "transaction_id"
+  hash_key  = "transaction_id"
   range_key = "timestamp"
 
   # Attribute definitions for all keys used in table and indexes
   attribute {
     name = "transaction_id"
-    type = "S"  # String
+    type = "S" # String
   }
 
   attribute {
     name = "timestamp"
-    type = "N"  # Number
+    type = "N" # Number
   }
 
   attribute {
     name = "date"
-    type = "S"  # String
+    type = "S" # String
   }
 
   attribute {
     name = "amount"
-    type = "N"  # Number
+    type = "N" # Number
   }
 
   # Global Secondary Index for date-based queries
@@ -36,7 +36,7 @@ resource "aws_dynamodb_table" "payment_transactions" {
     name            = "date-index"
     hash_key        = "date"
     range_key       = "amount"
-    projection_type = "ALL"  # Project all attributes to the index
+    projection_type = "ALL" # Project all attributes to the index
   }
 
   # Enable point-in-time recovery for data protection

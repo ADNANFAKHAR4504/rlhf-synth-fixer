@@ -23,7 +23,7 @@ variable "vpc_id" {
   description = "VPC ID for EKS cluster"
   type        = string
   # If empty, the module will create a VPC and populate references from aws_vpc.main
-  default     = ""
+  default = ""
 }
 
 variable "private_subnet_ids" {
@@ -34,7 +34,7 @@ variable "private_subnet_ids" {
     condition     = length(var.private_subnet_ids) == 0 || length(var.private_subnet_ids) == 3
     error_message = "private_subnet_ids must be empty (auto-create) or contain exactly 3 subnet IDs (one per AZ)"
   }
-  default     = []
+  default = []
 }
 
 variable "node_instance_type" {

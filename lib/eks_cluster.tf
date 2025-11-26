@@ -110,20 +110,6 @@ resource "aws_eks_addon" "ebs_csi_driver" {
         "EnvironmentSuffix" = var.environment_suffix
       }
     }
-    storageClasses = [
-      {
-        name = "gp3-encrypted"
-        annotations = {
-          "storageclass.kubernetes.io/is-default-class" = "true"
-        }
-        parameters = {
-          type      = "gp3"
-          encrypted = "true"
-        }
-        volumeBindingMode    = "WaitForFirstConsumer"
-        allowVolumeExpansion = true
-      }
-    ]
   })
 
   tags = {

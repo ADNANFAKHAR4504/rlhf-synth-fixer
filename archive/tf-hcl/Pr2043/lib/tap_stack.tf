@@ -655,14 +655,14 @@ resource "aws_cloudwatch_log_group" "application" {
 
 resource "aws_cloudtrail" "main" {
   name                          = "${local.name_prefix}-trail"
-  s3_bucket_name               = aws_s3_bucket.logs.id
+  s3_bucket_name                = aws_s3_bucket.logs.id
   include_global_service_events = true
-  is_multi_region_trail        = true
-  enable_logging               = true
+  is_multi_region_trail         = true
+  enable_logging                = true
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = ["kms.amazonaws.com"]
   }
 
@@ -680,7 +680,7 @@ resource "aws_config_configuration_recorder" "main" {
   role_arn = aws_iam_role.config.arn
 
   recording_group {
-    all_supported = true
+    all_supported            = true
     include_global_resources = true
   }
 }
@@ -728,7 +728,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 ########################
 
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name = "${local.name_prefix}/db/credentials"
+  name       = "${local.name_prefix}/db/credentials"
   kms_key_id = aws_kms_key.main.arn
 
   tags = merge(local.security_tags, {
@@ -937,7 +937,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = var.rds_allocated_storage * 2
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = "dbadmin"
@@ -948,16 +948,16 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.main.name
 
   backup_retention_period = 30
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  skip_final_snapshot = false
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-db-final-snapshot"
-  deletion_protection = true
+  deletion_protection       = true
 
   performance_insights_enabled = true
-  monitoring_interval         = 60
-  monitoring_role_arn         = aws_iam_role.rds_monitoring.arn
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
 
   tags = merge(local.security_tags, {
     Name = "${local.name_prefix}-db"
@@ -1207,12 +1207,12 @@ output "security_info" {
     region      = var.aws_region
     project     = var.project_name
     security_features = {
-      kms_encryption     = true
-      cloudtrail_logging = true
-      config_monitoring  = true
-      secrets_manager    = true
-      vpc_flow_logs      = true
-      ssl_enforcement    = true
+      kms_encryption      = true
+      cloudtrail_logging  = true
+      config_monitoring   = true
+      secrets_manager     = true
+      vpc_flow_logs       = true
+      ssl_enforcement     = true
       deletion_protection = true
     }
   }

@@ -65,20 +65,20 @@ resource "random_password" "rds_password" {
 
 locals {
   suffix = random_id.suffix.hex
-  
+
   # Ensure RDS username starts with a letter
   rds_master_username = "u${substr(random_string.rds_username.result, 1, 7)}"
-  
+
   common_tags = {
     Environment = var.environment
     Project     = var.project_name
     Terraform   = "true"
     Suffix      = local.suffix
   }
-  
+
   # Availability zones
   azs = ["${var.aws_region}a", "${var.aws_region}b"]
-  
+
   # Subnet CIDRs
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.3.0/24", "10.0.4.0/24"]
@@ -92,7 +92,7 @@ locals {
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
@@ -114,7 +114,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-vpc-${local.suffix}"
   })
@@ -126,7 +126,7 @@ resource "aws_flow_log" "vpc_flow_log" {
   log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-vpc-flow-log-${local.suffix}"
   })
@@ -136,14 +136,14 @@ resource "aws_flow_log" "vpc_flow_log" {
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
   name              = "/aws/vpc/flowlogs-${local.suffix}"
   retention_in_days = 30
-  
+
   tags = local.common_tags
 }
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-igw-${local.suffix}"
   })
@@ -152,12 +152,12 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 resource "aws_subnet" "public" {
   count = 2
-  
+
   vpc_id                  = aws_vpc.main.id
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}-${local.suffix}"
     Type = "Public"
@@ -167,11 +167,11 @@ resource "aws_subnet" "public" {
 # Private Subnets
 resource "aws_subnet" "private" {
   count = 2
-  
+
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}-${local.suffix}"
     Type = "Private"
@@ -181,10 +181,10 @@ resource "aws_subnet" "private" {
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
   count = 2
-  
-  domain = "vpc"
+
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-eip-${count.index + 1}-${local.suffix}"
   })
@@ -193,11 +193,11 @@ resource "aws_eip" "nat" {
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
   count = 2
-  
+
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
   depends_on    = [aws_internet_gateway.main]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-nat-gateway-${count.index + 1}-${local.suffix}"
   })
@@ -206,12 +206,12 @@ resource "aws_nat_gateway" "main" {
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-rt-${local.suffix}"
   })
@@ -220,14 +220,14 @@ resource "aws_route_table" "public" {
 # Route Tables for Private Subnets
 resource "aws_route_table" "private" {
   count = 2
-  
+
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-rt-${count.index + 1}-${local.suffix}"
   })
@@ -236,7 +236,7 @@ resource "aws_route_table" "private" {
 # Route Table Associations - Public
 resource "aws_route_table_association" "public" {
   count = 2
-  
+
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
@@ -244,7 +244,7 @@ resource "aws_route_table_association" "public" {
 # Route Table Associations - Private
 resource "aws_route_table_association" "private" {
   count = 2
-  
+
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
@@ -257,28 +257,28 @@ resource "aws_route_table_association" "private" {
 resource "aws_security_group" "alb" {
   name_prefix = "${var.project_name}-alb-${local.suffix}"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = var.authorized_cidr_blocks
   }
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = var.authorized_cidr_blocks
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-sg-${local.suffix}"
   })
@@ -288,21 +288,21 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "ec2" {
   name_prefix = "${var.project_name}-ec2-${local.suffix}"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-ec2-sg-${local.suffix}"
   })
@@ -312,14 +312,14 @@ resource "aws_security_group" "ec2" {
 resource "aws_security_group" "rds" {
   name_prefix = "${var.project_name}-rds-${local.suffix}"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = 3306
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2.id]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-sg-${local.suffix}"
   })
@@ -332,7 +332,7 @@ resource "aws_security_group" "rds" {
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "${var.project_name}-ec2-role-${local.suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -345,7 +345,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -353,7 +353,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_role_policy" "ec2_policy" {
   name = "${var.project_name}-ec2-policy-${local.suffix}"
   role = aws_iam_role.ec2_role.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -386,14 +386,14 @@ resource "aws_iam_role_policy" "ec2_policy" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.project_name}-ec2-profile-${local.suffix}"
   role = aws_iam_role.ec2_role.name
-  
+
   tags = local.common_tags
 }
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "flow_log_role" {
   name = "${var.project_name}-flow-log-role-${local.suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -406,7 +406,7 @@ resource "aws_iam_role" "flow_log_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -414,7 +414,7 @@ resource "aws_iam_role" "flow_log_role" {
 resource "aws_iam_role_policy" "flow_log_policy" {
   name = "${var.project_name}-flow-log-policy-${local.suffix}"
   role = aws_iam_role.flow_log_role.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -440,7 +440,7 @@ resource "aws_iam_role_policy" "flow_log_policy" {
 # S3 Bucket for static content
 resource "aws_s3_bucket" "static_content" {
   bucket = "${var.project_name}-static-content-${local.suffix}"
-  
+
   tags = local.common_tags
 }
 
@@ -455,14 +455,14 @@ resource "aws_s3_bucket_versioning" "static_content" {
 # S3 Bucket for access logs
 resource "aws_s3_bucket" "access_logs" {
   bucket = "${var.project_name}-access-logs-${local.suffix}"
-  
+
   tags = local.common_tags
 }
 
 # S3 Bucket logging configuration
 resource "aws_s3_bucket_logging" "static_content" {
   bucket = aws_s3_bucket.static_content.id
-  
+
   target_bucket = aws_s3_bucket.access_logs.id
   target_prefix = "static-content-logs/"
 }
@@ -470,7 +470,7 @@ resource "aws_s3_bucket_logging" "static_content" {
 # S3 Bucket policy for static content
 resource "aws_s3_bucket_policy" "static_content" {
   bucket = aws_s3_bucket.static_content.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -494,7 +494,7 @@ resource "aws_s3_bucket_policy" "static_content" {
 # Block public access for static content bucket
 resource "aws_s3_bucket_public_access_block" "static_content" {
   bucket = aws_s3_bucket.static_content.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -504,7 +504,7 @@ resource "aws_s3_bucket_public_access_block" "static_content" {
 # Block public access for access logs bucket
 resource "aws_s3_bucket_public_access_block" "access_logs" {
   bucket = aws_s3_bucket.access_logs.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -517,19 +517,19 @@ resource "aws_s3_bucket_public_access_block" "access_logs" {
 
 # DynamoDB Table with encryption
 resource "aws_dynamodb_table" "main" {
-  name           = "${var.project_name}-table-${local.suffix}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
-  
+  name         = "${var.project_name}-table-${local.suffix}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
   attribute {
     name = "id"
     type = "S"
   }
-  
+
   server_side_encryption {
     enabled = true
   }
-  
+
   tags = local.common_tags
 }
 
@@ -540,7 +540,7 @@ resource "aws_dynamodb_table" "main" {
 # Store RDS credentials in Secrets Manager
 resource "aws_secretsmanager_secret" "rds_credentials" {
   name = "${var.project_name}-rds-credentials-${local.suffix}"
-  
+
   tags = local.common_tags
 }
 
@@ -560,7 +560,7 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group-${local.suffix}"
   subnet_ids = aws_subnet.private[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-db-subnet-group-${local.suffix}"
   })
@@ -568,31 +568,31 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier             = "${var.project_name}-db-${local.suffix}"
-  allocated_storage      = 20
-  max_allocated_storage  = 100
+  identifier            = "${var.project_name}-db-${local.suffix}"
+  allocated_storage     = 20
+  max_allocated_storage = 100
   storage_type          = "gp2"
   engine                = "mysql"
   engine_version        = "8.0"
   instance_class        = "db.t3.micro"
-  
+
   db_name  = "tapstack"
   username = local.rds_master_username
   password = random_password.rds_password.result
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  
+
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   auto_minor_version_upgrade = true
-  multi_az                  = true
-  publicly_accessible      = false
-  
+  multi_az                   = true
+  publicly_accessible        = false
+
   storage_encrypted = true
-  
+
   tags = local.common_tags
 }
 
@@ -604,14 +604,14 @@ resource "aws_db_instance" "main" {
 resource "aws_backup_vault" "main" {
   name        = "${var.project_name}-backup-vault-${local.suffix}"
   kms_key_arn = aws_kms_key.backup.arn
-  
+
   tags = local.common_tags
 }
 
 # KMS Key for AWS Backup
 resource "aws_kms_key" "backup" {
   description = "KMS key for AWS Backup"
-  
+
   tags = local.common_tags
 }
 
@@ -623,7 +623,7 @@ resource "aws_kms_alias" "backup" {
 # IAM Role for AWS Backup
 resource "aws_iam_role" "backup_role" {
   name = "${var.project_name}-backup-role-${local.suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -636,7 +636,7 @@ resource "aws_iam_role" "backup_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -649,17 +649,17 @@ resource "aws_iam_role_policy_attachment" "backup_policy" {
 # Backup Plan
 resource "aws_backup_plan" "main" {
   name = "${var.project_name}-backup-plan-${local.suffix}"
-  
+
   rule {
     rule_name         = "daily_backup"
     target_vault_name = aws_backup_vault.main.name
     schedule          = "cron(0 2 ? * * *)"
-    
+
     lifecycle {
       delete_after = 30
     }
   }
-  
+
   tags = local.common_tags
 }
 
@@ -668,7 +668,7 @@ resource "aws_backup_selection" "main" {
   iam_role_arn = aws_iam_role.backup_role.arn
   name         = "${var.project_name}-backup-selection-${local.suffix}"
   plan_id      = aws_backup_plan.main.id
-  
+
   resources = [
     aws_db_instance.main.arn
   ]
@@ -684,10 +684,10 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = aws_subnet.public[*].id
-  
+  subnets            = aws_subnet.public[*].id
+
   enable_deletion_protection = false
-  
+
   tags = local.common_tags
 }
 
@@ -697,7 +697,7 @@ resource "aws_lb_target_group" "main" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -707,7 +707,7 @@ resource "aws_lb_target_group" "main" {
     path                = "/"
     matcher             = "200"
   }
-  
+
   tags = local.common_tags
 }
 
@@ -716,7 +716,7 @@ resource "aws_lb_listener" "main" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
@@ -732,13 +732,13 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt-${local.suffix}"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
-  
+
   vpc_security_group_ids = [aws_security_group.ec2.id]
-  
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-  
+
   user_data = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
@@ -750,14 +750,14 @@ resource "aws_launch_template" "main" {
               yum install -y amazon-cloudwatch-agent
               EOF
   )
-  
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
       Name = "${var.project_name}-instance-${local.suffix}"
     })
   }
-  
+
   tags = local.common_tags
 }
 
@@ -767,16 +767,16 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
-  
+
   min_size         = 2
   max_size         = 4
   desired_capacity = 2
-  
+
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-  
+
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -785,7 +785,7 @@ resource "aws_autoscaling_group" "main" {
       propagate_at_launch = true
     }
   }
-  
+
   tag {
     key                 = "Name"
     value               = "${var.project_name}-asg-${local.suffix}"
@@ -801,63 +801,63 @@ resource "aws_autoscaling_group" "main" {
 resource "aws_wafv2_web_acl" "main" {
   name  = "${var.project_name}-waf-${local.suffix}"
   scope = "REGIONAL"
-  
+
   default_action {
     allow {}
   }
-  
+
   # Rate limiting rule
   rule {
     name     = "RateLimitRule"
     priority = 1
-    
+
     action {
       block {}
     }
-    
+
     statement {
       rate_based_statement {
         limit              = 2000
         aggregate_key_type = "IP"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "RateLimitRule"
       sampled_requests_enabled   = true
     }
   }
-  
+
   # AWS Managed Rules
   rule {
     name     = "AWS-AWSManagedRulesCommonRuleSet"
     priority = 2
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "CommonRuleSetMetric"
       sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "${var.project_name}-waf-${local.suffix}"
     sampled_requests_enabled   = true
   }
-  
+
   tags = local.common_tags
 }
 
@@ -874,14 +874,14 @@ resource "aws_wafv2_web_acl_association" "main" {
 # S3 Bucket for CloudTrail
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${var.project_name}-cloudtrail-${local.suffix}"
-  
+
   tags = local.common_tags
 }
 
 # CloudTrail bucket policy
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -915,7 +915,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 # Block public access for CloudTrail bucket
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -926,15 +926,15 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 resource "aws_cloudtrail" "main" {
   name           = "${var.project_name}-cloudtrail-${local.suffix}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
-  
+
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
   }
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail]
-  
+
   tags = local.common_tags
 }
 
@@ -945,7 +945,7 @@ resource "aws_cloudtrail" "main" {
 # SNS Topic for alerts
 resource "aws_sns_topic" "alerts" {
   name = "${var.project_name}-alerts-${local.suffix}"
-  
+
   tags = local.common_tags
 }
 
@@ -953,7 +953,7 @@ resource "aws_sns_topic" "alerts" {
 resource "aws_cloudwatch_log_group" "ec2_logs" {
   name              = "/aws/ec2/${var.project_name}-${local.suffix}"
   retention_in_days = 14
-  
+
   tags = local.common_tags
 }
 
@@ -969,11 +969,11 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-  
+
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
   }
-  
+
   tags = local.common_tags
 }
 
@@ -989,11 +989,11 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   threshold           = "75"
   alarm_description   = "This metric monitors RDS cpu utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-  
+
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
   }
-  
+
   tags = local.common_tags
 }
 

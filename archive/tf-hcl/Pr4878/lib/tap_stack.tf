@@ -47,7 +47,7 @@ resource "aws_subnet" "public" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = {
@@ -170,8 +170,8 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = false
-  enable_http2              = true
+  enable_deletion_protection       = false
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
   tags = {
@@ -250,20 +250,20 @@ resource "aws_s3_bucket_public_access_block" "source" {
 }
 
 # Upload pipeline files to source bucket
-data "archive_file" "docker_build_zip"{
-    type = "zip"
-    source_dir = "pipeline_files/"
-    output_path = "pipeline_files.zip"
+data "archive_file" "docker_build_zip" {
+  type        = "zip"
+  source_dir  = "pipeline_files/"
+  output_path = "pipeline_files.zip"
 
-    depends_on = [ aws_s3_bucket.source ]
+  depends_on = [aws_s3_bucket.source]
 }
 
 resource "aws_s3_object" "pipeline_files" {
-  bucket = aws_s3_bucket.source.bucket
-  key    = "pipeline_files.zip"
+  bucket       = aws_s3_bucket.source.bucket
+  key          = "pipeline_files.zip"
   content_type = "application/zip"
-  source = "pipeline_files.zip"
-  etag = data.archive_file.docker_build_zip.output_md5
+  source       = "pipeline_files.zip"
+  etag         = data.archive_file.docker_build_zip.output_md5
 }
 
 
@@ -302,11 +302,11 @@ resource "aws_s3_bucket_public_access_block" "artifacts" {
 resource "aws_ecr_repository" "app" {
   name                 = var.project_name
   image_tag_mutability = "IMMUTABLE" # Prevents tag overwrites
-  
+
   image_scanning_configuration {
     scan_on_push = true # Security scanning on every push
   }
-  
+
   encryption_configuration {
     encryption_type = "AES256"
   }
@@ -314,16 +314,16 @@ resource "aws_ecr_repository" "app" {
 
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
-  
+
   # Keep last 10 images
   policy = jsonencode({
     rules = [{
       rulePriority = 1
       description  = "Keep last 10 images"
       selection = {
-        tagStatus     = "any"
-        countType     = "imageCountMoreThan"
-        countNumber   = 10
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 10
       }
       action = {
         type = "expire"
@@ -346,13 +346,13 @@ resource "aws_cloudwatch_log_group" "ecs" {
 # === SNS Topic for Notifications ===
 resource "aws_sns_topic" "pipeline_notifications" {
   name = "${var.project_name}-pipeline-notifications"
-  
+
   kms_master_key_id = "alias/aws/sns" # AWS managed encryption
 }
 
 resource "aws_sns_topic_subscription" "email_notifications" {
   for_each = toset(var.notification_emails)
-  
+
   topic_arn = aws_sns_topic.pipeline_notifications.arn
   protocol  = "email"
   endpoint  = each.value
@@ -363,7 +363,7 @@ resource "aws_sns_topic_subscription" "email_notifications" {
 # CodePipeline role - only what it needs to orchestrate
 resource "aws_iam_role" "codepipeline" {
   name = "${var.project_name}-codepipeline-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -379,7 +379,7 @@ resource "aws_iam_role" "codepipeline" {
 resource "aws_iam_role_policy" "codepipeline" {
   role = aws_iam_role.codepipeline.id
   name = "codepipeline-policy"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -449,7 +449,7 @@ resource "aws_iam_role_policy" "codepipeline" {
 # CodeBuild role - build and push images only
 resource "aws_iam_role" "codebuild" {
   name = "${var.project_name}-codebuild-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -465,7 +465,7 @@ resource "aws_iam_role" "codebuild" {
 resource "aws_iam_role_policy" "codebuild" {
   role = aws_iam_role.codebuild.id
   name = "codebuild-policy"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -516,7 +516,7 @@ resource "aws_iam_role_policy" "codebuild" {
 # ECS Task Execution Role (for pulling images)
 resource "aws_iam_role" "ecs_task_execution" {
   name = "${var.project_name}-ecs-task-execution"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -537,7 +537,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 resource "aws_iam_role_policy" "ecs_task_execution_ecr" {
   role = aws_iam_role.ecs_task_execution.id
   name = "ecr-pull-policy"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -556,7 +556,7 @@ resource "aws_iam_role_policy" "ecs_task_execution_ecr" {
 # ECS Task Role (for the app itself - customize as needed)
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -573,36 +573,36 @@ resource "aws_iam_role" "ecs_task" {
 resource "aws_codebuild_project" "docker_build" {
   name         = "${var.project_name}-build"
   service_role = aws_iam_role.codebuild.arn
-  
+
   artifacts {
     type = "CODEPIPELINE"
   }
-  
+
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
-    image                      = "aws/codebuild/standard:7.0"
-    type                       = "LINUX_CONTAINER"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
-    privileged_mode            = true # Required for Docker
-    
+    privileged_mode             = true # Required for Docker
+
     environment_variable {
       name  = "AWS_DEFAULT_REGION"
       value = var.aws_region
     }
-    
+
     environment_variable {
       name  = "ECR_REPO_URI"
       value = aws_ecr_repository.app.repository_url
     }
-    
+
     environment_variable {
       name  = "IMAGE_TAG"
       value = "latest"
     }
   }
-  
+
   source {
-    type = "CODEPIPELINE"
+    type      = "CODEPIPELINE"
     buildspec = <<-EOF
       version: 0.2
       phases:
@@ -641,7 +641,7 @@ resource "aws_codebuild_project" "docker_build" {
           - imagedefinitions.json
     EOF
   }
-  
+
   logs_config {
     cloudwatch_logs {
       group_name = aws_cloudwatch_log_group.codebuild.name
@@ -652,7 +652,7 @@ resource "aws_codebuild_project" "docker_build" {
 # === ECS Resources ===
 resource "aws_ecs_cluster" "main" {
   name = var.project_name
-  
+
   setting {
     name  = "containerInsights"
     value = "enabled"
@@ -661,23 +661,23 @@ resource "aws_ecs_cluster" "main" {
 
 resource "aws_ecs_task_definition" "app" {
   family                   = var.project_name
-  network_mode            = "awsvpc"
+  network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                     = var.ecs_cpu
-  memory                  = var.ecs_memory
-  execution_role_arn      = aws_iam_role.ecs_task_execution.arn
-  task_role_arn          = aws_iam_role.ecs_task.arn
-  
+  cpu                      = var.ecs_cpu
+  memory                   = var.ecs_memory
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
   container_definitions = jsonencode([{
     name      = "app"
     image     = "${aws_ecr_repository.app.repository_url}:${var.image_tag}"
     essential = true
-    
+
     portMappings = [{
       containerPort = var.container_port
       protocol      = "tcp"
     }]
-    
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -686,7 +686,7 @@ resource "aws_ecs_task_definition" "app" {
         "awslogs-stream-prefix" = "app"
       }
     }
-    
+
     # Add your app environment variables here
     environment = [
       {
@@ -702,7 +702,7 @@ resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project_name}-ecs-tasks"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = var.container_port
     to_port         = var.container_port
@@ -710,7 +710,7 @@ resource "aws_security_group" "ecs_tasks" {
     security_groups = [aws_security_group.alb.id]
     description     = "Allow traffic from ALB"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -732,19 +732,19 @@ resource "aws_ecs_service" "app" {
   launch_type                        = "FARGATE"
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
-  
+
   network_configuration {
     subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = false # Running in private subnets, accessed via ALB
   }
-  
+
   load_balancer {
     target_group_arn = aws_lb_target_group.app.arn
     container_name   = "app"
-    container_port    = var.container_port
+    container_port   = var.container_port
   }
-  
+
   # Ignore task definition changes from pipeline
   lifecycle {
     ignore_changes = [task_definition]
@@ -755,15 +755,15 @@ resource "aws_ecs_service" "app" {
 resource "aws_codepipeline" "main" {
   name     = var.project_name
   role_arn = aws_iam_role.codepipeline.arn
-  
+
   artifact_store {
     location = aws_s3_bucket.artifacts.bucket
     type     = "S3"
   }
-  
+
   stage {
     name = "Source"
-    
+
     action {
       name             = "Source"
       category         = "Source"
@@ -771,18 +771,18 @@ resource "aws_codepipeline" "main" {
       provider         = "S3"
       version          = "1"
       output_artifacts = ["source_output"]
-      
+
       configuration = {
-        S3Bucket    = aws_s3_bucket.source.bucket
-        S3ObjectKey = "pipeline_files.zip"
+        S3Bucket             = aws_s3_bucket.source.bucket
+        S3ObjectKey          = "pipeline_files.zip"
         PollForSourceChanges = true
       }
     }
   }
-  
+
   stage {
     name = "Build"
-    
+
     action {
       name             = "Build"
       category         = "Build"
@@ -791,16 +791,16 @@ resource "aws_codepipeline" "main" {
       version          = "1"
       input_artifacts  = ["source_output"]
       output_artifacts = ["build_output"]
-      
+
       configuration = {
         ProjectName = aws_codebuild_project.docker_build.name
       }
     }
   }
-  
+
   stage {
     name = "Deploy"
-    
+
     action {
       name            = "Deploy"
       category        = "Deploy"
@@ -808,7 +808,7 @@ resource "aws_codepipeline" "main" {
       provider        = "ECS"
       version         = "1"
       input_artifacts = ["build_output"]
-      
+
       configuration = {
         ClusterName = aws_ecs_cluster.main.name
         ServiceName = aws_ecs_service.app.name
@@ -816,7 +816,7 @@ resource "aws_codepipeline" "main" {
       }
     }
   }
-  
+
   # For production, add approval actions and blue/green deployments
   # Rollback is handled automatically by ECS service deployment config
 }
@@ -825,7 +825,7 @@ resource "aws_codepipeline" "main" {
 resource "aws_cloudwatch_event_rule" "s3_trigger" {
   name        = "${var.project_name}-s3-trigger"
   description = "Trigger pipeline on S3 object upload"
-  
+
   event_pattern = jsonencode({
     source      = ["aws.s3"]
     detail-type = ["Object Created"]
@@ -851,7 +851,7 @@ resource "aws_cloudwatch_event_target" "pipeline" {
 
 resource "aws_iam_role" "events" {
   name = "${var.project_name}-events-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -867,7 +867,7 @@ resource "aws_iam_role" "events" {
 resource "aws_iam_role_policy" "events" {
   role = aws_iam_role.events.id
   name = "start-pipeline"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -889,13 +889,13 @@ resource "aws_codestarnotifications_notification_rule" "pipeline" {
   name        = "${var.project_name}-pipeline-notifications"
   resource    = aws_codepipeline.main.arn
   detail_type = "FULL"
-  
+
   # Notify on failures and successes
   event_type_ids = [
     "codepipeline-pipeline-pipeline-execution-failed",
     "codepipeline-pipeline-pipeline-execution-succeeded",
   ]
-  
+
   target {
     address = aws_sns_topic.pipeline_notifications.arn
   }
@@ -904,7 +904,7 @@ resource "aws_codestarnotifications_notification_rule" "pipeline" {
 # SNS topic policy for CodeStar Notifications
 resource "aws_sns_topic_policy" "pipeline_notifications" {
   arn = aws_sns_topic.pipeline_notifications.arn
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -913,7 +913,7 @@ resource "aws_sns_topic_policy" "pipeline_notifications" {
       Principal = {
         Service = "codestar-notifications.amazonaws.com"
       }
-      Action = "SNS:Publish"
+      Action   = "SNS:Publish"
       Resource = aws_sns_topic.pipeline_notifications.arn
     }]
   })

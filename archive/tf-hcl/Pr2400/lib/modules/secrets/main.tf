@@ -1,7 +1,7 @@
 # Random passwords for database credentials
 resource "random_password" "db_password" {
   for_each = var.secrets_config
-  
+
   length  = 16
   special = true
 }
@@ -9,7 +9,7 @@ resource "random_password" "db_password" {
 # Random API keys
 resource "random_password" "api_key" {
   for_each = var.secrets_config
-  
+
   length  = 32
   special = false
 }
@@ -17,7 +17,7 @@ resource "random_password" "api_key" {
 # Random service tokens
 resource "random_password" "service_token" {
   for_each = var.secrets_config
-  
+
   length  = 24
   special = false
 }
@@ -25,20 +25,20 @@ resource "random_password" "service_token" {
 # Create secrets in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "secrets" {
   for_each = var.secrets_config
-  
+
   name                    = each.key
-  description            = each.value.description
+  description             = each.value.description
   recovery_window_in_days = 7
-  
+
   tags = var.common_tags
 }
 
 # Store secret values with dynamic passwords
 resource "aws_secretsmanager_secret_version" "secret_versions" {
   for_each = var.secrets_config
-  
+
   secret_id = aws_secretsmanager_secret.secrets[each.key].id
-  
+
   secret_string = jsonencode({
     username      = "admin"
     password      = random_password.db_password[each.key].result
@@ -57,7 +57,7 @@ data "aws_region" "current" {}
 resource "aws_iam_policy" "secrets_access" {
   name        = "secrets-manager-access-policy"
   description = "Policy for accessing production secrets"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -79,6 +79,6 @@ resource "aws_iam_policy" "secrets_access" {
       }
     ]
   })
-  
+
   tags = var.common_tags
 }

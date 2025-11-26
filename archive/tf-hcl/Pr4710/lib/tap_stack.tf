@@ -59,14 +59,14 @@ variable "desired_capacity" {
 locals {
   # Generate random suffix for resource naming
   random_suffix = lower(substr(replace(uuid(), "-", ""), 0, 4))
-  
+
   # Common tags for all resources
   common_tags = {
     environment = "prd"
     ManagedBy   = "terraform"
     Timestamp   = timestamp()
   }
-  
+
   # Resource naming conventions
   name_prefix = "tap"
   vpc_name    = "${local.name_prefix}-vpc-${local.random_suffix}"
@@ -79,7 +79,7 @@ locals {
   s3_name     = "${local.name_prefix}-static-${local.random_suffix}"
   cf_name     = "${local.name_prefix}-cdn-${local.random_suffix}"
   role_name   = "${local.name_prefix}-role-${local.random_suffix}"
-  
+
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
@@ -94,12 +94,12 @@ locals {
 data "aws_ami" "amazon_linux2" {
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-  
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -118,7 +118,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = local.vpc_name
   })
@@ -127,7 +127,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = local.igw_name
   })
@@ -137,11 +137,11 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   count  = 2
   domain = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.nat_name}-eip-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -152,7 +152,7 @@ resource "aws_subnet" "public" {
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}-${local.random_suffix}"
     Type = "public"
@@ -165,7 +165,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = var.availability_zones[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}-${local.random_suffix}"
     Type = "private"
@@ -178,7 +178,7 @@ resource "aws_subnet" "database" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.db_subnet_cidrs[count.index]
   availability_zone = var.availability_zones[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-${count.index + 1}-${local.random_suffix}"
     Type = "database"
@@ -190,23 +190,23 @@ resource "aws_nat_gateway" "main" {
   count         = 2
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.nat_name}-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-rt-${local.random_suffix}"
   })
@@ -216,12 +216,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-rt-${count.index + 1}-${local.random_suffix}"
   })
@@ -250,7 +250,7 @@ resource "aws_security_group" "alb" {
   name_prefix = "${local.sg_name}-alb-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Application Load Balancer"
-  
+
   ingress {
     from_port   = 80
     to_port     = 80
@@ -258,7 +258,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow HTTP from internet"
   }
-  
+
   ingress {
     from_port   = 443
     to_port     = 443
@@ -266,7 +266,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow HTTPS from internet"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -274,7 +274,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.sg_name}-alb"
   })
@@ -285,7 +285,7 @@ resource "aws_security_group" "ec2" {
   name_prefix = "${local.sg_name}-ec2-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances"
-  
+
   ingress {
     from_port       = 80
     to_port         = 80
@@ -293,7 +293,7 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
     description     = "Allow traffic from ALB"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -301,7 +301,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.sg_name}-ec2"
   })
@@ -312,7 +312,7 @@ resource "aws_security_group" "rds" {
   name_prefix = "${local.sg_name}-rds-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for RDS database"
-  
+
   ingress {
     from_port       = 3306
     to_port         = 3306
@@ -320,7 +320,7 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ec2.id]
     description     = "Allow MySQL/Aurora access from EC2"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.sg_name}-rds"
   })
@@ -333,7 +333,7 @@ resource "aws_security_group" "rds" {
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
   name = "${local.role_name}-ec2"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -346,7 +346,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -354,7 +354,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_role_policy" "ec2_policy" {
   name = "${local.role_name}-ec2-policy"
   role = aws_iam_role.ec2_role.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -410,7 +410,7 @@ resource "aws_iam_role_policy_attachment" "ec2_cloudwatch" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.role_name}-ec2-profile"
   role = aws_iam_role.ec2_role.name
-  
+
   tags = local.common_tags
 }
 
@@ -423,7 +423,7 @@ resource "aws_kms_key" "rds" {
   description             = "KMS key for RDS encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-kms-${local.random_suffix}"
   })
@@ -458,7 +458,7 @@ resource "random_password" "rds_password" {
 resource "aws_db_subnet_group" "main" {
   name       = "${local.rds_name}-subnet-group"
   subnet_ids = aws_subnet.database[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.rds_name}-subnet-group"
   })
@@ -466,8 +466,8 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance - Primary
 resource "aws_rds_cluster" "main" {
-  cluster_identifier      = local.rds_name
-  engine                  = "aurora-mysql"
+  cluster_identifier     = local.rds_name
+  engine                 = "aurora-mysql"
   engine_mode            = "provisioned"
   engine_version         = "8.0.mysql_aurora.3.02.0"
   database_name          = "tapdb"
@@ -475,15 +475,15 @@ resource "aws_rds_cluster" "main" {
   master_password        = random_password.rds_password.result
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  
+
   storage_encrypted               = true
-  kms_key_id                     = aws_kms_key.rds.arn
+  kms_key_id                      = aws_kms_key.rds.arn
   enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
-  
+
   backup_retention_period = 7
   preferred_backup_window = "03:00-04:00"
   skip_final_snapshot     = true
-  
+
   tags = merge(local.common_tags, {
     Name = local.rds_name
   })
@@ -497,13 +497,13 @@ resource "aws_rds_cluster_instance" "main" {
   instance_class     = var.rds_instance_class
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
-  
+
   performance_insights_enabled = true
   monitoring_interval          = 60
-  monitoring_role_arn         = aws_iam_role.rds_monitoring.arn
-  
+  monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
+
   auto_minor_version_upgrade = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.rds_name}-instance-${count.index + 1}"
   })
@@ -512,7 +512,7 @@ resource "aws_rds_cluster_instance" "main" {
 # IAM Role for RDS Monitoring
 resource "aws_iam_role" "rds_monitoring" {
   name = "${local.role_name}-rds-monitoring"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -525,7 +525,7 @@ resource "aws_iam_role" "rds_monitoring" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -538,7 +538,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 resource "aws_secretsmanager_secret" "rds_credentials" {
   name                    = "${local.name_prefix}-rds-credentials-${local.random_suffix}"
   recovery_window_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-credentials-${local.random_suffix}"
   })
@@ -558,20 +558,20 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 
 # Store credentials in Parameter Store
 resource "aws_ssm_parameter" "rds_username" {
-  name   = "/${local.name_prefix}/rds/username"
-  type   = "SecureString"
-  value  = "a${random_string.rds_username.result}"
-  
+  name  = "/${local.name_prefix}/rds/username"
+  type  = "SecureString"
+  value = "a${random_string.rds_username.result}"
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-username"
   })
 }
 
 resource "aws_ssm_parameter" "rds_password" {
-  name   = "/${local.name_prefix}/rds/password"
-  type   = "SecureString"
-  value  = random_password.rds_password.result
-  
+  name  = "/${local.name_prefix}/rds/password"
+  type  = "SecureString"
+  value = random_password.rds_password.result
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-password"
   })
@@ -586,22 +586,22 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux2.id
   instance_type = var.instance_type
-  
+
   vpc_security_group_ids = [aws_security_group.ec2.id]
   iam_instance_profile {
     arn = aws_iam_instance_profile.ec2_profile.arn
   }
-  
+
   monitoring {
     enabled = true
   }
-  
+
   metadata_options {
     http_tokens                 = "required"
     http_put_response_hop_limit = 1
     instance_metadata_tags      = "enabled"
   }
-  
+
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -619,21 +619,21 @@ resource "aws_launch_template" "main" {
     echo "<h1>TAP Stack - Instance in $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</h1>" > /var/www/html/index.html
   EOF
   )
-  
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
       Name = "${local.name_prefix}-instance-${local.random_suffix}"
     })
   }
-  
+
   tag_specifications {
     resource_type = "volume"
     tags = merge(local.common_tags, {
       Name = "${local.name_prefix}-volume-${local.random_suffix}"
     })
   }
-  
+
   tags = local.common_tags
 }
 
@@ -648,17 +648,17 @@ resource "aws_lb" "main" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-  
-  enable_deletion_protection = false
-  enable_http2              = true
+
+  enable_deletion_protection       = false
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
-  
+
   access_logs {
     bucket  = aws_s3_bucket.logs.id
     prefix  = "alb"
     enabled = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = local.alb_name
   })
@@ -670,7 +670,7 @@ resource "aws_lb_target_group" "main" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -680,15 +680,15 @@ resource "aws_lb_target_group" "main" {
     path                = "/"
     matcher             = "200"
   }
-  
+
   deregistration_delay = 30
-  
+
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400
     enabled         = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-tg-${local.random_suffix}"
   })
@@ -699,12 +699,12 @@ resource "aws_lb_listener" "main" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
-  
+
   tags = local.common_tags
 }
 
@@ -714,21 +714,21 @@ resource "aws_lb_listener" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = local.asg_name
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = local.asg_name
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  
+
   min_size         = var.min_size
   max_size         = var.max_size
   desired_capacity = var.desired_capacity
-  
+
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-  
+
   enabled_metrics = [
     "GroupMinSize",
     "GroupMaxSize",
@@ -736,19 +736,19 @@ resource "aws_autoscaling_group" "main" {
     "GroupInServiceInstances",
     "GroupTotalInstances"
   ]
-  
+
   tag {
     key                 = "Name"
     value               = "${local.name_prefix}-asg-instance-${local.random_suffix}"
     propagate_at_launch = true
   }
-  
+
   tag {
     key                 = "environment"
     value               = "prd"
     propagate_at_launch = true
   }
-  
+
   depends_on = [aws_lb.main]
 }
 
@@ -757,7 +757,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${local.name_prefix}-scale-up-${local.random_suffix}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -766,7 +766,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${local.name_prefix}-scale-down-${local.random_suffix}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -775,18 +775,18 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "${local.name_prefix}-cpu-high-${local.random_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "CPUUtilization"
-  namespace          = "AWS/EC2"
-  period             = "120"
-  statistic          = "Average"
-  threshold          = "70"
-  alarm_description  = "This metric monitors EC2 CPU utilization"
-  alarm_actions      = [aws_autoscaling_policy.scale_up.arn]
-  
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "70"
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
   }
-  
+
   tags = local.common_tags
 }
 
@@ -795,18 +795,18 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   alarm_name          = "${local.name_prefix}-cpu-low-${local.random_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "CPUUtilization"
-  namespace          = "AWS/EC2"
-  period             = "120"
-  statistic          = "Average"
-  threshold          = "20"
-  alarm_description  = "This metric monitors EC2 CPU utilization"
-  alarm_actions      = [aws_autoscaling_policy.scale_down.arn]
-  
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "20"
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
   }
-  
+
   tags = local.common_tags
 }
 
@@ -817,7 +817,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 # S3 Bucket for Static Content
 resource "aws_s3_bucket" "static" {
   bucket = local.s3_name
-  
+
   tags = merge(local.common_tags, {
     Name = local.s3_name
   })
@@ -826,7 +826,7 @@ resource "aws_s3_bucket" "static" {
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "static" {
   bucket = aws_s3_bucket.static.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -835,7 +835,7 @@ resource "aws_s3_bucket_versioning" "static" {
 # S3 Bucket Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "static" {
   bucket = aws_s3_bucket.static.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -846,7 +846,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "static" {
 # S3 Bucket Public Access Block
 resource "aws_s3_bucket_public_access_block" "static" {
   bucket = aws_s3_bucket.static.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -856,7 +856,7 @@ resource "aws_s3_bucket_public_access_block" "static" {
 # S3 Bucket for Logs
 resource "aws_s3_bucket" "logs" {
   bucket = "${local.name_prefix}-logs-${local.random_suffix}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-logs-${local.random_suffix}"
   })
@@ -866,7 +866,7 @@ resource "aws_s3_bucket" "logs" {
 # S3 Bucket Encryption for Logs
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -877,21 +877,21 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
 # S3 Bucket Lifecycle for Logs
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
+
   rule {
     id     = "delete-old-logs"
     status = "Enabled"
-    
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
-    
+
     transition {
       days          = 90
       storage_class = "GLACIER"
     }
-    
+
     expiration {
       days = 365
     }
@@ -950,7 +950,7 @@ resource "aws_cloudfront_origin_access_identity" "main" {
 # S3 Bucket Policy for CloudFront
 resource "aws_s3_bucket_policy" "static" {
   bucket = aws_s3_bucket.static.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -970,24 +970,24 @@ resource "aws_s3_bucket_policy" "static" {
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
-  is_ipv6_enabled    = true
-  comment            = "CDN for ${local.s3_name}"
+  is_ipv6_enabled     = true
+  comment             = "CDN for ${local.s3_name}"
   default_root_object = "index.html"
-  price_class        = "PriceClass_100"
-  
+  price_class         = "PriceClass_100"
+
   origin {
     domain_name = aws_s3_bucket.static.bucket_regional_domain_name
     origin_id   = "S3-${local.s3_name}"
-    
+
     s3_origin_config {
       origin_access_identity = aws_cloudfront_origin_access_identity.main.cloudfront_access_identity_path
     }
   }
-  
+
   origin {
     domain_name = aws_lb.main.dns_name
     origin_id   = "ALB-${local.alb_name}"
-    
+
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -995,32 +995,32 @@ resource "aws_cloudfront_distribution" "main" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
-  
+
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${local.s3_name}"
-    
+
     forwarded_values {
       query_string = false
       cookies {
         forward = "none"
       }
     }
-    
+
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 3600
     max_ttl                = 86400
     compress               = true
   }
-  
+
   ordered_cache_behavior {
     path_pattern     = "/api/*"
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "ALB-${local.alb_name}"
-    
+
     forwarded_values {
       query_string = true
       headers      = ["*"]
@@ -1028,29 +1028,29 @@ resource "aws_cloudfront_distribution" "main" {
         forward = "all"
       }
     }
-    
+
     viewer_protocol_policy = "https-only"
     min_ttl                = 0
     default_ttl            = 0
     max_ttl                = 0
   }
-  
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
-  
+
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-  
+
   logging_config {
     bucket          = aws_s3_bucket.logs.bucket_domain_name
     prefix          = "cloudfront/"
     include_cookies = false
   }
-  
+
   tags = merge(local.common_tags, {
     Name = local.cf_name
   })
@@ -1064,7 +1064,7 @@ resource "aws_cloudfront_distribution" "main" {
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/application/${local.name_prefix}"
   retention_in_days = 30
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-logs"
   })
@@ -1074,7 +1074,7 @@ resource "aws_cloudwatch_log_group" "application" {
 resource "aws_cloudwatch_log_group" "rds_error" {
   name              = "/aws/rds/cluster/${local.rds_name}/error"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-error-logs"
   })
@@ -1083,7 +1083,7 @@ resource "aws_cloudwatch_log_group" "rds_error" {
 resource "aws_cloudwatch_log_group" "rds_general" {
   name              = "/aws/rds/cluster/${local.rds_name}/general"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-general-logs"
   })
@@ -1092,7 +1092,7 @@ resource "aws_cloudwatch_log_group" "rds_general" {
 resource "aws_cloudwatch_log_group" "rds_slowquery" {
   name              = "/aws/rds/cluster/${local.rds_name}/slowquery"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-slowquery-logs"
   })

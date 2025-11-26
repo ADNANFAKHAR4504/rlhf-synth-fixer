@@ -30,16 +30,16 @@ variable "notification_email" {
 # ===========================
 locals {
   common_tags = {
-    System      = "file-processing"
-    CostCenter  = "content-management"
-    Compliance  = "internal"
+    System     = "file-processing"
+    CostCenter = "content-management"
+    Compliance = "internal"
   }
-  
+
   lambda_timeout     = 60
   lambda_memory      = 512
   log_retention_days = 7
-  alarm_period      = 300  # 5 minutes in seconds
-  
+  alarm_period       = 300 # 5 minutes in seconds
+
   # Naming convention with random suffix
   resource_prefix = "cms-file-processor"
 }
@@ -59,7 +59,7 @@ resource "random_string" "suffix" {
 # ===========================
 resource "aws_s3_bucket" "file_uploads" {
   bucket = "${local.resource_prefix}-${random_string.suffix.result}"
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -90,7 +90,7 @@ resource "aws_s3_bucket_public_access_block" "file_uploads" {
 
 resource "aws_s3_bucket_versioning" "file_uploads" {
   bucket = aws_s3_bucket.file_uploads.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -108,11 +108,11 @@ resource "aws_lambda_function" "file_processor" {
   filename         = data.archive_file.lambda_placeholder.output_path
   source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
   function_name    = "${local.resource_prefix}-${random_string.suffix.result}"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "index.handler"
-  runtime         = "nodejs18.x"
-  timeout         = local.lambda_timeout
-  memory_size     = local.lambda_memory
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "index.handler"
+  runtime          = "nodejs18.x"
+  timeout          = local.lambda_timeout
+  memory_size      = local.lambda_memory
 
   environment {
     variables = {
@@ -243,7 +243,7 @@ resource "aws_cloudwatch_event_target" "lambda" {
 # ===========================
 resource "aws_sns_topic" "notifications" {
   name = "${local.resource_prefix}-notifications-${random_string.suffix.result}"
-  
+
   kms_master_key_id = "alias/aws/sns"
 
   tags = merge(
@@ -421,13 +421,13 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_rate" {
   alarm_name          = "${local.resource_prefix}-lambda-errors-${random_string.suffix.result}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name        = "Errors"
-  namespace          = "AWS/Lambda"
-  period             = local.alarm_period
-  statistic          = "Average"
-  threshold          = 0.05  # 5% error rate
-  alarm_description  = "Lambda error rate exceeds 5%"
-  treat_missing_data = "notBreaching"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = local.alarm_period
+  statistic           = "Average"
+  threshold           = 0.05 # 5% error rate
+  alarm_description   = "Lambda error rate exceeds 5%"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.file_processor.function_name
@@ -447,13 +447,13 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_write_capacity" {
   alarm_name          = "${local.resource_prefix}-dynamodb-writes-${random_string.suffix.result}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "ConsumedWriteCapacityUnits"
-  namespace          = "AWS/DynamoDB"
-  period             = local.alarm_period
-  statistic          = "Sum"
-  threshold          = 100  # Threshold for on-demand mode
-  alarm_description  = "DynamoDB write throttling risk"
-  treat_missing_data = "notBreaching"
+  metric_name         = "ConsumedWriteCapacityUnits"
+  namespace           = "AWS/DynamoDB"
+  period              = local.alarm_period
+  statistic           = "Sum"
+  threshold           = 100 # Threshold for on-demand mode
+  alarm_description   = "DynamoDB write throttling risk"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     TableName = aws_dynamodb_table.file_metadata.name
@@ -473,13 +473,13 @@ resource "aws_cloudwatch_metric_alarm" "lambda_invocations" {
   alarm_name          = "${local.resource_prefix}-lambda-invocations-${random_string.suffix.result}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "Invocations"
-  namespace          = "AWS/Lambda"
-  period             = 3600  # 1 hour
-  statistic          = "Sum"
-  threshold          = 1
-  alarm_description  = "No Lambda invocations in the last hour"
-  treat_missing_data = "breaching"
+  metric_name         = "Invocations"
+  namespace           = "AWS/Lambda"
+  period              = 3600 # 1 hour
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "No Lambda invocations in the last hour"
+  treat_missing_data  = "breaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.file_processor.function_name

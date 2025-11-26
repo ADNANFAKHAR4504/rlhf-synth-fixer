@@ -803,7 +803,7 @@ locals {
     "cloud-setup-${var.env}-${data.aws_caller_identity.current.account_id}-uploads"
   )
 
-    user_data_use2 = templatefile("${path.module}/user_data/web.sh", {
+  user_data_use2 = templatefile("${path.module}/user_data/web.sh", {
     # lowercase keys (if referenced)
     environment = var.env
     log_level   = "info"
@@ -1133,10 +1133,10 @@ resource "aws_db_instance" "use2" {
 #############################################
 
 resource "aws_s3_bucket" "uploads" {
-  provider = aws.use2
-  bucket   = local.uploads_bucket_name
+  provider      = aws.use2
+  bucket        = local.uploads_bucket_name
   force_destroy = true
-  tags     = merge(local.base_tags, { Name = "${local.name.use2}-uploads" })
+  tags          = merge(local.base_tags, { Name = "${local.name.use2}-uploads" })
 }
 
 resource "aws_s3_bucket_versioning" "uploads" {
@@ -1173,22 +1173,22 @@ resource "aws_iam_role_policy" "lambda_s3_inline" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "ListBucket",
-        Effect: "Allow",
-        Action: ["s3:ListBucket"],
-        Resource: [aws_s3_bucket.uploads.arn]
+        Sid : "ListBucket",
+        Effect : "Allow",
+        Action : ["s3:ListBucket"],
+        Resource : [aws_s3_bucket.uploads.arn]
       },
       {
-        Sid: "ObjectRW",
-        Effect: "Allow",
-        Action: ["s3:PutObject","s3:GetObject"],
-        Resource: ["${aws_s3_bucket.uploads.arn}/*"]
+        Sid : "ObjectRW",
+        Effect : "Allow",
+        Action : ["s3:PutObject", "s3:GetObject"],
+        Resource : ["${aws_s3_bucket.uploads.arn}/*"]
       },
       {
-        Sid: "KmsForS3",
-        Effect: "Allow",
-        Action: ["kms:Encrypt","kms:Decrypt","kms:ReEncrypt*","kms:GenerateDataKey*","kms:DescribeKey"],
-        Resource: aws_kms_key.use2.arn
+        Sid : "KmsForS3",
+        Effect : "Allow",
+        Action : ["kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey"],
+        Resource : aws_kms_key.use2.arn
       }
     ]
   })
@@ -1231,7 +1231,7 @@ data "aws_iam_policy_document" "uploads_policy" {
   statement {
     sid     = "AllowLambdaObjectRW"
     effect  = "Allow"
-    actions = ["s3:PutObject","s3:GetObject"]
+    actions = ["s3:PutObject", "s3:GetObject"]
     principals {
       type        = "AWS"
       identifiers = [aws_iam_role.lambda_role.arn]
@@ -1256,7 +1256,7 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/lambda_upload_handler.zip"
 
   source {
-    content = <<-PY
+    content  = <<-PY
       import json
 
       def handler(event, context):
@@ -1309,7 +1309,7 @@ data "aws_iam_policy_document" "lambda_policy_doc" {
       "kms:Encrypt",
       "kms:Decrypt",
       "kms:ReEncrypt*",
-    #  "kms:GenerateDataKey",  # optional; not needed for simple PutObject with SSE-KMS
+      #  "kms:GenerateDataKey",  # optional; not needed for simple PutObject with SSE-KMS
       "kms:GenerateDataKeyWithoutPlaintext",
       "kms:DescribeKey"
     ]
@@ -1349,7 +1349,7 @@ data "aws_lambda_invocation" "on_upload_warm" {
   provider      = aws.use2
   function_name = aws_lambda_function.on_upload.function_name
   input         = jsonencode({ "ping" = true })
-  depends_on    = [
+  depends_on = [
     aws_iam_role_policy_attachment.lambda_attach,
     aws_iam_role_policy_attachment.lambda_basic,
     aws_s3_bucket_policy.uploads
@@ -1387,7 +1387,7 @@ data "archive_file" "heartbeat_zip" {
   output_path = "${path.module}/lambda_heartbeat.zip"
 
   source {
-    content = <<-PY
+    content  = <<-PY
       import json, os, time, boto3
       s3 = boto3.client('s3')
       def handler(event, context):
@@ -1414,10 +1414,10 @@ resource "aws_lambda_function" "heartbeat" {
 
   environment {
     variables = {
-      APP_BUCKET = aws_s3_bucket.uploads.bucket
-      RDS_PASSWORD_PARAM = aws_ssm_parameter.rds_password.name  # <-- add this
-      RDS_USERNAME       = "dbadmin"                             # optional helper
-      RDS_ENDPOINT       = aws_db_instance.use2.address          # optional helper
+      APP_BUCKET         = aws_s3_bucket.uploads.bucket
+      RDS_PASSWORD_PARAM = aws_ssm_parameter.rds_password.name # <-- add this
+      RDS_USERNAME       = "dbadmin"                           # optional helper
+      RDS_ENDPOINT       = aws_db_instance.use2.address        # optional helper
     }
   }
 
@@ -1531,10 +1531,10 @@ resource "aws_route53_record" "app_alias_alb" {
 #############################################
 
 resource "aws_s3_bucket" "cloudtrail" {
-  provider = aws.use2
-  bucket   = "cloud-setup-${var.env}-${data.aws_caller_identity.current.account_id}-trail"
+  provider      = aws.use2
+  bucket        = "cloud-setup-${var.env}-${data.aws_caller_identity.current.account_id}-trail"
   force_destroy = true
-  tags     = merge(local.base_tags, { Name = "${local.name.use2}-trail" })
+  tags          = merge(local.base_tags, { Name = "${local.name.use2}-trail" })
 }
 
 resource "aws_s3_bucket_versioning" "cloudtrail" {
@@ -1585,21 +1585,21 @@ data "aws_iam_policy_document" "cloudtrail_tls_only" {
   }
 
   statement {
-    sid     = "AllowCloudTrailGetBucketAcl"
-    effect  = "Allow"
+    sid    = "AllowCloudTrailGetBucketAcl"
+    effect = "Allow"
     principals {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
-    actions   = ["s3:GetBucketAcl"]
+    actions = ["s3:GetBucketAcl"]
     resources = [
       aws_s3_bucket.cloudtrail.arn
     ]
   }
 
   statement {
-    sid     = "AllowCloudTrailPutObject"
-    effect  = "Allow"
+    sid    = "AllowCloudTrailPutObject"
+    effect = "Allow"
     principals {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
@@ -1635,7 +1635,7 @@ resource "aws_cloudtrail" "main" {
     include_management_events = true
   }
   depends_on = [aws_s3_bucket_policy.cloudtrail]
-  tags = local.base_tags
+  tags       = local.base_tags
 }
 
 #############################################

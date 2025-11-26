@@ -52,9 +52,9 @@ variable "tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
   default = {
-    ManagedBy   = "Terraform"
-    Purpose     = "DailyBackup"
-    CostCenter  = "IT-Operations"
+    ManagedBy  = "Terraform"
+    Purpose    = "DailyBackup"
+    CostCenter = "IT-Operations"
   }
 }
 
@@ -76,8 +76,8 @@ locals {
 
   # Alarm thresholds
   alarm_thresholds = {
-    bucket_size_gb = 500    # Alert if bucket exceeds 500GB
-    daily_requests = 10000  # Alert if requests exceed 10k/day
+    bucket_size_gb = 500   # Alert if bucket exceeds 500GB
+    daily_requests = 10000 # Alert if requests exceed 10k/day
   }
 }
 
@@ -310,7 +310,7 @@ resource "aws_cloudwatch_metric_alarm" "bucket_requests" {
   }
 
   treat_missing_data = "notBreaching"
-  tags              = local.common_tags
+  tags               = local.common_tags
 }
 
 # ============================================================================

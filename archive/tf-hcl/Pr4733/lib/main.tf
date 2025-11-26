@@ -37,7 +37,7 @@ resource "aws_dynamodb_table" "transactions" {
   # Global Table v2 - Configure replica in secondary region
   replica {
     region_name = var.secondary_region
-    
+
     point_in_time_recovery = true
   }
 

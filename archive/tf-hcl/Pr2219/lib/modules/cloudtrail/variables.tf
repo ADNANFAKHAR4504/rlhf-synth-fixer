@@ -27,16 +27,16 @@ variable "tags" {
 
 variable "s3_bucket_name" {
   description = "S3 Bucket name"
-  type = string
+  type        = string
 }
 
 variable "cw_logs_role_arn" {
   description = "CloudWatch logs role arn"
-  type = string
+  type        = string
 }
 
 variable "cw_logs_group_arn" {
   description = "CloudWatch logs group arn"
-  type = string
+  type        = string
 }
 

@@ -41,9 +41,9 @@ variable "allowed_https_cidrs" {
 locals {
   # Common tags for all resources
   common_tags = {
-    Environment   = "Production"
-    ownership     = "self"
-    departmental  = "businessunit"
+    Environment  = "Production"
+    ownership    = "self"
+    departmental = "businessunit"
   }
 
   # Naming convention
@@ -57,7 +57,7 @@ locals {
   # Subnet CIDRs
   primary_public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
-  
+
   secondary_public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnet_cidrs = ["10.1.11.0/24", "10.1.12.0/24"]
 }
@@ -148,8 +148,8 @@ resource "random_string" "rds_username_secondary" {
 
 # Random password for secondary RDS
 resource "random_password" "rds_password_secondary" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&*()-_=+[]{}<>?"
 }
 
@@ -598,24 +598,24 @@ resource "aws_db_subnet_group" "primary_db_subnet_group" {
 
 # Primary RDS Instance
 resource "aws_db_instance" "primary_rds" {
-  provider                = aws.us_east_2
-  identifier              = "${local.primary_name_prefix}-rds"
-  allocated_storage       = 20
-  max_allocated_storage   = 100
-  storage_type            = "gp2"
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = "db.t3.micro"
-  db_name                 = "primarydb"
-  username                = "a${random_string.rds_username_primary.result}"
-  password                = random_password.rds_password_primary.result
-  vpc_security_group_ids  = [aws_security_group.primary_rds_sg.id]
-  db_subnet_group_name    = aws_db_subnet_group.primary_db_subnet_group.name
-  multi_az                = true
-  publicly_accessible     = false
+  provider                   = aws.us_east_2
+  identifier                 = "${local.primary_name_prefix}-rds"
+  allocated_storage          = 20
+  max_allocated_storage      = 100
+  storage_type               = "gp2"
+  engine                     = "mysql"
+  engine_version             = "8.0"
+  instance_class             = "db.t3.micro"
+  db_name                    = "primarydb"
+  username                   = "a${random_string.rds_username_primary.result}"
+  password                   = random_password.rds_password_primary.result
+  vpc_security_group_ids     = [aws_security_group.primary_rds_sg.id]
+  db_subnet_group_name       = aws_db_subnet_group.primary_db_subnet_group.name
+  multi_az                   = true
+  publicly_accessible        = false
   auto_minor_version_upgrade = true
-  skip_final_snapshot     = true
-  storage_encrypted       = true
+  skip_final_snapshot        = true
+  storage_encrypted          = true
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_name_prefix}-rds"
@@ -657,24 +657,24 @@ resource "aws_db_subnet_group" "secondary_db_subnet_group" {
 
 # Secondary RDS Instance
 resource "aws_db_instance" "secondary_rds" {
-  provider                = aws.us_west_1
-  identifier              = "${local.secondary_name_prefix}-rds"
-  allocated_storage       = 20
-  max_allocated_storage   = 100
-  storage_type            = "gp2"
-  engine                  = "mysql"
-  engine_version          = "8.0"
-  instance_class          = "db.t3.micro"
-  db_name                 = "secondarydb"
-  username                = "a${random_string.rds_username_secondary.result}"
-  password                = random_password.rds_password_secondary.result
-  vpc_security_group_ids  = [aws_security_group.secondary_rds_sg.id]
-  db_subnet_group_name    = aws_db_subnet_group.secondary_db_subnet_group.name
-  multi_az                = true
-  publicly_accessible     = false
+  provider                   = aws.us_west_1
+  identifier                 = "${local.secondary_name_prefix}-rds"
+  allocated_storage          = 20
+  max_allocated_storage      = 100
+  storage_type               = "gp2"
+  engine                     = "mysql"
+  engine_version             = "8.0"
+  instance_class             = "db.t3.micro"
+  db_name                    = "secondarydb"
+  username                   = "a${random_string.rds_username_secondary.result}"
+  password                   = random_password.rds_password_secondary.result
+  vpc_security_group_ids     = [aws_security_group.secondary_rds_sg.id]
+  db_subnet_group_name       = aws_db_subnet_group.secondary_db_subnet_group.name
+  multi_az                   = true
+  publicly_accessible        = false
   auto_minor_version_upgrade = true
-  skip_final_snapshot     = true
-  storage_encrypted       = true
+  skip_final_snapshot        = true
+  storage_encrypted          = true
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_name_prefix}-rds"
@@ -953,14 +953,14 @@ resource "aws_iam_instance_profile" "secondary_ec2_profile" {
 
 # Primary EC2 Instances
 resource "aws_instance" "primary_ec2" {
-  provider                     = aws.us_east_2
-  count                        = 2
-  ami                          = data.aws_ami.amazon_linux_primary.id
-  instance_type                = "t3.micro"
-  subnet_id                    = aws_subnet.primary_private_subnets[count.index].id
-  vpc_security_group_ids       = [aws_security_group.primary_ec2_sg.id]
-  iam_instance_profile         = aws_iam_instance_profile.ec2_profile.name
-  associate_public_ip_address  = false
+  provider                    = aws.us_east_2
+  count                       = 2
+  ami                         = data.aws_ami.amazon_linux_primary.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.primary_private_subnets[count.index].id
+  vpc_security_group_ids      = [aws_security_group.primary_ec2_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+  associate_public_ip_address = false
 
   root_block_device {
     volume_type = "gp3"
@@ -985,14 +985,14 @@ resource "aws_instance" "primary_ec2" {
 
 # Secondary EC2 Instances
 resource "aws_instance" "secondary_ec2" {
-  provider                     = aws.us_west_1
-  count                        = 2
-  ami                          = data.aws_ami.amazon_linux_secondary.id
-  instance_type                = "t3.micro"
-  subnet_id                    = aws_subnet.secondary_private_subnets[count.index].id
-  vpc_security_group_ids       = [aws_security_group.secondary_ec2_sg.id]
-  iam_instance_profile         = aws_iam_instance_profile.secondary_ec2_profile.name
-  associate_public_ip_address  = false
+  provider                    = aws.us_west_1
+  count                       = 2
+  ami                         = data.aws_ami.amazon_linux_secondary.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.secondary_private_subnets[count.index].id
+  vpc_security_group_ids      = [aws_security_group.secondary_ec2_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.secondary_ec2_profile.name
+  associate_public_ip_address = false
 
   root_block_device {
     volume_type = "gp3"
@@ -1317,11 +1317,11 @@ resource "aws_lambda_function" "primary_rds_backup" {
   provider         = aws.us_east_2
   filename         = "rds_backup.zip"
   function_name    = "${local.primary_name_prefix}-rds-backup"
-  role            = aws_iam_role.primary_lambda_role.arn
-  handler         = "index.lambda_handler"
+  role             = aws_iam_role.primary_lambda_role.arn
+  handler          = "index.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.9"
-  timeout         = 60
+  runtime          = "python3.9"
+  timeout          = 60
 
   reserved_concurrent_executions = 5
 
@@ -1400,11 +1400,11 @@ resource "aws_lambda_function" "secondary_rds_backup" {
   provider         = aws.us_west_1
   filename         = "rds_backup.zip"
   function_name    = "${local.secondary_name_prefix}-rds-backup"
-  role            = aws_iam_role.secondary_lambda_role.arn
-  handler         = "index.lambda_handler"
+  role             = aws_iam_role.secondary_lambda_role.arn
+  handler          = "index.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.9"
-  timeout         = 60
+  runtime          = "python3.9"
+  timeout          = 60
 
   reserved_concurrent_executions = 5
 
@@ -1424,7 +1424,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "rds_backup.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import boto3
 import os
 from datetime import datetime
@@ -1614,20 +1614,20 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
 
 # CloudTrail - Fixed event selector
 resource "aws_cloudtrail" "main_trail" {
-  provider               = aws.us_west_1
-  name                   = "${local.primary_name_prefix}-cloudtrail"
-  s3_bucket_name         = aws_s3_bucket.cloudtrail_bucket.id
-  is_multi_region_trail  = true
-  enable_logging         = true
+  provider              = aws.us_west_1
+  name                  = "${local.primary_name_prefix}-cloudtrail"
+  s3_bucket_name        = aws_s3_bucket.cloudtrail_bucket.id
+  is_multi_region_trail = true
+  enable_logging        = true
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type           = "All"
+    include_management_events = true
 
     # Fix: Use correct ARN format for S3 data resources
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3"]  # This logs data events for all S3 buckets and objects
+      values = ["arn:aws:s3"] # This logs data events for all S3 buckets and objects
     }
   }
 
@@ -1960,7 +1960,7 @@ resource "aws_dlm_lifecycle_policy" "primary_ebs_backup" {
   state              = "ENABLED"
 
   policy_details {
-    resource_types   = ["VOLUME"]
+    resource_types = ["VOLUME"]
     target_tags = {
       Environment = "Production"
     }
@@ -2046,7 +2046,7 @@ resource "aws_dlm_lifecycle_policy" "secondary_ebs_backup" {
   state              = "ENABLED"
 
   policy_details {
-    resource_types   = ["VOLUME"]
+    resource_types = ["VOLUME"]
     target_tags = {
       Environment = "Production"
     }

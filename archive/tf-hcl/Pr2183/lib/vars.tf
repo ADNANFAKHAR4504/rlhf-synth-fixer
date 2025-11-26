@@ -12,43 +12,43 @@ locals {
   instance_configs = {
     staging = {
       instance_type    = "t3.micro"
-      min_size        = 1
-      max_size        = 2
+      min_size         = 1
+      max_size         = 2
       desired_capacity = 1
-      volume_size     = 20
+      volume_size      = 20
     }
     production = {
       instance_type    = "t3.medium"
-      min_size        = 2
-      max_size        = 6
+      min_size         = 2
+      max_size         = 6
       desired_capacity = 3
-      volume_size     = 50
+      volume_size      = 50
     }
   }
 
   # Database configurations with MySQL 8.0.42
   db_configs = {
     staging = {
-      instance_class              = "db.t3.micro"
+      instance_class             = "db.t3.micro"
       allocated_storage          = 20
       backup_retention           = 7
       multi_az                   = false
       deletion_protection        = false
       auto_minor_version_upgrade = true
-      engine_version            = "8.0.42"
+      engine_version             = "8.0.42"
     }
     production = {
-      instance_class              = "db.t3.medium"
+      instance_class             = "db.t3.medium"
       allocated_storage          = 100
       backup_retention           = 30
       multi_az                   = true
       deletion_protection        = true
       auto_minor_version_upgrade = false
-      engine_version            = "8.0.42"
+      engine_version             = "8.0.42"
     }
   }
-  
-  
+
+
   network_configs = {
     staging = {
       vpc_cidr = "10.0.0.0/16"
@@ -87,8 +87,8 @@ locals {
 
   # Current environment configurations using lookup
   current_instance_config = lookup(local.instance_configs, var.environment, local.instance_configs["staging"])
-  current_db_config      = lookup(local.db_configs, var.environment, local.db_configs["staging"])
-  current_network_config = lookup(local.network_configs, var.environment, local.network_configs["staging"])
+  current_db_config       = lookup(local.db_configs, var.environment, local.db_configs["staging"])
+  current_network_config  = lookup(local.network_configs, var.environment, local.network_configs["staging"])
 
   # Common tags
   common_tags = {
