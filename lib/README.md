@@ -6,7 +6,7 @@ This Terraform configuration deploys a complete production-ready Amazon EKS clus
 
 This infrastructure code provisions a highly available, scalable, and secure EKS 1.28 cluster with the following capabilities:
 
-- Multi-AZ deployment across 3 availability zones in eu-west-1
+- Multi-AZ deployment across 3 availability zones in ap-southeast-1
 - Dedicated node groups for different workload types
 - Fargate profiles for system workloads
 - IAM Roles for Service Accounts (IRSA) for secure pod-level AWS access
@@ -96,7 +96,7 @@ Edit terraform.tfvars:
 
 ```hcl
 environment_suffix = "prod"
-aws_region = "eu-west-1"
+aws_region = "ap-southeast-1"
 cluster_version = "1.28"
 ```
 
@@ -113,7 +113,7 @@ Deployment time: ~20-30 minutes
 ### 3. Configure kubectl
 
 ```bash
-aws eks update-kubeconfig --region eu-west-1 --name eks-cluster-prod
+aws eks update-kubeconfig --region ap-southeast-1 --name eks-cluster-prod
 kubectl get nodes
 ```
 
@@ -144,7 +144,7 @@ kubectl get daemonset -n amazon-cloudwatch
 
 ### Optional Variables
 
-- `aws_region`: AWS region (default: "eu-west-1")
+- `aws_region`: AWS region (default: "ap-southeast-1")
 - `vpc_cidr`: VPC CIDR block (default: "10.0.0.0/16")
 - `cluster_version`: Kubernetes version (default: "1.28")
 - `cluster_name`: Base cluster name (default: "eks-cluster")
@@ -408,10 +408,10 @@ spec:
 
 ```bash
 # Check cluster status
-aws eks describe-cluster --name <cluster-name> --region eu-west-1
+aws eks describe-cluster --name <cluster-name> --region ap-southeast-1
 
 # Check node groups
-aws eks list-nodegroups --cluster-name <cluster-name> --region eu-west-1
+aws eks list-nodegroups --cluster-name <cluster-name> --region ap-southeast-1
 
 # Check pod logs
 kubectl logs -n kube-system <pod-name>
