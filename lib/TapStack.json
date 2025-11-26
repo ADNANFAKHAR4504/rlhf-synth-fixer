@@ -179,7 +179,14 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": {
           "Ref": "PublicSubnet1CIDR"
         },
@@ -213,7 +220,14 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": {
           "Ref": "PublicSubnet2CIDR"
         },
@@ -247,7 +261,14 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": {
           "Ref": "PublicSubnet3CIDR"
         },
@@ -281,7 +302,14 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": {
           "Ref": "PrivateSubnet1CIDR"
         },
@@ -315,7 +343,14 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": {
           "Ref": "PrivateSubnet2CIDR"
         },
@@ -349,7 +384,14 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "CidrBlock": {
           "Ref": "PrivateSubnet3CIDR"
         },
@@ -1098,10 +1140,6 @@
     "EKSNodeGroup": {
       "Type": "AWS::EKS::Nodegroup",
       "DeletionPolicy": "Delete",
-      "DependsOn": [
-        "EKSCluster",
-        "NodeGroupRole"
-      ],
       "Properties": {
         "NodegroupName": {
           "Fn::Sub": "eks-nodegroup-${EnvironmentSuffix}"
