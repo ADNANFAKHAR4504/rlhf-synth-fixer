@@ -4,6 +4,8 @@
   "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
   "po_id": "po-disaster-recovery",
   "author": "raajavelc",
   "training_quality": 9,
