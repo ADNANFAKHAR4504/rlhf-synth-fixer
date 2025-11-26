@@ -323,7 +323,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(response.Endpoints).toBeDefined();
       expect(response.Endpoints?.length).toBeGreaterThan(0);
       expect(response.Endpoints?.[0].EndpointArn).toBe(sourceEndpointArn);
-      expect(response.Endpoints?.[0].EndpointType).toBe('source');
+      expect(response.Endpoints?.[0].EndpointType?.toLowerCase()).toBe('source');
     });
     
     test('DMS target endpoint should exist', async () => {
@@ -344,7 +344,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
       expect(response.Endpoints).toBeDefined();
       expect(response.Endpoints?.length).toBeGreaterThan(0);
       expect(response.Endpoints?.[0].EndpointArn).toBe(targetEndpointArn);
-      expect(response.Endpoints?.[0].EndpointType).toBe('target');
+      expect(response.Endpoints?.[0].EndpointType?.toLowerCase()).toBe('target');
     });
     
     test('DMS replication task should exist', async () => {
