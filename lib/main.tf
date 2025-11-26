@@ -13,9 +13,8 @@ terraform {
   }
 
   # Backend configuration for state management
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # Partial backend config: values are injected at terraform init time via -backend-config
+  backend "s3" {}
 }
 
 provider "aws" {
