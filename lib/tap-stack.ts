@@ -73,7 +73,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Configuration
     const config = new pulumi.Config();
     const environmentSuffix =
-      args.environmentSuffix || config.require('environmentSuffix');
+      args.environmentSuffix || config.get('environmentSuffix') || 'dev';
     const region = aws.config.region || 'us-east-1';
 
     // KMS Key for RDS Encryption
