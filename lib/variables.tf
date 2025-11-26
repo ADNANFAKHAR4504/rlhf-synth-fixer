@@ -1,10 +1,7 @@
 variable "environment_suffix" {
-  description = "Unique suffix to append to resource names for multi-environment support"
+  description = "Unique suffix to append to resource names for multi-environment support. Can be set via ENVIRONMENT_SUFFIX environment variable or passed directly."
   type        = string
-  validation {
-    condition     = length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 10
-    error_message = "environment_suffix must be between 1 and 10 characters"
-  }
+  default     = ""
 }
 
 variable "region" {

@@ -1,6 +1,6 @@
 # Security group for EKS cluster control plane
 resource "aws_security_group" "cluster" {
-  name        = "eks-cluster-sg-${var.environment_suffix}"
+  name        = "eks-cluster-sg-${local.environment_suffix}"
   description = "Security group for EKS cluster control plane"
   vpc_id      = aws_vpc.main.id
 
@@ -13,7 +13,7 @@ resource "aws_security_group" "cluster" {
   }
 
   tags = {
-    Name = "eks-cluster-sg-${var.environment_suffix}"
+    Name = "eks-cluster-sg-${local.environment_suffix}"
   }
 }
 
@@ -30,7 +30,7 @@ resource "aws_security_group_rule" "cluster_ingress_nodes" {
 
 # Security group for EKS worker nodes
 resource "aws_security_group" "nodes" {
-  name        = "eks-nodes-sg-${var.environment_suffix}"
+  name        = "eks-nodes-sg-${local.environment_suffix}"
   description = "Security group for EKS worker nodes"
   vpc_id      = aws_vpc.main.id
 
@@ -43,7 +43,7 @@ resource "aws_security_group" "nodes" {
   }
 
   tags = {
-    Name                                          = "eks-nodes-sg-${var.environment_suffix}"
+    Name                                          = "eks-nodes-sg-${local.environment_suffix}"
     "kubernetes.io/cluster/${local.cluster_name}" = "owned"
   }
 }

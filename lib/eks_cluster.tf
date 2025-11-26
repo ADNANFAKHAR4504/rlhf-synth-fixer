@@ -1,5 +1,5 @@
 locals {
-  cluster_name = "eks-cluster-${var.environment_suffix}"
+  cluster_name = "eks-cluster-${local.environment_suffix}"
 }
 
 # CloudWatch Log Group for EKS cluster
@@ -8,7 +8,7 @@ resource "aws_cloudwatch_log_group" "cluster" {
   retention_in_days = var.log_retention_days
 
   tags = {
-    Name = "eks-cluster-logs-${var.environment_suffix}"
+    Name = "eks-cluster-logs-${local.environment_suffix}"
   }
 }
 
@@ -62,7 +62,7 @@ resource "aws_eks_addon" "vpc_cni" {
   })
 
   tags = {
-    Name = "vpc-cni-${var.environment_suffix}"
+    Name = "vpc-cni-${local.environment_suffix}"
   }
 }
 
@@ -74,7 +74,7 @@ resource "aws_eks_addon" "kube_proxy" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = {
-    Name = "kube-proxy-${var.environment_suffix}"
+    Name = "kube-proxy-${local.environment_suffix}"
   }
 }
 
@@ -86,7 +86,7 @@ resource "aws_eks_addon" "coredns" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = {
-    Name = "coredns-${var.environment_suffix}"
+    Name = "coredns-${local.environment_suffix}"
   }
 
   depends_on = [
@@ -107,13 +107,13 @@ resource "aws_eks_addon" "ebs_csi_driver" {
       extraVolumeTags = {
         "eks:cluster-name"  = local.cluster_name
         "ManagedBy"         = "ebs-csi-driver"
-        "EnvironmentSuffix" = var.environment_suffix
+        "EnvironmentSuffix" = local.environment_suffix
       }
     }
   })
 
   tags = {
-    Name = "ebs-csi-driver-${var.environment_suffix}"
+    Name = "ebs-csi-driver-${local.environment_suffix}"
   }
 }
 
@@ -126,7 +126,7 @@ resource "aws_eks_addon" "cloudwatch_observability" {
   resolve_conflicts_on_update = "OVERWRITE"
 
   tags = {
-    Name = "cloudwatch-observability-${var.environment_suffix}"
+    Name = "cloudwatch-observability-${local.environment_suffix}"
   }
 
   depends_on = [

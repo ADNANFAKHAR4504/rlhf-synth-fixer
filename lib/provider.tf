@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -26,7 +30,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment = var.environment_suffix
+      Environment = local.environment_suffix
       ManagedBy   = "Terraform"
       Project     = "EKS-Production"
     }

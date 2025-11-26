@@ -3,8 +3,8 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
-    Name              = "eks-vpc-${var.environment_suffix}"
-    EnvironmentSuffix = var.environment_suffix
+    Name              = "eks-vpc-${local.environment_suffix}"
+    EnvironmentSuffix = local.environment_suffix
   }
 }
 
@@ -15,8 +15,8 @@ resource "aws_subnet" "private" {
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = false
   tags = {
-    Name              = "eks-private-subnet-${count.index}-${var.environment_suffix}"
+    Name              = "eks-private-subnet-${count.index}-${local.environment_suffix}"
     Type              = "private"
-    EnvironmentSuffix = var.environment_suffix
+    EnvironmentSuffix = local.environment_suffix
   }
 }

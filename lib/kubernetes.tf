@@ -94,7 +94,7 @@ resource "kubernetes_namespace" "production" {
     name = "production"
     labels = {
       name        = "production"
-      environment = var.environment_suffix
+      environment = local.environment_suffix
     }
   }
 

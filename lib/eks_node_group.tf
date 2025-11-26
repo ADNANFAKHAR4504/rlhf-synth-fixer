@@ -1,6 +1,6 @@
 # Launch template for node group
 resource "aws_launch_template" "nodes" {
-  name_prefix = "eks-nodes-${var.environment_suffix}-"
+  name_prefix = "eks-nodes-${local.environment_suffix}-"
 
   block_device_mappings {
     device_name = "/dev/xvda"
@@ -28,7 +28,7 @@ resource "aws_launch_template" "nodes" {
     resource_type = "instance"
 
     tags = {
-      Name = "eks-node-${var.environment_suffix}"
+      Name = "eks-node-${local.environment_suffix}"
     }
   }
 
@@ -42,7 +42,7 @@ resource "aws_launch_template" "nodes" {
 # EKS Node Group
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "managed-nodes-${var.environment_suffix}"
+  node_group_name = "managed-nodes-${local.environment_suffix}"
   node_role_arn   = aws_iam_role.node_group.arn
   subnet_ids      = [for s in aws_subnet.private : s.id]
 
@@ -66,7 +66,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   tags = {
-    Name                                              = "eks-node-group-${var.environment_suffix}"
+    Name                                              = "eks-node-group-${local.environment_suffix}"
     "k8s.io/cluster-autoscaler/${local.cluster_name}" = "owned"
     "k8s.io/cluster-autoscaler/enabled"               = "true"
   }

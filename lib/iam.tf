@@ -1,6 +1,6 @@
 # EKS Cluster IAM Role
 resource "aws_iam_role" "cluster" {
-  name = "eks-cluster-role-${var.environment_suffix}"
+  name = "eks-cluster-role-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -26,7 +26,7 @@ resource "aws_iam_role_policy_attachment" "cluster_vpc_resource_controller" {
 
 # EKS Node Group IAM Role
 resource "aws_iam_role" "node_group" {
-  name = "eks-node-group-role-${var.environment_suffix}"
+  name = "eks-node-group-role-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -69,7 +69,7 @@ resource "aws_iam_openid_connect_provider" "cluster" {
 
 # Cluster Autoscaler IAM Role (IRSA)
 resource "aws_iam_role" "cluster_autoscaler" {
-  name = "eks-cluster-autoscaler-${var.environment_suffix}"
+  name = "eks-cluster-autoscaler-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -90,7 +90,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
 }
 
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name = "eks-cluster-autoscaler-policy-${var.environment_suffix}"
+  name = "eks-cluster-autoscaler-policy-${local.environment_suffix}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -135,7 +135,7 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
 
 # AWS Load Balancer Controller IAM Role (IRSA)
 resource "aws_iam_role" "lb_controller" {
-  name = "eks-lb-controller-${var.environment_suffix}"
+  name = "eks-lb-controller-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -156,7 +156,7 @@ resource "aws_iam_role" "lb_controller" {
 }
 
 resource "aws_iam_policy" "lb_controller" {
-  name = "eks-lb-controller-policy-${var.environment_suffix}"
+  name = "eks-lb-controller-policy-${local.environment_suffix}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -408,7 +408,7 @@ resource "aws_iam_role_policy_attachment" "lb_controller" {
 
 # EBS CSI Driver IAM Role (IRSA)
 resource "aws_iam_role" "ebs_csi_driver" {
-  name = "eks-ebs-csi-driver-${var.environment_suffix}"
+  name = "eks-ebs-csi-driver-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

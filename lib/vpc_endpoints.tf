@@ -7,7 +7,7 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = data.aws_route_tables.private.ids
 
   tags = {
-    Name = "s3-endpoint-${var.environment_suffix}"
+    Name = "s3-endpoint-${local.environment_suffix}"
   }
 }
 
@@ -21,7 +21,7 @@ resource "aws_vpc_endpoint" "ecr_api" {
   private_dns_enabled = true
 
   tags = {
-    Name = "ecr-api-endpoint-${var.environment_suffix}"
+    Name = "ecr-api-endpoint-${local.environment_suffix}"
   }
 }
 
@@ -35,13 +35,13 @@ resource "aws_vpc_endpoint" "ecr_dkr" {
   private_dns_enabled = true
 
   tags = {
-    Name = "ecr-dkr-endpoint-${var.environment_suffix}"
+    Name = "ecr-dkr-endpoint-${local.environment_suffix}"
   }
 }
 
 # Security group for VPC endpoints
 resource "aws_security_group" "vpc_endpoints" {
-  name        = "vpc-endpoints-sg-${var.environment_suffix}"
+  name        = "vpc-endpoints-sg-${local.environment_suffix}"
   description = "Security group for VPC endpoints"
   vpc_id      = aws_vpc.main.id
 
@@ -62,7 +62,7 @@ resource "aws_security_group" "vpc_endpoints" {
   }
 
   tags = {
-    Name = "vpc-endpoints-sg-${var.environment_suffix}"
+    Name = "vpc-endpoints-sg-${local.environment_suffix}"
   }
 }
 
