@@ -906,8 +906,139 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   policy_arn = aws_iam_policy.cluster_autoscaler.arn
   role       = aws_iam_role.cluster_autoscaler.name
 }
+
+# Kubernetes Namespace for hello-world application
+resource "kubernetes_namespace" "hello_world" {
+  metadata {
+    name = "hello-world"
+    labels = {
+      PRNumber  = var.pr_number
+      ManagedBy = "Terraform"
+    }
+  }
+
+  depends_on = [
+    aws_eks_cluster.main,
+    aws_eks_node_group.critical,
+    aws_eks_node_group.general
+  ]
+}
+
+# Kubernetes Deployment for hello-world application
+resource "kubernetes_deployment" "hello_world" {
+  metadata {
+    name      = "hello-world"
+    namespace = kubernetes_namespace.hello_world.metadata[0].name
+    labels = {
+      app       = "hello-world"
+      PRNumber  = var.pr_number
+      ManagedBy = "Terraform"
+    }
+  }
+
+  spec {
+    replicas = 2
+
+    selector {
+      match_labels = {
+        app = "hello-world"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app       = "hello-world"
+          PRNumber  = var.pr_number
+          ManagedBy = "Terraform"
+        }
+      }
+
+      spec {
+        container {
+          name  = "hello-world"
+          image = "ghcr.io/infrastructure-as-code/hello-world"
+
+          port {
+            container_port = 8080
+            name           = "http"
+          }
+
+          resources {
+            requests = {
+              cpu    = "100m"
+              memory = "128Mi"
+            }
+            limits = {
+              cpu    = "200m"
+              memory = "256Mi"
+            }
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    kubernetes_namespace.hello_world,
+    aws_eks_addon.vpc_cni,
+    aws_eks_addon.coredns,
+    aws_eks_addon.kube_proxy
+  ]
+}
+
+# Kubernetes Service for hello-world application
+resource "kubernetes_service" "hello_world" {
+  metadata {
+    name      = "hello-world"
+    namespace = kubernetes_namespace.hello_world.metadata[0].name
+    labels = {
+      app       = "hello-world"
+      PRNumber  = var.pr_number
+      ManagedBy = "Terraform"
+    }
+  }
+
+  spec {
+    type = "ClusterIP"
+
+    selector = {
+      app = "hello-world"
+    }
+
+    port {
+      name        = "http"
+      port        = 80
+      target_port = 8080
+      protocol    = "TCP"
+    }
+  }
+
+  depends_on = [
+    kubernetes_deployment.hello_world
+  ]
+}
 ```
 
+---
 
 ## `outputs.tf`
 
@@ -1034,8 +1165,29 @@ output "eks_node_role_arn" {
   description = "ARN of the EKS node IAM role"
   value       = aws_iam_role.eks_nodes.arn
 }
+
+output "hello_world_namespace" {
+  description = "Name of the hello-world Kubernetes namespace"
+  value       = kubernetes_namespace.hello_world.metadata[0].name
+}
+
+output "hello_world_deployment_name" {
+  description = "Name of the hello-world Kubernetes deployment"
+  value       = kubernetes_deployment.hello_world.metadata[0].name
+}
+
+output "hello_world_service_name" {
+  description = "Name of the hello-world Kubernetes service"
+  value       = kubernetes_service.hello_world.metadata[0].name
+}
+
+output "hello_world_service_namespace" {
+  description = "Namespace of the hello-world Kubernetes service"
+  value       = kubernetes_service.hello_world.metadata[0].namespace
+}
 ```
 
+---
 
 ## `provider.tf`
 
@@ -1058,6 +1210,10 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.23"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time
@@ -1078,8 +1234,28 @@ provider "aws" {
     }
   }
 }
+
+# Kubernetes provider for EKS cluster
+provider "kubernetes" {
+  host                   = aws_eks_cluster.main.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority[0].data)
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args = [
+      "eks",
+      "get-token",
+      "--cluster-name",
+      aws_eks_cluster.main.name,
+      "--region",
+      var.aws_region
+    ]
+  }
+}
 ```
 
+---
 
 ## `variables.tf`
 
@@ -1149,7 +1325,7 @@ variable "kube_proxy_version" {
 variable "pr_number" {
   description = "PR number for resource identification"
   type        = string
-  default     = "pr7253"
+  default     = "pr7389"
 }
 
 variable "common_tags" {
@@ -1187,4 +1363,5 @@ variable "team" {
 }
 ```
 
+---
 

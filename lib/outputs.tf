@@ -120,3 +120,23 @@ output "eks_node_role_arn" {
   description = "ARN of the EKS node IAM role"
   value       = aws_iam_role.eks_nodes.arn
 }
+
+output "hello_world_namespace" {
+  description = "Name of the hello-world Kubernetes namespace"
+  value       = kubernetes_namespace.hello_world.metadata[0].name
+}
+
+output "hello_world_deployment_name" {
+  description = "Name of the hello-world Kubernetes deployment"
+  value       = kubernetes_deployment.hello_world.metadata[0].name
+}
+
+output "hello_world_service_name" {
+  description = "Name of the hello-world Kubernetes service"
+  value       = kubernetes_service.hello_world.metadata[0].name
+}
+
+output "hello_world_service_namespace" {
+  description = "Namespace of the hello-world Kubernetes service"
+  value       = kubernetes_service.hello_world.metadata[0].namespace
+}

@@ -3,6 +3,11 @@ import {
   GetKeyRotationStatusCommand,
   KMSClient,
 } from '@aws-sdk/client-kms';
+import {
+  AppsV1Api,
+  CoreV1Api,
+  KubeConfig
+} from '@kubernetes/client-node';
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -17,6 +22,59 @@ const ec2 = new AWS.EC2({ region: AWS_REGION });
 const eks = new AWS.EKS({ region: AWS_REGION });
 const kmsClient = new KMSClient({ region: AWS_REGION });
 const iam = new AWS.IAM({ region: AWS_REGION });
+
+// Kubernetes client setup helper
+async function getK8sClients(): Promise<{ coreApi: CoreV1Api; appsApi: AppsV1Api }> {
+  const kc = new KubeConfig();
+
+  // Get cluster details from outputs
+  const outputs = getTerraformOutputs();
+  const clusterName = outputs.cluster_name;
+
+  // Get cluster endpoint and CA certificate
+  const clusterResult = await awsCall(() =>
+    eks.describeCluster({ name: clusterName }).promise()
+  );
+
+  const cluster = clusterResult.cluster!;
+  const clusterEndpoint = cluster.endpoint!;
+  const clusterCa = cluster.certificateAuthority!.data!;
+
+  // Build kubeconfig
+  kc.loadFromOptions({
+    clusters: [{
+      name: clusterName,
+      server: clusterEndpoint,
+      caData: clusterCa
+    }],
+    users: [{
+      name: 'aws',
+      exec: {
+        apiVersion: 'client.authentication.k8s.io/v1beta1',
+        command: 'aws',
+        args: [
+          'eks',
+          'get-token',
+          '--cluster-name',
+          clusterName,
+          '--region',
+          AWS_REGION
+        ]
+      }
+    }],
+    contexts: [{
+      name: clusterName,
+      cluster: clusterName,
+      user: 'aws'
+    }],
+    currentContext: clusterName
+  });
+
+  return {
+    coreApi: kc.makeApiClient(CoreV1Api),
+    appsApi: kc.makeApiClient(AppsV1Api)
+  };
+}
 
 // Helper: Get Terraform outputs
 function getTerraformOutputs(): Record<string, any> {
@@ -45,6 +103,7 @@ function getTerraformOutputs(): Record<string, any> {
       // Continue to try terraform output
     }
   }
+  return {};
 }
 
 // Helper: AWS API call wrapper
@@ -502,5 +561,115 @@ describe('Complete End-to-End Workflow', () => {
     );
 
     expect(result.clusters).toContain(clusterName);
+  }, TEST_TIMEOUT);
+});
+
+// =============================================================================
+// SUITE 5: KUBERNETES DEPLOYMENT VALIDATION
+// =============================================================================
+
+describe('Kubernetes Deployment Validation', () => {
+  let outputs: Record<string, any> = {};
+  let coreApi: CoreV1Api;
+  let appsApi: AppsV1Api;
+
+  beforeAll(async () => {
+    outputs = getTerraformOutputs();
+    const clients = await getK8sClients();
+    coreApi = clients.coreApi;
+    appsApi = clients.appsApi;
+  });
+
+  test('Hello-world namespace exists', async () => {
+    const namespaceName = outputs.hello_world_namespace;
+    expect(namespaceName).toBeDefined();
+    expect(namespaceName).toBe('hello-world');
+
+    const namespace = await coreApi.readNamespace(namespaceName);
+    expect(namespace.body).toBeDefined();
+    expect(namespace.body.metadata?.name).toBe(namespaceName);
+  }, TEST_TIMEOUT);
+
+  test('Hello-world deployment exists and has correct configuration', async () => {
+    const deploymentName = outputs.hello_world_deployment_name;
+    const namespaceName = outputs.hello_world_namespace;
+    expect(deploymentName).toBeDefined();
+    expect(deploymentName).toBe('hello-world');
+
+    const deployment = await appsApi.readNamespacedDeployment(
+      deploymentName,
+      namespaceName
+    );
+
+    expect(deployment.body).toBeDefined();
+    const dep = deployment.body;
+    expect(dep.metadata?.name).toBe(deploymentName);
+    expect(dep.metadata?.namespace).toBe(namespaceName);
+    expect(dep.spec?.replicas).toBe(2);
+    expect(dep.spec?.template?.spec?.containers).toBeDefined();
+    expect(dep.spec?.template?.spec?.containers[0]?.image).toBe(
+      'ghcr.io/infrastructure-as-code/hello-world'
+    );
+    expect(dep.spec?.template?.spec?.containers[0]?.ports).toBeDefined();
+    expect(dep.spec?.template?.spec?.containers[0]?.ports?.[0]?.containerPort).toBe(8080);
+  }, TEST_TIMEOUT);
+
+  test('Hello-world deployment has running pods', async () => {
+    const deploymentName = outputs.hello_world_deployment_name;
+    const namespaceName = outputs.hello_world_namespace;
+
+    // Wait a bit for pods to be ready
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    const deployment = await appsApi.readNamespacedDeployment(
+      deploymentName,
+      namespaceName
+    );
+
+    const dep = deployment.body;
+    expect(dep.status?.readyReplicas).toBeGreaterThanOrEqual(1);
+    expect(dep.status?.replicas).toBeGreaterThanOrEqual(1);
+  }, TEST_TIMEOUT * 2);
+
+  test('Hello-world service exists and has correct configuration', async () => {
+    const serviceName = outputs.hello_world_service_name;
+    const namespaceName = outputs.hello_world_service_namespace;
+    expect(serviceName).toBeDefined();
+    expect(serviceName).toBe('hello-world');
+    expect(namespaceName).toBeDefined();
+    expect(namespaceName).toBe('hello-world');
+
+    const service = await coreApi.readNamespacedService(
+      serviceName,
+      namespaceName
+    );
+
+    expect(service.body).toBeDefined();
+    const svc = service.body;
+    expect(svc.metadata?.name).toBe(serviceName);
+    expect(svc.metadata?.namespace).toBe(namespaceName);
+    expect(svc.spec?.type).toBe('ClusterIP');
+    expect(svc.spec?.ports).toBeDefined();
+    expect(svc.spec?.ports?.[0]?.port).toBe(80);
+    expect(svc.spec?.ports?.[0]?.targetPort).toBe(8080);
+    expect(svc.spec?.selector?.app).toBe('hello-world');
+  }, TEST_TIMEOUT);
+
+  test('Hello-world pods are using the correct image', async () => {
+    const namespaceName = outputs.hello_world_namespace;
+
+    const podList = await coreApi.listNamespacedPod(namespaceName);
+
+    expect(podList.body).toBeDefined();
+    const pods = podList.body.items || [];
+    expect(pods.length).toBeGreaterThan(0);
+
+    // Check that at least one pod has the correct image
+    const podWithImage = pods.find((pod) =>
+      pod.spec?.containers?.some((container) =>
+        container.image === 'ghcr.io/infrastructure-as-code/hello-world'
+      )
+    );
+    expect(podWithImage).toBeDefined();
   }, TEST_TIMEOUT);
 });

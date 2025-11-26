@@ -903,3 +903,133 @@ resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
   policy_arn = aws_iam_policy.cluster_autoscaler.arn
   role       = aws_iam_role.cluster_autoscaler.name
 }
+
+# Kubernetes Namespace for hello-world application
+resource "kubernetes_namespace" "hello_world" {
+  metadata {
+    name = "hello-world"
+    labels = {
+      PRNumber  = var.pr_number
+      ManagedBy = "Terraform"
+    }
+  }
+
+  depends_on = [
+    aws_eks_cluster.main,
+    aws_eks_node_group.critical,
+    aws_eks_node_group.general
+  ]
+}
+
+# Kubernetes Deployment for hello-world application
+resource "kubernetes_deployment" "hello_world" {
+  metadata {
+    name      = "hello-world"
+    namespace = kubernetes_namespace.hello_world.metadata[0].name
+    labels = {
+      app       = "hello-world"
+      PRNumber  = var.pr_number
+      ManagedBy = "Terraform"
+    }
+  }
+
+  spec {
+    replicas = 2
+
+    selector {
+      match_labels = {
+        app = "hello-world"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app       = "hello-world"
+          PRNumber  = var.pr_number
+          ManagedBy = "Terraform"
+        }
+      }
+
+      spec {
+        container {
+          name  = "hello-world"
+          image = "ghcr.io/infrastructure-as-code/hello-world"
+
+          port {
+            container_port = 8080
+            name           = "http"
+          }
+
+          resources {
+            requests = {
+              cpu    = "100m"
+              memory = "128Mi"
+            }
+            limits = {
+              cpu    = "200m"
+              memory = "256Mi"
+            }
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = 8080
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    kubernetes_namespace.hello_world,
+    aws_eks_addon.vpc_cni,
+    aws_eks_addon.coredns,
+    aws_eks_addon.kube_proxy
+  ]
+}
+
+# Kubernetes Service for hello-world application
+resource "kubernetes_service" "hello_world" {
+  metadata {
+    name      = "hello-world"
+    namespace = kubernetes_namespace.hello_world.metadata[0].name
+    labels = {
+      app       = "hello-world"
+      PRNumber  = var.pr_number
+      ManagedBy = "Terraform"
+    }
+  }
+
+  spec {
+    type = "ClusterIP"
+
+    selector = {
+      app = "hello-world"
+    }
+
+    port {
+      name        = "http"
+      port        = 80
+      target_port = 8080
+      protocol    = "TCP"
+    }
+  }
+
+  depends_on = [
+    kubernetes_deployment.hello_world
+  ]
+}
