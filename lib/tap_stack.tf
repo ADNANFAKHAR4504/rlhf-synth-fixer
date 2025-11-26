@@ -854,11 +854,11 @@ resource "aws_lambda_permission" "backup_scheduler" {
 # EVENTBRIDGE SCHEDULED RULES
 # ================================
 
-# Health check every 10 seconds
+# Health check every 1 minute (minimum supported rate)
 resource "aws_cloudwatch_event_rule" "health_check_schedule" {
   name                = "${local.name_prefix}-health-check-schedule"
-  description         = "Trigger health check every 10 seconds"
-  schedule_expression = "rate(10 seconds)"
+  description         = "Trigger health check every 1 minute"
+  schedule_expression = "rate(1 minute)"
 
   tags = local.common_tags
 }
@@ -1172,56 +1172,6 @@ resource "aws_fis_experiment_template" "aurora_failover" {
   })
 }
 
-# EventBridge rule for weekly FIS execution
-resource "aws_cloudwatch_event_rule" "fis_schedule" {
-  name                = "${local.name_prefix}-fis-weekly-test"
-  description         = "Weekly failover testing"
-  schedule_expression = "cron(0 2 ? * SUN *)"
-  is_enabled          = false # Disabled by default, enable after validation
-
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_event_target" "fis_schedule" {
-  rule     = aws_cloudwatch_event_rule.fis_schedule.name
-  arn      = "arn:aws:fis:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:experiment-template/${aws_fis_experiment_template.aurora_failover.id}"
-  role_arn = aws_iam_role.eventbridge_fis.arn
-}
-
-# IAM Role for EventBridge to invoke FIS
-resource "aws_iam_role" "eventbridge_fis" {
-  name = "${local.name_prefix}-eventbridge-fis-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "eventbridge_fis" {
-  name = "${local.name_prefix}-eventbridge-fis-policy"
-  role = aws_iam_role.eventbridge_fis.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "fis:StartExperiment"
-        ]
-        Resource = "arn:aws:fis:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:experiment-template/${aws_fis_experiment_template.aurora_failover.id}"
-      }
-    ]
-  })
-}
+# Note: FIS experiments must be triggered manually or via AWS CLI/SDK
+# EventBridge does not support FIS as a direct target
+# To automate FIS testing, use a Lambda function triggered by EventBridge that calls StartExperiment API
