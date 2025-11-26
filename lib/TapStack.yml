@@ -1166,8 +1166,6 @@ Resources:
         - error
         - general
         - slowquery
-      EnablePerformanceInsights: !If [IsProduction, true, false]
-      PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: webapp-database
