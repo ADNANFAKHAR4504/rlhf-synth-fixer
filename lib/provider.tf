@@ -22,8 +22,16 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # S3 backend configuration for state management
+  # Prevents resource creation conflicts by isolating state per environment
+  # Values are injected at terraform init time via -backend-config flags:
+  #   -backend-config=bucket=iac-rlhf-tf-states-***
+  #   -backend-config=key=prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate
+  #   -backend-config=region=us-east-1
+  #   -backend-config=encrypt=true
+  backend "s3" {
+    # All configuration provided via -backend-config during init
+  }
 }
 
 # Primary AWS provider for general resources
@@ -41,18 +49,5 @@ provider "aws" {
   }
 }
 
-# Note: Kubernetes and Helm providers will be configured after EKS cluster creation
-# They require the EKS cluster endpoint and authentication token
-provider "kubernetes" {
-  host                   = try(aws_eks_cluster.main.endpoint, "")
-  cluster_ca_certificate = try(base64decode(aws_eks_cluster.main.certificate_authority[0].data), "")
-  token                  = try(data.aws_eks_cluster_auth.main.token, "")
-}
-
-provider "helm" {
-  kubernetes {
-    host                   = try(aws_eks_cluster.main.endpoint, "")
-    cluster_ca_certificate = try(base64decode(aws_eks_cluster.main.certificate_authority[0].data), "")
-    token                  = try(data.aws_eks_cluster_auth.main.token, "")
-  }
-}
+# Note: Kubernetes and Helm providers are configured in main.tf after EKS cluster creation
+# They require the EKS cluster endpoint and authentication token from data sources
