@@ -685,8 +685,17 @@ exports.handler = async () => {
 };
 '''
 
-        # Create zip file with Canary code
+        # Create zip file with Canary code and upload to S3
         canary_zip_content = self.create_zip_base64(canary_script, "nodejs/node_modules/index.js")
+        
+        canary_code_object = S3Object(
+            self,
+            "canary_code_object",
+            bucket=canary_bucket.id,
+            key="canary_code.zip",
+            content_base64=canary_zip_content,
+            content_type="application/zip"
+        )
 
         # Create Synthetics Canary
         synthetics_canary = SyntheticsCanary(
@@ -696,7 +705,9 @@ exports.handler = async () => {
             artifact_s3_location=f"s3://{canary_bucket.id}/",
             execution_role_arn=canary_role.arn,
             handler="index.handler",
-            zip_file=canary_zip_content,
+            s3_bucket=canary_bucket.id,
+            s3_key=canary_code_object.key,
+            s3_version=canary_code_object.version_id,
             runtime_version="syn-nodejs-puppeteer-6.2",
             start_canary=True,
             schedule={
