@@ -1,14 +1,14 @@
-# variables.tf - Updated to include all required variables for EKS deployment
+# variables.tf - Complete variables for EKS infrastructure deployment
 
 # Required repository-standard variables
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "eu-central-1"  # Updated to match PROMPT requirement
+  default     = "eu-central-1"
 }
 
 variable "environment_suffix" {
-  description = "Environment suffix for resource naming"
+  description = "Environment suffix for resource naming (CRITICAL: must be unique)"
   type        = string
   default     = "dev"
 }
@@ -37,7 +37,7 @@ variable "team" {
   default     = "unknown"
 }
 
-# EKS-specific variables
+# Network Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -45,17 +45,19 @@ variable "vpc_cidr" {
 }
 
 variable "availability_zones" {
-  description = "List of availability zones"
+  description = "List of availability zones (must be 3 for high availability)"
   type        = list(string)
   default     = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
 }
 
+# EKS Cluster Configuration
 variable "eks_version" {
   description = "EKS cluster version"
   type        = string
   default     = "1.28"
 }
 
+# Node Group Instance Types
 variable "frontend_instance_type" {
   description = "Instance type for frontend node group"
   type        = string
@@ -74,6 +76,7 @@ variable "data_processing_instance_type" {
   default     = "c5.2xlarge"
 }
 
+# Node Group Scaling Configuration
 variable "min_nodes" {
   description = "Minimum number of nodes per node group"
   type        = number
@@ -86,6 +89,57 @@ variable "max_nodes" {
   default     = 10
 }
 
+variable "desired_nodes" {
+  description = "Desired number of nodes per node group"
+  type        = number
+  default     = 2
+}
+
+# EKS Add-on Versions
+variable "vpc_cni_version" {
+  description = "Version of vpc-cni addon (null for latest)"
+  type        = string
+  default     = null
+}
+
+variable "kube_proxy_version" {
+  description = "Version of kube-proxy addon (null for latest)"
+  type        = string
+  default     = null
+}
+
+variable "coredns_version" {
+  description = "Version of coredns addon (null for latest)"
+  type        = string
+  default     = null
+}
+
+variable "ebs_csi_driver_version" {
+  description = "Version of EBS CSI driver addon (null for latest)"
+  type        = string
+  default     = null
+}
+
+# Helm Chart Versions
+variable "alb_controller_chart_version" {
+  description = "Version of the AWS Load Balancer Controller Helm chart"
+  type        = string
+  default     = "1.7.0"
+}
+
+variable "cluster_autoscaler_chart_version" {
+  description = "Version of the Cluster Autoscaler Helm chart"
+  type        = string
+  default     = "9.35.0"
+}
+
+variable "istio_version" {
+  description = "Version of Istio to deploy"
+  type        = string
+  default     = "1.20.2"
+}
+
+# Common Tags
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
