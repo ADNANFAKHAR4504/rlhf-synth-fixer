@@ -744,7 +744,7 @@ export class TapStack extends pulumi.ComponentResource {
         name: `dr-operations-role-${environmentSuffix}`,
         assumeRolePolicy: pulumi
           .all([accountId])
-          .apply(([accId]: [string]) =>
+          .apply((values: string[]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -756,7 +756,7 @@ export class TapStack extends pulumi.ComponentResource {
                 {
                   Effect: 'Allow',
                   Principal: {
-                    AWS: `arn:aws:iam::${accId}:root`,
+                    AWS: `arn:aws:iam::${values[0]}:root`,
                   },
                   Action: 'sts:AssumeRole',
                   Condition: {
