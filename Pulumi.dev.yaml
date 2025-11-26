@@ -1,4 +1,0 @@
-encryptionsalt: v1:B/MLKCQ/WoM=:v1:b+4Eozx3Wk5CxQ4O:Iu46xdzZD2QD1AElgZjdqCc216lv9Q==
-config:
-  payment-app:environmentSuffix: dev
-  aws:region: us-east-1
