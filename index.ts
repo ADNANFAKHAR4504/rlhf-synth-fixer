@@ -9,8 +9,11 @@ const environmentSuffix = pulumi.getStack();
 // NOTE: For production use, configure these values via Pulumi config
 const githubOwner = config.get('githubOwner') || 'example-owner';
 const githubRepo = config.get('githubRepo') || 'example-repo';
-const githubToken = config.getSecret('githubToken') || pulumi.secret('placeholder-token-configure-before-use');
-const ecrImageUri = config.get('ecrImageUri') || 'public.ecr.aws/pulumi/pulumi:latest';
+const githubToken =
+  config.getSecret('githubToken') ||
+  pulumi.secret('placeholder-token-configure-before-use');
+const ecrImageUri =
+  config.get('ecrImageUri') || 'public.ecr.aws/pulumi/pulumi:latest';
 
 // Optional configuration with defaults
 const githubBranch = config.get('githubBranch') || 'main';

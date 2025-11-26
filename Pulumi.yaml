@@ -1,4 +1,4 @@
-name: pulumi-cicd-pipeline
+name: TapStack
 description: Self-managed CI/CD pipeline for deploying Pulumi stacks
 runtime: nodejs
 
