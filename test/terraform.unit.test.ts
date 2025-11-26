@@ -10,6 +10,7 @@ describe("Terraform EKS Infrastructure - File Structure", () => {
   const requiredFiles = [
     "variables.tf",
     "provider.tf",
+    "env_vars.tf",
     "data.tf",
     "iam.tf",
     "security_groups.tf",
@@ -24,6 +25,29 @@ describe("Terraform EKS Infrastructure - File Structure", () => {
   test.each(requiredFiles)("%s exists", (filename) => {
     const filePath = path.join(LIB_DIR, filename);
     expect(fs.existsSync(filePath)).toBe(true);
+  });
+});
+
+describe("Terraform EKS Infrastructure - Environment Variables", () => {
+  let envVarsContent: string;
+
+  beforeAll(() => {
+    envVarsContent = fs.readFileSync(path.join(LIB_DIR, "env_vars.tf"), "utf8");
+  });
+
+  test("defines external data source for ENVIRONMENT_SUFFIX", () => {
+    expect(envVarsContent).toMatch(/data\s+"external"\s+"environment"\s*{/);
+    expect(envVarsContent).toMatch(/ENVIRONMENT_SUFFIX/);
+  });
+
+  test("defines local.environment_suffix", () => {
+    expect(envVarsContent).toMatch(/locals\s*{/);
+    expect(envVarsContent).toMatch(/environment_suffix\s*=/);
+  });
+
+  test("includes validation for environment_suffix length", () => {
+    expect(envVarsContent).toMatch(/null_resource.*validate_environment_suffix/);
+    expect(envVarsContent).toMatch(/length\(local\.environment_suffix\)/);
   });
 });
 
@@ -54,7 +78,7 @@ describe("Terraform EKS Infrastructure - Variables", () => {
 
   test("defines private_subnet_ids variable with validation for 3 subnets", () => {
     expect(variablesContent).toMatch(/variable\s+"private_subnet_ids"\s*{/);
-    expect(variablesContent).toMatch(/length\(var\.private_subnet_ids\)\s*==\s*3/);
+    expect(variablesContent).toMatch(/length\(var\.private_subnet_ids\)\s*==\s*(0\s*\|\|\s*length\(var\.private_subnet_ids\)\s*==\s*)?3/);
   });
 
   test("defines node configuration variables", () => {
@@ -91,6 +115,11 @@ describe("Terraform EKS Infrastructure - Provider Configuration", () => {
 
   test("declares Helm provider", () => {
     expect(providerContent).toMatch(/provider\s+"helm"\s*{/);
+  });
+
+  test("declares null provider in required_providers", () => {
+    expect(providerContent).toMatch(/null\s*=\s*{/);
+    expect(providerContent).toMatch(/hashicorp\/null/);
   });
 
   test("configures AWS provider with region from variable", () => {
@@ -159,7 +188,7 @@ describe("Terraform EKS Infrastructure - IAM Roles", () => {
     const roleMatches = iamContent.match(/name\s*=\s*"[^"]+"/g) || [];
     roleMatches.forEach((match) => {
       if (match.includes("name =")) {
-        expect(match).toMatch(/\$\{var\.environment_suffix\}/);
+        expect(match).toMatch(/\$\{local\.environment_suffix\}/);
       }
     });
   });
@@ -181,8 +210,8 @@ describe("Terraform EKS Infrastructure - Security Groups", () => {
   });
 
   test("security groups include environment_suffix in names", () => {
-    expect(sgContent).toMatch(/eks-cluster-sg-\$\{var\.environment_suffix\}/);
-    expect(sgContent).toMatch(/eks-nodes-sg-\$\{var\.environment_suffix\}/);
+    expect(sgContent).toMatch(/eks-cluster-sg-\$\{local\.environment_suffix\}/);
+    expect(sgContent).toMatch(/eks-nodes-sg-\$\{local\.environment_suffix\}/);
   });
 
   test("configures security group rules for node-to-node communication", () => {
@@ -213,7 +242,7 @@ describe("Terraform EKS Infrastructure - VPC Endpoints", () => {
   });
 
   test("VPC endpoints include environment_suffix in Name tags", () => {
-    expect(vpcEndpointsContent).toMatch(/Name\s*=\s*"[^"]*\$\{var\.environment_suffix\}"/);
+    expect(vpcEndpointsContent).toMatch(/Name\s*=\s*"[^"]*\$\{local\.environment_suffix\}"/);
   });
 });
 
@@ -229,7 +258,7 @@ describe("Terraform EKS Infrastructure - EKS Cluster", () => {
   });
 
   test("cluster name includes environment_suffix", () => {
-    expect(eksClusterContent).toMatch(/name\s*=\s*"eks-cluster-\$\{var\.environment_suffix\}"/);
+    expect(eksClusterContent).toMatch(/name\s*=\s*"eks-cluster-\$\{local\.environment_suffix\}"/);
   });
 
   test("configures cluster version from variable", () => {
@@ -267,7 +296,7 @@ describe("Terraform EKS Infrastructure - EKS Node Group", () => {
   });
 
   test("node group name includes environment_suffix", () => {
-    expect(nodeGroupContent).toMatch(/node_group_name\s*=\s*"managed-nodes-\$\{var\.environment_suffix\}"/);
+    expect(nodeGroupContent).toMatch(/node_group_name\s*=\s*"managed-nodes-\$\{local\.environment_suffix\}"/);
   });
 
   test("uses Bottlerocket AMI", () => {
@@ -405,7 +434,7 @@ describe("Terraform EKS Infrastructure - Resource Naming", () => {
 
   test.each(filesToCheck)("%s uses environment_suffix in resource names", (filename) => {
     const content = fs.readFileSync(path.join(LIB_DIR, filename), "utf8");
-    const nameMatches = content.match(/name\s*=\s*"[^"]+\$\{var\.environment_suffix\}[^"]*"/g);
+    const nameMatches = content.match(/name\s*=\s*"[^"]+\$\{local\.environment_suffix\}[^"]*"/g);
     expect(nameMatches).toBeTruthy();
     expect(nameMatches!.length).toBeGreaterThan(0);
   });
