@@ -10,24 +10,42 @@
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
+      "Default": "vpc-09c4bdbdfef55e103",
       "Description": "VPC ID where resources will be deployed"
     },
     "PublicSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "subnet-0600c9c9558262a5b,subnet-094787ab83d755a36,subnet-0dfc9bd92acef29f7",
       "Description": "List of public subnet IDs for ALB (must span 3 AZs)"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
       "Description": "List of private subnet IDs for EC2 instances (must span 3 AZs)"
     },
     "CertificateArn": {
       "Type": "String",
+      "Default": "",
       "Description": "ARN of ACM certificate for HTTPS termination on ALB"
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
       "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
       "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
+    }
+  },
+  "Conditions": {
+    "HasCertificate": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CertificateArn"
+            },
+            ""
+          ]
+        }
+      ]
     }
   },
   "Resources": {
@@ -312,6 +330,7 @@
     },
     "ALBListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "HasCertificate",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
@@ -461,10 +480,7 @@
             "PropagateAtLaunch": true
           }
         ]
-      },
-      "DependsOn": [
-        "ALBListener"
-      ]
+      }
     },
     "ScaleUpPolicy": {
       "Type": "AWS::AutoScaling::ScalingPolicy",

@@ -467,11 +467,6 @@ describe('TapStack - Product Catalog API Infrastructure Unit Tests', () => {
       expect(appTag.PropagateAtLaunch).toBe(true);
     });
 
-    test('Auto Scaling Group depends on ALB Listener', () => {
-      const asg = template.Resources.AutoScalingGroup;
-      expect(asg.DependsOn).toEqual(['ALBListener']);
-    });
-
     test('Scale Up Policy uses target tracking scaling', () => {
       validateResourceExists('ScaleUpPolicy', 'AWS::AutoScaling::ScalingPolicy');
       const policy = template.Resources.ScaleUpPolicy;
