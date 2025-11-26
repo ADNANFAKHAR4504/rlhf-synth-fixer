@@ -292,7 +292,7 @@ const auroraCluster = new aws.rds.Cluster(
   {
     engine: 'aurora-postgresql',
     engineMode: 'provisioned',
-    engineVersion: '15.5',
+    engineVersion: '15.7',
     databaseName: 'webapp',
     masterUsername: 'dbadmin',
     masterPassword: config.requireSecret('dbPassword'),
@@ -317,7 +317,7 @@ new aws.rds.ClusterInstance(`aurora-instance-${environmentSuffix}`, {
   clusterIdentifier: auroraCluster.id,
   instanceClass: 'db.serverless',
   engine: 'aurora-postgresql',
-  engineVersion: '15.5',
+  engineVersion: '15.7',
   publiclyAccessible: false,
   tags: { ...commonTags, Name: `aurora-instance-${environmentSuffix}` },
 });
@@ -425,6 +425,26 @@ new aws.lb.Listener(`alb-listener-${environmentSuffix}`, {
 });
 
 // 7. EC2 Launch Template
+// Lookup Amazon Linux 2023 ARM64 AMI dynamically
+const al2023Arm64Ami = aws.ec2.getAmi({
+  mostRecent: true,
+  filters: [
+    {
+      name: 'name',
+      values: ['al2023-ami-2023*-arm64'],
+    },
+    {
+      name: 'architecture',
+      values: ['arm64'],
+    },
+    {
+      name: 'virtualization-type',
+      values: ['hvm'],
+    },
+  ],
+  owners: ['amazon'],
+});
+
 const userData = `#!/bin/bash
 set -ex
 
@@ -494,7 +514,7 @@ const launchTemplate = new aws.ec2.LaunchTemplate(
   `launch-template-${environmentSuffix}`,
   {
     namePrefix: `webapp-${environmentSuffix}`,
-    imageId: 'ami-0d081196e3df05f4d', // Amazon Linux 2023 ARM64 in us-west-2
+    imageId: al2023Arm64Ami.then(ami => ami.id), // Amazon Linux 2023 ARM64 in us-west-2 (dynamic lookup)
     instanceType: 't4g.micro', // ARM-based Graviton2
     iamInstanceProfile: {
       arn: ec2InstanceProfile.arn,
