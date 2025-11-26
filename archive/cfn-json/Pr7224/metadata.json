@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "r3s9o4p8",
+  "team": "synth",
+  "startedAt": "2025-11-25T11:14:59+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery and High Availability"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "VPC",
+    "Secrets Manager",
+    "Route 53",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

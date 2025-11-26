@@ -1,0 +1,977 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation template for PostgreSQL to Aurora migration using DMS with Route 53 traffic shifting",
+  "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": [
+          "W1011",
+          "W1030"
+        ]
+      }
+    },
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "PrivateSubnet1",
+            "PrivateSubnet2",
+            "PrivateSubnet3"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "SourceDbHost",
+            "SourceDbPort",
+            "SourceDbName",
+            "SourceDbPassword",
+            "TargetDbPassword",
+            "DBInstanceClass",
+            "EngineVersion"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Migration Configuration"
+          },
+          "Parameters": [
+            "ReplicationInstanceClass",
+            "DmsTaskTableMappings",
+            "ReplicationLagThreshold"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming (e.g., dev, qa, prod)",
+      "Default": "dev"
+    },
+    "VpcId": {
+      "Type": "String",
+      "Description": "VPC ID where resources will be deployed (required when CreateVpc=false)",
+      "Default": ""
+    },
+    "PrivateSubnet1": {
+      "Type": "String",
+      "Description": "First private subnet in availability zone 1 (required when CreateVpc=false)",
+      "Default": ""
+    },
+    "PrivateSubnet2": {
+      "Type": "String",
+      "Description": "Second private subnet in availability zone 2 (required when CreateVpc=false)",
+      "Default": ""
+    },
+    "PrivateSubnet3": {
+      "Type": "String",
+      "Description": "Third private subnet in availability zone 3 (required when CreateVpc=false)",
+      "Default": ""
+    },
+    "SourceDbHost": {
+      "Type": "String",
+      "Description": "Source PostgreSQL database host (on-premises)",
+      "Default": "source-db.example.com"
+    },
+    "SourceDbPort": {
+      "Type": "Number",
+      "Default": 5432,
+      "Description": "Source PostgreSQL database port"
+    },
+    "SourceDbName": {
+      "Type": "String",
+      "Description": "Source PostgreSQL database name",
+      "Default": "postgres"
+    },
+    "SourceDbPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Source PostgreSQL database password",
+      "Default": "TempPassword123!"
+    },
+    "TargetDbPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Aurora PostgreSQL master user password",
+      "Default": "TempPassword123!"
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.r5.large",
+      "AllowedValues": [
+        "db.r5.large",
+        "db.r5.xlarge",
+        "db.r5.2xlarge",
+        "db.r6i.xlarge",
+        "db.r6i.2xlarge"
+      ],
+      "Description": "Aurora PostgreSQL instance class"
+    },
+    "EngineVersion": {
+      "Type": "String",
+      "Default": "14.6",
+      "Description": "PostgreSQL engine version for Aurora"
+    },
+    "ReplicationInstanceClass": {
+      "Type": "String",
+      "Default": "dms.t3.medium",
+      "Description": "DMS replication instance class"
+    },
+    "DmsTaskTableMappings": {
+      "Type": "String",
+      "Default": "{\"rules\": [{\"rule-type\": \"selection\", \"rule-id\": \"1\", \"rule-name\": \"include-all-tables\", \"object-locator\": {\"schema-name\": \"%\", \"table-name\": \"%\"}, \"rule-action\": \"include\"}]}",
+      "Description": "DMS task table mappings in JSON format"
+    },
+    "ReplicationLagThreshold": {
+      "Type": "Number",
+      "Default": 300,
+      "Description": "DMS replication lag threshold in seconds for CloudWatch alarm"
+    },
+    "CreateVpc": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Whether to create a new VPC and subnets (true) or use existing ones (false)"
+    }
+  },
+  "Conditions": {
+    "ShouldCreateVpc": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateVpc"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1Resource": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2Resource": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3Resource": {
+      "Type": "AWS::EC2::Subnet",
+      "Condition": "ShouldCreateVpc",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "2",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": {
+          "Fn::Sub": "Security group for DMS replication instance ${EnvironmentSuffix}"
+        },
+        "GroupName": {
+          "Fn::Sub": "dms-replication-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Fn::If": [
+            "ShouldCreateVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "PostgreSQL from source database"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-replication-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-db-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": {
+          "Fn::Sub": "Subnet group for Aurora PostgreSQL cluster ${EnvironmentSuffix}"
+        },
+        "SubnetIds": {
+          "Fn::If": [
+            "ShouldCreateVpc",
+            [
+              {
+                "Ref": "PrivateSubnet1Resource"
+              },
+              {
+                "Ref": "PrivateSubnet2Resource"
+              },
+              {
+                "Ref": "PrivateSubnet3Resource"
+              }
+            ],
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-db-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraDBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": {
+          "Fn::Sub": "Security group for Aurora PostgreSQL database ${EnvironmentSuffix}"
+        },
+        "GroupName": {
+          "Fn::Sub": "aurora-db-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Fn::If": [
+            "ShouldCreateVpc",
+            {
+              "Ref": "VPC"
+            },
+            {
+              "Ref": "VpcId"
+            }
+          ]
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "DMSSecurityGroup"
+            },
+            "Description": "PostgreSQL from DMS replication instance"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-db-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "SourceDbPasswordParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/dms/source-db-password-${EnvironmentSuffix}"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "SourceDbPassword"
+        },
+        "Description": {
+          "Fn::Sub": "Source database password for DMS endpoint ${EnvironmentSuffix}"
+        }
+      }
+    },
+    "TargetDbPasswordParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/aurora/master-password-${EnvironmentSuffix}"
+        },
+        "Type": "String",
+        "Value": {
+          "Ref": "TargetDbPassword"
+        },
+        "Description": {
+          "Fn::Sub": "Aurora PostgreSQL master user password ${EnvironmentSuffix}"
+        }
+      }
+    },
+    "DMSReplicationSubnetGroup": {
+      "Type": "AWS::DMS::ReplicationSubnetGroup",
+      "Properties": {
+        "ReplicationSubnetGroupIdentifier": {
+          "Fn::Sub": "dms-replication-subnet-group-${EnvironmentSuffix}"
+        },
+        "ReplicationSubnetGroupDescription": {
+          "Fn::Sub": "Subnet group for DMS replication instance ${EnvironmentSuffix}"
+        },
+        "SubnetIds": {
+          "Fn::If": [
+            "ShouldCreateVpc",
+            [
+              {
+                "Ref": "PrivateSubnet1Resource"
+              },
+              {
+                "Ref": "PrivateSubnet2Resource"
+              },
+              {
+                "Ref": "PrivateSubnet3Resource"
+              }
+            ],
+            [
+              {
+                "Ref": "PrivateSubnet1"
+              },
+              {
+                "Ref": "PrivateSubnet2"
+              },
+              {
+                "Ref": "PrivateSubnet3"
+              }
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-replication-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationInstance": {
+      "Type": "AWS::DMS::ReplicationInstance",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "ReplicationInstanceIdentifier": {
+          "Fn::Sub": "aurora-migration-replica-instance-${EnvironmentSuffix}"
+        },
+        "ReplicationInstanceClass": {
+          "Ref": "ReplicationInstanceClass"
+        },
+        "ReplicationSubnetGroupIdentifier": {
+          "Ref": "DMSReplicationSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DMSSecurityGroup"
+          }
+        ],
+        "AllocatedStorage": 200,
+        "MultiAZ": true,
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-migration-instance-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSSourceEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "source-postgres-endpoint-${EnvironmentSuffix}"
+        },
+        "EndpointType": "source",
+        "EngineName": "postgres",
+        "ServerName": {
+          "Ref": "SourceDbHost"
+        },
+        "Port": {
+          "Ref": "SourceDbPort"
+        },
+        "DatabaseName": {
+          "Ref": "SourceDbName"
+        },
+        "Username": "postgres",
+        "Password": {
+          "Ref": "SourceDbPassword"
+        },
+        "SslMode": "require",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "source-postgres-endpoint-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-postgres-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-postgresql",
+        "EngineVersion": {
+          "Ref": "EngineVersion"
+        },
+        "DatabaseName": {
+          "Ref": "SourceDbName"
+        },
+        "MasterUsername": "postgres",
+        "MasterUserPassword": {
+          "Ref": "TargetDbPassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "AuroraDBSecurityGroup"
+          }
+        ],
+        "BackupRetentionPeriod": 35,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": [
+          "postgresql"
+        ],
+        "StorageEncrypted": true,
+        "EnableIAMDatabaseAuthentication": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-postgres-cluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-postgres-instance-1-${EnvironmentSuffix}"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-postgres-instance-2-${EnvironmentSuffix}"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "Engine": "aurora-postgresql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSTargetEndpoint": {
+      "Type": "AWS::DMS::Endpoint",
+      "Properties": {
+        "EndpointIdentifier": {
+          "Fn::Sub": "target-aurora-endpoint-${EnvironmentSuffix}"
+        },
+        "EndpointType": "target",
+        "EngineName": "aurora-postgresql",
+        "ServerName": {
+          "Fn::GetAtt": [
+            "AuroraCluster",
+            "Endpoint.Address"
+          ]
+        },
+        "Port": 5432,
+        "DatabaseName": {
+          "Ref": "SourceDbName"
+        },
+        "Username": "postgres",
+        "Password": {
+          "Ref": "TargetDbPassword"
+        },
+        "SslMode": "require",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "target-aurora-endpoint-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DMSReplicationTask": {
+      "Type": "AWS::DMS::ReplicationTask",
+      "Properties": {
+        "ReplicationTaskIdentifier": {
+          "Fn::Sub": "postgres-to-aurora-migration-${EnvironmentSuffix}"
+        },
+        "ReplicationInstanceArn": {
+          "Ref": "DMSReplicationInstance"
+        },
+        "SourceEndpointArn": {
+          "Ref": "DMSSourceEndpoint"
+        },
+        "TargetEndpointArn": {
+          "Ref": "DMSTargetEndpoint"
+        },
+        "MigrationType": "full-load-and-cdc",
+        "TableMappings": {
+          "Ref": "DmsTaskTableMappings"
+        },
+        "ReplicationTaskSettings": "{\"TargetMetadata\":{\"SupportLobs\":true,\"LobChunkSize\":64,\"LobMaxSize\":32},\"FullLoadSettings\":{\"TargetTablePrepMode\":\"DROP_AND_CREATE\",\"CreatePkAfterFullLoad\":false,\"StopTaskCachedChangesApplied\":false,\"StopTaskCachedChangesNotApplied\":false,\"MaxFullLoadSubTasks\":8,\"TransactionConsistencyTimeout\":600,\"CommitRate\":10000},\"Logging\":{\"EnableLogging\":true,\"LogComponents\":[{\"Id\":\"TRANSFORMATION\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"SOURCE_UNLOAD\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"IO\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TARGET_LOAD\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"PERFORMANCE\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"SOURCE_CAPTURE\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"SORTER\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"REST_SERVER\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"VALIDATOR_EXT\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TARGET_APPLY\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TASK_MANAGER\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TABLES_MANAGER\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"METADATA_MANAGER\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"FILE_FACTORY\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"COMMON\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"ADDONS\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"DATA_STRUCTURE\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"COMMUNICATION\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"FILE_TRANSFER\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"}]},\"ControlTablesSettings\":{\"historyTimeslotInMinutes\":5,\"HistoryTimeslotInMinutes\":5,\"ControlSchema\":\"\",\"HistoryTableEnabled\":false,\"SuspendedTablesTableEnabled\":false,\"StatusTableEnabled\":false},\"StreamBufferSettings\":{\"StreamBufferCount\":3,\"StreamBufferSizeInMB\":8,\"CtrlStreamBufferSizeInMB\":5},\"ChangeProcessingDdlHandlingPolicy\":{\"HandleSourceTableDropped\":true,\"HandleSourceTableTruncated\":true,\"HandleSourceTableAltered\":true},\"ErrorBehavior\":{\"DataErrorPolicy\":\"LOG_ERROR\",\"EventErrorPolicy\":\"IGNORE\",\"DataTruncationErrorPolicy\":\"LOG_ERROR\",\"DataErrorEscalationPolicy\":\"SUSPEND_TABLE\",\"DataErrorEscalationCount\":50,\"TableErrorPolicy\":\"SUSPEND_TABLE\",\"TableErrorEscalationPolicy\":\"STOP_TASK\",\"TableErrorEscalationCount\":50,\"RecoverableErrorCount\":-1,\"RecoverableErrorInterval\":5,\"RecoverableErrorThrottling\":true,\"RecoverableErrorThrottlingMax\":1800,\"RecoverableErrorStopRetryAfterThrottlingMax\":true,\"ApplyErrorDeletePolicy\":\"IGNORE_RECORD\",\"ApplyErrorInsertPolicy\":\"LOG_ERROR\",\"ApplyErrorUpdatePolicy\":\"LOG_ERROR\",\"ApplyErrorEscalationPolicy\":\"LOG_ERROR\",\"ApplyErrorEscalationCount\":0,\"ApplyErrorFailOnTruncationDdl\":false,\"FullLoadIgnoreConflicts\":true,\"FailOnTransactionConsistencyBreached\":false,\"FailOnNoTablesCaptured\":true},\"ChangeProcessingTuning\":{\"BatchApplyPreserveTransaction\":true,\"BatchApplyTimeoutMin\":1,\"BatchApplyTimeoutMax\":30,\"BatchApplyMemoryLimit\":500,\"BatchSplitSize\":0,\"MinTransactionSize\":1000,\"CommitTimeout\":1,\"MemoryLimitTotal\":1024,\"MemoryKeepTime\":60,\"StatementCacheSize\":50},\"ValidationSettings\":{\"EnableValidation\":true,\"ValidationMode\":\"ROW_LEVEL\",\"ThreadCount\":5,\"PartitionSize\":10000,\"FailureMaxCount\":10000,\"RecordFailureDelayLimitInMinutes\":0,\"RecordSuspendDelayInMinutes\":30,\"MaxKeyColumnSize\":8096,\"TableFailureMaxCount\":1000,\"ValidationOnly\":false,\"HandleCollationDiff\":false,\"RecordFailureDelayInMinutes\":5,\"SkipLobColumns\":false,\"ValidationPartialLobSize\":0,\"ValidationQueryCdcDelaySeconds\":0}}",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "postgres-to-aurora-migration-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ReplicationLagAlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "dms-replication-lag-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": {
+          "Fn::Sub": "DMS Replication Lag Alerts ${EnvironmentSuffix}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "replication-lag-topic-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ReplicationLagAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "DMS-ReplicationLagExceeded-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": {
+          "Fn::Sub": "Alert when DMS replication lag exceeds threshold for ${EnvironmentSuffix}"
+        },
+        "MetricName": "CDCLatencySource",
+        "Namespace": "AWS/DMS",
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": {
+          "Ref": "ReplicationLagThreshold"
+        },
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ReplicationTaskIdentifier",
+            "Value": {
+              "Fn::Sub": "postgres-to-aurora-migration-${EnvironmentSuffix}"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "ReplicationLagAlarmTopic"
+          }
+        ]
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "DMS-Aurora-Migration-Dashboard-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\": [{\"type\": \"metric\", \"x\": 0, \"y\": 0, \"width\": 12, \"height\": 6, \"properties\": {\"metrics\": [[\"AWS/DMS\", \"CDCLatencySource\", {\"stat\": \"Maximum\"}], [\"AWS/DMS\", \"CDCLatencyTarget\", {\"stat\": \"Maximum\"}]], \"period\": 300, \"stat\": \"Average\", \"region\": \"${AWS::Region}\", \"title\": \"DMS Latency Metrics\"}}, {\"type\": \"metric\", \"x\": 12, \"y\": 0, \"width\": 12, \"height\": 6, \"properties\": {\"metrics\": [[\"AWS/DMS\", \"FullLoadThroughputRowsTarget\", {\"stat\": \"Average\"}], [\"AWS/DMS\", \"NetworkTransmitThroughput\", {\"stat\": \"Average\"}]], \"period\": 300, \"stat\": \"Average\", \"region\": \"${AWS::Region}\", \"title\": \"DMS Throughput Metrics\"}}, {\"type\": \"metric\", \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6, \"properties\": {\"metrics\": [[\"AWS/RDS\", \"DatabaseConnections\", \"DBClusterIdentifier\", \"aurora-postgres-cluster-${EnvironmentSuffix}\"], [\"AWS/RDS\", \"ReplicaLag\", \"DBClusterIdentifier\", \"aurora-postgres-cluster-${EnvironmentSuffix}\"]], \"period\": 300, \"stat\": \"Average\", \"region\": \"${AWS::Region}\", \"title\": \"Aurora Metrics\"}}]}"
+        }
+      }
+    },
+    "Route53HostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-${EnvironmentSuffix}.local"
+        },
+        "VPCs": [
+          {
+            "VPCId": {
+              "Fn::If": [
+                "ShouldCreateVpc",
+                {
+                  "Ref": "VPC"
+                },
+                {
+                  "Ref": "VpcId"
+                }
+              ]
+            },
+            "VPCRegion": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ],
+        "HostedZoneConfig": {
+          "Comment": {
+            "Fn::Sub": "Private hosted zone for database migration traffic shifting ${EnvironmentSuffix}"
+          }
+        },
+        "HostedZoneTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "migration-hosted-zone-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "Route53WeightedRecord1": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "database.migration-${EnvironmentSuffix}.local"
+        },
+        "Type": "CNAME",
+        "SetIdentifier": {
+          "Fn::Sub": "source-primary-${EnvironmentSuffix}"
+        },
+        "Weight": 100,
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Ref": "SourceDbHost"
+          }
+        ]
+      }
+    },
+    "Route53WeightedRecord2": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "database.migration-${EnvironmentSuffix}.local"
+        },
+        "Type": "CNAME",
+        "SetIdentifier": {
+          "Fn::Sub": "target-secondary-${EnvironmentSuffix}"
+        },
+        "Weight": 0,
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "AuroraCluster",
+              "Endpoint.Address"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DMSReplicationTaskArn": {
+      "Description": "ARN of the DMS replication task",
+      "Value": {
+        "Ref": "DMSReplicationTask"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMSTaskArn"
+        }
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora PostgreSQL cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraEndpoint"
+        }
+      }
+    },
+    "AuroraClusterPort": {
+      "Description": "Aurora PostgreSQL cluster port",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraPort"
+        }
+      }
+    },
+    "Route53HostedZoneId": {
+      "Description": "Route 53 hosted zone ID for traffic shifting",
+      "Value": {
+        "Ref": "Route53HostedZone"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-HostedZoneId"
+        }
+      }
+    },
+    "DMSReplicationInstanceArn": {
+      "Description": "DMS replication instance ARN",
+      "Value": {
+        "Ref": "DMSReplicationInstance"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReplicationInstanceArn"
+        }
+      }
+    },
+    "DMSSourceEndpointArn": {
+      "Description": "DMS source endpoint ARN",
+      "Value": {
+        "Ref": "DMSSourceEndpoint"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SourceEndpointArn"
+        }
+      }
+    },
+    "DMSTargetEndpointArn": {
+      "Description": "DMS target endpoint ARN",
+      "Value": {
+        "Ref": "DMSTargetEndpoint"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TargetEndpointArn"
+        }
+      }
+    },
+    "CloudWatchDashboardUrl": {
+      "Description": "URL to CloudWatch dashboard for monitoring",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=DMS-Aurora-Migration-Dashboard-${EnvironmentSuffix}"
+      }
+    },
+    "SNSAlertTopicArn": {
+      "Description": "SNS topic ARN for replication lag alerts",
+      "Value": {
+        "Ref": "ReplicationLagAlarmTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopicArn"
+        }
+      }
+    },
+    "AuroraClusterIdentifier": {
+      "Description": "Aurora cluster identifier",
+      "Value": {
+        "Ref": "AuroraCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterIdentifier"
+        }
+      }
+    },
+    "DMSSecurityGroupId": {
+      "Description": "DMS security group ID",
+      "Value": {
+        "Ref": "DMSSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DMSSecurityGroupId"
+        }
+      }
+    },
+    "AuroraSecurityGroupId": {
+      "Description": "Aurora security group ID",
+      "Value": {
+        "Ref": "AuroraDBSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AuroraSecurityGroupId"
+        }
+      }
+    }
+  }
+}
