@@ -1,0 +1,63 @@
+# Bottlerocket User Data Configuration
+# This file configures Bottlerocket OS settings for EKS worker nodes
+
+[settings.kubernetes]
+# Cluster configuration will be set via launch template:
+# - cluster-name
+# - api-server (endpoint)
+# - cluster-certificate
+
+# Enable pod security policy
+pod-security-policy = true
+
+# Network configuration
+[settings.kubernetes.node-labels]
+# Node labels for workload scheduling
+node.kubernetes.io/instance-type = "t3.large"
+workload-type = "general-purpose"
+
+[settings.kubernetes.node-taints]
+# No taints by default - allows all workloads
+
+# CloudWatch logging
+[settings.cloudwatch]
+enabled = true
+region = "us-east-2"
+log-group-name = "/aws/bottlerocket/eks"
+
+# Host container configuration
+[settings.host-containers.admin]
+enabled = true
+superpowered = true
+
+[settings.host-containers.control]
+enabled = true
+superpowered = false
+
+# Network settings
+[settings.network]
+# HTTPS proxy settings (if required)
+# https-proxy = ""
+# no-proxy = ["169.254.169.254", "localhost"]
+
+# Kernel settings for production workloads
+[settings.kernel.sysctl]
+# Network tuning
+"net.ipv4.tcp_keepalive_time" = "600"
+"net.ipv4.tcp_keepalive_intvl" = "30"
+"net.ipv4.tcp_keepalive_probes" = "10"
+
+# File descriptor limits
+"fs.file-max" = "2097152"
+"fs.nr_open" = "1048576"
+
+# Security settings
+[settings.kernel.lockdown]
+# Enable kernel lockdown for enhanced security
+mode = "integrity"
+
+# Updates configuration
+[settings.updates]
+# Auto-update settings (handled by EKS)
+metadata-url = "https://updates.bottlerocket.aws/2020-07-07/aws-k8s-1.28/x86_64/"
+target-version = "latest"
