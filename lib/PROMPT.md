@@ -1,4 +1,4 @@
-### Functional scope (build everything new):
+### Functional scope:
 Design and produce a complete TapStack.yml that provisions a fresh, production-ready migration framework for AWS CloudFormation stack moves between multiple AWS accounts and regions. The template must define every module from scratch—no references to existing modules or external stacks—and include parameters, conditions, mappings, resources, and outputs required for end-to-end operation. It should encapsulate configuration and orchestration logic for:
 - CloudFormation-driven migration automation across accounts and regions.
 - Infrastructure state validation before and after migration.
