@@ -28,8 +28,16 @@ import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
-import { KMSClient, DescribeKeyCommand, ListAliasesCommand } from '@aws-sdk/client-kms';
-import { S3Client, GetBucketVersioningCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+import {
+  S3Client,
+  GetBucketVersioningCommand,
+  ListBucketsCommand,
+} from '@aws-sdk/client-s3';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -43,21 +51,23 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 function getPulumiOutputs(): Record<string, any> {
   try {
     const passphrase = process.env.PULUMI_CONFIG_PASSPHRASE || 'dev-passphrase';
-    const result = execSync(
-      `pulumi stack output --json`,
-      {
-        encoding: 'utf-8',
-        env: { ...process.env, PULUMI_CONFIG_PASSPHRASE: passphrase },
-        cwd: path.join(__dirname, '..'),
-      }
-    );
+    const result = execSync(`pulumi stack output --json`, {
+      encoding: 'utf-8',
+      env: { ...process.env, PULUMI_CONFIG_PASSPHRASE: passphrase },
+      cwd: path.join(__dirname, '..'),
+    });
     const outputs = JSON.parse(result);
-    console.log(`✅ Fetched ${Object.keys(outputs).length} outputs from Pulumi stack`);
+    console.log(
+      `✅ Fetched ${Object.keys(outputs).length} outputs from Pulumi stack`
+    );
     return outputs;
   } catch (error: any) {
     console.warn(`⚠️ Could not fetch Pulumi outputs: ${error.message}`);
     // Try fallback to flat-outputs.json
-    const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '../cfn-outputs/flat-outputs.json'
+    );
     if (fs.existsSync(outputsPath)) {
       try {
         const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
@@ -77,14 +87,11 @@ function getPulumiOutputs(): Record<string, any> {
 function getPulumiStackName(): string {
   try {
     const passphrase = process.env.PULUMI_CONFIG_PASSPHRASE || 'dev-passphrase';
-    const result = execSync(
-      `pulumi stack --show-name`,
-      {
-        encoding: 'utf-8',
-        env: { ...process.env, PULUMI_CONFIG_PASSPHRASE: passphrase },
-        cwd: path.join(__dirname, '..'),
-      }
-    );
+    const result = execSync(`pulumi stack --show-name`, {
+      encoding: 'utf-8',
+      env: { ...process.env, PULUMI_CONFIG_PASSPHRASE: passphrase },
+      cwd: path.join(__dirname, '..'),
+    });
     return result.trim();
   } catch (error: any) {
     console.warn(`⚠️ Could not get Pulumi stack name: ${error.message}`);
@@ -98,14 +105,11 @@ function getPulumiStackName(): string {
 function isResourceDeployed(urnPattern: string): boolean {
   try {
     const passphrase = process.env.PULUMI_CONFIG_PASSPHRASE || 'dev-passphrase';
-    const result = execSync(
-      `pulumi stack --show-urns`,
-      {
-        encoding: 'utf-8',
-        env: { ...process.env, PULUMI_CONFIG_PASSPHRASE: passphrase },
-        cwd: path.join(__dirname, '..'),
-      }
-    );
+    const result = execSync(`pulumi stack --show-urns`, {
+      encoding: 'utf-8',
+      env: { ...process.env, PULUMI_CONFIG_PASSPHRASE: passphrase },
+      cwd: path.join(__dirname, '..'),
+    });
     return result.includes(urnPattern);
   } catch (error) {
     return false;
@@ -123,9 +127,14 @@ async function discoverResourceByName(
 ): Promise<any> {
   try {
     const response = await client.send(command);
-    const resources = response[resourceType] || response[`${resourceType}s`] || [];
+    const resources =
+      response[resourceType] || response[`${resourceType}s`] || [];
     const matching = resources.filter((r: any) => {
-      const name = r.Name || r[`${resourceType}Name`] || r[`${resourceType}Identifier`] || '';
+      const name =
+        r.Name ||
+        r[`${resourceType}Name`] ||
+        r[`${resourceType}Identifier`] ||
+        '';
       return name.includes(namePattern);
     });
     return matching.length > 0 ? matching[0] : null;
@@ -151,11 +160,16 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('production VPC exists and is accessible', async () => {
       let vpcId = outputs.productionVpcId;
-      
+
       // If output not available, discover by name
       if (!vpcId) {
         const command = new DescribeVpcsCommand({
-          Filters: [{ Name: 'tag:Name', Values: [`${appName}-production-vpc-${environmentSuffix}*`] }],
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`${appName}-production-vpc-${environmentSuffix}*`],
+            },
+          ],
         });
         const response = await ec2Client.send(command);
         vpcId = response.Vpcs?.[0]?.VpcId;
@@ -172,11 +186,16 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('staging VPC exists and is accessible', async () => {
       let vpcId = outputs.stagingVpcId;
-      
+
       // If output not available, discover by name
       if (!vpcId) {
         const command = new DescribeVpcsCommand({
-          Filters: [{ Name: 'tag:Name', Values: [`${appName}-staging-vpc-${environmentSuffix}*`] }],
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`${appName}-staging-vpc-${environmentSuffix}*`],
+            },
+          ],
         });
         const response = await ec2Client.send(command);
         vpcId = response.Vpcs?.[0]?.VpcId;
@@ -193,11 +212,16 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('VPC peering connection exists and is active', async () => {
       let peeringId = outputs.vpcPeeringConnectionId;
-      
+
       // If output not available, discover by name
       if (!peeringId) {
         const command = new DescribeVpcPeeringConnectionsCommand({
-          Filters: [{ Name: 'tag:Name', Values: [`${appName}-vpc-peering-${environmentSuffix}*`] }],
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`${appName}-vpc-peering-${environmentSuffix}*`],
+            },
+          ],
         });
         const response = await ec2Client.send(command);
         peeringId = response.VpcPeeringConnections?.[0]?.VpcPeeringConnectionId;
@@ -215,10 +239,20 @@ describe('Payment App Infrastructure - Integration Tests', () => {
     }, 30000);
 
     it('VPCs have subnets in multiple availability zones', async () => {
-      const prodVpcId = outputs.productionVpcId || 
-        (await ec2Client.send(new DescribeVpcsCommand({
-          Filters: [{ Name: 'tag:Name', Values: [`${appName}-production-vpc-${environmentSuffix}*`] }],
-        }))).Vpcs?.[0]?.VpcId;
+      const prodVpcId =
+        outputs.productionVpcId ||
+        (
+          await ec2Client.send(
+            new DescribeVpcsCommand({
+              Filters: [
+                {
+                  Name: 'tag:Name',
+                  Values: [`${appName}-production-vpc-${environmentSuffix}*`],
+                },
+              ],
+            })
+          )
+        ).Vpcs?.[0]?.VpcId;
 
       expect(prodVpcId).toBeDefined();
 
@@ -236,12 +270,12 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('KMS key exists and has key rotation enabled', async () => {
       let keyId = outputs.kmsKeyId;
-      
+
       // If output not available, discover by alias
       if (!keyId) {
         const aliasCommand = new ListAliasesCommand({});
         const aliases = await kmsClient.send(aliasCommand);
-        const alias = aliases.Aliases?.find(a => 
+        const alias = aliases.Aliases?.find(a =>
           a.AliasName?.includes(`${appName}-${environmentSuffix}`)
         );
         keyId = alias?.TargetKeyId;
@@ -261,18 +295,22 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('ALB exists and is active', async () => {
       // Check if ALB was actually deployed
-      const albDeployed = isResourceDeployed('aws:lb/loadBalancer:LoadBalancer');
+      const albDeployed = isResourceDeployed(
+        'aws:lb/loadBalancer:LoadBalancer'
+      );
       if (!albDeployed) {
-        throw new Error('ALB was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'ALB was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let albArn = outputs.albArn;
-      
+
       // If output not available, discover by name
       if (!albArn || albArn === 'N/A - HTTP-only mode') {
         const command = new DescribeLoadBalancersCommand({});
         const response = await elbClient.send(command);
-        const alb = response.LoadBalancers?.find(lb => 
+        const alb = response.LoadBalancers?.find(lb =>
           lb.LoadBalancerName?.includes(`${appName}-alb-${environmentSuffix}`)
         );
         albArn = alb?.LoadBalancerArn;
@@ -280,7 +318,7 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
       expect(albArn).toBeDefined();
       expect(albArn).not.toBe('N/A - HTTP-only mode');
-      
+
       const command = new DescribeLoadBalancersCommand({
         LoadBalancerArns: [albArn!],
       });
@@ -293,22 +331,24 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Check if target group was actually deployed
       const tgDeployed = isResourceDeployed('aws:lb/targetGroup:TargetGroup');
       if (!tgDeployed) {
-        throw new Error('Target group was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'Target group was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let tgArn = outputs.blueTargetGroupArn;
-      
+
       if (!tgArn) {
         const command = new DescribeTargetGroupsCommand({});
         const response = await elbClient.send(command);
-        const tg = response.TargetGroups?.find(t => 
+        const tg = response.TargetGroups?.find(t =>
           t.TargetGroupName?.includes(`${appName}-blue-tg-${environmentSuffix}`)
         );
         tgArn = tg?.TargetGroupArn;
       }
 
       expect(tgArn).toBeDefined();
-      
+
       const command = new DescribeTargetGroupsCommand({
         TargetGroupArns: [tgArn!],
       });
@@ -321,22 +361,26 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Check if target group was actually deployed
       const tgDeployed = isResourceDeployed('aws:lb/targetGroup:TargetGroup');
       if (!tgDeployed) {
-        throw new Error('Target group was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'Target group was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let tgArn = outputs.greenTargetGroupArn;
-      
+
       if (!tgArn) {
         const command = new DescribeTargetGroupsCommand({});
         const response = await elbClient.send(command);
-        const tg = response.TargetGroups?.find(t => 
-          t.TargetGroupName?.includes(`${appName}-green-tg-${environmentSuffix}`)
+        const tg = response.TargetGroups?.find(t =>
+          t.TargetGroupName?.includes(
+            `${appName}-green-tg-${environmentSuffix}`
+          )
         );
         tgArn = tg?.TargetGroupArn;
       }
 
       expect(tgArn).toBeDefined();
-      
+
       const command = new DescribeTargetGroupsCommand({
         TargetGroupArns: [tgArn!],
       });
@@ -353,16 +397,20 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Check if Aurora cluster was actually deployed
       const clusterDeployed = isResourceDeployed('aws:rds/cluster:Cluster');
       if (!clusterDeployed) {
-        throw new Error('Aurora cluster was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'Aurora cluster was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let clusterEndpoint = outputs.auroraClusterEndpoint;
-      
+
       if (!clusterEndpoint) {
         const command = new DescribeDBClustersCommand({});
         const response = await rdsClient.send(command);
-        const cluster = response.DBClusters?.find(c => 
-          c.DBClusterIdentifier?.includes(`${appName}-aurora-cluster-${environmentSuffix}`)
+        const cluster = response.DBClusters?.find(c =>
+          c.DBClusterIdentifier?.includes(
+            `${appName}-aurora-cluster-${environmentSuffix}`
+          )
         );
         clusterEndpoint = cluster?.Endpoint;
       }
@@ -376,7 +424,9 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       const response = await rdsClient.send(command);
       expect(response.DBClusters).toHaveLength(1);
       expect(response.DBClusters?.[0].Endpoint).toBe(clusterEndpoint);
-      expect(response.DBClusters?.[0].DatabaseName).toBe(outputs.databaseName || 'paymentdb');
+      expect(response.DBClusters?.[0].DatabaseName).toBe(
+        outputs.databaseName || 'paymentdb'
+      );
       expect(response.DBClusters?.[0].StorageEncrypted).toBe(true);
     }, 30000);
   });
@@ -386,17 +436,21 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('database connection secret exists', async () => {
       // Check if secret was actually deployed
-      const secretDeployed = isResourceDeployed('aws:secretsmanager/secret:Secret');
+      const secretDeployed = isResourceDeployed(
+        'aws:secretsmanager/secret:Secret'
+      );
       if (!secretDeployed) {
-        throw new Error('Secret was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'Secret was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let secretArn = outputs.dbConnectionSecretArn;
-      
+
       if (!secretArn) {
         const command = new ListSecretsCommand({});
         const response = await secretsClient.send(command);
-        const secret = response.SecretList?.find(s => 
+        const secret = response.SecretList?.find(s =>
           s.Name?.includes(`${appName}-db-connection-${environmentSuffix}`)
         );
         secretArn = secret?.ARN;
@@ -420,16 +474,20 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Check if ASG was actually deployed
       const asgDeployed = isResourceDeployed('aws:autoscaling/group:Group');
       if (!asgDeployed) {
-        throw new Error('ASG was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'ASG was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let asgName = outputs.blueAsgName;
-      
+
       if (!asgName) {
         const command = new DescribeAutoScalingGroupsCommand({});
         const response = await asgClient.send(command);
-        const asg = response.AutoScalingGroups?.find(a => 
-          a.AutoScalingGroupName?.includes(`${appName}-blue-asg-${environmentSuffix}`)
+        const asg = response.AutoScalingGroups?.find(a =>
+          a.AutoScalingGroupName?.includes(
+            `${appName}-blue-asg-${environmentSuffix}`
+          )
         );
         asgName = asg?.AutoScalingGroupName;
       }
@@ -450,16 +508,20 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Check if ASG was actually deployed
       const asgDeployed = isResourceDeployed('aws:autoscaling/group:Group');
       if (!asgDeployed) {
-        throw new Error('ASG was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'ASG was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let asgName = outputs.greenAsgName;
-      
+
       if (!asgName) {
         const command = new DescribeAutoScalingGroupsCommand({});
         const response = await asgClient.send(command);
-        const asg = response.AutoScalingGroups?.find(a => 
-          a.AutoScalingGroupName?.includes(`${appName}-green-asg-${environmentSuffix}`)
+        const asg = response.AutoScalingGroups?.find(a =>
+          a.AutoScalingGroupName?.includes(
+            `${appName}-green-asg-${environmentSuffix}`
+          )
         );
         asgName = asg?.AutoScalingGroupName;
       }
@@ -483,17 +545,19 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Check if S3 bucket was actually deployed
       const bucketDeployed = isResourceDeployed('aws:s3/bucket:Bucket');
       if (!bucketDeployed) {
-        throw new Error('S3 bucket was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'S3 bucket was not deployed - test should fail for undeployed resources'
+        );
       }
 
       // Discover bucket by listing all buckets and finding the one with our naming pattern
       const listCommand = new ListBucketsCommand({});
       const listResponse = await s3Client.send(listCommand);
-      
-      const bucket = listResponse.Buckets?.find(b => 
+
+      const bucket = listResponse.Buckets?.find(b =>
         b.Name?.includes(`${appName}-alb-logs-${environmentSuffix}`)
       );
-      
+
       expect(bucket).toBeDefined();
       expect(bucket?.Name).toBeDefined();
 
@@ -511,13 +575,17 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('log group exists with correct configuration', async () => {
       // Check if log group was actually deployed
-      const logGroupDeployed = isResourceDeployed('aws:cloudwatch/logGroup:LogGroup');
+      const logGroupDeployed = isResourceDeployed(
+        'aws:cloudwatch/logGroup:LogGroup'
+      );
       if (!logGroupDeployed) {
-        throw new Error('Log group was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'Log group was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let logGroupName = outputs.logGroupName;
-      
+
       if (!logGroupName) {
         const command = new DescribeLogGroupsCommand({
           logGroupNamePrefix: `${appName}-logs-${environmentSuffix}`,
@@ -535,7 +603,9 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups?.length).toBeGreaterThan(0);
       const logGroup = response.logGroups?.find(
-        lg => lg.logGroupName === logGroupName || lg.logGroupName?.startsWith(logGroupName!)
+        lg =>
+          lg.logGroupName === logGroupName ||
+          lg.logGroupName?.startsWith(logGroupName!)
       );
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(30);
@@ -543,17 +613,21 @@ describe('Payment App Infrastructure - Integration Tests', () => {
 
     it('dashboard exists', async () => {
       // Check if dashboard was actually deployed
-      const dashboardDeployed = isResourceDeployed('aws:cloudwatch/dashboard:Dashboard');
+      const dashboardDeployed = isResourceDeployed(
+        'aws:cloudwatch/dashboard:Dashboard'
+      );
       if (!dashboardDeployed) {
-        throw new Error('Dashboard was not deployed - test should fail for undeployed resources');
+        throw new Error(
+          'Dashboard was not deployed - test should fail for undeployed resources'
+        );
       }
 
       let dashboardName = outputs.dashboardName;
-      
+
       if (!dashboardName) {
         const command = new ListDashboardsCommand({});
         const response = await cwClient.send(command);
-        dashboardName = response.DashboardEntries?.find(d => 
+        dashboardName = response.DashboardEntries?.find(d =>
           d.DashboardName?.includes(`${appName}-dashboard-${environmentSuffix}`)
         )?.DashboardName;
       }
@@ -577,24 +651,27 @@ describe('Payment App Infrastructure - Integration Tests', () => {
       // Verify core resources that should always be deployed
       const ec2Client = new EC2Client({ region });
       const kmsClient = new KMSClient({ region });
-      
+
       // Verify at least one VPC exists
       const vpcCommand = new DescribeVpcsCommand({
         Filters: [
-          { Name: 'tag:Name', Values: [`${appName}-*-vpc-${environmentSuffix}*`] },
+          {
+            Name: 'tag:Name',
+            Values: [`${appName}-*-vpc-${environmentSuffix}*`],
+          },
         ],
       });
       const vpcs = await ec2Client.send(vpcCommand);
       expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
-      
+
       // Verify KMS key exists
       const aliasCommand = new ListAliasesCommand({});
       const aliases = await kmsClient.send(aliasCommand);
-      const kmsAlias = aliases.Aliases?.find(a => 
+      const kmsAlias = aliases.Aliases?.find(a =>
         a.AliasName?.includes(`${appName}-${environmentSuffix}`)
       );
       expect(kmsAlias).toBeDefined();
-      
+
       console.log(`\n✅ Verified core resources exist via AWS API`);
       console.log(`   - VPCs found: ${vpcs.Vpcs?.length}`);
       console.log(`   - KMS alias found: ${kmsAlias ? 'Yes' : 'No'}`);
@@ -610,7 +687,9 @@ describe('Payment App Infrastructure - Integration Tests', () => {
     });
 
     it('blue-green deployment is configured (if ALB deployed)', () => {
-      const albDeployed = isResourceDeployed('aws:lb/loadBalancer:LoadBalancer');
+      const albDeployed = isResourceDeployed(
+        'aws:lb/loadBalancer:LoadBalancer'
+      );
       if (albDeployed) {
         expect(outputs.blueAsgName).toBeDefined();
         expect(outputs.greenAsgName).toBeDefined();

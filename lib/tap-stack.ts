@@ -69,7 +69,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Get environmentSuffix from args, config, or environment variable
     // The deploy script sets ENVIRONMENT_SUFFIX as an environment variable
     const environmentSuffix =
-      args.environmentSuffix || 
+      args.environmentSuffix ||
       config.get('environmentSuffix') ||
       process.env.ENVIRONMENT_SUFFIX ||
       'dev'; // Default fallback
@@ -594,9 +594,26 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Target groups for blue-green deployment
+    // AWS Target Groups have a 32-character name limit
+    // Using shorter names to ensure we stay under the limit
+    const generateTgName = (prefix: string, suffix: string): string => {
+      let name = `${prefix}-${suffix}`;
+      if (name.length > 32) {
+        name = name.substring(0, 32);
+        // Remove trailing hyphens (AWS doesn't allow names ending with hyphen)
+        while (name.endsWith('-')) {
+          name = name.substring(0, name.length - 1);
+        }
+      }
+      return name;
+    };
+    const blueTgName = generateTgName('pay-btg', environmentSuffix);
+    const greenTgName = generateTgName('pay-gtg', environmentSuffix);
+
     const blueTargetGroup = new aws.lb.TargetGroup(
       `${appName}-blue-tg-${environmentSuffix}`,
       {
+        name: blueTgName,
         port: 8080,
         protocol: 'HTTP',
         vpcId: productionVpc.vpcId,
@@ -624,6 +641,7 @@ export class TapStack extends pulumi.ComponentResource {
     const greenTargetGroup = new aws.lb.TargetGroup(
       `${appName}-green-tg-${environmentSuffix}`,
       {
+        name: greenTgName,
         port: 8080,
         protocol: 'HTTP',
         vpcId: productionVpc.vpcId,
@@ -1092,9 +1110,8 @@ echo "Application would start here"
 const config = new pulumi.Config();
 // Get environmentSuffix from config or environment variable
 // The deploy script sets ENVIRONMENT_SUFFIX as an environment variable
-const environmentSuffix = config.get('environmentSuffix') || 
-  process.env.ENVIRONMENT_SUFFIX || 
-  'dev'; // Default fallback
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev'; // Default fallback
 const environment = config.get('environment') || 'production';
 
 // Get metadata from environment variables for tagging purposes.
