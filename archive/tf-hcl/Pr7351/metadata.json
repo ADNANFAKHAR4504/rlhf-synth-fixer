@@ -20,5 +20,10 @@
   "po_id": "101912685",
   "training_quality": 9,
   "author": "iamarpit-turing",
-  "reviewer": "akshat-jain355"
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
