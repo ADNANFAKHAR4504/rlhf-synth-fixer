@@ -193,7 +193,7 @@ describe("TapStack - Product Catalog API Infrastructure Integration Tests", () =
 
       // Verify launch template
       expect(asg?.LaunchTemplate?.LaunchTemplateId).toBeDefined();
-      expect(asg?.LaunchTemplate?.Version).toBe(1);
+      expect(asg?.LaunchTemplate?.Version).toBe("1");
     });
 
     test("Auto Scaling Group has instances in healthy state", async () => {
