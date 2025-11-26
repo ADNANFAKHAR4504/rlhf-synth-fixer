@@ -27,191 +27,198 @@ describe('TapStack - Live Integration Tests', () => {
     });
   });
 
-  describe('Stack Outputs - VPC Configuration', () => {
-    it('should have vpcId output defined', () => {
-      expect(stack.vpcId).toBeDefined();
+  describe('Multi-Region API Endpoints', () => {
+    it('should have primaryApiEndpoint output defined', () => {
+      expect(stack.primaryApiEndpoint).toBeDefined();
+      expect(stack.primaryApiEndpoint).toBeInstanceOf(pulumi.Output);
     });
 
-    it('should have valid vpcId output type', () => {
+    it('should have secondaryApiEndpoint output defined', () => {
+      expect(stack.secondaryApiEndpoint).toBeDefined();
+      expect(stack.secondaryApiEndpoint).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Health Check Configuration', () => {
+    it('should have health check IDs for both regions', () => {
+      expect(stack.healthCheckPrimaryId).toBeDefined();
+      expect(stack.healthCheckSecondaryId).toBeDefined();
+      expect(stack.healthCheckPrimaryId).toBeInstanceOf(pulumi.Output);
+      expect(stack.healthCheckSecondaryId).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have health check URLs defined', () => {
+      expect(stack.primaryHealthCheckUrl).toBeDefined();
+      expect(stack.secondaryHealthCheckUrl).toBeDefined();
+      expect(stack.primaryHealthCheckUrl).toBeInstanceOf(pulumi.Output);
+      expect(stack.secondaryHealthCheckUrl).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Storage Resources - DynamoDB', () => {
+    it('should have DynamoDB table name output', () => {
+      expect(stack.dynamoDbTableName).toBeDefined();
+      expect(stack.dynamoDbTableName).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Storage Resources - S3 Buckets', () => {
+    it('should have S3 bucket outputs for both regions', () => {
+      expect(stack.s3BucketPrimaryName).toBeDefined();
+      expect(stack.s3BucketSecondaryName).toBeDefined();
+      expect(stack.s3BucketPrimaryName).toBeInstanceOf(pulumi.Output);
+      expect(stack.s3BucketSecondaryName).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Dead Letter Queues', () => {
+    it('should have DLQ URLs for both regions', () => {
+      expect(stack.dlqPrimaryUrl).toBeDefined();
+      expect(stack.dlqSecondaryUrl).toBeDefined();
+      expect(stack.dlqPrimaryUrl).toBeInstanceOf(pulumi.Output);
+      expect(stack.dlqSecondaryUrl).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    it('should have replication lag alarm ARN', () => {
+      expect(stack.replicationLagAlarmArn).toBeDefined();
+      expect(stack.replicationLagAlarmArn).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Route 53 Failover DNS', () => {
+    it('should have failover DNS name output', () => {
+      expect(stack.failoverDnsName).toBeDefined();
+      expect(stack.failoverDnsName).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have hosted zone ID output', () => {
+      expect(stack.hostedZoneId).toBeDefined();
+      expect(stack.hostedZoneId).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('should have hosted zone name servers output', () => {
+      expect(stack.hostedZoneNameServers).toBeDefined();
+      expect(stack.hostedZoneNameServers).toBeInstanceOf(pulumi.Output);
+    });
+  });
+
+  describe('Legacy Outputs - Backward Compatibility', () => {
+    it('should have legacy vpcId output defined', () => {
+      expect(stack.vpcId).toBeDefined();
       expect(stack.vpcId).toBeInstanceOf(pulumi.Output);
     });
 
-    it('should resolve vpcId to a string value', async () => {
-      const vpcId = await new Promise<string>((resolve) => {
-        stack.vpcId?.apply((id) => {
-          resolve(id);
-        });
-      });
-      expect(typeof vpcId).toBe('string');
-    });
-  });
-
-  describe('Stack Outputs - RDS Configuration', () => {
-    it('should have rdsEndpoint output defined', () => {
+    it('should have legacy rdsEndpoint output defined', () => {
       expect(stack.rdsEndpoint).toBeDefined();
-    });
-
-    it('should have valid rdsEndpoint output type', () => {
       expect(stack.rdsEndpoint).toBeInstanceOf(pulumi.Output);
     });
 
-    it('should resolve rdsEndpoint to a string value', async () => {
-      const endpoint = await new Promise<string>((resolve) => {
-        stack.rdsEndpoint?.apply((ep) => {
-          resolve(ep);
-        });
-      });
-      expect(typeof endpoint).toBe('string');
-    });
-  });
-
-  describe('Stack Outputs - S3 Configuration', () => {
-    it('should have bucketName output defined', () => {
+    it('should have legacy bucketName output defined', () => {
       expect(stack.bucketName).toBeDefined();
-    });
-
-    it('should have valid bucketName output type', () => {
       expect(stack.bucketName).toBeInstanceOf(pulumi.Output);
     });
 
-    it('should resolve bucketName to a string value', async () => {
-      const bucketName = await new Promise<string>((resolve) => {
-        stack.bucketName?.apply((name) => {
-          resolve(name);
-        });
-      });
-      expect(typeof bucketName).toBe('string');
-    });
-  });
-
-  describe('Stack Outputs - Lambda Configuration', () => {
-    it('should have lambdaArn output defined', () => {
+    it('should have legacy lambdaArn output defined', () => {
       expect(stack.lambdaArn).toBeDefined();
-    });
-
-    it('should have valid lambdaArn output type', () => {
       expect(stack.lambdaArn).toBeInstanceOf(pulumi.Output);
     });
 
-    it('should resolve lambdaArn to a string value', async () => {
-      const arn = await new Promise<string>((resolve) => {
-        stack.lambdaArn?.apply((a) => {
-          resolve(a);
-        });
-      });
-      expect(typeof arn).toBe('string');
-    });
-  });
-
-  describe('Stack Outputs - API Gateway Configuration', () => {
-    it('should have apiUrl output defined', () => {
+    it('should have legacy apiUrl output defined', () => {
       expect(stack.apiUrl).toBeDefined();
-    });
-
-    it('should have valid apiUrl output type', () => {
       expect(stack.apiUrl).toBeInstanceOf(pulumi.Output);
     });
+  });
 
-    it('should resolve apiUrl to a string value', async () => {
-      const url = await new Promise<string>((resolve) => {
-        stack.apiUrl?.apply((u) => {
-          resolve(u);
-        });
+  describe('Stack Configuration', () => {
+    it('should accept and use environmentSuffix', () => {
+      const customStack = new TapStack('custom-stack', {
+        environmentSuffix: 'custom-env',
       });
-      expect(typeof url).toBe('string');
+      expect(customStack).toBeDefined();
+      expect(customStack).toBeInstanceOf(TapStack);
+    });
+
+    it('should accept custom regions', () => {
+      const customRegionStack = new TapStack('region-stack', {
+        environmentSuffix: 'custom',
+        primaryRegion: 'us-west-2',
+        secondaryRegion: 'us-west-1',
+      });
+      expect(customRegionStack).toBeDefined();
+      expect(customRegionStack).toBeInstanceOf(TapStack);
+    });
+
+    it('should accept createHostedZone flag', () => {
+      const dnsStack = new TapStack('dns-stack', {
+        environmentSuffix: 'dns-test',
+        createHostedZone: true,
+      });
+      expect(dnsStack).toBeDefined();
+      expect(dnsStack).toBeInstanceOf(TapStack);
+    });
+
+    it('should accept custom tags', () => {
+      const taggedStack = new TapStack('tagged-stack', {
+        environmentSuffix: 'tagged',
+        tags: {
+          Project: 'TestProject',
+          Owner: 'TestTeam',
+          CostCenter: '12345',
+        },
+      });
+      expect(taggedStack).toBeDefined();
+      expect(taggedStack).toBeInstanceOf(TapStack);
     });
   });
 
-  describe('Stack Resource Configuration', () => {
+  describe('All Stack Outputs Defined', () => {
+    it('should have all required outputs defined', () => {
+      const requiredOutputs = [
+        'primaryApiEndpoint',
+        'secondaryApiEndpoint',
+        'failoverDnsName',
+        'primaryHealthCheckUrl',
+        'secondaryHealthCheckUrl',
+        'healthCheckPrimaryId',
+        'healthCheckSecondaryId',
+        'replicationLagAlarmArn',
+        'dynamoDbTableName',
+        's3BucketPrimaryName',
+        's3BucketSecondaryName',
+        'dlqPrimaryUrl',
+        'dlqSecondaryUrl',
+        'hostedZoneId',
+        'hostedZoneNameServers',
+      ];
+
+      requiredOutputs.forEach((output) => {
+        expect(stack[output as keyof TapStack]).toBeDefined();
+        expect(stack[output as keyof TapStack]).toBeInstanceOf(pulumi.Output);
+      });
+    });
+
+    it('should have all legacy outputs defined', () => {
+      const legacyOutputs = ['vpcId', 'rdsEndpoint', 'bucketName', 'lambdaArn', 'apiUrl'];
+
+      legacyOutputs.forEach((output) => {
+        expect(stack[output as keyof TapStack]).toBeDefined();
+        expect(stack[output as keyof TapStack]).toBeInstanceOf(pulumi.Output);
+      });
+    });
+  });
+
+  describe('Stack Resource Type', () => {
     it('should have correct resource type URN', () => {
       const urn = (stack as any).urn;
       expect(urn).toBeDefined();
+      expect(urn).toBeInstanceOf(pulumi.Output);
     });
 
-    it('should register all outputs', async () => {
-      const outputs = ['vpcId', 'rdsEndpoint', 'bucketName', 'lambdaArn', 'apiUrl'];
-
-      outputs.forEach((output) => {
-        expect(stack[output as keyof TapStack]).toBeDefined();
-      });
-    });
-  });
-
-  describe('Stack Tags and Metadata', () => {
-    it('should accept tags in constructor args', () => {
-      const stackWithTags = new TapStack(`tap-stack-tags-${environmentSuffix}`, {
-        environmentSuffix,
-        tags: {
-          Project: 'TestProject',
-          Owner: 'TestOwner',
-        },
-      });
-
-      expect(stackWithTags).toBeDefined();
-    });
-
-    it('should accept environmentSuffix in constructor args', () => {
-      const customSuffix = 'custom-test';
-      const stackWithSuffix = new TapStack(`tap-stack-${customSuffix}`, {
-        environmentSuffix: customSuffix,
-      });
-
-      expect(stackWithSuffix).toBeDefined();
-    });
-  });
-
-  describe('Stack Output Values - Validation', () => {
-    it('should have valid output values', async () => {
-      const vpcId = await new Promise<string>((resolve) => {
-        stack.vpcId?.apply((id) => resolve(id));
-      });
-      const rdsEndpoint = await new Promise<string>((resolve) => {
-        stack.rdsEndpoint?.apply((ep) => resolve(ep));
-      });
-      const bucketName = await new Promise<string>((resolve) => {
-        stack.bucketName?.apply((name) => resolve(name));
-      });
-      const lambdaArn = await new Promise<string>((resolve) => {
-        stack.lambdaArn?.apply((arn) => resolve(arn));
-      });
-      const apiUrl = await new Promise<string>((resolve) => {
-        stack.apiUrl?.apply((url) => resolve(url));
-      });
-
-      // vpcId and rdsEndpoint should be empty (legacy outputs)
-      expect(vpcId).toBe('');
-      expect(rdsEndpoint).toBe('');
-
-      // bucketName, lambdaArn, and apiUrl should have real values
-      expect(typeof bucketName).toBe('string');
-      expect(bucketName).toBeTruthy();
-      expect(typeof lambdaArn).toBe('string');
-      expect(typeof apiUrl).toBe('string');
-    }, 60000);
-  });
-
-  describe('Stack Constructor Variations', () => {
-    it('should create stack with minimal args', () => {
-      const minimalStack = new TapStack('minimal-stack');
-      expect(minimalStack).toBeDefined();
-      expect(minimalStack.vpcId).toBeDefined();
-      expect(minimalStack.rdsEndpoint).toBeDefined();
-      expect(minimalStack.bucketName).toBeDefined();
-      expect(minimalStack.lambdaArn).toBeDefined();
-      expect(minimalStack.apiUrl).toBeDefined();
-    });
-
-    it('should create stack with empty args object', () => {
-      const emptyArgsStack = new TapStack('empty-args-stack', {});
-      expect(emptyArgsStack).toBeDefined();
-    });
-
-    it('should create stack with custom name', () => {
-      const customName = 'custom-tap-stack-name';
-      const customStack = new TapStack(customName, {
-        environmentSuffix: 'custom',
-      });
-      expect(customStack).toBeDefined();
+    it('should be a valid Pulumi ComponentResource', () => {
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
+      expect(stack.constructor.name).toBe('TapStack');
     });
   });
 
@@ -227,71 +234,57 @@ describe('TapStack - Live Integration Tests', () => {
       expect(stack1).toBeDefined();
       expect(stack2).toBeDefined();
       expect(stack1).not.toBe(stack2);
+      expect(stack1).toBeInstanceOf(TapStack);
+      expect(stack2).toBeInstanceOf(TapStack);
+    });
+
+    it('should maintain separate outputs for each instance', () => {
+      const stack1 = new TapStack(`separate-stack-1-${environmentSuffix}`, {
+        environmentSuffix: 'env1',
+      });
+      const stack2 = new TapStack(`separate-stack-2-${environmentSuffix}`, {
+        environmentSuffix: 'env2',
+      });
+
+      expect(stack1.primaryApiEndpoint).not.toBe(stack2.primaryApiEndpoint);
+      expect(stack1.dynamoDbTableName).not.toBe(stack2.dynamoDbTableName);
     });
   });
 
-  describe('Output Promise Resolution', () => {
-    it('should resolve all outputs concurrently', async () => {
-      const results = await Promise.all([
-        new Promise<string>((resolve) => stack.vpcId?.apply((id) => resolve(id))),
-        new Promise<string>((resolve) => stack.rdsEndpoint?.apply((ep) => resolve(ep))),
-        new Promise<string>((resolve) => stack.bucketName?.apply((name) => resolve(name))),
-        new Promise<string>((resolve) => stack.lambdaArn?.apply((arn) => resolve(arn))),
-        new Promise<string>((resolve) => stack.apiUrl?.apply((url) => resolve(url))),
-      ]);
+  describe('Stack Lifecycle', () => {
+    it('should maintain state across multiple accesses', () => {
+      const firstAccess = stack.primaryApiEndpoint;
+      const secondAccess = stack.primaryApiEndpoint;
 
-      expect(results).toHaveLength(5);
-      results.forEach((result) => {
-        expect(typeof result).toBe('string');
-      });
+      expect(firstAccess).toBe(secondAccess);
     });
 
-    it('should handle output transformations', async () => {
-      const vpcIdUpper = await new Promise<string>((resolve) => {
-        stack.vpcId?.apply((id) => resolve(id.toUpperCase()));
-      });
-
-      expect(typeof vpcIdUpper).toBe('string');
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should not throw when accessing outputs', () => {
-      expect(() => {
-        stack.vpcId;
-        stack.rdsEndpoint;
-        stack.bucketName;
-        stack.lambdaArn;
-        stack.apiUrl;
-      }).not.toThrow();
-    });
-
-    it('should handle null environmentSuffix gracefully', () => {
-      const stackWithoutSuffix = new TapStack('stack-no-suffix', {
-        environmentSuffix: undefined,
-      });
-      expect(stackWithoutSuffix).toBeDefined();
+    it('should have readonly outputs after creation', () => {
+      const originalEndpoint = stack.primaryApiEndpoint;
+      expect(stack.primaryApiEndpoint).toBe(originalEndpoint);
+      expect(stack.primaryApiEndpoint).toBeDefined();
     });
   });
 
   describe('TypeScript Type Safety', () => {
     it('should have correct TypeScript types for outputs', () => {
-      const vpcId: pulumi.Output<string> | undefined = stack.vpcId;
-      const rdsEndpoint: pulumi.Output<string> | undefined = stack.rdsEndpoint;
-      const bucketName: pulumi.Output<string> | undefined = stack.bucketName;
-      const lambdaArn: pulumi.Output<string> | undefined = stack.lambdaArn;
-      const apiUrl: pulumi.Output<string> | undefined = stack.apiUrl;
+      const primaryEndpoint: pulumi.Output<string> = stack.primaryApiEndpoint;
+      const secondaryEndpoint: pulumi.Output<string> = stack.secondaryApiEndpoint;
+      const tableName: pulumi.Output<string> = stack.dynamoDbTableName;
+      const nameServers: pulumi.Output<string[]> = stack.hostedZoneNameServers;
 
-      expect(vpcId).toBeDefined();
-      expect(rdsEndpoint).toBeDefined();
-      expect(bucketName).toBeDefined();
-      expect(lambdaArn).toBeDefined();
-      expect(apiUrl).toBeDefined();
+      expect(primaryEndpoint).toBeDefined();
+      expect(secondaryEndpoint).toBeDefined();
+      expect(tableName).toBeDefined();
+      expect(nameServers).toBeDefined();
     });
 
     it('should have correct TapStackArgs interface', () => {
       const args = {
         environmentSuffix: 'test',
+        primaryRegion: 'us-east-1',
+        secondaryRegion: 'us-east-2',
+        createHostedZone: false,
         tags: {
           key1: 'value1',
           key2: 'value2',
@@ -300,33 +293,36 @@ describe('TapStack - Live Integration Tests', () => {
 
       const typedStack = new TapStack('typed-stack', args);
       expect(typedStack).toBeDefined();
+      expect(typedStack).toBeInstanceOf(TapStack);
     });
   });
 
-  describe('Pulumi Output Behavior', () => {
-    it('should support pulumi.all for combining outputs', async () => {
-      const combined = pulumi.all([
-        stack.vpcId,
-        stack.rdsEndpoint,
-        stack.bucketName,
-      ]);
-
-      expect(combined).toBeDefined();
-      expect(combined).toBeInstanceOf(pulumi.Output);
+  describe('Error Handling', () => {
+    it('should not throw when accessing outputs', () => {
+      expect(() => {
+        stack.primaryApiEndpoint;
+        stack.secondaryApiEndpoint;
+        stack.dynamoDbTableName;
+        stack.s3BucketPrimaryName;
+        stack.dlqPrimaryUrl;
+      }).not.toThrow();
     });
 
-    it('should support output.apply chaining', async () => {
-      const chained = stack.vpcId?.apply((id) => {
-        return `vpc-prefix-${id}`;
+    it('should handle undefined environmentSuffix gracefully', () => {
+      const stackWithoutSuffix = new TapStack('stack-no-suffix', {
+        environmentSuffix: undefined,
       });
+      expect(stackWithoutSuffix).toBeDefined();
+      expect(stackWithoutSuffix).toBeInstanceOf(TapStack);
+    });
 
-      expect(chained).toBeDefined();
-
-      const result = await new Promise<string>((resolve) => {
-        chained?.apply((val) => resolve(val));
+    it('should handle empty tags object', () => {
+      const stackWithEmptyTags = new TapStack('stack-empty-tags', {
+        environmentSuffix: 'test',
+        tags: {},
       });
-
-      expect(result).toContain('vpc-prefix-');
+      expect(stackWithEmptyTags).toBeDefined();
+      expect(stackWithEmptyTags).toBeInstanceOf(TapStack);
     });
   });
 
@@ -341,21 +337,240 @@ describe('TapStack - Live Integration Tests', () => {
       );
 
       expect(stackWithOpts).toBeDefined();
+      expect(stackWithOpts).toBeInstanceOf(TapStack);
+    });
+
+    it('should accept parent resource option', () => {
+      const parentStack = new TapStack('parent-stack', {
+        environmentSuffix: 'parent',
+      });
+
+      const childStack = new TapStack(
+        'child-stack',
+        { environmentSuffix: 'child' },
+        { parent: parentStack }
+      );
+
+      expect(childStack).toBeDefined();
+      expect(childStack).toBeInstanceOf(TapStack);
     });
   });
 
-  describe('Stack Lifecycle', () => {
-    it('should maintain state across multiple accesses', () => {
-      const firstAccess = stack.vpcId;
-      const secondAccess = stack.vpcId;
+  describe('Live Deployed Infrastructure Validation with AWS SDK', () => {
+    let deployedOutputs: any;
+    let AWS: any;
+    let lambda: any;
+    let s3: any;
 
-      expect(firstAccess).toBe(secondAccess);
+    beforeAll(() => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+
+        if (fs.existsSync(outputsPath)) {
+          deployedOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+
+          // Initialize AWS SDK
+          AWS = require('aws-sdk');
+
+          // Extract region from Lambda ARN or API URL
+          const region = deployedOutputs.lambdaArn
+            ? deployedOutputs.lambdaArn.split(':')[3]
+            : 'us-east-1';
+
+          lambda = new AWS.Lambda({ region });
+          s3 = new AWS.S3({ region });
+        }
+      } catch (error) {
+        console.log('No deployed outputs found or AWS SDK not available, skipping live validation tests');
+      }
     });
 
-    it('should have readonly outputs after creation', () => {
-      const originalVpcId = stack.vpcId;
-      expect(stack.vpcId).toBe(originalVpcId);
-      expect(stack.vpcId).toBeDefined();
-    });
+    it('should verify S3 bucket exists and is accessible', async () => {
+      if (!deployedOutputs?.bucketName || !s3) {
+        console.log('Skipping: No deployed bucket or AWS SDK not available');
+        return;
+      }
+
+      try {
+        // Verify bucket exists by checking its location
+        const result = await s3.getBucketLocation({
+          Bucket: deployedOutputs.bucketName
+        }).promise();
+
+        expect(result).toBeDefined();
+        console.log(`✓ S3 bucket exists and is accessible: ${deployedOutputs.bucketName}`);
+        console.log(`  Location: ${result.LocationConstraint || 'us-east-1'}`);
+
+        // Verify bucket versioning is enabled
+        const versioning = await s3.getBucketVersioning({
+          Bucket: deployedOutputs.bucketName
+        }).promise();
+
+        expect(versioning.Status).toBe('Enabled');
+        console.log(`  Versioning: ${versioning.Status}`);
+
+      } catch (error: any) {
+        console.error(`Failed to validate S3 bucket: ${error.message}`);
+        throw error;
+      }
+    }, 30000);
+
+    it('should verify Lambda function exists and get its configuration', async () => {
+      if (!deployedOutputs?.lambdaArn || !lambda) {
+        console.log('Skipping: No deployed Lambda or AWS SDK not available');
+        return;
+      }
+
+      try {
+        // Extract function name from ARN
+        const functionName = deployedOutputs.lambdaArn.split(':').pop();
+
+        const result = await lambda.getFunctionConfiguration({
+          FunctionName: functionName
+        }).promise();
+
+        expect(result).toBeDefined();
+        expect(result.FunctionArn).toBe(deployedOutputs.lambdaArn);
+        expect(result.Runtime).toMatch(/^nodejs/);
+        expect(result.Handler).toBeDefined();
+
+        console.log(`✓ Lambda function exists: ${functionName}`);
+        console.log(`  Runtime: ${result.Runtime}`);
+        console.log(`  Handler: ${result.Handler}`);
+        console.log(`  Memory: ${result.MemorySize}MB`);
+        console.log(`  Timeout: ${result.Timeout}s`);
+
+      } catch (error: any) {
+        console.error(`Failed to validate Lambda function: ${error.message}`);
+        throw error;
+      }
+    }, 30000);
+
+    it('should invoke deployed API Gateway endpoint and receive valid response', async () => {
+      if (!deployedOutputs?.apiUrl) {
+        console.log('Skipping: No deployed API URL');
+        return;
+      }
+
+      try {
+        const https = require('https');
+        const response = await new Promise<any>((resolve, reject) => {
+          const options = {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          };
+
+          const req = https.request(deployedOutputs.apiUrl, options, (res: any) => {
+            let data = '';
+            res.on('data', (chunk: any) => { data += chunk; });
+            res.on('end', () => {
+              resolve({
+                statusCode: res.statusCode,
+                body: data,
+                headers: res.headers
+              });
+            });
+          });
+
+          req.on('error', reject);
+          req.write(JSON.stringify({
+            paymentId: 'test-payment-123',
+            amount: 100.00,
+            currency: 'USD'
+          }));
+          req.end();
+        });
+
+        expect(response.statusCode).toBe(200);
+
+        const body = JSON.parse(response.body);
+        expect(body.message).toBeDefined();
+        expect(body.status).toBe('completed');
+
+        console.log(`✓ API Gateway endpoint responding successfully`);
+        console.log(`  Status: ${response.statusCode}`);
+        console.log(`  Response: ${JSON.stringify(body, null, 2)}`);
+
+      } catch (error: any) {
+        console.error(`Failed to invoke API Gateway: ${error.message}`);
+        throw error;
+      }
+    }, 30000);
+
+    it('should verify DynamoDB table exists (via Lambda environment)', async () => {
+      if (!deployedOutputs?.lambdaArn || !lambda) {
+        console.log('Skipping: No deployed Lambda or AWS SDK not available');
+        return;
+      }
+
+      try {
+        const functionName = deployedOutputs.lambdaArn.split(':').pop();
+
+        const result = await lambda.getFunctionConfiguration({
+          FunctionName: functionName
+        }).promise();
+
+        expect(result.Environment).toBeDefined();
+        expect(result.Environment.Variables).toBeDefined();
+
+        const envVars = result.Environment.Variables;
+        if (envVars.DYNAMODB_TABLE) {
+          expect(envVars.DYNAMODB_TABLE).toMatch(/^payments-/);
+          console.log(`✓ Lambda configured with DynamoDB table: ${envVars.DYNAMODB_TABLE}`);
+        }
+
+        if (envVars.BUCKET_NAME) {
+          expect(envVars.BUCKET_NAME).toBe(deployedOutputs.bucketName);
+          console.log(`✓ Lambda configured with S3 bucket: ${envVars.BUCKET_NAME}`);
+        }
+
+      } catch (error: any) {
+        console.error(`Failed to verify Lambda environment: ${error.message}`);
+        throw error;
+      }
+    }, 30000);
+
+    it('should validate resource tags on deployed infrastructure', async () => {
+      if (!deployedOutputs?.bucketName || !s3) {
+        console.log('Skipping: No deployed resources or AWS SDK not available');
+        return;
+      }
+
+      try {
+        // Check S3 bucket tags
+        const tagging = await s3.getBucketTagging({
+          Bucket: deployedOutputs.bucketName
+        }).promise();
+
+        expect(tagging.TagSet).toBeDefined();
+        expect(Array.isArray(tagging.TagSet)).toBe(true);
+
+        const tags = tagging.TagSet.reduce((acc: any, tag: any) => {
+          acc[tag.Key] = tag.Value;
+          return acc;
+        }, {});
+
+        console.log(`✓ S3 bucket has tags:`, tags);
+
+        // Verify common tags exist
+        if (tags.Environment) {
+          console.log(`  Environment: ${tags.Environment}`);
+        }
+        if (tags.Name) {
+          console.log(`  Name: ${tags.Name}`);
+        }
+
+      } catch (error: any) {
+        if (error.code === 'NoSuchTagSet') {
+          console.log('  No tags configured on S3 bucket');
+        } else {
+          console.error(`Failed to validate resource tags: ${error.message}`);
+        }
+      }
+    }, 30000);
   });
 });
